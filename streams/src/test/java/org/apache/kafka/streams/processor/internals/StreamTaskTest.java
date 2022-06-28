@@ -1946,6 +1946,24 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldCheckpointState() {
+        stateManager.flush();
+        EasyMock.expectLastCall().once();
+        stateManager.checkpoint();
+        EasyMock.expectLastCall().once();
+        EasyMock.expect(stateManager.changelogOffsets()).andStubReturn(Collections.emptyMap());
+        EasyMock.expect(recordCollector.offsets()).andStubReturn(Collections.emptyMap());
+        EasyMock.replay(stateManager, recordCollector);
+
+        task = createOptimizedStatefulTask(createConfig("100"), consumer);
+
+        task.initializeIfNeeded();
+        task.maybeCheckpoint(true);
+
+        EasyMock.verify(stateManager);
+    }
+
+    @Test
     public void shouldCheckpointOffsetsOnPostCommit() {
         final long offset = 543L;
         final long consumedOffset = 345L;

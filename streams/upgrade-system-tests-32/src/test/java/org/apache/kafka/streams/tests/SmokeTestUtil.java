@@ -23,12 +23,12 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
-
-import java.time.Instant;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
+
+import java.time.Instant;
 
 public class SmokeTestUtil {
 
@@ -47,7 +47,7 @@ public class SmokeTestUtil {
             @Override
             public void init(final ProcessorContext<Void, Void> context) {
                 super.init(context);
-                System.out.println("[DEV] initializing processor: topic=" + topic + " taskId=" + context.taskId());
+                System.out.println("[3.2] initializing processor: topic=" + topic + " taskId=" + context.taskId());
                 System.out.flush();
                 numRecordsProcessed = 0;
                 smallestOffset = Long.MAX_VALUE;
@@ -62,14 +62,14 @@ public class SmokeTestUtil {
                     System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
                 }
 
-                if (context().recordMetadata().isPresent()) {
-                    if (smallestOffset > context().recordMetadata().get().offset()) {
-                        smallestOffset = context().recordMetadata().get().offset();
+                context().recordMetadata().ifPresent(recordMetadata -> {
+                    if (smallestOffset > recordMetadata.offset()) {
+                        smallestOffset = recordMetadata.offset();
                     }
-                    if (largestOffset < context().recordMetadata().get().offset()) {
-                        largestOffset = context().recordMetadata().get().offset();
+                    if (largestOffset < recordMetadata.offset()) {
+                        largestOffset = recordMetadata.offset();
                     }
-                }
+                });
             }
 
             @Override

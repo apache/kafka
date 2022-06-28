@@ -41,7 +41,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -86,12 +85,12 @@ public class TestTopicsTest {
 
     @Test
     public void testValue() {
-        final TestInputTopic<Long, String> inputTopic =
-            testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer());
+        final TestInputTopic<String, String> inputTopic =
+            testDriver.createInputTopic(INPUT_TOPIC, stringSerde.serializer(), stringSerde.serializer());
         final TestOutputTopic<String, String> outputTopic =
             testDriver.createOutputTopic(OUTPUT_TOPIC, stringSerde.deserializer(), stringSerde.deserializer());
-        //Feed word "Hello" to inputTopic, timestamp and key irrelevant in this case
-        inputTopic.pipeInput(1L, "Hello");
+        //Feed word "Hello" to inputTopic and no kafka key, timestamp is irrelevant in this case
+        inputTopic.pipeInput("Hello");
         assertThat(outputTopic.readValue(), equalTo("Hello"));
         //No more output in topic
         assertThat(outputTopic.isEmpty(), is(true));
@@ -99,20 +98,16 @@ public class TestTopicsTest {
 
     @Test
     public void testValueList() {
-        final TestInputTopic<Long, String> inputTopic =
-            testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer());
+        final TestInputTopic<String, String> inputTopic =
+            testDriver.createInputTopic(INPUT_TOPIC, stringSerde.serializer(), stringSerde.serializer());
         final TestOutputTopic<String, String> outputTopic =
             testDriver.createOutputTopic(OUTPUT_TOPIC, stringSerde.deserializer(), stringSerde.deserializer());
-        final List<KeyValue<Long, String>> inputList = Arrays.asList(
-            new KeyValue<>(1L, "This"),
-            new KeyValue<>(2L, "is"),
-            new KeyValue<>(3L, "an"),
-            new KeyValue<>(4L, "example"));
-        //Feed list of words to inputTopic, key and timestamp are irrelevant in this case
-        inputTopic.pipeKeyValueList(inputList);
+        final List<String> inputList = Arrays.asList("This", "is", "an", "example");
+        //Feed list of words to inputTopic and no kafka key, timestamp is irrelevant in this case
+        inputTopic.pipeValueList(inputList);
         final List<String> output = outputTopic.readValuesToList();
         assertThat(output, hasItems("This", "is", "an", "example"));
-        assertThat(output, is(equalTo(inputList.stream().map(kv -> kv.value).collect(Collectors.toList()))));
+        assertThat(output, is(equalTo(inputList)));
     }
 
     @Test
@@ -229,8 +224,8 @@ public class TestTopicsTest {
             testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer());
         final TestOutputTopic<Long, String> outputTopic =
             testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde.deserializer(), stringSerde.deserializer());
-        inputTopic.pipeInput(1L, "Hello", baseTime);
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<>(1L, "Hello", null, baseTime))));
+        inputTopic.pipeInput(null, "Hello", baseTime);
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<>(null, "Hello", null, baseTime))));
 
         inputTopic.pipeInput(2L, "Kafka", ++baseTime);
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<>(2L, "Kafka", null, baseTime))));
@@ -238,15 +233,13 @@ public class TestTopicsTest {
         inputTopic.pipeInput(2L, "Kafka", testBaseTime);
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<>(2L, "Kafka", testBaseTime))));
 
-        final List<KeyValue<Long, String>> inputList = Arrays.asList(
-            new KeyValue<>(1L, "Advancing"),
-            new KeyValue<>(2L, "time"));
+        final List<String> inputList = Arrays.asList("Advancing", "time");
         //Feed list of words to inputTopic and no kafka key, timestamp advancing from testInstant
         final Duration advance = Duration.ofSeconds(15);
         final Instant recordInstant = testBaseTime.plus(Duration.ofDays(1));
-        inputTopic.pipeKeyValueList(inputList, recordInstant, advance);
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<>(1L, "Advancing", recordInstant))));
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<>(2L, "time", null, recordInstant.plus(advance)))));
+        inputTopic.pipeValueList(inputList, recordInstant, advance);
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<>(null, "Advancing", recordInstant))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<>(null, "time", null, recordInstant.plus(advance)))));
     }
 
     @Test
@@ -294,8 +287,8 @@ public class TestTopicsTest {
             testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer(), testBaseTime, advance);
         final TestOutputTopic<Long, String> outputTopic =
             testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde.deserializer(), stringSerde.deserializer());
-        inputTopic.pipeInput(1L, "Hello");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<>(1L, "Hello", testBaseTime))));
+        inputTopic.pipeInput("Hello");
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<>(null, "Hello", testBaseTime))));
         inputTopic.pipeInput(2L, "Kafka");
         assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<>(2L, "Kafka", testBaseTime.plus(advance)))));
     }
@@ -339,12 +332,12 @@ public class TestTopicsTest {
 
     @Test
     public void testEmptyTopic() {
-        final TestInputTopic<Long, String> inputTopic =
-            testDriver.createInputTopic(INPUT_TOPIC, longSerde.serializer(), stringSerde.serializer());
+        final TestInputTopic<String, String> inputTopic =
+            testDriver.createInputTopic(INPUT_TOPIC, stringSerde.serializer(), stringSerde.serializer());
         final TestOutputTopic<String, String> outputTopic =
             testDriver.createOutputTopic(OUTPUT_TOPIC, stringSerde.deserializer(), stringSerde.deserializer());
         //Feed word "Hello" to inputTopic and no kafka key, timestamp is irrelevant in this case
-        inputTopic.pipeInput(1L, "Hello");
+        inputTopic.pipeInput("Hello");
         assertThat(outputTopic.readValue(), equalTo("Hello"));
         //No more output in topic
         assertThrows(NoSuchElementException.class, outputTopic::readRecord, "Empty topic");

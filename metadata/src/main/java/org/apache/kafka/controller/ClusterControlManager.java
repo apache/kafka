@@ -528,13 +528,23 @@ public class ClusterControlManager {
     }
 
     /**
-     * Returns true if the broker is in fenced state; Returns false if it is
+     * Returns true if the broker is unfenced; Returns false if it is
      * not or if it does not exist.
      */
     public boolean unfenced(int brokerId) {
         BrokerRegistration registration = brokerRegistrations.get(brokerId);
         if (registration == null) return false;
         return !registration.fenced();
+    }
+
+    /**
+     * Get a broker registration if it exists.
+     *
+     * @param brokerId The brokerId to get the registration for
+     * @return The current registration or null if the broker is not registered
+     */
+    public BrokerRegistration registration(int brokerId) {
+        return brokerRegistrations.get(brokerId);
     }
 
     /**
