@@ -52,16 +52,6 @@ public class SessionStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, Sessio
         if (!enableCaching) {
             return inner;
         }
-
-        if (!inner.persistent()) {
-            return inner;
-        }
-
-        // do not enable cache if the underlying store is time ordered
-        if (storeSupplier instanceof RocksDbTimeOrderedSessionBytesStoreSupplier) {
-            return inner;
-        }
-
         return new CachingSessionStore(inner, storeSupplier.segmentIntervalMs());
     }
 

@@ -21,7 +21,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -43,7 +42,6 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Instant;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -55,7 +53,6 @@ import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
-import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
@@ -225,21 +222,14 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Instant earliestSessionEndTime,
-                                                                  final Instant latestSessionEndTime) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final long earliestSessionEndTime,
+                                                                  final long latestSessionEndTime) {
         removeExpiredSegments();
 
-        final long earliestEndTime = ApiUtils.validateMillisecondInstant(earliestSessionEndTime,
-            prepareMillisCheckFailMsgPrefix(earliestSessionEndTime, "earliestSessionEndTime"));
-        final long latestEndTime = ApiUtils.validateMillisecondInstant(latestSessionEndTime,
-            prepareMillisCheckFailMsgPrefix(latestSessionEndTime, "latestSessionEndTime"));
+        final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimSubMap
+            = endTimeMap.subMap(earliestSessionEndTime, true, latestSessionEndTime, true);
 
-        // since subMap is exclusive on toKey, we need to plus one
-        return registerNewIterator(null,
-                                   null,
-                                   Long.MAX_VALUE,
-                                   endTimeMap.subMap(earliestEndTime, true, latestEndTime, true).entrySet().iterator(),
-                                   true);
+        return registerNewIterator(null, null, Long.MAX_VALUE, endTimSubMap.entrySet().iterator(), true);
     }
 
     @Override

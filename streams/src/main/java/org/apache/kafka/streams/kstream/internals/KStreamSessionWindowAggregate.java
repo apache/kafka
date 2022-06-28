@@ -40,7 +40,6 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -268,7 +267,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
             // Only time ordered (indexed) session store should have implemented
             // this function, otherwise a not-supported exception would throw
             final KeyValueIterator<Windowed<KIn>, VAgg> windowToEmit = store
-                .findSessions(Instant.ofEpochMilli(emitRangeLowerBound), Instant.ofEpochMilli(emitRangeUpperBound));
+                .findSessions(emitRangeLowerBound, emitRangeUpperBound);
 
             int emittedCount = 0;
             while (windowToEmit.hasNext()) {

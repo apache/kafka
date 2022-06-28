@@ -39,9 +39,15 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  */
 public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K, AGG> {
 
-    // TODO: javadoc; both ends are inclusive
-    default KeyValueIterator<Windowed<K>, AGG> findSessions(final Instant earliestSessionEndTime,
-                                                            final Instant latestSessionEndTime) {
+    /**
+     * Return all the session window entries that ends between the specified range (both ends are inclusive).
+     * This function would be used to retrieve all closed and immutable windows.
+     *
+     * @param earliestSessionEndTime earliest session end time to search from, inclusive
+     * @param latestSessionEndTime latest session end time to search to, inclusive
+     */
+    default KeyValueIterator<Windowed<K>, AGG> findSessions(final long earliestSessionEndTime,
+                                                            final long latestSessionEndTime) {
         throw new UnsupportedOperationException(
                 "This API is not supported by this implementation of SessionStore.");
     }

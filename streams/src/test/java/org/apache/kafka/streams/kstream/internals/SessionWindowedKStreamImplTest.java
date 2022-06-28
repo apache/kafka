@@ -37,6 +37,10 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.state.internals.ChangeLoggingSessionBytesStore;
+import org.apache.kafka.streams.state.internals.MeteredSessionStore;
+import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedSessionStore;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
@@ -58,6 +62,7 @@ import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
@@ -352,6 +357,26 @@ public class SessionWindowedKStreamImplTest {
     @Test
     public void shouldThrowNullPointerOnCountIfMaterializedIsNull() {
         assertThrows(NullPointerException.class, () -> stream.count((Materialized<String, Long, SessionStore<Bytes, byte[]>>) null));
+    }
+
+    @Test
+    public void shouldNotEnableCachingWithEmitFinal() {
+        if (!emitFinal)
+            return;
+
+        stream.aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                sessionMerger,
+                Materialized.<String, String, SessionStore<Bytes, byte[]>>as("aggregated").withValueSerde(Serdes.String()));
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final SessionStore<String, String> store = driver.getSessionStore("aggregated");
+            final WrappedStateStore changeLogging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+            assertThat(store, instanceOf(MeteredSessionStore.class));
+            assertThat(changeLogging, instanceOf(ChangeLoggingSessionBytesStore.class));
+            assertThat(changeLogging.wrapped(), instanceOf(RocksDBTimeOrderedSessionStore.class));
+        }
     }
 
     private void processData(final TopologyTestDriver driver) {

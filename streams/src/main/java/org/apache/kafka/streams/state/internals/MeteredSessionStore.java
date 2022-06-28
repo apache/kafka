@@ -45,7 +45,6 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
-import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
 
@@ -348,8 +347,8 @@ public class MeteredSessionStore<K, V>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> findSessions(final Instant earliestSessionEndTime,
-                                                         final Instant latestSessionEndTime) {
+    public KeyValueIterator<Windowed<K>, V> findSessions(final long earliestSessionEndTime,
+                                                         final long latestSessionEndTime) {
         return new MeteredWindowedKeyValueIterator<>(
                 wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime),
                 fetchSensor,

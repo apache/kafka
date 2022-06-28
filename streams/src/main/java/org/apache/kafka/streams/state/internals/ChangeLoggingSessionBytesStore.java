@@ -25,17 +25,15 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 
-import java.time.Instant;
-
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 /**
  * Simple wrapper around a {@link SessionStore} to support writing
  * updates to a changelog
  */
-class ChangeLoggingSessionBytesStore
-        extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
-        implements SessionStore<Bytes, byte[]> {
+public class ChangeLoggingSessionBytesStore
+    extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
+    implements SessionStore<Bytes, byte[]> {
 
     private InternalProcessorContext context;
 
@@ -98,8 +96,8 @@ class ChangeLoggingSessionBytesStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Instant earliestSessionEndTime,
-                                                                  final Instant latestSessionEndTime) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final long earliestSessionEndTime,
+                                                                  final long latestSessionEndTime) {
         return wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime);
     }
 
