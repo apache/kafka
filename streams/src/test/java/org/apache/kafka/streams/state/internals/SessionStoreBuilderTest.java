@@ -86,6 +86,9 @@ public class SessionStoreBuilderTest {
 
     @Test
     public void shouldHaveCachingStoreWhenEnabled() {
+        expect(inner.persistent()).andReturn(true);
+        replay(inner);
+
         final SessionStore<String, String> store = builder.withCachingEnabled().build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredSessionStore.class));
@@ -105,6 +108,9 @@ public class SessionStoreBuilderTest {
 
     @Test
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
+        expect(inner.persistent()).andReturn(true);
+        replay(inner);
+
         final SessionStore<String, String> store = builder
                 .withLoggingEnabled(Collections.<String, String>emptyMap())
                 .withCachingEnabled()
