@@ -118,6 +118,39 @@ public class SessionStoreBuilderTest {
     }
 
     @Test
+    public void shouldDisableCachingWhenSupplierIsTimeOrdered() {
+        RocksDbTimeOrderedSessionBytesStoreSupplier supplier = new RocksDbTimeOrderedSessionBytesStoreSupplier("test", 0L, true);
+        builder = new SessionStoreBuilder<>(
+                supplier,
+                Serdes.String(),
+                Serdes.String(),
+                new MockTime());
+
+        final SessionStore<String, String> store = builder
+                .withLoggingDisabled()
+                .withCachingEnabled()
+                .build();
+        final StateStore inner =  ((WrappedStateStore) store).wrapped();
+        assertThat(store, instanceOf(MeteredSessionStore.class));
+        assertThat(inner, instanceOf(RocksDBTimeOrderedSessionStore.class));
+    }
+
+    @Test
+    public void shouldDisableCachingWhenInnerIsNotPersistent() {
+        expect(inner.persistent()).andReturn(false);
+        replay(inner);
+
+        final SessionStore<String, String> store = builder
+                .withLoggingEnabled(Collections.<String, String>emptyMap())
+                .withCachingEnabled()
+                .build();
+        final WrappedStateStore changeLogging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+        assertThat(store, instanceOf(MeteredSessionStore.class));
+        assertThat(changeLogging, instanceOf(ChangeLoggingSessionBytesStore.class));
+        assertThat(changeLogging.wrapped(), CoreMatchers.equalTo(inner));
+    }
+
+    @Test
     public void shouldThrowNullPointerIfInnerIsNull() {
         final Exception e = assertThrows(NullPointerException.class, () -> new SessionStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime()));
         assertThat(e.getMessage(), equalTo("storeSupplier cannot be null"));

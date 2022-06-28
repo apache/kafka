@@ -181,11 +181,6 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                         store.remove(session.key);
 
                         maybeForwardUpdate(session.key, session.value, null);
-                        /*
-                        tupleForwarder.maybeForward(
-                            record.withKey(session.key)
-                                .withValue(new Change<>(null, session.value)));
-                         */
                     }
                 }
 
@@ -194,11 +189,6 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
                 store.put(sessionKey, agg);
 
                 maybeForwardUpdate(sessionKey, null, agg);
-                /*
-                tupleForwarder.maybeForward(
-                    record.withKey(sessionKey)
-                        .withValue(new Change<>(agg, null)));
-                 */
             }
 
             maybeForwardFinalResult(record, windowCloseTime);
@@ -254,7 +244,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         }
 
         private long emitRangeLowerBound() {
-            return lastEmitWindowCloseTime == ConsumerRecord.NO_TIMESTAMP ? 0L : Math.max(0L, lastEmitWindowCloseTime);
+            return Math.max(0L, lastEmitWindowCloseTime);
         }
 
         private long emitRangeUpperBound(final long windowCloseTime) {
@@ -264,7 +254,9 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         }
 
         private boolean shouldRangeFetch(final long emitRangeLowerBound, final long emitRangeUpperBound) {
-            return emitRangeUpperBound > emitRangeLowerBound;
+            // since a session window could be a single point (i.e. [t, t]),
+            // we need to range fetch and emit even if the upper and lower bound are the same
+            return emitRangeUpperBound >= emitRangeLowerBound;
         }
 
         private void fetchAndEmit(final Record<KIn, VIn> record,

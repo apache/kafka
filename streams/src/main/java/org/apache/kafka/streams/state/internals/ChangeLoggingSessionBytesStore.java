@@ -25,6 +25,8 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 
+import java.time.Instant;
+
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 /**
@@ -93,6 +95,12 @@ class ChangeLoggingSessionBytesStore
     @Override
     public byte[] fetchSession(final Bytes key, final long earliestSessionEndTime, final long latestSessionStartTime) {
         return wrapped().fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Instant earliestSessionEndTime,
+                                                                  final Instant latestSessionEndTime) {
+        return wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime);
     }
 
     @Override

@@ -32,6 +32,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
+import java.time.Instant;
 import java.util.List;
 
 abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends WrappedStateStore<T, K, V> {
@@ -257,6 +258,12 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
                                                                final long earliestSessionEndTime,
                                                                final long latestSessionStartTime) {
             return wrapped().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> findSessions(final Instant earliestSessionEndTime,
+                                                               final Instant latestSessionEndTime) {
+            return wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime);
         }
 
         @Override

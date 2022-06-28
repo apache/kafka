@@ -54,22 +54,16 @@ public class SessionStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, Sessio
             return inner;
         }
 
+        if (!inner.persistent()) {
+            return inner;
+        }
+
         // do not enable cache if the underlying store is time ordered
-        if (isTimeOrderedStore(inner)) {
+        if (storeSupplier instanceof RocksDbTimeOrderedSessionBytesStoreSupplier) {
             return inner;
         }
 
         return new CachingSessionStore(inner, storeSupplier.segmentIntervalMs());
-    }
-
-    private boolean isTimeOrderedStore(final StateStore stateStore) {
-        if (stateStore instanceof RocksDBTimeOrderedWindowStore) {
-            return true;
-        }
-        if (stateStore instanceof WrappedStateStore) {
-            return isTimeOrderedStore(((WrappedStateStore) stateStore).wrapped());
-        }
-        return false;
     }
 
     private SessionStore<Bytes, byte[]> maybeWrapLogging(final SessionStore<Bytes, byte[]> inner) {

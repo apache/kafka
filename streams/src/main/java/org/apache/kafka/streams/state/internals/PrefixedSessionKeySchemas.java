@@ -203,8 +203,9 @@ public class PrefixedSessionKeySchemas {
                                        final long endTime) {
             buf.putLong(endTime);
             buf.putLong(startTime);
-            if (key != null)
+            if (key != null) {
                 buf.put(key.get());
+            }
         }
 
         public static Bytes toBinary(final Bytes key,

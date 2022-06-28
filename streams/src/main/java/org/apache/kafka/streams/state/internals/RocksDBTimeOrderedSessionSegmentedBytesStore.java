@@ -39,7 +39,7 @@ import org.rocksdb.WriteBatch;
  */
 public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksDBTimeOrderedSegmentedBytesStore {
 
-    private class SessionKeySchemaIndexToBaseStoreIterator  extends IndexToBaseStoreIterator {
+    private class SessionKeySchemaIndexToBaseStoreIterator extends IndexToBaseStoreIterator {
         SessionKeySchemaIndexToBaseStoreIterator(final KeyValueIterator<Bytes, byte[]> indexIterator) {
             super(indexIterator);
         }
@@ -76,10 +76,10 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksD
                                                          final long latestSessionEndTime) {
         final List<KeyValueSegment> searchSpace = segments.segments(earliestSessionEndTime, latestSessionEndTime, true);
 
-        // here we use both as lower range since we the search boundaries are both on the session time end;
-        // hence effectively our search range is [0 earliestSE] - [0, latestSE]
+        // here we want [0, latestSE, FF] as the upper bound to cover any possible keys,
+        // but since we can only get upper bound based on timestamps, we use a slight larger upper bound as [0, latestSE+1]
         final Bytes binaryFrom = baseKeySchema.lowerRangeFixedSize(null, earliestSessionEndTime);
-        final Bytes binaryTo = baseKeySchema.lowerRangeFixedSize(null, latestSessionEndTime);
+        final Bytes binaryTo = baseKeySchema.lowerRangeFixedSize(null, latestSessionEndTime + 1);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
@@ -90,9 +90,9 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksD
                         final Windowed<Bytes> windowedKey = TimeFirstSessionKeySchema.from(bytes);
                         final long endTime = windowedKey.window().end();
 
-                        if (endTime <= latestSessionEndTime && endTime >= earliestSessionEndTime)
+                        if (endTime <= latestSessionEndTime && endTime >= earliestSessionEndTime) {
                             return true;
-
+                        }
                         iterator.next();
                     }
                     return false;
