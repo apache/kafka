@@ -339,8 +339,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
                     new Windowed<>("d", new SessionWindow(0, GAP_MS / 2)),
                     new Change<>(2L, null),
                     GAP_MS / 2)
-            ),
-            results);
+                ),
+                results);
         } else {
             assertEquals(
                 Arrays.asList(

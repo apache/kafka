@@ -119,7 +119,8 @@ public class SessionStoreBuilderTest {
 
     @Test
     public void shouldDisableCachingWhenSupplierIsTimeOrdered() {
-        RocksDbTimeOrderedSessionBytesStoreSupplier supplier = new RocksDbTimeOrderedSessionBytesStoreSupplier("test", 0L, true);
+        final RocksDbTimeOrderedSessionBytesStoreSupplier supplier
+                = new RocksDbTimeOrderedSessionBytesStoreSupplier("test", 0L, true);
         builder = new SessionStoreBuilder<>(
                 supplier,
                 Serdes.String(),
