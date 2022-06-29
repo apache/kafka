@@ -319,6 +319,7 @@ public class StreamThread extends Thread {
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
     private final AtomicLong maxBufferSizeBytes = new AtomicLong(-1L);
+    private final Set<TopicPartition> pausedPartitions = new HashSet<>();
     private final boolean eosEnabled;
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
@@ -797,8 +798,7 @@ public class StreamThread extends Thread {
                     totalProcessed += processed;
                     totalRecordsProcessedSinceLastSummary += processed;
                     final long bufferSize = taskManager.getInputBufferSizeInBytes();
-                    if (bufferSize <= maxBufferSizeBytes.get()) {
-                        final Set<TopicPartition> pausedPartitions = mainConsumer.paused();
+                    if (bufferSize <= maxBufferSizeBytes.get() && !pausedPartitions.isEmpty()) {
                         log.info("Buffered records size {} bytes falls below {}. Resuming all the paused partitions {} in the consumer",
                             bufferSize, maxBufferSizeBytes.get(), pausedPartitions);
                         mainConsumer.resume(pausedPartitions);
@@ -980,6 +980,7 @@ public class StreamThread extends Thread {
                 // and even lead to temporal deadlock. More explanation can be found here:
                 // https://issues.apache.org/jira/browse/KAFKA-13152?focusedCommentId=17400647&page=com.atlassian.jira.plugin.system.issuetabpanels%3Acomment-tabpanel#comment-17400647
                 mainConsumer.pause(taskManager.nonEmptyPartitions());
+                pausedPartitions.addAll(taskManager.nonEmptyPartitions());
             }
         }
 
