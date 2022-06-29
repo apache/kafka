@@ -1743,6 +1743,7 @@ class PartitionTest extends AbstractPartitionTest {
     )
 
     assertEquals(Set(brokerId, follower1, follower2, follower3), partition.partitionState.isr)
+    assertEquals(partitionEpoch + 1, partition.getZkVersion)
     // Verify that the AlterPartition request was sent twice
     verify(mockChannelManager, times(2)).sendRequest(any(), any())
     // After the retry, the partition state should be committed
