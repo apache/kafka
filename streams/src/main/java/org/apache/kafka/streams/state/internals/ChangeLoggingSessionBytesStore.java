@@ -31,9 +31,9 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
  * Simple wrapper around a {@link SessionStore} to support writing
  * updates to a changelog
  */
-class ChangeLoggingSessionBytesStore
-        extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
-        implements SessionStore<Bytes, byte[]> {
+public class ChangeLoggingSessionBytesStore
+    extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
+    implements SessionStore<Bytes, byte[]> {
 
     private InternalProcessorContext context;
 
@@ -93,6 +93,12 @@ class ChangeLoggingSessionBytesStore
     @Override
     public byte[] fetchSession(final Bytes key, final long earliestSessionEndTime, final long latestSessionStartTime) {
         return wrapped().fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final long earliestSessionEndTime,
+                                                                  final long latestSessionEndTime) {
+        return wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime);
     }
 
     @Override

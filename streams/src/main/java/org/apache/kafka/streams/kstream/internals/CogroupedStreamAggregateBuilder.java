@@ -100,6 +100,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                 (KStreamAggProcessorSupplier<K, ?, K, ?>) new KStreamWindowAggregate<K, K, VOut, W>(
                     windows,
                     storeBuilder.name(),
+                    EmitStrategy.onWindowUpdate(),
                     initializer,
                     kGroupedStream.getValue());
             parentProcessors.add(parentProcessor);
@@ -138,6 +139,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                 (KStreamAggProcessorSupplier<K, ?, K, ?>) new KStreamSessionWindowAggregate<K, K, VOut>(
                     sessionWindows,
                     storeBuilder.name(),
+                    EmitStrategy.onWindowUpdate(),
                     initializer,
                     kGroupedStream.getValue(),
                     sessionMerger);

@@ -85,7 +85,7 @@ public class TimeWindowedKStreamImplTest {
     private boolean emitFinal;
 
     @Parameterized.Parameters(name = "{0}_cache:{1}")
-    public static Collection<Object[]> getKeySchema() {
+    public static Collection<Object[]> data() {
         return asList(new Object[][] {
             {StrategyType.ON_WINDOW_UPDATE, true},
             {StrategyType.ON_WINDOW_UPDATE, false},

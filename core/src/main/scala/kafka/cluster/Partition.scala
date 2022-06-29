@@ -952,7 +952,7 @@ class Partition(val topicPartition: TopicPartition,
    *
    * With the addition of AlterPartition, we also consider newly added replicas as part of the ISR when advancing
    * the HW. These replicas have not yet been committed to the ISR by the controller, so we could revert to the previously
-   * committed ISR. However, adding additional replicas to the ISR makes it more restrictive and therefor safe. We call
+   * committed ISR. However, adding additional replicas to the ISR makes it more restrictive and therefore safe. We call
    * this set the "maximal" ISR. See KIP-497 for more details
    *
    * Note There is no need to acquire the leaderIsrUpdate lock here since all callers of this private API acquire that lock
