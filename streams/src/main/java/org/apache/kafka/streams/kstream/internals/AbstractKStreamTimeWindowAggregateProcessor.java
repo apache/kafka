@@ -73,11 +73,10 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
         internalProcessorContext = (InternalProcessorContext<Windowed<KIn>, Change<VAgg>>) context;
         final StreamsMetricsImpl metrics = internalProcessorContext.metrics();
         final String threadId = Thread.currentThread().getName();
+        final String processorName = internalProcessorContext.currentNode().name();
         droppedRecordsSensor = droppedRecordsSensor(threadId, context.taskId().toString(), metrics);
-        emittedRecordsSensor = emittedRecordsSensor(threadId, context.taskId().toString(),
-            internalProcessorContext.currentNode().name(), metrics);
-        emitFinalLatencySensor = emitFinalLatencySensor(threadId, context.taskId().toString(),
-            internalProcessorContext.currentNode().name(), metrics);
+        emittedRecordsSensor = emittedRecordsSensor(threadId, context.taskId().toString(), processorName, metrics);
+        emitFinalLatencySensor = emitFinalLatencySensor(threadId, context.taskId().toString(), processorName, metrics);
         windowStore = context.getStateStore(storeName);
 
         if (emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
@@ -175,7 +174,7 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
         observedStreamTime = Math.max(observedStreamTime, timestamp);
     }
 
-    private boolean shouldEmitFinal(final long closeTime) {
+    private boolean shouldEmitFinal(final long windowCloseTime) {
         if (emitStrategy.type() != StrategyType.ON_WINDOW_CLOSE) {
             return false;
         }
@@ -192,7 +191,7 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
         timeTracker.advanceNextTimeToEmit();
 
         // Only EMIT if the window close time does progress
-        return lastEmitWindowCloseTime == ConsumerRecord.NO_TIMESTAMP || lastEmitWindowCloseTime < closeTime;
+        return lastEmitWindowCloseTime == ConsumerRecord.NO_TIMESTAMP || lastEmitWindowCloseTime < windowCloseTime;
     }
 
     private void fetchAndEmit(final Record<KIn, VIn> record,

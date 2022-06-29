@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.internals.KStreamSessionWindowAggregate;
@@ -86,6 +87,7 @@ public class GraphGraceSearchUtilTest {
                 new KStreamWindowAggregate<String, Long, Integer, TimeWindow>(
                     windows,
                     "asdf",
+                    EmitStrategy.onWindowUpdate(),
                     null,
                     null
                 ),
@@ -108,6 +110,7 @@ public class GraphGraceSearchUtilTest {
                 new KStreamSessionWindowAggregate<String, Long, Integer>(
                     windows,
                     "asdf",
+                    EmitStrategy.onWindowUpdate(),
                     null,
                     null,
                     null
@@ -127,7 +130,7 @@ public class GraphGraceSearchUtilTest {
         final StatefulProcessorNode<String, Long> graceGrandparent = new StatefulProcessorNode<>(
             "asdf",
             new ProcessorParameters<>(new KStreamSessionWindowAggregate<String, Long, Integer>(
-                windows, "asdf", null, null, null
+                windows, "asdf", EmitStrategy.onWindowUpdate(), null, null, null
             ), "asdf"),
             (StoreBuilder<?>) null
         );
@@ -167,6 +170,7 @@ public class GraphGraceSearchUtilTest {
                 new KStreamSessionWindowAggregate<String, Long, Integer>(
                     windows,
                     "asdf",
+                    EmitStrategy.onWindowUpdate(),
                     null,
                     null,
                     null
@@ -194,6 +198,7 @@ public class GraphGraceSearchUtilTest {
                 new KStreamSessionWindowAggregate<String, Long, Integer>(
                     SessionWindows.ofInactivityGapAndGrace(ofMillis(10L), ofMillis(1234L)),
                     "asdf",
+                    EmitStrategy.onWindowUpdate(),
                     null,
                     null,
                     null
@@ -209,6 +214,7 @@ public class GraphGraceSearchUtilTest {
                 new KStreamWindowAggregate<String, Long, Integer, TimeWindow>(
                     TimeWindows.ofSizeAndGrace(ofMillis(10L), ofMillis(4321L)),
                     "asdf",
+                    EmitStrategy.onWindowUpdate(),
                     null,
                     null
                 ),

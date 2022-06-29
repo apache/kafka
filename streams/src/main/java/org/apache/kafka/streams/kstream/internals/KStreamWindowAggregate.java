@@ -51,13 +51,6 @@ public class KStreamWindowAggregate<KIn, VIn, VAgg, W extends Window> implements
 
     public KStreamWindowAggregate(final Windows<W> windows,
                                   final String storeName,
-                                  final Initializer<VAgg> initializer,
-                                  final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {
-        this(windows, storeName, EmitStrategy.onWindowUpdate(), initializer, aggregator);
-    }
-
-    public KStreamWindowAggregate(final Windows<W> windows,
-                                  final String storeName,
                                   final EmitStrategy emitStrategy,
                                   final Initializer<VAgg> initializer,
                                   final Aggregator<? super KIn, ? super VIn, VAgg> aggregator) {

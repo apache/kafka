@@ -110,14 +110,17 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
 
         return aggregateBuilder.build(
-                new NamedInternal(aggregateName),
-                materialize(materializedInternal),
-                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), emitStrategy, aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
-                materializedInternal.queryableStoreName(),
-                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-                materializedInternal.valueSerde());
-
-
+            new NamedInternal(aggregateName),
+            materialize(materializedInternal),
+            new KStreamWindowAggregate<>(
+                windows,
+                materializedInternal.storeName(),
+                emitStrategy,
+                aggregateBuilder.countInitializer,
+                aggregateBuilder.countAggregator),
+            materializedInternal.queryableStoreName(),
+            materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
+            materializedInternal.valueSerde());
     }
 
     @Override
@@ -158,14 +161,17 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
 
         return aggregateBuilder.build(
-                new NamedInternal(aggregateName),
-                materialize(materializedInternal),
-                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), emitStrategy, initializer, aggregator),
-                materializedInternal.queryableStoreName(),
-                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-                materializedInternal.valueSerde());
-
-
+            new NamedInternal(aggregateName),
+            materialize(materializedInternal),
+            new KStreamWindowAggregate<>(
+                windows,
+                materializedInternal.storeName(),
+                emitStrategy,
+                initializer,
+                aggregator),
+            materializedInternal.queryableStoreName(),
+            materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
+            materializedInternal.valueSerde());
     }
 
     @Override
@@ -205,12 +211,17 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         final String reduceName = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
 
         return aggregateBuilder.build(
-                new NamedInternal(reduceName),
-                materialize(materializedInternal),
-                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), emitStrategy, aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
-                materializedInternal.queryableStoreName(),
-                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-                materializedInternal.valueSerde());
+            new NamedInternal(reduceName),
+            materialize(materializedInternal),
+            new KStreamWindowAggregate<>(
+                windows,
+                materializedInternal.storeName(),
+                emitStrategy,
+                aggregateBuilder.reduceInitializer,
+                aggregatorForReducer(reducer)),
+            materializedInternal.queryableStoreName(),
+            materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
+            materializedInternal.valueSerde());
     }
 
     @Override
