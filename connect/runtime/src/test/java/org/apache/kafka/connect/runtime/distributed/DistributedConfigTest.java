@@ -33,6 +33,9 @@ import java.util.Map;
 
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -63,7 +66,7 @@ public class DistributedConfigTest {
     }
 
     @Test
-    public void shouldNotValidateDefaultKeyAlgorithms() {
+    public void testDefaultAlgorithmsNotPresent() {
         final String fakeKeyGenerationAlgorithm = "FakeKeyGenerationAlgorithm";
         final String fakeMacAlgorithm = "FakeMacAlgorithm";
 
@@ -97,7 +100,23 @@ public class DistributedConfigTest {
             mac.when(() -> Mac.getInstance(fakeMacAlgorithm))
                     .thenReturn(fakeMac);
 
+            // Should succeed; even though the defaults aren't present, the manually-specified algorithms are valid
             new DistributedConfig(configs);
+
+            // Should fail; the default key generation algorithm isn't present, and no override is specified
+            String removed = configs.remove(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG);
+            assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
+            configs.put(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, removed);
+
+            // Should fail; the default key generation algorithm isn't present, and no override is specified
+            removed = configs.remove(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG);
+            assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
+            configs.put(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, removed);
+
+            // Should fail; the default key generation algorithm isn't present, and no override is specified
+            removed = configs.remove(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG);
+            assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
+            configs.put(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, removed);
         }
     }
 

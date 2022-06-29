@@ -31,6 +31,7 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.Mac;
 import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -226,6 +227,58 @@ public class DistributedConfig extends WorkerConfig {
             //       + "See the exactly-once source support documentation at [add docs link here] for more information on this feature.";
     public static final String EXACTLY_ONCE_SOURCE_SUPPORT_DEFAULT = ExactlyOnceSourceSupport.DISABLED.toString();
 
+    private static Object defaultKeyGenerationAlgorithm() {
+        try {
+            validateKeyAlgorithm(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT);
+            return INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT;
+        } catch (Throwable t) {
+            log.info(
+                    "The default key generation algorithm '{}' does not appear to be available on this worker."
+                            + "A key algorithm will have to be manually specified via the '{}' worker property",
+                    INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT,
+                    INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG
+            );
+            return ConfigDef.NO_DEFAULT_VALUE;
+        }
+    }
+
+    private static Object defaultSignatureAlgorithm() {
+        try {
+            validateSignatureAlgorithm(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
+            return INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT;
+        } catch (Throwable t) {
+            log.info(
+                    "The default signature algorithm '{}' does not appear to be available on this worker."
+                            + "A signature algorithm will have to be manually specified via the '{}' worker property",
+                    INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT,
+                    INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG
+            );
+            return ConfigDef.NO_DEFAULT_VALUE;
+        }
+    }
+
+    private static Object defaultVerificationAlgorithms() {
+        List<String> result = new ArrayList<>();
+        for (String verificationAlgorithm : INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT) {
+            try {
+                validateSignatureAlgorithm(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, verificationAlgorithm);
+                result.add(verificationAlgorithm);
+            } catch (Throwable t) {
+                log.trace("Verification algorithm '{}' not found", verificationAlgorithm);
+            }
+        }
+        if (result.isEmpty()) {
+            log.info(
+                    "The default verification algorithm '{}' does not appear to be available on this worker."
+                            + "One or more verification algorithms will have to be manually specified via the '{}' worker property",
+                    INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT,
+                    INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG
+            );
+            return ConfigDef.NO_DEFAULT_VALUE;
+        }
+        return result;
+    }
+
     @SuppressWarnings("unchecked")
     private static final ConfigDef CONFIG = baseConfigDef()
             .define(GROUP_ID_CONFIG,
@@ -407,16 +460,10 @@ public class DistributedConfig extends WorkerConfig {
                     INTER_WORKER_KEY_TTL_MS_MS_DOC)
             .define(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG,
                     ConfigDef.Type.STRING,
-                    INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT,
+                    defaultKeyGenerationAlgorithm(),
                     ConfigDef.LambdaValidator.with(
-                        // Intentionally leave out any validation that checks to see if the key algorithm is
-                        // actually present on the worker in order to avoid introducing a hard dependency
-                        // on the default key generator algorithm (which may not be available on this worker,
-                        // and does not have to be available if the worker is configured to use a non-default
-                        // key generation algorithm)
-                        new ConfigDef.NonEmptyString()::ensureValid,
-                        () -> "Any KeyGenerator algorithm supported by the worker JVM"
-                    ),
+                            (name, value) -> validateKeyAlgorithm(name, (String) value),
+                            () -> "Any KeyGenerator algorithm supported by the worker JVM"),
                     ConfigDef.Importance.LOW,
                     INTER_WORKER_KEY_GENERATION_ALGORITHM_DOC)
             .define(INTER_WORKER_KEY_SIZE_CONFIG,
@@ -426,24 +473,18 @@ public class DistributedConfig extends WorkerConfig {
                     INTER_WORKER_KEY_SIZE_DOC)
             .define(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG,
                     ConfigDef.Type.STRING,
-                    INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT,
+                    defaultSignatureAlgorithm(),
                     ConfigDef.LambdaValidator.with(
-                        // Intentionally leave out any validation that checks to see if the signature algorithm is
-                        // actually present on the worker
-                        new ConfigDef.NonEmptyString()::ensureValid,
-                        () -> "Any MAC algorithm supported by the worker JVM"
-                    ),
+                            (name, value) -> validateSignatureAlgorithm(name, (String) value),
+                            () -> "Any MAC algorithm supported by the worker JVM"),
                     ConfigDef.Importance.LOW,
                     INTER_WORKER_SIGNATURE_ALGORITHM_DOC)
             .define(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG,
                     ConfigDef.Type.LIST,
-                    INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT,
+                    defaultVerificationAlgorithms(),
                     ConfigDef.LambdaValidator.with(
-                        // Intentionally leave out any validation that checks to see if the signature algorithms are
-                        // actually present on the worker
-                        (name, value) -> { },
-                        () -> "A list of one or more MAC algorithms, each supported by the worker JVM"
-                    ),
+                            (name, value) -> validateVerificationAlgorithms(name, (List<String>) value),
+                            () -> "A list of one or more MAC algorithms, each supported by the worker JVM"),
                     ConfigDef.Importance.LOW,
                     INTER_WORKER_VERIFICATION_ALGORITHMS_DOC);
 
@@ -548,9 +589,6 @@ public class DistributedConfig extends WorkerConfig {
     }
 
     private void validateInterWorkerKeyConfigs() {
-        validateKeyAlgorithm();
-        validateSignatureAlgorithm();
-        validateVerificationAlgorithms();
         getInternalRequestKeyGenerator();
         ensureVerificationAlgorithmsIncludeSignatureAlgorithm();
     }
@@ -567,26 +605,18 @@ public class DistributedConfig extends WorkerConfig {
         }
     }
 
-    private void validateVerificationAlgorithms() {
-        List<String> algorithms = getList(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG);
+    private static void validateVerificationAlgorithms(String configName, List<String> algorithms) {
         if (algorithms.isEmpty()) {
             throw new ConfigException(
-                INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG,
-                algorithms,
-                "At least one signature verification algorithm must be provided"
+                    configName,
+                    algorithms,
+                    "At least one signature verification algorithm must be provided"
             );
         }
-        algorithms.forEach(algorithm -> validateSignatureAlgorithm(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, algorithm));
+        algorithms.forEach(algorithm -> validateSignatureAlgorithm(configName, algorithm));
     }
 
-    private void validateSignatureAlgorithm() {
-        validateSignatureAlgorithm(
-                INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG,
-                getString(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG)
-        );
-    }
-
-    private void validateSignatureAlgorithm(String configName, String algorithm) {
+    private static void validateSignatureAlgorithm(String configName, String algorithm) {
         try {
             Mac.getInstance(algorithm);
         } catch (NoSuchAlgorithmException e) {
@@ -594,12 +624,11 @@ public class DistributedConfig extends WorkerConfig {
         }
     }
 
-    private void validateKeyAlgorithm() {
-        String algorithm = getString(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG);
+    private static void validateKeyAlgorithm(String configName, String algorithm) {
         try {
             KeyGenerator.getInstance(algorithm);
         } catch (NoSuchAlgorithmException e) {
-            throw new ConfigException(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, algorithm, e.getMessage());
+            throw new ConfigException(configName, algorithm, e.getMessage());
         }
     }
 }
