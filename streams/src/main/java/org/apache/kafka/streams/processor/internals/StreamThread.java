@@ -798,8 +798,10 @@ public class StreamThread extends Thread {
                     totalRecordsProcessedSinceLastSummary += processed;
                     final long bufferSize = taskManager.getInputBufferSizeInBytes();
                     if (bufferSize <= maxBufferSizeBytes.get()) {
-                        log.info("Buffered records size {} bytes falls below {}. Resuming the consumer", bufferSize, maxBufferSizeBytes.get());
-                        mainConsumer.resume(mainConsumer.paused());
+                        final Set<TopicPartition> pausedPartitions = mainConsumer.paused();
+                        log.info("Buffered records size {} bytes falls below {}. Resuming all the paused partitions {} in the consumer",
+                            bufferSize, maxBufferSizeBytes.get(), pausedPartitions);
+                        mainConsumer.resume(pausedPartitions);
                     }
                 }
 
@@ -970,7 +972,9 @@ public class StreamThread extends Thread {
             final long bufferSize = taskManager.getInputBufferSizeInBytes();
             // Pausing partitions as the buffer size now exceeds max buffer size
             if (bufferSize > maxBufferSizeBytes.get()) {
-                log.info("Buffered records size {} bytes exceeds {}. Pausing the consumer", bufferSize, maxBufferSizeBytes.get());
+                final Set<TopicPartition> nonEmptyPartitions = taskManager.nonEmptyPartitions();
+                log.info("Buffered records size {} bytes exceeds {}. Pausing partitions {} from the consumer",
+                    bufferSize, maxBufferSizeBytes.get(), nonEmptyPartitions);
                 // Only non-empty partitions are paused here. Reason is that, if a task has multiple partitions with
                 // some of them empty, then in that case pausing even empty partitions would sacrifice ordered processing
                 // and even lead to temporal deadlock. More explanation can be found here:
