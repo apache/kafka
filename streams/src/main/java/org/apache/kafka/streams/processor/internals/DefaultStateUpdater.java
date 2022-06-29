@@ -363,9 +363,10 @@ public class DefaultStateUpdater implements StateUpdater {
             stateUpdaterThread = new StateUpdaterThread("state-updater", changelogReader, offsetResetter);
             stateUpdaterThread.start();
             shutdownGate = new CountDownLatch(1);
+
+            // initialize the last commit as of now to prevent first commit happens immediately
+            this.lastCommitMs = time.milliseconds();
         }
-        // initialize the last commit as of now to prevent first commit happens immediately
-        this.lastCommitMs = time.milliseconds();
     }
 
     @Override
