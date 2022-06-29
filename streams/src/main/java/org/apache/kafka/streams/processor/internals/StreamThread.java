@@ -798,6 +798,7 @@ public class StreamThread extends Thread {
                     totalRecordsProcessedSinceLastSummary += processed;
                     final long bufferSize = taskManager.getInputBufferSizeInBytes();
                     if (bufferSize <= maxBufferSizeBytes.get()) {
+                        log.info("Buffered records size {} bytes falls below {}. Resuming the consumer", bufferSize, maxBufferSizeBytes.get());
                         mainConsumer.resume(mainConsumer.paused());
                     }
                 }
