@@ -24,7 +24,8 @@ public class TaskAndAction {
 
     enum Action {
         ADD,
-        REMOVE
+        REMOVE,
+        PAUSE
     }
 
     private final Task task;
@@ -45,6 +46,11 @@ public class TaskAndAction {
     public static TaskAndAction createRemoveTask(final TaskId taskId) {
         Objects.requireNonNull(taskId, "Task ID of task to remove is null!");
         return new TaskAndAction(null, taskId, Action.REMOVE);
+    }
+
+    public static TaskAndAction createPauseTask(final TaskId taskId) {
+        Objects.requireNonNull(taskId, "Task ID of task to pause is null!");
+        return new TaskAndAction(null, taskId, Action.PAUSE);
     }
 
     public Task getTask() {
