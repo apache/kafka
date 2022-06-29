@@ -802,6 +802,7 @@ public class StreamThread extends Thread {
                         log.info("Buffered records size {} bytes falls below {}. Resuming all the paused partitions {} in the consumer",
                             bufferSize, maxBufferSizeBytes.get(), pausedPartitions);
                         mainConsumer.resume(pausedPartitions);
+                        pausedPartitions.clear();
                     }
                 }
 
