@@ -251,7 +251,12 @@ public class DefaultStateUpdater implements StateUpdater {
                 addToRestoredTasks((StreamTask) task);
                 log.debug("Stateless active task " + task.id() + " was added to the restored tasks of the state updater");
             } else {
-                updatingTasks.put(task.id(), task);
+                final Task existingTask = updatingTasks.putIfAbsent(task.id(), task);
+                if (existingTask != null) {
+                    throw new IllegalStateException((existingTask.isActive() ? "Active" : "Standby") + " task " + task.id() + " already exist, " +
+                        "should not try to add another " + (task.isActive() ? "Active" : "Standby") + " task with the same id. " + BUG_ERROR_MESSAGE);
+                }
+
                 if (task.isActive()) {
                     log.debug("Stateful active task " + task.id() + " was added to the updating tasks of the state updater");
                     changelogReader.enforceRestoreActive();
