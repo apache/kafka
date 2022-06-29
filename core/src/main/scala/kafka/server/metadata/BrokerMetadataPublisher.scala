@@ -196,12 +196,14 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                 toLoggableProps(resource, props).mkString(","))
               dynamicConfigHandlers(ConfigType.Topic).
                 processConfigChanges(resource.name(), props)
+
             case CLIENT_METRICS =>
               // Apply changes to client metrics subscription
               info(s"Updating client metrics subscription ${resource.name()} with new configuration : " +
                 toLoggableProps(resource, props).mkString(","))
               dynamicConfigHandlers(ConfigType.ClientMetrics).processConfigChanges(resource.name(), props)
               conf.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
+
             case BROKER =>
               if (resource.name().isEmpty) {
                 // Apply changes to "cluster configs" (also known as default BROKER configs).
@@ -222,6 +224,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                 // have changed. This doesn't apply to topic configs or cluster configs.
                 reloadUpdatedFilesWithoutConfigChange(props)
               }
+
             case _ => // nothing to do
           }
         }

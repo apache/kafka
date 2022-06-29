@@ -1186,7 +1186,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private RequestFuture<Void> maybeAutoCommitOffsetsAsync() {
         if (autoCommitEnabled)
             return autoCommitOffsetsAsync();
-        return null;    
+        return null;
     }
 
     private class DefaultOffsetCommitCallback implements OffsetCommitCallback {

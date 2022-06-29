@@ -108,6 +108,10 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
             nullTopicConfigs.mkString(","))
         }
         LogConfig.validate(properties)
+      case CLIENT_METRICS =>
+        val props = new Properties()
+        config.entrySet().forEach(e => props.setProperty(e.getKey(), e.getValue()))
+        ClientMetricsConfig.validateConfig(resource.name(), props)
       case BROKER => validateBrokerName(resource.name())
       case CLIENT_METRICS =>
         val props = new Properties()
