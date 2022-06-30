@@ -102,8 +102,8 @@ public class PrefixedSessionKeySchemas {
         @Override
         public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom,
                                                  final Bytes binaryKeyTo,
-                                                 final long from,
-                                                 final long to,
+                                                 final long earliestWindowEndTime,
+                                                 final long latestWindowStartTime,
                                                  final boolean forward) {
             return iterator -> {
                 while (iterator.hasNext()) {
@@ -120,13 +120,13 @@ public class PrefixedSessionKeySchemas {
 
                     // We can return false directly here since keys are sorted by end time and if
                     // we get time smaller than `from`, there won't be time within range.
-                    if (!forward && endTime < from) {
+                    if (!forward && endTime < earliestWindowEndTime) {
                         return false;
                     }
 
                     if ((binaryKeyFrom == null || windowedKey.key().compareTo(binaryKeyFrom) >= 0)
                         && (binaryKeyTo == null || windowedKey.key().compareTo(binaryKeyTo) <= 0)
-                        && endTime >= from && startTime <= to) {
+                        && endTime >= earliestWindowEndTime && startTime <= latestWindowStartTime) {
                         return true;
                     }
                     iterator.next();
@@ -137,10 +137,10 @@ public class PrefixedSessionKeySchemas {
 
         @Override
         public <S extends Segment> List<S> segmentsToSearch(final Segments<S> segments,
-                                                            final long from,
-                                                            final long to,
+                                                            final long earliestWindowEndTime,
+                                                            final long latestWindowStartTime,
                                                             final boolean forward) {
-            return segments.segments(from, Long.MAX_VALUE, forward);
+            return segments.segments(earliestWindowEndTime, Long.MAX_VALUE, forward);
         }
 
         static long extractStartTimestamp(final byte[] binaryKey) {

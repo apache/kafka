@@ -73,6 +73,13 @@ public abstract class AbstractSessionBytesStoreTest {
     static final long SEGMENT_INTERVAL = 60_000L;
     static final long RETENTION_PERIOD = 10_000L;
 
+    enum StoreType {
+        RocksDBSessionStore,
+        RocksDBTimeOrderedSessionStoreWithIndex,
+        RocksDBTimeOrderedSessionStoreWithoutIndex,
+        InMemoryStore
+    }
+
     SessionStore<String, Long> sessionStore;
 
     private MockRecordCollector recordCollector;
@@ -82,6 +89,8 @@ public abstract class AbstractSessionBytesStoreTest {
     abstract <K, V> SessionStore<K, V> buildSessionStore(final long retentionPeriod,
                                                          final Serde<K> keySerde,
                                                          final Serde<V> valueSerde);
+
+    abstract StoreType getStoreType();
 
     @Before
     public void setUp() {
@@ -175,6 +184,75 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 5L);
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch("a")) {
+            assertEquals(expected, toList(values));
+        }
+    }
+
+    @Test
+    public void shouldFindSessionsForTimeRange() {
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 5L);
+
+        if (getStoreType() == StoreType.RocksDBSessionStore) {
+            assertThrows(
+                "This API is not supported by this implementation of SessionStore.",
+                UnsupportedOperationException.class,
+                () -> sessionStore.findSessions(0, 0)
+            );
+            return;
+        }
+
+        // Find point
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(0, 0)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 5L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        sessionStore.put(new Windowed<>("b", new SessionWindow(10, 20)), 10L);
+        sessionStore.put(new Windowed<>("c", new SessionWindow(30, 40)), 20L);
+
+        // Find boundary
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(0, 20)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 5L),
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(10, 20)), 10L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        // Find left boundary
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(0, 19)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 5L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        // Find right boundary
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(1, 20)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(10, 20)), 10L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        // Find partial off by 1
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(19, 41)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(10, 20)), 10L),
+                KeyValue.pair(new Windowed<>("c", new SessionWindow(30, 40)), 20L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        // Find all boundary
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(0, 40)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 5L),
+                KeyValue.pair(new Windowed<>("b", new SessionWindow(10, 20)), 10L),
+                KeyValue.pair(new Windowed<>("c", new SessionWindow(30, 40)), 20L)
+            );
             assertEquals(expected, toList(values));
         }
     }

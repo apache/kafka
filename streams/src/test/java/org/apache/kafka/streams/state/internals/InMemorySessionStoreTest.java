@@ -55,6 +55,10 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
             valueSerde).build();
     }
 
+    StoreType getStoreType() {
+        return StoreType.InMemoryStore;
+    }
+
     @Test
     public void shouldRemoveExpired() {
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);

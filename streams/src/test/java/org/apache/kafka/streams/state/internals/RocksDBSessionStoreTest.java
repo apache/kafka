@@ -45,11 +45,6 @@ public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
 
     private static final String STORE_NAME = "rocksDB session store";
 
-    enum StoreType {
-        RocksDBSessionStore,
-        RocksDBTimeOrderedSessionStoreWithIndex,
-        RocksDBTimeOrderedSessionStoreWithoutIndex
-    }
     @Parameter
     public StoreType storeType;
 
@@ -60,6 +55,11 @@ public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
             {StoreType.RocksDBTimeOrderedSessionStoreWithIndex},
             {StoreType.RocksDBTimeOrderedSessionStoreWithoutIndex}
         });
+    }
+
+    @Override
+    StoreType getStoreType() {
+        return storeType;
     }
 
     @Override
