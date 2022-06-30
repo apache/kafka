@@ -996,6 +996,7 @@ object KafkaConfig {
   val MetricReporterClassesDoc = CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC
   val MetricRecordingLevelDoc = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC
 
+
   /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
   val KafkaMetricsReporterClassesDoc = "A list of classes to use as Yammer metrics custom reporters." +
     " The reporters should implement <code>kafka.metrics.KafkaMetricsReporter</code> trait. If a client wants" +
