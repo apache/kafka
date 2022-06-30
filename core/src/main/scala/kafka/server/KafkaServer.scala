@@ -34,14 +34,14 @@ import kafka.security.CredentialProvider
 import kafka.server.metadata.{ZkConfigRepository, ZkMetadataCache}
 import kafka.utils._
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
-import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils, NodeApiVersions}
+import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ControlledShutdownRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{ApiVersionsResponse, ControlledShutdownRequest, ControlledShutdownResponse}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
@@ -229,7 +229,6 @@ class KafkaServer(
         this.logIdent = logContext.logPrefix
 
         val controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
-        val currentNodeControllerApiVersions = Some(NodeApiVersions.create(ApiKeys.zkBrokerApis.asScala.map(ApiVersionsResponse.toApiVersion).asJava))
 
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
         // applied after ZkConfigManager starts.
@@ -285,8 +284,7 @@ class KafkaServer(
           config = config,
           channelName = "forwarding",
           threadNamePrefix = threadNamePrefix,
-          retryTimeoutMs = config.requestTimeoutMs.longValue,
-          currentNodeControllerApiVersions
+          retryTimeoutMs = config.requestTimeoutMs.longValue
         )
         clientToControllerChannelManager.start()
 
@@ -322,8 +320,7 @@ class KafkaServer(
             config = config,
             channelName = "alterIsr",
             threadNamePrefix = threadNamePrefix,
-            retryTimeoutMs = Long.MaxValue,
-            currentNodeControllerApiVersions
+            retryTimeoutMs = Long.MaxValue
           )
           AlterPartitionManager(
             config = config,

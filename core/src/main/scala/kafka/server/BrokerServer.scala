@@ -34,14 +34,11 @@ import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.server.metadata.BrokerServerMetrics
 import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, KRaftMetadataCache, SnapshotWriterBuilder}
 import kafka.utils.{CoreUtils, KafkaScheduler}
-import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
@@ -215,11 +212,6 @@ class BrokerServer(
 
       val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
-      val currentNodeControllerApiVersions = if (config.isKRaftCoResidentMode) {
-        Some(NodeApiVersions.create(ApiKeys.controllerApis().asScala.map(ApiVersionsResponse.toApiVersion).asJava))
-      } else {
-        None
-      }
 
       clientToControllerChannelManager = BrokerToControllerChannelManager(
         controllerNodeProvider,
@@ -228,8 +220,7 @@ class BrokerServer(
         config,
         channelName = "forwarding",
         threadNamePrefix,
-        retryTimeoutMs = 60000,
-        currentNodeControllerApiVersions
+        retryTimeoutMs = 60000
       )
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
@@ -257,8 +248,7 @@ class BrokerServer(
         config,
         channelName = "alterIsr",
         threadNamePrefix,
-        retryTimeoutMs = Long.MaxValue,
-        currentNodeControllerApiVersions
+        retryTimeoutMs = Long.MaxValue
       )
       alterPartitionManager = new DefaultAlterPartitionManager(
         controllerChannelManager = alterIsrChannelManager,
@@ -360,8 +350,7 @@ class BrokerServer(
         config,
         "heartbeat",
         threadNamePrefix,
-        config.brokerSessionTimeoutMs.toLong,
-        currentNodeControllerApiVersions
+        config.brokerSessionTimeoutMs.toLong
       )
       lifecycleManager.start(
         () => metadataListener.highestMetadataOffset,

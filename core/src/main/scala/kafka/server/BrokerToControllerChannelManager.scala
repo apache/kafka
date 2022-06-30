@@ -122,8 +122,7 @@ object BrokerToControllerChannelManager {
     config: KafkaConfig,
     channelName: String,
     threadNamePrefix: Option[String],
-    retryTimeoutMs: Long,
-    currentNodeControllerApiVersions: Option[NodeApiVersions]
+    retryTimeoutMs: Long
   ): BrokerToControllerChannelManager = {
     new BrokerToControllerChannelManagerImpl(
       controllerNodeProvider,
@@ -132,8 +131,7 @@ object BrokerToControllerChannelManager {
       config,
       channelName,
       threadNamePrefix,
-      retryTimeoutMs,
-      currentNodeControllerApiVersions
+      retryTimeoutMs
     )
   }
 }
@@ -162,8 +160,7 @@ class BrokerToControllerChannelManagerImpl(
   config: KafkaConfig,
   channelName: String,
   threadNamePrefix: Option[String],
-  retryTimeoutMs: Long,
-  currentNodeControllerApiVersions: Option[NodeApiVersions]
+  retryTimeoutMs: Long
 ) extends BrokerToControllerChannelManager with Logging {
   private val logContext = new LogContext(s"[BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
@@ -255,10 +252,7 @@ class BrokerToControllerChannelManagerImpl(
 
   def controllerApiVersions(): Option[NodeApiVersions] = {
     requestThread.activeControllerAddress().flatMap { activeController =>
-      if (activeController.id == config.brokerId)
-        currentNodeControllerApiVersions
-      else
-        Option(apiVersions.get(activeController.idString))
+      Option(apiVersions.get(activeController.idString))
     }
   }
 }

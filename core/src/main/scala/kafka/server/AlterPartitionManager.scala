@@ -76,14 +76,14 @@ object AlterPartitionManager {
   def apply(
     config: KafkaConfig,
     metadataCache: MetadataCache,
-    alterPartitionChannelManager: BrokerToControllerChannelManager,
+    channelManager: BrokerToControllerChannelManager,
     scheduler: KafkaScheduler,
     time: Time,
     brokerEpochSupplier: () => Long
   ): AlterPartitionManager = {
 
     new DefaultAlterPartitionManager(
-      controllerChannelManager = alterPartitionChannelManager,
+      controllerChannelManager = channelManager,
       scheduler = scheduler,
       time = time,
       brokerId = config.brokerId,
