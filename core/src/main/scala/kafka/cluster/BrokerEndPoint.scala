@@ -35,13 +35,6 @@ object BrokerEndPoint {
       case _ => None
     }
   }
-
-  def readFrom(buffer: ByteBuffer): BrokerEndPoint = {
-    val brokerId = buffer.getInt()
-    val host = readShortString(buffer)
-    val port = buffer.getInt()
-    BrokerEndPoint(brokerId, host, port)
-  }
 }
 
 /**
