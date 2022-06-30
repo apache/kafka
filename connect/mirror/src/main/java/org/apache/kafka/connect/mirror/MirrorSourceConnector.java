@@ -20,6 +20,7 @@ import java.util.Map.Entry;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
@@ -191,6 +192,11 @@ public class MirrorSourceConnector extends SourceConnector {
     @Override
     public String version() {
         return AppInfoParser.getVersion();
+    }
+
+    @Override
+    public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> props) {
+        return ExactlyOnceSupport.SUPPORTED;
     }
 
     // visible for testing

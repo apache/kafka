@@ -29,6 +29,7 @@ import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewTopic;
 
+import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.kafka.connect.mirror.MirrorSourceConfig.TASK_TOPIC_PARTITIONS;
@@ -334,4 +335,8 @@ public class MirrorSourceConnectorTest {
         assertDoesNotThrow(() -> connector.isCycle(".b"));
     }
 
+    @Test
+    public void testExactlyOnceSupport() {
+        assertEquals(ExactlyOnceSupport.SUPPORTED, new MirrorSourceConnector().exactlyOnceSupport(makeProps()));
+    }
 }
