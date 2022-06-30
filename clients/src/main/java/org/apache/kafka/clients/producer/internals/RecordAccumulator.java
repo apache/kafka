@@ -113,6 +113,7 @@ public class RecordAccumulator {
      * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
      *                           numbers per partition.
      * @param bufferPool The buffer pool
+     * @param clientTelemetry {@link ClientTelemetry} used to record metrics
      */
     public RecordAccumulator(LogContext logContext,
                              int batchSize,
