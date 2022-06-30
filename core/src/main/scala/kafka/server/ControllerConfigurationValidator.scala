@@ -113,10 +113,6 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
         config.entrySet().forEach(e => props.setProperty(e.getKey(), e.getValue()))
         ClientMetricsConfig.validateConfig(resource.name(), props)
       case BROKER => validateBrokerName(resource.name())
-      case CLIENT_METRICS =>
-        val props = new Properties()
-        config.entrySet().forEach(e => props.setProperty(e.getKey(), e.getValue()))
-        ClientMetricsConfig.validateConfig(resource.name(), props)
       case _ => throwExceptionForUnknownResourceType(resource)
     }
   }

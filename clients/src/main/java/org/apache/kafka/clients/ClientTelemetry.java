@@ -494,7 +494,6 @@ public class ClientTelemetry implements Closeable {
                     return;
                 }
             } else {
-                log.warn("Could not transition state after failed request from state {}", state);
                 return;
             }
 

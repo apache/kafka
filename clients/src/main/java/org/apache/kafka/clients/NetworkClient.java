@@ -132,11 +132,11 @@ public class NetworkClient implements KafkaClient {
 
     private final Sensor throttleTimeSensor;
 
-    private final Optional<ClientInstanceMetricsRegistry> clientInstanceMetricsRegistry;
-
     private final AtomicReference<State> state;
 
     private final Optional<ClientTelemetryUpdater> clientTelemetryUpdater;
+
+    private final Optional<ClientInstanceMetricsRegistry> clientInstanceMetricsRegistry;
 
     public NetworkClient(Selectable selector,
                          Metadata metadata,
@@ -154,22 +154,22 @@ public class NetworkClient implements KafkaClient {
                          ApiVersions apiVersions,
                          LogContext logContext) {
         this(selector,
-            metadata,
-            clientId,
-            maxInFlightRequestsPerConnection,
-            reconnectBackoffMs,
-            reconnectBackoffMax,
-            socketSendBuffer,
-            socketReceiveBuffer,
-            defaultRequestTimeoutMs,
-            connectionSetupTimeoutMs,
-            connectionSetupTimeoutMaxMs,
-            time,
-            discoverBrokerVersions,
-            apiVersions,
-            null,
-            Optional.empty(),
-            logContext);
+             metadata,
+             clientId,
+             maxInFlightRequestsPerConnection,
+             reconnectBackoffMs,
+             reconnectBackoffMax,
+             socketSendBuffer,
+             socketReceiveBuffer,
+             defaultRequestTimeoutMs,
+             connectionSetupTimeoutMs,
+             connectionSetupTimeoutMaxMs,
+             time,
+             discoverBrokerVersions,
+             apiVersions,
+             null,
+             Optional.empty(),
+             logContext);
     }
 
     public NetworkClient(Selectable selector,
@@ -226,24 +226,24 @@ public class NetworkClient implements KafkaClient {
                          ApiVersions apiVersions,
                          LogContext logContext) {
         this(metadataUpdater,
-            null,
-            selector,
-            clientId,
-            maxInFlightRequestsPerConnection,
-            reconnectBackoffMs,
-            reconnectBackoffMax,
-            socketSendBuffer,
-            socketReceiveBuffer,
-            defaultRequestTimeoutMs,
-            connectionSetupTimeoutMs,
-            connectionSetupTimeoutMaxMs,
-            time,
-            discoverBrokerVersions,
-            apiVersions,
-            null,
-            Optional.empty(),
-            logContext,
-            new DefaultHostResolver());
+             null,
+             selector,
+             clientId,
+             maxInFlightRequestsPerConnection,
+             reconnectBackoffMs,
+             reconnectBackoffMax,
+             socketSendBuffer,
+             socketReceiveBuffer,
+             defaultRequestTimeoutMs,
+             connectionSetupTimeoutMs,
+             connectionSetupTimeoutMaxMs,
+             time,
+             discoverBrokerVersions,
+             apiVersions,
+             null,
+             Optional.empty(),
+             logContext,
+             new DefaultHostResolver());
     }
 
     public NetworkClient(MetadataUpdater metadataUpdater,
