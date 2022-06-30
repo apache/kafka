@@ -21,7 +21,7 @@ There may be bugs, including serious ones.  You should *assume that your data co
 The first step is to generate an ID for your new cluster, using the kafka-storage tool:
 
 ~~~~
-$ ./bin/kafka-storage.sh random-uuid
+$ $CONFLUENT_HOME/bin/kafka-storage random-uuid
 xtzWWN4bTjitpL3kfd9s5g
 ~~~~
 
@@ -29,7 +29,8 @@ xtzWWN4bTjitpL3kfd9s5g
 The next step is to format your storage directories.  If you are running in single-node mode, you can do this with one command:
 
 ~~~~
-$ ./bin/kafka-storage.sh format -t <uuid> -c ./config/kraft/server.properties
+$ cd $CONFLUENT_HOME
+$ ./bin/kafka-storage format -t <uuid> -c ./etc/kafka/kraft/server.properties
 Formatting /tmp/kraft-combined-logs
 ~~~~
 
@@ -42,7 +43,8 @@ Please see [here](https://github.com/apache/kafka/blob/trunk/config/kraft/broker
 Finally, you are ready to start the Kafka server on each node.
 
 ~~~~
-$ ./bin/kafka-server-start.sh ./config/kraft/server.properties
+$ cd $CONFLUENT_HOME
+$ ./bin/kafka-server-start ./etc/kafka/kraft/server.properties
 [2021-02-26 15:37:11,071] INFO Registered kafka:type=kafka.Log4jController MBean (kafka.utils.Log4jControllerRegistration$)
 [2021-02-26 15:37:11,294] INFO Setting -D jdk.tls.rejectClientInitiatedRenegotiation=true to disable client-initiated TLS renegotiation (org.apache.zookeeper.common.X509Util)
 [2021-02-26 15:37:11,466] INFO [Log partition=__cluster_metadata-0, dir=/tmp/kraft-combined-logs] Loading producer state till offset 0 with message format version 2 (kafka.log.Log)
@@ -54,7 +56,7 @@ $ ./bin/kafka-server-start.sh ./config/kraft/server.properties
 Just like with a ZooKeeper based broker, you can connect to port 9092 (or whatever port you configured) to perform administrative operations or produce or consume data.
 
 ~~~~
-$ ./bin/kafka-topics.sh --create --topic foo --partitions 1 --replication-factor 1 --bootstrap-server localhost:9092
+$ $CONFLUENT_HOME/bin/kafka-topics --create --topic foo --partitions 1 --replication-factor 1 --bootstrap-server localhost:9092
 Created topic foo.
 ~~~~
 
@@ -101,7 +103,7 @@ node IDs is probably just to give each server a numeric ID, starting from 0.  Al
 Note that clients never need to configure `controller.quorum.voters`; only servers do.
 
 ## Kafka Storage Tool
-As described above in the QuickStart section, you must use the `kafka-storage.sh` tool to generate a cluster ID for your new cluster, and then run the format command on each node before starting the node.
+As described above in the QuickStart section, you must use the `kafka-storage` tool to generate a cluster ID for your new cluster, and then run the format command on each node before starting the node.
 
 This is different from how Kafka has operated in the past.  Previously, Kafka would format blank storage directories automatically, and also generate a new cluster UUID automatically.  One reason for the change
 is that auto-formatting can sometimes obscure an error condition.  For example, under UNIX, if a data directory can't be mounted, it may show up as blank.  In this case, auto-formatting would be the wrong thing to do.
@@ -127,10 +129,10 @@ We've tried to make it clear when a feature is not supported in the preview rele
 If you encounter an issue, you might want to take a look at the metadata log.
 
 ## kafka-dump-log
-One way to view the metadata log is with kafka-dump-log.sh tool, like so:
+One way to view the metadata log is with kafka-dump-log tool, like so:
 
 ~~~~
-$ ./bin/kafka-dump-log.sh  --cluster-metadata-decoder --skip-record-metadata --files /tmp/kraft-combined-logs/__cluster_metadata-0/*.log
+$ $CONFLUENT_HOME/bin/kafka-dump-log --cluster-metadata-decoder --skip-record-metadata --files /tmp/kraft-combined-logs/__cluster_metadata-0/*.log
 Dumping /tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log
 Starting offset: 0
 baseOffset: 0 lastOffset: 0 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 1 isTransactional: false isControl: true position: 0 CreateTime: 1614382631640 size: 89 magic: 2 compresscodec: NONE crc: 1438115474 isvalid: true
@@ -156,7 +158,7 @@ baseOffset: 7 lastOffset: 8 count: 2 baseSequence: -1 lastSequence: -1 producerI
 Another tool for examining the metadata logs is the Kafka metadata shell.  Just like the ZooKeeper shell, this allows you to inspect the metadata of the cluster.
 
 ~~~~
-$ ./bin/kafka-metadata-shell.sh  --snapshot /tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log
+$ $CONFLUENT_HOME/bin/kafka-metadata-shell --snapshot /tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log
 >> ls /
 brokers  local  metadataQuorum  topicIds  topics
 >> ls /topics
