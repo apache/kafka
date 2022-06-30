@@ -733,6 +733,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             if (maxBufferedSize != -1 && recordInfo.queue().size() == maxBufferedSize) {
                 mainConsumer.resume(singleton(partition));
             }
+            if (recordInfo.queue.isEmpty()) {
+                log.info("Exhausted buffered records for partition {}. Resume consuming this partition", partition);
+                mainConsumer.resume(singleton(partition));
+            }
 
             record = null;
         } catch (final TimeoutException timeoutException) {
