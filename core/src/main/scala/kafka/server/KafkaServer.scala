@@ -313,21 +313,14 @@ class KafkaServer(
 
         // Start alter partition manager based on the IBP version
         alterPartitionManager = if (config.interBrokerProtocolVersion.isAlterPartitionSupported) {
-          val alterPartitionChannelManager = BrokerToControllerChannelManager(
-            controllerNodeProvider,
-            time = time,
-            metrics = metrics,
-            config = config,
-            channelName = "alterIsr",
-            threadNamePrefix = threadNamePrefix,
-            retryTimeoutMs = Long.MaxValue
-          )
           AlterPartitionManager(
             config = config,
             metadataCache = metadataCache,
-            alterPartitionChannelManager,
             scheduler = kafkaScheduler,
+            controllerNodeProvider,
             time = time,
+            metrics = metrics,
+            threadNamePrefix = threadNamePrefix,
             brokerEpochSupplier = () => kafkaController.brokerEpoch
           )
         } else {

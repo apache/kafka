@@ -241,22 +241,15 @@ class BrokerServer(
 
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
 
-      val alterIsrChannelManager = BrokerToControllerChannelManager(
-        controllerNodeProvider,
-        time,
-        metrics,
+      alterPartitionManager = AlterPartitionManager(
         config,
-        channelName = "alterIsr",
-        threadNamePrefix,
-        retryTimeoutMs = Long.MaxValue
-      )
-      alterPartitionManager = new DefaultAlterPartitionManager(
-        controllerChannelManager = alterIsrChannelManager,
+        metadataCache,
         scheduler = kafkaScheduler,
+        controllerNodeProvider,
         time = time,
-        brokerId = config.nodeId,
-        brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
-        metadataVersionSupplier = () => metadataCache.metadataVersion()
+        metrics,
+        threadNamePrefix,
+        brokerEpochSupplier = () => lifecycleManager.brokerEpoch
       )
       alterPartitionManager.start()
 
