@@ -16,11 +16,6 @@
  */
 package kafka.cluster
 
-import java.nio.ByteBuffer
-
-import kafka.api.ApiUtils._
-import org.apache.kafka.common.utils.Utils._
-
 object BrokerEndPoint {
 
   private val uriParseExp = """\[?([0-9a-zA-Z\-%._:]*)\]?:([0-9]+)""".r
@@ -45,20 +40,6 @@ object BrokerEndPoint {
  * This allows us to keep the wire protocol with the clients unchanged where the protocol is not needed.
  */
 case class BrokerEndPoint(id: Int, host: String, port: Int) {
-
-  def connectionString(): String = formatAddress(host, port)
-
-  def writeTo(buffer: ByteBuffer): Unit = {
-    buffer.putInt(id)
-    writeShortString(buffer, host)
-    buffer.putInt(port)
-  }
-
-  def sizeInBytes: Int =
-    4 + /* broker Id */
-    4 + /* port */
-    shortStringLength(host)
-
   override def toString: String = {
     s"BrokerEndPoint(id=$id, host=$host:$port)"
   }
