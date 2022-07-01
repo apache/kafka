@@ -48,8 +48,9 @@ public class ListConsumerGroupOffsetsOptions extends AbstractOptions<ListConsume
     /**
      * Sets an optional requireStable flag.
      */
-    public void requireStable(final boolean requireStable) {
+    public ListConsumerGroupOffsetsOptions requireStable(final boolean requireStable) {
         this.requireStable = requireStable;
+        return this;
     }
 
     /**
