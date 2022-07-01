@@ -247,7 +247,7 @@ class BrokerMetadataListenerTest {
 
     updateFeature(listener, feature = MetadataVersion.FEATURE_NAME, MetadataVersion.latest.featureLevel(), 100L)
     listener.getImageRecords().get()
-    assertEquals(-1L, snapshotter.activeSnapshotOffset, "We won't generate snapshot before starting publishing")
+    assertEquals(-1L, snapshotter.activeSnapshotOffset, "We won't generate snapshot on metadata version change before starting publishing")
   }
 
   @Test
@@ -256,9 +256,10 @@ class BrokerMetadataListenerTest {
     val listener = newBrokerMetadataListener(snapshotter = Some(snapshotter),
       maxBytesBetweenSnapshots = 1000L)
 
-    updateFeature(listener, feature = MetadataVersion.FEATURE_NAME, MetadataVersion.latest.featureLevel(), 100L)
+    val endOffset = 100L
+    updateFeature(listener, feature = MetadataVersion.FEATURE_NAME, MetadataVersion.latest.featureLevel(), endOffset)
     listener.startPublishing(new MockMetadataPublisher()).get()
-    assertEquals(100L, snapshotter.activeSnapshotOffset, "We should try to generate snapshot when starting publishing")
+    assertEquals(endOffset, snapshotter.activeSnapshotOffset, "We should try to generate snapshot when starting publishing")
   }
 
   @Test
@@ -268,9 +269,10 @@ class BrokerMetadataListenerTest {
       maxBytesBetweenSnapshots = 1000L)
     listener.startPublishing(new MockMetadataPublisher()).get()
 
-    updateFeature(listener, feature = MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV2.featureLevel(), 100L)
+    val endOffset = 100L
+    updateFeature(listener, feature = MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV2.featureLevel(), endOffset)
     listener.getImageRecords().get()
-    assertEquals(100L, snapshotter.activeSnapshotOffset, "We should generate snapshot on feature update")
+    assertEquals(endOffset, snapshotter.activeSnapshotOffset, "We should generate snapshot on feature update")
   }
 
   private def registerBrokers(
