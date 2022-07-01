@@ -228,8 +228,6 @@ class KafkaServer(
         logContext = new LogContext(s"[KafkaServer id=${config.brokerId}] ")
         this.logIdent = logContext.logPrefix
 
-        val controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
-
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
         // applied after ZkConfigManager starts.
         config.dynamicConfig.initialize(Some(zkClient))
@@ -265,6 +263,7 @@ class KafkaServer(
         logManager.startup(zkClient.getAllTopicsInCluster())
 
         metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion, brokerFeatures)
+        val controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
 
         /* initialize feature change listener */
         _featureChangeListener = new FinalizedFeatureChangeListener(metadataCache, _zkClient)
