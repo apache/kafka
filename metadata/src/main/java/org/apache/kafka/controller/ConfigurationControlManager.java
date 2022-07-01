@@ -248,24 +248,26 @@ public class ConfigurationControlManager {
     private ApiError validateAlterConfig(ConfigResource configResource,
                                          List<ApiMessageAndVersion> newRecords,
                                          boolean newlyCreatedResource) {
-        Map<String, String> newConfigs = new HashMap<>();
+        Map<String, String> allConfigs = new HashMap<>();
+        Map<String, String> alteredConfigs = new HashMap<>();
         TimelineHashMap<String, String> existingConfigs = configData.get(configResource);
-        if (existingConfigs != null) newConfigs.putAll(existingConfigs);
+        if (existingConfigs != null) allConfigs.putAll(existingConfigs);
         for (ApiMessageAndVersion newRecord : newRecords) {
             ConfigRecord configRecord = (ConfigRecord) newRecord.message();
             if (configRecord.value() == null) {
-                newConfigs.remove(configRecord.name());
+                allConfigs.remove(configRecord.name());
             } else {
-                newConfigs.put(configRecord.name(), configRecord.value());
+                allConfigs.put(configRecord.name(), configRecord.value());
             }
+            alteredConfigs.put(configRecord.name(), configRecord.value());
         }
         try {
-            validator.validate(configResource, newConfigs);
+            validator.validate(configResource, allConfigs);
             if (!newlyCreatedResource) {
                 existenceChecker.accept(configResource);
             }
             if (alterConfigPolicy.isPresent()) {
-                alterConfigPolicy.get().validate(new RequestMetadata(configResource, newConfigs));
+                alterConfigPolicy.get().validate(new RequestMetadata(configResource, alteredConfigs));
             }
         } catch (ConfigException e) {
             return new ApiError(INVALID_CONFIG, e.getMessage());
