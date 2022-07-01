@@ -31,12 +31,16 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.Mac;
 import java.security.InvalidParameterException;
 import java.security.NoSuchAlgorithmException;
+import java.security.Provider;
+import java.security.Security;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -177,8 +181,10 @@ public class DistributedConfig extends WorkerConfig {
     public static final int SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT = Math.toIntExact(TimeUnit.SECONDS.toMillis(300));
 
     public static final String INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG = "inter.worker.key.generation.algorithm";
-    public static final String INTER_WORKER_KEY_GENERATION_ALGORITHM_DOC = "The algorithm to use for generating internal request keys";
     public static final String INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT = "HmacSHA256";
+    public static final String INTER_WORKER_KEY_GENERATION_ALGORITHM_DOC = "The algorithm to use for generating internal request keys. "
+            + "The algorithm '" + INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT + "' will be used as a default on JVMs that support it; "
+            + "on other JVMs, no default is used and a value for this property must be manually specified in the worker config.";
 
     public static final String INTER_WORKER_KEY_SIZE_CONFIG = "inter.worker.key.size";
     public static final String INTER_WORKER_KEY_SIZE_DOC = "The size of the key to use for signing internal requests, in bits. "
@@ -191,13 +197,17 @@ public class DistributedConfig extends WorkerConfig {
     public static final int INTER_WORKER_KEY_TTL_MS_MS_DEFAULT = Math.toIntExact(TimeUnit.HOURS.toMillis(1));
 
     public static final String INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG = "inter.worker.signature.algorithm";
-    public static final String INTER_WORKER_SIGNATURE_ALGORITHM_DOC = "The algorithm used to sign internal requests";
     public static final String INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT = "HmacSHA256";
+    public static final String INTER_WORKER_SIGNATURE_ALGORITHM_DOC = "The algorithm used to sign internal requests"
+            + "The algorithm '" + INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG + "' will be used as a default on JVMs that support it; "
+            + "on other JVMs, no default is used and a value for this property must be manually specified in the worker config.";
 
     public static final String INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG = "inter.worker.verification.algorithms";
-    public static final String INTER_WORKER_VERIFICATION_ALGORITHMS_DOC = "A list of permitted algorithms for verifying internal requests. "
-        + "Must include the algorithm used for the " + INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG + " property";
     public static final List<String> INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT = Collections.singletonList(INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
+    public static final String INTER_WORKER_VERIFICATION_ALGORITHMS_DOC = "A list of permitted algorithms for verifying internal requests, "
+        + "which must include the algorithm used for the " + INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG + " property. "
+        + "The algorithm(s) '" + INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT + "' will be used as a default on JVMs that provide them; "
+        + "on other JVMs, no default is used and a value for this property must be manually specified in the worker config.";
 
     private enum ExactlyOnceSourceSupport {
         DISABLED(false),
@@ -613,14 +623,20 @@ public class DistributedConfig extends WorkerConfig {
                     "At least one signature verification algorithm must be provided"
             );
         }
-        algorithms.forEach(algorithm -> validateSignatureAlgorithm(configName, algorithm));
+        for (String algorithm : algorithms) {
+            try {
+                Mac.getInstance(algorithm);
+            } catch (NoSuchAlgorithmException e) {
+                throw unsupportedAlgorithmException(configName, algorithm, "Mac");
+            }
+        }
     }
 
     private static void validateSignatureAlgorithm(String configName, String algorithm) {
         try {
             Mac.getInstance(algorithm);
         } catch (NoSuchAlgorithmException e) {
-            throw new ConfigException(configName, algorithm, e.getMessage());
+            throw unsupportedAlgorithmException(configName, algorithm, "Mac");
         }
     }
 
@@ -628,7 +644,29 @@ public class DistributedConfig extends WorkerConfig {
         try {
             KeyGenerator.getInstance(algorithm);
         } catch (NoSuchAlgorithmException e) {
-            throw new ConfigException(configName, algorithm, e.getMessage());
+            throw unsupportedAlgorithmException(configName, algorithm, "KeyGenerator");
         }
     }
+
+    private static ConfigException unsupportedAlgorithmException(String name, Object value, String type) {
+        return new ConfigException(
+                name,
+                value,
+                "the algorithm is not supported by this JVM; the supported algorithms are: " + supportedAlgorithms(type)
+        );
+    }
+
+    // Visible for testing
+    static Set<String> supportedAlgorithms(String type) {
+        Set<String> result = new HashSet<>();
+        for (Provider provider : Security.getProviders()) {
+            for (Provider.Service service : provider.getServices()) {
+                if (type.equals(service.getType())) {
+                    result.add(service.getAlgorithm());
+                }
+            }
+        }
+        return result;
+    }
+
 }

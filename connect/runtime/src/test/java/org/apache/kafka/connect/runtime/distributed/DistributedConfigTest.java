@@ -27,9 +27,12 @@ import javax.crypto.Mac;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.GROUP_ID_CONFIG;
@@ -118,6 +121,35 @@ public class DistributedConfigTest {
             assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
             configs.put(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, removed);
         }
+    }
+
+    @Test
+    public void testSupportedMacAlgorithms() {
+        // These algorithms are required to be supported on JVMs ranging from at least Java 8 through Java 17; see
+        // https://docs.oracle.com/javase/8/docs/api/javax/crypto/Mac.html
+        // and https://docs.oracle.com/en/java/javase/17/docs/api/java.base/javax/crypto/Mac.html
+        testSupportedAlgorithms(
+                "Mac",
+                "HmacSHA1", "HmacSHA256"
+        );
+    }
+
+    @Test
+    public void testSupportedKeyGeneratorAlgorithms() {
+        // These algorithms are required to be supported on JVMs ranging from at least Java 8 through Java 17; see
+        // https://docs.oracle.com/javase/8/docs/api/javax/crypto/KeyGenerator.html
+        // and https://docs.oracle.com/en/java/javase/17/docs/api/java.base/javax/crypto/KeyGenerator.html
+        testSupportedAlgorithms(
+                "KeyGenerator",
+                "AES", "DESede", "HmacSHA1", "HmacSHA256"
+        );
+    }
+
+    private void testSupportedAlgorithms(String type, String... expectedAlgorithms) {
+        Set<String> supportedAlgorithms = DistributedConfig.supportedAlgorithms(type);
+        Set<String> unuspportedAlgorithms = new HashSet<>(Arrays.asList(expectedAlgorithms));
+        unuspportedAlgorithms.removeAll(supportedAlgorithms);
+        assertEquals(type + " algorithms were found that should be supported by this JVM but are not", Collections.emptySet(), unuspportedAlgorithms);
     }
 
     @Test
