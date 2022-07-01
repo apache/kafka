@@ -30,8 +30,10 @@ import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 import java.util.Properties
 import kafka.utils.TestUtils.{createAdminClient, resource}
+import org.apache.kafka.common.acl.AccessControlEntry
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
@@ -235,6 +237,14 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     } else {
       adminZkClient.deleteTopic(topic)
     }
+  }
+
+  def addAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
+    TestUtils.addAndVerifyAcls(brokers, acls, resource, controllerServers)
+  }
+
+  def removeAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
+    TestUtils.removeAndVerifyAcls(brokers, acls, resource, controllerServers)
   }
 
   /**

@@ -97,6 +97,25 @@ public class SnapshottableHashTableTest {
             new SnapshottableHashTable<>(registry, 1);
         assertEquals(0, table.snapshottableSize(Long.MAX_VALUE));
     }
+    @Test
+    public void testDeleteOnEmptyDeltaTable() {
+        // A simple test case to validate the behavior of the TimelineHashSet
+        // when the deltaTable for a snapshot is null
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
+        TimelineHashSet<String> set = new TimelineHashSet<>(registry, 5);
+
+        registry.getOrCreateSnapshot(100);
+        set.add("bar");
+        registry.getOrCreateSnapshot(200);
+        set.add("baz");
+        registry.revertToSnapshot(100);
+        assertTrue(set.isEmpty());
+        set.add("foo");
+        registry.getOrCreateSnapshot(300);
+        set.remove("bar");
+        registry.revertToSnapshot(100);
+        assertTrue(set.isEmpty());
+    }
 
     @Test
     public void testAddAndRemove() {

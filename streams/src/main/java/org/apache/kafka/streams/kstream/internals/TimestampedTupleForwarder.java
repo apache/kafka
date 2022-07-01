@@ -20,6 +20,7 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.state.internals.CacheFlushListener;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 /**
@@ -38,7 +39,7 @@ class TimestampedTupleForwarder<K, V> {
     @SuppressWarnings({"unchecked", "rawtypes"})
     TimestampedTupleForwarder(final StateStore store,
                               final ProcessorContext<K, Change<V>> context,
-                              final TimestampedCacheFlushListener<K, V> flushListener,
+                              final CacheFlushListener<K, ?> flushListener,
                               final boolean sendOldValues) {
         this.context = (InternalProcessorContext<K, Change<V>>) context;
         this.sendOldValues = sendOldValues;

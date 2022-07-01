@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.streams.examples.wordcount;
 
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.MockProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.junit.jupiter.api.Test;
@@ -44,7 +44,7 @@ public class WordCountTransformerTest {
         final MockProcessorContext<String, String> context = new MockProcessorContext<>();
 
         // Create and initialize the transformer under test; including its provided store
-        final WordCountTransformerDemo.MyTransformerSupplier supplier = new WordCountTransformerDemo.MyTransformerSupplier();
+        final WordCountTransformerDemo.MyProcessorSupplier supplier = new WordCountTransformerDemo.MyProcessorSupplier();
         for (final StoreBuilder<?> storeBuilder : supplier.stores()) {
             final StateStore store = storeBuilder
                 .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
@@ -53,16 +53,16 @@ public class WordCountTransformerTest {
             store.init(context.getStateStoreContext(), store);
             context.getStateStoreContext().register(store, null);
         }
-        final Transformer<String, String, KeyValue<String, String>> transformer = supplier.get();
-        transformer.init(new org.apache.kafka.streams.processor.MockProcessorContext() {
+        final Processor<String, String, String, String> processor = supplier.get();
+        processor.init(new org.apache.kafka.streams.processor.api.MockProcessorContext<String, String>() {
             @Override
             public <S extends StateStore> S getStateStore(final String name) {
                 return context.getStateStore(name);
             }
 
             @Override
-            public <K, V> void forward(final K key, final V value) {
-                context.forward(new Record<>((String) key, (String) value, 0L));
+            public <K extends String, V extends String> void forward(final Record<K, V> record) {
+                context.forward(record);
             }
 
             @Override
@@ -72,7 +72,8 @@ public class WordCountTransformerTest {
         });
 
         // send a record to the transformer
-        transformer.transform("key", "alpha beta\tgamma\n\talpha");
+        final Record<String, String> record = new Record<>("key", "alpha beta\tgamma\n\talpha", 0L);
+        processor.process(record);
 
         // note that the transformer does not forward during transform()
         assertTrue(context.forwarded().isEmpty());
