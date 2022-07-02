@@ -997,9 +997,15 @@ public final class Utils {
     }
 
     /**
-     * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level. Note that, if
-     * a method reference of null object is passed as closeable to this method, then that leads to NPE and
-     * the close() doesn't happen as expected.
+     * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
+     * <b>Be cautious when passing method references as an argument.</b> For example:
+     * <p>
+     * {@code closeQuietly(task::stop, "source task");}
+     * <p>
+     * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
+     * reference from a null object will result in a {@link NullPointerException}. In the example code above,
+     * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
+     * use a method reference from it.
      */
     public static void closeQuietly(AutoCloseable closeable, String name) {
         if (closeable != null) {
@@ -1011,10 +1017,16 @@ public final class Utils {
         }
     }
 
-    /*
+    /**
     * Closes {@code closeable} and if an exception is thrown, it is registered to the firstException parameter.
-    * Note that, if a method reference of null object is passed as closeable to this method, then that leads to NPE and
-    * * the close() doesn't happen as expected.
+    * <b>Be cautious when passing method references as an argument.</b> For example:
+    * <p>
+    * {@code closeQuietly(task::stop, "source task");}
+    * <p>
+    * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
+    * reference from a null object will result in a {@link NullPointerException}. In the example code above,
+    * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
+    * use a method reference from it.
     */
     public static void closeQuietly(AutoCloseable closeable, String name, AtomicReference<Throwable> firstException) {
         if (closeable != null) {
@@ -1028,8 +1040,7 @@ public final class Utils {
     }
 
     /**
-     * close all closable objects even if one of them throws exception. Have care when passing method references as a
-     * closeable as a method reference on a null object would throw an NPE and the close won't happen as expected.
+     * close all closable objects even if one of them throws exception.
      * @param firstException keeps the first exception
      * @param name message of closing those objects
      * @param closeables closable objects
