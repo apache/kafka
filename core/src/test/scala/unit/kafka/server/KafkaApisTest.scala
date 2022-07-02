@@ -307,8 +307,12 @@ class KafkaApisTest {
         Seq(new AlterConfigsRequest.ConfigEntry("foo", "bar")).asJava))
     val alterConfigsRequest = new AlterConfigsRequest.Builder(configs.asJava, false).build(requestHeader.apiVersion)
 
+    val startTimeNanos = time.nanoseconds()
+    val dequeueCostNanos = 5 * 1000 * 1000
     val request = TestUtils.buildEnvelopeRequest(
-      alterConfigsRequest, kafkaPrincipalSerde, requestChannelMetrics, time.nanoseconds())
+      alterConfigsRequest, kafkaPrincipalSerde, requestChannelMetrics, startTimeNanos)
+    // add dequeue time to simulate request handlers poll request from requestQueue
+    request.requestDequeueTimeNanos = startTimeNanos + dequeueCostNanos
 
     val capturedResponse: ArgumentCaptor[AlterConfigsResponse] = ArgumentCaptor.forClass(classOf[AlterConfigsResponse])
     val capturedRequest: ArgumentCaptor[RequestChannel.Request] = ArgumentCaptor.forClass(classOf[RequestChannel.Request])
@@ -321,6 +325,8 @@ class KafkaApisTest {
       any()
     )
     assertEquals(Some(request), capturedRequest.getValue.envelope)
+    // the dequeue time of forwarded request should equels to envelop request
+    assertEquals(request.requestDequeueTimeNanos, capturedRequest.getValue.requestDequeueTimeNanos)
     val innerResponse = capturedResponse.getValue
     val responseMap = innerResponse.data.responses().asScala.map { resourceResponse =>
       resourceResponse.resourceName() -> Errors.forCode(resourceResponse.errorCode)
