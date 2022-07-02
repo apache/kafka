@@ -124,15 +124,12 @@ public class ConnectorPluginsResource implements ConnectResource {
     @Path("/{pluginName}/config/validate")
     @Operation(
             summary = "Validate the provided configuration against the configuration definition for the specified pluginName",
-            parameters = {
-                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "pluginName"),
-            },
             requestBody = @RequestBody(
                     required = true,
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = MapSchema.class),
-                            additionalPropertiesSchema = @Schema(implementation = StringSchema.class)
+                            additionalPropertiesSchema = @Schema(type = "string")
                     )
             )
     )
@@ -174,12 +171,7 @@ public class ConnectorPluginsResource implements ConnectResource {
 
     @GET
     @Path("/")
-    @Operation(
-            summary = "List all connector plugins installed",
-            parameters = {
-                @Parameter(in = ParameterIn.QUERY, schema = @Schema(implementation = BooleanSchema.class), name = "connectorsOnly"),
-            }
-    )
+    @Operation(summary = "List all connector plugins installed")
     @ApiResponse(
             responseCode = "200",
             content = @Content(mediaType = "application/json", array =  @ArraySchema(schema = @Schema(implementation = PluginInfo.class)))
@@ -200,11 +192,7 @@ public class ConnectorPluginsResource implements ConnectResource {
 
     @GET
     @Path("/{pluginName}/config")
-    @Operation(
-            summary = "Get the configuration definition for the specified pluginName",
-            parameters = {
-                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "pluginName"),
-            })
+    @Operation(summary = "Get the configuration definition for the specified pluginName")
     @ApiResponse(
             responseCode = "200",
             content = @Content(mediaType = "application/json", array =  @ArraySchema(schema = @Schema(implementation = ConfigKeyInfo.class)))

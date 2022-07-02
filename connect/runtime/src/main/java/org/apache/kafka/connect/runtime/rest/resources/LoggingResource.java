@@ -105,12 +105,7 @@ public class LoggingResource implements ConnectResource {
      */
     @GET
     @Path("/{logger}")
-    @Operation(
-            summary = "Get the log level for the specified logger",
-            parameters = {
-                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "namedLogger"),
-            }
-    )
+    @Operation(summary = "Get the log level for the specified logger")
     @ApiResponse(responseCode = "200",
             content = @Content(mediaType = "application/json",
                     schema = @Schema(implementation = MapSchema.class),
@@ -156,9 +151,6 @@ public class LoggingResource implements ConnectResource {
     @Path("/{logger}")
     @Operation(
             summary = "Set the level for the specified logger",
-            parameters = {
-                    @Parameter(in = ParameterIn.PATH, schema = @Schema(implementation = StringSchema.class), name = "namedLogger"),
-            },
             requestBody = @RequestBody(
                     required = true,
                     content = @Content(
