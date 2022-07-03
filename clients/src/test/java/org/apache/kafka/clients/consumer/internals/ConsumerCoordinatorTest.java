@@ -1315,28 +1315,37 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
 
         coordinator.ensureActiveGroup();
+        subscriptions.seek(t1p, 100L);
 
         ExecutorService executor = Executors.newFixedThreadPool(1);
         try {
             executor.submit(() -> {
                 try {
-                    // sleep 200ms to delay response
-                    Thread.sleep(200);
-                } catch (Exception e) { }
-                prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NONE);
+                    // sleep 100ms to ensure onJoinPrepare invoked
+                    Thread.sleep(100);
+                    time.sleep(150);
+                } catch (InterruptedException e) {
+                }
             });
 
             int generationId = 42;
             String memberId = "consumer-42";
 
-            boolean res = coordinator.onJoinPrepare(generationId, memberId);
+            boolean res = coordinator.onJoinPrepare(time.timer(100L), generationId, memberId);
+            assertFalse(res);
 
+            client.respond(offsetCommitResponse(singletonMap(t1p, Errors.NONE)));
+            time.sleep(100);
+
+            res = coordinator.onJoinPrepare(time.timer(100L), generationId, memberId);
             assertTrue(res);
+
             assertFalse(client.hasPendingResponses());
             assertFalse(client.hasInFlightRequests());
             assertFalse(coordinator.coordinatorUnknown());
+
         }  finally {
-            executor.shutdownNow();
+            executor.shutdown();
             executor.awaitTermination(1000, TimeUnit.MILLISECONDS);
         }
     }
@@ -1351,7 +1360,7 @@ public abstract class ConsumerCoordinatorTest {
             int generationId = 42;
             String memberId = "consumer-42";
 
-            boolean res = coordinator.onJoinPrepare(generationId, memberId);
+            boolean res = coordinator.onJoinPrepare(time.timer(0L), generationId, memberId);
 
             assertTrue(res);
             assertTrue(client.hasPendingResponses());
@@ -1369,7 +1378,7 @@ public abstract class ConsumerCoordinatorTest {
             int generationId = 42;
             String memberId = "consumer-42";
 
-            boolean res = coordinator.onJoinPrepare(generationId, memberId);
+            boolean res = coordinator.onJoinPrepare(time.timer(0L), generationId, memberId);
             coordinator.invokeCompletedOffsetCommitCallbacks();
 
             assertTrue(res);
@@ -1389,7 +1398,7 @@ public abstract class ConsumerCoordinatorTest {
             int generationId = 42;
             String memberId = "consumer-42";
 
-            boolean res = coordinator.onJoinPrepare(generationId, memberId);
+            boolean res = coordinator.onJoinPrepare(time.timer(0L), generationId, memberId);
             coordinator.invokeCompletedOffsetCommitCallbacks();
 
             assertFalse(res);
@@ -1409,7 +1418,7 @@ public abstract class ConsumerCoordinatorTest {
             int generationId = 42;
             String memberId = "consumer-42";
 
-            boolean res = coordinator.onJoinPrepare(generationId, memberId);
+            boolean res = coordinator.onJoinPrepare(time.timer(0L), generationId, memberId);
             coordinator.invokeCompletedOffsetCommitCallbacks();
 
             assertTrue(res);

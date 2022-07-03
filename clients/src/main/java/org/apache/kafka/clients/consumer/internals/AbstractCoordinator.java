@@ -191,7 +191,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * @param memberId The identifier of this member in the previous group or "" if there was none
      * @return true If onJoinPrepare async commit succeeded, false otherwise
      */
-    protected abstract boolean onJoinPrepare(int generation, String memberId);
+    protected abstract boolean onJoinPrepare(Timer timer, int generation, String memberId);
 
     /**
      * Invoked when the leader is elected. This is used by the leader to perform the assignment
@@ -426,7 +426,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 // exception, in which case upon retry we should not retry onJoinPrepare either.
                 needsJoinPrepare = false;
                 // return false when onJoinPrepare is waiting for committing offset
-                if (!onJoinPrepare(generation.generationId, generation.memberId)) {
+                if (!onJoinPrepare(timer, generation.generationId, generation.memberId)) {
                     needsJoinPrepare = true;
                     //should not initiateJoinGroup if needsJoinPrepare still is true
                     return false;

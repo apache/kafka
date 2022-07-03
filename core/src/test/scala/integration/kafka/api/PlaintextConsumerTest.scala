@@ -38,6 +38,7 @@ import kafka.server.KafkaServer
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.clients.admin.NewTopic
 
+import java.util.concurrent.locks.ReentrantLock
 import scala.collection.mutable
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
@@ -967,6 +968,71 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     } finally {
       consumerPollers.foreach(_.shutdown())
     }
+  }
+
+  @Test
+  def testCoopearativeAssigorAndRejoin(): Unit = {
+    // 2 consumer using cooperative-sticky assignment
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "cooperative-sticky-group")
+    this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[CooperativeStickyAssignor].getName)
+    val consumer1 = createConsumer()
+    val consumer2 = createConsumer()
+
+    // create a new topic, have 2 partitions
+    val topic1 = "topic1"
+    val producer = createProducer()
+    val expectedAssignment = createTopicAndSendRecords(producer, topic1, 2, 100)
+
+    assertEquals(0, consumer1.assignment().size)
+    assertEquals(0, consumer2.assignment().size)
+
+    val lock1 = new ReentrantLock()
+    var generationId1 = 0
+    var memberId1 = ""
+    val customRebalanceListener = new ConsumerRebalanceListener {
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+      }
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+        lock1.lock()
+        try {
+          generationId1 = consumer1.groupMetadata().generationId()
+          memberId1 = consumer1.groupMetadata().memberId()
+        } finally {
+          lock1.unlock()
+        }
+      }
+    }
+    val consumerPoller1 = new ConsumerAssignmentPoller(consumer1, List(topic1), Set.empty, customRebalanceListener)
+    consumerPoller1.start()
+    TestUtils.waitUntilTrue(() => consumerPoller1.consumerAssignment() == expectedAssignment,
+      s"Timed out while awaiting expected assignment change to 2.")
+
+    var stableGeneration = 0
+    var stableMemberId1 = ""
+    lock1.lock()
+    try {
+      stableGeneration = generationId1
+      stableMemberId1 = memberId1
+    } finally {
+      lock1.unlock()
+    }
+
+    val consumerPoller2 = subscribeConsumerAndStartPolling(consumer2, List(topic1))
+    TestUtils.waitUntilTrue(() => consumerPoller1.consumerAssignment().size == 1,
+      s"Timed out while awaiting expected assignment change to 1.")
+    TestUtils.waitUntilTrue(() => consumerPoller2.consumerAssignment().size == 1,
+      s"Timed out while awaiting expected assignment change to 1.")
+    lock1.lock()
+    try {
+      // should rebalance twice before finally stable
+      assertEquals(stableGeneration + 2, generationId1)
+      assertEquals(stableMemberId1, memberId1)
+    } finally {
+      lock1.unlock()
+    }
+
+    consumerPoller1.shutdown()
+    consumerPoller2.shutdown()
   }
 
   /**

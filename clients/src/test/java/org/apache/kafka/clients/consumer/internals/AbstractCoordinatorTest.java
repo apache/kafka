@@ -1698,7 +1698,7 @@ public class AbstractCoordinatorTest {
         }
 
         @Override
-        protected boolean onJoinPrepare(int generation, String memberId) {
+        protected boolean onJoinPrepare(Timer timer, int generation, String memberId) {
             onJoinPrepareInvokes++;
             return true;
         }

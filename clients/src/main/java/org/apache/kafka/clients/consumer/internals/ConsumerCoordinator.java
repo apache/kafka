@@ -141,6 +141,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private final RebalanceProtocol protocol;
+    // pending commit offset request in onJoinPrepare
+    private RequestFuture<Void> autoCommitOffsetRequestFuture = null;
 
     /**
      * Initialize the coordination manager.
@@ -740,28 +742,34 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected boolean onJoinPrepare(int generation, String memberId) {
+    protected boolean onJoinPrepare(Timer timer, int generation, String memberId) {
         log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
         boolean onJoinPrepareAsyncCommitCompleted = false;
         // async commit offsets prior to rebalance if auto-commit enabled
-        RequestFuture<Void> future = maybeAutoCommitOffsetsAsync();
-        // wait for commit offset response if future exist
-        if (future != null) {
-            client.poll(future, time.timer(rebalanceConfig.rebalanceTimeoutMs));
+        if (autoCommitEnabled && autoCommitOffsetRequestFuture == null) {
+            autoCommitOffsetRequestFuture = maybeAutoCommitOffsetsAsync();
         }
+
+        // wait for commit offset response before timer.
+        if (autoCommitOffsetRequestFuture != null) {
+            client.poll(autoCommitOffsetRequestFuture, timer);
+        }
+
         // return true when
         // 1. future is null, which means no commit request sent, so it is still considered completed
         // 2. offset commit completed
         // 3. offset commit failed with non-retriable exception
-        if (future == null)
+        if (autoCommitOffsetRequestFuture == null)
             onJoinPrepareAsyncCommitCompleted = true;
-        else if (future.succeeded())
+        else if (autoCommitOffsetRequestFuture.succeeded()) {
             onJoinPrepareAsyncCommitCompleted = true;
-        else if (future.failed() && !future.isRetriable()) {
-            log.error("Asynchronous auto-commit of offsets failed: {}", future.exception().getMessage());
+        } else if (autoCommitOffsetRequestFuture.failed() && !autoCommitOffsetRequestFuture.isRetriable()) {
+            log.error("Asynchronous auto-commit of offsets failed: {}", autoCommitOffsetRequestFuture.exception().getMessage());
             onJoinPrepareAsyncCommitCompleted = true;
         }
-
+        if (autoCommitOffsetRequestFuture != null && autoCommitOffsetRequestFuture.isDone()) {
+            autoCommitOffsetRequestFuture = null;
+        }
 
         // the generation / member-id can possibly be reset by the heartbeat thread
         // upon getting errors or heartbeat timeouts; in this case whatever is previously
