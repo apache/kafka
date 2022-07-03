@@ -978,8 +978,10 @@ public class KafkaStreams implements AutoCloseable {
         }
         // Initially, all Stream Threads are created with 0 cache size and max buffer size and then resized here.
         resizeThreadCacheAndBufferMemory(numStreamThreads);
-        log.info("Initializing {} StreamThread with cache size/max buffer size values as {} per thread.",
-            numStreamThreads, getThreadCacheAndBufferMemoryString());
+        if (numStreamThreads > 0) {
+            log.info("Initializing {} StreamThread with cache size/max buffer size values as {} per thread.",
+                numStreamThreads, getThreadCacheAndBufferMemoryString());
+        }
 
         stateDirCleaner = setupStateDirCleaner();
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, applicationConfigs);

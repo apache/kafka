@@ -861,8 +861,8 @@ public class PartitionGroupTest {
             ),
             tp -> OptionalLong.of(0L),
             getValueSensor(metrics, lastLatenessValue),
-            enforcedProcessingSensor,
             getValueSensor(metrics, totalBytesValue),
+            enforcedProcessingSensor,
             maxTaskIdleMs
         );
     }
