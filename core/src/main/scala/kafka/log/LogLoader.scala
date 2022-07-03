@@ -432,11 +432,11 @@ class LogLoader(
           // we had an invalid message, delete all remaining log
           warn(s"Corruption found in segment ${segment.baseOffset}," +
             s" truncating to offset ${segment.readNextOffset}")
-          removeAndDeleteSegmentsAsync(unflushed.toList)
+          removeAndDeleteSegmentsAsync(unflushedIter.toList)
           truncated = true
         }
         numFlushed += 1
-        numRemainingSegments.compute(threadName, (_, _) => unflushedSize - numFlushed)
+        numRemainingSegments.put(threadName, unflushedSize - numFlushed)
       }
     }
 
