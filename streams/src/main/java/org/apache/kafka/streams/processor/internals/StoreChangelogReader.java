@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
-import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -707,7 +706,7 @@ public class StoreChangelogReader implements ChangelogReader {
             clearTaskTimeout(getTasksFromPartitions(tasks, partitions));
             return committedOffsets;
         } catch (final TimeoutException | InterruptedException | ExecutionException retriableException) {
-            log.debug("Could not retrieve the committed offset for partitions {} due to {}, will retry in the next run loop",
+            log.debug("Could not retrieve the committed offsets for partitions {} due to {}, will retry in the next run loop",
                 partitions, retriableException.toString());
             maybeInitTaskTimeoutOrThrow(getTasksFromPartitions(tasks, partitions), retriableException);
             return Collections.emptyMap();
@@ -722,17 +721,17 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         try {
-            final ListOffsetsResult result = adminClient.listOffsets(
-                    partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest())),
-                    new ListOffsetsOptions(IsolationLevel.READ_UNCOMMITTED)
-            );
+            // we always use read_uncommitted to get log end offset since the last committed txn may have not advanced the LSO for EOS,
+            // see KAFKA-10167 for more details
+            final ListOffsetsOptions options = new ListOffsetsOptions(IsolationLevel.READ_UNCOMMITTED);
+            final Map<TopicPartition, OffsetSpec> offsetSpecs =
+                partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()));
+            final Map<TopicPartition, Long> logEndOffsets = adminClient.listOffsets(offsetSpecs, options)
+                .all().get().entrySet()
+                .stream().collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset()));
 
-            final Map<TopicPartition,  ListOffsetsResult.ListOffsetsResultInfo> resultPerPartition = result.all().get();
             clearTaskTimeout(getTasksFromPartitions(tasks, partitions));
-
-            return resultPerPartition.entrySet().stream().collect(
-                    Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset())
-            );
+            return logEndOffsets;
         } catch (final TimeoutException | InterruptedException | ExecutionException retriableException) {
             log.debug("Could not fetch all end offsets for {} due to {}, will retry in the next run loop",
                 partitions, retriableException.toString());
