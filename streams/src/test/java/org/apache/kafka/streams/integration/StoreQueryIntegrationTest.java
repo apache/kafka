@@ -81,6 +81,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.anyOf;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @Category({IntegrationTest.class})
 public class StoreQueryIntegrationTest {
@@ -562,7 +563,8 @@ public class StoreQueryIntegrationTest {
     private static void until(final TestCondition condition) {
         boolean success = false;
         final long deadline = System.currentTimeMillis() + IntegrationTestUtils.DEFAULT_TIMEOUT;
-        while (!success && System.currentTimeMillis() < deadline) {
+        boolean deadlineExceeded = System.currentTimeMillis() >= deadline;
+        while (!success && !deadlineExceeded) {
             try {
                 success = condition.conditionMet();
                 Thread.sleep(500L);
@@ -570,7 +572,12 @@ public class StoreQueryIntegrationTest {
                 throw e;
             } catch (final Exception e) {
                 throw new RuntimeException(e);
+            } finally {
+                deadlineExceeded = System.currentTimeMillis() >= deadline;
             }
+        }
+        if (deadlineExceeded) {
+            fail("Test execution timed out");
         }
     }
 
