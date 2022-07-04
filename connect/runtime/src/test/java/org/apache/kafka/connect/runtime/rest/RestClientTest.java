@@ -28,11 +28,20 @@ import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
 import org.jose4j.keys.HmacKey;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
+import org.junit.experimental.runners.Enclosed;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import javax.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -41,20 +50,16 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@RunWith(Enclosed.class)
 public class RestClientTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<TestDTO> TEST_TYPE = new TypeReference<TestDTO>() {
     };
 
-    private final HttpClient httpClient = mock(HttpClient.class);
-
-    private static String toJsonString(Object obj) {
-        try {
-            return OBJECT_MAPPER.writeValueAsString(obj);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
+    private static void assertIsInternalServerError(ConnectRestException e) {
+        assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), e.statusCode());
+        assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), e.errorCode());
     }
 
     private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient, String requestSignatureAlgorithm) {
@@ -71,90 +76,135 @@ public class RestClientTest {
 
     private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient) {
         String validRequestSignatureAlgorithm = "HmacMD5";
-        return RestClient.httpRequest(
-                httpClient,
-                "https://localhost:1234/api/endpoint",
-                "GET",
-                null,
-                new TestDTO("requestBodyData"),
-                TEST_TYPE,
-                new HmacKey("HMAC".getBytes(StandardCharsets.UTF_8)),
-                validRequestSignatureAlgorithm);
-
+        return httpRequest(httpClient, validRequestSignatureAlgorithm);
     }
 
-    private static void assertIsInternalServerError(ConnectRestException e) {
-        assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), e.statusCode());
-        assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), e.errorCode());
+
+    @RunWith(Parameterized.class)
+    public static class RequestFailureParameterizedTest {
+        private static final HttpClient httpClient = mock(HttpClient.class);
+
+        @Parameterized.Parameter
+        public Throwable requestException;
+
+        @Parameterized.Parameters
+        public static Collection<Object[]> requestExceptions() {
+            return Arrays.asList(new Object[][]{
+                    {new InterruptedException()},
+                    {new ExecutionException(null)},
+                    {new TimeoutException()}
+            });
+        }
+
+        private static Request buildThrowingMockRequest(Throwable t) throws ExecutionException, InterruptedException, TimeoutException {
+            Request req = mock(Request.class);
+            when(req.send()).thenThrow(t);
+            return req;
+        }
+
+        @Test
+        public void testFailureDuringRequestCausesInternalServerError() throws Exception {
+            Request request = buildThrowingMockRequest(requestException);
+            when(httpClient.newRequest(anyString())).thenReturn(request);
+            ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient));
+            assertIsInternalServerError(e);
+        }
     }
 
-    @Test
-    public void testSuccess() throws Exception {
-        int statusCode = Response.Status.OK.getStatusCode();
-        TestDTO expectedResponse = new TestDTO("someContent");
-        setupHttpClient(statusCode, toJsonString(expectedResponse));
 
-        RestClient.HttpResponse<TestDTO> httpResp = httpRequest(httpClient);
-        assertEquals(statusCode, httpResp.status());
-        assertEquals(expectedResponse, httpResp.body());
+    @RunWith(MockitoJUnitRunner.class)
+    public static class Tests {
+        @Mock
+        private static HttpClient httpClient;
+
+        private static String toJsonString(Object obj) {
+            try {
+                return OBJECT_MAPPER.writeValueAsString(obj);
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        private static void setupHttpClient(int responseCode, String responseJsonString) throws Exception {
+            Request req = mock(Request.class);
+            ContentResponse resp = mock(ContentResponse.class);
+            when(resp.getStatus()).thenReturn(responseCode);
+            when(resp.getContentAsString()).thenReturn(responseJsonString);
+            when(req.send()).thenReturn(resp);
+            when(req.header(anyString(), anyString())).thenReturn(req);
+            when(httpClient.newRequest(anyString())).thenReturn(req);
+        }
+
+        @Test
+        public void testSuccess() throws Exception {
+            int statusCode = Response.Status.OK.getStatusCode();
+            TestDTO expectedResponse = new TestDTO("someContent");
+            setupHttpClient(statusCode, toJsonString(expectedResponse));
+
+            RestClient.HttpResponse<TestDTO> httpResp = httpRequest(httpClient);
+            assertEquals(statusCode, httpResp.status());
+            assertEquals(expectedResponse, httpResp.body());
+        }
+
+        @Test
+        public void testNoContent() throws Exception {
+            int statusCode = Response.Status.NO_CONTENT.getStatusCode();
+            setupHttpClient(statusCode, null);
+
+            RestClient.HttpResponse<TestDTO> httpResp = httpRequest(httpClient);
+            assertEquals(statusCode, httpResp.status());
+            assertNull(httpResp.body());
+        }
+
+        @Test
+        public void testStatusCodeAndErrorMessagePreserved() throws Exception {
+            int statusCode = Response.Status.CONFLICT.getStatusCode();
+            ErrorMessage errorMsg = new ErrorMessage(Response.Status.GONE.getStatusCode(), "Some Error Message");
+            setupHttpClient(statusCode, toJsonString(errorMsg));
+
+            ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient));
+            assertEquals(statusCode, e.statusCode());
+            assertEquals(errorMsg.errorCode(), e.errorCode());
+            assertEquals(errorMsg.message(), e.getMessage());
+        }
+
+        @Test
+        public void testUnexpectedHttpResponseCausesInternalServerError() throws Exception {
+            int statusCode = Response.Status.NOT_MODIFIED.getStatusCode(); // never thrown explicitly -
+            // should be treated as an unexpected error and translated into 500 INTERNAL_SERVER_ERROR
+
+            setupHttpClient(statusCode, null);
+            ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient));
+            assertIsInternalServerError(e);
+        }
+
+        @Test
+        public void testRuntimeExceptionCausesInternalServerError() {
+            when(httpClient.newRequest(anyString())).thenThrow(new RuntimeException());
+
+            ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient));
+            assertIsInternalServerError(e);
+        }
+
+        @Test
+        public void testRequestSignatureFailureCausesInternalServerError() throws Exception {
+            setupHttpClient(0, null);
+
+            String invalidRequestSignatureAlgorithm = "Foo";
+            ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient, invalidRequestSignatureAlgorithm));
+            assertIsInternalServerError(e);
+        }
+
+        @Test
+        public void testIOExceptionCausesInternalServerError() throws Exception {
+            String invalidJsonString = "Invalid";
+            setupHttpClient(201, invalidJsonString);
+
+            ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient));
+            assertIsInternalServerError(e);
+        }
     }
 
-    @Test
-    public void testNoContent() throws Exception {
-        int statusCode = Response.Status.NO_CONTENT.getStatusCode();
-        setupHttpClient(statusCode, null);
-
-        RestClient.HttpResponse<TestDTO> httpResp = httpRequest(httpClient);
-        assertEquals(statusCode, httpResp.status());
-        assertNull(httpResp.body());
-    }
-
-    @Test
-    public void testStatusCodeAndErrorMessagePreserved() throws Exception {
-        int statusCode = Response.Status.CONFLICT.getStatusCode();
-        ErrorMessage errorMsg = new ErrorMessage(Response.Status.GONE.getStatusCode(), "Some Error Message");
-        setupHttpClient(statusCode, toJsonString(errorMsg));
-        ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient));
-        assertEquals(statusCode, e.statusCode());
-        assertEquals(errorMsg.errorCode(), e.errorCode());
-        assertEquals(errorMsg.message(), e.getMessage());
-    }
-
-    @Test
-    public void testUnexpectedHttpResponseCausesInternalServerError() throws Exception {
-        int statusCode = Response.Status.NOT_MODIFIED.getStatusCode(); // never thrown explicitly -
-        // should be treated as an unexpected error and translated into 500 INTERNAL_SERVER_ERROR
-
-        setupHttpClient(statusCode, null);
-        ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient));
-        assertIsInternalServerError(e);
-    }
-
-    @Test
-    public void testRuntimeExceptionCausesInternalServerError() {
-        when(httpClient.newRequest(anyString())).thenThrow(new RuntimeException());
-
-        ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient));
-        assertIsInternalServerError(e);
-    }
-
-    @Test
-    public void testRequestSignatureFailureCausesInternalServerError() throws Exception {
-        setupHttpClient(0, null);
-        String invalidRequestSignatureAlgorithm = "Foo";
-        ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient, invalidRequestSignatureAlgorithm));
-        assertIsInternalServerError(e);
-    }
-
-    private void setupHttpClient(int responseCode, String responseJsonString) throws Exception {
-        Request req = mock(Request.class);
-        ContentResponse resp = mock(ContentResponse.class);
-        when(resp.getStatus()).thenReturn(responseCode);
-        when(resp.getContentAsString()).thenReturn(responseJsonString);
-        when(req.send()).thenReturn(resp);
-        when(req.header(anyString(), anyString())).thenReturn(req);
-        when(httpClient.newRequest(anyString())).thenReturn(req);
-    }
 
     private static class TestDTO {
         private final String content;
