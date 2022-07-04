@@ -407,16 +407,17 @@ public class StoreChangelogReader implements ChangelogReader {
     // 2. if all changelogs have finished, return early;
     // 3. if there are any restoring changelogs, try to read from the restore consumer and process them.
     @Override
-    public void restore(final Map<TaskId, Task> tasks) {
+    public long restore(final Map<TaskId, Task> tasks) {
         initializeChangelogs(tasks, registeredChangelogs());
 
         if (!activeRestoringChangelogs().isEmpty() && state == ChangelogReaderState.STANDBY_UPDATING) {
             throw new IllegalStateException("Should not be in standby updating state if there are still un-completed active changelogs");
         }
 
+        long totalRestored = 0L;
         if (allChangelogsCompleted()) {
             log.debug("Finished restoring all changelogs {}", changelogs.keySet());
-            return;
+            return totalRestored;
         }
 
         final Set<TopicPartition> restoringChangelogs = restoringChangelogs();
@@ -459,12 +460,15 @@ public class StoreChangelogReader implements ChangelogReader {
                 //       small batches; this can be optimized in the future, e.g. wait longer for larger batches.
                 final TaskId taskId = changelogs.get(partition).stateManager.taskId();
                 try {
-                    if (restoreChangelog(changelogs.get(partition))) {
+                    final ChangelogMetadata changelogMetadata = changelogs.get(partition);
+                    int restored = restoreChangelog(changelogs.get(partition));
+                    if (restored > 0 || changelogMetadata.state().equals(ChangelogState.COMPLETED)) {
                         final Task task = tasks.get(taskId);
                         if (task != null) {
                             task.clearTaskTimeout();
                         }
                     }
+                    totalRestored += restored;
                 } catch (final TimeoutException timeoutException) {
                     tasks.get(taskId).maybeInitTaskTimeoutOrThrow(
                         time.milliseconds(),
@@ -477,6 +481,8 @@ public class StoreChangelogReader implements ChangelogReader {
 
             maybeLogRestorationProgress();
         }
+
+        return totalRestored;
     }
 
     private void pauseResumePartitions(final Map<TaskId, Task> tasks,
@@ -603,19 +609,17 @@ public class StoreChangelogReader implements ChangelogReader {
     /**
      * restore a changelog with its buffered records if there's any; for active changelogs also check if
      * it has completed the restoration and can transit to COMPLETED state and trigger restore callbacks
+     *
+     * @return number of records restored
      */
-    private boolean restoreChangelog(final ChangelogMetadata changelogMetadata) {
+    private int restoreChangelog(final ChangelogMetadata changelogMetadata) {
         final ProcessorStateManager stateManager = changelogMetadata.stateManager;
         final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
         final TopicPartition partition = storeMetadata.changelogPartition();
         final String storeName = storeMetadata.store().name();
         final int numRecords = changelogMetadata.bufferedLimitIndex;
 
-        boolean madeProgress = false;
-
         if (numRecords != 0) {
-            madeProgress = true;
-
             final List<ConsumerRecord<byte[], byte[]>> records = changelogMetadata.bufferedRecords.subList(0, numRecords);
             stateManager.restore(storeMetadata, records);
 
@@ -630,7 +634,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
             final Long currentOffset = storeMetadata.offset();
             log.trace("Restored {} records from changelog {} to store {}, end offset is {}, current offset is {}",
-                partition, storeName, numRecords, recordEndOffset(changelogMetadata.restoreEndOffset), currentOffset);
+                numRecords, partition, storeName, recordEndOffset(changelogMetadata.restoreEndOffset), currentOffset);
 
             changelogMetadata.bufferedLimitIndex = 0;
             changelogMetadata.totalRestored += numRecords;
@@ -647,8 +651,6 @@ public class StoreChangelogReader implements ChangelogReader {
 
         // we should check even if there's nothing restored, but do not check completed if we are processing standby tasks
         if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE && hasRestoredToEnd(changelogMetadata)) {
-            madeProgress = true;
-
             log.info("Finished restoring changelog {} to store {} with a total number of {} records",
                 partition, storeName, changelogMetadata.totalRestored);
 
@@ -662,7 +664,7 @@ public class StoreChangelogReader implements ChangelogReader {
             }
         }
 
-        return madeProgress;
+        return numRecords;
     }
 
     private Set<Task> getTasksFromPartitions(final Map<TaskId, Task> tasks,

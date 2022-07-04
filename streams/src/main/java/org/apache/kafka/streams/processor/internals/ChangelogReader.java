@@ -28,8 +28,10 @@ import java.util.Set;
 public interface ChangelogReader extends ChangelogRegister {
     /**
      * Restore all registered state stores by reading from their changelogs
+     *
+     * @return the total number of records restored in this call
      */
-    void restore(final Map<TaskId, Task> tasks);
+    long restore(final Map<TaskId, Task> tasks);
 
     /**
      * Transit to restore active changelogs mode

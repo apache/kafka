@@ -39,8 +39,9 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void restore(final Map<TaskId, Task> tasks) {
+    public long restore(final Map<TaskId, Task> tasks) {
         // do nothing
+        return 0L;
     }
 
     @Override
