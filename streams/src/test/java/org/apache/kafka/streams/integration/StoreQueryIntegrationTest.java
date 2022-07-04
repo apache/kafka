@@ -43,6 +43,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import org.hamcrest.Matcher;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -80,6 +81,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.anyOf;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @Category({IntegrationTest.class})
 public class StoreQueryIntegrationTest {
@@ -154,7 +156,7 @@ public class StoreQueryIntegrationTest {
                 }
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                verifyRetrievableException(exception);
+                verifyRetriableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
@@ -238,7 +240,7 @@ public class StoreQueryIntegrationTest {
                 }
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                verifyRetrievableException(exception);
+                verifyRetriableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
@@ -507,7 +509,7 @@ public class StoreQueryIntegrationTest {
                 assertThat(store1.get(key3), is(notNullValue()));
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                verifyRetrievableException(exception);
+                verifyRetriableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
@@ -528,31 +530,37 @@ public class StoreQueryIntegrationTest {
                 assertThat(store1.get(key3), is(notNullValue()));
                 return true;
             } catch (final InvalidStateStoreException exception) {
-                verifyRetrievableException(exception);
+                verifyRetriableException(exception);
                 LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
                 return false;
             }
         });
     }
 
-    private void verifyRetrievableException(final Exception exception) {
+    private Matcher<String> retriableException() {
+        return is(
+            anyOf(
+                containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
+                containsString("The state store, source-table, may have migrated to another instance"),
+                containsString("Cannot get state store source-table because the stream thread is STARTING, not RUNNING"),
+                containsString("The specified partition 1 for store source-table does not exist.")
+            )
+        );
+    }
+
+    private void verifyRetriableException(final Exception exception) {
         assertThat(
             "Unexpected exception thrown while getting the value from store.",
             exception.getMessage(),
-            is(
-                anyOf(
-                    containsString("Cannot get state store source-table because the stream thread is PARTITIONS_ASSIGNED, not RUNNING"),
-                    containsString("The state store, source-table, may have migrated to another instance"),
-                    containsString("Cannot get state store source-table because the stream thread is STARTING, not RUNNING")
-                )
-            )
+            retriableException()
         );
     }
 
     private static void until(final TestCondition condition) {
         boolean success = false;
         final long deadline = System.currentTimeMillis() + IntegrationTestUtils.DEFAULT_TIMEOUT;
-        while (!success && System.currentTimeMillis() < deadline) {
+        boolean deadlineExceeded = System.currentTimeMillis() >= deadline;
+        while (!success && !deadlineExceeded) {
             try {
                 success = condition.conditionMet();
                 Thread.sleep(500L);
@@ -560,7 +568,12 @@ public class StoreQueryIntegrationTest {
                 throw e;
             } catch (final Exception e) {
                 throw new RuntimeException(e);
+            } finally {
+                deadlineExceeded = System.currentTimeMillis() >= deadline;
             }
+        }
+        if (deadlineExceeded) {
+            fail("Test execution timed out");
         }
     }
 
