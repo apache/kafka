@@ -183,7 +183,7 @@ public class StoreQueryIntegrationTest {
 
         // Assert that all messages in the first batch were processed in a timely manner
         assertThat(semaphore.tryAcquire(batch1NumMessages, 60, TimeUnit.SECONDS), is(equalTo(true)));
-        retryUntil(() -> {
+        until(() -> {
             final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
 
             //key belongs to this partition
@@ -215,30 +215,37 @@ public class StoreQueryIntegrationTest {
             final StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> storeQueryParam2 =
                     StoreQueryParameters.<ReadOnlyKeyValueStore<Integer, Integer>>fromNameAndType(TABLE_NAME, keyValueStore())
                             .withPartition(keyDontBelongPartition);
-            // Assert that key is not served when wrong specific partition is requested
-            // If kafkaStreams1 is active for keyPartition, kafkaStreams2 would be active for keyDontBelongPartition
-            // So, in that case, store3 would be null and the store4 would not return the value for key as wrong partition was requested
-            if (kafkaStreams1IsActive) {
-                assertThat(store1.get(key), is(notNullValue()));
-                assertThat(getStore(kafkaStreams2, storeQueryParam2).get(key), is(nullValue()));
-                final InvalidStateStoreException exception =
-                        assertThrows(InvalidStateStoreException.class, () -> getStore(kafkaStreams1, storeQueryParam2).get(key));
-                assertThat(
-                    exception.getMessage(),
-                    containsString("The specified partition 1 for store source-table does not exist.")
-                );
-            } else {
-                assertThat(store2.get(key), is(notNullValue()));
-                assertThat(getStore(kafkaStreams1, storeQueryParam2).get(key), is(nullValue()));
-                final InvalidStateStoreException exception =
-                        assertThrows(InvalidStateStoreException.class, () -> getStore(kafkaStreams2, storeQueryParam2).get(key));
-                assertThat(
-                        exception.getMessage(),
-                        containsString("The specified partition 1 for store source-table does not exist.")
-                );
+
+            try {
+                // Assert that key is not served when wrong specific partition is requested
+                // If kafkaStreams1 is active for keyPartition, kafkaStreams2 would be active for keyDontBelongPartition
+                // So, in that case, store3 would be null and the store4 would not return the value for key as wrong partition was requested
+                if (kafkaStreams1IsActive) {
+                    assertThat(store1.get(key), is(notNullValue()));
+                    assertThat(getStore(kafkaStreams2, storeQueryParam2).get(key), is(nullValue()));
+                    final InvalidStateStoreException exception =
+                            assertThrows(InvalidStateStoreException.class, () -> getStore(kafkaStreams1, storeQueryParam2).get(key));
+                    assertThat(
+                            exception.getMessage(),
+                            containsString("The specified partition 1 for store source-table does not exist.")
+                    );
+                } else {
+                    assertThat(store2.get(key), is(notNullValue()));
+                    assertThat(getStore(kafkaStreams1, storeQueryParam2).get(key), is(nullValue()));
+                    final InvalidStateStoreException exception =
+                            assertThrows(InvalidStateStoreException.class, () -> getStore(kafkaStreams2, storeQueryParam2).get(key));
+                    assertThat(
+                            exception.getMessage(),
+                            containsString("The specified partition 1 for store source-table does not exist.")
+                    );
+                }
+                return true;
+            } catch (final InvalidStateStoreException exception) {
+                verifyRetriableException(exception);
+                LOG.info("Either streams wasn't running or a re-balancing took place. Will try again.");
+                return false;
             }
-            return true;
-        }, this::retriableException);
+        });
     }
 
     @Test
@@ -565,27 +572,6 @@ public class StoreQueryIntegrationTest {
                 throw e;
             } catch (final Exception e) {
                 throw new RuntimeException(e);
-            }
-        }
-    }
-
-    private static void retryUntil(final Callable<Boolean> callable, final Predicate<Exception> exceptionPredicate) throws Exception {
-        boolean success = false;
-        final long deadline = System.currentTimeMillis() + IntegrationTestUtils.DEFAULT_TIMEOUT;
-        while (!success && System.currentTimeMillis() < deadline) {
-            try {
-                success = callable.call();
-                Thread.sleep(500L);
-            } catch (final Exception e) {
-                if (exceptionPredicate.test(e)) {
-                    LOG.info("Retryable exception detected, retrying", e);
-                } else {
-                    if (e instanceof RuntimeException) {
-                        throw e;
-                    } else {
-                        throw new RuntimeException(e);
-                    }
-                }
             }
         }
     }
