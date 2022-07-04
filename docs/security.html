@@ -1328,6 +1328,8 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
                     <li>DescribeConfigs</li>
                     <li>AlterConfigs</li>
                     <li>IdempotentWrite</li>
+                    <li>CreateTokens</li>
+                    <li>DescribeTokens</li>
                     <li>All</li>
                 </ul>
             </td>
@@ -1450,6 +1452,8 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
         <li>DescribeConfigs</li>
         <li>AlterConfigs</li>
         <li>IdempotentWrite</li>
+        <li>CreateTokens</li>
+        <li>DescribeTokens</li>
         <li>All</li>
     </ul>
     <h5 class="anchor-heading"><a id="resources_in_kafka" class="anchor-link"></a><a href="#resources_in_kafka">Resources in Kafka</a></h5>
@@ -1471,6 +1475,8 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
             a little special behavior in Kafka it is recommended to read
             <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-48+Delegation+token+support+for+Kafka#KIP-48DelegationtokensupportforKafka-DescribeDelegationTokenRequest">KIP-48</a>
             and the related upstream documentation at <a href="#security_delegation_token">Authentication using Delegation Tokens</a>.</li>
+        <li><b>User:</b> CreateToken and DescribeToken operations can be granted to User resources to allow creating and describing
+            tokens for other users. More info can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-373%3A+Allow+users+to+create+delegation+tokens+for+other+users">KIP-373</a>.</li>
     </ul>
     <h5 class="anchor-heading"><a id="operations_resources_and_protocols" class="anchor-link"></a><a href="#operations_resources_and_protocols">Operations and Resources on Protocols</a></h5>
     <p>In the below table we'll list the valid operations on resources that are executed by the Kafka API protocols.</p>
@@ -1847,6 +1853,12 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
                 <a id="security_delegation_token_1" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
         </tr>
         <tr>
+            <td>CREATE_DELEGATION_TOKEN (38)</td>
+            <td>CreateTokens</td>
+            <td>User</td>
+            <td>Allows creating delegation tokens for the User resource.</td>
+        </tr>
+        <tr>
             <td>RENEW_DELEGATION_TOKEN (39)</td>
             <td></td>
             <td></td>
@@ -1866,6 +1878,12 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
             <td>DelegationToken</td>
             <td>Describing delegation tokens has special rules, for this please see the
                 <a id="security_delegation_token_4" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_DELEGATION_TOKEN (41)</td>
+            <td>DescribeTokens</td>
+            <td>User</td>
+            <td>Allows describing delegation tokens of the User resource.</td>
         </tr>
         <tr>
             <td>DELETE_GROUPS (42)</td>
