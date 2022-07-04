@@ -548,10 +548,6 @@ public class StoreQueryIntegrationTest {
         );
     }
 
-    private boolean retriableException(final Exception exception) {
-        return retriableException().matches(exception.getMessage());
-    }
-
     private void verifyRetriableException(final Exception exception) {
         assertThat(
             "Unexpected exception thrown while getting the value from store.",
