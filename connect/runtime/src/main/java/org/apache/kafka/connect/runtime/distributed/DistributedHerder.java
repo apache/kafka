@@ -1497,9 +1497,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         //      progress. We can backoff and try rejoining later.
         //  1b. We are not the leader. We might need to catch up. If we're already caught up we can rejoin immediately,
         //      otherwise, we just want to wait reasonable amount of time to catch up and rejoin if we are ready.
+        //  For the cases where a protocol switch to eager was requested, we don't need to do anything extra as a re-join
+        //  is anyway requested here which would invoke onJoinPrepare where it should revoke all assigned connectors/tasks
         // 2. Assignment succeeded.
         //  2a. We are caught up on configs. Awesome! We can proceed to run our assigned work.
         //  2b. We need to try to catch up - try reading configs for reasonable amount of time.
+        //  Also, if there was a protocol downgrade to eager requested, that flag would be unset at the end successfully
+        //  marking the downgrade to eager.
 
         boolean needsReadToEnd = false;
         boolean needsRejoin = false;
@@ -1563,6 +1567,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // guarantees we'll attempt to rejoin before executing this method again.
         herderMetrics.rebalanceSucceeded(time.milliseconds());
         rebalanceResolved = true;
+
+        // We had a successful rebalance which should mark the downgrade
+        // happening successfully. Unsetting the flag now.
+        member.toggleEagerProtocolDowngradeRequest(false);
 
         if (!assignment.revokedConnectors().isEmpty() || !assignment.revokedTasks().isEmpty()) {
             assignment.revokedConnectors().clear();

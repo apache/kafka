@@ -293,6 +293,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         herder.tick();
@@ -345,6 +348,9 @@ public class DistributedHerderTest extends ThreadedTest {
         EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -400,6 +406,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         time.sleep(1000L);
@@ -434,6 +443,12 @@ public class DistributedHerderTest extends ThreadedTest {
 
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -505,6 +520,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         time.sleep(1000L);
@@ -563,6 +581,9 @@ public class DistributedHerderTest extends ThreadedTest {
 
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -666,6 +687,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         herder.tick();
@@ -738,6 +762,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         // No immediate action besides this -- change will be picked up via the config log
 
         PowerMock.replayAll();
@@ -795,6 +822,9 @@ public class DistributedHerderTest extends ThreadedTest {
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         // No immediate action besides this -- change will be picked up via the config log
 
@@ -1103,6 +1133,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         // No immediate action besides this -- change will be picked up via the config log
 
         PowerMock.replayAll();
@@ -1162,6 +1195,10 @@ public class DistributedHerderTest extends ThreadedTest {
         expectConfigRefreshAndSnapshot(ClusterConfigState.EMPTY);
         member.requestRejoin();
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         herder.deleteConnectorConfig(CONN1, putConnectorCallback);
@@ -1224,6 +1261,9 @@ public class DistributedHerderTest extends ThreadedTest {
         PowerMock.expectLastCall();
         EasyMock.expect(worker.isRunning(CONN1)).andReturn(true);
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         herder.tick();
@@ -1252,6 +1292,9 @@ public class DistributedHerderTest extends ThreadedTest {
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -1286,6 +1329,9 @@ public class DistributedHerderTest extends ThreadedTest {
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -1324,6 +1370,9 @@ public class DistributedHerderTest extends ThreadedTest {
 
         String ownerUrl = "ownerUrl";
         EasyMock.expect(member.ownerUrl(CONN1)).andReturn(ownerUrl);
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -1371,6 +1420,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall();
+
         PowerMock.replayAll();
 
         herder.tick();
@@ -1403,6 +1455,9 @@ public class DistributedHerderTest extends ThreadedTest {
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -1438,6 +1493,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.ensureActive();
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
         PowerMock.expectLastCall();
 
         PowerMock.replayAll();
@@ -1479,6 +1537,9 @@ public class DistributedHerderTest extends ThreadedTest {
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -1656,6 +1717,9 @@ public class DistributedHerderTest extends ThreadedTest {
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         herder.tick();
@@ -1683,6 +1747,9 @@ public class DistributedHerderTest extends ThreadedTest {
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -1732,6 +1799,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         herder.tick();
@@ -1768,6 +1838,9 @@ public class DistributedHerderTest extends ThreadedTest {
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -1826,6 +1899,9 @@ public class DistributedHerderTest extends ThreadedTest {
         EasyMock.expect(worker.connectorTaskConfigs(CONN1, conn1SinkConfig)).andReturn(TASK_CONFIGS);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -1894,6 +1970,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         herder.tick(); // join
@@ -1955,6 +2034,9 @@ public class DistributedHerderTest extends ThreadedTest {
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -2019,6 +2101,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         herder.tick(); // join
@@ -2055,6 +2140,9 @@ public class DistributedHerderTest extends ThreadedTest {
 
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -2103,6 +2191,9 @@ public class DistributedHerderTest extends ThreadedTest {
 
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -2160,6 +2251,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         herder.tick(); // join
@@ -2199,6 +2293,9 @@ public class DistributedHerderTest extends ThreadedTest {
         PowerMock.expectLastCall().andReturn(true);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -2252,6 +2349,9 @@ public class DistributedHerderTest extends ThreadedTest {
         expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -2338,6 +2438,9 @@ public class DistributedHerderTest extends ThreadedTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
 
         PowerMock.replayAll();
 
@@ -2437,6 +2540,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
@@ -2494,6 +2600,10 @@ public class DistributedHerderTest extends ThreadedTest {
 
 
         EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         FutureCallback<Collection<String>> listConnectorsCb = new FutureCallback<>();
@@ -2590,6 +2700,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         // Should pick up original config
@@ -2651,6 +2764,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.poll(EasyMock.captureLong(pollTimeout));
         EasyMock.expectLastCall();
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         herder.tick();
@@ -2686,6 +2802,12 @@ public class DistributedHerderTest extends ThreadedTest {
         // Second rebalance: poll indefinitely as worker is no longer leader, so key expiration doesn't come into play
         member.poll(Long.MAX_VALUE);
         EasyMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall();
 
         PowerMock.replayAll(initialSecretKey);
 
@@ -2824,6 +2946,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.poll(EasyMock.anyInt());
         PowerMock.expectLastCall();
 
+        member.toggleEagerProtocolDowngradeRequest(false);
+        PowerMock.expectLastCall().anyTimes();
+
         PowerMock.replayAll();
 
         herder.tick();
@@ -2868,6 +2993,9 @@ public class DistributedHerderTest extends ThreadedTest {
         member.ensureActive();
         PowerMock.expectLastCall();
         member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        member.toggleEagerProtocolDowngradeRequest(false);
         PowerMock.expectLastCall();
 
         PowerMock.replayAll(secretKey);

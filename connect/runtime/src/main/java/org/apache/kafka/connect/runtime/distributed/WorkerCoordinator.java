@@ -43,6 +43,7 @@ import java.util.Objects;
 
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
 
 /**
@@ -60,10 +61,12 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     private LeaderState leaderState;
 
     private boolean rejoinRequested;
+    private boolean eagerProtocolDowngradeRequested;
     private volatile ConnectProtocolCompatibility currentConnectProtocol;
     private volatile int lastCompletedGenerationId;
     private final ConnectAssignor eagerAssignor;
     private final ConnectAssignor incrementalAssignor;
+    private final ConnectAssignor revokingAssignor;
     private final int coordinatorDiscoveryTimeoutMs;
 
     /**
@@ -96,9 +99,11 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         this.protocolCompatibility = protocolCompatibility;
         this.incrementalAssignor = new IncrementalCooperativeAssignor(logContext, time, maxDelay);
         this.eagerAssignor = new EagerAssignor(logContext);
+        this.revokingAssignor = new RevokingAssignor(logContext);
         this.currentConnectProtocol = protocolCompatibility;
         this.coordinatorDiscoveryTimeoutMs = config.heartbeatIntervalMs;
         this.lastCompletedGenerationId = Generation.NO_GENERATION.generationId;
+        this.eagerProtocolDowngradeRequested = false;
     }
 
     @Override
@@ -188,19 +193,23 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         currentConnectProtocol = ConnectProtocolCompatibility.fromProtocol(protocol);
         // At this point we always consider ourselves to be a member of the cluster, even if there was an assignment
         // error (the leader couldn't make the assignment) or we are behind the config and cannot yet work on our assigned
-        // tasks. It's the responsibility of the code driving this process to decide how to react (e.g. trying to get
+        // tasks. It's the responsibility of the code driving this process(DistributedHerder) to decide how to react (e.g. trying to get
         // up to date, try to rejoin again, leaving the group and backing off, etc.).
         rejoinRequested = false;
-        if (currentConnectProtocol != EAGER) {
-            if (!newAssignment.revokedConnectors().isEmpty() || !newAssignment.revokedTasks().isEmpty()) {
-                listener.onRevoked(newAssignment.leader(), newAssignment.revokedConnectors(), newAssignment.revokedTasks());
-            }
+        final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
 
-            final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
+        // if there's a CONFIG_MISMATCH error, then nothing would be revoked.
+        if (!newAssignment.revokedConnectors().isEmpty() || !newAssignment.revokedTasks().isEmpty()) {
+            listener.onRevoked(newAssignment.leader(), newAssignment.revokedConnectors(), newAssignment.revokedTasks());
             if (localAssignmentSnapshot != null) {
                 localAssignmentSnapshot.connectors().removeAll(newAssignment.revokedConnectors());
                 localAssignmentSnapshot.tasks().removeAll(newAssignment.revokedTasks());
                 log.debug("After revocations snapshot of assignment: {}", localAssignmentSnapshot);
+            }
+        }
+
+        if (currentConnectProtocol != EAGER) {
+            if (localAssignmentSnapshot != null) {
                 newAssignment.connectors().addAll(localAssignmentSnapshot.connectors());
                 newAssignment.tasks().addAll(localAssignmentSnapshot.tasks());
             }
@@ -219,9 +228,21 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         if (skipAssignment)
             throw new IllegalStateException("Can't skip assignment because Connect does not support static membership.");
 
-        return ConnectProtocolCompatibility.fromProtocol(protocol) == EAGER
-               ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
-               : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
+        ConnectProtocolCompatibility newConnectProtocol = ConnectProtocolCompatibility.fromProtocol(protocol);
+        if (connectProtocolDowngraded(newConnectProtocol) || eagerProtocolDowngradeRequested) {
+            log.info("Downgraded from incremental to eager assignment or previous downgrade didn't succeed. " +
+                    "Revoking all tasks and connectors from all workers in the cluster");
+            eagerProtocolDowngradeRequested = true;
+            return revokingAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
+        } else {
+            return ConnectProtocolCompatibility.fromProtocol(protocol) == EAGER
+                    ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
+                    : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
+        }
+    }
+
+    private boolean connectProtocolDowngraded(ConnectProtocolCompatibility newConnectProtocol) {
+        return currentConnectProtocol.protocolVersion() >= COMPATIBLE.protocolVersion() && newConnectProtocol == EAGER;
     }
 
     @Override
@@ -229,10 +250,11 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         log.info("Rebalance started");
         leaderState(null);
         final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
-        if (currentConnectProtocol == EAGER) {
+        if (currentConnectProtocol == EAGER || eagerProtocolDowngradeRequested) {
             log.debug("Revoking previous assignment {}", localAssignmentSnapshot);
-            if (localAssignmentSnapshot != null && !localAssignmentSnapshot.failed())
+            if (localAssignmentSnapshot != null && !localAssignmentSnapshot.failed()) {
                 listener.onRevoked(localAssignmentSnapshot.leader(), localAssignmentSnapshot.connectors(), localAssignmentSnapshot.tasks());
+            }
         } else {
             log.debug("Cooperative rebalance triggered. Keeping assignment {} until it's "
                       + "explicitly revoked.", localAssignmentSnapshot);
@@ -244,6 +266,14 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     protected boolean rejoinNeededOrPending() {
         final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
         return super.rejoinNeededOrPending() || (localAssignmentSnapshot == null || localAssignmentSnapshot.failed()) || rejoinRequested;
+    }
+
+    boolean eagerProtocolDowngradeRequested() {
+        return eagerProtocolDowngradeRequested;
+    }
+
+    void toggleEagerProtocolDowngradeRequest(boolean newStatus) {
+        this.eagerProtocolDowngradeRequested = newStatus;
     }
 
     @Override
