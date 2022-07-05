@@ -36,7 +36,7 @@ import scala.math._
  * @param time: The time implementation to use
  */
 @threadsafe
-class Throttler(var desiredRatePerSec: Double,
+class Throttler(@volatile var desiredRatePerSec: Double,
                 checkIntervalMs: Long = 100L,
                 throttleDown: Boolean = true,
                 metricName: String = "throttler",
