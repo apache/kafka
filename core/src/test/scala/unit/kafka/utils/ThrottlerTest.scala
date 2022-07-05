@@ -90,11 +90,11 @@ class ThrottlerTest {
     // Update ThrottleDesiredRate
     throttler.updateDesiredRatePerSec(updatedDesiredCountPerSec);
 
-    // Observe desiredCountPerInterval at t2
+    // Observe updatedDesiredCountPerInterval at t2
     throttler.maybeThrottle(updatedDesiredCountPerInterval)
     assertEquals(t2, mockTime.milliseconds())
 
-    // Observe desiredCountPerInterval at t2 + throttleCheckIntervalMs + 1
+    // Observe updatedDesiredCountPerInterval at t2 + throttleCheckIntervalMs + 1
     mockTime.sleep(throttleCheckIntervalMs + 1)
     throttler.maybeThrottle(updatedDesiredCountPerInterval)
     val t3 = mockTime.milliseconds()
