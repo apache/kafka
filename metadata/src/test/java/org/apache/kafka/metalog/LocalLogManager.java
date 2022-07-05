@@ -234,7 +234,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
             }
 
             if (epoch < leader.epoch()) {
-                throw new NotLeaderException("Append failed because the epoch because the given epoch is stale");
+                throw new NotLeaderException("Append failed because the given epoch " + epoch + " is stale. " +
+                        "Current leader epoch = " + leader.epoch());
             } else if (epoch > leader.epoch()) {
                 throw new IllegalArgumentException("Attempt to append from epoch " + epoch +
                         " which is larger than the current epoch " + leader.epoch());
