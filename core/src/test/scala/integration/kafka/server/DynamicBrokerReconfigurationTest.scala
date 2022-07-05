@@ -26,7 +26,6 @@ import java.time.Duration
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent._
-
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
@@ -35,9 +34,9 @@ import kafka.controller.{ControllerBrokerStateInfo, ControllerChannelManager}
 import kafka.log.{CleanerConfig, LogConfig}
 import kafka.message.ProducerCompressionCodec
 import kafka.network.{Processor, RequestChannel}
-import kafka.server.QuorumTestHarness
 import kafka.utils._
 import kafka.utils.Implicits._
+import kafka.utils.TestUtils.TestControllerRequestCompletionHandler
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -52,10 +51,12 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.MetadataRequestData
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter, Quota}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PROPS}
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.requests.MetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
@@ -429,6 +430,20 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       verifyProduceConsume(producer, consumer, 10, topic)
     }
 
+    def verifyBrokerToControllerCall(controller: KafkaServer): Unit = {
+      val nonControllerBroker = servers.find(_.config.brokerId != controller.config.brokerId).get
+      val brokerToControllerManager = nonControllerBroker.clientToControllerChannelManager
+      val completionHandler = new TestControllerRequestCompletionHandler()
+      brokerToControllerManager.sendRequest(new MetadataRequest.Builder(new MetadataRequestData()), completionHandler)
+      TestUtils.waitUntilTrue(() => {
+        completionHandler.completed.get() || completionHandler.timedOut.get()
+      }, "Timed out while waiting for broker to controller API call")
+      val response = completionHandler.actualResponse.getOrElse(throw new IllegalStateException("No response recorded even though request is completed"))
+      assertNull(response.authenticationException(), s"Request failed due to authentication error ${response.authenticationException}")
+      assertNull(response.versionMismatch(), s"Request failed due to unsupported version error ${response.versionMismatch}")
+      assertFalse(response.wasDisconnected(), "Request failed because broker is not available")
+    }
+
     // Produce/consume should work with old as well as new client keystore
     verifySslProduceConsume(sslProperties1, "alter-truststore-1")
     verifySslProduceConsume(sslProperties2, "alter-truststore-2")
@@ -469,6 +484,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       JTestUtils.fieldValue(controllerChannelManager, classOf[ControllerChannelManager], "brokerStateInfo")
     brokerStateInfo(0).networkClient.disconnect("0")
     TestUtils.createTopic(zkClient, "testtopic2", numPartitions, replicationFactor = numServers, servers)
+
+    // validate that the brokerToController request works fine
+    verifyBrokerToControllerCall(controller)
   }
 
   @Test
