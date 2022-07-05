@@ -23,9 +23,8 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
 import java.util.Properties
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-
 import kafka.common._
-import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, KafkaConfig, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.CorruptRecordException
@@ -1854,6 +1853,26 @@ class LogCleanerTest {
     } finally logCleaner.shutdown()
   }
 
+  @Test
+  def testReconfigureLogCleanerIoMaxBytesPerSecond(): Unit = {
+    val oldKafkaProps = TestUtils.createBrokerConfig(1, "localhost:2181")
+    oldKafkaProps.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, 10000000)
+
+    val logCleaner = new LogCleaner(LogCleaner.cleanerConfig(new KafkaConfig(oldKafkaProps)),
+      logDirs = Array(TestUtils.tempDir()),
+      logs = new Pool[TopicPartition, UnifiedLog](),
+      logDirFailureChannel = new LogDirFailureChannel(1),
+      time = time)
+
+    assertEquals(logCleaner.throttler.desiredRatePerSec, 10000000, "Throttler.desiredRatePerSec should be initialized with KafkaConfig.LogCleanerIoMaxBytesPerSecondProp")
+
+    val newKafkaProps = TestUtils.createBrokerConfig(1, "localhost:2181")
+    newKafkaProps.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, 20000000)
+
+    logCleaner.reconfigure(new KafkaConfig(oldKafkaProps), new KafkaConfig(newKafkaProps))
+
+    assertEquals(logCleaner.throttler.desiredRatePerSec, 20000000, "Throttler.desiredRatePerSec should be updated with new KafkaConfig.LogCleanerIoMaxBytesPerSecondProp")
+  }
 
   private def writeToLog(log: UnifiedLog, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for(((key, value), offset) <- keysAndValues.zip(offsetSeq))
