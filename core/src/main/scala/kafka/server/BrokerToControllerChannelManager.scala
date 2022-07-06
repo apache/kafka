@@ -190,7 +190,6 @@ class BrokerToControllerChannelManagerImpl(
       )
       channelBuilder match {
         case reconfigurable: Reconfigurable => config.addReconfigurable(reconfigurable)
-        case _ =>
       }
       val selector = new Selector(
         NetworkReceive.UNLIMITED,

@@ -438,7 +438,10 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       TestUtils.waitUntilTrue(() => {
         completionHandler.completed.get() || completionHandler.timedOut.get()
       }, "Timed out while waiting for broker to controller API call")
-      val response = completionHandler.actualResponse.getOrElse(throw new IllegalStateException("No response recorded even though request is completed"))
+      // we do not expect a timeout from broker to controller request
+      assertFalse(completionHandler.timedOut.get(), "broker to controller request is timeout")
+      assertTrue(completionHandler.actualResponse.isDefined, "No response recorded even though request is completed")
+      val response = completionHandler.actualResponse.get
       assertNull(response.authenticationException(), s"Request failed due to authentication error ${response.authenticationException}")
       assertNull(response.versionMismatch(), s"Request failed due to unsupported version error ${response.versionMismatch}")
       assertFalse(response.wasDisconnected(), "Request failed because broker is not available")
