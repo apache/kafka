@@ -186,7 +186,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   }
 
   /**
-    * Reconfigure log clean config. This updates desiredRatePerSec in Throttler with logCleanerIoMaxBytesPerSecond and stops current log cleaners and creates new ones.
+    * Reconfigure log clean config. It will (1) update desiredRatePerSec in Throttler with logCleanerIoMaxBytesPerSecond if necessary (2) stop current log cleaners and create new ones.
     * That ensures that if any of the cleaners had failed, new cleaners are created to match the new config.
     */
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
