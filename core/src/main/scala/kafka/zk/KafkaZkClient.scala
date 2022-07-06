@@ -32,7 +32,7 @@ import kafka.zookeeper._
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
-import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.OpResult.{CreateResult, ErrorResult, SetDataResult}
@@ -1307,7 +1307,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @return list of resource names
    */
   def getResourceNames(patternType: PatternType, resourceType: ResourceType): Seq[String] = {
-    getChildren(ZkAclStore(patternType).path(resourceType)).map(resourceName => Sanitizer.desanitize(resourceName))
+    getChildren(ZkAclStore(patternType).path(resourceType))
   }
 
   /**
