@@ -17,10 +17,11 @@
 
 package kafka.server.metadata
 
+import kafka.utils.TestUtils
+
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CountDownLatch}
-
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.protocol.ByteBufferAccessor
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords}
@@ -100,6 +101,20 @@ class BrokerMetadataSnapshotterTest {
       assertFalse(snapshotter.maybeStartSnapshot(11000L, MetadataImageTest.IMAGE2))
       blockingEvent.latch.countDown()
       assertEquals(MetadataImageTest.IMAGE1, writerBuilder.image.get())
+    } finally {
+      snapshotter.close()
+    }
+  }
+
+  @Test
+  def testCreateSnapshotTwiceAtTheSameOffset(): Unit = {
+    val writerBuilder = new MockSnapshotWriterBuilder()
+    val snapshotter = new BrokerMetadataSnapshotter(0, Time.SYSTEM, None, writerBuilder)
+    try {
+      assertTrue(snapshotter.maybeStartSnapshot(1L, MetadataImageTest.IMAGE1))
+      TestUtils.waitUntilTrue(() => snapshotter.currentSnapshotOffset() == -1L, "timeout waiting for snapshot to finish")
+      assertFalse(snapshotter.maybeStartSnapshot(1L, MetadataImageTest.IMAGE1))
+      assertTrue(snapshotter.maybeStartSnapshot(1L, MetadataImageTest.IMAGE2))
     } finally {
       snapshotter.close()
     }

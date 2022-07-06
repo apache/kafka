@@ -46,7 +46,7 @@ class BrokerMetadataSnapshotter(
   private var _currentSnapshotOffset = -1L
 
   /**
-   * The offset of the newest snapshot, or -1 if there hasn't been one.Accessed only under
+   * The offset of the newest snapshot, or -1 if there hasn't been one. Accessed only under
    * the object lock.
    */
   private var _latestSnapshotOffset = -1L
@@ -61,9 +61,9 @@ class BrokerMetadataSnapshotter(
       warn(s"Declining to create a new snapshot at ${image.highestOffsetAndEpoch()} because " +
         s"there is already a snapshot in progress at offset ${_currentSnapshotOffset}")
       false
-    } else if (_latestSnapshotOffset >= image.highestOffsetAndEpoch().offset) {
+    } else if (_latestSnapshotOffset == image.highestOffsetAndEpoch().offset) {
       warn(s"Declining to create a new snapshot at ${image.highestOffsetAndEpoch()} because " +
-        s"there is a newer snapshot in progress at offset ${_latestSnapshotOffset}")
+        s"there is already a snapshot at offset ${_latestSnapshotOffset}")
       false
     } else {
       val writer = writerBuilder.build(
@@ -119,5 +119,10 @@ class BrokerMetadataSnapshotter(
   def close(): Unit = {
     beginShutdown()
     eventQueue.close()
+  }
+
+  // VisibleForTesting
+  def currentSnapshotOffset(): Long = {
+    _currentSnapshotOffset
   }
 }
