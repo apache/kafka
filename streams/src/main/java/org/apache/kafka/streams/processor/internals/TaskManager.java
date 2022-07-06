@@ -798,12 +798,12 @@ public class TaskManager {
         } catch (final RuntimeException swallow) {
             log.error("Error suspending dirty task {} ", task.id(), swallow);
         }
-        tasks.removeTaskBeforeClosing(task.id());
+        tasks.removeTask(task.id());
         task.closeDirty();
     }
 
     private void completeTaskCloseClean(final Task task) {
-        tasks.removeTaskBeforeClosing(task.id());
+        tasks.removeTask(task.id());
         task.closeClean();
     }
 
@@ -1175,7 +1175,7 @@ public class TaskManager {
             final Set<TaskId> allRemovedTasks =
                 union(HashSet::new, activeTasksToRemove, standbyTasksToRemove).stream().map(Task::id).collect(Collectors.toSet());
             closeAndCleanUpTasks(activeTasksToRemove, standbyTasksToRemove, true);
-            allRemovedTasks.forEach(tasks::removeTaskBeforeClosing);
+            allRemovedTasks.forEach(tasks::removeTask);
             releaseLockedDirectoriesForTasks(allRemovedTasks);
         } catch (final Exception e) {
             // TODO KAFKA-12648: for now just swallow the exception to avoid interfering with the other topologies
@@ -1322,8 +1322,11 @@ public class TaskManager {
         return tasks().values().stream().anyMatch(Task::needsInitializationOrRestoration);
     }
 
-    // for testing only
-    void addTask(final Task task) {
+    public Task removeTask(final TaskId taskId) {
+        return tasks.removeTask(taskId);
+    }
+
+    public void addTask(final Task task) {
         tasks.addTask(task);
     }
 }

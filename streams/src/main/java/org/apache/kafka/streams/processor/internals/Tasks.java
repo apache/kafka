@@ -47,16 +47,15 @@ class Tasks {
     // TODO: change type to `StreamTask`
     private final Map<TopicPartition, Task> activeTasksPerPartition = new HashMap<>();
     // TODO: change type to `StreamTask`
-    private final Map<TaskId, Task> readOnlyActiveTasksPerId = Collections.unmodifiableMap(activeTasksPerId);
-    private final Set<TaskId> readOnlyActiveTaskIds = Collections.unmodifiableSet(activeTasksPerId.keySet());
-    // TODO: change type to `StreamTask`
     private final Collection<Task> readOnlyActiveTasks = Collections.unmodifiableCollection(activeTasksPerId.values());
 
     // TODO: change type to `StandbyTask`
     private final Map<TaskId, Task> standbyTasksPerId = new TreeMap<>();
+
+    // TODO: change type to `StreamTask`
+    private final Collection<Task> readOnlyStandbyTasks = Collections.unmodifiableCollection(standbyTasksPerId.values());
+
     // TODO: change type to `StandbyTask`
-    private final Map<TaskId, Task> readOnlyStandbyTasksPerId = Collections.unmodifiableMap(standbyTasksPerId);
-    private final Set<TaskId> readOnlyStandbyTaskIds = Collections.unmodifiableSet(standbyTasksPerId.keySet());
     private final Collection<Task> successfullyProcessed = new HashSet<>();
 
     private final ActiveTaskCreator activeTaskCreator;
@@ -198,7 +197,7 @@ class Tasks {
             log.error(uncleanMessage, e);
             taskCloseExceptions.putIfAbsent(taskId, e);
         }
-        removeTaskBeforeClosing(taskId);
+        removeTask(taskId);
     }
 
     void reInitializeThreadProducer() {
@@ -214,7 +213,8 @@ class Tasks {
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(activeTask.id());
     }
 
-    void removeTaskBeforeClosing(final TaskId taskId) {
+    Task removeTask(final TaskId taskId) {
+        final Task task = allTasksPerId.remove(taskId);
         activeTasksPerId.remove(taskId);
         final Set<TopicPartition> toBeRemoved = activeTasksPerPartition.entrySet().stream()
             .filter(e -> e.getValue().id().equals(taskId))
@@ -222,7 +222,7 @@ class Tasks {
             .collect(Collectors.toSet());
         toBeRemoved.forEach(activeTasksPerPartition::remove);
         standbyTasksPerId.remove(taskId);
-        allTasksPerId.remove(taskId);
+        return task;
     }
 
     void clear() {
@@ -235,14 +235,6 @@ class Tasks {
     // TODO: change return type to `StreamTask`
     Task activeTasksForInputPartition(final TopicPartition partition) {
         return activeTasksPerPartition.get(partition);
-    }
-
-    // TODO: change return type to `StandbyTask`
-    Task standbyTask(final TaskId taskId) {
-        if (!standbyTasksPerId.containsKey(taskId)) {
-            throw new IllegalStateException("Standby task unknown: " + taskId);
-        }
-        return standbyTasksPerId.get(taskId);
     }
 
     Task task(final TaskId taskId) {
@@ -265,6 +257,11 @@ class Tasks {
         return readOnlyActiveTasks;
     }
 
+    // TODO: change return type to `StreamTask`
+    Collection<Task> standbyTasks() {
+        return readOnlyStandbyTasks;
+    }
+
     Collection<Task> allTasks() {
         return readOnlyTasks;
     }
@@ -281,24 +278,6 @@ class Tasks {
             .stream()
             .filter(t -> !topologyMetadata.isPaused(t.id().topologyName()))
             .collect(Collectors.toList());
-    }
-
-    Set<TaskId> activeTaskIds() {
-        return readOnlyActiveTaskIds;
-    }
-
-    Set<TaskId> standbyTaskIds() {
-        return readOnlyStandbyTaskIds;
-    }
-
-    // TODO: change return type to `StreamTask`
-    Map<TaskId, Task> activeTaskMap() {
-        return readOnlyActiveTasksPerId;
-    }
-
-    // TODO: change return type to `StandbyTask`
-    Map<TaskId, Task> standbyTaskMap() {
-        return readOnlyStandbyTasksPerId;
     }
 
     Map<TaskId, Task> tasksPerId() {
@@ -337,7 +316,7 @@ class Tasks {
         successfullyProcessed.add(task);
     }
 
-    void removeTaskFromCuccessfullyProcessedBeforeClosing(final Task task) {
+    void removeTaskFromSuccessfullyProcessedBeforeClosing(final Task task) {
         successfullyProcessed.remove(task);
     }
 
@@ -345,10 +324,12 @@ class Tasks {
         successfullyProcessed.clear();
     }
 
-    // for testing only
     void addTask(final Task task) {
         if (task.isActive()) {
             activeTasksPerId.put(task.id(), task);
+            for (final TopicPartition topicPartition : task.inputPartitions()) {
+                activeTasksPerPartition.put(topicPartition, task);
+            }
         } else {
             standbyTasksPerId.put(task.id(), task);
         }

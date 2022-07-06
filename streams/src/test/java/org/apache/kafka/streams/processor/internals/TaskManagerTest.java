@@ -93,6 +93,9 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.union;
+import static org.apache.kafka.test.StreamsTestUtils.createStandbyTask;
+import static org.apache.kafka.test.StreamsTestUtils.createStatefulTask;
+import static org.apache.kafka.test.StreamsTestUtils.createStatelessTask;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.eq;
@@ -115,6 +118,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.when;
 
 @RunWith(EasyMockRunner.class)
 public class TaskManagerTest {
@@ -3243,6 +3247,111 @@ public class TaskManagerTest {
         taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
 
         verify(standbyTaskCreator, activeTaskCreator);
+    }
+
+    @Test
+    public void shouldAddStatelessTaskToTaskManager() {
+        final Task task = createStatelessTask(taskId00);
+        shouldAddActiveTaskToTaskManager(task);
+    }
+
+    @Test
+    public void shouldAddStatefulTaskToTaskManager() {
+        final Task task = createStatefulTask(taskId00, Collections.singleton(new TopicPartition("test", 0)));
+        shouldAddActiveTaskToTaskManager(task);
+    }
+
+    private void shouldAddActiveTaskToTaskManager(final Task task) {
+        taskManager.addTask(task);
+
+        final Map<TaskId, Task> tasks = taskManager.tasks();
+        assertEquals(1, tasks.size());
+        assertEquals(task, tasks.get(task.id()));
+        final Map<TaskId, Task> nonPausedTasks = taskManager.notPausedTasks();
+        assertEquals(1, nonPausedTasks.size());
+        assertEquals(task, nonPausedTasks.get(task.id()));
+        final Map<TaskId, Task> activeTasks = taskManager.activeTaskMap();
+        assertEquals(1, activeTasks.size());
+        assertEquals(task, activeTasks.get(task.id()));
+        final Set<TaskId> activeTaskIds = taskManager.activeTaskIds();
+        assertEquals(1, activeTaskIds.size());
+        assertTrue(activeTaskIds.contains(task.id()));
+        final List<Task> activeTaskIterable = taskManager.activeTaskIterable();
+        assertEquals(1, activeTaskIterable.size());
+        assertTrue(activeTaskIterable.contains(task));
+        assertTrue(taskManager.standbyTaskMap().isEmpty());
+        assertTrue(taskManager.standbyTaskIds().isEmpty());
+    }
+
+    @Test
+    public void shouldAddStandbyTaskToTaskManager() {
+        final Task task = createStandbyTask(taskId00, Collections.singleton(new TopicPartition("test", 0)));
+
+        taskManager.addTask(task);
+
+        final Map<TaskId, Task> tasks = taskManager.tasks();
+        assertEquals(1, tasks.size());
+        assertEquals(task, tasks.get(task.id()));
+        final Map<TaskId, Task> nonPausedTasks = taskManager.notPausedTasks();
+        assertEquals(1, nonPausedTasks.size());
+        assertEquals(task, nonPausedTasks.get(task.id()));
+        final Map<TaskId, Task> standbyTaskMap = taskManager.standbyTaskMap();
+        assertEquals(1, standbyTaskMap.size());
+        assertEquals(task, standbyTaskMap.get(task.id()));
+        final Set<TaskId> standbyTaskIds = taskManager.standbyTaskIds();
+        assertEquals(1, standbyTaskIds.size());
+        assertTrue(standbyTaskIds.contains(task.id()));
+        assertTrue(taskManager.activeTaskMap().isEmpty());
+        assertTrue(taskManager.activeTaskIds().isEmpty());
+        assertTrue(taskManager.activeTaskIterable().isEmpty());
+    }
+
+    @Test
+    public void shouldRemoveStatelessTaskFromTaskManager() {
+        final Task task = createStatelessTask(taskId00);
+        when(task.inputPartitions())
+            .thenReturn(mkSet(new TopicPartition("input1", 0), new TopicPartition("input2", 0)));
+        shouldRemoveActiveTaskFromTaskManager(task);
+    }
+
+    @Test
+    public void shouldRemoveStatefulTaskFromTaskManager() {
+        final Task task = createStatefulTask(taskId00, mkSet(new TopicPartition("changelog00", 0)));
+        when(task.inputPartitions())
+            .thenReturn(mkSet(new TopicPartition("input1", 0), new TopicPartition("input2", 0)));
+        shouldRemoveActiveTaskFromTaskManager(task);
+    }
+
+    private void shouldRemoveActiveTaskFromTaskManager(final Task task) {
+        taskManager.addTask(task);
+
+        final Task removedTask = taskManager.removeTask(task.id());
+
+        assertEquals(task, removedTask);
+        assertTrue(taskManager.tasks().isEmpty());
+        assertTrue(taskManager.notPausedTasks().isEmpty());
+        assertTrue(taskManager.activeTaskMap().isEmpty());
+        assertTrue(taskManager.activeTaskIds().isEmpty());
+        assertTrue(taskManager.activeTaskIterable().isEmpty());
+        assertTrue(taskManager.standbyTaskMap().isEmpty());
+        assertTrue(taskManager.standbyTaskIds().isEmpty());
+    }
+
+    @Test
+    public void shouldRemoveStandbyTaskFromTaskManager() {
+        final Task task = createStandbyTask(taskId00, mkSet(new TopicPartition("changelog00", 0)));
+        taskManager.addTask(task);
+
+        final Task removedTask = taskManager.removeTask(task.id());
+
+        assertEquals(task, removedTask);
+        assertTrue(taskManager.tasks().isEmpty());
+        assertTrue(taskManager.notPausedTasks().isEmpty());
+        assertTrue(taskManager.activeTaskMap().isEmpty());
+        assertTrue(taskManager.activeTaskIds().isEmpty());
+        assertTrue(taskManager.activeTaskIterable().isEmpty());
+        assertTrue(taskManager.standbyTaskMap().isEmpty());
+        assertTrue(taskManager.standbyTaskIds().isEmpty());
     }
 
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,
