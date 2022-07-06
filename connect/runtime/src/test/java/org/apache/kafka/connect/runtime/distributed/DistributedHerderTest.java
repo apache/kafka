@@ -105,6 +105,7 @@ import java.util.stream.IntStream;
 
 import static java.util.Collections.singletonList;
 import static javax.ws.rs.core.Response.Status.FORBIDDEN;
+import static javax.ws.rs.core.Response.Status.SERVICE_UNAVAILABLE;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUIRED;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
@@ -2773,13 +2774,43 @@ public class DistributedHerderTest extends ThreadedTest {
         EasyMock.expect(signature.keyAlgorithm()).andReturn("HmacSHA256").anyTimes();
         EasyMock.expect(signature.isValid(EasyMock.anyObject())).andReturn(false).anyTimes();
 
-        PowerMock.replayAll(taskConfigCb, signature);
+        SessionKey sessionKey = EasyMock.mock(SessionKey.class);
+        SecretKey secretKey = EasyMock.niceMock(SecretKey.class);
+        EasyMock.expect(sessionKey.key()).andReturn(secretKey);
+        EasyMock.expect(sessionKey.creationTimestamp()).andReturn(time.milliseconds());
+
+        PowerMock.replayAll(taskConfigCb, signature, sessionKey, secretKey);
+
+        // Read a new session key from the config topic
+        configUpdateListener.onSessionKeyUpdate(sessionKey);
 
         herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
 
         PowerMock.verifyAll();
         assertTrue(errorCapture.getValue() instanceof ConnectRestException);
         assertEquals(FORBIDDEN.getStatusCode(), ((ConnectRestException) errorCapture.getValue()).statusCode());
+    }
+
+    @Test
+    public void putTaskConfigsWorkerStillStarting() {
+        Callback<Void> taskConfigCb = EasyMock.mock(Callback.class);
+        Capture<Throwable> errorCapture = Capture.newInstance();
+        taskConfigCb.onCompletion(capture(errorCapture), EasyMock.eq(null));
+        EasyMock.expectLastCall().once();
+
+        EasyMock.expect(member.currentProtocolVersion()).andReturn(CONNECT_PROTOCOL_V2).anyTimes();
+
+        InternalRequestSignature signature = EasyMock.mock(InternalRequestSignature.class);
+        EasyMock.expect(signature.keyAlgorithm()).andReturn("HmacSHA256").anyTimes();
+        EasyMock.expect(signature.isValid(EasyMock.anyObject())).andReturn(true).anyTimes();
+
+        PowerMock.replayAll(taskConfigCb, signature);
+
+        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
+
+        PowerMock.verifyAll();
+        assertTrue(errorCapture.getValue() instanceof ConnectRestException);
+        assertEquals(SERVICE_UNAVAILABLE.getStatusCode(), ((ConnectRestException) errorCapture.getValue()).statusCode());
     }
 
     @Test
@@ -2794,7 +2825,15 @@ public class DistributedHerderTest extends ThreadedTest {
         EasyMock.expect(signature.keyAlgorithm()).andReturn("HmacSHA256").anyTimes();
         EasyMock.expect(signature.isValid(EasyMock.anyObject())).andReturn(true).anyTimes();
 
-        PowerMock.replayAll(taskConfigCb, signature);
+        SessionKey sessionKey = EasyMock.mock(SessionKey.class);
+        SecretKey secretKey = EasyMock.niceMock(SecretKey.class);
+        EasyMock.expect(sessionKey.key()).andReturn(secretKey);
+        EasyMock.expect(sessionKey.creationTimestamp()).andReturn(time.milliseconds());
+
+        PowerMock.replayAll(taskConfigCb, signature, sessionKey, secretKey);
+
+        // Read a new session key from the config topic
+        configUpdateListener.onSessionKeyUpdate(sessionKey);
 
         herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
 
@@ -2893,7 +2932,15 @@ public class DistributedHerderTest extends ThreadedTest {
         EasyMock.expect(signature.keyAlgorithm()).andReturn("HmacSHA256").anyTimes();
         EasyMock.expect(signature.isValid(EasyMock.anyObject())).andReturn(false).anyTimes();
 
-        PowerMock.replayAll(taskConfigCb, signature);
+        SessionKey sessionKey = EasyMock.mock(SessionKey.class);
+        SecretKey secretKey = EasyMock.niceMock(SecretKey.class);
+        EasyMock.expect(sessionKey.key()).andReturn(secretKey);
+        EasyMock.expect(sessionKey.creationTimestamp()).andReturn(time.milliseconds());
+
+        PowerMock.replayAll(taskConfigCb, signature, sessionKey, secretKey);
+
+        // Read a new session key from the config topic
+        configUpdateListener.onSessionKeyUpdate(sessionKey);
 
         herder.fenceZombieSourceTasks(CONN1, taskConfigCb, signature);
 
