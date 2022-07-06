@@ -1255,44 +1255,6 @@ public class StreamsConfigTest {
         );
     }
 
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldUseStateStoreCacheMaxBytesWhenBothOldAndNewConfigsAreSet() {
-        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 100);
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
-        final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(config.getTotalCacheSize(), 100);
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldUseCacheMaxBytesBufferingConfigWhenOnlyDeprecatedConfigIsSet() {
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
-        final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(config.getTotalCacheSize(), 10);
-    }
-
-    @Test
-    public void shouldUseStateStoreCacheMaxBytesWhenNewConfigIsSet() {
-        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 10);
-        final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(config.getTotalCacheSize(), 10);
-    }
-
-    @Test
-    public void shouldUseDefaultStateStoreCacheMaxBytesConfigWhenNoConfigIsSet() {
-        final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(config.getTotalCacheSize(), 10 * 1024 * 1024);
-    }
-
-    @Test
-    public void testInvalidSecurityProtocol() {
-        props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc");
-        final ConfigException ce = assertThrows(ConfigException.class,
-                () -> new StreamsConfig(props));
-        assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
-    }
-
     static class MisconfiguredSerde implements Serde<Object> {
         @Override
         public void configure(final Map<String, ?>  configs, final boolean isKey) {
