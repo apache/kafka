@@ -356,8 +356,6 @@ public class DefaultStateUpdater implements StateUpdater {
         this.offsetResetter = offsetResetter;
         this.time = time;
         this.commitIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
-        // initialize the last commit as of now to prevent first commit happens immediately
-        this.lastCommitMs = time.milliseconds();
     }
 
     public void start() {
@@ -365,6 +363,9 @@ public class DefaultStateUpdater implements StateUpdater {
             stateUpdaterThread = new StateUpdaterThread("state-updater", changelogReader, offsetResetter);
             stateUpdaterThread.start();
             shutdownGate = new CountDownLatch(1);
+
+            // initialize the last commit as of now to prevent first commit happens immediately
+            this.lastCommitMs = time.milliseconds();
         }
     }
 

@@ -978,6 +978,10 @@ public class KafkaStreams implements AutoCloseable {
         }
         // Initially, all Stream Threads are created with 0 cache size and max buffer size and then resized here.
         resizeThreadCacheAndBufferMemory(numStreamThreads);
+        if (numStreamThreads > 0) {
+            log.info("Initializing {} StreamThread with cache size/max buffer size values as {} per thread.",
+                numStreamThreads, getThreadCacheAndBufferMemoryString());
+        }
 
         stateDirCleaner = setupStateDirCleaner();
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, applicationConfigs);
@@ -1143,7 +1147,8 @@ public class KafkaStreams implements AutoCloseable {
                                     + "for it to complete shutdown as this will result in deadlock.", streamThread.getName());
                         }
                         resizeThreadCacheAndBufferMemory(getNumLiveStreamThreads());
-                        log.info("Resizing thread cache/max buffer size due to removal of thread {}, new cache size/max buffer size per thread is {}", streamThread.getName(), getThreadCacheAndBufferMemoryString());
+                        log.info("Resizing thread cache/max buffer size due to removal of thread {}, " +
+                            "new cache size/max buffer size per thread is {}", streamThread.getName(), getThreadCacheAndBufferMemoryString());
                         if (groupInstanceID.isPresent() && callingThreadIsNotCurrentStreamThread) {
                             final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceID.get());
                             final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);

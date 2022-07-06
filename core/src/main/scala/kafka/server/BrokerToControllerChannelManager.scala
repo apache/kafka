@@ -165,7 +165,6 @@ class BrokerToControllerChannelManagerImpl(
   private val logContext = new LogContext(s"[BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
-  private val currentNodeApiVersions = NodeApiVersions.create()
   private val requestThread = newRequestThread
 
   def start(): Unit = {
@@ -253,10 +252,7 @@ class BrokerToControllerChannelManagerImpl(
 
   def controllerApiVersions(): Option[NodeApiVersions] = {
     requestThread.activeControllerAddress().flatMap { activeController =>
-      if (activeController.id == config.brokerId)
-        Some(currentNodeApiVersions)
-      else
-        Option(apiVersions.get(activeController.idString))
+      Option(apiVersions.get(activeController.idString))
     }
   }
 }

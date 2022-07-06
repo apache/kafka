@@ -1080,9 +1080,14 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
                     <p>Tokens can be created by using Admin APIs or using <tt>kafka-delegation-tokens.sh</tt> script.
                         Delegation token requests (create/renew/expire/describe) should be issued only on SASL or SSL authenticated channels.
                         Tokens can not be requests if the initial authentication is done through delegation token.
+                        A token can be created by the user for that user or others as well by specifying the <tt>--owner-principal</tt> parameter.
+                        Owner/Renewers can renew or expire tokens. Owner/renewers can always describe their own tokens.
+                        To describe other tokens, a DESCRIBE_TOKEN permission needs to be added on the User resource representing the owner of the token.
                         <tt>kafka-delegation-tokens.sh</tt> script examples are given below.</p>
                     <p>Create a delegation token:
                     <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-delegation-tokens.sh --bootstrap-server localhost:9092 --create   --max-life-time-period -1 --command-config client.properties --renewer-principal User:user1</code></pre>
+                    <p>Create a delegation token for a different owner:
+                    <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-delegation-tokens.sh --bootstrap-server localhost:9092 --create   --max-life-time-period -1 --command-config client.properties --renewer-principal User:user1 --owner-principal User:owner1</code></pre>
                     <p>Renew a delegation token:
                     <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-delegation-tokens.sh --bootstrap-server localhost:9092 --renew    --renew-time-period -1 --command-config client.properties --hmac ABCDEFGHIJK</code></pre>
                     <p>Expire a delegation token:
@@ -1125,13 +1130,6 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
                         <li>Generate new tokens</li>
                     </ol>
                     <p>We intend to automate this in a future Kafka release.</p>
-                </li>
-
-                <li><h5 class="anchor-heading"><a id="security_token_notes" class="anchor-link"></a><a href="#security_token_notes">Notes on Delegation Tokens</a></h5>
-                    <ul>
-                        <li>Currently, we only allow a user to create delegation token for that user only. Owner/Renewers can renew or expire tokens.
-                            Owner/renewers can always describe their own tokens. To describe others tokens, we need to add DESCRIBE permission on Token Resource.</li>
-                    </ul>
                 </li>
             </ol>
         </li>
@@ -1267,6 +1265,13 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
             <td>ResourcePattern</td>
         </tr>
         <tr>
+            <td>--user-principal [user-principal]</td>
+            <td>A user resource to which ACLs should be added or removed. This is currently supported in relation with delegation tokens.
+                A value of * indicates ACL should apply to all users.</td>
+            <td></td>
+            <td>ResourcePattern</td>
+        </tr>
+        <tr>
             <td>--resource-pattern-type [pattern-type]</td>
             <td>Indicates to the script the type of resource pattern, (for --add), or resource pattern filter, (for --list and --remove), the user wishes to use.<br>
                 When adding acls, this should be a specific pattern type, e.g. 'literal' or 'prefixed'.<br>
@@ -1323,6 +1328,8 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
                     <li>DescribeConfigs</li>
                     <li>AlterConfigs</li>
                     <li>IdempotentWrite</li>
+                    <li>CreateTokens</li>
+                    <li>DescribeTokens</li>
                     <li>All</li>
                 </ul>
             </td>
@@ -1418,9 +1425,10 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
             Users having Alter permission on ClusterResource can use Admin API for ACL management. kafka-acls.sh script supports AdminClient API to manage ACLs without interacting with zookeeper/authorizer directly.
             All the above examples can be executed by using <b>--bootstrap-server</b> option. For example:
 
-            <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --add --allow-principal User:Bob --producer --topic Test-topic
+            <pre class="line-numbers"><code class="language-bash">bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --add --allow-principal User:Bob --producer --topic Test-topic
 bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --add --allow-principal User:Bob --consumer --topic Test-topic --group Group-1
-bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --list --topic Test-topic</code></pre></li>
+bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --list --topic Test-topic
+bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --add --allow-principal User:tokenRequester --operation CreateTokens --user-principal "owner1"</code></pre></li>
 
     </ul>
 
@@ -1442,6 +1450,8 @@ bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminc
         <li>DescribeConfigs</li>
         <li>AlterConfigs</li>
         <li>IdempotentWrite</li>
+        <li>CreateTokens</li>
+        <li>DescribeTokens</li>
         <li>All</li>
     </ul>
     <h5 class="anchor-heading"><a id="resources_in_kafka" class="anchor-link"></a><a href="#resources_in_kafka">Resources in Kafka</a></h5>
@@ -1463,6 +1473,8 @@ bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminc
             a little special behavior in Kafka it is recommended to read
             <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-48+Delegation+token+support+for+Kafka#KIP-48DelegationtokensupportforKafka-DescribeDelegationTokenRequest">KIP-48</a>
             and the related upstream documentation at <a href="#security_delegation_token">Authentication using Delegation Tokens</a>.</li>
+        <li><b>User:</b> CreateToken and DescribeToken operations can be granted to User resources to allow creating and describing
+            tokens for other users. More info can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-373%3A+Allow+users+to+create+delegation+tokens+for+other+users">KIP-373</a>.</li>
     </ul>
     <h5 class="anchor-heading"><a id="operations_resources_and_protocols" class="anchor-link"></a><a href="#operations_resources_and_protocols">Operations and Resources on Protocols</a></h5>
     <p>In the below table we'll list the valid operations on resources that are executed by the Kafka API protocols.</p>
@@ -1839,6 +1851,12 @@ bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminc
                 <a id="security_delegation_token_1" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
         </tr>
         <tr>
+            <td>CREATE_DELEGATION_TOKEN (38)</td>
+            <td>CreateTokens</td>
+            <td>User</td>
+            <td>Allows creating delegation tokens for the User resource.</td>
+        </tr>
+        <tr>
             <td>RENEW_DELEGATION_TOKEN (39)</td>
             <td></td>
             <td></td>
@@ -1858,6 +1876,12 @@ bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminc
             <td>DelegationToken</td>
             <td>Describing delegation tokens has special rules, for this please see the
                 <a id="security_delegation_token_4" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_DELEGATION_TOKEN (41)</td>
+            <td>DescribeTokens</td>
+            <td>User</td>
+            <td>Allows describing delegation tokens of the User resource.</td>
         </tr>
         <tr>
             <td>DELETE_GROUPS (42)</td>

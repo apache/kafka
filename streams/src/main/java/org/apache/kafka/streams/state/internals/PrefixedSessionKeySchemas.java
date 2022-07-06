@@ -77,10 +77,8 @@ public class PrefixedSessionKeySchemas {
         }
 
         /**
-         *
          * @param key the key in the range
          * @param to the latest start time
-         * @return
          */
         @Override
         public Bytes upperRangeFixedSize(final Bytes key, final long to) {
@@ -88,10 +86,8 @@ public class PrefixedSessionKeySchemas {
         }
 
         /**
-         *
          * @param key the key in the range
          * @param from the earliest end timestamp in the range
-         * @return
          */
         @Override
         public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
@@ -105,7 +101,10 @@ public class PrefixedSessionKeySchemas {
 
         @Override
         public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom,
-            final Bytes binaryKeyTo, final long from, final long to, final boolean forward) {
+                                                 final Bytes binaryKeyTo,
+                                                 final long from,
+                                                 final long to,
+                                                 final boolean forward) {
             return iterator -> {
                 while (iterator.hasNext()) {
                     final Bytes bytes = iterator.peekNextKey();
@@ -204,7 +203,9 @@ public class PrefixedSessionKeySchemas {
                                        final long endTime) {
             buf.putLong(endTime);
             buf.putLong(startTime);
-            buf.put(key.get());
+            if (key != null) {
+                buf.put(key.get());
+            }
         }
 
         public static Bytes toBinary(final Bytes key,

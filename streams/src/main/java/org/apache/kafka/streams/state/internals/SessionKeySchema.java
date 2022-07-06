@@ -35,7 +35,7 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
 
     public static int keyByteLength(final Bytes key) {
-        return key.get().length + 2 * TIMESTAMP_SIZE;
+        return (key == null ? 0 : key.get().length) + 2 * TIMESTAMP_SIZE;
     }
 
     @Override
