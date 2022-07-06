@@ -696,11 +696,7 @@ object ConsumerGroupCommand extends Logging {
       Admin.create(props)
     }
 
-    private def withRequireStable(options: ListConsumerGroupOffsetsOptions, requireStable: Boolean) = {
-      options.requireStable(requireStable)
-    }
-
-    private def withTimeoutMs [T <: AbstractOptions[T]] (options : T) = {
+    private def withTimeoutMs [T <: AbstractOptions[T]] (options : T) =  {
       val t = opts.options.valueOf(opts.timeoutMsOpt).intValue()
       options.timeoutMs(t)
     }
@@ -758,7 +754,7 @@ object ConsumerGroupCommand extends Logging {
     private def getCommittedOffsets(groupId: String): Map[TopicPartition, OffsetAndMetadata] = {
       adminClient.listConsumerGroupOffsets(
         groupId,
-        withRequireStable(withTimeoutMs(new ListConsumerGroupOffsetsOptions), opts.options.has(opts.requireStableOpt))
+        withTimeoutMs(new ListConsumerGroupOffsetsOptions)
       ).partitionsToOffsetAndMetadata.get.asScala
     }
 
@@ -1013,8 +1009,6 @@ object ConsumerGroupCommand extends Logging {
     val OffsetsDoc = "Describe the group and list all topic partitions in the group along with their offset lag. " +
       "This is the default sub-action of and may be used with '--describe' and '--bootstrap-server' options only." + nl +
       "Example: --bootstrap-server localhost:9092 --describe --group group1 --offsets"
-    val RequireStableDoc = "Require brokers to hold on returning unstable offsets (due to pending transactions) but retry until offsets are stably committed." + nl +
-      "Example: --bootstrap-server localhost:9092 --describe --group group1 --offsets --require-stable"
     val StateDoc = "When specified with '--describe', includes the state of the group." + nl +
       "Example: --bootstrap-server localhost:9092 --describe --group group1 --state" + nl +
       "When specified with '--list', it displays the state of all groups. It can also be used to list groups with specific states." + nl +
@@ -1082,10 +1076,6 @@ object ConsumerGroupCommand extends Logging {
                            .availableIf(describeOpt)
     val offsetsOpt = parser.accepts("offsets", OffsetsDoc)
                            .availableIf(describeOpt)
-    val requireStableOpt = parser.accepts("require-stable", RequireStableDoc)
-                           .availableIf(offsetsOpt)
-                           .withOptionalArg()
-                           .ofType(classOf[Boolean])
     val stateOpt = parser.accepts("state", StateDoc)
                          .availableIf(describeOpt, listOpt)
                          .withOptionalArg()
