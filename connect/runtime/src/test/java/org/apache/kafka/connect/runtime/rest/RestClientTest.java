@@ -27,7 +27,6 @@ import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
-import org.jose4j.keys.HmacKey;
 import org.junit.Test;
 import org.junit.experimental.runners.Enclosed;
 import org.junit.runner.RunWith;
@@ -35,6 +34,7 @@ import org.junit.runners.Parameterized;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import javax.crypto.SecretKey;
 import javax.ws.rs.core.Response;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -56,10 +56,18 @@ public class RestClientTest {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<TestDTO> TEST_TYPE = new TypeReference<TestDTO>() {
     };
+    private static final SecretKey MOCK_SECRET_KEY = getMockSecretKey();
 
     private static void assertIsInternalServerError(ConnectRestException e) {
         assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), e.statusCode());
         assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), e.errorCode());
+    }
+
+    private static SecretKey getMockSecretKey() {
+        SecretKey mockKey = mock(SecretKey.class);
+        when(mockKey.getFormat()).thenReturn("RAW");// supported format by
+        when(mockKey.getEncoded()).thenReturn("SomeKey".getBytes(StandardCharsets.UTF_8));
+        return mockKey;
     }
 
     private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient, String requestSignatureAlgorithm) {
@@ -70,19 +78,19 @@ public class RestClientTest {
                 null,
                 new TestDTO("requestBodyData"),
                 TEST_TYPE,
-                new HmacKey("HMAC".getBytes(StandardCharsets.UTF_8)),
+                MOCK_SECRET_KEY,
                 requestSignatureAlgorithm);
     }
 
     private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient) {
-        String validRequestSignatureAlgorithm = "HmacMD5";
+        String validRequestSignatureAlgorithm = "HmacSHA1";
         return httpRequest(httpClient, validRequestSignatureAlgorithm);
     }
 
 
     @RunWith(Parameterized.class)
     public static class RequestFailureParameterizedTest {
-        private static final HttpClient httpClient = mock(HttpClient.class);
+        private final HttpClient httpClient = mock(HttpClient.class);
 
         @Parameterized.Parameter
         public Throwable requestException;
@@ -115,7 +123,7 @@ public class RestClientTest {
     @RunWith(MockitoJUnitRunner.class)
     public static class Tests {
         @Mock
-        private static HttpClient httpClient;
+        private HttpClient httpClient;
 
         private static String toJsonString(Object obj) {
             try {
@@ -125,7 +133,7 @@ public class RestClientTest {
             }
         }
 
-        private static void setupHttpClient(int responseCode, String responseJsonString) throws Exception {
+        private void setupHttpClient(int responseCode, String responseJsonString) throws Exception {
             Request req = mock(Request.class);
             ContentResponse resp = mock(ContentResponse.class);
             when(resp.getStatus()).thenReturn(responseCode);
