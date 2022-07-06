@@ -1862,16 +1862,23 @@ class LogCleanerTest {
       logDirs = Array(TestUtils.tempDir()),
       logs = new Pool[TopicPartition, UnifiedLog](),
       logDirFailureChannel = new LogDirFailureChannel(1),
-      time = time)
+      time = time) {
+      // shutdown() and startup() are called in LogCleaner.reconfigure().
+      // Empty startup() and shutdown() to ensure that no unnecessary log cleaner threads remain after this test.
+      override def startup(): Unit = {}
+      override def shutdown(): Unit = {}
+    }
 
-    assertEquals(logCleaner.throttler.desiredRatePerSec, 10000000, "Throttler.desiredRatePerSec should be initialized with KafkaConfig.LogCleanerIoMaxBytesPerSecondProp")
+    try {
+      assertEquals(10000000, logCleaner.throttler.desiredRatePerSec, s"Throttler.desiredRatePerSec should be initialized from initial `${KafkaConfig.LogCleanerIoMaxBytesPerSecondProp}` config.")
 
-    val newKafkaProps = TestUtils.createBrokerConfig(1, "localhost:2181")
-    newKafkaProps.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, 20000000)
+      val newKafkaProps = TestUtils.createBrokerConfig(1, "localhost:2181")
+      newKafkaProps.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, 20000000)
 
-    logCleaner.reconfigure(new KafkaConfig(oldKafkaProps), new KafkaConfig(newKafkaProps))
+      logCleaner.reconfigure(new KafkaConfig(oldKafkaProps), new KafkaConfig(newKafkaProps))
 
-    assertEquals(logCleaner.throttler.desiredRatePerSec, 20000000, "Throttler.desiredRatePerSec should be updated with new KafkaConfig.LogCleanerIoMaxBytesPerSecondProp")
+      assertEquals(20000000, logCleaner.throttler.desiredRatePerSec, s"Throttler.desiredRatePerSec should be updated with new `${KafkaConfig.LogCleanerIoMaxBytesPerSecondProp}` config.")
+    } finally logCleaner.shutdown();
   }
 
   private def writeToLog(log: UnifiedLog, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
