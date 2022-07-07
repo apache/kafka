@@ -2193,6 +2193,7 @@ object TestUtils extends Logging {
     principalSerde: KafkaPrincipalSerde,
     requestChannelMetrics: RequestChannel.Metrics,
     startTimeNanos: Long,
+    dequeueTimeNanos: Long = -1,
     fromPrivilegedListener: Boolean = true
   ): RequestChannel.Request = {
     val clientId = "id"
@@ -2214,7 +2215,7 @@ object TestUtils extends Logging {
       KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
       fromPrivilegedListener, Optional.of(principalSerde))
 
-    new RequestChannel.Request(
+    val envelopRequest = new RequestChannel.Request(
       processor = 1,
       context = envelopeContext,
       startTimeNanos = startTimeNanos,
@@ -2223,6 +2224,8 @@ object TestUtils extends Logging {
       metrics = requestChannelMetrics,
       envelope = None
     )
+    envelopRequest.requestDequeueTimeNanos = dequeueTimeNanos
+    envelopRequest
   }
 
   def verifyNoUnexpectedThreads(context: String): Unit = {

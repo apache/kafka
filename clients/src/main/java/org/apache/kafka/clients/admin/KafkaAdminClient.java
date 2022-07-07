@@ -3404,7 +3404,7 @@ public class KafkaAdminClient extends AdminClient {
                                                                    final ListConsumerGroupOffsetsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> future =
                 ListConsumerGroupOffsetsHandler.newFuture(groupId);
-        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(groupId, options.topicPartitions(), logContext);
+        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(groupId, options.topicPartitions(), options.requireStable(), logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new ListConsumerGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)));
     }

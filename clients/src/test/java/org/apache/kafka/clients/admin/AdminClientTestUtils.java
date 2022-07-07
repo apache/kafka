@@ -25,6 +25,7 @@ import org.apache.kafka.clients.HostResolver;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -105,6 +106,12 @@ public class AdminClientTestUtils {
 
     public static ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult(Map<TopicPartition, OffsetAndMetadata> offsets) {
         return new ListConsumerGroupOffsetsResult(KafkaFuture.completedFuture(offsets));
+    }
+
+    public static ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult(KafkaException exception) {
+        final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(exception);
+        return new ListConsumerGroupOffsetsResult(future);
     }
 
     /**

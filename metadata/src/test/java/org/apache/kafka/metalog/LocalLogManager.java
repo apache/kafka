@@ -31,6 +31,7 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.MockRawSnapshotReader;
@@ -226,16 +227,20 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
 
         synchronized long tryAppend(int nodeId, int epoch, LocalBatch batch) {
-            if (epoch != leader.epoch()) {
-                log.trace("tryAppend(nodeId={}, epoch={}): the provided epoch does not " +
-                    "match the current leader epoch of {}.", nodeId, epoch, leader.epoch());
-                return Long.MAX_VALUE;
-            }
             if (!leader.isLeader(nodeId)) {
-                log.trace("tryAppend(nodeId={}, epoch={}): the given node id does not " +
-                    "match the current leader id of {}.", nodeId, epoch, leader.leaderId());
-                return Long.MAX_VALUE;
+                log.debug("tryAppend(nodeId={}, epoch={}): the given node id does not " +
+                        "match the current leader id of {}.", nodeId, epoch, leader.leaderId());
+                throw new NotLeaderException("Append failed because the replication is not the current leader");
             }
+
+            if (epoch < leader.epoch()) {
+                throw new NotLeaderException("Append failed because the given epoch " + epoch + " is stale. " +
+                        "Current leader epoch = " + leader.epoch());
+            } else if (epoch > leader.epoch()) {
+                throw new IllegalArgumentException("Attempt to append from epoch " + epoch +
+                        " which is larger than the current epoch " + leader.epoch());
+            }
+
             log.trace("tryAppend(nodeId={}): appending {}.", nodeId, batch);
             long offset = append(batch);
             electLeaderIfNeeded();
@@ -723,9 +728,35 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
     @Override
     public void resign(int epoch) {
-        LeaderAndEpoch curLeader = leader;
-        LeaderAndEpoch nextLeader = new LeaderAndEpoch(OptionalInt.empty(), curLeader.epoch() + 1);
-        shared.tryAppend(nodeId, curLeader.epoch(), new LeaderChangeBatch(nextLeader));
+        if (epoch < 0) {
+            throw new IllegalArgumentException("Attempt to resign from an invalid negative epoch " + epoch);
+        }
+
+        LeaderAndEpoch leaderAndEpoch = leaderAndEpoch();
+        int currentEpoch = leaderAndEpoch.epoch();
+
+        if (epoch > currentEpoch) {
+            throw new IllegalArgumentException("Attempt to resign from epoch " + epoch +
+                    " which is larger than the current epoch " + currentEpoch);
+        } else if (epoch < currentEpoch) {
+            // If the passed epoch is smaller than the current epoch, then it might mean
+            // that the listener has not been notified about a leader change that already
+            // took place. In this case, we consider the call as already fulfilled and
+            // take no further action.
+            log.debug("Ignoring call to resign from epoch {} since it is smaller than the " +
+                    "current epoch {}", epoch, currentEpoch);
+            return;
+        }
+
+        LeaderAndEpoch nextLeader = new LeaderAndEpoch(OptionalInt.empty(), currentEpoch + 1);
+        try {
+            shared.tryAppend(nodeId, currentEpoch, new LeaderChangeBatch(nextLeader));
+        } catch (NotLeaderException exp) {
+            // the leader epoch has already advanced. resign is a no op.
+            log.debug("Ignoring call to resign from epoch {}. Either we are not the leader or the provided epoch is " +
+                    "smaller than the current epoch {}", epoch, currentEpoch);
+            return;
+        }
     }
 
     @Override
