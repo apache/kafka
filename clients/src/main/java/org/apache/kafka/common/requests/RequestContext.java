@@ -136,6 +136,7 @@ public class RequestContext implements AuthorizableRequestContext {
         return header.apiVersion();
     }
 
+    @Override
     public ClientInformation clientInformation() {
         return clientInformation;
     }
