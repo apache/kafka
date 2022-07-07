@@ -83,8 +83,7 @@ class DefaultStateUpdaterTest {
     private final Time time = new MockTime(1L);
     private final StreamsConfig config = new StreamsConfig(configProps());
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
-    private final java.util.function.Consumer<Set<TopicPartition>> offsetResetter = topicPartitions -> { };
-    private final DefaultStateUpdater stateUpdater = new DefaultStateUpdater(config, changelogReader, offsetResetter, time);
+    private final DefaultStateUpdater stateUpdater = new DefaultStateUpdater(config, changelogReader, time);
 
     @AfterEach
     public void tearDown() {
@@ -93,11 +92,11 @@ class DefaultStateUpdaterTest {
 
     private Properties configProps() {
         return mkObjectProperties(mkMap(
-                mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-                mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
-                mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2),
-                mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL),
-                mkEntry(producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), COMMIT_INTERVAL)
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2),
+            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL),
+            mkEntry(producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), COMMIT_INTERVAL)
         ));
     }
 
@@ -231,7 +230,6 @@ class DefaultStateUpdaterTest {
         verifyRemovedTasks();
         verify(changelogReader, times(1)).enforceRestoreActive();
         verify(changelogReader, atLeast(3)).restore(anyMap());
-        verify(task).completeRestoration(offsetResetter);
         verify(changelogReader, never()).transitToUpdateStandby();
     }
 
@@ -263,9 +261,6 @@ class DefaultStateUpdaterTest {
         verifyRemovedTasks();
         verify(changelogReader, times(3)).enforceRestoreActive();
         verify(changelogReader, atLeast(4)).restore(anyMap());
-        verify(task3).completeRestoration(offsetResetter);
-        verify(task1).completeRestoration(offsetResetter);
-        verify(task2).completeRestoration(offsetResetter);
         verify(changelogReader, never()).transitToUpdateStandby();
     }
 
@@ -347,8 +342,6 @@ class DefaultStateUpdaterTest {
         verifyUpdatingStandbyTasks(task4, task3);
         verifyExceptionsAndFailedTasks();
         verifyRemovedTasks();
-        verify(task1).completeRestoration(offsetResetter);
-        verify(task2).completeRestoration(offsetResetter);
         verify(changelogReader, atLeast(3)).restore(anyMap());
         final InOrder orderVerifier = inOrder(changelogReader, task1, task2);
         orderVerifier.verify(changelogReader, times(2)).enforceRestoreActive();
@@ -372,7 +365,6 @@ class DefaultStateUpdaterTest {
 
         verifyRestoredActiveTasks(task1);
         verifyCheckpointTasks(true, task1);
-        verify(task1).completeRestoration(offsetResetter);
         verifyUpdatingStandbyTasks(task2);
         final InOrder orderVerifier = inOrder(changelogReader);
         orderVerifier.verify(changelogReader, times(1)).enforceRestoreActive();
@@ -381,7 +373,6 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task3);
 
         verifyRestoredActiveTasks(task1, task3);
-        verify(task3).completeRestoration(offsetResetter);
         verifyCheckpointTasks(true, task3);
         orderVerifier.verify(changelogReader, times(1)).enforceRestoreActive();
         orderVerifier.verify(changelogReader, times(1)).transitToUpdateStandby();
@@ -854,7 +845,7 @@ class DefaultStateUpdaterTest {
     public void shouldNotAutoCheckpointTasksIfIntervalNotElapsed() {
         // we need to use a non auto-ticking timer here to control how much time elapsed exactly
         final Time time = new MockTime();
-        final DefaultStateUpdater stateUpdater = new DefaultStateUpdater(config, changelogReader, offsetResetter, time);
+        final DefaultStateUpdater stateUpdater = new DefaultStateUpdater(config, changelogReader, time);
         try {
             final StreamTask task1 = createActiveStatefulTaskInStateRestoring(TASK_0_0, Collections.singletonList(TOPIC_PARTITION_A_0));
             final StreamTask task2 = createActiveStatefulTaskInStateRestoring(TASK_0_2, Collections.singletonList(TOPIC_PARTITION_B_0));
@@ -1061,7 +1052,6 @@ class DefaultStateUpdaterTest {
                 VERIFICATION_TIMEOUT,
                 "Did not get all restored active task within the given timeout!"
             );
-            assertTrue(restoredTasks.stream().allMatch(task -> task.state() == State.RESTORING));
         }
     }
 
@@ -1095,10 +1085,6 @@ class DefaultStateUpdaterTest {
                 VERIFICATION_TIMEOUT,
                 "Did not get all updating task within the given timeout!"
             );
-            assertTrue(updatingTasks.stream()
-                .allMatch(task -> task.isActive() && task.state() == State.RESTORING
-                    ||
-                    !task.isActive() && task.state() == State.RUNNING));
         }
     }
 
@@ -1114,7 +1100,6 @@ class DefaultStateUpdaterTest {
             VERIFICATION_TIMEOUT,
             "Did not see all standby task within the given timeout!"
         );
-        assertTrue(standbyTasks.stream().allMatch(task -> task.state() == State.RUNNING));
     }
 
     private void verifyRemovedTasks(final Task... tasks) throws Exception {
@@ -1132,9 +1117,6 @@ class DefaultStateUpdaterTest {
                 VERIFICATION_TIMEOUT,
                 "Did not get all removed task within the given timeout!"
             );
-            assertTrue(removedTasks.stream()
-                .allMatch(task -> task.isActive() && task.state() == State.RESTORING
-                    || !task.isActive() && task.state() == State.RUNNING));
         }
     }
 

@@ -709,7 +709,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
             public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
-                return AdminClientTestUtils.listConsumerGroupOffsetsResult(kaboom);
+                throw kaboom;
             }
         };
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));

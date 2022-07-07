@@ -47,6 +47,9 @@ public class EmbeddedConnectClusterAssertions {
     public static final long WORKER_SETUP_DURATION_MS = TimeUnit.MINUTES.toMillis(5);
     public static final long VALIDATION_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
     public static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.MINUTES.toMillis(2);
+    // Creating a connector requires two rounds of rebalance; destroying one only requires one
+    // Assume it'll take ~half the time to destroy a connector as it does to create one
+    public static final long CONNECTOR_SHUTDOWN_DURATION_MS = TimeUnit.MINUTES.toMillis(1);
     private static final long CONNECT_INTERNAL_TOPIC_UPDATES_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
 
     private final EmbeddedConnectCluster connect;
