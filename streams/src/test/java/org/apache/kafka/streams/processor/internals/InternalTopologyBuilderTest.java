@@ -966,22 +966,9 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
-    public void shouldUseNonDeprecatedConfigToSetCacheBytesWhenBothDeprecatedAndNonDeprecatedConfigsUsed() {
-        final Properties globalProps = StreamsTestUtils.getStreamsConfig();
-        globalProps.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 200L);
-        globalProps.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 100L);
-        final StreamsConfig globalStreamsConfig = new StreamsConfig(globalProps);
-        final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(globalStreamsConfig);
-        assertThat(topologyBuilder.topologyConfigs(), equalTo(new TopologyConfig(null, globalStreamsConfig, new Properties())));
-        assertThat(topologyBuilder.topologyConfigs().cacheSize, equalTo(200L));
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
     public void shouldOverrideGlobalStreamsConfigWhenGivenNamedTopologyProps() {
         final Properties topologyOverrides = new Properties();
-        topologyOverrides.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 12345L);
+        topologyOverrides.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 12345L);
         topologyOverrides.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 500L);
         topologyOverrides.put(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L);
         topologyOverrides.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
@@ -1007,10 +994,9 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldNotOverrideGlobalStreamsConfigWhenGivenUnnamedTopologyProps() {
         final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
-        streamsProps.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 12345L);
+        streamsProps.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 12345L);
         streamsProps.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, 500L);
         streamsProps.put(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1000L);
         streamsProps.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 15);
