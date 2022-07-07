@@ -61,7 +61,7 @@ public class TaskAndAction {
     }
 
     public TaskId getTaskId() {
-        if (action != Action.REMOVE && action != Action.PAUSE ) {
+        if (action != Action.REMOVE && action != Action.PAUSE) {
             throw new IllegalStateException("Action type " + action + " cannot have a task ID!");
         }
         return taskId;

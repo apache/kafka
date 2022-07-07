@@ -265,7 +265,7 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         private void removeTask(final TaskId taskId) {
-            Task task;
+            final Task task;
             if (updatingTasks.containsKey(taskId)) {
                 task = updatingTasks.get(taskId);
                 task.maybeCheckpoint(true);
