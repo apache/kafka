@@ -60,7 +60,7 @@ public class ListConsumerGroupOffsetsOptions extends AbstractOptions<ListConsume
         return topicPartitions;
     }
 
-    public boolean shouldRequireStable() {
+    public boolean requireStable() {
         return requireStable;
     }
 }
