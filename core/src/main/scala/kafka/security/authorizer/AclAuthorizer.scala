@@ -121,10 +121,8 @@ object AclAuthorizer {
   private def validateAclBinding(aclBinding: AclBinding): Unit = {
     if (aclBinding.isUnknown)
       throw new IllegalArgumentException("ACL binding contains unknown elements")
-  }
-
-  private def inValidAclBindingResourceName(resourceName: String): Boolean = {
-    resourceName.contains("/")
+    if (aclBinding.pattern().name().contains("/"))
+      throw new IllegalArgumentException(s"ACL binding contains invalid resource name: ${aclBinding.pattern().name()}")
   }
 }
 
@@ -212,9 +210,6 @@ class AclAuthorizer extends Authorizer with Logging {
         if (!extendedAclSupport && aclBinding.pattern.patternType == PatternType.PREFIXED) {
           throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
             s"${KafkaConfig.InterBrokerProtocolVersionProp} of $IBP_2_0_IV1 or greater")
-        }
-        if (inValidAclBindingResourceName(aclBinding.pattern().name())) {
-          throw new IllegalArgumentException(s"ACL binding contains invalid resource name: ${aclBinding.pattern().name()}")
         }
         validateAclBinding(aclBinding)
         true
