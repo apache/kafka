@@ -260,7 +260,6 @@ public class DefaultStateUpdater implements StateUpdater {
             final Task task = updatingTasks.get(taskId);
             if (task != null) {
                 task.maybeCheckpoint(true);
-
                 final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
                 changelogReader.unregister(changelogPartitions);
                 removedTasks.add(task);
@@ -310,7 +309,7 @@ public class DefaultStateUpdater implements StateUpdater {
             final long elapsedMsSinceLastCommit = now - lastCommitMs;
             if (elapsedMsSinceLastCommit > commitIntervalMs) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Committing all restoring tasks since {}ms has elapsed (commit interval is {}ms)",
+                    log.debug("Checkpointing all restoring tasks since {}ms has elapsed (commit interval is {}ms)",
                         elapsedMsSinceLastCommit, commitIntervalMs);
                 }
 

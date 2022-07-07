@@ -1946,7 +1946,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldCheckpointState() {
+    public void shouldAlwaysCheckpointStateIfEnforced() {
         stateManager.flush();
         EasyMock.expectLastCall().once();
         stateManager.checkpoint();
@@ -1959,6 +1959,31 @@ public class StreamTaskTest {
 
         task.initializeIfNeeded();
         task.maybeCheckpoint(true);
+
+        EasyMock.verify(stateManager);
+    }
+
+    @Test
+    public void shouldOnlyCheckpointStateWithBigAdvanceIfNotEnforced() {
+        stateManager.flush();
+        EasyMock.expectLastCall().once();
+        stateManager.checkpoint();
+        EasyMock.expectLastCall().once();
+        EasyMock.expect(stateManager.changelogOffsets())
+                .andReturn(Collections.singletonMap(partition1, 50L))
+                .andReturn(Collections.singletonMap(partition1, 11000L))
+                .andReturn(Collections.singletonMap(partition1, 12000L));
+        EasyMock.replay(stateManager);
+
+        task = createOptimizedStatefulTask(createConfig("100"), consumer);
+        task.initializeIfNeeded();
+
+        task.maybeCheckpoint(false);  // this should not checkpoint
+        assertTrue(task.offsetSnapshotSinceLastFlush.isEmpty());
+        task.maybeCheckpoint(false);  // this should checkpoint
+        assertEquals(Collections.singletonMap(partition1, 11000L), task.offsetSnapshotSinceLastFlush);
+        task.maybeCheckpoint(false);  // this should not checkpoint
+        assertEquals(Collections.singletonMap(partition1, 11000L), task.offsetSnapshotSinceLastFlush);
 
         EasyMock.verify(stateManager);
     }
