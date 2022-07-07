@@ -176,8 +176,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         recordInfo = new PartitionGroup.RecordInfo();
 
-        final Sensor enforcedProcessingSensor;
-        enforcedProcessingSensor = TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics);
         final long maxTaskIdleMs = config.maxTaskIdleMs;
         partitionGroup = new PartitionGroup(
             logContext,
@@ -185,7 +183,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             mainConsumer::currentLag,
             TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
             TaskMetrics.totalInputBufferBytesSensor(threadId, taskId, streamsMetrics),
-            enforcedProcessingSensor,
+            TaskMetrics.enforcedProcessingSensor(threadId, taskId, streamsMetrics),
             maxTaskIdleMs
         );
 

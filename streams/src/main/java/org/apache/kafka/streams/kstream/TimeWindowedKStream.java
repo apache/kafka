@@ -649,5 +649,6 @@ public interface TimeWindowedKStream<K, V> {
                                   final Named named,
                                   final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
 
+    // TODO: add javadoc
     TimeWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy);
 }

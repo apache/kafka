@@ -78,15 +78,14 @@ object AlterPartitionManager {
     config: KafkaConfig,
     metadataCache: MetadataCache,
     scheduler: KafkaScheduler,
+    controllerNodeProvider: ControllerNodeProvider,
     time: Time,
     metrics: Metrics,
     threadNamePrefix: Option[String],
     brokerEpochSupplier: () => Long,
   ): AlterPartitionManager = {
-    val nodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
-
     val channelManager = BrokerToControllerChannelManager(
-      controllerNodeProvider = nodeProvider,
+      controllerNodeProvider,
       time = time,
       metrics = metrics,
       config = config,
@@ -359,14 +358,12 @@ class DefaultAlterPartitionManager(
         inflightAlterPartitionItems.foreach { inflightAlterPartition =>
           partitionResponses.get(inflightAlterPartition.topicIdPartition.topicPartition) match {
             case Some(leaderAndIsrOrError) =>
-              try {
-                leaderAndIsrOrError match {
-                  case Left(error) => inflightAlterPartition.future.completeExceptionally(error.exception)
-                  case Right(leaderAndIsr) => inflightAlterPartition.future.complete(leaderAndIsr)
-                }
-              } finally {
-                // Regardless of callback outcome, we need to clear from the unsent updates map to unblock further updates
-                unsentIsrUpdates.remove(inflightAlterPartition.topicIdPartition.topicPartition)
+              // Regardless of callback outcome, we need to clear from the unsent updates map to unblock further
+              // updates. We clear it now to allow the callback to submit a new update if needed.
+              unsentIsrUpdates.remove(inflightAlterPartition.topicIdPartition.topicPartition)
+              leaderAndIsrOrError match {
+                case Left(error) => inflightAlterPartition.future.completeExceptionally(error.exception)
+                case Right(leaderAndIsr) => inflightAlterPartition.future.complete(leaderAndIsr)
               }
             case None =>
               // Don't remove this partition from the update map so it will get re-sent

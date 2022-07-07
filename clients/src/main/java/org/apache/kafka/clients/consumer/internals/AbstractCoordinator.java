@@ -946,7 +946,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     protected synchronized void markCoordinatorUnknown(boolean isDisconnected, String cause) {
         if (this.coordinator != null) {
-            log.info("Group coordinator {} is unavailable or invalid due to cause: {}."
+            log.info("Group coordinator {} is unavailable or invalid due to cause: {}. "
                     + "isDisconnected: {}. Rediscovery will be attempted.", this.coordinator,
                     cause, isDisconnected);
             Node oldCoordinator = this.coordinator;

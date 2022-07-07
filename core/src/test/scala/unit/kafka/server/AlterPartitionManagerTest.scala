@@ -47,6 +47,7 @@ import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{mock, reset, times, verify}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.jdk.CollectionConverters._
 
 class AlterPartitionManagerTest {
@@ -74,7 +75,7 @@ class AlterPartitionManagerTest {
     val scheduler = new MockScheduler(time)
     val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => metadataVersion)
     alterPartitionManager.start()
-    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10), 0)
+    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
     verify(brokerToController).start()
     verify(brokerToController).sendRequest(any(), any())
   }
@@ -111,15 +112,15 @@ class AlterPartitionManagerTest {
     alterPartitionManager.start()
 
     // Only send one ISR update for a given topic+partition
-    val firstSubmitFuture = alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10), 0)
+    val firstSubmitFuture = alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
     assertFalse(firstSubmitFuture.isDone)
 
-    val failedSubmitFuture = alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1,2), LeaderRecoveryState.RECOVERED, 10), 0)
+    val failedSubmitFuture = alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1, 2), LeaderRecoveryState.RECOVERED, 10), 0)
     assertTrue(failedSubmitFuture.isCompletedExceptionally)
     assertFutureThrows(failedSubmitFuture, classOf[OperationNotAttemptedException])
 
     // Simulate response
-    val alterPartitionResp = partitionResponse(tp0, Errors.NONE)
+    val alterPartitionResp = partitionResponse()
     val resp = makeClientResponse(
       response = alterPartitionResp,
       version = if (canUseTopicIds) ApiKeys.ALTER_PARTITION.latestVersion else 1
@@ -152,12 +153,12 @@ class AlterPartitionManagerTest {
 
     // First request will send batch of one
     alterPartitionManager.submit(new TopicIdPartition(topicId, 0, topic),
-      LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10), 0)
+      LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
 
     // Other submissions will queue up until a response
     for (i <- 1 to 9) {
       alterPartitionManager.submit(new TopicIdPartition(topicId, i, topic),
-        LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10), 0)
+        LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
     }
 
     // Simulate response, omitting partition 0 will allow it to stay in unsent queue
@@ -176,6 +177,56 @@ class AlterPartitionManagerTest {
     val request = capture.getValue.build()
     assertEquals(request.data().topics().size(), 1)
     assertEquals(request.data().topics().get(0).partitions().size(), 10)
+  }
+
+  @Test
+  def testSubmitFromCallback(): Unit = {
+    // prepare a partition level retriable error response
+    val alterPartitionRespWithPartitionError = partitionResponse(tp0, Errors.UNKNOWN_SERVER_ERROR)
+    val errorResponse = makeClientResponse(alterPartitionRespWithPartitionError, ApiKeys.ALTER_PARTITION.latestVersion)
+
+    val leaderId = 1
+    val leaderEpoch = 1
+    val partitionEpoch = 10
+    val isr = List(1, 2, 3)
+    val leaderAndIsr = new LeaderAndIsr(leaderId, leaderEpoch, isr, LeaderRecoveryState.RECOVERED, partitionEpoch)
+    val callbackCapture = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+
+    val scheduler = new MockScheduler(time)
+    val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => IBP_3_2_IV0)
+    alterPartitionManager.start()
+    val future = alterPartitionManager.submit(tp0, leaderAndIsr, 0)
+    val finalFuture = new CompletableFuture[LeaderAndIsr]()
+    future.whenComplete { (_, e) =>
+      if (e != null) {
+        // Retry when error.
+        alterPartitionManager.submit(tp0, leaderAndIsr, 0).whenComplete { (result, e) =>
+          if (e != null) {
+            finalFuture.completeExceptionally(e)
+          } else {
+            finalFuture.complete(result)
+          }
+        }
+      } else {
+        finalFuture.completeExceptionally(new AssertionError("Expected the future to be failed"))
+      }
+    }
+
+    verify(brokerToController).start()
+    verify(brokerToController).sendRequest(any(), callbackCapture.capture())
+    reset(brokerToController)
+    callbackCapture.getValue.onComplete(errorResponse)
+
+    // Complete the retry request
+    val retryAlterPartitionResponse = partitionResponse(tp0, Errors.NONE, partitionEpoch, leaderId, leaderEpoch, isr)
+    val retryResponse = makeClientResponse(retryAlterPartitionResponse, ApiKeys.ALTER_PARTITION.latestVersion)
+
+    verify(brokerToController).sendRequest(any(), callbackCapture.capture())
+    callbackCapture.getValue.onComplete(retryResponse)
+
+    assertEquals(leaderAndIsr, finalFuture.get(200, TimeUnit.MILLISECONDS))
+    // No more items in unsentIsrUpdates
+    assertFalse(alterPartitionManager.unsentIsrUpdates.containsKey(tp0.topicPartition))
   }
 
   @Test
@@ -212,7 +263,7 @@ class AlterPartitionManagerTest {
   }
 
   private def testRetryOnErrorResponse(response: ClientResponse): Unit = {
-    val leaderAndIsr = new LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10)
+    val leaderAndIsr = new LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10)
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     val scheduler = new MockScheduler(time)
@@ -234,7 +285,7 @@ class AlterPartitionManagerTest {
     scheduler.tick()
 
     // After a successful response, we can submit another AlterIsrItem
-    val retryAlterPartitionResponse = partitionResponse(tp0, Errors.NONE)
+    val retryAlterPartitionResponse = partitionResponse()
     val retryResponse = makeClientResponse(retryAlterPartitionResponse, ApiKeys.ALTER_PARTITION.latestVersion)
 
     verify(brokerToController).sendRequest(any(), callbackCapture.capture())
@@ -266,7 +317,7 @@ class AlterPartitionManagerTest {
   private def checkPartitionError(error: Errors): Unit = {
     val alterPartitionManager = testPartitionError(tp0, error)
     // Any partition-level error should clear the item from the pending queue allowing for future updates
-    val future = alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10), 0)
+    val future = alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
     assertFalse(future.isDone)
   }
 
@@ -278,7 +329,7 @@ class AlterPartitionManagerTest {
     val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => IBP_3_2_IV0)
     alterPartitionManager.start()
 
-    val future = alterPartitionManager.submit(tp, LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10), 0)
+    val future = alterPartitionManager.submit(tp, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
 
     verify(brokerToController).start()
     verify(brokerToController).sendRequest(any(), callbackCapture.capture())
@@ -302,11 +353,11 @@ class AlterPartitionManagerTest {
     alterPartitionManager.start()
 
     // First submit will send the request
-    alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10), 0)
+    alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
 
     // These will become pending unsent items
-    alterPartitionManager.submit(tp1, LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10), 0)
-    alterPartitionManager.submit(tp2, LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10), 0)
+    alterPartitionManager.submit(tp1, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
+    alterPartitionManager.submit(tp2, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
 
     verify(brokerToController).start()
     verify(brokerToController).sendRequest(any(), callbackCapture.capture())
@@ -327,7 +378,7 @@ class AlterPartitionManagerTest {
     } else {
       1.toShort
     }
-    val leaderAndIsr = LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10)
+    val leaderAndIsr = LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10)
     val controlledEpoch = 0
     val brokerEpoch = 2
     val scheduler = new MockScheduler(time)
@@ -394,7 +445,7 @@ class AlterPartitionManagerTest {
     val bar = new TopicIdPartition(Uuid.randomUuid(), 0, "bar")
     val zar = new TopicIdPartition(Uuid.randomUuid(), 0, "zar")
 
-    val leaderAndIsr = LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 10)
+    val leaderAndIsr = LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10)
     val controlledEpoch = 0
     val brokerEpoch = 2
     val scheduler = new MockScheduler(time)
@@ -545,17 +596,24 @@ class AlterPartitionManagerTest {
     zkIsrManager.start()
 
     // Correct ZK version
-    val future1 = zkIsrManager.submit(tp0, LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 1), 0)
+    val future1 = zkIsrManager.submit(tp0, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 1), 0)
     assertTrue(future1.isDone)
-    assertEquals(LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 2), future1.get)
+    assertEquals(LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 2), future1.get)
 
     // Wrong ZK version
-    val future2 = zkIsrManager.submit(tp0, LeaderAndIsr(1, 1, List(1,2,3), LeaderRecoveryState.RECOVERED, 3), 0)
+    val future2 = zkIsrManager.submit(tp0, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 3), 0)
     assertTrue(future2.isCompletedExceptionally)
     assertFutureThrows(future2, classOf[InvalidUpdateVersionException])
   }
 
-  private def partitionResponse(tp: TopicIdPartition, error: Errors): AlterPartitionResponse = {
+  private def partitionResponse(
+    tp: TopicIdPartition = tp0,
+    error: Errors = Errors.NONE,
+    partitionEpoch: Int = 0,
+    leaderId: Int = 0,
+    leaderEpoch: Int = 0,
+    isr: List[Int] = List.empty
+  ): AlterPartitionResponse = {
     new AlterPartitionResponse(new AlterPartitionResponseData()
       .setTopics(Collections.singletonList(
         new AlterPartitionResponseData.TopicData()
@@ -563,7 +621,11 @@ class AlterPartitionManagerTest {
           .setTopicId(tp.topicId)
           .setPartitions(Collections.singletonList(
             new AlterPartitionResponseData.PartitionData()
-              .setPartitionIndex(tp.partition())
+              .setPartitionIndex(tp.partition)
+              .setPartitionEpoch(partitionEpoch)
+              .setLeaderEpoch(leaderEpoch)
+              .setLeaderId(leaderId)
+              .setIsr(isr.map(Integer.valueOf).asJava)
               .setErrorCode(error.code))))))
   }
 }
