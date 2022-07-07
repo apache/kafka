@@ -1533,7 +1533,7 @@ public class SenderTest {
     }
 
     @Test
-    public void testUnresolvedSequencesAreNotFatal() throws Exception {
+    public void testUnresolvedSequencesAreFatalBumpable() throws Exception {
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         apiVersions.update("0", NodeApiVersions.create(ApiKeys.INIT_PRODUCER_ID.id, (short) 0, (short) 3));
         TransactionManager txnManager = new TransactionManager(logContext, "testUnresolvedSeq", 60000, 100, apiVersions);
@@ -1570,7 +1570,7 @@ public class SenderTest {
 
         // Loop once and confirm that the transaction manager does not enter a fatal error state
         sender.runOnce();
-        assertTrue(txnManager.hasAbortableError());
+        assertTrue(txnManager.hasFatalBumpableError());
     }
 
     @Test

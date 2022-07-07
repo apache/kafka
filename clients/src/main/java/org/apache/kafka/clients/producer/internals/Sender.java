@@ -260,8 +260,9 @@ public class Sender implements Runnable {
         }
 
         // Abort the transaction if any commit or abort didn't go through the transaction manager's queue
-        while (!forceClose && transactionManager != null && transactionManager.hasOngoingTransaction()) {
-            if (!transactionManager.isCompleting()) {
+        // Alternatively, send a final fencing init if there was a client side timeout
+        while (!forceClose && transactionManagerNeedsFlush()) {
+            if (transactionManager.hasOngoingTransaction() && !transactionManager.isCompleting()) {
                 log.info("Aborting incomplete transaction due to shutdown");
                 transactionManager.beginAbort();
             }
@@ -326,6 +327,11 @@ public class Sender implements Runnable {
         long currentTimeMs = time.milliseconds();
         long pollTimeout = sendProducerData(currentTimeMs);
         client.poll(pollTimeout, currentTimeMs);
+    }
+
+    private boolean transactionManagerNeedsFlush() {
+        return transactionManager != null
+                && (transactionManager.hasOngoingTransaction() || transactionManager.hasFatalBumpableError());
     }
 
     private long sendProducerData(long now) {

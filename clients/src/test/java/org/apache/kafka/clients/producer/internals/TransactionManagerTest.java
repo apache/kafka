@@ -2459,7 +2459,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTransitionToAbortableErrorOnBatchExpiry() throws InterruptedException {
+    public void testTransitionToFatalBumpableErrorOnBatchExpiry() throws InterruptedException {
         doInitTransactions();
 
         transactionManager.beginTransaction();
@@ -2495,11 +2495,12 @@ public class TransactionManagerTest {
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof  TimeoutException);
         }
-        assertTrue(transactionManager.hasAbortableError());
+
+        assertPendingForceEpochBump();
     }
 
     @Test
-    public void testTransitionToAbortableErrorOnMultipleBatchExpiry() throws InterruptedException {
+    public void testTransitionToFatalBumpableErrorOnMultipleBatchExpiry() throws InterruptedException {
         doInitTransactions();
 
         transactionManager.beginTransaction();
@@ -2553,7 +2554,8 @@ public class TransactionManagerTest {
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof  TimeoutException);
         }
-        assertTrue(transactionManager.hasAbortableError());
+
+        assertPendingForceEpochBump();
     }
 
     @Test
@@ -2594,27 +2596,20 @@ public class TransactionManagerTest {
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof  TimeoutException);
         }
+
         runUntil(commitResult::isCompleted);  // the commit shouldn't be completed without being sent since the produce request failed.
         assertFalse(commitResult.isSuccessful());  // the commit shouldn't succeed since the produce request failed.
-        assertThrows(TimeoutException.class, commitResult::await);
+        assertThrows(KafkaException.class, commitResult::await);
 
-        assertTrue(transactionManager.hasAbortableError());
-        assertTrue(transactionManager.hasOngoingTransaction());
-        assertFalse(transactionManager.isCompleting());
-        assertTrue(transactionManager.transactionContainsPartition(tp0));
-
-        TransactionalRequestResult abortResult = transactionManager.beginAbort();
-
-        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, epoch);
-        prepareInitPidResponse(Errors.NONE, false, producerId, (short) (epoch + 1));
-        runUntil(abortResult::isCompleted);
-        assertTrue(abortResult.isSuccessful());
+        assertTrue(transactionManager.hasFatalBumpableError());
         assertFalse(transactionManager.hasOngoingTransaction());
-        assertFalse(transactionManager.transactionContainsPartition(tp0));
+        assertFalse(transactionManager.isCompleting());
+
+        assertThrows(KafkaException.class, () -> transactionManager.beginAbort());
     }
 
     @Test
-    public void testTransitionToFatalErrorWhenRetriedBatchIsExpired() throws InterruptedException {
+    public void testTransitionToFatalBumpableErrorWhenRetriedBatchIsExpired() throws InterruptedException {
         apiVersions.update("0", NodeApiVersions.create(Arrays.asList(
                 new ApiVersion()
                     .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
@@ -3018,7 +3013,6 @@ public class TransactionManagerTest {
     @Test
     public void testBumpTransactionalEpochOnTimeout() throws InterruptedException {
         final short initialEpoch = 1;
-        final short bumpedEpoch = 2;
 
         doInitTransactions(producerId, initialEpoch);
 
@@ -3049,29 +3043,9 @@ public class TransactionManagerTest {
 
         runUntil(responseFuture2::isDone); // We should try to flush the produce, but expire it instead without sending anything.
 
-        assertTrue(transactionManager.hasAbortableError());
-        TransactionalRequestResult abortResult = transactionManager.beginAbort();
+        assertPendingForceEpochBump();
 
-        sender.runOnce();  // handle the abort
-        time.sleep(110);  // Sleep to make sure the node backoff period has passed
-
-        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
-        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, producerId, initialEpoch);
-        prepareInitPidResponse(Errors.NONE, false, producerId, bumpedEpoch);
-        runUntil(() -> transactionManager.producerIdAndEpoch().epoch == bumpedEpoch);
-
-        assertTrue(abortResult.isCompleted());
-        assertTrue(abortResult.isSuccessful());
-        abortResult.await();
-        assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
-
-        transactionManager.beginTransaction();
-        transactionManager.maybeAddPartition(tp0);
-
-        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, bumpedEpoch, producerId);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
-
-        assertEquals(0, transactionManager.sequenceNumber(tp0).intValue());
+        assertThrows(KafkaException.class, () -> transactionManager.beginAbort());
     }
 
     @Test
@@ -3344,6 +3318,15 @@ public class TransactionManagerTest {
         assertEquals(1, transactionManager.sequenceNumber(tp1).intValue());
     }
 
+    private void assertPendingForceEpochBump() {
+        assertTrue(transactionManager.hasFatalBumpableError());
+        assertFalse(transactionManager.hasOngoingTransaction());
+
+        TransactionManager.TxnRequestHandler requestHandler = transactionManager.nextRequest(false);
+        assertTrue(requestHandler instanceof TransactionManager.InitProducerIdHandler);
+        assertTrue(((TransactionManager.InitProducerIdHandler) requestHandler).isForcedEpochBump());
+    }
+
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {
         final long nowMs = time.milliseconds();
         return accumulator.append(tp.topic(), tp.partition(), nowMs, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS,
@@ -3408,6 +3391,11 @@ public class TransactionManagerTest {
     }
 
     private void prepareInitPidResponse(Errors error, boolean shouldDisconnect, long producerId, short producerEpoch) {
+        prepareInitPidResponse(error, shouldDisconnect, producerId, producerEpoch, Optional.empty(), Optional.empty());
+    }
+
+    private void prepareInitPidResponse(Errors error, boolean shouldDisconnect, long producerId, short producerEpoch,
+                                        Optional<Long> expectedProducerId, Optional<Short> expectedProducerEpoch) {
         InitProducerIdResponseData responseData = new InitProducerIdResponseData()
                 .setErrorCode(error.code())
                 .setProducerEpoch(producerEpoch)
@@ -3417,6 +3405,8 @@ public class TransactionManagerTest {
             InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
             assertEquals(transactionalId, initProducerIdRequest.data().transactionalId());
             assertEquals(transactionTimeoutMs, initProducerIdRequest.data().transactionTimeoutMs());
+            expectedProducerId.ifPresent(expected -> assertEquals(expected, initProducerIdRequest.data().producerId()));
+            expectedProducerEpoch.ifPresent(expected -> assertEquals(expected, initProducerIdRequest.data().producerEpoch()));
             return true;
         }, new InitProducerIdResponse(responseData), shouldDisconnect);
     }

@@ -25,7 +25,9 @@ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
+import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
@@ -150,6 +152,7 @@ public class TransactionManager {
         COMMITTING_TRANSACTION,
         ABORTING_TRANSACTION,
         ABORTABLE_ERROR,
+        FATAL_BUMPABLE_ERROR,
         FATAL_ERROR;
 
         private boolean isTransitionValid(State source, State target) {
@@ -168,6 +171,8 @@ public class TransactionManager {
                     return source == IN_TRANSACTION || source == ABORTABLE_ERROR;
                 case ABORTABLE_ERROR:
                     return source == IN_TRANSACTION || source == COMMITTING_TRANSACTION || source == ABORTABLE_ERROR;
+                case FATAL_BUMPABLE_ERROR:
+                    return source != FATAL_ERROR;
                 case FATAL_ERROR:
                 default:
                     // We can transition to FATAL_ERROR unconditionally.
@@ -241,10 +246,37 @@ public class TransactionManager {
                     .setProducerId(producerIdAndEpoch.producerId)
                     .setProducerEpoch(producerIdAndEpoch.epoch);
             InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData),
-                    isEpochBump);
+                    isEpochBump, false);
             enqueueRequest(handler);
             return handler.result;
         }, State.INITIALIZING, "initTransactions");
+    }
+
+    synchronized void tryTransitioningIntoFatalBumpableError(RuntimeException cause) {
+        if (currentState == State.FATAL_ERROR || currentState == State.FATAL_BUMPABLE_ERROR) {
+            // Already in a fatal state, skip
+            return;
+        }
+        RuntimeException failure = cause == null
+                ? new KafkaException("Encountered unrecoverable error due to batch delivery timeout")
+                : new KafkaException("Encountered unrecoverable error due to batch delivery timeout", cause);
+        transitionToFatalBumpableError(failure);
+
+        // If an epoch bump is possible, try to fence the current transaction by bumping
+        if (canBumpEpoch()) {
+            log.info("Invoking InitProducerId with current producer ID and epoch {} in order to bump the epoch to fence the current transaction", producerIdAndEpoch);
+            InitProducerIdRequestData requestData = new InitProducerIdRequestData()
+                    .setTransactionalId(transactionalId)
+                    .setTransactionTimeoutMs(transactionTimeoutMs)
+                    .setProducerId(producerIdAndEpoch.producerId)
+                    .setProducerEpoch(producerIdAndEpoch.epoch);
+            InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData),
+                    false, true);
+            enqueueRequest(handler);
+        } else {
+            log.info("Cannot bump epoch, transitioning into fatal error");
+            transitionToFatalError(failure);
+        }
     }
 
     public synchronized void beginTransaction() {
@@ -376,7 +408,7 @@ public class TransactionManager {
     }
 
     synchronized boolean hasError() {
-        return currentState == State.ABORTABLE_ERROR || currentState == State.FATAL_ERROR;
+        return currentState == State.ABORTABLE_ERROR || currentState == State.FATAL_ERROR || currentState == State.FATAL_BUMPABLE_ERROR;
     }
 
     synchronized boolean isAborting() {
@@ -392,6 +424,15 @@ public class TransactionManager {
 
         log.info("Transiting to abortable error state due to {}", exception.toString());
         transitionTo(State.ABORTABLE_ERROR, exception);
+    }
+
+    synchronized void transitionToFatalBumpableError(RuntimeException exception) {
+        log.info("Transiting to fatal bumpable error state due to {}", exception.toString());
+        transitionTo(State.FATAL_BUMPABLE_ERROR, exception);
+
+        if (pendingTransition != null) {
+            pendingTransition.result.fail(exception);
+        }
     }
 
     synchronized void transitionToFatalError(RuntimeException exception) {
@@ -498,7 +539,7 @@ public class TransactionManager {
                 InitProducerIdRequestData requestData = new InitProducerIdRequestData()
                         .setTransactionalId(null)
                         .setTransactionTimeoutMs(Integer.MAX_VALUE);
-                InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData), false);
+                InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData), false, false);
                 enqueueRequest(handler);
             }
         }
@@ -613,7 +654,7 @@ public class TransactionManager {
                 || exception instanceof ProducerFencedException
                 || exception instanceof UnsupportedVersionException) {
             transitionToFatalError(exception);
-        } else if (isTransactional()) {
+        } else if (isTransactional() && !hasFatalError() && !hasFatalBumpableError()) {
             if (canBumpEpoch() && !isCompleting()) {
                 epochBumpRequired = true;
             }
@@ -624,6 +665,16 @@ public class TransactionManager {
     synchronized void handleFailedBatch(ProducerBatch batch, RuntimeException exception, boolean adjustSequenceNumbers) {
         maybeTransitionToErrorState(exception);
         removeInFlightBatch(batch);
+
+        if (isTransactional()) {
+            // When a batch fails due to delivery or request timeout, the request can still complete on the broker side
+            // To make sure that the abort marker does not get in front of the in-flight produce requests,
+            // we should skip aborting the transaction with the current producer epoch and instead bump the epoch
+            // This will ensure that any "late" batches will be fenced by partition leaders
+            if (exception instanceof TimeoutException || exception instanceof NetworkException) {
+                tryTransitioningIntoFatalBumpableError(exception);
+            }
+        }
 
         if (hasFatalError()) {
             log.debug("Ignoring batch {} with producer id {}, epoch {}, and sequence number {} " +
@@ -728,18 +779,11 @@ public class TransactionManager {
                 } else {
                     // We would enter this branch if all in flight batches were ultimately expired in the producer.
                     if (isTransactional()) {
-                        // For the transactional producer, we bump the epoch if possible, otherwise we transition to a fatal error
+                        // For the transactional producer, we bump the epoch if possible, then transition to a fatal error
                         String unackedMessagesErr = "The client hasn't received acknowledgment for some previously " +
                                 "sent messages and can no longer retry them. ";
-                        if (canBumpEpoch()) {
-                            epochBumpRequired = true;
-                            KafkaException exception = new KafkaException(unackedMessagesErr + "It is safe to abort " +
-                                    "the transaction and continue.");
-                            transitionToAbortableError(exception);
-                        } else {
-                            KafkaException exception = new KafkaException(unackedMessagesErr + "It isn't safe to continue.");
-                            transitionToFatalError(exception);
-                        }
+                        KafkaException exception = new KafkaException(unackedMessagesErr + "It isn't safe to continue.");
+                        tryTransitioningIntoFatalBumpableError(exception);
                     } else {
                         // For the idempotent producer, bump the epoch
                         log.info("No inflight batches remaining for {}, last ack'd sequence for partition is {}, next sequence is {}. " +
@@ -851,6 +895,10 @@ public class TransactionManager {
     // visible for testing.
     boolean hasFatalError() {
         return currentState == State.FATAL_ERROR;
+    }
+
+    boolean hasFatalBumpableError() {
+        return currentState == State.FATAL_BUMPABLE_ERROR;
     }
 
     // visible for testing.
@@ -1016,6 +1064,9 @@ public class TransactionManager {
         if (hasError()) {
             if (hasAbortableError() && requestHandler instanceof FindCoordinatorHandler)
                 // No harm letting the FindCoordinator request go through if we're expecting to abort
+                return false;
+            if (hasFatalBumpableError() && requestHandler instanceof InitProducerIdHandler)
+                // Should allow the fencing bump to complete
                 return false;
 
             requestHandler.fail(lastError);
@@ -1243,14 +1294,16 @@ public class TransactionManager {
         abstract Priority priority();
     }
 
-    private class InitProducerIdHandler extends TxnRequestHandler {
+    class InitProducerIdHandler extends TxnRequestHandler {
         private final InitProducerIdRequest.Builder builder;
         private final boolean isEpochBump;
+        private final boolean isForcedEpochBump;
 
-        private InitProducerIdHandler(InitProducerIdRequest.Builder builder, boolean isEpochBump) {
+        private InitProducerIdHandler(InitProducerIdRequest.Builder builder, boolean isEpochBump, boolean isForcedEpochBump) {
             super("InitProducerId");
             this.builder = builder;
             this.isEpochBump = isEpochBump;
+            this.isForcedEpochBump = isForcedEpochBump;
         }
 
         @Override
@@ -1278,6 +1331,12 @@ public class TransactionManager {
             Errors error = initProducerIdResponse.error();
 
             if (error == Errors.NONE) {
+                if (isForcedEpochBump) {
+                    // If the bump was used to abort an ongoing transaction, we don't expect a successful response
+                    // Regardless, the producer has to stop, as we cannot safely continue after a fencing operation
+                    fatalError(new KafkaException("Producer encountered an unrecoverable error requiring an epoch bump"));
+                    return;
+                }
                 ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data().producerId(),
                         initProducerIdResponse.data().producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
@@ -1291,6 +1350,12 @@ public class TransactionManager {
                 lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
+                if (isForcedEpochBump && error == Errors.CONCURRENT_TRANSACTIONS) {
+                    // If the bump was used to abort an ongoing transaction, we will receive CONCURRENT_TRANSACTIONS
+                    // At this point, the producer has to stop, as we cannot safely continue after a fencing operation
+                    fatalError(new KafkaException("Producer encountered an unrecoverable error requiring an epoch bump"));
+                    return;
+                }
                 reenqueue();
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED ||
                     error == Errors.CLUSTER_AUTHORIZATION_FAILED) {
@@ -1302,6 +1367,10 @@ public class TransactionManager {
             } else {
                 fatalError(new KafkaException("Unexpected error in InitProducerIdResponse; " + error.message()));
             }
+        }
+
+        boolean isForcedEpochBump() {
+            return isForcedEpochBump;
         }
     }
 
