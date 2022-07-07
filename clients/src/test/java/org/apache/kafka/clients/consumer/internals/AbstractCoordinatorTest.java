@@ -571,6 +571,11 @@ public class AbstractCoordinatorTest {
         expectSyncGroup(generation, memberId);
         ensureActiveGroup(generation, memberId);
         assertEquals("", coordinator.rejoinReason());
+
+        // check limit length of reason field
+        mockClient.prepareResponse(joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED));
+        coordinator.requestRejoin("Very looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong reason that is 271 characters long to make sure that length limit logic handles the scenario nicely");
+        assertEquals("Very looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong reason that is 271 characters long to make sure that length limit logic handles the", coordinator.rejoinReason());
     }
 
     private void ensureActiveGroup(

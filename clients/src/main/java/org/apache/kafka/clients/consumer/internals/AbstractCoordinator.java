@@ -478,11 +478,12 @@ public abstract class AbstractCoordinator implements Closeable {
 
                 resetJoinGroupFuture();
                 synchronized (AbstractCoordinator.this) {
+                    final String simpleName = exception.getClass().getSimpleName();
                     final String shortReason = String.format("rebalance failed due to %s",
-                        exception.getClass().getSimpleName());
+                            simpleName);
                     final String fullReason = String.format("rebalance failed due to '%s' (%s)",
-                        exception.getMessage(),
-                        exception.getClass().getSimpleName());
+                            exception.getMessage(),
+                            simpleName);
                     requestRejoin(shortReason, fullReason);
                 }
 
@@ -1050,8 +1051,16 @@ public abstract class AbstractCoordinator implements Closeable {
     public synchronized void requestRejoin(final String shortReason,
                                            final String fullReason) {
         log.info("Request joining group due to: {}", fullReason);
-        this.rejoinReason = shortReason;
+        this.rejoinReason = truncateIfRequired(shortReason);
         this.rejoinNeeded = true;
+    }
+
+    private String truncateIfRequired(final String reason) {
+        if (reason.length() > 255) {
+            return reason.substring(0, 255);
+        } else {
+            return reason;
+        }
     }
 
     private boolean isProtocolTypeInconsistent(String protocolType) {
@@ -1112,9 +1121,10 @@ public abstract class AbstractCoordinator implements Closeable {
             // attempt any resending if the request fails or times out.
             log.info("Member {} sending LeaveGroup request to coordinator {} due to {}",
                 generation.memberId, coordinator, leaveReason);
+            final String reason = truncateIfRequired(leaveReason);
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
                 rebalanceConfig.groupId,
-                Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId).setReason(leaveReason))
+                Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId).setReason(reason))
             );
 
             future = client.send(coordinator, request).compose(new LeaveGroupResponseHandler(generation));
