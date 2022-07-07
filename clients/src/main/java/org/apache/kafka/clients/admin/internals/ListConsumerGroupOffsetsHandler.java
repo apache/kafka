@@ -45,9 +45,9 @@ public class ListConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Coo
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public ListConsumerGroupOffsetsHandler(
-            String groupId,
-            List<TopicPartition> partitions,
-            LogContext logContext
+        String groupId,
+        List<TopicPartition> partitions,
+        LogContext logContext
     ) {
         this(groupId, partitions, false, logContext);
     }
