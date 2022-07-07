@@ -27,12 +27,15 @@ import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.runners.Enclosed;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.MockitoRule;
 
 import javax.crypto.SecretKey;
 import javax.ws.rs.core.Response;
@@ -65,7 +68,7 @@ public class RestClientTest {
 
     private static SecretKey getMockSecretKey() {
         SecretKey mockKey = mock(SecretKey.class);
-        when(mockKey.getFormat()).thenReturn("RAW");// supported format by
+        when(mockKey.getFormat()).thenReturn("RAW"); // supported format by
         when(mockKey.getEncoded()).thenReturn("SomeKey".getBytes(StandardCharsets.UTF_8));
         return mockKey;
     }
@@ -90,11 +93,16 @@ public class RestClientTest {
 
     @RunWith(Parameterized.class)
     public static class RequestFailureParameterizedTest {
-        private final HttpClient httpClient = mock(HttpClient.class);
+
+        @Rule
+        public MockitoRule initRule = MockitoJUnit.rule();
+
+        @Mock
+        private HttpClient httpClient;
 
         @Parameterized.Parameter
         public Throwable requestException;
-
+        
         @Parameterized.Parameters
         public static Collection<Object[]> requestExceptions() {
             return Arrays.asList(new Object[][]{
@@ -106,6 +114,7 @@ public class RestClientTest {
 
         private static Request buildThrowingMockRequest(Throwable t) throws ExecutionException, InterruptedException, TimeoutException {
             Request req = mock(Request.class);
+            when(req.header(anyString(), anyString())).thenReturn(req);
             when(req.send()).thenThrow(t);
             return req;
         }
@@ -116,6 +125,7 @@ public class RestClientTest {
             when(httpClient.newRequest(anyString())).thenReturn(request);
             ConnectRestException e = assertThrows(ConnectRestException.class, () -> httpRequest(httpClient));
             assertIsInternalServerError(e);
+            assertEquals(requestException, e.getCause());
         }
     }
 
