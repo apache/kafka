@@ -1072,17 +1072,6 @@ public class TaskManager {
     }
 
     /**
-     *  Fetch all non-empty partitions for pausing
-     */
-    Set<TopicPartition> nonEmptyPartitions() {
-        final Set<TopicPartition> nonEmptyPartitions = new HashSet<>();
-        for (final Task task : activeTaskIterable()) {
-            nonEmptyPartitions.addAll(((StreamTask) task).getNonEmptyTopicPartitions());
-        }
-        return nonEmptyPartitions;
-    }
-
-    /**
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      * @throws TimeoutException if task.timeout.ms has been exceeded (non-EOS)
@@ -1183,14 +1172,6 @@ public class TaskManager {
             //  the user of an error in this named topology without killing the thread and delaying the others
             log.error("Caught the following exception while closing tasks from a removed topology:", e);
         }
-    }
-
-    long getInputBufferSizeInBytes() {
-        long bytesBuffered = 0L;
-        for (final Task task : activeTaskIterable()) {
-            bytesBuffered += ((StreamTask) task).totalBytesBuffered();
-        }
-        return bytesBuffered;
     }
 
     /**

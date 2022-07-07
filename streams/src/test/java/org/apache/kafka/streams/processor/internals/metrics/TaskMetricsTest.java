@@ -92,52 +92,6 @@ public class TaskMetricsTest {
     }
 
     @Test
-    public void shouldGetTotalBytesSensor() {
-        final String operation = "input-buffer-bytes-total";
-        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.INFO))
-                .thenReturn(expectedSensor);
-        final String totalBytesDescription = "The total number of bytes accumulated in this task's input buffer";
-        when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
-
-        try (final MockedStatic<StreamsMetricsImpl> streamsMetricsStaticMock = mockStatic(StreamsMetricsImpl.class)) {
-            final Sensor sensor = TaskMetrics.totalInputBufferBytesSensor(THREAD_ID, TASK_ID, streamsMetrics);
-            streamsMetricsStaticMock.verify(
-                () -> StreamsMetricsImpl.addValueMetricToSensor(
-                    expectedSensor,
-                    TASK_LEVEL_GROUP,
-                    tagMap,
-                    operation,
-                    totalBytesDescription
-                )
-            );
-            assertThat(sensor, is(expectedSensor));
-        }
-    }
-
-    @Test
-    public void shouldGetTotalCacheSizeInBytesSensor() {
-        final String operation = "cache-size-bytes-total";
-        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.INFO))
-                .thenReturn(expectedSensor);
-        final String totalBytesDescription = "The total size in bytes of this task's cache.";
-        when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
-
-        try (final MockedStatic<StreamsMetricsImpl> streamsMetricsStaticMock = mockStatic(StreamsMetricsImpl.class)) {
-            final Sensor sensor = TaskMetrics.totalCacheSizeBytesSensor(THREAD_ID, TASK_ID, streamsMetrics);
-            streamsMetricsStaticMock.verify(
-                () -> StreamsMetricsImpl.addValueMetricToSensor(
-                    expectedSensor,
-                    TASK_LEVEL_GROUP,
-                    tagMap,
-                    operation,
-                    totalBytesDescription
-                )
-            );
-            assertThat(sensor, is(expectedSensor));
-        }
-    }
-
-    @Test
     public void shouldGetProcessLatencySensor() {
         final String operation = "process-latency";
         when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
