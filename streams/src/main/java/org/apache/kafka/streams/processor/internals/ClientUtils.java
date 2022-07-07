@@ -39,7 +39,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -110,43 +109,6 @@ public class ClientUtils {
             }
         }
         return result;
-    }
-
-    /**
-     * @throws StreamsException if the consumer throws an exception
-     * @throws org.apache.kafka.common.errors.TimeoutException if the request times out
-     */
-    public static Map<TopicPartition, Long> fetchCommittedOffsets(final Set<TopicPartition> partitions,
-                                                                  final String groupId,
-                                                                  final Admin adminClient) {
-        if (partitions.isEmpty()) {
-            return Collections.emptyMap();
-        }
-
-        final Map<TopicPartition, Long> committedOffsets;
-        try {
-            // those which do not have a committed offset would default to 0
-            final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions();
-            options.topicPartitions(new ArrayList<>(partitions));
-            committedOffsets = adminClient.listConsumerGroupOffsets(groupId, options)
-                    .partitionsToOffsetAndMetadata().get().entrySet()
-                    .stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
-        } catch (final InterruptedException e) {
-            LOG.warn("The committed offsets request failed due to interruption", e);
-            throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
-        } catch (final ExecutionException e) {
-            if (e.getCause() instanceof TimeoutException) {
-                final TimeoutException exception = (TimeoutException) e.getCause();
-                LOG.warn("The committed offsets request timed out, try increasing the consumer client's default.api.timeout.ms", exception);
-                throw exception;
-            } else {
-                LOG.warn("The committed offsets request failed", e.getCause());
-                throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e.getCause());
-            }
-        }
-
-        return committedOffsets;
     }
 
     /**
