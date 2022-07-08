@@ -292,7 +292,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     partitionGroup.clear();
                 } finally {
                     transitToSuspend();
-                    log.info("Suspended running");
                 }
 
                 break;

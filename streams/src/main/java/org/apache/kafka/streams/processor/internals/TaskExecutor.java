@@ -100,6 +100,7 @@ public class TaskExecutor {
             while (processed < maxNumRecords && task.process(now)) {
                 task.clearTaskTimeout();
                 processed++;
+                log.error("Processed task {}", task.id());
             }
             // TODO: enable regardless of whether using named topologies
             if (processed > 0 && hasNamedTopologies && processingMode != EXACTLY_ONCE_V2) {
@@ -163,6 +164,9 @@ public class TaskExecutor {
                 task.postCommit(false);
             }
         }
+
+        log.error("Committed {} tasks for {}", committed, tasksToCommit.stream().map(Task::id).collect(Collectors.toList()));
+
         return committed;
     }
 
