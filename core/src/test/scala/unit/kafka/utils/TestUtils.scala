@@ -2133,6 +2133,7 @@ object TestUtils extends Logging {
     override def requestVersion(): Int = 0
     override def clientId(): String = ""
     override def correlationId(): Int = 0
+    override def clientInformation(): ClientInformation = ClientInformation.EMPTY
   }
 
   def addAndVerifyAcls[B <: KafkaBroker](

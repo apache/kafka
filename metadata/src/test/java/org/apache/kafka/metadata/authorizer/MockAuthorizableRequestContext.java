@@ -17,6 +17,7 @@
 
 package org.apache.kafka.metadata.authorizer;
 
+import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -35,6 +36,7 @@ public class MockAuthorizableRequestContext implements AuthorizableRequestContex
         private short requestVersion = ApiKeys.FETCH.latestVersion();
         private String clientId = "myClientId";
         private int correlationId = 123;
+        private ClientInformation clientInformation = ClientInformation.EMPTY;
 
         public Builder() throws Exception {
             this.clientAddress = InetAddress.getLocalHost();
@@ -80,6 +82,11 @@ public class MockAuthorizableRequestContext implements AuthorizableRequestContex
             return this;
         }
 
+        public Builder setClientInformation(ClientInformation clientInformation) {
+            this.clientInformation = clientInformation;
+            return this;
+        }
+
         public MockAuthorizableRequestContext build() {
             return new MockAuthorizableRequestContext(listenerName,
                 securityProtocol,
@@ -88,7 +95,8 @@ public class MockAuthorizableRequestContext implements AuthorizableRequestContex
                 requestType,
                 requestVersion,
                 clientId,
-                correlationId);
+                correlationId,
+                clientInformation);
         }
     }
 
@@ -100,6 +108,7 @@ public class MockAuthorizableRequestContext implements AuthorizableRequestContex
     private final short requestVersion;
     private final String clientId;
     private final int correlationId;
+    private final ClientInformation clientInformation;
 
     private MockAuthorizableRequestContext(String listenerName,
             SecurityProtocol securityProtocol,
@@ -108,7 +117,8 @@ public class MockAuthorizableRequestContext implements AuthorizableRequestContex
             ApiKeys requestType,
             short requestVersion,
             String clientId,
-            int correlationId) {
+            int correlationId,
+            ClientInformation clientInformation) {
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
         this.principal = principal;
@@ -117,6 +127,7 @@ public class MockAuthorizableRequestContext implements AuthorizableRequestContex
         this.requestVersion = requestVersion;
         this.clientId = clientId;
         this.correlationId = correlationId;
+        this.clientInformation = clientInformation;
     }
 
     @Override
@@ -157,5 +168,10 @@ public class MockAuthorizableRequestContext implements AuthorizableRequestContex
     @Override
     public int correlationId() {
         return correlationId;
+    }
+
+    @Override
+    public ClientInformation clientInformation() {
+        return clientInformation;
     }
 }
