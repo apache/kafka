@@ -1432,4 +1432,17 @@ public final class Utils {
                 .toArray(String[]::new);
     }
 
+    /**
+     * Ensures that the provided {@code reason} remains within a range of 255 chars.
+     * @param reason This is the reason that is sent to the broker over the wire
+     *               as a part of {@code JoinGroupRequest}, {@code LeaveGroupRequest} or {@code RemoveMembersFromConsumerGroupOptions} messages.
+     * @return a provided reason as is or truncated reason if it exceeds the 255 chars threshold.
+     */
+    public static String truncateIfRequired(final String reason) {
+        if (reason.length() > 255) {
+            return reason.substring(0, 255);
+        } else {
+            return reason;
+        }
+    }
 }

@@ -560,7 +560,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         .setProtocolType(protocolType())
                         .setProtocols(metadata())
                         .setRebalanceTimeoutMs(this.rebalanceConfig.rebalanceTimeoutMs)
-                        .setReason(truncateIfRequired(this.rejoinReason))
+                        .setReason(Utils.truncateIfRequired(this.rejoinReason))
         );
 
         log.debug("Sending JoinGroup ({}) to coordinator {}", requestBuilder, this.coordinator);
@@ -1055,14 +1055,6 @@ public abstract class AbstractCoordinator implements Closeable {
         this.rejoinNeeded = true;
     }
 
-    private String truncateIfRequired(final String reason) {
-        if (reason.length() > 255) {
-            return reason.substring(0, 255);
-        } else {
-            return reason;
-        }
-    }
-
     private boolean isProtocolTypeInconsistent(String protocolType) {
         return protocolType != null && !protocolType.equals(protocolType());
     }
@@ -1123,7 +1115,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 generation.memberId, coordinator, leaveReason);
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
                 rebalanceConfig.groupId,
-                Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId).setReason(truncateIfRequired(leaveReason)))
+                Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId).setReason(Utils.truncateIfRequired(leaveReason)))
             );
 
             future = client.send(coordinator, request).compose(new LeaveGroupResponseHandler(generation));
