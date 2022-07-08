@@ -573,9 +573,13 @@ public class AbstractCoordinatorTest {
         assertEquals("", coordinator.rejoinReason());
 
         // check limit length of reason field
-        mockClient.prepareResponse(joinGroupFollowerResponse(defaultGeneration, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED));
-        coordinator.requestRejoin("Very looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong reason that is 271 characters long to make sure that length limit logic handles the scenario nicely");
-        assertEquals("Very looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong reason that is 271 characters long to make sure that length limit logic handles the", coordinator.rejoinReason());
+        final String reason = "Very looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong reason that is 271 characters long to make sure that length limit logic handles the scenario nicely";
+        final String truncatedReason = reason.substring(0, 255);
+        expectJoinGroup(memberId, truncatedReason, generation, memberId);
+        expectSyncGroup(generation, memberId);
+        coordinator.requestRejoin(reason);
+        ensureActiveGroup(generation, memberId);
+        assertEquals("", coordinator.rejoinReason());
     }
 
     private void ensureActiveGroup(
@@ -1160,6 +1164,34 @@ public class AbstractCoordinatorTest {
         LeaveGroupResponse response =
             leaveGroupResponse(Collections.singletonList(memberResponse));
         RequestFuture<Void> leaveGroupFuture = setupLeaveGroup(response);
+        assertNotNull(leaveGroupFuture);
+        assertTrue(leaveGroupFuture.succeeded());
+    }
+
+    @Test
+    public void testHandleNormalLeaveGroupResponseAndTruncatedLeaveReason() {
+        MemberResponse memberResponse = new MemberResponse()
+                                            .setMemberId(memberId)
+                                            .setErrorCode(Errors.NONE.code());
+        LeaveGroupResponse leaveGroupResponse =
+            leaveGroupResponse(Collections.singletonList(memberResponse));
+        String leaveReason = "Very looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong leaveReason that is 271 characters long to make sure that length limit logic handles the scenario nicely";
+        setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, Optional.empty());
+
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+        mockClient.prepareResponse(body -> {
+            if (!(body instanceof LeaveGroupRequest)) {
+                return false;
+            }
+            LeaveGroupRequestData leaveGroupRequest = ((LeaveGroupRequest) body).data();
+            return leaveGroupRequest.members().get(0).memberId().equals(memberId) &&
+                    leaveGroupRequest.members().get(0).reason().equals(leaveReason.substring(0, 255));
+        }, leaveGroupResponse);
+
+        coordinator.ensureActiveGroup();
+        final RequestFuture<Void> leaveGroupFuture = coordinator.maybeLeaveGroup(leaveReason);
         assertNotNull(leaveGroupFuture);
         assertTrue(leaveGroupFuture.succeeded());
     }
