@@ -328,12 +328,12 @@ object LogCleanerParameterizedIntegrationTest {
 
   class AllCompressions extends ArgumentsProvider {
     override def provideArguments(context: ExtensionContext): java.util.stream.Stream[_ <: Arguments] =
-      java.util.Arrays.stream(CompressionType.values.map(codec => Arguments.of(CompressionConfig.of(codec).build)))
+      java.util.Arrays.stream(CompressionType.values.map(codec => Arguments.of(CompressionConfig.of(codec).build())))
   }
 
   // zstd compression is not supported with older message formats (i.e supported by V0 and V1)
   class ExcludeZstd extends ArgumentsProvider {
     override def provideArguments(context: ExtensionContext): java.util.stream.Stream[_ <: Arguments] =
-      java.util.Arrays.stream(CompressionType.values.filter(_ != CompressionType.ZSTD).map(codec => Arguments.of(CompressionConfig.of(codec).build)))
+      java.util.Arrays.stream(CompressionType.values.filter(_ != CompressionType.ZSTD).map(codec => Arguments.of(CompressionConfig.of(codec).build())))
   }
 }

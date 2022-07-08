@@ -33,9 +33,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.record.CompressionConfig;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -47,6 +44,9 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionRatioEstimator;
+import org.apache.kafka.common.record.CompressionConfig;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
@@ -93,7 +93,7 @@ public class RecordAccumulator {
      *
      * @param logContext The log context used for logging
      * @param batchSize The size to use when allocating {@link MemoryRecords} instances
-     * @param compression The compression configuration for the records
+     * @param compressionConfig The compression configuration for the records
      * @param lingerMs An artificial delay time to add before declaring a records instance that isn't full ready for
      *        sending. This allows time for more records to arrive. Setting a non-zero lingerMs will trade off some
      *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
@@ -111,7 +111,7 @@ public class RecordAccumulator {
      */
     public RecordAccumulator(LogContext logContext,
                              int batchSize,
-                             CompressionConfig compression,
+                             CompressionConfig compressionConfig,
                              int lingerMs,
                              long retryBackoffMs,
                              int deliveryTimeoutMs,
@@ -128,7 +128,7 @@ public class RecordAccumulator {
         this.flushesInProgress = new AtomicInteger(0);
         this.appendsInProgress = new AtomicInteger(0);
         this.batchSize = batchSize;
-        this.compression = compression;
+        this.compression = compressionConfig;
         this.lingerMs = lingerMs;
         this.retryBackoffMs = retryBackoffMs;
         this.deliveryTimeoutMs = deliveryTimeoutMs;
@@ -149,7 +149,7 @@ public class RecordAccumulator {
      *
      * @param logContext The log context used for logging
      * @param batchSize The size to use when allocating {@link MemoryRecords} instances
-     * @param compression The compression configuration for the records
+     * @param compressionConfig The compression configuration for the records
      * @param lingerMs An artificial delay time to add before declaring a records instance that isn't full ready for
      *        sending. This allows time for more records to arrive. Setting a non-zero lingerMs will trade off some
      *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
@@ -166,7 +166,7 @@ public class RecordAccumulator {
      */
     public RecordAccumulator(LogContext logContext,
                              int batchSize,
-                             CompressionConfig compression,
+                             CompressionConfig compressionConfig,
                              int lingerMs,
                              long retryBackoffMs,
                              int deliveryTimeoutMs,
@@ -178,7 +178,7 @@ public class RecordAccumulator {
                              BufferPool bufferPool) {
         this(logContext,
             batchSize,
-            compression,
+            compressionConfig,
             lingerMs,
             retryBackoffMs,
             deliveryTimeoutMs,

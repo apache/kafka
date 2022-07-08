@@ -280,7 +280,7 @@ class LogLoaderTest {
     val records = Seq(new SimpleRecord(timestamp, key, value))
 
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
-    val builder = MemoryRecords.builder(buf, magicValue, CompressionConfig.of(codec).build, TimestampType.CREATE_TIME, offset,
+    val builder = MemoryRecords.builder(buf, magicValue, CompressionConfig.of(codec).build(), TimestampType.CREATE_TIME, offset,
       mockTime.milliseconds, leaderEpoch)
     records.foreach(builder.append)
     builder.build()

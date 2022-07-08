@@ -192,18 +192,18 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
     if (this.compressionLevel.isEmpty) {
       compressionType match {
         case CompressionType.NONE => CompressionConfig.NONE
-        case CompressionType.GZIP => CompressionConfig.gzip.build
-        case CompressionType.SNAPPY => CompressionConfig.snappy.build
-        case CompressionType.LZ4 => CompressionConfig.lz4.build
-        case CompressionType.ZSTD => CompressionConfig.zstd.build
+        case CompressionType.GZIP => CompressionConfig.gzip.build()
+        case CompressionType.SNAPPY => CompressionConfig.snappy.build()
+        case CompressionType.LZ4 => CompressionConfig.lz4.build()
+        case CompressionType.ZSTD => CompressionConfig.zstd.build()
       }
     } else {
       compressionType match {
         case CompressionType.NONE => CompressionConfig.NONE
-        case CompressionType.GZIP => CompressionConfig.gzip.level(Integer.parseInt(this.compressionLevel)).build
-        case CompressionType.SNAPPY => CompressionConfig.snappy.build
-        case CompressionType.LZ4 => CompressionConfig.lz4.level(Integer.parseInt(this.compressionLevel)).build
-        case CompressionType.ZSTD => CompressionConfig.zstd.level(Integer.parseInt(this.compressionLevel)).build
+        case CompressionType.GZIP => CompressionConfig.gzip.level(Integer.parseInt(this.compressionLevel)).build()
+        case CompressionType.SNAPPY => CompressionConfig.snappy.build()
+        case CompressionType.LZ4 => CompressionConfig.lz4.level(Integer.parseInt(this.compressionLevel)).build()
+        case CompressionType.ZSTD => CompressionConfig.zstd.level(Integer.parseInt(this.compressionLevel)).build()
       }
     }
   }

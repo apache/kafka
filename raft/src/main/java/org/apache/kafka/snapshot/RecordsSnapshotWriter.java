@@ -19,7 +19,6 @@ package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.record.CompressionConfig;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
@@ -106,7 +105,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
      * @param memoryPool the memory pool for buffer allocation
      * @param snapshotTime the clock implementation
      * @param lastContainedLogTimestamp The append time of the highest record contained in this snapshot
-     * @param compressionType the compression algorithm to use
+     * @param compressionConfig the compression configuration to use
      * @param serde the record serialization and deserialization implementation
      * @return {@link Optional}{@link RecordsSnapshotWriter}
      */

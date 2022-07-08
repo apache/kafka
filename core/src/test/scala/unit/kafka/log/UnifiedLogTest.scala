@@ -1694,8 +1694,8 @@ class UnifiedLogTest {
     val log = createLog(logDir, logConfig)
 
     /* append 2 compressed message sets, each with two messages giving offsets 0, 1, 2, 3 */
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionConfig.of(CompressionType.GZIP).build, new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes)), leaderEpoch = 0)
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionConfig.of(CompressionType.GZIP).build, new SimpleRecord("alpha".getBytes), new SimpleRecord("beta".getBytes)), leaderEpoch = 0)
+    log.appendAsLeader(MemoryRecords.withRecords(CompressionConfig.of(CompressionType.GZIP).build(), new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes)), leaderEpoch = 0)
+    log.appendAsLeader(MemoryRecords.withRecords(CompressionConfig.of(CompressionType.GZIP).build(), new SimpleRecord("alpha".getBytes), new SimpleRecord("beta".getBytes)), leaderEpoch = 0)
 
     def read(offset: Int) = LogTestUtils.readLog(log, offset, 4096).records.records
 
@@ -1766,8 +1766,8 @@ class UnifiedLogTest {
 
     val messageSetWithUnkeyedMessage = MemoryRecords.withRecords(CompressionConfig.NONE, unkeyedMessage, keyedMessage)
     val messageSetWithOneUnkeyedMessage = MemoryRecords.withRecords(CompressionConfig.NONE, unkeyedMessage)
-    val messageSetWithCompressedKeyedMessage = MemoryRecords.withRecords(CompressionConfig.of(CompressionType.GZIP).build, keyedMessage)
-    val messageSetWithCompressedUnkeyedMessage = MemoryRecords.withRecords(CompressionConfig.of(CompressionType.GZIP).build, keyedMessage, unkeyedMessage)
+    val messageSetWithCompressedKeyedMessage = MemoryRecords.withRecords(CompressionConfig.of(CompressionType.GZIP).build(), keyedMessage)
+    val messageSetWithCompressedUnkeyedMessage = MemoryRecords.withRecords(CompressionConfig.of(CompressionType.GZIP).build(), keyedMessage, unkeyedMessage)
 
     val messageSetWithKeyedMessage = MemoryRecords.withRecords(CompressionConfig.NONE, keyedMessage)
     val messageSetWithKeyedMessages = MemoryRecords.withRecords(CompressionConfig.NONE, keyedMessage, anotherKeyedMessage)
@@ -2190,7 +2190,7 @@ class UnifiedLogTest {
     val magicVals = Seq(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)
     val compressionTypes = Seq(CompressionType.NONE, CompressionType.LZ4)
     for (magic <- magicVals; compression <- compressionTypes) {
-      val invalidRecord = MemoryRecords.withRecords(magic, CompressionConfig.of(compression).build, new SimpleRecord(1.toString.getBytes))
+      val invalidRecord = MemoryRecords.withRecords(magic, CompressionConfig.of(compression).build(), new SimpleRecord(1.toString.getBytes))
       assertThrows(classOf[UnexpectedAppendOffsetException],
         () => log.appendAsFollower(invalidRecord),
         () => s"Magic=$magic, compressionType=$compression")

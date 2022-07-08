@@ -50,11 +50,14 @@ public abstract class CompressionConfig {
     /**
      * Wrap buffer with an InputStream that will decompress data with this CompressionType.
      *
+     * @param buffer The {@link ByteBuffer} instance holding the data to decompress.
+     * @param messageVersion The record format version to use.
      * @param decompressionBufferSupplier The supplier of ByteBuffer(s) used for decompression if supported.
      *                                    For small record batches, allocating a potentially large buffer (64 KB for LZ4)
      *                                    will dominate the cost of decompressing and iterating over the records in the
      *                                    batch. As such, a supplier that reuses buffers will have a significant
      *                                    performance impact.
+     * @see RecordBatch.CURRENT_MAGIC_VALUE
      */
     public abstract InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier);
 

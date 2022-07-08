@@ -955,7 +955,7 @@ class TransactionStateManagerTest {
       val partitionId = transactionManager.partitionFor(transactionalId1)
       val topicPartition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId)
       val expectedTombstone = new SimpleRecord(time.milliseconds(), TransactionLog.keyToBytes(transactionalId1), null)
-      val expectedRecords = MemoryRecords.withRecords(CompressionConfig.of(TransactionLog.EnforcedCompressionType).build, expectedTombstone)
+      val expectedRecords = MemoryRecords.withRecords(CompressionConfig.of(TransactionLog.EnforcedCompressionType).build(), expectedTombstone)
       assertEquals(Set(topicPartition), appendedRecords.keySet)
       assertEquals(Seq(expectedRecords), appendedRecords(topicPartition).toSeq)
     } else {

@@ -60,7 +60,7 @@ class GroupMetadataManager(brokerId: Int,
                            time: Time,
                            metrics: Metrics) extends Logging with KafkaMetricsGroup {
 
-  private val compressionConfig: CompressionConfig = CompressionConfig.of(CompressionType.forId(config.offsetsTopicCompressionCodec.codec)).build
+  private val compressionConfig: CompressionConfig = CompressionConfig.of(CompressionType.forId(config.offsetsTopicCompressionCodec.codec)).build()
 
   private val groupMetadataCache = new Pool[String, GroupMetadata]
 

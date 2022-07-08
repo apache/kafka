@@ -74,7 +74,7 @@ class ProduceRequestTest extends BaseRequestTest {
     sendAndCheck(MemoryRecords.withRecords(CompressionConfig.NONE,
       new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes)), 0)
 
-    sendAndCheck(MemoryRecords.withRecords(CompressionConfig.of(CompressionType.GZIP).build,
+    sendAndCheck(MemoryRecords.withRecords(CompressionConfig.of(CompressionType.GZIP).build(),
       new SimpleRecord(System.currentTimeMillis(), "key1".getBytes, "value1".getBytes),
       new SimpleRecord(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes)), 1)
   }
@@ -90,7 +90,7 @@ class ProduceRequestTest extends BaseRequestTest {
 
     def createRecords(magicValue: Byte, timestamp: Long, codec: CompressionType): MemoryRecords = {
       val buf = ByteBuffer.allocate(512)
-      val builder = MemoryRecords.builder(buf, magicValue, CompressionConfig.of(codec).build, TimestampType.CREATE_TIME, 0L)
+      val builder = MemoryRecords.builder(buf, magicValue, CompressionConfig.of(codec).build(), TimestampType.CREATE_TIME, 0L)
       builder.appendWithOffset(0, timestamp, null, "hello".getBytes)
       builder.appendWithOffset(1, timestamp, null, "there".getBytes)
       builder.appendWithOffset(2, timestamp, null, "beautiful".getBytes)
@@ -171,7 +171,7 @@ class ProduceRequestTest extends BaseRequestTest {
   def testCorruptLz4ProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
     val timestamp = 1000000
-    val memoryRecords = MemoryRecords.withRecords(CompressionConfig.of(CompressionType.LZ4).build,
+    val memoryRecords = MemoryRecords.withRecords(CompressionConfig.of(CompressionType.LZ4).build(),
       new SimpleRecord(timestamp, "key".getBytes, "value".getBytes))
     // Change the lz4 checksum value (not the kafka record crc) so that it doesn't match the contents
     val lz4ChecksumOffset = 6
@@ -211,7 +211,7 @@ class ProduceRequestTest extends BaseRequestTest {
     topicConfig.setProperty(LogConfig.CompressionTypeProp, ZStdCompressionCodec.name)
     val partitionToLeader = TestUtils.createTopic(zkClient, topic, 1, 1, servers, topicConfig)
     val leader = partitionToLeader(partition)
-    val memoryRecords = MemoryRecords.withRecords(CompressionConfig.of(CompressionType.ZSTD).build,
+    val memoryRecords = MemoryRecords.withRecords(CompressionConfig.of(CompressionType.ZSTD).build(),
       new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))
     val topicPartition = new TopicPartition("topic", partition)
     val partitionRecords = new ProduceRequestData()

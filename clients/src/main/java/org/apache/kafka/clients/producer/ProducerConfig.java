@@ -591,7 +591,7 @@ public class ProducerConfig extends AbstractConfig {
         super(CONFIG, props);
     }
 
-    public CompressionConfig getCompressionConfig(CompressionType compressionType) {
+    CompressionConfig getCompressionConfig(CompressionType compressionType) {
         if (getString(ProducerConfig.COMPRESSION_LEVEL_CONFIG).isEmpty()) {
             switch (compressionType) {
                 case NONE:

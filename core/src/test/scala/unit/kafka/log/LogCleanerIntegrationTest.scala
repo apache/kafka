@@ -36,7 +36,7 @@ import scala.jdk.CollectionConverters._
   */
 class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with KafkaMetricsGroup {
 
-  val compressionConfig: CompressionConfig = CompressionConfig.lz4.build
+  val compressionConfig: CompressionConfig = CompressionConfig.lz4.build()
 
   val time = new MockTime()
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
