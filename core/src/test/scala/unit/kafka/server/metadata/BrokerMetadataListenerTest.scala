@@ -271,6 +271,7 @@ class BrokerMetadataListenerTest {
 
     val endOffset = 100L
     updateFeature(listener, feature = MetadataVersion.FEATURE_NAME, (MetadataVersion.latest().featureLevel() - 1).toShort, endOffset)
+    // Waiting for the metadata version update to get processed
     listener.getImageRecords().get()
     assertEquals(endOffset, snapshotter.activeSnapshotOffset, "We should generate snapshot on feature update")
   }

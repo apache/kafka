@@ -132,6 +132,8 @@ class BrokerMetadataListener(
   }
 
   private def metadataVersionChanged(): Boolean = {
+    // The _publisher is empty before starting publishing, and we won't compute feature delta
+    // until we starting publishing
     _publisher.nonEmpty && Option(_delta.featuresDelta()).exists { featuresDelta =>
       featuresDelta.metadataVersionChange().isPresent
     }

@@ -115,9 +115,4 @@ class BrokerMetadataSnapshotter(
     beginShutdown()
     eventQueue.close()
   }
-
-  // VisibleForTesting
-  def currentSnapshotOffset(): Long = {
-    _currentSnapshotOffset
-  }
 }
