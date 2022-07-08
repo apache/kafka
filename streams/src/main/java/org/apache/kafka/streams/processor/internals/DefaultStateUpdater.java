@@ -40,6 +40,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -279,6 +280,7 @@ public class DefaultStateUpdater implements StateUpdater {
             }
             changelogReader.clear();
             updatingTasks.clear();
+            restoreMetrics.clear();
         }
 
         private List<TaskAndAction> getTasksAndActions() {
@@ -707,46 +709,67 @@ public class DefaultStateUpdater implements StateUpdater {
         private final Sensor restoreRatioSensor;
         private final Sensor checkpointRatioSensor;
 
+        private final Deque<String> allSensorNames = new LinkedList<>();
+        private final Deque<MetricName> allMetricNames = new LinkedList<>();
+
         private StateUpdaterMetrics(final Metrics metrics, final String threadId) {
             final Map<String, String> threadLevelTags = StreamsMetricsImpl.threadLevelTagMap(threadId);
 
-            metrics.addMetric(metrics.metricName("restoring-active-tasks",
-                    STATE_LEVEL_GROUP,
-                    "The number of active tasks currently undergoing restoration",
-                    threadLevelTags),
-                (config, now) -> getUpdatingActiveTasks().size());
+            MetricName metricName = metrics.metricName("restoring-active-tasks",
+                STATE_LEVEL_GROUP,
+                "The number of active tasks currently undergoing restoration",
+                threadLevelTags);
+            metrics.addMetric(metricName, (config, now) -> getUpdatingActiveTasks().size());
+            allMetricNames.push(metricName);
 
-            metrics.addMetric(metrics.metricName("restoring-standby-tasks",
-                    STATE_LEVEL_GROUP,
-                    "The number of active tasks currently undergoing restoration",
-                    threadLevelTags),
-                (config, now) -> getUpdatingStandbyTasks().size());
+            metricName = metrics.metricName("restoring-standby-tasks",
+                STATE_LEVEL_GROUP,
+                "The number of active tasks currently undergoing restoration",
+                threadLevelTags);
+            metrics.addMetric(metricName, (config, now) -> getUpdatingStandbyTasks().size());
+            allMetricNames.push(metricName);
 
-            metrics.addMetric(metrics.metricName("paused-active-tasks",
-                    STATE_LEVEL_GROUP,
-                    "The number of active tasks paused restoring",
-                    threadLevelTags),
-                (config, now) -> getPausedActiveTasks().size());
+            metricName = metrics.metricName("paused-active-tasks",
+                STATE_LEVEL_GROUP,
+                "The number of active tasks paused restoring",
+                threadLevelTags);
+            metrics.addMetric(metricName, (config, now) -> getPausedActiveTasks().size());
+            allMetricNames.push(metricName);
 
-            metrics.addMetric(metrics.metricName("paused-standby-tasks",
-                    STATE_LEVEL_GROUP,
-                    "The number of standby tasks paused restoring",
-                    threadLevelTags),
-                (config, now) -> getPausedStandbyTasks().size());
+            metricName = metrics.metricName("paused-standby-tasks",
+                STATE_LEVEL_GROUP,
+                "The number of standby tasks paused restoring",
+                threadLevelTags);
+            metrics.addMetric(metricName, (config, now) -> getPausedStandbyTasks().size());
+            allMetricNames.push(metricName);
 
             this.idleRatioSensor = metrics.sensor("idle-ratio", RecordingLevel.INFO);
             this.idleRatioSensor.add(new MetricName("idle-ratio", STATE_LEVEL_GROUP, IDLE_RATIO_DESCRIPTION, threadLevelTags), new Value());
+            allSensorNames.add("idle-ratio");
 
             this.restoreRatioSensor = metrics.sensor("restore-ratio", RecordingLevel.INFO);
             this.restoreRatioSensor.add(new MetricName("restore-ratio", STATE_LEVEL_GROUP, RESTORE_RATIO_DESCRIPTION, threadLevelTags), new Value());
+            allSensorNames.add("restore-ratio");
 
             this.checkpointRatioSensor = metrics.sensor("checkpoint-ratio", RecordingLevel.INFO);
             this.checkpointRatioSensor.add(new MetricName("checkpoint-ratio", STATE_LEVEL_GROUP, CHECKPOINT_RATIO_DESCRIPTION, threadLevelTags), new Value());
+            allSensorNames.add("checkpoint-ratio");
 
             this.restoreSensor = metrics.sensor("restore-records", RecordingLevel.INFO);
             this.restoreSensor.add(new MetricName("restore-records-total", STATE_LEVEL_GROUP, RESTORE_RECORDS_TOTAL_DESCRIPTION, threadLevelTags), new CumulativeSum());
             this.restoreSensor.add(new MetricName("restore-records-rate", STATE_LEVEL_GROUP, RESTORE_RECORDS_RATE_DESCRIPTION, threadLevelTags), new Rate());
             this.restoreSensor.add(new MetricName("restore-call-rate", STATE_LEVEL_GROUP, RESTORE_RATE_DESCRIPTION, threadLevelTags), new Rate(new WindowedCount()));
+            allSensorNames.add("restore-records");
+        }
+
+        void clear() {
+            while (!allSensorNames.isEmpty()) {
+                metrics.removeSensor(allSensorNames.pop());
+            }
+
+            while (!allMetricNames.isEmpty()) {
+                metrics.removeMetric(allMetricNames.pop());
+            }
         }
     }
 }
