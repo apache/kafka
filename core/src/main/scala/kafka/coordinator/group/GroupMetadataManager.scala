@@ -255,7 +255,7 @@ class GroupMetadataManager(brokerId: Int,
         val value = GroupMetadataManager.groupMetadataValue(group, groupAssignment, interBrokerProtocolVersion)
 
         val records = {
-          val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compressionConfig.getType,
+          val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compressionConfig.`type`,
             Seq(new SimpleRecord(timestamp, key, value)).asJava))
           val builder = MemoryRecords.builder(buffer, magicValue, compressionConfig, timestampType, 0L)
           builder.append(timestamp, key, value)
@@ -379,7 +379,7 @@ class GroupMetadataManager(brokerId: Int,
             new SimpleRecord(timestamp, key, value)
           }
           val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
-          val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compressionConfig.getType, records.asJava))
+          val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compressionConfig.`type`, records.asJava))
 
           if (isTxnOffsetCommit && magicValue < RecordBatch.MAGIC_VALUE_V2)
             throw Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT.exception("Attempting to make a transaction offset commit with an invalid magic: " + magicValue)

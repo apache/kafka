@@ -19,6 +19,6 @@ public class GzipCompressedRecordBatchValidationBenchmark extends AbstractCompre
 
     @Override
     CompressionConfig compressionConfig() {
-        return CompressionConfig.gzip().setLevel(level).build();
+        return CompressionConfig.gzip().level(level).build();
     }
 }

@@ -32,7 +32,7 @@ import java.nio.ByteBuffer;
 public final class SnappyConfig extends CompressionConfig {
     private SnappyConfig() {}
 
-    public CompressionType getType() {
+    public CompressionType type() {
         return CompressionType.SNAPPY;
     }
 

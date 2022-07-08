@@ -518,7 +518,7 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(MemoryRecords.readableRecords(buffer));
             fileRecords.flush();
-            downConvertAndVerifyRecords(records, offsets, fileRecords, compressionConfig.getType(), toMagic, 0L, time);
+            downConvertAndVerifyRecords(records, offsets, fileRecords, compressionConfig.type(), toMagic, 0L, time);
         }
     }
 
@@ -594,9 +594,9 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(MemoryRecords.readableRecords(buffer));
             fileRecords.flush();
-            downConvertAndVerifyRecords(records, offsets, fileRecords, compressionConfig.getType(), toMagic, 0L, time);
+            downConvertAndVerifyRecords(records, offsets, fileRecords, compressionConfig.type(), toMagic, 0L, time);
 
-            if (toMagic <= RecordBatch.MAGIC_VALUE_V1 && compressionConfig.getType() == CompressionType.NONE) {
+            if (toMagic <= RecordBatch.MAGIC_VALUE_V1 && compressionConfig.type() == CompressionType.NONE) {
                 long firstOffset;
                 if (toMagic == RecordBatch.MAGIC_VALUE_V0)
                     firstOffset = 11L; // v1 record
@@ -607,10 +607,10 @@ public class FileRecordsTest {
                 int index = filteredOffsets.indexOf(firstOffset) - 1;
                 filteredRecords.remove(index);
                 filteredOffsets.remove(index);
-                downConvertAndVerifyRecords(filteredRecords, filteredOffsets, fileRecords, compressionConfig.getType(), toMagic, firstOffset, time);
+                downConvertAndVerifyRecords(filteredRecords, filteredOffsets, fileRecords, compressionConfig.type(), toMagic, firstOffset, time);
             } else {
                 // firstOffset doesn't have any effect in this case
-                downConvertAndVerifyRecords(records, offsets, fileRecords, compressionConfig.getType(), toMagic, 10L, time);
+                downConvertAndVerifyRecords(records, offsets, fileRecords, compressionConfig.type(), toMagic, 10L, time);
             }
         }
     }

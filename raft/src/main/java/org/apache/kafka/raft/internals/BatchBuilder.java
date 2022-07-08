@@ -247,7 +247,7 @@ public class BatchBuilder<T> {
             lastOffsetDelta,
             size,
             RecordBatch.MAGIC_VALUE_V2,
-            compressionConfig.getType(),
+            compressionConfig.type(),
             TimestampType.CREATE_TIME,
             appendTime,
             appendTime,
@@ -314,7 +314,7 @@ public class BatchBuilder<T> {
     private int batchHeaderSizeInBytes() {
         return AbstractRecords.recordBatchHeaderSizeInBytes(
             RecordBatch.MAGIC_VALUE_V2,
-            compressionConfig.getType()
+            compressionConfig.type()
         );
     }
 

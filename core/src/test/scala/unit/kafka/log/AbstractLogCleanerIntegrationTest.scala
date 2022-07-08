@@ -139,7 +139,7 @@ abstract class AbstractLogCleanerIntegrationTest {
                 startKey: Int = 0, magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): Seq[(Int, String, Long)] = {
     for(_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val value = counter.toString
-      val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.getBytes, codec = compressionConfig.getType,
+      val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.getBytes, codec = compressionConfig.`type`,
         key = key.toString.getBytes, magicValue = magicValue), leaderEpoch = 0)
       // move LSO forward to increase compaction bound
       log.updateHighWatermark(log.logEndOffset)
@@ -154,7 +154,7 @@ abstract class AbstractLogCleanerIntegrationTest {
       new String(random.alphanumeric.take(length).toArray)
     }
     val value = messageValue(128)
-    val messageSet = TestUtils.singletonRecords(value = value.getBytes, codec = compressionConfig.getType, key = key.toString.getBytes,
+    val messageSet = TestUtils.singletonRecords(value = value.getBytes, codec = compressionConfig.`type`, key = key.toString.getBytes,
       magicValue = messageFormatVersion)
     (value, messageSet)
   }

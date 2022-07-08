@@ -36,7 +36,7 @@ public final class LZ4Config extends CompressionConfig {
     }
 
     @Override
-    public CompressionType getType() {
+    public CompressionType type() {
         return CompressionType.LZ4;
     }
 
@@ -62,7 +62,7 @@ public final class LZ4Config extends CompressionConfig {
     public static class Builder extends CompressionConfig.Builder<LZ4Config> {
         private int level = Lz4OutputStream.DEFAULT_COMPRESSION_LEVEL;
 
-        public Builder setLevel(int level) {
+        public Builder level(int level) {
             if (level < Lz4OutputStream.MIN_COMPRESSION_LEVEL || Lz4OutputStream.MAX_COMPRESSION_LEVEL < level) {
                 throw new IllegalArgumentException("lz4 doesn't support given compression level: " + level);
             }

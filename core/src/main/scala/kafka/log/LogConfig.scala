@@ -200,10 +200,10 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
     } else {
       compressionType match {
         case CompressionType.NONE => CompressionConfig.NONE
-        case CompressionType.GZIP => CompressionConfig.gzip.setLevel(Integer.parseInt(this.compressionLevel)).build
+        case CompressionType.GZIP => CompressionConfig.gzip.level(Integer.parseInt(this.compressionLevel)).build
         case CompressionType.SNAPPY => CompressionConfig.snappy.build
-        case CompressionType.LZ4 => CompressionConfig.lz4.setLevel(Integer.parseInt(this.compressionLevel)).build
-        case CompressionType.ZSTD => CompressionConfig.zstd.setLevel(Integer.parseInt(this.compressionLevel)).build
+        case CompressionType.LZ4 => CompressionConfig.lz4.level(Integer.parseInt(this.compressionLevel)).build
+        case CompressionType.ZSTD => CompressionConfig.zstd.level(Integer.parseInt(this.compressionLevel)).build
       }
     }
   }

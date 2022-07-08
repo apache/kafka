@@ -324,7 +324,7 @@ public class MemoryRecordsBuilderTest {
             }
 
             MemoryRecords built = builder.build();
-            if (args.compressionConfig.getType() == CompressionType.NONE) {
+            if (args.compressionConfig.type() == CompressionType.NONE) {
                 assertEquals(1.0, builder.compressionRatio(), 0.00001);
             } else {
                 int recordHeaad = magic == MAGIC_VALUE_V0 ? LegacyRecord.RECORD_OVERHEAD_V0 : LegacyRecord.RECORD_OVERHEAD_V1;
@@ -355,7 +355,7 @@ public class MemoryRecordsBuilderTest {
         int bytesWrittenBeforeClose = builder.estimatedSizeInBytes();
         MemoryRecords records = builder.build();
         assertEquals(records.sizeInBytes(), builder.estimatedSizeInBytes());
-        if (args.compressionConfig.getType() == CompressionType.NONE)
+        if (args.compressionConfig.type() == CompressionType.NONE)
             assertEquals(records.sizeInBytes(), bytesWrittenBeforeClose);
     }
 
@@ -378,7 +378,7 @@ public class MemoryRecordsBuilderTest {
         MemoryRecordsBuilder.RecordsInfo info = builder.info();
         assertEquals(logAppendTime, info.maxTimestamp);
 
-        if (args.compressionConfig.getType() == CompressionType.NONE && magic <= MAGIC_VALUE_V1)
+        if (args.compressionConfig.type() == CompressionType.NONE && magic <= MAGIC_VALUE_V1)
             assertEquals(0L, info.shallowOffsetOfMaxTimestamp);
         else
             assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
@@ -415,7 +415,7 @@ public class MemoryRecordsBuilderTest {
             assertEquals(2L, info.maxTimestamp);
         }
 
-        if (args.compressionConfig.getType() == CompressionType.NONE && magic == MAGIC_VALUE_V1)
+        if (args.compressionConfig.type() == CompressionType.NONE && magic == MAGIC_VALUE_V1)
             assertEquals(1L, info.shallowOffsetOfMaxTimestamp);
         else
             assertEquals(2L, info.shallowOffsetOfMaxTimestamp);

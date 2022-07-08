@@ -18,6 +18,7 @@ package org.apache.kafka.common.compress;
 
 import com.github.luben.zstd.BufferPool;
 import com.github.luben.zstd.RecyclingBufferPool;
+import com.github.luben.zstd.Zstd;
 import com.github.luben.zstd.ZstdInputStreamNoFinalizer;
 import com.github.luben.zstd.ZstdOutputStreamNoFinalizer;
 
@@ -42,8 +43,8 @@ public final class ZstdConfig extends CompressionConfig {
      *
      * For details, please refer the official zstd manual: http://facebook.github.io/zstd/zstd_manual.html
      */
-    static final int MAX_COMPRESSION_LEVEL = 22;
-    static final int DEFAULT_COMPRESSION_LEVEL = 0;
+    static final int MAX_COMPRESSION_LEVEL = Zstd.maxCompressionLevel();
+    static final int DEFAULT_COMPRESSION_LEVEL = Zstd.defaultCompressionLevel();
 
     private final int level;
 
@@ -51,7 +52,7 @@ public final class ZstdConfig extends CompressionConfig {
         this.level = level;
     }
 
-    public CompressionType getType() {
+    public CompressionType type() {
         return CompressionType.ZSTD;
     }
 
@@ -94,7 +95,7 @@ public final class ZstdConfig extends CompressionConfig {
     public static class Builder extends CompressionConfig.Builder<ZstdConfig> {
         private int level = DEFAULT_COMPRESSION_LEVEL;
 
-        public Builder setLevel(int level) {
+        public Builder level(int level) {
             if (MAX_COMPRESSION_LEVEL < level) {
                 throw new IllegalArgumentException("zstd doesn't support given compression level: " + level);
             }

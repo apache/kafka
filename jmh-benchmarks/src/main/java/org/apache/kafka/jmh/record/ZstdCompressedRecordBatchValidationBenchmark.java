@@ -19,6 +19,6 @@ public class ZstdCompressedRecordBatchValidationBenchmark extends AbstractCompre
 
     @Override
     CompressionConfig compressionConfig() {
-        return CompressionConfig.zstd().setLevel(level).build();
+        return CompressionConfig.zstd().level(level).build();
     }
 }

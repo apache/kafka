@@ -675,7 +675,7 @@ public class MemoryRecords extends AbstractRecords {
                                             SimpleRecord... records) {
         if (records.length == 0)
             return MemoryRecords.EMPTY;
-        int sizeEstimate = AbstractRecords.estimateSizeInBytes(magic, compressionConfig.getType(), Arrays.asList(records));
+        int sizeEstimate = AbstractRecords.estimateSizeInBytes(magic, compressionConfig.type(), Arrays.asList(records));
         ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(sizeEstimate);
         long logAppendTime = RecordBatch.NO_TIMESTAMP;
         if (timestampType == TimestampType.LOG_APPEND_TIME)

@@ -38,7 +38,7 @@ public final class GzipConfig extends CompressionConfig {
         this.level = level;
     }
 
-    public CompressionType getType() {
+    public CompressionType type() {
         return CompressionType.GZIP;
     }
 
@@ -70,7 +70,7 @@ public final class GzipConfig extends CompressionConfig {
     public static class Builder extends CompressionConfig.Builder<GzipConfig> {
         private int level = Deflater.DEFAULT_COMPRESSION;
 
-        public Builder setLevel(int level) {
+        public Builder level(int level) {
             if ((level < Deflater.BEST_SPEED || Deflater.BEST_COMPRESSION < level) && level != Deflater.DEFAULT_COMPRESSION) {
                 throw new IllegalArgumentException("gzip doesn't support given compression level: " + level);
             }

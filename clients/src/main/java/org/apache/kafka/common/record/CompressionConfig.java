@@ -35,7 +35,7 @@ public abstract class CompressionConfig {
     // Instantiating this class directly is disallowed; use builder methods.
     protected CompressionConfig() {}
 
-    public abstract CompressionType getType();
+    public abstract CompressionType type();
 
     /**
      * Wrap bufferStream with an OutputStream that will compress data with this CompressionType.

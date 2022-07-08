@@ -1015,7 +1015,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             Header[] headers = record.headers().toArray();
 
             int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
-                    compressionConfig.getType(), serializedKey, serializedValue, headers);
+                    compressionConfig.type(), serializedKey, serializedValue, headers);
             ensureValidRecordSize(serializedSize);
             long timestamp = record.timestamp() == null ? nowMs : record.timestamp();
 

@@ -137,7 +137,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   def testCleanerWithMessageFormatV0(compressionConfig: CompressionConfig): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.MAGIC_VALUE_V0, compressionConfig)
-    val maxMessageSize = compressionConfig.getType match {
+    val maxMessageSize = compressionConfig.`type` match {
       case CompressionType.NONE => largeMessageSet.sizeInBytes
       case _ =>
         // the broker assigns absolute offsets for message format 0 which potentially causes the compressed size to

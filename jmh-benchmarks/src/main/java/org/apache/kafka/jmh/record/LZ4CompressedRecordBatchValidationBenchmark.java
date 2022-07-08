@@ -19,6 +19,6 @@ public class LZ4CompressedRecordBatchValidationBenchmark extends AbstractCompres
 
     @Override
     CompressionConfig compressionConfig() {
-        return CompressionConfig.lz4().setLevel(level).build();
+        return CompressionConfig.lz4().level(level).build();
     }
 }

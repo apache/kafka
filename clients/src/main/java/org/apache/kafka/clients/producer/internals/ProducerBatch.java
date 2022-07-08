@@ -93,7 +93,7 @@ public final class ProducerBatch {
         this.retry = false;
         this.isSplitBatch = isSplitBatch;
         float compressionRatioEstimation = CompressionRatioEstimator.estimation(topicPartition.topic(),
-                                                                                recordsBuilder.compressionConfig().getType());
+                                                                                recordsBuilder.compressionConfig().type());
         recordsBuilder.setEstimatedCompressionRatio(compressionRatioEstimation);
     }
 
@@ -108,7 +108,7 @@ public final class ProducerBatch {
         } else {
             this.recordsBuilder.append(timestamp, key, value, headers);
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
-                recordsBuilder.compressionConfig().getType(), key, value, headers));
+                recordsBuilder.compressionConfig().type(), key, value, headers));
             this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
                                                                    timestamp,
@@ -134,7 +134,7 @@ public final class ProducerBatch {
             // No need to get the CRC.
             this.recordsBuilder.append(timestamp, key, value, headers);
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
-                    recordsBuilder.compressionConfig().getType(), key, value, headers));
+                    recordsBuilder.compressionConfig().type(), key, value, headers));
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
                                                                    timestamp,
                                                                    key == null ? -1 : key.remaining(),
@@ -339,7 +339,7 @@ public final class ProducerBatch {
 
     private ProducerBatch createBatchOffAccumulatorForRecord(Record record, int batchSize) {
         int initialSize = Math.max(AbstractRecords.estimateSizeInBytesUpperBound(magic(),
-                recordsBuilder.compressionConfig().getType(), record.key(), record.value(), record.headers()), batchSize);
+                recordsBuilder.compressionConfig().type(), record.key(), record.value(), record.headers()), batchSize);
         ByteBuffer buffer = ByteBuffer.allocate(initialSize);
 
         // Note that we intentionally do not set producer state (producerId, epoch, sequence, and isTransactional)
@@ -351,7 +351,7 @@ public final class ProducerBatch {
     }
 
     public boolean isCompressed() {
-        return recordsBuilder.compressionConfig().getType() != CompressionType.NONE;
+        return recordsBuilder.compressionConfig().type() != CompressionType.NONE;
     }
 
     /**
@@ -453,7 +453,7 @@ public final class ProducerBatch {
         recordsBuilder.close();
         if (!recordsBuilder.isControlBatch()) {
             CompressionRatioEstimator.updateEstimation(topicPartition.topic(),
-                                                       recordsBuilder.compressionConfig().getType(),
+                                                       recordsBuilder.compressionConfig().type(),
                                                        (float) recordsBuilder.compressionRatio());
         }
         reopened = false;

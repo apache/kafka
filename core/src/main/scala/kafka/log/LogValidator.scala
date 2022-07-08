@@ -98,7 +98,7 @@ private[log] object LogValidator extends Logging {
                                                     interBrokerProtocolVersion: MetadataVersion,
                                                     brokerTopicStats: BrokerTopicStats,
                                                     requestLocal: RequestLocal): ValidationAndOffsetAssignResult = {
-    if (sourceType == CompressionType.NONE && targetConfig.getType == CompressionType.NONE) {
+    if (sourceType == CompressionType.NONE && targetConfig.`type` == CompressionType.NONE) {
       // check the magic value
       if (!records.hasMatchingMagic(magic))
         convertAndAssignOffsetsNonCompressed(records, topicPartition, offsetCounter, compactedTopic, time, now, timestampType,
@@ -370,7 +370,7 @@ private[log] object LogValidator extends Logging {
                                                  brokerTopicStats: BrokerTopicStats,
                                                  requestLocal: RequestLocal): ValidationAndOffsetAssignResult = {
 
-    if (targetConfig.getType == CompressionType.ZSTD && interBrokerProtocolVersion.isLessThan(IBP_2_1_IV0))
+    if (targetConfig.`type` == CompressionType.ZSTD && interBrokerProtocolVersion.isLessThan(IBP_2_1_IV0))
       throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " +
         "are not allowed to use ZStandard compression")
 
@@ -382,7 +382,7 @@ private[log] object LogValidator extends Logging {
     }
 
     // No in place assignment situation 1
-    var inPlaceAssignment = sourceType == targetConfig.getType
+    var inPlaceAssignment = sourceType == targetConfig.`type`
 
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     val expectedInnerOffset = new LongRef(0)
@@ -505,7 +505,7 @@ private[log] object LogValidator extends Logging {
                                            partitionLeaderEpoch: Int,
                                            uncompressedSizeInBytes: Int): ValidationAndOffsetAssignResult = {
     val startNanos = time.nanoseconds
-    val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionConfig.getType,
+    val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionConfig.`type`,
       validatedRecords.asJava)
     // The current implementation of BufferSupplier is naive and works best when the buffer size
     // cardinality is low, so don't use it here

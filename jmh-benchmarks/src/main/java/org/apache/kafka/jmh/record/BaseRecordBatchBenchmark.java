@@ -21,7 +21,6 @@ import kafka.server.RequestLocal;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionConfig;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
@@ -126,7 +125,7 @@ public abstract class BaseRecordBatchBenchmark {
         Header[] headers = messageVersion < RecordBatch.MAGIC_VALUE_V2 ? Record.EMPTY_HEADERS : createHeaders();
         byte[] value = new byte[messageSize];
         final ByteBuffer buf = ByteBuffer.allocate(
-            AbstractRecords.estimateSizeInBytesUpperBound(messageVersion, compressionConfig().getType(),
+            AbstractRecords.estimateSizeInBytesUpperBound(messageVersion, compressionConfig().type(),
                 new byte[0], value, headers) * batchSize
         );
 

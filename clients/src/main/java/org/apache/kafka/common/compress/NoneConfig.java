@@ -28,7 +28,7 @@ import java.nio.ByteBuffer;
 
 public final class NoneConfig extends CompressionConfig {
     @Override
-    public CompressionType getType() {
+    public CompressionType type() {
         return CompressionType.NONE;
     }
 

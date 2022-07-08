@@ -19,21 +19,13 @@ package org.apache.kafka.jmh.record;
 import kafka.common.LongRef;
 import kafka.log.AppendOrigin;
 import kafka.log.LogValidator;
-import kafka.message.CompressionCodec;
+
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.CompressionConfig;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.Fork;
-import org.openjdk.jmh.annotations.Measurement;
-import org.openjdk.jmh.annotations.Param;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
 public abstract class AbstractCompressedRecordBatchValidationBenchmark extends BaseRecordBatchBenchmark {
@@ -42,7 +34,7 @@ public abstract class AbstractCompressedRecordBatchValidationBenchmark extends B
         MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
         LogValidator.validateMessagesAndAssignOffsetsCompressed(records, new TopicPartition("a", 0),
                 new LongRef(startingOffset), Time.SYSTEM, System.currentTimeMillis(),
-                compressionConfig().getType(),
+                compressionConfig().type(),
                 compressionConfig(),
                 false,  messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, 0,
                 new AppendOrigin.Client$(),

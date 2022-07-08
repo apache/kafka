@@ -612,13 +612,13 @@ public class ProducerConfig extends AbstractConfig {
                 case NONE:
                     return CompressionConfig.NONE;
                 case GZIP:
-                    return CompressionConfig.gzip().setLevel(Integer.parseInt(getString(ProducerConfig.COMPRESSION_LEVEL_CONFIG))).build();
+                    return CompressionConfig.gzip().level(Integer.parseInt(getString(ProducerConfig.COMPRESSION_LEVEL_CONFIG))).build();
                 case SNAPPY:
                     return CompressionConfig.snappy().build();
                 case LZ4:
-                    return CompressionConfig.lz4().setLevel(Integer.parseInt(getString(ProducerConfig.COMPRESSION_LEVEL_CONFIG))).build();
+                    return CompressionConfig.lz4().level(Integer.parseInt(getString(ProducerConfig.COMPRESSION_LEVEL_CONFIG))).build();
                 case ZSTD:
-                    return CompressionConfig.zstd().setLevel(Integer.parseInt(getString(ProducerConfig.COMPRESSION_LEVEL_CONFIG))).build();
+                    return CompressionConfig.zstd().level(Integer.parseInt(getString(ProducerConfig.COMPRESSION_LEVEL_CONFIG))).build();
                 default:
                     throw new IllegalArgumentException("Unknown compression type: " + compressionType.name);
             }
