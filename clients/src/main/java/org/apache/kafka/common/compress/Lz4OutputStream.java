@@ -96,32 +96,6 @@ public final class Lz4OutputStream extends OutputStream {
         writeHeader();
     }
 
-    /**
-     * Create a new {@link OutputStream} that will compress data using the LZ4 algorithm.
-     *
-     * @param out The stream to compress
-     * @param blockSize Default: 4. The block size used during compression. 4=64kb, 5=256kb, 6=1mb, 7=4mb. All other
-     *            values will generate an exception
-     * @throws IOException
-     */
-    public Lz4OutputStream(OutputStream out, int blockSize) throws IOException {
-        this(out, blockSize, DEFAULT_COMPRESSION_LEVEL, false, false);
-    }
-
-    /**
-     * Create a new {@link OutputStream} that will compress data using the LZ4 algorithm.
-     *
-     * @param out The output stream to compress
-     * @throws IOException
-     */
-    public Lz4OutputStream(OutputStream out) throws IOException {
-        this(out, BLOCKSIZE_64KB);
-    }
-
-    public Lz4OutputStream(OutputStream out, boolean useBrokenHC) throws IOException {
-        this(out, BLOCKSIZE_64KB, -1, false, useBrokenHC);
-    }
-
     public Lz4OutputStream(OutputStream out, int level, boolean useBrokenHC) throws IOException {
         this(out, BLOCKSIZE_64KB, level, false, useBrokenHC);
     }
