@@ -165,8 +165,6 @@ public class TaskExecutor {
             }
         }
 
-        log.error("Committed {} tasks for {}", committed, tasksToCommit.stream().map(Task::id).collect(Collectors.toList()));
-
         return committed;
     }
 

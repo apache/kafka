@@ -221,7 +221,7 @@ class Tasks {
         }
     }
 
-    void updateActiveTaskInputPartitions(final Task task, final Set<TopicPartition> topicPartitions) {
+    boolean updateActiveTaskInputPartitions(final Task task, final Set<TopicPartition> topicPartitions) {
         final boolean requiresUpdate = !task.inputPartitions().equals(topicPartitions);
         if (requiresUpdate) {
             log.debug("Update task {} inputPartitions: current {}, new {}", task, task.inputPartitions(), topicPartitions);
@@ -234,6 +234,8 @@ class Tasks {
                 }
             }
         }
+
+        return requiresUpdate;
     }
 
     RuntimeException cleanUpTaskProducerAfterClose(final TaskId taskId) {
@@ -257,14 +259,6 @@ class Tasks {
     // TODO: change type to `StreamTask`
     void closeAndRemoveTaskProducerIfNeeded(final Task activeTask) {
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(activeTask.id());
-    }
-
-    void removeTaskBeforeClosing(final TaskId taskId) {
-        if (activeTasksPerId.remove(taskId) != null) {
-            removePartitionsForActiveTask(taskId);
-        } else if (standbyTasksPerId.remove(taskId) == null) {
-            throw new IllegalArgumentException("Attempted to remove a task that is not owned: " + taskId);
-        }
     }
 
     private void removePartitionsForActiveTask(final TaskId taskId) {

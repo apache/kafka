@@ -302,8 +302,9 @@ public class TaskManager {
             if (activeTasksToCreate.containsKey(taskId)) {
                 if (task.isActive()) {
                     final Set<TopicPartition> topicPartitions = activeTasksToCreate.get(taskId);
-                    tasks.updateActiveTaskInputPartitions(task, topicPartitions);
-                    task.updateInputPartitions(topicPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
+                    if (tasks.updateActiveTaskInputPartitions(task, topicPartitions)) {
+                        task.updateInputPartitions(topicPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
+                    }
                     task.resume();
                 } else {
                     tasksToRecycle.put(task, activeTasksToCreate.get(taskId));

@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,7 +111,7 @@ public abstract class AbstractTask implements Task {
 
     @Override
     public Set<TopicPartition> inputPartitions() {
-        return inputPartitions;
+        return Collections.unmodifiableSet(inputPartitions);
     }
 
     @Override
@@ -155,7 +156,8 @@ public abstract class AbstractTask implements Task {
 
     @Override
     public void updateInputPartitions(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics) {
-        this.inputPartitions = topicPartitions;
+        this.inputPartitions.clear();
+        this.inputPartitions.addAll(topicPartitions);
         topology.updateSourceTopics(allTopologyNodesToSourceTopics);
     }
 
