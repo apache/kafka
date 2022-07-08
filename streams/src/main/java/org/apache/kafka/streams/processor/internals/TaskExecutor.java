@@ -100,7 +100,6 @@ public class TaskExecutor {
             while (processed < maxNumRecords && task.process(now)) {
                 task.clearTaskTimeout();
                 processed++;
-                log.error("Processed task {}", task.id());
             }
             // TODO: enable regardless of whether using named topologies
             if (processed > 0 && hasNamedTopologies && processingMode != EXACTLY_ONCE_V2) {
