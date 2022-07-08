@@ -49,7 +49,7 @@ public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
     public StoreType storeType;
 
     @Parameterized.Parameters(name = "{0}")
-    public static Collection<Object[]> getKeySchema() {
+    public static Collection<Object[]> getParamStoreType() {
         return asList(new Object[][] {
             {StoreType.RocksDBSessionStore},
             {StoreType.RocksDBTimeOrderedSessionStoreWithIndex},
@@ -135,4 +135,5 @@ public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
         final Position actual = rocksDBSessionStore.getPosition();
         assertEquals(expected, actual);
     }
+
 }

@@ -91,6 +91,7 @@ import static org.hamcrest.Matchers.hasEntry;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -868,6 +869,10 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         final byte[] value4 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
             key3, windows[3].start(), windows[3].end());
         assertEquals(Bytes.wrap(value4), Bytes.wrap(expectedValue4));
+
+        final byte[] noValue = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+            key3, 2000, 3000);
+        assertNull(noValue);
     }
 
     @Test
