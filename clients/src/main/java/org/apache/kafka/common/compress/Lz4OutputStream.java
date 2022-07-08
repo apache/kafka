@@ -33,7 +33,7 @@ import net.jpountz.xxhash.XXHashFactory;
  *
  * This class is not thread-safe.
  */
-public final class KafkaLZ4BlockOutputStream extends OutputStream {
+public final class Lz4OutputStream extends OutputStream {
 
     public static final int MAGIC = 0x184D2204;
     public static final int LZ4_MAX_HEADER_LENGTH = 19;
@@ -75,7 +75,7 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
      *            compatible with older kafka clients.
      * @throws IOException
      */
-    public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize, int level, boolean blockChecksum, boolean useBrokenFlagDescriptorChecksum) throws IOException {
+    public Lz4OutputStream(OutputStream out, int blockSize, int level, boolean blockChecksum, boolean useBrokenFlagDescriptorChecksum) throws IOException {
         this.out = out;
         /**
          * lz4-java provides two types of compressors; fastCompressor, which requires less memory but fast compression speed (with default compression level only),
@@ -104,7 +104,7 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
      *            values will generate an exception
      * @throws IOException
      */
-    public KafkaLZ4BlockOutputStream(OutputStream out, int blockSize) throws IOException {
+    public Lz4OutputStream(OutputStream out, int blockSize) throws IOException {
         this(out, blockSize, DEFAULT_COMPRESSION_LEVEL, false, false);
     }
 
@@ -114,15 +114,15 @@ public final class KafkaLZ4BlockOutputStream extends OutputStream {
      * @param out The output stream to compress
      * @throws IOException
      */
-    public KafkaLZ4BlockOutputStream(OutputStream out) throws IOException {
+    public Lz4OutputStream(OutputStream out) throws IOException {
         this(out, BLOCKSIZE_64KB);
     }
 
-    public KafkaLZ4BlockOutputStream(OutputStream out, boolean useBrokenHC) throws IOException {
+    public Lz4OutputStream(OutputStream out, boolean useBrokenHC) throws IOException {
         this(out, BLOCKSIZE_64KB, -1, false, useBrokenHC);
     }
 
-    public KafkaLZ4BlockOutputStream(OutputStream out, int level, boolean useBrokenHC) throws IOException {
+    public Lz4OutputStream(OutputStream out, int level, boolean useBrokenHC) throws IOException {
         this(out, BLOCKSIZE_64KB, level, false, useBrokenHC);
     }
 

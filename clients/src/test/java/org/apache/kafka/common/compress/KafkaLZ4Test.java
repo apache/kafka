@@ -35,7 +35,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream.LZ4_FRAME_INCOMPRESSIBLE_MASK;
+import static org.apache.kafka.common.compress.Lz4OutputStream.LZ4_FRAME_INCOMPRESSIBLE_MASK;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -361,9 +361,9 @@ public class KafkaLZ4Test {
 
     private byte[] compressedBytes(Args args) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        KafkaLZ4BlockOutputStream lz4 = new KafkaLZ4BlockOutputStream(
+        Lz4OutputStream lz4 = new Lz4OutputStream(
             output,
-            KafkaLZ4BlockOutputStream.BLOCKSIZE_64KB,
+            Lz4OutputStream.BLOCKSIZE_64KB,
             args.level,
             args.blockChecksum,
             args.useBrokenFlagDescriptorChecksum

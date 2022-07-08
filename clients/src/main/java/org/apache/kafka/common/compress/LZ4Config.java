@@ -43,7 +43,7 @@ public final class LZ4Config extends CompressionConfig {
     @Override
     public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
         try {
-            return new KafkaLZ4BlockOutputStream(buffer, this.level, messageVersion == MAGIC_VALUE_V0);
+            return new Lz4OutputStream(buffer, this.level, messageVersion == MAGIC_VALUE_V0);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }
@@ -60,10 +60,10 @@ public final class LZ4Config extends CompressionConfig {
     }
 
     public static class Builder extends CompressionConfig.Builder<LZ4Config> {
-        private int level = KafkaLZ4BlockOutputStream.DEFAULT_COMPRESSION_LEVEL;
+        private int level = Lz4OutputStream.DEFAULT_COMPRESSION_LEVEL;
 
         public Builder setLevel(int level) {
-            if (level < KafkaLZ4BlockOutputStream.MIN_COMPRESSION_LEVEL || KafkaLZ4BlockOutputStream.MAX_COMPRESSION_LEVEL < level) {
+            if (level < Lz4OutputStream.MIN_COMPRESSION_LEVEL || Lz4OutputStream.MAX_COMPRESSION_LEVEL < level) {
                 throw new IllegalArgumentException("lz4 doesn't support given compression level: " + level);
             }
 

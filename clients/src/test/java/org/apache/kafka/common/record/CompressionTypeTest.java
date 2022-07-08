@@ -17,7 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.compress.KafkaLZ4BlockInputStream;
-import org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream;
+import org.apache.kafka.common.compress.Lz4OutputStream;
 import org.apache.kafka.common.compress.LZ4Config;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
@@ -35,7 +35,7 @@ public class CompressionTypeTest {
     @Test
     public void testLZ4FramingMagicV0() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
-        KafkaLZ4BlockOutputStream out = (KafkaLZ4BlockOutputStream) LZ4_CONFIG.wrapForOutput(
+        Lz4OutputStream out = (Lz4OutputStream) LZ4_CONFIG.wrapForOutput(
                 new ByteBufferOutputStream(buffer), RecordBatch.MAGIC_VALUE_V0);
         assertTrue(out.useBrokenFlagDescriptorChecksum());
 
@@ -49,7 +49,7 @@ public class CompressionTypeTest {
     @Test
     public void testLZ4FramingMagicV1() {
         ByteBuffer buffer = ByteBuffer.allocate(256);
-        KafkaLZ4BlockOutputStream out = (KafkaLZ4BlockOutputStream) LZ4_CONFIG.wrapForOutput(
+        Lz4OutputStream out = (Lz4OutputStream) LZ4_CONFIG.wrapForOutput(
                 new ByteBufferOutputStream(buffer), RecordBatch.MAGIC_VALUE_V1);
         assertFalse(out.useBrokenFlagDescriptorChecksum());
 
