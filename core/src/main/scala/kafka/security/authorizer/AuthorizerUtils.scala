@@ -23,6 +23,7 @@ import kafka.network.RequestChannel.Session
 import org.apache.kafka.common.resource.Resource
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer}
 
 
@@ -42,6 +43,7 @@ object AuthorizerUtils {
       override def securityProtocol(): SecurityProtocol = null
       override def correlationId(): Int = -1
       override def requestVersion(): Int = -1
+      override def clientInformation(): ClientInformation = ClientInformation.EMPTY;
     }
   }
 }
