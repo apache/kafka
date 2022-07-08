@@ -1171,27 +1171,12 @@ public class AbstractCoordinatorTest {
     @Test
     public void testHandleNormalLeaveGroupResponseAndTruncatedLeaveReason() {
         MemberResponse memberResponse = new MemberResponse()
-                                            .setMemberId(memberId)
-                                            .setErrorCode(Errors.NONE.code());
-        LeaveGroupResponse leaveGroupResponse =
-            leaveGroupResponse(Collections.singletonList(memberResponse));
+                .setMemberId(memberId)
+                .setErrorCode(Errors.NONE.code());
+        LeaveGroupResponse response =
+                leaveGroupResponse(Collections.singletonList(memberResponse));
         String leaveReason = "Very looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong leaveReason that is 271 characters long to make sure that length limit logic handles the scenario nicely";
-        setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, Optional.empty());
-
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        mockClient.prepareResponse(joinGroupFollowerResponse(1, memberId, leaderId, Errors.NONE));
-        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
-        mockClient.prepareResponse(body -> {
-            if (!(body instanceof LeaveGroupRequest)) {
-                return false;
-            }
-            LeaveGroupRequestData leaveGroupRequest = ((LeaveGroupRequest) body).data();
-            return leaveGroupRequest.members().get(0).memberId().equals(memberId) &&
-                    leaveGroupRequest.members().get(0).reason().equals(leaveReason.substring(0, 255));
-        }, leaveGroupResponse);
-
-        coordinator.ensureActiveGroup();
-        final RequestFuture<Void> leaveGroupFuture = coordinator.maybeLeaveGroup(leaveReason);
+        RequestFuture<Void> leaveGroupFuture = setupLeaveGroup(response, leaveReason.substring(0, 255), leaveReason);
         assertNotNull(leaveGroupFuture);
         assertTrue(leaveGroupFuture.succeeded());
     }
@@ -1230,6 +1215,12 @@ public class AbstractCoordinatorTest {
     }
 
     private RequestFuture<Void> setupLeaveGroup(LeaveGroupResponse leaveGroupResponse) {
+        return setupLeaveGroup(leaveGroupResponse, "test maybe leave group", "test maybe leave group");
+    }
+
+    private RequestFuture<Void> setupLeaveGroup(LeaveGroupResponse leaveGroupResponse,
+                                                String expectedLeaveReason,
+                                                String actualLeaveReason) {
         setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, Optional.empty());
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -1241,11 +1232,11 @@ public class AbstractCoordinatorTest {
             }
             LeaveGroupRequestData leaveGroupRequest = ((LeaveGroupRequest) body).data();
             return leaveGroupRequest.members().get(0).memberId().equals(memberId) &&
-                   leaveGroupRequest.members().get(0).reason().equals("test maybe leave group");
+                    leaveGroupRequest.members().get(0).reason().equals(expectedLeaveReason);
         }, leaveGroupResponse);
 
         coordinator.ensureActiveGroup();
-        return coordinator.maybeLeaveGroup("test maybe leave group");
+        return coordinator.maybeLeaveGroup(actualLeaveReason);
     }
 
     @Test
