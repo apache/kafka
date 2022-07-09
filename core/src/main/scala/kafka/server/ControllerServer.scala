@@ -69,6 +69,8 @@ class ControllerServer(
 ) extends Logging with KafkaMetricsGroup {
   import kafka.server.Server._
 
+  config.dynamicConfig.initialize(zkClientOpt = None)
+
   val lock = new ReentrantLock()
   val awaitShutdownCond = lock.newCondition()
   var status: ProcessStatus = SHUTDOWN
