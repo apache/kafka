@@ -171,7 +171,7 @@ object ReplicaVerificationTool extends Logging {
     }
 
     if (filteredTopicMetadata.isEmpty) {
-      error(s"No topics found. ${opts.topicWhiteListOpt} if specified, is either filtering out all topics or there is no topic.")
+      error(s"No topics found. $topicsIncludeOpt if specified, is either filtering out all topics or there is no topic.")
       Exit.exit(1)
     }
 
