@@ -143,6 +143,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final RebalanceProtocol protocol;
     // pending commit offset request in onJoinPrepare
     private RequestFuture<Void> autoCommitOffsetRequestFuture = null;
+    private Timer joinPrepareTimer = null;
 
     /**
      * Initialize the coordination manager.
@@ -744,7 +745,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     @Override
     protected boolean onJoinPrepare(Timer timer, int generation, String memberId) {
         log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
-        boolean onJoinPrepareAsyncCommitCompleted = false;
+        if (joinPrepareTimer == null) {
+            joinPrepareTimer = time.timer(rebalanceConfig.rebalanceTimeoutMs);
+        }
         // async commit offsets prior to rebalance if auto-commit enabled
         if (autoCommitEnabled && autoCommitOffsetRequestFuture == null) {
             autoCommitOffsetRequestFuture = maybeAutoCommitOffsetsAsync();
@@ -752,23 +755,32 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // wait for commit offset response before timer.
         if (autoCommitOffsetRequestFuture != null) {
-            client.poll(autoCommitOffsetRequestFuture, timer);
+            Timer pollTimer = timer.remainingMs() < joinPrepareTimer.remainingMs() ?
+                   timer : joinPrepareTimer;
+            client.poll(autoCommitOffsetRequestFuture, pollTimer);
         }
 
-        // return true when
-        // 1. future is null, which means no commit request sent, so it is still considered completed
-        // 2. offset commit completed
-        // 3. offset commit failed with non-retriable exception
-        if (autoCommitOffsetRequestFuture == null)
-            onJoinPrepareAsyncCommitCompleted = true;
-        else if (autoCommitOffsetRequestFuture.succeeded()) {
-            onJoinPrepareAsyncCommitCompleted = true;
-        } else if (autoCommitOffsetRequestFuture.failed() && !autoCommitOffsetRequestFuture.isRetriable()) {
-            log.error("Asynchronous auto-commit of offsets failed: {}", autoCommitOffsetRequestFuture.exception().getMessage());
-            onJoinPrepareAsyncCommitCompleted = true;
+        // return false when:
+        //   1. offset commit haven't done
+        //   2. offset commit failed with retriable exception and joinPrepare haven't expired
+        boolean onJoinPrepareAsyncCommitCompleted = true;
+        if (autoCommitOffsetRequestFuture != null) {
+            if (!autoCommitOffsetRequestFuture.isDone()) {
+                onJoinPrepareAsyncCommitCompleted = false;
+            } else if (autoCommitOffsetRequestFuture.failed() && autoCommitOffsetRequestFuture.isRetriable()) {
+                onJoinPrepareAsyncCommitCompleted = joinPrepareTimer.isExpired();
+            } else if (autoCommitOffsetRequestFuture.failed() && autoCommitOffsetRequestFuture.isRetriable()) {
+                log.error("Asynchronous auto-commit of offsets failed: {}", autoCommitOffsetRequestFuture.exception().getMessage());
+            } else if (joinPrepareTimer != null && joinPrepareTimer.isExpired()) {
+                log.error("Asynchronous auto-commit of offsets failed: joinPrepare timeout");
+            }
+            if (autoCommitOffsetRequestFuture.isDone()) {
+                autoCommitOffsetRequestFuture = null;
+            }
         }
-        if (autoCommitOffsetRequestFuture != null && autoCommitOffsetRequestFuture.isDone()) {
-            autoCommitOffsetRequestFuture = null;
+        if (!onJoinPrepareAsyncCommitCompleted) {
+            timer.sleep(rebalanceConfig.retryBackoffMs);
+            return false;
         }
 
         // the generation / member-id can possibly be reset by the heartbeat thread
@@ -821,11 +833,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         isLeader = false;
         subscriptions.resetGroupSubscription();
+        joinPrepareTimer = null;
 
         if (exception != null) {
             throw new KafkaException("User rebalance callback throws an error", exception);
         }
-        return onJoinPrepareAsyncCommitCompleted;
+        return true;
     }
 
     @Override

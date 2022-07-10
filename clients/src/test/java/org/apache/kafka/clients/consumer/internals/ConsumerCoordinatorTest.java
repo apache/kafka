@@ -77,6 +77,7 @@ import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -1317,37 +1318,34 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.ensureActiveGroup();
         subscriptions.seek(t1p, 100L);
 
-        ExecutorService executor = Executors.newFixedThreadPool(1);
-        try {
-            executor.submit(() -> {
-                try {
-                    // sleep 100ms to ensure onJoinPrepare invoked
-                    Thread.sleep(100);
-                    time.sleep(150);
-                } catch (InterruptedException e) {
-                }
-            });
+        int generationId = 42;
+        String memberId = "consumer-42";
 
-            int generationId = 42;
-            String memberId = "consumer-42";
+        Timer pollTimer = time.timer(100L);
+        time.sleep(150);
+        boolean res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
+        assertFalse(res);
 
-            boolean res = coordinator.onJoinPrepare(time.timer(100L), generationId, memberId);
-            assertFalse(res);
+        pollTimer = time.timer(100L);
+        time.sleep(150);
+        client.respond(offsetCommitResponse(singletonMap(t1p, Errors.UNKNOWN_TOPIC_OR_PARTITION)));
+        res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
+        assertFalse(res);
 
-            client.respond(offsetCommitResponse(singletonMap(t1p, Errors.NONE)));
-            time.sleep(100);
+        pollTimer = time.timer(100L);
+        time.sleep(150);
+        res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
+        assertFalse(res);
 
-            res = coordinator.onJoinPrepare(time.timer(100L), generationId, memberId);
-            assertTrue(res);
+        pollTimer = time.timer(100L);
+        time.sleep(150);
+        client.respond(offsetCommitResponse(singletonMap(t1p, Errors.NONE)));
+        res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
+        assertTrue(res);
 
-            assertFalse(client.hasPendingResponses());
-            assertFalse(client.hasInFlightRequests());
-            assertFalse(coordinator.coordinatorUnknown());
-
-        }  finally {
-            executor.shutdown();
-            executor.awaitTermination(1000, TimeUnit.MILLISECONDS);
-        }
+        assertFalse(client.hasPendingResponses());
+        assertFalse(client.hasInFlightRequests());
+        assertFalse(coordinator.coordinatorUnknown());
     }
 
     @Test
