@@ -142,7 +142,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
                                           final long to,
                                           final boolean forward) {
 
-        final long actualFrom = getActualFrom(from);
+        final long actualFrom = getActualFrom(from, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
 
         if (baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema && to < actualFrom) {
             return KeyValueIterators.emptyIterator();
@@ -207,7 +207,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
             return KeyValueIterators.emptyIterator();
         }
 
-        final long actualFrom = getActualFrom(from);
+        final long actualFrom = getActualFrom(from, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
 
         if (baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema && to < actualFrom) {
             return KeyValueIterators.emptyIterator();
@@ -252,7 +252,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
     public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom,
                                                     final long timeTo) {
 
-        final long actualFrom = getActualFrom(timeFrom);
+        final long actualFrom = getActualFrom(timeFrom, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
 
         if (baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema && timeTo < actualFrom) {
             return KeyValueIterators.emptyIterator();
@@ -274,7 +274,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
     public KeyValueIterator<Bytes, byte[]> backwardFetchAll(final long timeFrom,
                                                             final long timeTo) {
 
-        final long actualFrom = getActualFrom(timeFrom);
+        final long actualFrom = getActualFrom(timeFrom, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
 
         if (baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema && timeTo < actualFrom) {
             return KeyValueIterators.emptyIterator();
