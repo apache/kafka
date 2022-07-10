@@ -583,6 +583,12 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                 }
             }).
             generate(buffer);
+        // Fix for KAFKA-14063, defend against antagonistic payloads.
+        buffer.printf("if (%s > _readable.remaining()) {%n", lengthVar);
+        buffer.incrementIndent();
+        buffer.printf("throw new RuntimeException(\"field length for %s is longer than remaining reader data\");%n", name);
+        buffer.decrementIndent();
+        buffer.printf("}%n");
         buffer.printf("if (%s < 0) {%n", lengthVar);
         buffer.incrementIndent();
         VersionConditional.forVersions(nullableVersions, possibleVersions).
