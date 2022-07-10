@@ -19,9 +19,30 @@ package org.apache.kafka.common.security.auth;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import javax.security.auth.Subject;
 
 /**
- * A simple immutable value object class holding customizable SASL extensions
+ * A simple immutable value object class holding customizable SASL extensions.
+ *
+ * <p/>
+ *
+ * <b>Note on object identity and equality</b>: <code>SaslExtensions</code> <em>intentionally</em>
+ * does not override the standard {@link #equals(Object)} and {@link #hashCode()} methods. Thus, it
+ * will only provide equality via reference identity and will not base equality based on the
+ * underlying values of its {@link #extensionsMap extentions map}.
+ *
+ * <p/>
+ *
+ * The reason for this approach to equality is based off of the manner in which
+ * credentials are stored in a {@link Subject}. <code>SaslExtensions</code> are added to and
+ * removed from a {@link Subject} via its {@link Subject#getPublicCredentials() public credentials}.
+ * The public credentials are stored in a {@link Set} in the {@link Subject}, so object equality
+ * therefore becomes a concern. With shallow, reference-based equality, distinct
+ * <code>SaslExtensions</code> instances with the same map values can be considered unique. This is
+ * critical to operations like token refresh.
+ *
+ * See <a href="https://issues.apache.org/jira/browse/KAFKA-14062">KAFKA-14062</a> for more detail.
  */
 public class SaslExtensions {
     /**
@@ -45,4 +66,5 @@ public class SaslExtensions {
     public String toString() {
         return extensionsMap.toString();
     }
+
 }
