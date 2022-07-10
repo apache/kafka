@@ -44,6 +44,8 @@ import org.apache.kafka.common.requests.ListOffsetsResponse
 
 object ConsumerGroupCommand extends Logging {
 
+  private[admin] val ListOffsetsForAllPartitions: java.util.List[TopicPartition] = null
+
   def main(args: Array[String]): Unit = {
 
     val opts = new ConsumerGroupCommandOptions(args)
@@ -753,8 +755,8 @@ object ConsumerGroupCommand extends Logging {
 
     private def getCommittedOffsets(groupId: String): Map[TopicPartition, OffsetAndMetadata] = {
       adminClient.listConsumerGroupOffsets(
-        Collections.singletonList(groupId),
-        withTimeoutMs(new ListConsumerGroupOffsetsOptions(Collections.singletonList(groupId))))
+        Collections.singletonMap(groupId, ListOffsetsForAllPartitions),
+        withTimeoutMs(new ListConsumerGroupOffsetsOptions()))
         .groupIdsToPartitionsAndOffsetAndMetadata
         .get(groupId)
         .get().asScala

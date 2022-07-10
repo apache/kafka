@@ -196,13 +196,7 @@ public class EosIntegrationTest {
             final TopicPartition topicPartition = new TopicPartition(SINGLE_PARTITION_INPUT_TOPIC, 0);
             final Collection<TopicPartition> topicPartitions = Collections.singleton(topicPartition);
 
-            final long committedOffset =
-                adminClient.listConsumerGroupOffsets(Collections.singletonList(applicationId))
-                    .groupIdsToPartitionsAndOffsetAndMetadata()
-                    .get(applicationId)
-                    .get()
-                    .get(topicPartition)
-                    .offset();
+            final long committedOffset = adminClient.listConsumerGroupOffsets(applicationId).partitionsToOffsetAndMetadata().get().get(topicPartition).offset();
 
             consumer.assign(topicPartitions);
             final long consumerPosition = consumer.position(topicPartition);

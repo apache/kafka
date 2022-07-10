@@ -55,6 +55,7 @@ import org.junit.runners.Parameterized;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -648,12 +649,12 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         final AtomicBoolean functionCalled = new AtomicBoolean(false);
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
-            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final Map<String, List<TopicPartition>> groupIdToTopicPartitions, final ListConsumerGroupOffsetsOptions options) {
                 if (functionCalled.get()) {
-                    return super.listConsumerGroupOffsets(groupId, options);
+                    return super.listConsumerGroupOffsets(groupIdToTopicPartitions, options);
                 } else {
                     functionCalled.set(true);
-                    return AdminClientTestUtils.listConsumerGroupOffsetsResult(new TimeoutException("KABOOM!"));
+                    return AdminClientTestUtils.listConsumerGroupOffsetsResult(groupIdToTopicPartitions.keySet().iterator().next(), new TimeoutException("KABOOM!"));
                 }
             }
         };
@@ -708,7 +709,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
-            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final Map<String, List<TopicPartition>> groupIdToTopicPartitions, final ListConsumerGroupOffsetsOptions options) {
                 throw kaboom;
             }
         };
@@ -790,7 +791,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
-            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final Map<String, List<TopicPartition>> groupIdToTopicPartitions, final ListConsumerGroupOffsetsOptions options) {
                 throw new AssertionError("Should not try to fetch committed offsets");
             }
         };

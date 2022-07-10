@@ -17,14 +17,14 @@
 package org.apache.kafka.clients.admin.internals;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-
 import java.util.stream.Collectors;
+
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -44,23 +44,6 @@ public class ListConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Coo
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public ListConsumerGroupOffsetsHandler(
-        String groupId,
-        List<TopicPartition> partitions,
-        LogContext logContext
-    ) {
-        this(groupId, partitions, false, logContext);
-    }
-
-    public ListConsumerGroupOffsetsHandler(
-        String groupId,
-        List<TopicPartition> partitions,
-        boolean requireStable,
-        LogContext logContext
-    ) {
-        this(Collections.singletonMap(groupId, partitions), requireStable, logContext);
-    }
-
-    public ListConsumerGroupOffsetsHandler(
         Map<String, List<TopicPartition>> groupIdToTopicPartitions,
         boolean requireStable,
         LogContext logContext
@@ -71,19 +54,8 @@ public class ListConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Coo
         this.requireStable = requireStable;
     }
 
-    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> newFuture(
-        List<String> groupIds
-    ) {
-        return AdminApiFuture.forKeys(groupIds
-            .stream()
-            .map(CoordinatorKey::byGroupId)
-            .collect(Collectors.toSet()));
-    }
-
-    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> newFuture(
-        String groupId
-    ) {
-        return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
+    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> newFuture(Collection<String> groupIds) {
+        return AdminApiFuture.forKeys(coordinatorKeys(groupIds));
     }
 
     @Override
@@ -97,15 +69,17 @@ public class ListConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Coo
     }
 
     private void validateKeys(Set<CoordinatorKey> groupIds) {
-        Set<CoordinatorKey> keys = groupIdToTopicPartitions
-                .keySet()
-                .stream()
-                .map(CoordinatorKey::byGroupId)
-                .collect(Collectors.toSet());
+        Set<CoordinatorKey> keys = coordinatorKeys(groupIdToTopicPartitions.keySet());
         if (!keys.containsAll(groupIds)) {
             throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
                     " (expected one of " + keys + ")");
         }
+    }
+
+    private static Set<CoordinatorKey> coordinatorKeys(Collection<String> groupIds) {
+        return groupIds.stream()
+           .map(CoordinatorKey::byGroupId)
+           .collect(Collectors.toSet());
     }
 
     @Override

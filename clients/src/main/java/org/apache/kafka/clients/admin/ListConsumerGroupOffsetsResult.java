@@ -18,18 +18,18 @@
 package org.apache.kafka.clients.admin;
 
 import java.util.HashMap;
-import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
+
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Map;
-
 /**
- * The result of the {@link Admin#listConsumerGroupOffsets(List)} and
+ * The result of the {@link Admin#listConsumerGroupOffsets(Map)} and
  * {@link Admin#listConsumerGroupOffsets(String)} call.
  * <p>
  * The API of this class is evolving, see {@link Admin} for details.
@@ -37,17 +37,10 @@ import java.util.Map;
 @InterfaceStability.Evolving
 public class ListConsumerGroupOffsetsResult {
 
-    final KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future;
     final Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures;
-
-    ListConsumerGroupOffsetsResult(KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
-        this.future = future;
-        this.futures = null;
-    }
 
     ListConsumerGroupOffsetsResult(final Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {
         this.futures = futures;
-        this.future = null;
     }
 
     /**
@@ -55,27 +48,28 @@ public class ListConsumerGroupOffsetsResult {
      * If the group does not have a committed offset for this partition, the corresponding value in the returned map will be null.
      */
     public KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> partitionsToOffsetAndMetadata() {
-        return future;
+        if (futures.size() != 1) {
+            throw new IllegalStateException("Offsets from multiple consumer groups were requested. " +
+                    "Use groupIdsToPartitionsAndOffsetAndMetadata() instead to get all futures.");
+        }
+        return futures.values().iterator().next();
     }
 
     /**
-     * Return a future which yields a map of group ids to a map of topic partitions to
+     * Return a map of group ids to their corresponding futures that yield a map of topic partitions to
      * OffsetAndMetadata objects. If the group doesn't have a committed offset for a specific
      * partition, the corresponding value in the returned map for that group id will be null.
      */
     public Map<String, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> groupIdsToPartitionsAndOffsetAndMetadata() {
-        assert futures != null;
-        Map<String, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> listedConsumerGroupOffsets = new HashMap<>(futures.size());
-        futures.forEach((key, future) -> listedConsumerGroupOffsets.put(key.idValue, future));
-        return listedConsumerGroupOffsets;
+        return futures.entrySet().stream()
+                .collect(Collectors.toMap(e -> e.getKey().idValue, Map.Entry::getValue));
     }
 
     /**
      * Return a future which yields all Map<String, Map<TopicPartition, OffsetAndMetadata> objects,
-     * if all the describes succeed.
+     * if requests for all the groups succeed.
      */
     public KafkaFuture<Map<String, Map<TopicPartition, OffsetAndMetadata>>> all() {
-        assert futures != null;
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(
             nil -> {
                 Map<String, Map<TopicPartition, OffsetAndMetadata>> listedConsumerGroupOffsets = new HashMap<>(futures.size());

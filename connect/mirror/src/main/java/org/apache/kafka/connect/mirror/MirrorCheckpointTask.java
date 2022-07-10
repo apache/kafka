@@ -183,11 +183,7 @@ public class MirrorCheckpointTask extends SourceTask {
             // short circuit if stopping
             return Collections.emptyMap();
         }
-        return sourceAdminClient
-            .listConsumerGroupOffsets(Collections.singletonList(group))
-            .groupIdsToPartitionsAndOffsetAndMetadata()
-            .get(group)
-            .get();
+        return sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get();
     }
 
     Optional<Checkpoint> checkpoint(String group, TopicPartition topicPartition,
@@ -246,13 +242,8 @@ public class MirrorCheckpointTask extends SourceTask {
                 // (1) idle: because the consumer at target is not actively consuming the mirrored topic
                 // (2) dead: the new consumer that is recently created at source and never existed at target
                 if (consumerGroupState == ConsumerGroupState.EMPTY) {
-                    idleConsumerGroupsOffset.put(group, targetAdminClient.listConsumerGroupOffsets(Collections.singletonList(group))
-                            .groupIdsToPartitionsAndOffsetAndMetadata()
-                            .get(group)
-                            .get()
-                            .entrySet()
-                            .stream()
-                            .collect(Collectors.toMap(Entry::getKey, Entry::getValue)));
+                    idleConsumerGroupsOffset.put(group, targetAdminClient.listConsumerGroupOffsets(group)
+                        .partitionsToOffsetAndMetadata().get());
                 }
                 // new consumer upstream has state "DEAD" and will be identified during the offset sync-up
             } catch (InterruptedException | ExecutionException e) {

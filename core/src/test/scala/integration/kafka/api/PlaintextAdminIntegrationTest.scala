@@ -1252,9 +1252,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
           // Test listConsumerGroupOffsets
           TestUtils.waitUntilTrue(() => {
-            val parts = client.listConsumerGroupOffsets(Collections.singletonList(testGroupId))
-              .groupIdsToPartitionsAndOffsetAndMetadata()
-              .get(testGroupId).get()
+            val parts = client.listConsumerGroupOffsets(testGroupId).partitionsToOffsetAndMetadata().get()
             val part = new TopicPartition(testTopicName, 0)
             parts.containsKey(part) && (parts.get(part).offset() == 1)
           }, s"Expected the offset for partition 0 to eventually become 1.")

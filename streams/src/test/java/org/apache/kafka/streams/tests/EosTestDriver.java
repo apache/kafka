@@ -272,12 +272,8 @@ public class EosTestDriver extends SmokeTestUtil {
         final Map<TopicPartition, OffsetAndMetadata> topicPartitionOffsetAndMetadataMap;
 
         try {
-            final ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult =
-                adminClient.listConsumerGroupOffsets(Collections.singletonList(EosTestClient.APP_ID));
-            topicPartitionOffsetAndMetadataMap =
-                listConsumerGroupOffsetsResult.groupIdsToPartitionsAndOffsetAndMetadata()
-                    .get(EosTestClient.APP_ID)
-                    .get(10, TimeUnit.SECONDS);
+            final ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult = adminClient.listConsumerGroupOffsets(EosTestClient.APP_ID);
+            topicPartitionOffsetAndMetadataMap = listConsumerGroupOffsetsResult.partitionsToOffsetAndMetadata().get(10, TimeUnit.SECONDS);
         } catch (final Exception e) {
             e.printStackTrace();
             throw new RuntimeException(e);

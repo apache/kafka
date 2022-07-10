@@ -182,11 +182,7 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         try (Admin backupClient = backup.kafka().createAdminClient()) {
             // retrieve the consumer group offset from backup cluster
             Map<TopicPartition, OffsetAndMetadata> remoteOffsets =
-                backupClient
-                    .listConsumerGroupOffsets(Collections.singletonList(consumerGroupName))
-                    .groupIdsToPartitionsAndOffsetAndMetadata()
-                    .get(consumerGroupName)
-                    .get();
+                    backupClient.listConsumerGroupOffsets(consumerGroupName).partitionsToOffsetAndMetadata().get();
 
             // pinpoint the offset of the last partition which does not receive records
             OffsetAndMetadata offset = remoteOffsets.get(new TopicPartition(backupTopic, NUM_PARTITIONS - 1));

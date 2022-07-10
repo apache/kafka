@@ -696,10 +696,9 @@ public class StoreChangelogReader implements ChangelogReader {
         try {
             // those which do not have a committed offset would default to 0
             final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions();
-            options.topicPartitions(new ArrayList<>(partitions));
             options.requireStable(true);
-            final Map<TopicPartition, Long> committedOffsets = adminClient.listConsumerGroupOffsets(Collections.singletonList(groupId), options)
-                    .partitionsToOffsetAndMetadata().get().entrySet()
+            final Map<TopicPartition, Long> committedOffsets = adminClient.listConsumerGroupOffsets(Collections.singletonMap(groupId, new ArrayList<>(partitions)))
+                    .groupIdsToPartitionsAndOffsetAndMetadata().get(groupId).get().entrySet()
                     .stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
 
