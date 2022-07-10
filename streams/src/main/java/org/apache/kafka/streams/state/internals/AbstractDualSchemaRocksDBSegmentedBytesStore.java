@@ -79,7 +79,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
 
-        final long actualFrom = getActualFrom(0);
+        final long actualFrom = getActualFrom(0, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
 
         final List<S> searchSpace = segments.allSegments(true);
         final Bytes from = baseKeySchema.lowerRange(null, actualFrom);
@@ -96,7 +96,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardAll() {
 
-        final long actualFrom = getActualFrom(0);
+        final long actualFrom = getActualFrom(0, baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema);
 
         final List<S> searchSpace = segments.allSegments(false);
         final Bytes from = baseKeySchema.lowerRange(null, actualFrom);
@@ -128,8 +128,10 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
     abstract protected KeyValue<Bytes, byte[]> getIndexKeyValue(final Bytes baseKey, final byte[] baseValue);
 
-    protected long getActualFrom(final long from) {
-        return Math.max(from, observedStreamTime - retentionPeriod + 1);
+    protected long getActualFrom(final long from, boolean isTimeFirstWindowSchema) {
+        return isTimeFirstWindowSchema ? Math.max(from, observedStreamTime - retentionPeriod) :
+                Math.max(from, observedStreamTime - retentionPeriod + 1);
+
     }
 
     // For testing
@@ -206,11 +208,21 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     public byte[] get(final Bytes rawKey) {
         final long timestampFromRawKey = baseKeySchema.segmentTimestamp(rawKey);
         // check if timestamp is expired
-        if (timestampFromRawKey < observedStreamTime - retentionPeriod + 1) {
-            LOG.debug("Record with key {} is expired as timestamp from key ({}) < actual stream time ({})",
-                    rawKey.toString(), timestampFromRawKey, observedStreamTime - retentionPeriod + 1);
-            return null;
+
+        if (baseKeySchema instanceof PrefixedWindowKeySchemas.TimeFirstWindowKeySchema) {
+            if (timestampFromRawKey < observedStreamTime - retentionPeriod) {
+                LOG.debug("Record with key {} is expired as timestamp from key ({}) < actual stream time ({})",
+                        rawKey.toString(), timestampFromRawKey, observedStreamTime - retentionPeriod);
+                return null;
+            }
+        } else {
+            if (timestampFromRawKey < observedStreamTime - retentionPeriod + 1) {
+                LOG.debug("Record with key {} is expired as timestamp from key ({}) < actual stream time ({})",
+                        rawKey.toString(), timestampFromRawKey, observedStreamTime - retentionPeriod + 1);
+                return null;
+            }
         }
+
         final S segment = segments.getSegmentForTimestamp(timestampFromRawKey);
         if (segment == null) {
             return null;
