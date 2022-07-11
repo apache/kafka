@@ -28,7 +28,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.mockito.ArgumentMatchers.any
+import org.mockito.ArgumentMatchers.{any, anyInt}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify}
 
@@ -739,6 +739,21 @@ class LogManagerTest {
     }
   }
 
+  private def verifyLogRecoverMetricsRemoved(spyLogManager: LogManager): Unit = {
+    val spyLogManagerClassName = spyLogManager.getClass().getSimpleName
+    // get all `remainingLogsToRecover` metrics
+    def logMetrics: mutable.Set[MetricName] = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
+      .filter { metric => metric.getType == s"$spyLogManagerClassName" && metric.getName == "remainingLogsToRecover" }
+
+    assertTrue(logMetrics.isEmpty)
+
+    // get all `remainingSegmentsToRecover` metrics
+    val logSegmentMetrics: mutable.Set[MetricName] = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
+      .filter { metric => metric.getType == s"$spyLogManagerClassName" && metric.getName == "remainingSegmentsToRecover" }
+
+    assertTrue(logSegmentMetrics.isEmpty)
+  }
+
   @Test
   def testLogRecoveryMetrics(): Unit = {
     logManager.shutdown()
@@ -793,14 +808,14 @@ class LogManagerTest {
       any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]])
 
     // do nothing for removeLogRecoveryMetrics for metrics verification
-    doNothing().when(spyLogManager).removeLogRecoveryMetrics()
+    doNothing().when(spyLogManager).removeLogRecoveryMetrics(anyInt)
 
     // start the logManager to do log recovery
     spyLogManager.startup(Set.empty)
 
     // make sure log recovery metrics are added and removed
-    verify(spyLogManager, times(1)).addLogRecoveryMetrics()
-    verify(spyLogManager, times(1)).removeLogRecoveryMetrics()
+    verify(spyLogManager, times(1)).addLogRecoveryMetrics(recoveryThreadsPerDataDir)
+    verify(spyLogManager, times(1)).removeLogRecoveryMetrics(recoveryThreadsPerDataDir)
 
     // expected 1 log in each log dir since we created 2 partitions with 2 log dirs
     val expectedRemainingLogsParams = Map[String, Int](logDir1.getAbsolutePath -> 1, logDir2.getAbsolutePath -> 1)
@@ -809,6 +824,36 @@ class LogManagerTest {
     val expectedRemainingSegmentsParams = Map[String, Int](
       logDir1.getAbsolutePath -> expectedSegmentsPerLog, logDir2.getAbsolutePath -> expectedSegmentsPerLog)
     verifyRemainingSegmentsToRecoverMetric(spyLogManager, logDirs, recoveryThreadsPerDataDir, mockMap, expectedRemainingSegmentsParams)
+  }
+
+  @Test
+  def testLogRecoveryMetricsShouldBeRemovedAfterLogRecovered(): Unit = {
+    logManager.shutdown()
+    val logDir1 = TestUtils.tempDir()
+    val logDir2 = TestUtils.tempDir()
+    val logDirs = Seq(logDir1, logDir2)
+    val recoveryThreadsPerDataDir = 2
+    // create logManager with expected recovery thread number
+    logManager = createLogManager(logDirs, recoveryThreadsPerDataDir = recoveryThreadsPerDataDir)
+    val spyLogManager = spy(logManager)
+
+    assertEquals(2, spyLogManager.liveLogDirs.size)
+
+    // intercept loadLog method to pass expected parameter to do log recovery
+    doAnswer { _ =>
+      // simulate the recovery thread is resized during log recovery
+      spyLogManager.resizeRecoveryThreadPool(recoveryThreadsPerDataDir - 1)
+    } .when(spyLogManager).loadLog(any[File], any[Boolean], any[Map[TopicPartition, Long]], any[Map[TopicPartition, Long]],
+      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]])
+
+    // start the logManager to do log recovery
+    spyLogManager.startup(Set.empty)
+
+    // make sure log recovery metrics are added and removed with the expected parameter
+    verify(spyLogManager, times(1)).addLogRecoveryMetrics(recoveryThreadsPerDataDir)
+    verify(spyLogManager, times(1)).removeLogRecoveryMetrics(recoveryThreadsPerDataDir)
+
+    verifyLogRecoverMetricsRemoved(spyLogManager)
   }
 
   @Test

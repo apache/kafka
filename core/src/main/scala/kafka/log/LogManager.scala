@@ -316,13 +316,16 @@ class LogManager(logDirs: Seq[File],
   import java.util.concurrent.ThreadFactory
 
   // factory class for naming the log recovery threads used in metrics
-  class LogRecoveryThreadFactory(val baseName: String) extends ThreadFactory {
-    val threadsNum = new AtomicInteger(0)
+  class LogRecoveryThreadFactory(val dirPath: String) extends ThreadFactory {
+    val threadNum = new AtomicInteger(0)
 
     override def newThread(runnable: Runnable): Thread = {
-      KafkaThread.nonDaemon(s"$baseName-${threadsNum.getAndIncrement()}", runnable)
+      KafkaThread.nonDaemon(logRecoveryThreadName(dirPath, threadNum.getAndIncrement()), runnable)
     }
   }
+
+  // create a unique log recovery thread name for each log dir as the format: prefix-dirPath-threadNum, ex: "log-recovery-/tmp/kafkaLogs-0"
+  private def logRecoveryThreadName(dirPath: String, threadNum: Int, prefix: String = "log-recovery"): String = s"$prefix-$dirPath-$threadNum"
 
   private[log] def updateNumRemainingLogs(path: String, remainingLogs: Int): Unit = {
     require(path != null, "path cannot be null to update remaining logs metric.")
@@ -339,6 +342,7 @@ class LogManager(logDirs: Seq[File],
     val offlineDirs = mutable.Set.empty[(String, IOException)]
     val jobs = ArrayBuffer.empty[Seq[Future[_]]]
     var numTotalLogs = 0
+    val curNumRecoveryThreadsPerDataDir = numRecoveryThreadsPerDataDir
 
     def handleIOException(logDirAbsolutePath: String, e: IOException): Unit = {
       offlineDirs.add((logDirAbsolutePath, e))
@@ -349,8 +353,8 @@ class LogManager(logDirs: Seq[File],
       val logDirAbsolutePath = dir.getAbsolutePath
       var hadCleanShutdown: Boolean = false
       try {
-        val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir,
-          new LogRecoveryThreadFactory(s"log-recovery-$logDirAbsolutePath"))
+        val pool = Executors.newFixedThreadPool(curNumRecoveryThreadsPerDataDir,
+          new LogRecoveryThreadFactory(logDirAbsolutePath))
         threadPools.append(pool)
 
         val cleanShutdownFile = new File(dir, LogLoader.CleanShutdownFile)
@@ -403,6 +407,7 @@ class LogManager(logDirs: Seq[File],
 
               info(s"Completed load of $log with ${log.numberOfSegments} segments in ${logLoadDurationMs}ms " +
                 s"($currentNumLoaded/${logsToLoad.length} loaded in $logDirAbsolutePath)")
+              println("!!! numRemainingSegments:" + numRemainingSegments + ";" + log)
             } catch {
               case e: IOException =>
                 handleIOException(logDirAbsolutePath, e)
@@ -424,7 +429,7 @@ class LogManager(logDirs: Seq[File],
     }
 
     try {
-      addLogRecoveryMetrics()
+      addLogRecoveryMetrics(curNumRecoveryThreadsPerDataDir)
       for (dirJobs <- jobs) {
         dirJobs.foreach(_.get)
       }
@@ -437,29 +442,29 @@ class LogManager(logDirs: Seq[File],
         error(s"There was an error in one of the threads during logs loading: ${e.getCause}")
         throw e.getCause
     } finally {
-      removeLogRecoveryMetrics()
+      removeLogRecoveryMetrics(curNumRecoveryThreadsPerDataDir)
       threadPools.foreach(_.shutdown())
     }
 
     info(s"Loaded $numTotalLogs logs in ${time.hiResClockMs() - startMs}ms.")
   }
 
-  private[log] def addLogRecoveryMetrics(): Unit = {
+  private[log] def addLogRecoveryMetrics(curNumRecoveryThreadsPerDataDir: Int): Unit = {
     for (dir <- logDirs) {
       newGauge("remainingLogsToRecover", () => numRemainingLogs.get(dir.getAbsolutePath),
         Map("dir" -> dir.getAbsolutePath))
-      for (i <- 0 until numRecoveryThreadsPerDataDir) {
-        val threadName = s"log-recovery-${dir.getAbsolutePath}-$i"
+      for (i <- 0 until curNumRecoveryThreadsPerDataDir) {
+        val threadName = logRecoveryThreadName(dir.getAbsolutePath, i)
         newGauge("remainingSegmentsToRecover", () => numRemainingSegments.get(threadName),
           Map("dir" -> dir.getAbsolutePath, "threadNum" -> i.toString))
       }
     }
   }
 
-  private[log] def removeLogRecoveryMetrics(): Unit = {
+  private[log] def removeLogRecoveryMetrics(curNumRecoveryThreadsPerDataDir: Int): Unit = {
     for (dir <- logDirs) {
       removeMetric("remainingLogsToRecover", Map("dir" -> dir.getAbsolutePath))
-      for (i <- 0 until numRecoveryThreadsPerDataDir) {
+      for (i <- 0 until curNumRecoveryThreadsPerDataDir) {
         removeMetric("remainingSegmentsToRecover", Map("dir" -> dir.getAbsolutePath, "threadNum" -> i.toString))
       }
     }
