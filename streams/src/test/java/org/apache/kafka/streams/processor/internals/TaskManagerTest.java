@@ -52,6 +52,7 @@ import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 
+import java.nio.file.Files;
 import java.util.ArrayList;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
@@ -3275,7 +3276,7 @@ public class TaskManagerTest {
 
     private void writeCheckpointFile(final TaskId task, final Map<TopicPartition, Long> offsets) throws Exception {
         final File checkpointFile = getCheckpointFile(task);
-        assertThat(checkpointFile.createNewFile(), is(true));
+        Files.createFile(checkpointFile.toPath());
         new OffsetCheckpoint(checkpointFile).write(offsets);
         expect(stateDirectory.checkpointFileFor(task)).andReturn(checkpointFile);
     }

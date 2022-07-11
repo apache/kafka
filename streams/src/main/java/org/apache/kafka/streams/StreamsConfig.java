@@ -31,7 +31,9 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
@@ -417,14 +419,8 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code buffered.records.per.partition} */
     @SuppressWarnings("WeakerAccess")
-    @Deprecated
     public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";
     public static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "Maximum number of records to buffer per partition.";
-
-    /** {@code input.buffer.max.bytes} */
-    @SuppressWarnings("WeakerAccess")
-    public static final String INPUT_BUFFER_MAX_BYTES_CONFIG = "input.buffer.max.bytes";
-    public static final String INPUT_BUFFER_MAX_BYTES_DOC = "Maximum bytes of records to buffer across all threads";
 
     /** {@code built.in.metrics.version} */
     public static final String BUILT_IN_METRICS_VERSION_CONFIG = "built.in.metrics.version";
@@ -432,14 +428,8 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code cache.max.bytes.buffering} */
     @SuppressWarnings("WeakerAccess")
-    @Deprecated
     public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
     public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
-
-    /** {@statestore.cache.max.bytes} */
-    @SuppressWarnings("WeakerAccess")
-    public static final String STATESTORE_CACHE_MAX_BYTES_CONFIG = "statestore.cache.max.bytes";
-    public static final String STATESTORE_CACHE_MAX_BYTES_DOC = "Maximum number of memory bytes to be used for statestore cache across all threads";
 
     /** {@code client.id} */
     @SuppressWarnings("WeakerAccess")
@@ -450,7 +440,9 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code commit.interval.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String COMMIT_INTERVAL_MS_CONFIG = "commit.interval.ms";
-    private static final String COMMIT_INTERVAL_MS_DOC = "The frequency in milliseconds with which to save the position of the processor." +
+    private static final String COMMIT_INTERVAL_MS_DOC = "The frequency in milliseconds with which to commit processing progress." +
+        " For at-least-once processing, committing means to save the position (ie, offsets) of the processor." +
+        " For exactly-once processing, it means to commit the transaction which includes to save the position and to make the committed data in the output topic visible to consumers with isolation level read_committed." +
         " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE_V2 + "</code>, <code>" + EXACTLY_ONCE + "</code>,the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
         " otherwise the default value is <code>" + DEFAULT_COMMIT_INTERVAL_MS + "</code>.";
 
@@ -498,8 +490,8 @@ public class StreamsConfig extends AbstractConfig {
         "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
     public static final String WINDOWED_INNER_CLASS_SERDE = "windowed.inner.class.serde";
-    private static final String WINDOWED_INNER_CLASS_SERDE_DOC = " Default serializer / deserializer for the inner class of a windowed record. Must implement the \" +\n" +
-        "        \"<code>org.apache.kafka.common.serialization.Serde</code> interface.. Note that setting this config in KafkaStreams application would result " +
+    private static final String WINDOWED_INNER_CLASS_SERDE_DOC = " Default serializer / deserializer for the inner class of a windowed record. Must implement the " +
+        "<code>org.apache.kafka.common.serialization.Serde</code> interface. Note that setting this config in KafkaStreams application would result " +
         "in an error as it is meant to be used only from Plain consumer client.";
 
     /** {@code default key.serde} */
@@ -751,12 +743,6 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.MEDIUM,
                     CACHE_MAX_BYTES_BUFFERING_DOC)
-            .define(STATESTORE_CACHE_MAX_BYTES_CONFIG,
-                    Type.LONG,
-                    10 * 1024 * 1024L,
-                    atLeast(0),
-                    Importance.MEDIUM,
-                    STATESTORE_CACHE_MAX_BYTES_DOC)
             .define(CLIENT_ID_CONFIG,
                     Type.STRING,
                     "",
@@ -843,6 +829,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(SECURITY_PROTOCOL_CONFIG,
                     Type.STRING,
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                    in(Utils.enumOptions(SecurityProtocol.class)),
                     Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
             .define(TASK_TIMEOUT_MS_CONFIG,
@@ -857,11 +844,6 @@ public class StreamsConfig extends AbstractConfig {
                     in(NO_OPTIMIZATION, OPTIMIZE),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
-            .define(INPUT_BUFFER_MAX_BYTES_CONFIG,
-                    Type.LONG,
-                    512 * 1024 * 1024,
-                    Importance.MEDIUM,
-                    INPUT_BUFFER_MAX_BYTES_DOC)
 
             // LOW
 

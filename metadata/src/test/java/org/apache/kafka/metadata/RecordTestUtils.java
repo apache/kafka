@@ -205,12 +205,16 @@ public class RecordTestUtils {
     /**
      * Create a batch reader for testing.
      *
-     * @param lastOffset    The last offset of the given list of records.
-     * @param records       The records.
-     * @return              A batch reader which will return the given records.
+     * @param lastOffset the last offset of the given list of records
+     * @param appendTimestamp the append timestamp for the batches created
+     * @param records the records
+     * @return a batch reader which will return the given records
      */
-    public static BatchReader<ApiMessageAndVersion>
-            mockBatchReader(long lastOffset, List<ApiMessageAndVersion> records) {
+    public static BatchReader<ApiMessageAndVersion> mockBatchReader(
+        long lastOffset,
+        long appendTimestamp,
+        List<ApiMessageAndVersion> records
+    ) {
         List<Batch<ApiMessageAndVersion>> batches = new ArrayList<>();
         long offset = lastOffset - records.size() + 1;
         Iterator<ApiMessageAndVersion> iterator = records.iterator();
@@ -218,7 +222,7 @@ public class RecordTestUtils {
         assertTrue(iterator.hasNext()); // At least one record is required
         while (true) {
             if (!iterator.hasNext() || curRecords.size() >= 2) {
-                batches.add(Batch.data(offset, 0, 0, sizeInBytes(curRecords), curRecords));
+                batches.add(Batch.data(offset, 0, appendTimestamp, sizeInBytes(curRecords), curRecords));
                 if (!iterator.hasNext()) {
                     break;
                 }

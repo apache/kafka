@@ -20,6 +20,7 @@ package kafka.testkit;
 import kafka.server.MetaProperties;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -32,12 +33,24 @@ import java.util.TreeMap;
 
 public class TestKitNodes {
     public static class Builder {
+        private boolean coResident = false;
         private Uuid clusterId = null;
+        private MetadataVersion bootstrapMetadataVersion = null;
         private final NavigableMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
         private final NavigableMap<Integer, BrokerNode> brokerNodes = new TreeMap<>();
 
         public Builder setClusterId(Uuid clusterId) {
             this.clusterId = clusterId;
+            return this;
+        }
+
+        public Builder setBootstrapMetadataVersion(MetadataVersion metadataVersion) {
+            this.bootstrapMetadataVersion = metadataVersion;
+            return this;
+        }
+
+        public Builder setCoResident(boolean coResident) {
+            this.coResident = coResident;
             return this;
         }
 
@@ -71,7 +84,7 @@ public class TestKitNodes {
                 controllerNodes.pollFirstEntry();
             }
             while (controllerNodes.size() < numControllerNodes) {
-                int nextId = 3000;
+                int nextId = startControllerId();
                 if (!controllerNodes.isEmpty()) {
                     nextId = controllerNodes.lastKey() + 1;
                 }
@@ -89,7 +102,7 @@ public class TestKitNodes {
                 brokerNodes.pollFirstEntry();
             }
             while (brokerNodes.size() < numBrokerNodes) {
-                int nextId = 0;
+                int nextId = startBrokerId();
                 if (!brokerNodes.isEmpty()) {
                     nextId = brokerNodes.lastKey() + 1;
                 }
@@ -103,24 +116,49 @@ public class TestKitNodes {
             if (clusterId == null) {
                 clusterId = Uuid.randomUuid();
             }
-            return new TestKitNodes(clusterId, controllerNodes, brokerNodes);
+            if (bootstrapMetadataVersion == null) {
+                bootstrapMetadataVersion = MetadataVersion.latest();
+            }
+            return new TestKitNodes(clusterId, bootstrapMetadataVersion, controllerNodes, brokerNodes);
+        }
+
+        private int startBrokerId() {
+            return 0;
+        }
+
+        private int startControllerId() {
+            if (coResident) {
+                return startBrokerId();
+            }
+            return startBrokerId() + 3000;
         }
     }
 
     private final Uuid clusterId;
+    private final MetadataVersion bootstrapMetadataVersion;
     private final NavigableMap<Integer, ControllerNode> controllerNodes;
     private final NavigableMap<Integer, BrokerNode> brokerNodes;
 
+    public boolean isCoResidentNode(int node) {
+        return controllerNodes.containsKey(node) && brokerNodes.containsKey(node);
+    }
+
     private TestKitNodes(Uuid clusterId,
+                         MetadataVersion bootstrapMetadataVersion,
                          NavigableMap<Integer, ControllerNode> controllerNodes,
                          NavigableMap<Integer, BrokerNode> brokerNodes) {
         this.clusterId = clusterId;
+        this.bootstrapMetadataVersion = bootstrapMetadataVersion;
         this.controllerNodes = controllerNodes;
         this.brokerNodes = brokerNodes;
     }
 
     public Uuid clusterId() {
         return clusterId;
+    }
+
+    public MetadataVersion bootstrapMetadataVersion() {
+        return bootstrapMetadataVersion;
     }
 
     public Map<Integer, ControllerNode> controllerNodes() {
@@ -161,7 +199,7 @@ public class TestKitNodes {
                 node.incarnationId(), absolutize(baseDirectory, node.metadataDirectory()),
                 absolutize(baseDirectory, node.logDataDirectories()), node.propertyOverrides()));
         }
-        return new TestKitNodes(clusterId, newControllerNodes, newBrokerNodes);
+        return new TestKitNodes(clusterId, bootstrapMetadataVersion, newControllerNodes, newBrokerNodes);
     }
 
     private static List<String> absolutize(String base, Collection<String> directories) {

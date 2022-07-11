@@ -328,11 +328,14 @@ public interface Controller extends AclMutator, AutoCloseable {
      * Create partitions on certain topics.
      *
      * @param topics        The list of topics to create partitions for.
+     * @param validateOnly  If true, the request is validated, but no partitions will be created.
+     *
      * @return              A future yielding per-topic results.
      */
     CompletableFuture<List<CreatePartitionsTopicResult>> createPartitions(
         ControllerRequestContext context,
-        List<CreatePartitionsTopic> topics
+        List<CreatePartitionsTopic> topics,
+        boolean validateOnly
     );
 
     /**

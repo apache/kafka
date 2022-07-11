@@ -18,9 +18,9 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
-import org.apache.kafka.common.metadata.RemoveFeatureLevelRecord;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -29,8 +29,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
-import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_FEATURE_LEVEL_RECORD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
@@ -46,23 +44,25 @@ public class FeaturesImageTest {
         map1.put("foo", (short) 2);
         map1.put("bar", (short) 1);
         map1.put("baz", (short) 8);
-        IMAGE1 = new FeaturesImage(map1);
+        IMAGE1 = new FeaturesImage(map1, MetadataVersion.latest());
 
         DELTA1_RECORDS = new ArrayList<>();
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
             setName("foo").setFeatureLevel((short) 3),
-            FEATURE_LEVEL_RECORD.highestSupportedVersion()));
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveFeatureLevelRecord().
-            setName("bar"), REMOVE_FEATURE_LEVEL_RECORD.highestSupportedVersion()));
-        DELTA1_RECORDS.add(new ApiMessageAndVersion(new RemoveFeatureLevelRecord().
-            setName("baz"), REMOVE_FEATURE_LEVEL_RECORD.highestSupportedVersion()));
+            (short) 0));
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName("bar").setFeatureLevel((short) 0),
+            (short) 0));
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName("baz").setFeatureLevel((short) 0),
+            (short) 0));
 
         DELTA1 = new FeaturesDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
         Map<String, Short> map2 = new HashMap<>();
         map2.put("foo", (short) 3);
-        IMAGE2 = new FeaturesImage(map2);
+        IMAGE2 = new FeaturesImage(map2, MetadataVersion.latest());
     }
 
     @Test

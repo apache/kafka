@@ -194,7 +194,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
             case RUNNING:
             case SUSPENDED:
-                maybeWriteCheckpoint(enforceCheckpoint);
+                maybeCheckpoint(enforceCheckpoint);
 
                 log.debug("Finalized commit for {} task", state());
 

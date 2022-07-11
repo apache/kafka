@@ -41,12 +41,12 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
+import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.kstream.internals.TimeWindowedKStreamImpl;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
@@ -64,6 +64,8 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
@@ -83,6 +85,9 @@ import static org.junit.Assert.assertThrows;
 @Category({IntegrationTest.class})
 @RunWith(Parameterized.class)
 public class TimeWindowedKStreamIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
+
     private static final int NUM_BROKERS = 1;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS,
@@ -143,7 +148,7 @@ public class TimeWindowedKStreamIntegrationTest {
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
@@ -176,12 +181,10 @@ public class TimeWindowedKStreamIntegrationTest {
         );
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, 10L);
-        // TODO: remove this cast https://issues.apache.org/jira/browse/KAFKA-13800
-        final TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream = (TimeWindowedKStreamImpl<String, String, TimeWindow>) builder
-            .stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
+        builder.stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
-            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(10L)).advanceBy(ofMillis(5L)));
-        windowedStream.emitStrategy(emitStrategy)
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(10L)).advanceBy(ofMillis(5L)))
+            .emitStrategy(emitStrategy)
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
@@ -243,11 +246,10 @@ public class TimeWindowedKStreamIntegrationTest {
         );
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, 10L);
-        final TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream = (TimeWindowedKStreamImpl<String, String, TimeWindow>) builder
-            .stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
+        builder.stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
-            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10L), ofMillis(5)).advanceBy(ofMillis(5L)));
-        windowedStream.emitStrategy(emitStrategy)
+            .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10L), ofMillis(5)).advanceBy(ofMillis(5L)))
+            .emitStrategy(emitStrategy)
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
@@ -327,11 +329,9 @@ public class TimeWindowedKStreamIntegrationTest {
             .join(streamTwo, (v1, v2) -> v1 + "," + v2,
                 JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(2)));
 
-        final TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream = (TimeWindowedKStreamImpl<String, String, TimeWindow>) joinedStream
-            .groupByKey()
-            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(10L)).advanceBy(ofMillis(5L)));
-
-        windowedStream.emitStrategy(emitStrategy)
+        joinedStream.groupByKey()
+            .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(10L)).advanceBy(ofMillis(5L)))
+            .emitStrategy(emitStrategy)
             .aggregate(
                 MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
@@ -432,9 +432,7 @@ public class TimeWindowedKStreamIntegrationTest {
 
     @Test
     public void shouldThrowUnlimitedWindows() {
-        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, 10L);
-        final TimeWindowedKStreamImpl<String, String, TimeWindow> windowedStream = (TimeWindowedKStreamImpl<String, String, TimeWindow>) builder
-            .stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
+        final TimeWindowedKStream<String, String> windowedStream = builder.stream(streamOneInput, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey()
             .windowedBy(
             UnlimitedWindows.of().startOn(ofEpochMilli(0))

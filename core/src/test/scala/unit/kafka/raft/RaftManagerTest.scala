@@ -18,7 +18,6 @@ package kafka.raft
 
 import java.util.concurrent.CompletableFuture
 import java.util.Properties
-
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.tools.TestRaftServer.ByteArraySerde

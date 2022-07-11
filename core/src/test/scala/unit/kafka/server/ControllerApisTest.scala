@@ -17,12 +17,6 @@
 
 package kafka.server
 
-import java.net.InetAddress
-import java.util
-import java.util.Collections.singletonList
-import java.util.Properties
-import java.util.concurrent.{CompletableFuture, ExecutionException}
-
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
@@ -45,7 +39,7 @@ import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterConfigsResourceCollection, AlterableConfig, AlterableConfigCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse
-import org.apache.kafka.common.message.{CreateTopicsRequestData, _}
+import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
@@ -53,16 +47,23 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.{ElectionType, Uuid}
+import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.controller.{Controller, ControllerRequestContext}
-import org.apache.kafka.controller.ControllerRequestContext.ANONYMOUS_CONTEXT
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 
+import java.net.InetAddress
+import java.util
+import java.util.Collections.singletonList
+import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
+import java.util.{Collections, Properties}
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -171,6 +172,41 @@ class ControllerApisTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.any()
     )
+  }
+
+  @Test
+  def testFetchLocalTimeComputedCorrectly(): Unit = {
+    val localTimeDurationMs = 5
+    val initialTimeNanos = time.nanoseconds()
+    val initialTimeMs = time.milliseconds()
+
+    when(
+      raftManager.handleRequest(
+        any(classOf[RequestHeader]),
+        any(classOf[ApiMessage]),
+        any(classOf[Long])
+      )
+    ).thenAnswer { _ =>
+      time.sleep(localTimeDurationMs)
+      new CompletableFuture[ApiMessage]()
+    }
+
+    // Local time should be updated when `ControllerApis.handle` returns
+    val fetchRequestData = new FetchRequestData()
+    val request = buildRequest(new FetchRequest(fetchRequestData, ApiKeys.FETCH.latestVersion))
+    createControllerApis(None, new MockController.Builder().build())
+      .handle(request, RequestLocal.NoCaching)
+
+    verify(raftManager).handleRequest(
+      ArgumentMatchers.eq(request.header),
+      ArgumentMatchers.eq(fetchRequestData),
+      ArgumentMatchers.eq(initialTimeMs)
+    )
+
+    assertEquals(localTimeDurationMs, TimeUnit.MILLISECONDS.convert(
+      request.apiLocalCompleteTimeNanos - initialTimeNanos,
+      TimeUnit.NANOSECONDS
+    ))
   }
 
   @Test
@@ -297,7 +333,7 @@ class ControllerApisTest {
     assertThrows(classOf[ClusterAuthorizationException], () => createControllerApis(
       Some(createDenyAllAuthorizer()), new MockController.Builder().build()).
         handleAlterPartitionRequest(buildRequest(new AlterPartitionRequest.Builder(
-          new AlterPartitionRequestData()).build(0))))
+          new AlterPartitionRequestData(), false).build(0))))
   }
 
   @Test
@@ -717,11 +753,10 @@ class ControllerApisTest {
         _ => Set("foo", "bar")))
   }
 
-  @Test
-  def testCreatePartitionsRequest(): Unit = {
-    val controller = new MockController.Builder().
-      newInitialTopic("foo", Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
-      newInitialTopic("bar", Uuid.fromString("VlFu5c51ToiNx64wtwkhQw")).build()
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testCreatePartitionsRequest(validateOnly: Boolean): Unit = {
+    val controller = mock(classOf[Controller])
     val controllerApis = createControllerApis(None, controller)
     val request = new CreatePartitionsRequestData()
     request.topics().add(new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(5))
@@ -729,9 +764,23 @@ class ControllerApisTest {
     request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
     request.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(5))
     request.topics().add(new CreatePartitionsTopic().setName("baz").setAssignments(null).setCount(5))
+    request.setValidateOnly(validateOnly)
+
+    // Check if the controller is called correctly with the 'validateOnly' field set appropriately.
+    when(controller.createPartitions(
+      any(),
+      ArgumentMatchers.eq(
+        Collections.singletonList(
+          new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(5))),
+      ArgumentMatchers.eq(validateOnly))).thenReturn(CompletableFuture
+      .completedFuture(Collections.singletonList(
+        new CreatePartitionsTopicResult().setName("foo").
+          setErrorCode(NONE.code()).
+          setErrorMessage(null)
+      )))
     assertEquals(Set(new CreatePartitionsTopicResult().setName("foo").
-        setErrorCode(NONE.code()).
-        setErrorMessage(null),
+      setErrorCode(NONE.code()).
+      setErrorMessage(null),
       new CreatePartitionsTopicResult().setName("bar").
         setErrorCode(INVALID_REQUEST.code()).
         setErrorMessage("Duplicate topic name."),

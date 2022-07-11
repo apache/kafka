@@ -120,10 +120,7 @@ public abstract class SslSelectorTest extends SelectorTest {
         Selector selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
 
         selector.connect(node, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
-        while (!selector.connected().contains(node))
-            selector.poll(10000L);
-        while (!selector.isChannelReady(node))
-            selector.poll(10000L);
+        NetworkTestUtils.waitForChannelReady(selector, node);
 
         selector.send(createSend(node, request));
 
@@ -365,7 +362,7 @@ public abstract class SslSelectorTest extends SelectorTest {
             boolean muteSocket = false;
 
             public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine,
-                                         ChannelMetadataRegistry metadataRegistry) throws IOException {
+                                         ChannelMetadataRegistry metadataRegistry) {
                 super(channelId, key, sslEngine, metadataRegistry);
                 transportLayers.put(channelId, this);
             }

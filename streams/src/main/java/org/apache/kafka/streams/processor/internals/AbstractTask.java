@@ -88,7 +88,8 @@ public abstract class AbstractTask implements Task {
      * @throws StreamsException fatal error when flushing the state store, for example sending changelog records failed
      *                          or flushing state store get IO errors; such error should cause the thread to die
      */
-    protected void maybeWriteCheckpoint(final boolean enforceCheckpoint) {
+    @Override
+    public void maybeCheckpoint(final boolean enforceCheckpoint) {
         final Map<TopicPartition, Long> offsetSnapshot = stateMgr.changelogOffsets();
         if (StateManagerUtil.checkpointNeeded(enforceCheckpoint, offsetSnapshotSinceLastFlush, offsetSnapshot)) {
             // the state's current offset would be used to checkpoint
@@ -97,7 +98,6 @@ public abstract class AbstractTask implements Task {
             offsetSnapshotSinceLastFlush = new HashMap<>(offsetSnapshot);
         }
     }
-
 
     @Override
     public TaskId id() {

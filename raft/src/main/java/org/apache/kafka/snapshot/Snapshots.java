@@ -30,7 +30,7 @@ import java.util.Optional;
 
 public final class Snapshots {
     private static final Logger log = LoggerFactory.getLogger(Snapshots.class);
-    private static final String SUFFIX = ".checkpoint";
+    public static final String SUFFIX = ".checkpoint";
     private static final String PARTIAL_SUFFIX = String.format("%s.part", SUFFIX);
     private static final String DELETE_SUFFIX = String.format("%s.deleted", SUFFIX);
 

@@ -22,14 +22,13 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-
-import java.util.HashSet;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -38,9 +37,8 @@ import java.util.stream.Collectors;
 class Tasks {
     private final Logger log;
     private final TopologyMetadata topologyMetadata;
-    private final StreamsMetricsImpl streamsMetrics;
 
-    private final Map<TaskId, Task> allTasksPerId = new TreeMap<>();
+    private final Map<TaskId, Task> allTasksPerId = Collections.synchronizedSortedMap(new TreeMap<>());
     private final Map<TaskId, Task> readOnlyTasksPerId = Collections.unmodifiableMap(allTasksPerId);
     private final Collection<Task> readOnlyTasks = Collections.unmodifiableCollection(allTasksPerId.values());
 
@@ -68,14 +66,12 @@ class Tasks {
 
     Tasks(final LogContext logContext,
           final TopologyMetadata topologyMetadata,
-          final StreamsMetricsImpl streamsMetrics,
           final ActiveTaskCreator activeTaskCreator,
           final StandbyTaskCreator standbyTaskCreator) {
 
         log = logContext.logger(getClass());
 
         this.topologyMetadata = topologyMetadata;
-        this.streamsMetrics = streamsMetrics;
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
     }
@@ -271,6 +267,20 @@ class Tasks {
 
     Collection<Task> allTasks() {
         return readOnlyTasks;
+    }
+
+    Collection<Task> notPausedActiveTasks() {
+        return new ArrayList<>(readOnlyActiveTasks)
+            .stream()
+            .filter(t -> !topologyMetadata.isPaused(t.id().topologyName()))
+            .collect(Collectors.toList());
+    }
+
+    Collection<Task> notPausedTasks() {
+        return new ArrayList<>(readOnlyTasks)
+            .stream()
+            .filter(t -> !topologyMetadata.isPaused(t.id().topologyName()))
+            .collect(Collectors.toList());
     }
 
     Set<TaskId> activeTaskIds() {

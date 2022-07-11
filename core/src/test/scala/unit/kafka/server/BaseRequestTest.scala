@@ -83,6 +83,20 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
     }.map(_.socketServer).getOrElse(throw new IllegalStateException(s"Could not find broker with id $brokerId"))
   }
 
+  /**
+   * Return the socket server where admin request to be sent.
+   *
+   * For KRaft clusters that is any broker as the broker will forward the request to the active
+   * controller. For Legacy clusters that is the controller broker.
+   */
+  def adminSocketServer: SocketServer = {
+    if (isKRaftTest()) {
+      anySocketServer
+    } else {
+      controllerSocketServer
+    }
+  }
+
   def connect(socketServer: SocketServer = anySocketServer,
               listenerName: ListenerName = listenerName): Socket = {
     new Socket("localhost", socketServer.boundPort(listenerName))

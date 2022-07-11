@@ -37,6 +37,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
@@ -48,6 +49,8 @@ import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.internals.PrefixedSessionKeySchemas.KeyFirstSessionKeySchema;
+import org.apache.kafka.streams.state.internals.PrefixedSessionKeySchemas.TimeFirstSessionKeySchema;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
 import org.apache.kafka.streams.state.internals.SegmentedBytesStore.KeySchema;
@@ -98,7 +101,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
     private AbstractDualSchemaRocksDBSegmentedBytesStore<S> bytesStore;
     private File stateDir;
     private final Window[] windows = new Window[4];
-    private Window nextSegmentWindow;
+    private Window nextSegmentWindow, startEdgeWindow, endEdgeWindow;
+    private final long startEdgeTime = Long.MAX_VALUE - 700L;
+    private final long endEdgeTime = Long.MAX_VALUE - 600L;
 
     final long retention = 1000;
     final long segmentInterval = 60_000L;
@@ -106,6 +111,20 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
 
     @Before
     public void before() {
+        if (getBaseSchema() instanceof TimeFirstSessionKeySchema) {
+            windows[0] = new SessionWindow(10L, 10L);
+            windows[1] = new SessionWindow(500L, 1000L);
+            windows[2] = new SessionWindow(1_000L, 1_500L);
+            windows[3] = new SessionWindow(30_000L, 60_000L);
+            // All four of the previous windows will go into segment 1.
+            // The nextSegmentWindow is computed be a high enough time that when it gets written
+            // to the segment store, it will advance stream time past the first segment's retention time and
+            // expire it.
+            nextSegmentWindow = new SessionWindow(segmentInterval + retention, segmentInterval + retention);
+
+            startEdgeWindow = new SessionWindow(0L, startEdgeTime);
+            endEdgeWindow = new SessionWindow(endEdgeTime, Long.MAX_VALUE);
+        }
         if (getBaseSchema() instanceof TimeFirstWindowKeySchema) {
             windows[0] = timeWindowForSize(10L, windowSizeForTimeWindow);
             windows[1] = timeWindowForSize(500L, windowSizeForTimeWindow);
@@ -116,6 +135,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
             // to the segment store, it will advance stream time past the first segment's retention time and
             // expire it.
             nextSegmentWindow = timeWindowForSize(segmentInterval + retention, windowSizeForTimeWindow);
+
+            startEdgeWindow = timeWindowForSize(startEdgeTime, windowSizeForTimeWindow);
+            endEdgeWindow = timeWindowForSize(endEdgeTime, windowSizeForTimeWindow);
         }
 
         bytesStore = getBytesStore();
@@ -286,7 +308,369 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
     }
 
     @Test
+    public void shouldPutAndFetchEdgeSingleKey() {
+        final String keyA = "a";
+        final String keyB = "b";
+
+        final Bytes serializedKeyAStart = serializeKey(new Windowed<>(keyA, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyAEnd = serializeKey(new Windowed<>(keyA, endEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBStart = serializeKey(new Windowed<>(keyB, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBEnd = serializeKey(new Windowed<>(keyB, endEdgeWindow), false,
+            Integer.MAX_VALUE);
+
+        bytesStore.put(serializedKeyAStart, serializeValue(10));
+        bytesStore.put(serializedKeyAEnd, serializeValue(50));
+        bytesStore.put(serializedKeyBStart, serializeValue(100));
+        bytesStore.put(serializedKeyBEnd, serializeValue(150));
+
+        // Can fetch start/end edge for single key
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
+            Bytes.wrap(keyA.getBytes()), startEdgeTime, endEdgeTime)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        // Can fetch start/end edge for single key
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
+            Bytes.wrap(keyB.getBytes()), startEdgeTime, endEdgeTime)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        // Can fetch from 0 to max for single key
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
+            Bytes.wrap(keyA.getBytes()), 0, Long.MAX_VALUE)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        // Can fetch from 0 to max for single key
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
+            Bytes.wrap(keyB.getBytes()), 0, Long.MAX_VALUE)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+    }
+
+    @Test
+    public void shouldPutAndFetchEdgeKeyRange() {
+        final String keyA = "a";
+        final String keyB = "b";
+
+        final Bytes serializedKeyAStart = serializeKey(new Windowed<>(keyA, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyAEnd = serializeKey(new Windowed<>(keyA, endEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBStart = serializeKey(new Windowed<>(keyB, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBEnd = serializeKey(new Windowed<>(keyB, endEdgeWindow), false,
+            Integer.MAX_VALUE);
+
+        bytesStore.put(serializedKeyAStart, serializeValue(10));
+        bytesStore.put(serializedKeyAEnd, serializeValue(50));
+        bytesStore.put(serializedKeyBStart, serializeValue(100));
+        bytesStore.put(serializedKeyBEnd, serializeValue(150));
+        // Can fetch from start/end for key range
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
+            Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), startEdgeTime, endEdgeTime)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = getIndexSchema() == null ? asList(
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+            ) : asList(
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        // Can fetch from 0 to max for key range
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
+            Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), 0L, Long.MAX_VALUE)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = getIndexSchema() == null ? asList(
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+            ) : asList(
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        // KeyB should be ignored and KeyA should be included even in storage
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
+            null, Bytes.wrap(keyA.getBytes()), startEdgeTime, endEdgeTime - 1L)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
+            Bytes.wrap(keyB.getBytes()), null, startEdgeTime + 1, endEdgeTime)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
+            null, null, 0, Long.MAX_VALUE)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = getIndexSchema() == null ? asList(
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+            ) : asList(
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
+            null, null, startEdgeTime, endEdgeTime)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = getIndexSchema() == null ? asList(
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+            ) : asList(
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+    }
+
+    @Test
+    public void shouldPutAndBackwardFetchEdgeSingleKey() {
+        final String keyA = "a";
+        final String keyB = "b";
+
+        final Bytes serializedKeyAStart = serializeKey(new Windowed<>(keyA, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyAEnd = serializeKey(new Windowed<>(keyA, endEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBStart = serializeKey(new Windowed<>(keyB, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBEnd = serializeKey(new Windowed<>(keyB, endEdgeWindow), false,
+            Integer.MAX_VALUE);
+
+        bytesStore.put(serializedKeyAStart, serializeValue(10));
+        bytesStore.put(serializedKeyAEnd, serializeValue(50));
+        bytesStore.put(serializedKeyBStart, serializeValue(100));
+        bytesStore.put(serializedKeyBEnd, serializeValue(150));
+
+        // Can fetch start/end edge for single key
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
+            Bytes.wrap(keyA.getBytes()), startEdgeTime, endEdgeTime)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        // Can fetch start/end edge for single key
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
+            Bytes.wrap(keyB.getBytes()), startEdgeTime, endEdgeTime)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        // Can fetch from 0 to max for single key
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
+            Bytes.wrap(keyA.getBytes()), 0, Long.MAX_VALUE)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        // Can fetch from 0 to max for single key
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
+            Bytes.wrap(keyB.getBytes()), 0, Long.MAX_VALUE)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+    }
+
+    @Test
+    public void shouldPutAndBackwardFetchEdgeKeyRange() {
+        final String keyA = "a";
+        final String keyB = "b";
+
+        final Bytes serializedKeyAStart = serializeKey(new Windowed<>(keyA, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyAEnd = serializeKey(new Windowed<>(keyA, endEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBStart = serializeKey(new Windowed<>(keyB, startEdgeWindow), false,
+            Integer.MAX_VALUE);
+        final Bytes serializedKeyBEnd = serializeKey(new Windowed<>(keyB, endEdgeWindow), false,
+            Integer.MAX_VALUE);
+
+        bytesStore.put(serializedKeyAStart, serializeValue(10));
+        bytesStore.put(serializedKeyAEnd, serializeValue(50));
+        bytesStore.put(serializedKeyBStart, serializeValue(100));
+        bytesStore.put(serializedKeyBEnd, serializeValue(150));
+
+        // Can fetch from start/end for key range
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
+            Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), startEdgeTime, endEdgeTime)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = getIndexSchema() == null ? asList(
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+            ) : asList(
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        // Can fetch from 0 to max for key range
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
+            Bytes.wrap(keyA.getBytes()), Bytes.wrap(keyB.getBytes()), 0L, Long.MAX_VALUE)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = getIndexSchema() == null ? asList(
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+            ) : asList(
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        // KeyB should be ignored and KeyA should be included even in storage
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
+            null, Bytes.wrap(keyA.getBytes()), startEdgeTime, endEdgeTime - 1L)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
+            Bytes.wrap(keyB.getBytes()), null, startEdgeTime + 1, endEdgeTime)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
+            null, null, 0, Long.MAX_VALUE)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = getIndexSchema() == null ? asList(
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+            ) : asList(
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+            );
+            assertEquals(expected, toList(values));
+        }
+
+        try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
+            null, null, startEdgeTime, endEdgeTime)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = getIndexSchema() == null ? asList(
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+            ) : asList(
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L),
+                KeyValue.pair(new Windowed<>(keyB, startEdgeWindow), 100L),
+                KeyValue.pair(new Windowed<>(keyA, endEdgeWindow), 50L),
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+            );
+            assertEquals(expected, toList(values));
+        }
+    }
+
+    @Test
     public void shouldPutAndFetchWithPrefixKey() {
+        // Only for TimeFirstWindowKeySchema schema
+        if (!(getBaseSchema() instanceof TimeFirstWindowKeySchema)) {
+            return;
+        }
         final String keyA = "a";
         final String keyB = "aa";
         final String keyC = "aaa";
@@ -365,6 +749,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
 
     @Test
     public void shouldPutAndBackwardFetchWithPrefix() {
+        // Only for TimeFirstWindowKeySchema schema
+        if (!(getBaseSchema() instanceof TimeFirstWindowKeySchema)) {
+            return;
+        }
+
         final String keyA = "a";
         final String keyB = "aa";
         final String keyC = "aaa";
@@ -1081,10 +1470,16 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
 
     private Bytes serializeKey(final Windowed<String> key, final boolean changeLog, final int seq) {
         final StateSerdes<String, Long> stateSerdes = StateSerdes.withBuiltinTypes("dummy", String.class, Long.class);
-        if (changeLog) {
-            return WindowKeySchema.toStoreKeyBinary(key, seq, stateSerdes);
-        } else if (getBaseSchema() instanceof TimeFirstWindowKeySchema) {
+        if (getBaseSchema() instanceof TimeFirstWindowKeySchema) {
+            if (changeLog) {
+                return WindowKeySchema.toStoreKeyBinary(key, seq, stateSerdes);
+            }
             return TimeFirstWindowKeySchema.toStoreKeyBinary(key, seq, stateSerdes);
+        } else if (getBaseSchema() instanceof TimeFirstSessionKeySchema) {
+            if (changeLog) {
+                return Bytes.wrap(SessionKeySchema.toBinary(key, stateSerdes.keySerializer(), "dummy"));
+            }
+            return Bytes.wrap(TimeFirstSessionKeySchema.toBinary(key, stateSerdes.keySerializer(), "dummy"));
         } else {
             throw new IllegalStateException("Unrecognized serde schema");
         }
@@ -1094,6 +1489,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         final StateSerdes<String, Long> stateSerdes = StateSerdes.withBuiltinTypes("dummy", String.class, Long.class);
         if (getIndexSchema() instanceof KeyFirstWindowKeySchema) {
             return KeyFirstWindowKeySchema.toStoreKeyBinary(key, 0, stateSerdes);
+        } else if (getIndexSchema() instanceof KeyFirstSessionKeySchema) {
+            return Bytes.wrap(KeyFirstSessionKeySchema.toBinary(key, stateSerdes.keySerializer(), "dummy"));
         } else {
             throw new IllegalStateException("Unrecognized serde schema");
         }
@@ -1116,6 +1513,12 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
                         stateSerdes.keyDeserializer(),
                         stateSerdes.topic()
                     ),
+                    stateSerdes.valueDeserializer().deserialize("dummy", next.value)
+                );
+                results.add(deserialized);
+            } else if (getBaseSchema() instanceof TimeFirstSessionKeySchema) {
+                final KeyValue<Windowed<String>, Long> deserialized = KeyValue.pair(
+                    TimeFirstSessionKeySchema.from(next.key.get(), stateSerdes.keyDeserializer(), "dummy"),
                     stateSerdes.valueDeserializer().deserialize("dummy", next.value)
                 );
                 results.add(deserialized);

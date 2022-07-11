@@ -24,6 +24,7 @@ import org.apache.kafka.snapshot.SnapshotWriter;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 
 public interface RaftClient<T> extends AutoCloseable {
@@ -114,6 +115,11 @@ public interface RaftClient<T> extends AutoCloseable {
     void unregister(Listener<T> listener);
 
     /**
+     * Returns the current high water mark, or OptionalLong.empty if it is not known.
+     */
+    OptionalLong highWatermark();
+
+    /**
      * Return the current {@link LeaderAndEpoch}.
      *
      * @return the current leader and epoch
@@ -199,8 +205,11 @@ public interface RaftClient<T> extends AutoCloseable {
      * Notification of successful resignation can be observed through
      * {@link Listener#handleLeaderChange(LeaderAndEpoch)}.
      *
-     * @param epoch the epoch to resign from. If this does not match the current epoch, this
+     * @param epoch the epoch to resign from. If this epoch is smaller than the current epoch, this
      *              call will be ignored.
+     *
+     * @throws IllegalArgumentException - if the passed epoch is invalid (negative or greater than current) or
+     * if the listener is not the leader associated with this epoch.
      */
     void resign(int epoch);
 

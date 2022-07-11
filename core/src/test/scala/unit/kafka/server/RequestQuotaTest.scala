@@ -599,7 +599,7 @@ class RequestQuotaTest extends BaseRequestTest {
             tp, 10, 5, Collections.singletonList(3)))
 
         case ApiKeys.ALTER_PARTITION =>
-          new AlterPartitionRequest.Builder(new AlterPartitionRequestData())
+          new AlterPartitionRequest.Builder(new AlterPartitionRequestData(), true)
 
         case ApiKeys.UPDATE_FEATURES =>
           new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())

@@ -163,7 +163,7 @@ class ControllerChannelManagerTest {
   def testLeaderAndIsrInterBrokerProtocolVersion(): Unit = {
     testLeaderAndIsrRequestFollowsInterBrokerProtocolVersion(MetadataVersion.latest, ApiKeys.LEADER_AND_ISR.latestVersion)
 
-    for (metadataVersion <- MetadataVersion.VALUES) {
+    for (metadataVersion <- MetadataVersion.VERSIONS) {
       val leaderAndIsrRequestVersion: Short =
         if (metadataVersion.isAtLeast(IBP_3_2_IV0)) 6
         else if (metadataVersion.isAtLeast(IBP_2_8_IV1)) 5
@@ -380,7 +380,7 @@ class ControllerChannelManagerTest {
   def testUpdateMetadataInterBrokerProtocolVersion(): Unit = {
     testUpdateMetadataFollowsInterBrokerProtocolVersion(MetadataVersion.latest, ApiKeys.UPDATE_METADATA.latestVersion)
 
-    for (metadataVersion <- MetadataVersion.VALUES) {
+    for (metadataVersion <- MetadataVersion.VERSIONS) {
       val updateMetadataRequestVersion: Short =
         if (metadataVersion.isAtLeast(IBP_2_8_IV1)) 7
         else if (metadataVersion.isAtLeast(IBP_2_4_IV1)) 6
@@ -474,7 +474,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaRequestsWhileTopicQueuedForDeletion(): Unit = {
-    for (metadataVersion <- MetadataVersion.VALUES) {
+    for (metadataVersion <- MetadataVersion.VERSIONS) {
       testStopReplicaRequestsWhileTopicQueuedForDeletion(metadataVersion)
     }
   }
@@ -521,7 +521,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaRequestsWhileTopicDeletionStarted(): Unit = {
-    for (metadataVersion <- MetadataVersion.VALUES) {
+    for (metadataVersion <- MetadataVersion.VERSIONS) {
       testStopReplicaRequestsWhileTopicDeletionStarted(metadataVersion)
     }
   }
@@ -576,7 +576,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaRequestWithoutDeletePartitionWhileTopicDeletionStarted(): Unit = {
-    for (metadataVersion <- MetadataVersion.VALUES) {
+    for (metadataVersion <- MetadataVersion.VERSIONS) {
       testStopReplicaRequestWithoutDeletePartitionWhileTopicDeletionStarted(metadataVersion)
     }
   }
@@ -626,7 +626,7 @@ class ControllerChannelManagerTest {
     testMixedDeleteAndNotDeleteStopReplicaRequests(MetadataVersion.latest,
       ApiKeys.STOP_REPLICA.latestVersion)
 
-    for (metadataVersion <- MetadataVersion.VALUES) {
+    for (metadataVersion <- MetadataVersion.VERSIONS) {
       if (metadataVersion.isLessThan(IBP_2_2_IV0))
         testMixedDeleteAndNotDeleteStopReplicaRequests(metadataVersion, 0.toShort)
       else if (metadataVersion.isLessThan(IBP_2_4_IV1))
@@ -775,7 +775,7 @@ class ControllerChannelManagerTest {
   def testStopReplicaInterBrokerProtocolVersion(): Unit = {
     testStopReplicaFollowsInterBrokerProtocolVersion(MetadataVersion.latest, ApiKeys.STOP_REPLICA.latestVersion)
 
-    for (metadataVersion <- MetadataVersion.VALUES) {
+    for (metadataVersion <- MetadataVersion.VERSIONS) {
       if (metadataVersion.isLessThan(IBP_2_2_IV0))
         testStopReplicaFollowsInterBrokerProtocolVersion(metadataVersion, 0.toShort)
       else if (metadataVersion.isLessThan(IBP_2_4_IV1))

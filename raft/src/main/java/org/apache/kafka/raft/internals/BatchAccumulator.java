@@ -104,7 +104,8 @@ public class BatchAccumulator<T> implements Closeable {
      * @throws RecordBatchTooLargeException if the size of one record T is greater than the maximum
      *         batch size; if this exception is throw some of the elements in records may have
      *         been committed
-     * @throws NotLeaderException if the epoch doesn't match the leader epoch
+     * @throws NotLeaderException if the epoch is less than the leader epoch
+     * @throws IllegalArgumentException if the epoch is invalid (greater than the leader epoch)
      * @throws BufferAllocationException if we failed to allocate memory for the records
      */
     public long append(int epoch, List<T> records) {
@@ -123,7 +124,8 @@ public class BatchAccumulator<T> implements Closeable {
      * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
-     * @throws NotLeaderException if the epoch doesn't match the leader epoch
+     * @throws NotLeaderException if the epoch is less than the leader epoch
+     * @throws IllegalArgumentException if the epoch is invalid (greater than the leader epoch)
      * @throws BufferAllocationException if we failed to allocate memory for the records
      */
     public long appendAtomic(int epoch, List<T> records) {
@@ -132,7 +134,8 @@ public class BatchAccumulator<T> implements Closeable {
 
     private long append(int epoch, List<T> records, boolean isAtomic) {
         if (epoch < this.epoch) {
-            throw new NotLeaderException("Append failed because the epoch doesn't match");
+            throw new NotLeaderException("Append failed because the given epoch " + epoch + " is stale. " +
+                    "Current leader epoch = " + this.epoch());
         } else if (epoch > this.epoch) {
             throw new IllegalArgumentException("Attempt to append from epoch " + epoch +
                 " which is larger than the current epoch " + this.epoch);
@@ -189,7 +192,7 @@ public class BatchAccumulator<T> implements Closeable {
             if (bytesNeeded.isPresent() && bytesNeeded.getAsInt() > maxBatchSize) {
                 throw new RecordBatchTooLargeException(
                     String.format(
-                        "The total record(s) size of %s exceeds the maximum allowed batch size of %s",
+                        "The total record(s) size of %d exceeds the maximum allowed batch size of %d",
                         bytesNeeded.getAsInt(),
                         maxBatchSize
                     )

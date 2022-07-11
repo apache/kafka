@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -26,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-
 
 /**
  * Represents the cluster in the metadata image.
@@ -54,10 +54,10 @@ public final class ClusterImage {
         return brokers.get(nodeId);
     }
 
-    public void write(Consumer<List<ApiMessageAndVersion>> out) {
+    public void write(Consumer<List<ApiMessageAndVersion>> out, MetadataVersion metadataVersion) {
         List<ApiMessageAndVersion> batch = new ArrayList<>();
         for (BrokerRegistration broker : brokers.values()) {
-            batch.add(broker.toRecord());
+            batch.add(broker.toRecord(metadataVersion));
         }
         out.accept(batch);
     }

@@ -33,17 +33,17 @@ import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFir
 
 
 public class RocksDBTimeOrderedWindowStore
-    extends WrappedStateStore<RocksDBTimeOrderedSegmentedBytesStore, Object, Object>
+    extends WrappedStateStore<RocksDBTimeOrderedWindowSegmentedBytesStore, Object, Object>
     implements WindowStore<Bytes, byte[]>, TimestampedBytesStore {
 
     private final boolean retainDuplicates;
     private final long windowSize;
 
-    private StateStoreContext stateStoreContext;
     private int seqnum = 0;
+    private StateStoreContext stateStoreContext;
 
     RocksDBTimeOrderedWindowStore(
-        final RocksDBTimeOrderedSegmentedBytesStore store,
+        final RocksDBTimeOrderedWindowSegmentedBytesStore store,
         final boolean retainDuplicates,
         final long windowSize
     ) {

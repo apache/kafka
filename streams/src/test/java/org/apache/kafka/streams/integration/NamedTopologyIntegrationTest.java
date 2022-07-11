@@ -56,6 +56,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
@@ -70,7 +71,10 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
+
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Iterator;
@@ -101,7 +105,10 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 
+@Category(IntegrationTest.class)
 public class NamedTopologyIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private static final Duration STARTUP_TIMEOUT = Duration.ofSeconds(45);
     
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
@@ -813,7 +820,7 @@ public class NamedTopologyIntegrationTest {
         try {
             final AtomicInteger noOutputExpected = new AtomicInteger(0);
             final AtomicInteger outputExpected = new AtomicInteger(0);
-            props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+            props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
             props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 15000L);
             props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath());
             props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);

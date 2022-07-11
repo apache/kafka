@@ -16,6 +16,7 @@
  */
 package kafka.server
 
+import kafka.server.metadata.ZkMetadataCache
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
@@ -30,17 +31,16 @@ import scala.jdk.CollectionConverters._
 
 class ApiVersionManagerTest {
   private val brokerFeatures = BrokerFeatures.createDefault()
-  private val featureCache = new FinalizedFeatureCache(brokerFeatures)
+  private val metadataCache = new ZkMetadataCache(1, MetadataVersion.latest(), brokerFeatures)
 
   @ParameterizedTest
   @EnumSource(classOf[ListenerType])
   def testApiScope(apiScope: ListenerType): Unit = {
     val versionManager = new DefaultApiVersionManager(
       listenerType = apiScope,
-      interBrokerProtocolVersion = MetadataVersion.latest,
       forwardingManager = None,
       features = brokerFeatures,
-      featureCache = featureCache
+      metadataCache = metadataCache
     )
     assertEquals(ApiKeys.apisForListener(apiScope).asScala, versionManager.enabledApis)
     assertTrue(ApiKeys.apisForListener(apiScope).asScala.forall(versionManager.isApiEnabled))
@@ -61,10 +61,9 @@ class ApiVersionManagerTest {
 
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
-      interBrokerProtocolVersion = MetadataVersion.latest,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
-      featureCache = featureCache
+      metadataCache = metadataCache
     )
 
     val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0)
@@ -82,10 +81,9 @@ class ApiVersionManagerTest {
     for (forwardingManagerOpt <- Seq(Some(forwardingManager), None)) {
       val versionManager = new DefaultApiVersionManager(
         listenerType = ListenerType.BROKER,
-        interBrokerProtocolVersion = MetadataVersion.latest,
         forwardingManager = forwardingManagerOpt,
         features = brokerFeatures,
-        featureCache = featureCache
+        metadataCache = metadataCache
       )
       assertFalse(versionManager.isApiEnabled(ApiKeys.ENVELOPE))
       assertFalse(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
@@ -104,10 +102,9 @@ class ApiVersionManagerTest {
 
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
-      interBrokerProtocolVersion = MetadataVersion.latest,
       forwardingManager = Some(forwardingManager),
       features = brokerFeatures,
-      featureCache = featureCache
+      metadataCache = metadataCache
     )
     assertTrue(versionManager.isApiEnabled(ApiKeys.ENVELOPE))
     assertTrue(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
@@ -123,10 +120,9 @@ class ApiVersionManagerTest {
   def testEnvelopeDisabledWhenForwardingManagerEmpty(): Unit = {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
-      interBrokerProtocolVersion = MetadataVersion.latest,
       forwardingManager = None,
       features = brokerFeatures,
-      featureCache = featureCache
+      metadataCache = metadataCache
     )
     assertFalse(versionManager.isApiEnabled(ApiKeys.ENVELOPE))
     assertFalse(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))

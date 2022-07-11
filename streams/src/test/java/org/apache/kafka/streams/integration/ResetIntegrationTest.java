@@ -32,8 +32,10 @@ import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -55,7 +57,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
  */
 @Category({IntegrationTest.class})
 public class ResetIntegrationTest extends AbstractResetIntegrationTest {
-
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private static final String NON_EXISTING_TOPIC = "nonExistingTopic";
 
     public static final EmbeddedKafkaCluster CLUSTER;

@@ -107,6 +107,16 @@ public class ClusterMetadataAuthorizerTest {
         }
 
         @Override
+        public void completeInitialLoad() {
+            // do nothing
+        }
+
+        @Override
+        public void completeInitialLoad(Exception e) {
+            // do nothing
+        }
+
+        @Override
         public void loadSnapshot(Map<Uuid, StandardAcl> acls) {
             // do nothing
         }

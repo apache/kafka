@@ -16,17 +16,16 @@
  */
 package kafka.controller
 
-import java.util
 import java.util.concurrent.TimeUnit
 import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
-import kafka.controller.KafkaController.AlterPartitionCallback
 import kafka.cluster.Broker
 import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback, UpdateFeaturesCallback}
 import kafka.coordinator.transaction.ZkProducerIdManager
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
+import kafka.server.metadata.ZkFinalizedFeatureCache
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
@@ -37,8 +36,8 @@ import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
-import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
 import org.apache.kafka.common.message.{AllocateProducerIdsRequestData, AllocateProducerIdsResponseData, AlterPartitionRequestData, AlterPartitionResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -66,7 +65,6 @@ object KafkaController extends Logging {
   type ElectLeadersCallback = Map[TopicPartition, Either[ApiError, Int]] => Unit
   type ListReassignmentsCallback = Either[Map[TopicPartition, ReplicaAssignment], ApiError] => Unit
   type AlterReassignmentsCallback = Either[Map[TopicPartition, ApiError], ApiError] => Unit
-  type AlterPartitionCallback = Either[Map[TopicPartition, Either[Errors, LeaderAndIsr]], Errors] => Unit
   type UpdateFeaturesCallback = Either[ApiError, Map[String, ApiError]] => Unit
 }
 
@@ -78,7 +76,7 @@ class KafkaController(val config: KafkaConfig,
                       initialBrokerEpoch: Long,
                       tokenManager: DelegationTokenManager,
                       brokerFeatures: BrokerFeatures,
-                      featureCache: FinalizedFeatureCache,
+                      featureCache: ZkFinalizedFeatureCache,
                       threadNamePrefix: Option[String] = None)
   extends ControllerEventProcessor with Logging with KafkaMetricsGroup {
 
@@ -87,7 +85,7 @@ class KafkaController(val config: KafkaConfig,
   @volatile private var brokerInfo = initialBrokerInfo
   @volatile private var _brokerEpoch = initialBrokerEpoch
 
-  private val isAlterIsrEnabled = config.interBrokerProtocolVersion.isAlterIsrSupported
+  private val isAlterPartitionEnabled = config.interBrokerProtocolVersion.isAlterPartitionSupported
   private val stateChangeLogger = new StateChangeLogger(config.brokerId, inControllerContext = true, None)
   val controllerContext = new ControllerContext
   var controllerChannelManager = new ControllerChannelManager(controllerContext, config, time, metrics,
@@ -309,7 +307,7 @@ class KafkaController(val config: KafkaConfig,
    * This method enables the feature versioning system (KIP-584).
    *
    * Development in Kafka (from a high level) is organized into features. Each feature is tracked by
-   * a name and a range of version numbers. A feature can be of two types:
+   * a name and a range of version numbers or a version number. A feature can be of two types:
    *
    * 1. Supported feature:
    * A supported feature is represented by a name (string) and a range of versions (defined by a
@@ -320,8 +318,8 @@ class KafkaController(val config: KafkaConfig,
    * range of versions.
    *
    * 2. Finalized feature:
-   * A finalized feature is represented by a name (string) and a range of version levels (defined
-   * by a FinalizedVersionRange). Whenever the feature versioning system (KIP-584) is
+   * A finalized feature is represented by a name (string) and a specified version level (defined
+   * by a Short). Whenever the feature versioning system (KIP-584) is
    * enabled, the finalized features are stored in the cluster-wide common FeatureZNode.
    * In comparison to a supported feature, the key difference is that a finalized feature exists
    * in ZK only when it is guaranteed to be supported by any random broker in the cluster for a
@@ -385,24 +383,27 @@ class KafkaController(val config: KafkaConfig,
   private def enableFeatureVersioning(): Unit = {
     val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(FeatureZNode.path)
     if (version == ZkVersion.UnknownVersion) {
-      val newVersion = createFeatureZNode(new FeatureZNode(FeatureZNodeStatus.Enabled,
-                                          brokerFeatures.defaultFinalizedFeatures))
-      featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
+      val newVersion = createFeatureZNode(
+        FeatureZNode(config.interBrokerProtocolVersion,
+          FeatureZNodeStatus.Enabled,
+          brokerFeatures.defaultFinalizedFeatures
+        ))
+      featureCache.waitUntilFeatureEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
     } else {
       val existingFeatureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
       val newFeatures = existingFeatureZNode.status match {
         case FeatureZNodeStatus.Enabled => existingFeatureZNode.features
         case FeatureZNodeStatus.Disabled =>
-          if (!existingFeatureZNode.features.empty()) {
+          if (existingFeatureZNode.features.nonEmpty) {
             warn(s"FeatureZNode at path: ${FeatureZNode.path} with disabled status" +
                  s" contains non-empty features: ${existingFeatureZNode.features}")
           }
-          Features.emptyFinalizedFeatures
+          Map.empty[String, Short]
       }
-      val newFeatureZNode = new FeatureZNode(FeatureZNodeStatus.Enabled, newFeatures)
+      val newFeatureZNode = FeatureZNode(config.interBrokerProtocolVersion, FeatureZNodeStatus.Enabled, newFeatures)
       if (!newFeatureZNode.equals(existingFeatureZNode)) {
         val newVersion = updateFeatureZNode(newFeatureZNode)
-        featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
+        featureCache.waitUntilFeatureEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
       }
     }
   }
@@ -423,14 +424,14 @@ class KafkaController(val config: KafkaConfig,
    *    are disabled when IBP config is < than IBP_2_7_IV0.
    */
   private def disableFeatureVersioning(): Unit = {
-    val newNode = FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())
+    val newNode = FeatureZNode(config.interBrokerProtocolVersion, FeatureZNodeStatus.Disabled, Map.empty[String, Short])
     val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(FeatureZNode.path)
     if (version == ZkVersion.UnknownVersion) {
       createFeatureZNode(newNode)
     } else {
       val existingFeatureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
       if (existingFeatureZNode.status == FeatureZNodeStatus.Disabled &&
-          !existingFeatureZNode.features.empty()) {
+          existingFeatureZNode.features.nonEmpty) {
         warn(s"FeatureZNode at path: ${FeatureZNode.path} with disabled status" +
              s" contains non-empty features: ${existingFeatureZNode.features}")
       }
@@ -468,14 +469,6 @@ class KafkaController(val config: KafkaConfig,
 
     // shutdown leader rebalance scheduler
     kafkaScheduler.shutdown()
-    offlinePartitionCount = 0
-    preferredReplicaImbalanceCount = 0
-    globalTopicCount = 0
-    globalPartitionCount = 0
-    topicsToDeleteCount = 0
-    replicasToDeleteCount = 0
-    ineligibleTopicsToDeleteCount = 0
-    ineligibleReplicasToDeleteCount = 0
 
     // stop token expiry check scheduler
     if (tokenCleanScheduler.isStarted)
@@ -802,7 +795,7 @@ class KafkaController(val config: KafkaConfig,
         stopRemovedReplicasOfReassignedPartition(topicPartition, unneededReplicas)
     }
 
-    if (!isAlterIsrEnabled) {
+    if (!isAlterPartitionEnabled) {
       val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(eventManager, topicPartition)
       zkClient.registerZNodeChangeHandler(reassignIsrChangeHandler)
     }
@@ -858,7 +851,7 @@ class KafkaController(val config: KafkaConfig,
     * Attempt to elect a replica as leader for each of the given partitions.
     * @param partitions The partitions to have a new leader elected
     * @param electionType The type of election to perform
-    * @param electionTrigger The reason for tigger this election
+    * @param electionTrigger The reason for trigger this election
     * @return A map of failed and successful elections. The keys are the topic partitions and the corresponding values are
     *         either the exception that was thrown or new leader & ISR.
     */
@@ -908,7 +901,7 @@ class KafkaController(val config: KafkaConfig,
     // update controller cache with delete topic information
     val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
     val (compatibleBrokerAndEpochs, incompatibleBrokerAndEpochs) = partitionOnFeatureCompatibility(curBrokerAndEpochs)
-    if (!incompatibleBrokerAndEpochs.isEmpty) {
+    if (incompatibleBrokerAndEpochs.nonEmpty) {
       warn("Ignoring registration of new brokers due to incompatibilities with finalized features: " +
         incompatibleBrokerAndEpochs.map { case (broker, _) => broker.id }.toSeq.sorted.mkString(","))
     }
@@ -1095,7 +1088,7 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  private def registerPartitionModificationsHandlers(topics: Seq[String]) = {
+  private def registerPartitionModificationsHandlers(topics: Seq[String]): Unit = {
     topics.foreach { topic =>
       val partitionModificationsHandler = new PartitionModificationsHandler(eventManager, topic)
       partitionModificationsHandlers.put(topic, partitionModificationsHandler)
@@ -1103,14 +1096,14 @@ class KafkaController(val config: KafkaConfig,
     partitionModificationsHandlers.values.foreach(zkClient.registerZNodeChangeHandler)
   }
 
-  private[controller] def unregisterPartitionModificationsHandlers(topics: Seq[String]) = {
+  private[controller] def unregisterPartitionModificationsHandlers(topics: Seq[String]): Unit = {
     topics.foreach { topic =>
       partitionModificationsHandlers.remove(topic).foreach(handler => zkClient.unregisterZNodeChangeHandler(handler.path))
     }
   }
 
   private def unregisterPartitionReassignmentIsrChangeHandlers(): Unit = {
-    if (!isAlterIsrEnabled) {
+    if (!isAlterPartitionEnabled) {
       controllerContext.partitionsBeingReassigned.foreach { tp =>
         val path = TopicPartitionStateZNode.path(tp)
         zkClient.unregisterZNodeChangeHandler(path)
@@ -1121,7 +1114,7 @@ class KafkaController(val config: KafkaConfig,
   private def removePartitionFromReassigningPartitions(topicPartition: TopicPartition,
                                                        assignment: ReplicaAssignment): Unit = {
     if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
-      if (!isAlterIsrEnabled) {
+      if (!isAlterPartitionEnabled) {
         val path = TopicPartitionStateZNode.path(topicPartition)
         zkClient.unregisterZNodeChangeHandler(path)
       }
@@ -1435,43 +1428,37 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def updateMetrics(): Unit = {
-    offlinePartitionCount =
-      if (!isActive) {
-        0
-      } else {
-        controllerContext.offlinePartitionCount
-      }
-
-    preferredReplicaImbalanceCount =
-      if (!isActive) {
-        0
-      } else {
-        controllerContext.preferredReplicaImbalanceCount
-      }
-
-    globalTopicCount = if (!isActive) 0 else controllerContext.allTopics.size
-
-    globalPartitionCount = if (!isActive) 0 else controllerContext.partitionWithLeadersCount
-
-    topicsToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.size
-
-    replicasToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.map { topic =>
-      // For each enqueued topic, count the number of replicas that are not yet deleted
-      controllerContext.replicasForTopic(topic).count { replica =>
-        controllerContext.replicaState(replica) != ReplicaDeletionSuccessful
-      }
-    }.sum
-
-    ineligibleTopicsToDeleteCount = if (!isActive) 0 else controllerContext.topicsIneligibleForDeletion.size
-
-    ineligibleReplicasToDeleteCount = if (!isActive) 0 else controllerContext.topicsToBeDeleted.map { topic =>
-      // For each enqueued topic, count the number of replicas that are ineligible
-      controllerContext.replicasForTopic(topic).count { replica =>
-        controllerContext.replicaState(replica) == ReplicaDeletionIneligible
-      }
-    }.sum
-
-    activeBrokerCount = if (isActive) controllerContext.liveOrShuttingDownBrokerIds.size else 0
+    if (isActive) {
+      offlinePartitionCount = controllerContext.offlinePartitionCount
+      preferredReplicaImbalanceCount = controllerContext.preferredReplicaImbalanceCount
+      globalTopicCount = controllerContext.allTopics.size
+      globalPartitionCount = controllerContext.partitionWithLeadersCount
+      topicsToDeleteCount = controllerContext.topicsToBeDeleted.size
+      replicasToDeleteCount = controllerContext.topicsToBeDeleted.map { topic =>
+        // For each enqueued topic, count the number of replicas that are not yet deleted
+        controllerContext.replicasForTopic(topic).count { replica =>
+          controllerContext.replicaState(replica) != ReplicaDeletionSuccessful
+        }
+      }.sum
+      ineligibleTopicsToDeleteCount = controllerContext.topicsIneligibleForDeletion.size
+      ineligibleReplicasToDeleteCount = controllerContext.topicsToBeDeleted.map { topic =>
+        // For each enqueued topic, count the number of replicas that are ineligible
+        controllerContext.replicasForTopic(topic).count { replica =>
+          controllerContext.replicaState(replica) == ReplicaDeletionIneligible
+        }
+      }.sum
+      activeBrokerCount = controllerContext.liveOrShuttingDownBrokerIds.size
+    } else {
+      offlinePartitionCount = 0
+      preferredReplicaImbalanceCount = 0
+      globalTopicCount = 0
+      globalPartitionCount = 0
+      topicsToDeleteCount = 0
+      replicasToDeleteCount = 0
+      ineligibleTopicsToDeleteCount = 0
+      ineligibleReplicasToDeleteCount = 0
+      activeBrokerCount = 0
+    }
   }
 
   // visible for testing
@@ -1564,7 +1551,7 @@ class KafkaController(val config: KafkaConfig,
     brokersAndEpochs.partition {
       case (broker, _) =>
         !config.isFeatureVersioningSupported ||
-        !featureCache.get.exists(
+        !featureCache.getFeatureOption.exists(
           latestFinalizedFeatures =>
             BrokerFeatures.hasIncompatibleFeatures(broker.features, latestFinalizedFeatures.features))
     }
@@ -1599,7 +1586,7 @@ class KafkaController(val config: KafkaConfig,
     if (newBrokerIds.nonEmpty) {
       val (newCompatibleBrokerAndEpochs, newIncompatibleBrokerAndEpochs) =
         partitionOnFeatureCompatibility(newBrokerAndEpochs)
-      if (!newIncompatibleBrokerAndEpochs.isEmpty) {
+      if (newIncompatibleBrokerAndEpochs.nonEmpty) {
         warn("Ignoring registration of new brokers due to incompatibilities with finalized features: " +
           newIncompatibleBrokerAndEpochs.map { case (broker, _) => broker.id }.toSeq.sorted.mkString(","))
       }
@@ -1611,7 +1598,7 @@ class KafkaController(val config: KafkaConfig,
       onBrokerFailure(bouncedBrokerIdsSorted)
       val (bouncedCompatibleBrokerAndEpochs, bouncedIncompatibleBrokerAndEpochs) =
         partitionOnFeatureCompatibility(bouncedBrokerAndEpochs)
-      if (!bouncedIncompatibleBrokerAndEpochs.isEmpty) {
+      if (bouncedIncompatibleBrokerAndEpochs.nonEmpty) {
         warn("Ignoring registration of bounced brokers due to incompatibilities with finalized features: " +
           bouncedIncompatibleBrokerAndEpochs.map { case (broker, _) => broker.id }.toSeq.sorted.mkString(","))
       }
@@ -1921,16 +1908,16 @@ class KafkaController(val config: KafkaConfig,
   }
 
   /**
-   * Returns the new FinalizedVersionRange for the feature, if there are no feature
+   * Returns the new finalized version for the feature, if there are no feature
    * incompatibilities seen with all known brokers for the provided feature update.
    * Otherwise returns an ApiError object containing Errors.INVALID_REQUEST.
    *
    * @param update   the feature update to be processed (this can not be meant to delete the feature)
    *
-   * @return         the new FinalizedVersionRange or error, as described above.
+   * @return         the new finalized version or error, as described above.
    */
-  private def newFinalizedVersionRangeOrIncompatibilityError(update: UpdateFeaturesRequest.FeatureUpdateItem):
-      Either[FinalizedVersionRange, ApiError] = {
+  private def newFinalizedVersionOrIncompatibilityError(update: UpdateFeaturesRequest.FeatureUpdateItem):
+      Either[Short, ApiError] = {
     if (update.isDeleteRequest) {
       throw new IllegalArgumentException(s"Provided feature update can not be meant to delete the feature: $update")
     }
@@ -1941,28 +1928,19 @@ class KafkaController(val config: KafkaConfig,
                          "Could not apply finalized feature update because the provided feature" +
                          " is not supported."))
     } else {
-      var newVersionRange: FinalizedVersionRange = null
-      try {
-        newVersionRange = new FinalizedVersionRange(update.versionLevel(), update.versionLevel())
-      } catch {
-        case _: IllegalArgumentException => {
-          // This exception means the provided maxVersionLevel is invalid. It is handled below
-          // outside of this catch clause.
-        }
-      }
-      if (newVersionRange == null) {
+      val newVersion = update.versionLevel()
+      if (supportedVersionRange.isIncompatibleWith(newVersion)) {
         Right(new ApiError(Errors.INVALID_REQUEST,
           "Could not apply finalized feature update because the provided" +
-          s" maxVersionLevel:${update.versionLevel} is lower than the" +
+          s" versionLevel:${update.versionLevel} is lower than the" +
           s" supported minVersion:${supportedVersionRange.min}."))
       } else {
-        val newFinalizedFeature =
-          Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry(update.feature, newVersionRange)))
+        val newFinalizedFeature = Utils.mkMap(Utils.mkEntry(update.feature, newVersion)).asScala.toMap
         val numIncompatibleBrokers = controllerContext.liveOrShuttingDownBrokers.count(broker => {
           BrokerFeatures.hasIncompatibleFeatures(broker.features, newFinalizedFeature)
         })
         if (numIncompatibleBrokers == 0) {
-          Left(newVersionRange)
+          Left(newVersion)
         } else {
           Right(new ApiError(Errors.INVALID_REQUEST,
                              "Could not apply finalized feature update because" +
@@ -1973,24 +1951,24 @@ class KafkaController(val config: KafkaConfig,
   }
 
   /**
-   * Validates a feature update on an existing FinalizedVersionRange.
+   * Validates a feature update on an existing finalized version.
    * If the validation succeeds, then, the return value contains:
-   * 1. the new FinalizedVersionRange for the feature, if the feature update was not meant to delete the feature.
+   * 1. the new finalized version for the feature, if the feature update was not meant to delete the feature.
    * 2. Option.empty, if the feature update was meant to delete the feature.
    *
    * If the validation fails, then returned value contains a suitable ApiError.
    *
-   * @param update                 the feature update to be processed.
-   * @param existingVersionRange   the existing FinalizedVersionRange which can be empty when no
-   *                               FinalizedVersionRange exists for the associated feature
+   * @param update             the feature update to be processed.
+   * @param existingVersion    the existing finalized version which can be empty when no
+   *                           finalized version exists for the associated feature
    *
-   * @return                       the new FinalizedVersionRange to be updated into ZK or error
-   *                               as described above.
+   * @return                   the new finalized version to be updated into ZK or error
+   *                           as described above.
    */
   private def validateFeatureUpdate(update: UpdateFeaturesRequest.FeatureUpdateItem,
-                                    existingVersionRange: Option[FinalizedVersionRange]): Either[Option[FinalizedVersionRange], ApiError] = {
-    def newVersionRangeOrError(update: UpdateFeaturesRequest.FeatureUpdateItem): Either[Option[FinalizedVersionRange], ApiError] = {
-      newFinalizedVersionRangeOrIncompatibilityError(update)
+                                    existingVersion: Option[Short]): Either[Option[Short], ApiError] = {
+    def newVersionRangeOrError(update: UpdateFeaturesRequest.FeatureUpdateItem): Either[Option[Short], ApiError] = {
+      newFinalizedVersionOrIncompatibilityError(update)
         .fold(versionRange => Left(Some(versionRange)), error => Right(error))
     }
 
@@ -2003,7 +1981,7 @@ class KafkaController(val config: KafkaConfig,
 
       // We handle deletion requests separately from non-deletion requests.
       if (update.isDeleteRequest) {
-        if (existingVersionRange.isEmpty) {
+        if (existingVersion.isEmpty) {
           // Disallow deletion of a non-existing finalized feature.
           Right(new ApiError(Errors.INVALID_REQUEST,
                              "Can not delete non-existing finalized feature."))
@@ -2013,30 +1991,30 @@ class KafkaController(val config: KafkaConfig,
       } else if (update.versionLevel() < 1) {
         // Disallow deletion of a finalized feature without SAFE downgrade type.
         Right(new ApiError(Errors.INVALID_REQUEST,
-                           s"Can not provide maxVersionLevel: ${update.versionLevel} less" +
+                           s"Can not provide versionLevel: ${update.versionLevel} less" +
                            s" than 1 without setting the SAFE downgradeType in the request."))
       } else {
-        existingVersionRange.map(existing =>
-          if (update.versionLevel == existing.max) {
-            // Disallow a case where target maxVersionLevel matches existing maxVersionLevel.
+        existingVersion.map(existing =>
+          if (update.versionLevel == existing) {
+            // Disallow a case where target versionLevel matches existing versionLevel.
             Right(new ApiError(Errors.INVALID_REQUEST,
                                s"Can not ${if (update.upgradeType.equals(UpgradeType.SAFE_DOWNGRADE)) "downgrade" else "upgrade"}" +
-                               s" a finalized feature from existing maxVersionLevel:${existing.max}" +
+                               s" a finalized feature from existing versionLevel:$existing" +
                                " to the same value."))
-          } else if (update.versionLevel < existing.max && !update.upgradeType.equals(UpgradeType.SAFE_DOWNGRADE)) {
+          } else if (update.versionLevel < existing && !update.upgradeType.equals(UpgradeType.SAFE_DOWNGRADE)) {
             // Disallow downgrade of a finalized feature without the downgradeType set.
             Right(new ApiError(Errors.INVALID_REQUEST,
                                s"Can not downgrade finalized feature from existing" +
-                               s" maxVersionLevel:${existing.max} to provided" +
-                               s" maxVersionLevel:${update.versionLevel} without setting the" +
+                               s" versionLevel:$existing to provided" +
+                               s" versionLevel:${update.versionLevel} without setting the" +
                                " downgradeType to SAFE in the request."))
-          } else if (!update.upgradeType.equals(UpgradeType.UPGRADE) && update.versionLevel > existing.max) {
+          } else if (!update.upgradeType.equals(UpgradeType.UPGRADE) && update.versionLevel > existing) {
             // Disallow a request that sets downgradeType without specifying a
-            // maxVersionLevel that's lower than the existing maxVersionLevel.
+            // versionLevel that's lower than the existing versionLevel.
             Right(new ApiError(Errors.INVALID_REQUEST,
-                               s"When the downgradeType is set to SAFE set in the request, the provided" +
-                               s" maxVersionLevel:${update.versionLevel} can not be greater than" +
-                               s" existing maxVersionLevel:${existing.max}."))
+                               s"When the downgradeType is set to SAFE in the request, the provided" +
+                               s" versionLevel:${update.versionLevel} can not be greater than" +
+                               s" existing versionLevel:$existing."))
           } else {
             newVersionRangeOrError(update)
           }
@@ -2057,12 +2035,12 @@ class KafkaController(val config: KafkaConfig,
   private def processFeatureUpdatesWithActiveController(request: UpdateFeaturesRequest,
                                                         callback: UpdateFeaturesCallback): Unit = {
     val updates = request.featureUpdates
-    val existingFeatures = featureCache.get
-      .map(featuresAndEpoch => featuresAndEpoch.features.features().asScala)
-      .getOrElse(Map[String, FinalizedVersionRange]())
-    // A map with key being feature name and value being FinalizedVersionRange.
+    val existingFeatures = featureCache.getFeatureOption
+      .map(featuresAndEpoch => featuresAndEpoch.features)
+      .getOrElse(Map[String, Short]())
+    // A map with key being feature name and value being finalized version.
     // This contains the target features to be eventually written to FeatureZNode.
-    val targetFeatures = scala.collection.mutable.Map[String, FinalizedVersionRange]() ++ existingFeatures
+    val targetFeatures = scala.collection.mutable.Map[String, Short]() ++ existingFeatures
     // A map with key being feature name and value being error encountered when the FeatureUpdate
     // was applied.
     val errors = scala.collection.mutable.Map[String, ApiError]()
@@ -2071,7 +2049,7 @@ class KafkaController(val config: KafkaConfig,
     //  - If a FeatureUpdate is found to be valid, then:
     //    - The corresponding entry in errors map would be updated to contain Errors.NONE.
     //    - If the FeatureUpdate is an add or update request, then the targetFeatures map is updated
-    //      to contain the new FinalizedVersionRange for the feature.
+    //      to contain the new finalized version for the feature.
     //    - Otherwise if the FeatureUpdate is a delete request, then the feature is removed from the
     //      targetFeatures map.
     //  - Otherwise if a FeatureUpdate is found to be invalid, then:
@@ -2096,9 +2074,9 @@ class KafkaController(val config: KafkaConfig,
     // of the existing finalized features in ZK.
     try {
       if (!existingFeatures.equals(targetFeatures)) {
-        val newNode = new FeatureZNode(FeatureZNodeStatus.Enabled, Features.finalizedFeatures(targetFeatures.asJava))
+        val newNode = FeatureZNode(config.interBrokerProtocolVersion, FeatureZNodeStatus.Enabled, targetFeatures)
         val newVersion = updateFeatureZNode(newNode)
-        featureCache.waitUntilEpochOrThrow(newVersion, request.data().timeoutMs())
+        featureCache.waitUntilFeatureEpochOrThrow(newVersion, request.data().timeoutMs())
       }
     } catch {
       // For all features that correspond to valid FeatureUpdate (i.e. error is Errors.NONE),
@@ -2245,197 +2223,226 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  def alterPartitions(alterPartitionRequest: AlterPartitionRequestData, callback: AlterPartitionResponseData => Unit): Unit = {
-    val partitionsToAlter = mutable.Map[TopicPartition, LeaderAndIsr]()
-
-    alterPartitionRequest.topics.forEach { topicReq =>
-      topicReq.partitions.forEach { partitionReq =>
-        partitionsToAlter.put(
-          new TopicPartition(topicReq.name, partitionReq.partitionIndex),
-          LeaderAndIsr(
-            alterPartitionRequest.brokerId,
-            partitionReq.leaderEpoch,
-            partitionReq.newIsr().asScala.toList.map(_.toInt),
-            LeaderRecoveryState.of(partitionReq.leaderRecoveryState),
-            partitionReq.partitionEpoch
-          )
-        )
-      }
-    }
-
-    def responseCallback(results: Either[Map[TopicPartition, Either[Errors, LeaderAndIsr]], Errors]): Unit = {
-      val resp = new AlterPartitionResponseData()
-      results match {
-        case Right(error) =>
-          resp.setErrorCode(error.code)
-        case Left(partitionResults) =>
-          resp.setTopics(new util.ArrayList())
-          partitionResults
-            .groupBy { case (tp, _) => tp.topic }   // Group by topic
-            .foreach { case (topic, partitions) =>
-              // Add each topic part to the response
-              val topicResp = new AlterPartitionResponseData.TopicData()
-                .setName(topic)
-                .setPartitions(new util.ArrayList())
-              resp.topics.add(topicResp)
-              partitions.foreach { case (tp, errorOrIsr) =>
-                // Add each partition part to the response (new ISR or error)
-                errorOrIsr match {
-                  case Left(error) => topicResp.partitions.add(
-                    new AlterPartitionResponseData.PartitionData()
-                      .setPartitionIndex(tp.partition)
-                      .setErrorCode(error.code))
-                  case Right(leaderAndIsr) =>
-                    /* Setting the LeaderRecoveryState field is always safe because it will always be the same
-                     * as the value set in the request. For version 0, that is always the default RECOVERED
-                     * which is ignored when serializing to version 0. For any other version, the
-                     * LeaderRecoveryState field is supported.
-                     */
-                    topicResp.partitions.add(
-                      new AlterPartitionResponseData.PartitionData()
-                        .setPartitionIndex(tp.partition)
-                        .setLeaderId(leaderAndIsr.leader)
-                        .setLeaderEpoch(leaderAndIsr.leaderEpoch)
-                        .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
-                        .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
-                        .setPartitionEpoch(leaderAndIsr.partitionEpoch)
-                    )
-                }
-            }
-          }
-      }
-      callback.apply(resp)
-    }
-
-    eventManager.put(
-      AlterPartitionReceived(alterPartitionRequest.brokerId, alterPartitionRequest.brokerEpoch, partitionsToAlter, responseCallback)
-    )
+  def alterPartitions(
+    alterPartitionRequest: AlterPartitionRequestData,
+    alterPartitionRequestVersion: Short,
+    callback: AlterPartitionResponseData => Unit
+  ): Unit = {
+    eventManager.put(AlterPartitionReceived(
+      alterPartitionRequest,
+      alterPartitionRequestVersion,
+      callback
+    ))
   }
 
   private def processAlterPartition(
-    brokerId: Int,
-    brokerEpoch: Long,
-    partitionsToAlter: Map[TopicPartition, LeaderAndIsr],
-    callback: AlterPartitionCallback
+    alterPartitionRequest: AlterPartitionRequestData,
+    alterPartitionRequestVersion: Short,
+    callback: AlterPartitionResponseData => Unit
   ): Unit = {
+    val partitionResponses = try {
+      tryProcessAlterPartition(
+        alterPartitionRequest,
+        alterPartitionRequestVersion,
+        callback
+      )
+    } catch {
+      case e: Throwable =>
+        error(s"Error when processing AlterPartition: $alterPartitionRequest", e)
+        callback(new AlterPartitionResponseData().setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code))
+        mutable.Map.empty
+    }
+
+    // After we have returned the result of the `AlterPartition` request, we should check whether
+    // there are any reassignments which can be completed by a successful ISR expansion.
+    partitionResponses.forKeyValue { (topicPartition, partitionResponse) =>
+      if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
+        val isSuccessfulUpdate = partitionResponse.isRight
+        if (isSuccessfulUpdate) {
+          maybeCompleteReassignment(topicPartition)
+        }
+      }
+    }
+  }
+
+  private def tryProcessAlterPartition(
+    alterPartitionRequest: AlterPartitionRequestData,
+    alterPartitionRequestVersion: Short,
+    callback: AlterPartitionResponseData => Unit
+  ): mutable.Map[TopicPartition, Either[Errors, LeaderAndIsr]] = {
+    val useTopicsIds = alterPartitionRequestVersion > 1
 
     // Handle a few short-circuits
     if (!isActive) {
-      callback.apply(Right(Errors.NOT_CONTROLLER))
-      return
+      callback(new AlterPartitionResponseData().setErrorCode(Errors.NOT_CONTROLLER.code))
+      return mutable.Map.empty
     }
 
+    val brokerId = alterPartitionRequest.brokerId
+    val brokerEpoch = alterPartitionRequest.brokerEpoch
     val brokerEpochOpt = controllerContext.liveBrokerIdAndEpochs.get(brokerId)
     if (brokerEpochOpt.isEmpty) {
       info(s"Ignoring AlterPartition due to unknown broker $brokerId")
-      callback.apply(Right(Errors.STALE_BROKER_EPOCH))
-      return
+      callback(new AlterPartitionResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code))
+      return mutable.Map.empty
     }
 
     if (!brokerEpochOpt.contains(brokerEpoch)) {
       info(s"Ignoring AlterPartition due to stale broker epoch $brokerEpoch and local broker epoch $brokerEpochOpt for broker $brokerId")
-      callback.apply(Right(Errors.STALE_BROKER_EPOCH))
-      return
+      callback(new AlterPartitionResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code))
+      return mutable.Map.empty
     }
 
-    val response = try {
-      val partitionResponses = mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
+    val partitionsToAlter = new mutable.HashMap[TopicPartition, LeaderAndIsr]()
+    val alterPartitionResponse = new AlterPartitionResponseData()
 
-      // Determine which partitions we will accept the new ISR for
-      val adjustedIsrs: Map[TopicPartition, LeaderAndIsr] = partitionsToAlter.flatMap {
-        case (tp: TopicPartition, newLeaderAndIsr: LeaderAndIsr) =>
-          controllerContext.partitionLeadershipInfo(tp) match {
-            case Some(leaderIsrAndControllerEpoch) =>
-              val currentLeaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-              if (newLeaderAndIsr.leaderEpoch != currentLeaderAndIsr.leaderEpoch) {
-                partitionResponses(tp) = Left(Errors.FENCED_LEADER_EPOCH)
-                None
-              } else if (newLeaderAndIsr.partitionEpoch < currentLeaderAndIsr.partitionEpoch) {
-                partitionResponses(tp) = Left(Errors.INVALID_UPDATE_VERSION)
-                None
-              } else if (newLeaderAndIsr.equalsIgnorePartitionEpoch(currentLeaderAndIsr)) {
-                // If a partition is already in the desired state, just return it
-                partitionResponses(tp) = Right(currentLeaderAndIsr)
-                None
-              } else if (newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING && newLeaderAndIsr.isr.length > 1) {
-                partitionResponses(tp) = Left(Errors.INVALID_REQUEST)
-                info(
-                  s"Rejecting AlterPartition from node $brokerId for $tp because leader is recovering and ISR is greater than 1: " +
-                  s"$newLeaderAndIsr"
-                )
-                None
-              } else if (currentLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERED &&
-                newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING) {
+    alterPartitionRequest.topics.forEach { topicReq =>
+      val topicNameOpt = if (useTopicsIds) {
+        controllerContext.topicName(topicReq.topicId)
+      } else {
+        Some(topicReq.topicName)
+      }
 
-                partitionResponses(tp) = Left(Errors.INVALID_REQUEST)
-                info(
-                  s"Rejecting AlterPartition from node $brokerId for $tp because the leader recovery state cannot change from " +
-                  s"RECOVERED to RECOVERING: $newLeaderAndIsr"
-                )
-                None
-              } else {
-                Some(tp -> newLeaderAndIsr)
-              }
-            case None =>
-              partitionResponses(tp) = Left(Errors.UNKNOWN_TOPIC_OR_PARTITION)
-              None
+      topicNameOpt match {
+        case None =>
+          val topicResponse = new AlterPartitionResponseData.TopicData()
+            .setTopicId(topicReq.topicId)
+          alterPartitionResponse.topics.add(topicResponse)
+          topicReq.partitions.forEach { partitionReq =>
+            topicResponse.partitions.add(new AlterPartitionResponseData.PartitionData()
+              .setPartitionIndex(partitionReq.partitionIndex)
+              .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code))
+          }
+
+        case Some(topicName) =>
+          topicReq.partitions.forEach { partitionReq =>
+            partitionsToAlter.put(
+              new TopicPartition(topicName, partitionReq.partitionIndex),
+              LeaderAndIsr(
+                alterPartitionRequest.brokerId,
+                partitionReq.leaderEpoch,
+                partitionReq.newIsr.asScala.toList.map(_.toInt),
+                LeaderRecoveryState.of(partitionReq.leaderRecoveryState),
+                partitionReq.partitionEpoch
+              )
+            )
           }
       }
-
-      // Do the updates in ZK
-      debug(s"Updating ISRs for partitions: ${adjustedIsrs.keySet}.")
-      val UpdateLeaderAndIsrResult(finishedUpdates, badVersionUpdates) = zkClient.updateLeaderAndIsr(
-        adjustedIsrs, controllerContext.epoch, controllerContext.epochZkVersion)
-
-      val successfulUpdates: Map[TopicPartition, LeaderAndIsr] = finishedUpdates.flatMap {
-        case (partition: TopicPartition, isrOrError: Either[Throwable, LeaderAndIsr]) =>
-          isrOrError match {
-            case Right(updatedIsr) =>
-              debug(s"ISR for partition $partition updated to [${updatedIsr.isr.mkString(",")}] and zkVersion updated to [${updatedIsr.partitionEpoch}]")
-              partitionResponses(partition) = Right(updatedIsr)
-              Some(partition -> updatedIsr)
-            case Left(e) =>
-              error(s"Failed to update ISR for partition $partition", e)
-              partitionResponses(partition) = Left(Errors.forException(e))
-              None
-          }
-      }
-
-      badVersionUpdates.foreach { partition =>
-        info(s"Failed to update ISR to ${adjustedIsrs(partition)} for partition $partition, bad ZK version.")
-        partitionResponses(partition) = Left(Errors.INVALID_UPDATE_VERSION)
-      }
-
-      def processUpdateNotifications(partitions: Seq[TopicPartition]): Unit = {
-        val liveBrokers: Seq[Int] = controllerContext.liveOrShuttingDownBrokerIds.toSeq
-        sendUpdateMetadataRequest(liveBrokers, partitions.toSet)
-      }
-
-      // Update our cache and send out metadata updates
-      updateLeaderAndIsrCache(successfulUpdates.keys.toSeq)
-      processUpdateNotifications(partitionsToAlter.keys.toSeq)
-
-      Left(partitionResponses)
-    } catch {
-      case e: Throwable =>
-        error(s"Error when processing AlterPartition for partitions: ${partitionsToAlter.keys.toSeq}", e)
-        Right(Errors.UNKNOWN_SERVER_ERROR)
     }
 
-    callback.apply(response)
+    val partitionResponses = mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
+    // Determine which partitions we will accept the new ISR for
+    val adjustedIsrs = partitionsToAlter.flatMap { case (tp, newLeaderAndIsr) =>
+      controllerContext.partitionLeadershipInfo(tp) match {
+        case Some(leaderIsrAndControllerEpoch) =>
+          val currentLeaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
+          if (newLeaderAndIsr.leaderEpoch != currentLeaderAndIsr.leaderEpoch) {
+            partitionResponses(tp) = Left(Errors.FENCED_LEADER_EPOCH)
+            None
+          } else if (newLeaderAndIsr.partitionEpoch < currentLeaderAndIsr.partitionEpoch) {
+            partitionResponses(tp) = Left(Errors.INVALID_UPDATE_VERSION)
+            None
+          } else if (newLeaderAndIsr.equalsIgnorePartitionEpoch(currentLeaderAndIsr)) {
+            // If a partition is already in the desired state, just return it
+            partitionResponses(tp) = Right(currentLeaderAndIsr)
+            None
+          } else if (newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING && newLeaderAndIsr.isr.length > 1) {
+            partitionResponses(tp) = Left(Errors.INVALID_REQUEST)
+            info(
+              s"Rejecting AlterPartition from node $brokerId for $tp because leader is recovering and ISR is greater than 1: " +
+              s"$newLeaderAndIsr"
+            )
+            None
+          } else if (currentLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERED &&
+            newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING) {
 
-    // After we have returned the result of the `AlterPartition` request, we should check whether
-    // there are any reassignments which can be completed by a successful ISR expansion.
-    response.left.foreach { alterPartitionResponses =>
-      alterPartitionResponses.forKeyValue { (topicPartition, partitionResponse) =>
-        if (controllerContext.partitionsBeingReassigned.contains(topicPartition)) {
-          val isSuccessfulUpdate = partitionResponse.isRight
-          if (isSuccessfulUpdate) {
-            maybeCompleteReassignment(topicPartition)
+            partitionResponses(tp) = Left(Errors.INVALID_REQUEST)
+            info(
+              s"Rejecting AlterPartition from node $brokerId for $tp because the leader recovery state cannot change from " +
+              s"RECOVERED to RECOVERING: $newLeaderAndIsr"
+            )
+            None
+          } else {
+            Some(tp -> newLeaderAndIsr)
           }
+
+        case None =>
+          partitionResponses(tp) = Left(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+          None
+      }
+    }
+
+    // Do the updates in ZK
+    debug(s"Updating ISRs for partitions: ${adjustedIsrs.keySet}.")
+    val UpdateLeaderAndIsrResult(finishedUpdates, badVersionUpdates) = zkClient.updateLeaderAndIsr(
+      adjustedIsrs, controllerContext.epoch, controllerContext.epochZkVersion)
+
+    val successfulUpdates = finishedUpdates.flatMap { case (partition, isrOrError) =>
+      isrOrError match {
+        case Right(updatedIsr) =>
+          debug(s"ISR for partition $partition updated to $updatedIsr.")
+          partitionResponses(partition) = Right(updatedIsr)
+          Some(partition -> updatedIsr)
+        case Left(e) =>
+          error(s"Failed to update ISR for partition $partition", e)
+          partitionResponses(partition) = Left(Errors.forException(e))
+          None
+      }
+    }
+
+    badVersionUpdates.foreach { partition =>
+      info(s"Failed to update ISR to ${adjustedIsrs(partition)} for partition $partition, bad ZK version.")
+      partitionResponses(partition) = Left(Errors.INVALID_UPDATE_VERSION)
+    }
+
+    // Update our cache and send out metadata updates
+    updateLeaderAndIsrCache(successfulUpdates.keys.toSeq)
+    sendUpdateMetadataRequest(
+      controllerContext.liveOrShuttingDownBrokerIds.toSeq,
+      partitionsToAlter.keySet
+    )
+
+    partitionResponses.groupBy(_._1.topic).forKeyValue { (topicName, partitionResponses) =>
+      // Add each topic part to the response
+      val topicResponse = if (useTopicsIds) {
+        new AlterPartitionResponseData.TopicData()
+          .setTopicId(controllerContext.topicIds.getOrElse(topicName, Uuid.ZERO_UUID))
+      } else {
+        new AlterPartitionResponseData.TopicData()
+          .setTopicName(topicName)
+      }
+      alterPartitionResponse.topics.add(topicResponse)
+
+      partitionResponses.forKeyValue { (tp, errorOrIsr) =>
+        // Add each partition part to the response (new ISR or error)
+        errorOrIsr match {
+          case Left(error) =>
+            topicResponse.partitions.add(
+              new AlterPartitionResponseData.PartitionData()
+                .setPartitionIndex(tp.partition)
+                .setErrorCode(error.code))
+          case Right(leaderAndIsr) =>
+            /* Setting the LeaderRecoveryState field is always safe because it will always be the same
+             * as the value set in the request. For version 0, that is always the default RECOVERED
+             * which is ignored when serializing to version 0. For any other version, the
+             * LeaderRecoveryState field is supported.
+             */
+            topicResponse.partitions.add(
+              new AlterPartitionResponseData.PartitionData()
+                .setPartitionIndex(tp.partition)
+                .setLeaderId(leaderAndIsr.leader)
+                .setLeaderEpoch(leaderAndIsr.leaderEpoch)
+                .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
+                .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
+                .setPartitionEpoch(leaderAndIsr.partitionEpoch)
+            )
         }
       }
     }
+
+    callback(alterPartitionResponse)
+
+    partitionResponses
   }
 
   def allocateProducerIds(allocateProducerIdsRequest: AllocateProducerIdsRequestData,
@@ -2562,8 +2569,8 @@ class KafkaController(val config: KafkaConfig,
           processPartitionReassignmentIsrChange(partition)
         case IsrChangeNotification =>
           processIsrChangeNotification()
-        case AlterPartitionReceived(brokerId, brokerEpoch, partitionsToAlter, callback) =>
-          processAlterPartition(brokerId, brokerEpoch, partitionsToAlter, callback)
+        case AlterPartitionReceived(alterPartitionRequest, alterPartitionRequestVersion, callback) =>
+          processAlterPartition(alterPartitionRequest, alterPartitionRequestVersion, callback)
         case AllocateProducerIds(brokerId, brokerEpoch, callback) =>
           processAllocateProducerIds(brokerId, brokerEpoch, callback)
         case Startup =>
@@ -2826,7 +2833,9 @@ case object IsrChangeNotification extends ControllerEvent {
 }
 
 case class AlterPartitionReceived(
-  brokerId: Int, brokerEpoch: Long, partitionsToAlter: Map[TopicPartition, LeaderAndIsr], callback: AlterPartitionCallback
+  alterPartitionRequest: AlterPartitionRequestData,
+  alterPartitionRequestVersion: Short,
+  callback: AlterPartitionResponseData => Unit
 ) extends ControllerEvent {
   override def state: ControllerState = ControllerState.IsrChange
   override def preempt(): Unit = {}

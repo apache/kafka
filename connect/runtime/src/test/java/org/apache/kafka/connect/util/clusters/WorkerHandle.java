@@ -81,7 +81,7 @@ public class WorkerHandle {
      * @return the worker's url
      */
     public URI url() {
-        return worker.restUrl();
+        return worker.rest().serverUrl();
     }
 
     /**
@@ -90,14 +90,24 @@ public class WorkerHandle {
      * @return the worker's admin url
      */
     public URI adminUrl() {
-        return worker.adminUrl();
+        return worker.rest().adminUrl();
+    }
+
+    /**
+     * Set a new timeout for REST requests to the worker. Useful if a request is expected
+     * to block, since the time spent awaiting that request can be reduced and test runtime
+     * bloat can be avoided.
+     * @param requestTimeoutMs the new timeout in milliseconds; must be positive
+     */
+    public void requestTimeout(long requestTimeoutMs) {
+        worker.rest().requestTimeout(requestTimeoutMs);
     }
 
     @Override
     public String toString() {
         return "WorkerHandle{" +
                 "workerName='" + workerName + '\'' +
-                "workerURL='" + worker.restUrl() + '\'' +
+                "workerURL='" + worker.rest().serverUrl() + '\'' +
                 '}';
     }
 

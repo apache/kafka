@@ -18,12 +18,12 @@
 package kafka.server.metadata
 
 import java.util.Properties
-
+import java.util.concurrent.atomic.AtomicLong
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.ConfigAdminManager.toLoggableProps
-import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, FinalizedFeatureCache, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
@@ -101,7 +101,6 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                               groupCoordinator: GroupCoordinator,
                               txnCoordinator: TransactionCoordinator,
                               clientQuotaMetadataManager: ClientQuotaMetadataManager,
-                              featureCache: FinalizedFeatureCache,
                               dynamicConfigHandlers: Map[String, ConfigHandler],
                               private val _authorizer: Option[Authorizer]) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${conf.nodeId}] "
@@ -118,6 +117,11 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
    */
   var _firstPublish = true
 
+  /**
+   * This is updated after all components (e.g. LogManager) has finished publishing the new metadata delta
+   */
+  val publishedOffsetAtomic = new AtomicLong(-1)
+
   override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
     val highestOffsetAndEpoch = newImage.highestOffsetAndEpoch()
 
@@ -127,19 +131,22 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 
+      val metadataVersionLogMsg = s"metadata.version ${newImage.features().metadataVersion()}"
+
       if (_firstPublish) {
-        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch.")
+        info(s"Publishing initial metadata at offset $highestOffsetAndEpoch with $metadataVersionLogMsg.")
 
         // If this is the first metadata update we are applying, initialize the managers
         // first (but after setting up the metadata cache).
         initializeManagers()
       } else if (isDebugEnabled) {
-        debug(s"Publishing metadata at offset $highestOffsetAndEpoch.")
+        debug(s"Publishing metadata at offset $highestOffsetAndEpoch with $metadataVersionLogMsg.")
       }
 
-      // Apply feature deltas.
       Option(delta.featuresDelta()).foreach { featuresDelta =>
-        featureCache.update(featuresDelta, highestOffsetAndEpoch.offset)
+        featuresDelta.metadataVersionChange().ifPresent{ metadataVersion =>
+          info(s"Updating metadata.version to ${metadataVersion.featureLevel()} at offset $highestOffsetAndEpoch.")
+        }
       }
 
       // Apply topic deltas.
@@ -249,6 +256,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       if (_firstPublish) {
         finishInitializingReplicaManager(newImage)
       }
+      publishedOffsetAtomic.set(newImage.highestOffsetAndEpoch().offset)
     } catch {
       case t: Throwable => error(s"Error publishing broker metadata at $highestOffsetAndEpoch", t)
         throw t
@@ -256,6 +264,8 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       _firstPublish = false
     }
   }
+
+  override def publishedOffset: Long = publishedOffsetAtomic.get()
 
   def reloadUpdatedFilesWithoutConfigChange(props: Properties): Unit = {
     conf.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)

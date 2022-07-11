@@ -178,8 +178,8 @@ public class SubmittedRecordsTest {
         assertEquals(Collections.emptyMap(), committableOffsets.offsets());
         assertMetadata(committableOffsets, 0, 1, 1, 1, PARTITION1);
 
-        assertTrue("First attempt to remove record from submitted queue should succeed", submittedRecords.removeLastOccurrence(submittedRecord));
-        assertFalse("Attempt to remove already-removed record from submitted queue should fail", submittedRecords.removeLastOccurrence(submittedRecord));
+        assertTrue("First attempt to remove record from submitted queue should succeed", submittedRecord.drop());
+        assertFalse("Attempt to remove already-removed record from submitted queue should fail", submittedRecord.drop());
 
         committableOffsets = submittedRecords.committableOffsets();
         // Even if SubmittedRecords::remove is broken, we haven't ack'd anything yet, so there should be no committable offsets
@@ -203,7 +203,7 @@ public class SubmittedRecordsTest {
         assertMetadata(committableOffsets, 0, 2, 2, 1, PARTITION1, PARTITION2);
         assertNoEmptyDeques();
 
-        assertTrue("First attempt to remove record from submitted queue should succeed", submittedRecords.removeLastOccurrence(recordToRemove));
+        assertTrue("First attempt to remove record from submitted queue should succeed", recordToRemove.drop());
 
         committableOffsets = submittedRecords.committableOffsets();
         // Even if SubmittedRecords::remove is broken, we haven't ack'd anything yet, so there should be no committable offsets
@@ -269,20 +269,20 @@ public class SubmittedRecordsTest {
                 submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
         );
 
-        submittedRecords.removeLastOccurrence(recordToRemove1);
+        recordToRemove1.drop();
         assertFalse(
                 "Await should fail since only one of the two submitted records has been removed so far",
                 submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
         );
 
-        submittedRecords.removeLastOccurrence(recordToRemove1);
+        recordToRemove1.drop();
         assertFalse(
                 "Await should fail since only one of the two submitted records has been removed so far, "
                         + "even though that record has been removed twice",
                 submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)
         );
 
-        submittedRecords.removeLastOccurrence(recordToRemove2);
+        recordToRemove2.drop();
         assertTrue(
                 "Await should succeed since both submitted records have now been removed",
                 submittedRecords.awaitAllMessages(0, TimeUnit.MILLISECONDS)

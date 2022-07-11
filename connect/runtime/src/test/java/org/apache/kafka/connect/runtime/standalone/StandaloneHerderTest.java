@@ -41,7 +41,7 @@ import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.WorkerConnector;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -364,9 +364,12 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
                 Collections.singletonMap(taskId, taskConfig(SourceSink.SOURCE)),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                new HashSet<>(),
                 new HashSet<>(),
                 transformer);
-        worker.startTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
+        worker.startSourceTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(true);
 
         PowerMock.replayAll();
@@ -402,9 +405,12 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
                 Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0), taskConfig(SourceSink.SOURCE)),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                new HashSet<>(),
                 new HashSet<>(),
                 transformer);
-        worker.startTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
+        worker.startSourceTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(false);
 
         PowerMock.replayAll();
@@ -572,9 +578,12 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
                 Collections.singletonMap(taskId, taskConfig(SourceSink.SINK)),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                new HashSet<>(),
                 new HashSet<>(),
                 transformer);
-        worker.startTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SINK), herder, TargetState.STARTED);
+        worker.startSinkTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SINK), herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(true);
         PowerMock.replayAll();
 
@@ -635,9 +644,12 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
                 Collections.singletonMap(taskId, taskConfig(SourceSink.SINK)),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                new HashSet<>(),
                 new HashSet<>(),
                 transformer);
-        worker.startTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SINK), herder, TargetState.STARTED);
+        worker.startSinkTask(taskId, configState, connectorConfig, taskConfig(SourceSink.SINK), herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(true);
         PowerMock.replayAll();
 
@@ -878,7 +890,6 @@ public class StandaloneHerderTest {
         Capture<Callback<TargetState>> onStart = EasyMock.newCapture();
         worker.startConnector(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(connectorProps), EasyMock.anyObject(HerderConnectorContext.class),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), EasyMock.capture(onStart));
-        // EasyMock.expectLastCall().andReturn(true);
         EasyMock.expectLastCall().andAnswer(() -> {
             onStart.getValue().onCompletion(null, TargetState.STARTED);
             return true;
@@ -902,9 +913,16 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig(sourceSink)),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
                 Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0), generatedTaskProps),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                new HashSet<>(),
                 new HashSet<>(),
                 transformer);
-        worker.startTask(new ConnectorTaskId(CONNECTOR_NAME, 0), configState, connectorConfig(sourceSink), generatedTaskProps, herder, TargetState.STARTED);
+        if (sourceSink.equals(SourceSink.SOURCE)) {
+            worker.startSourceTask(new ConnectorTaskId(CONNECTOR_NAME, 0), configState, connectorConfig(sourceSink), generatedTaskProps, herder, TargetState.STARTED);
+        } else {
+            worker.startSinkTask(new ConnectorTaskId(CONNECTOR_NAME, 0), configState, connectorConfig(sourceSink), generatedTaskProps, herder, TargetState.STARTED);
+        }
         EasyMock.expectLastCall().andReturn(true);
 
         EasyMock.expect(herder.connectorTypeForClass(BogusSourceConnector.class.getName()))

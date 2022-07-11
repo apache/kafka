@@ -28,6 +28,7 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.health.ConnectClusterDetailsImpl;
 import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
+import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorPluginsResource;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.runtime.rest.resources.LoggingResource;
@@ -60,6 +61,7 @@ import javax.ws.rs.core.UriBuilder;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
@@ -88,6 +90,7 @@ public class RestServer {
     private final ContextHandlerCollection handlers;
     private final Server jettyServer;
 
+    private Collection<ConnectResource> resources;
     private List<ConnectRestExtension> connectRestExtensions = Collections.emptyList();
 
     /**
@@ -210,9 +213,11 @@ public class RestServer {
         ResourceConfig resourceConfig = new ResourceConfig();
         resourceConfig.register(new JacksonJsonProvider());
 
-        resourceConfig.register(new RootResource(herder));
-        resourceConfig.register(new ConnectorsResource(herder, config));
-        resourceConfig.register(new ConnectorPluginsResource(herder));
+        this.resources = new ArrayList<>();
+        resources.add(new RootResource(herder));
+        resources.add(new ConnectorsResource(herder, config));
+        resources.add(new ConnectorPluginsResource(herder));
+        resources.forEach(resourceConfig::register);
 
         resourceConfig.register(ConnectExceptionMapper.class);
         resourceConfig.property(ServerProperties.WADL_FEATURE_DISABLE, true);
@@ -224,14 +229,18 @@ public class RestServer {
         if (adminListeners == null) {
             log.info("Adding admin resources to main listener");
             adminResourceConfig = resourceConfig;
-            adminResourceConfig.register(new LoggingResource());
+            LoggingResource loggingResource = new LoggingResource();
+            this.resources.add(loggingResource);
+            adminResourceConfig.register(loggingResource);
         } else if (adminListeners.size() > 0) {
             // TODO: we need to check if these listeners are same as 'listeners'
             // TODO: the following code assumes that they are different
             log.info("Adding admin resources to admin listener");
             adminResourceConfig = new ResourceConfig();
             adminResourceConfig.register(new JacksonJsonProvider());
-            adminResourceConfig.register(new LoggingResource());
+            LoggingResource loggingResource = new LoggingResource();
+            this.resources.add(loggingResource);
+            adminResourceConfig.register(loggingResource);
             adminResourceConfig.register(ConnectExceptionMapper.class);
         } else {
             log.info("Skipping adding admin resources");
@@ -385,6 +394,11 @@ public class RestServer {
         return builder.build();
     }
 
+    // For testing only
+    public void requestTimeout(long requestTimeoutMs) {
+        this.resources.forEach(resource -> resource.requestTimeout(requestTimeoutMs));
+    }
+
     String determineAdvertisedProtocol() {
         String advertisedSecurityProtocol = config.getString(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG);
         if (advertisedSecurityProtocol == null) {
@@ -432,7 +446,7 @@ public class RestServer {
             config.getList(WorkerConfig.REST_EXTENSION_CLASSES_CONFIG),
             config, ConnectRestExtension.class);
 
-        long herderRequestTimeoutMs = ConnectorsResource.REQUEST_TIMEOUT_MS;
+        long herderRequestTimeoutMs = ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
         Integer rebalanceTimeoutMs = config.getRebalanceTimeout();
 

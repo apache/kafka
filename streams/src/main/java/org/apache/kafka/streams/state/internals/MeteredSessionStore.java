@@ -347,6 +347,18 @@ public class MeteredSessionStore<K, V>
     }
 
     @Override
+    public KeyValueIterator<Windowed<K>, V> findSessions(final long earliestSessionEndTime,
+                                                         final long latestSessionEndTime) {
+        return new MeteredWindowedKeyValueIterator<>(
+                wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime),
+                fetchSensor,
+                streamsMetrics,
+                serdes::keyFrom,
+                serdes::valueFrom,
+                time);
+    }
+
+    @Override
     public KeyValueIterator<Windowed<K>, V> backwardFindSessions(final K keyFrom,
                                                                  final K keyTo,
                                                                  final long earliestSessionEndTime,

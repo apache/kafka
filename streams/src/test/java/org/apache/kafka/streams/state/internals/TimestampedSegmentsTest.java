@@ -28,6 +28,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -304,7 +305,7 @@ public class TimestampedSegmentsTest {
         for (int segmentId = 0; segmentId < NUM_SEGMENTS; ++segmentId) {
             final File oldSegment = new File(storeDirectoryPath + File.separator + storeName + "-" + formatter.format(new Date(segmentId * segmentInterval)));
             //noinspection ResultOfMethodCallIgnored
-            oldSegment.createNewFile();
+            Files.createFile(oldSegment.toPath());
         }
 
         segments.openExisting(context, -1L);
@@ -312,7 +313,7 @@ public class TimestampedSegmentsTest {
         for (int segmentId = 0; segmentId < NUM_SEGMENTS; ++segmentId) {
             final String segmentName = storeName + "." + (long) segmentId * segmentInterval;
             final File newSegment = new File(storeDirectoryPath + File.separator + segmentName);
-            assertTrue(newSegment.exists());
+            assertTrue(Files.exists(newSegment.toPath()));
         }
     }
 
@@ -326,14 +327,14 @@ public class TimestampedSegmentsTest {
         for (int segmentId = 0; segmentId < NUM_SEGMENTS; ++segmentId) {
             final File oldSegment = new File(storeDirectoryPath + File.separator + storeName + ":" + segmentId * (RETENTION_PERIOD / (NUM_SEGMENTS - 1)));
             //noinspection ResultOfMethodCallIgnored
-            oldSegment.createNewFile();
+            Files.createFile(oldSegment.toPath());
         }
 
         segments.openExisting(context, -1L);
 
         for (int segmentId = 0; segmentId < NUM_SEGMENTS; ++segmentId) {
             final File newSegment = new File(storeDirectoryPath + File.separator + storeName + "." + segmentId * (RETENTION_PERIOD / (NUM_SEGMENTS - 1)));
-            assertTrue(newSegment.exists());
+            assertTrue(Files.exists(newSegment.toPath()));
         }
     }
 

@@ -51,7 +51,9 @@ import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.easymock.EasyMock;
 import org.junit.Assert;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -71,6 +73,8 @@ import static org.junit.Assert.fail;
 
 @SuppressWarnings("deprecation")
 public class TopologyTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     private final StoreBuilder<MockKeyValueStore> storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
     private final KeyValueStoreBuilder<?, ?> globalStoreBuilder = EasyMock.createNiceMock(KeyValueStoreBuilder.class);

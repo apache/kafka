@@ -39,8 +39,10 @@ import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -55,7 +57,8 @@ import static org.hamcrest.core.IsEqual.equalTo;
 @SuppressWarnings("unchecked")
 @Category({IntegrationTest.class})
 public class KStreamTransformIntegrationTest {
-
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private StreamsBuilder builder;
     private final String topic = "stream";
     private final String stateStoreName = "myTransformState";

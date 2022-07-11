@@ -18,6 +18,7 @@
 package kafka.test.junit;
 
 import kafka.network.SocketServer;
+import kafka.server.BrokerFeatures;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.test.ClusterConfig;
@@ -38,6 +39,7 @@ import scala.compat.java8.OptionConverters;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -63,18 +65,20 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
     private final ClusterConfig clusterConfig;
     private final AtomicReference<KafkaClusterTestKit> clusterReference;
+    private final boolean isCoResident;
 
-    public RaftClusterInvocationContext(ClusterConfig clusterConfig) {
+    public RaftClusterInvocationContext(ClusterConfig clusterConfig, boolean isCoResident) {
         this.clusterConfig = clusterConfig;
         this.clusterReference = new AtomicReference<>();
+        this.isCoResident = isCoResident;
     }
 
     @Override
     public String getDisplayName(int invocationIndex) {
         String clusterDesc = clusterConfig.nameTags().entrySet().stream()
-                .map(Object::toString)
-                .collect(Collectors.joining(", "));
-        return String.format("[%d] Type=Raft, %s", invocationIndex, clusterDesc);
+            .map(Object::toString)
+            .collect(Collectors.joining(", "));
+        return String.format("[%d] Type=Raft-%s, %s", invocationIndex, isCoResident ? "CoReside" : "Distributed", clusterDesc);
     }
 
     @Override
@@ -83,6 +87,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         return Arrays.asList(
             (BeforeTestExecutionCallback) context -> {
                 TestKitNodes nodes = new TestKitNodes.Builder().
+                        setBootstrapMetadataVersion(clusterConfig.metadataVersion()).
+                        setCoResident(isCoResident).
                         setNumBrokerNodes(clusterConfig.numBrokers()).
                         setNumControllerNodes(clusterConfig.numControllers()).build();
                 nodes.brokerNodes().forEach((brokerId, brokerNode) -> {
@@ -166,6 +172,14 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 .map(ControllerServer::socketServer)
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("No controller SocketServers found"));
+        }
+
+        @Override
+        public Map<Integer, BrokerFeatures> brokerFeatures() {
+            return brokers().collect(Collectors.toMap(
+                brokerServer -> brokerServer.config().nodeId(),
+                BrokerServer::brokerFeatures
+            ));
         }
 
         @Override

@@ -33,7 +33,7 @@ import kafka.utils.Json
 import kafka.utils.json.JsonObject
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.feature.Features._
-import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -880,20 +880,37 @@ object FeatureZNodeStatus {
 /**
  * Represents the contents of the ZK node containing finalized feature information.
  *
+ * @param version    the version of ZK node, we removed min_version_level in version 2
  * @param status     the status of the ZK node
  * @param features   the cluster-wide finalized features
  */
-case class FeatureZNode(status: FeatureZNodeStatus, features: Features[FinalizedVersionRange]) {
+case class FeatureZNode(version: Int, status: FeatureZNodeStatus, features: Map[String, Short]) {
 }
 
 object FeatureZNode {
   private val VersionKey = "version"
   private val StatusKey = "status"
   private val FeaturesKey = "features"
+  private val V1MinVersionKey = "min_version_level"
+  private val V1MaxVersionKey = "max_version_level"
 
   // V1 contains 'version', 'status' and 'features' keys.
   val V1 = 1
-  val CurrentVersion = V1
+  // V2 removes min_version_level
+  val V2 = 2
+
+  /**
+   * - Create a feature info with v1 json format if if the metadataVersion is before 3.2.0
+   * - Create a feature znode with v2 json format if the metadataVersion is 3.2.1 or above.
+   */
+  def apply(metadataVersion: MetadataVersion, status: FeatureZNodeStatus, features: Map[String, Short]): FeatureZNode = {
+    val version = if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_3_IV0)) {
+      V2
+    } else {
+      V1
+    }
+    FeatureZNode(version, status, features)
+  }
 
   def path = "/feature"
 
@@ -914,10 +931,19 @@ object FeatureZNode {
    * @return               JSON representation of the FeatureZNode, as an Array[Byte]
    */
   def encode(featureZNode: FeatureZNode): Array[Byte] = {
+    val features = if (featureZNode.version == V1) {
+      asJavaMap(featureZNode.features.map{
+        case (feature, version) => feature -> Map(V1MaxVersionKey -> version, V1MinVersionKey -> version)
+      })
+    } else {
+      asJavaMap(featureZNode.features.map{
+        case (feature, version) => feature -> Map(V1MaxVersionKey -> version)
+      })
+    }
     val jsonMap = collection.mutable.Map(
-      VersionKey -> CurrentVersion,
+      VersionKey -> featureZNode.version,
       StatusKey -> featureZNode.status.id,
-      FeaturesKey -> featureZNode.features.toMap)
+      FeaturesKey -> features)
     Json.encodeAsBytes(jsonMap.asJava)
   }
 
@@ -935,26 +961,10 @@ object FeatureZNode {
       case Right(js) =>
         val featureInfo = js.asJsonObject
         val version = featureInfo(VersionKey).to[Int]
-        if (version < V1) {
+        if (version < V1 || version > V2) {
           throw new IllegalArgumentException(s"Unsupported version: $version of feature information: " +
             s"${new String(jsonBytes, UTF_8)}")
         }
-
-        val featuresMap = featureInfo
-          .get(FeaturesKey)
-          .flatMap(_.to[Option[Map[String, Map[String, Int]]]])
-
-        if (featuresMap.isEmpty) {
-          throw new IllegalArgumentException("Features map can not be absent in: " +
-            s"${new String(jsonBytes, UTF_8)}")
-        }
-        val features = asJavaMap(
-          featuresMap
-            .map(theMap => theMap.map {
-              case (featureName, versionInfo) => featureName -> versionInfo.map {
-                case (label, version) => label -> version.asInstanceOf[Short]
-              }
-            }).getOrElse(Map[String, Map[String, Short]]()))
 
         val statusInt = featureInfo
           .get(StatusKey)
@@ -969,17 +979,42 @@ object FeatureZNode {
             s"Malformed status: $statusInt found in feature information: ${new String(jsonBytes, UTF_8)}")
         }
 
-        var finalizedFeatures: Features[FinalizedVersionRange] = null
-        try {
-          finalizedFeatures = fromFinalizedFeaturesMap(features)
-        } catch {
-          case e: Exception => throw new IllegalArgumentException(
-            "Unable to convert to finalized features from map: " + features, e)
-        }
-        FeatureZNode(status.get, finalizedFeatures)
+        val finalizedFeatures = decodeFeature(version, featureInfo, jsonBytes)
+        FeatureZNode(version, status.get, finalizedFeatures)
       case Left(e) =>
         throw new IllegalArgumentException(s"Failed to parse feature information: " +
           s"${new String(jsonBytes, UTF_8)}", e)
+    }
+  }
+
+  private def decodeFeature(version: Int, featureInfo: JsonObject, jsonBytes: Array[Byte]): Map[String, Short] = {
+    val featuresMap = featureInfo
+      .get(FeaturesKey)
+      .flatMap(_.to[Option[Map[String, Map[String, Int]]]])
+
+    if (featuresMap.isEmpty) {
+      throw new IllegalArgumentException("Features map can not be absent in: " +
+        s"${new String(jsonBytes, UTF_8)}")
+    }
+    featuresMap.get.map {
+      case (featureName, versionInfo) =>
+        if (version == V1 && !versionInfo.contains(V1MinVersionKey)) {
+          throw new IllegalArgumentException(s"$V1MinVersionKey absent in [$versionInfo]")
+        }
+        if (!versionInfo.contains(V1MaxVersionKey)) {
+          throw new IllegalArgumentException(s"$V1MaxVersionKey absent in [$versionInfo]")
+        }
+
+        val minValueOpt = versionInfo.get(V1MinVersionKey)
+        val maxValue = versionInfo(V1MaxVersionKey)
+
+        if (version == V1 && (minValueOpt.get < 1 || maxValue < minValueOpt.get)) {
+          throw new IllegalArgumentException(s"Expected minValue >= 1, maxValue >= 1 and maxValue >= minValue, but received minValue: ${minValueOpt.get}, maxValue: $maxValue")
+        }
+        if (maxValue < 1) {
+          throw new IllegalArgumentException(s"Expected maxValue >= 1, but received maxValue: $maxValue")
+        }
+        featureName -> maxValue.toShort
     }
   }
 }

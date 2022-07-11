@@ -57,6 +57,18 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
     AclMutator aclMutatorOrException();
 
     /**
+     * Complete the initial load of the cluster metadata authorizer, so that all
+     * principals can use it.
+     */
+    void completeInitialLoad();
+
+    /**
+     * Complete the initial load of the cluster metadata authorizer with an exception,
+     * indicating that the loading process has failed.
+     */
+    void completeInitialLoad(Exception e);
+
+    /**
      * Load the ACLs in the given map. Anything not in the map will be removed.
      * The authorizer will also wait for this initial snapshot load to complete when
      * coming up.
@@ -91,7 +103,7 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
         AclMutator aclMutator = aclMutatorOrException();
         aclBindings.forEach(b -> futures.add(new CompletableFuture<>()));
         ControllerRequestContext context = new ControllerRequestContext(
-            requestContext.principal(), OptionalLong.empty());
+            requestContext, OptionalLong.empty());
         aclMutator.createAcls(context, aclBindings).whenComplete((results, throwable) -> {
             if (throwable == null && results.size() != futures.size()) {
                 throwable = new UnknownServerException("Invalid size " +
@@ -131,7 +143,7 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
         AclMutator aclMutator = aclMutatorOrException();
         filters.forEach(b -> futures.add(new CompletableFuture<>()));
         ControllerRequestContext context = new ControllerRequestContext(
-            requestContext.principal(), OptionalLong.empty());
+            requestContext, OptionalLong.empty());
         aclMutator.deleteAcls(context, filters).whenComplete((results, throwable) -> {
             if (throwable == null && results.size() != futures.size()) {
                 throwable = new UnknownServerException("Invalid size " +

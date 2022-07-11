@@ -45,7 +45,7 @@ public class PrefixedWindowKeySchemas {
         return binaryBytes.length > 0 && binaryBytes[0] == TIME_FIRST_PREFIX;
     }
 
-    public static class TimeFirstWindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
+    public static class TimeFirstWindowKeySchema implements KeySchema {
 
         @Override
         public Bytes upperRange(final Bytes key, final long to) {
@@ -238,8 +238,6 @@ public class PrefixedWindowKeySchemas {
 
     public static class KeyFirstWindowKeySchema implements KeySchema {
 
-
-
         @Override
         public Bytes upperRange(final Bytes key, final long to) {
             final Bytes noPrefixBytes = new WindowKeySchema().upperRange(key, to);
@@ -267,7 +265,7 @@ public class PrefixedWindowKeySchemas {
 
         @Override
         public long segmentTimestamp(final Bytes key) {
-            return KeyFirstWindowKeySchema.extractStoreTimestamp(key.get());
+            return extractStoreTimestamp(key.get());
         }
 
         @Override

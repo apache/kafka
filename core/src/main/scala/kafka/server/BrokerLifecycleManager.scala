@@ -98,6 +98,11 @@ class BrokerLifecycleManager(val config: KafkaConfig,
   val initialCatchUpFuture = new CompletableFuture[Void]()
 
   /**
+   * A future which is completed when the broker is unfenced for the first time.
+   */
+  val initialUnfenceFuture = new CompletableFuture[Void]()
+
+  /**
    * A future which is completed when controlled shutdown is done.
    */
   val controlledShutdownFuture = new CompletableFuture[Void]()
@@ -189,8 +194,9 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       channelManager, clusterId, advertisedListeners, supportedFeatures))
   }
 
-  def setReadyToUnfence(): Unit = {
+  def setReadyToUnfence(): CompletableFuture[Void] = {
     eventQueue.append(new SetReadyToUnfenceEvent())
+    initialUnfenceFuture
   }
 
   def brokerEpoch: Long = _brokerEpoch
@@ -384,6 +390,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
             case BrokerState.RECOVERY =>
               if (!message.data().isFenced) {
                 info(s"The broker has been unfenced. Transitioning from RECOVERY to RUNNING.")
+                initialUnfenceFuture.complete(null)
                 _state = BrokerState.RUNNING
               } else {
                 info(s"The broker is in RECOVERY.")
@@ -476,6 +483,7 @@ class BrokerLifecycleManager(val config: KafkaConfig,
       _state = BrokerState.SHUTTING_DOWN
       controlledShutdownFuture.complete(null)
       initialCatchUpFuture.cancel(false)
+      initialUnfenceFuture.cancel(false)
       if (_channelManager != null) {
         _channelManager.shutdown()
         _channelManager = null

@@ -279,7 +279,8 @@ public class BufferPool {
     }
 
     public void deallocate(ByteBuffer buffer) {
-        deallocate(buffer, buffer.capacity());
+        if (buffer != null)
+            deallocate(buffer, buffer.capacity());
     }
 
     /**

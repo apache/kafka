@@ -717,7 +717,6 @@ public class KafkaConsumerTest {
         consumer.seekToEnd(singleton(tp0));
         consumer.seekToBeginning(singleton(tp1));
 
-        client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
         client.prepareResponse(body -> {
             ListOffsetsRequest request = (ListOffsetsRequest) body;
             List<ListOffsetsPartition> partitions = request.topics().stream().flatMap(t -> {

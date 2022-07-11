@@ -115,7 +115,7 @@ public class TaskManager {
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
-        this.tasks = new Tasks(logContext, topologyMetadata,  streamsMetrics, activeTaskCreator, standbyTaskCreator);
+        this.tasks = new Tasks(logContext, topologyMetadata, activeTaskCreator, standbyTaskCreator);
         this.taskExecutor = new TaskExecutor(
             tasks,
             topologyMetadata.taskExecutionMetadata(),
@@ -1018,6 +1018,11 @@ public class TaskManager {
         return tasks.tasksPerId();
     }
 
+    Map<TaskId, Task> notPausedTasks() {
+        return Collections.unmodifiableMap(tasks.notPausedTasks().stream()
+            .collect(Collectors.toMap(Task::id, v -> v)));
+    }
+
     Map<TaskId, Task> activeTaskMap() {
         return activeTaskStream().collect(Collectors.toMap(Task::id, t -> t));
     }
@@ -1064,17 +1069,6 @@ public class TaskManager {
 
             activeTask.addRecords(partition, records.records(partition));
         }
-    }
-
-    /**
-     *  Fetch all non-empty partitions for pausing
-     */
-    Set<TopicPartition> nonEmptyPartitions() {
-        final Set<TopicPartition> nonEmptyPartitions = new HashSet<>();
-        for (final Task task : activeTaskIterable()) {
-            nonEmptyPartitions.addAll(((StreamTask) task).getNonEmptyTopicPartitions());
-        }
-        return nonEmptyPartitions;
     }
 
     /**
@@ -1178,14 +1172,6 @@ public class TaskManager {
             //  the user of an error in this named topology without killing the thread and delaying the others
             log.error("Caught the following exception while closing tasks from a removed topology:", e);
         }
-    }
-
-    long getInputBufferSizeInBytes() {
-        long bytesBuffered = 0L;
-        for (final Task task : activeTaskIterable()) {
-            bytesBuffered += ((StreamTask) task).totalBytesBuffered();
-        }
-        return bytesBuffered;
     }
 
     /**

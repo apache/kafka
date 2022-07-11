@@ -19,15 +19,52 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.kstream.internals.emitstrategy.WindowCloseStrategy;
 import org.apache.kafka.streams.kstream.internals.emitstrategy.WindowUpdateStrategy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * This interface controls the strategy that can be used to control how we emit results in a processor.
  */
 public interface EmitStrategy {
 
+    Logger log = LoggerFactory.getLogger(EmitStrategy.class);
+
     enum StrategyType {
-        ON_WINDOW_CLOSE,
-        ON_WINDOW_UPDATE
+        ON_WINDOW_UPDATE(0, new WindowUpdateStrategy()),
+        ON_WINDOW_CLOSE(1, new WindowCloseStrategy());
+
+        private final short code;
+        private final EmitStrategy strategy;
+
+        private short code() {
+            return this.code;
+        }
+
+        private EmitStrategy strategy() {
+            return this.strategy;
+        }
+
+        StrategyType(final int code, final EmitStrategy strategy) {
+            this.code = (short) code;
+            this.strategy = strategy;
+        }
+
+        private final static Map<Short, EmitStrategy> TYPE_TO_STRATEGY = new HashMap<>();
+
+        static {
+            for (final StrategyType type : StrategyType.values()) {
+                if (TYPE_TO_STRATEGY.put(type.code(), type.strategy()) != null)
+                    throw new IllegalStateException("Code " + type.code() + " for type " +
+                            type + " has already been used");
+            }
+        }
+
+        public static EmitStrategy forType(final StrategyType type) {
+            return TYPE_TO_STRATEGY.get(type.code());
+        }
     }
 
     /**

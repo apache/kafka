@@ -17,46 +17,74 @@
 
 package org.apache.kafka.server.common;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import org.apache.kafka.common.feature.Features;
-import org.apache.kafka.common.feature.FinalizedVersionRange;
-import org.apache.kafka.common.feature.SupportedVersionRange;
-import org.apache.kafka.common.message.ApiMessageType.ListenerType;
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
-import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKey;
-import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.RecordVersion;
-import org.apache.kafka.common.requests.AbstractResponse;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
-import org.apache.kafka.common.utils.Utils;
 
-import static org.apache.kafka.server.common.MetadataVersion.*;
+import java.util.Arrays;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+
+import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_1_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_1_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_1_IV2;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_0_10_2_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_0_11_0_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_0_11_0_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_0_11_0_IV2;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_0_8_0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_0_8_1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_0_8_2;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_0_9_0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_1_0_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_1_1_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_0_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_0_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_1_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_1_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_1_IV2;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_2_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_2_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_3_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_3_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_4_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_4_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_5_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV2;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_1_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_2_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV0;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import org.junit.jupiter.api.Test;
 
 class MetadataVersionTest {
 
     @Test
     public void testFeatureLevel() {
-        int firstFeatureLevelIndex = Arrays.asList(MetadataVersion.VALUES).indexOf(IBP_3_0_IV0);
+        MetadataVersion[] metadataVersions = MetadataVersion.VERSIONS;
+        int firstFeatureLevelIndex = Arrays.asList(metadataVersions).indexOf(MetadataVersion.MINIMUM_KRAFT_VERSION);
         for (int i = 0; i < firstFeatureLevelIndex; i++) {
-            assertFalse(MetadataVersion.VALUES[i].featureLevel().isPresent());
+            assertTrue(metadataVersions[i].featureLevel() < 0);
         }
         short expectedFeatureLevel = 1;
-        for (int i = firstFeatureLevelIndex; i < MetadataVersion.VALUES.length; i++) {
-            MetadataVersion metadataVersion = MetadataVersion.VALUES[i];
-            short featureLevel = metadataVersion.featureLevel().orElseThrow(() ->
-                new IllegalArgumentException(
-                    String.format("Metadata version %s must have a non-null feature level", metadataVersion.version())));
-            assertEquals(expectedFeatureLevel, featureLevel,
-                String.format("Metadata version %s should have feature level %s", metadataVersion.version(), expectedFeatureLevel));
+        for (int i = firstFeatureLevelIndex; i < metadataVersions.length; i++) {
+            MetadataVersion metadataVersion = metadataVersions[i];
+            assertEquals(expectedFeatureLevel, metadataVersion.featureLevel(),
+                    String.format("Metadata version %s should have feature level %s", metadataVersion.featureLevel(), expectedFeatureLevel));
             expectedFeatureLevel += 1;
         }
     }
@@ -164,6 +192,12 @@ class MetadataVersionTest {
 
         assertEquals(IBP_3_2_IV0, MetadataVersion.fromVersionString("3.2"));
         assertEquals(IBP_3_2_IV0, MetadataVersion.fromVersionString("3.2-IV0"));
+
+        assertEquals(IBP_3_3_IV3, MetadataVersion.fromVersionString("3.3"));
+        assertEquals(IBP_3_3_IV0, MetadataVersion.fromVersionString("3.3-IV0"));
+        assertEquals(IBP_3_3_IV1, MetadataVersion.fromVersionString("3.3-IV1"));
+        assertEquals(IBP_3_3_IV2, MetadataVersion.fromVersionString("3.3-IV2"));
+        assertEquals(IBP_3_3_IV3, MetadataVersion.fromVersionString("3.3-IV3"));
     }
 
     @Test
@@ -207,6 +241,10 @@ class MetadataVersionTest {
         assertEquals("3.0", IBP_3_0_IV1.shortVersion());
         assertEquals("3.1", IBP_3_1_IV0.shortVersion());
         assertEquals("3.2", IBP_3_2_IV0.shortVersion());
+        assertEquals("3.3", IBP_3_3_IV0.shortVersion());
+        assertEquals("3.3", IBP_3_3_IV1.shortVersion());
+        assertEquals("3.3", IBP_3_3_IV2.shortVersion());
+        assertEquals("3.3", IBP_3_3_IV3.shortVersion());
     }
 
     @Test
@@ -239,105 +277,66 @@ class MetadataVersionTest {
         assertEquals("3.0-IV1", IBP_3_0_IV1.version());
         assertEquals("3.1-IV0", IBP_3_1_IV0.version());
         assertEquals("3.2-IV0", IBP_3_2_IV0.version());
+        assertEquals("3.3-IV0", IBP_3_3_IV0.version());
+        assertEquals("3.3-IV1", IBP_3_3_IV1.version());
+        assertEquals("3.3-IV2", IBP_3_3_IV2.version());
+        assertEquals("3.3-IV3", IBP_3_3_IV3.version());
     }
 
     @Test
-    public void shouldCreateApiResponseOnlyWithKeysSupportedByMagicValue() {
-        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
-            10,
-            RecordVersion.V1,
-            Features.emptySupportedFeatures(),
-            Features.emptyFinalizedFeatures(),
-            ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
-            null,
-            ListenerType.ZK_BROKER
-        );
-        verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
-        assertEquals(10, response.throttleTimeMs());
-        assertTrue(response.data().supportedFeatures().isEmpty());
-        assertTrue(response.data().finalizedFeatures().isEmpty());
-        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, response.data().finalizedFeaturesEpoch());
-    }
-
-    @Test
-    public void shouldReturnFeatureKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
-        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
-            10,
-            RecordVersion.V1,
-            Features.supportedFeatures(
-                Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange((short) 1, (short) 4)))),
-            Features.finalizedFeatures(
-                Utils.mkMap(Utils.mkEntry("feature", new FinalizedVersionRange((short) 2, (short) 3)))),
-            10L,
-            null,
-            ListenerType.ZK_BROKER
-        );
-
-        verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
-        assertEquals(10, response.throttleTimeMs());
-        assertEquals(1, response.data().supportedFeatures().size());
-        SupportedFeatureKey sKey = response.data().supportedFeatures().find("feature");
-        assertNotNull(sKey);
-        assertEquals(1, sKey.minVersion());
-        assertEquals(4, sKey.maxVersion());
-        assertEquals(1, response.data().finalizedFeatures().size());
-        FinalizedFeatureKey fKey = response.data().finalizedFeatures().find("feature");
-        assertNotNull(fKey);
-        assertEquals(2, fKey.minVersionLevel());
-        assertEquals(3, fKey.maxVersionLevel());
-        assertEquals(10, response.data().finalizedFeaturesEpoch());
-    }
-
-    private void verifyApiKeysForMagic(ApiVersionsResponse response, Byte maxMagic) {
-        for (ApiVersion version : response.data().apiKeys()) {
-            assertTrue(ApiKeys.forId(version.apiKey()).minRequiredInterBrokerMagic <= maxMagic);
+    public void testPrevious() {
+        for (int i = 1; i < MetadataVersion.VERSIONS.length - 2; i++) {
+            MetadataVersion version = MetadataVersion.VERSIONS[i];
+            assertTrue(version.previous().isPresent(), version.toString());
+            assertEquals(MetadataVersion.VERSIONS[i - 1], version.previous().get());
         }
     }
 
     @Test
-    public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
-        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
-            AbstractResponse.DEFAULT_THROTTLE_TIME,
-            RecordVersion.current(),
-            Features.emptySupportedFeatures(),
-            Features.emptyFinalizedFeatures(),
-            ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
-            null,
-            ListenerType.ZK_BROKER
-        );
-        assertEquals(new HashSet<ApiKeys>(ApiKeys.zkBrokerApis()), apiKeysInResponse(response));
-        assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
-        assertTrue(response.data().supportedFeatures().isEmpty());
-        assertTrue(response.data().finalizedFeatures().isEmpty());
-        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, response.data().finalizedFeaturesEpoch());
+    public void testMetadataChanged() {
+        assertFalse(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_2_IV0));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_1_IV0));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_0_IV1));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_3_0_IV0));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_2_IV0, IBP_2_8_IV1));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_3_IV1, IBP_3_3_IV0));
+
+        // Check that argument order doesn't matter
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_3_0_IV0, IBP_3_2_IV0));
+        assertTrue(MetadataVersion.checkIfMetadataChanged(IBP_2_8_IV1, IBP_3_2_IV0));
     }
 
     @Test
-    public void testMetadataQuorumApisAreDisabled() {
-        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
-            AbstractResponse.DEFAULT_THROTTLE_TIME,
-            RecordVersion.current(),
-            Features.emptySupportedFeatures(),
-            Features.emptyFinalizedFeatures(),
-            ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
-            null,
-            ListenerType.ZK_BROKER
-        );
+    public void testKRaftVersions() {
+        for (MetadataVersion metadataVersion : MetadataVersion.VERSIONS) {
+            if (metadataVersion.isKRaftSupported()) {
+                assertTrue(metadataVersion.featureLevel() > 0);
+            } else {
+                assertEquals(-1, metadataVersion.featureLevel());
+            }
+        }
 
-        // Ensure that APIs needed for the KRaft mode are not exposed through ApiVersions until we are ready for them
-        HashSet<ApiKeys> exposedApis = apiKeysInResponse(response);
-        assertFalse(exposedApis.contains(ApiKeys.ENVELOPE));
-        assertFalse(exposedApis.contains(ApiKeys.VOTE));
-        assertFalse(exposedApis.contains(ApiKeys.BEGIN_QUORUM_EPOCH));
-        assertFalse(exposedApis.contains(ApiKeys.END_QUORUM_EPOCH));
-        assertFalse(exposedApis.contains(ApiKeys.DESCRIBE_QUORUM));
+        for (MetadataVersion metadataVersion : MetadataVersion.VERSIONS) {
+            if (metadataVersion.isAtLeast(IBP_3_0_IV1)) {
+                assertTrue(metadataVersion.isKRaftSupported(), metadataVersion.toString());
+            } else {
+                assertFalse(metadataVersion.isKRaftSupported());
+            }
+        }
     }
 
-    private HashSet<ApiKeys> apiKeysInResponse(ApiVersionsResponse apiVersions) {
-        HashSet<ApiKeys> apiKeys = new HashSet<>();
-        for (ApiVersion version : apiVersions.data().apiKeys()) {
-            apiKeys.add(ApiKeys.forId(version.apiKey()));
-        }
-        return apiKeys;
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testIsInControlledShutdownStateSupported(MetadataVersion metadataVersion) {
+        assertEquals(metadataVersion.isAtLeast(IBP_3_3_IV3),
+            metadataVersion.isInControlledShutdownStateSupported());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testRegisterBrokerRecordVersion(MetadataVersion metadataVersion) {
+        short expectedVersion = metadataVersion.isAtLeast(IBP_3_3_IV3) ?
+            (short) 1 : (short) 0;
+        assertEquals(expectedVersion, metadataVersion.registerBrokerRecordVersion());
     }
 }

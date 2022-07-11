@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
+import kafka.utils.{CoreUtils, Exit, TestInfoUtils, TestUtils}
 
 import java.io.{DataInputStream, File}
 import java.net.ServerSocket
@@ -30,7 +30,6 @@ import kafka.zookeeper.ZooKeeperClientTimeoutException
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
@@ -39,8 +38,9 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo, Timeout}
+import org.junit.jupiter.api.{BeforeEach, Disabled, Test, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -144,28 +144,47 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
-    if (quorum == "zk") {
-      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectionTimeoutMsProp, "50")
-      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectProp, "some.invalid.hostname.foo.bar.local:65535")
-      verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException](quorum)
-    } else {
+    if (isKRaftTest()) {
       propsToChangeUponRestart.setProperty(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp, "1000")
       shutdownBroker()
       shutdownKRaftController()
-      verifyCleanShutdownAfterFailedStartup[CancellationException](quorum)
+      verifyCleanShutdownAfterFailedStartup[CancellationException]
+    } else {
+      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectionTimeoutMsProp, "50")
+      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectProp, "some.invalid.hostname.foo.bar.local:65535")
+      verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException]
     }
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def testCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
+  def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
     createTopic(topic)
     shutdownBroker()
     config.logDirs.foreach { dirName =>
       val partitionDir = new File(dirName, s"$topic-0")
       partitionDir.listFiles.foreach(f => TestUtils.appendNonsenseToFile(f, TestUtils.random.nextInt(1024) + 1))
     }
-    verifyCleanShutdownAfterFailedStartup[KafkaStorageException](quorum)
+
+    val expectedStatusCode = Some(1)
+    @volatile var receivedStatusCode = Option.empty[Int]
+    @volatile var hasHaltProcedureCalled = false
+    Exit.setHaltProcedure((statusCode, _) => {
+      hasHaltProcedureCalled = true
+      receivedStatusCode = Some(statusCode)
+    }.asInstanceOf[Nothing])
+
+    try {
+      val recreateBrokerExec: Executable = () => recreateBroker(true)
+      // this startup should fail with no online log dir (due to corrupted log), and exit directly without throwing exception
+      assertDoesNotThrow(recreateBrokerExec)
+      // JVM should exit with status code 1
+      TestUtils.waitUntilTrue(() => hasHaltProcedureCalled == true && expectedStatusCode == receivedStatusCode,
+        s"Expected to halt directly with the expected status code:${expectedStatusCode.get}, " +
+          s"but got hasHaltProcedureCalled: $hasHaltProcedureCalled and received status code: ${receivedStatusCode.orNull}")
+    } finally {
+      Exit.resetHaltProcedure()
+    }
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -177,6 +196,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     verifyNonDaemonThreadsStatus()
   }
 
+  @Disabled
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("kraft"))
   def testCleanShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
@@ -186,7 +206,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     verifyNonDaemonThreadsStatus()
   }
 
-  private def verifyCleanShutdownAfterFailedStartup[E <: Exception](quorum: String)(implicit exceptionClassTag: ClassTag[E]): Unit = {
+  private def verifyCleanShutdownAfterFailedStartup[E <: Exception](implicit exceptionClassTag: ClassTag[E]): Unit = {
     try {
       recreateBroker(startup = true)
       fail("Expected KafkaServer setup to fail and throw exception")
@@ -195,11 +215,22 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       // identify the correct exception, making sure the server was shutdown, and cleaning up if anything
       // goes wrong so that awaitShutdown doesn't hang
       case e: Exception =>
-        assertTrue(exceptionClassTag.runtimeClass.isInstance(e), s"Unexpected exception $e")
-        assertEquals(if (quorum == "zk") BrokerState.NOT_RUNNING else BrokerState.SHUTTING_DOWN, brokers.head.brokerState)
+        assertCause(exceptionClassTag.runtimeClass, e)
+        assertEquals(if (isKRaftTest()) BrokerState.SHUTTING_DOWN else BrokerState.NOT_RUNNING, brokers.head.brokerState)
     } finally {
       shutdownBroker()
     }
+  }
+
+  private def assertCause(expectedClass: Class[_], e: Throwable): Unit = {
+    var cause = e
+    while (cause != null) {
+      if (expectedClass.isInstance(cause)) {
+        return
+      }
+      cause = cause.getCause
+    }
+    fail(s"Failed to assert cause of $e, expected cause $expectedClass")
   }
 
   private[this] def isNonDaemonKafkaThread(t: Thread): Boolean = {

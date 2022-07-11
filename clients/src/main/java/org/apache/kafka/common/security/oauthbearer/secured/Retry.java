@@ -49,13 +49,13 @@ public class Retry<R> {
         this.retryBackoffMaxMs = retryBackoffMaxMs;
 
         if (this.retryBackoffMs < 0)
-            throw new IllegalArgumentException(String.format("retryBackoffMs value (%s) must be non-negative", retryBackoffMs));
+            throw new IllegalArgumentException(String.format("retryBackoffMs value (%d) must be non-negative", retryBackoffMs));
 
         if (this.retryBackoffMaxMs < 0)
-            throw new IllegalArgumentException(String.format("retryBackoffMaxMs value (%s) must be non-negative", retryBackoffMaxMs));
+            throw new IllegalArgumentException(String.format("retryBackoffMaxMs value (%d) must be non-negative", retryBackoffMaxMs));
 
         if (this.retryBackoffMaxMs < this.retryBackoffMs)
-            throw new IllegalArgumentException(String.format("retryBackoffMaxMs value (%s) is less than retryBackoffMs value (%s)", retryBackoffMaxMs, retryBackoffMs));
+            throw new IllegalArgumentException(String.format("retryBackoffMaxMs value (%d) is less than retryBackoffMs value (%d)", retryBackoffMaxMs, retryBackoffMs));
     }
 
     public R execute(Retryable<R> retryable) throws ExecutionException {
@@ -88,7 +88,7 @@ public class Retry<R> {
                 if (waitMs <= 0)
                     break;
 
-                String message = String.format("Attempt %s to make call resulted in an error; sleeping %s ms before retrying",
+                String message = String.format("Attempt %d to make call resulted in an error; sleeping %d ms before retrying",
                     currAttempt, waitMs);
                 log.warn(message, e);
 

@@ -71,7 +71,7 @@ class IsrExpirationTest {
       scheduler = null,
       logManager = logManager,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId),
+      metadataCache = MetadataCache.zkMetadataCache(configs.head.brokerId, configs.head.interBrokerProtocolVersion),
       logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
       alterPartitionManager = alterIsrManager)
   }
@@ -226,7 +226,8 @@ class IsrExpirationTest {
     partition.setLog(localLog, isFutureLog = false)
 
     partition.updateAssignmentAndIsr(
-      assignment = configs.map(_.brokerId),
+      replicas = configs.map(_.brokerId),
+      isLeader = true,
       isr = configs.map(_.brokerId).toSet,
       addingReplicas = Seq.empty,
       removingReplicas = Seq.empty,

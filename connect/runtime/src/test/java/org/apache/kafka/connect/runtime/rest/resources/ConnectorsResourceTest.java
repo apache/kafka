@@ -849,6 +849,70 @@ public class ConnectorsResourceTest {
     }
 
     @Test
+    public void testFenceZombiesNoInternalRequestSignature() throws Throwable {
+        final Capture<Callback<Void>> cb = Capture.newInstance();
+        herder.fenceZombieSourceTasks(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb), EasyMock.anyObject(InternalRequestSignature.class));
+        expectAndCallbackResult(cb, null);
+
+        PowerMock.replayAll();
+
+        connectorsResource.fenceZombies(CONNECTOR_NAME, NULL_HEADERS, FORWARD, serializeAsBytes(null));
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testFenceZombiesWithInternalRequestSignature() throws Throwable {
+        final String signatureAlgorithm = "HmacSHA256";
+        final String encodedSignature = "Kv1/OSsxzdVIwvZ4e30avyRIVrngDfhzVUm/kAZEKc4=";
+
+        final Capture<Callback<Void>> cb = Capture.newInstance();
+        final Capture<InternalRequestSignature> signatureCapture = Capture.newInstance();
+        herder.fenceZombieSourceTasks(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb), EasyMock.capture(signatureCapture));
+        expectAndCallbackResult(cb, null);
+
+        HttpHeaders headers = EasyMock.mock(HttpHeaders.class);
+        EasyMock.expect(headers.getHeaderString(InternalRequestSignature.SIGNATURE_ALGORITHM_HEADER))
+                .andReturn(signatureAlgorithm)
+                .once();
+        EasyMock.expect(headers.getHeaderString(InternalRequestSignature.SIGNATURE_HEADER))
+                .andReturn(encodedSignature)
+                .once();
+
+        PowerMock.replayAll(headers);
+
+        connectorsResource.fenceZombies(CONNECTOR_NAME, headers, FORWARD, serializeAsBytes(null));
+
+        PowerMock.verifyAll();
+        InternalRequestSignature expectedSignature = new InternalRequestSignature(
+                serializeAsBytes(null),
+                Mac.getInstance(signatureAlgorithm),
+                Base64.getDecoder().decode(encodedSignature)
+        );
+        assertEquals(
+                expectedSignature,
+                signatureCapture.getValue()
+        );
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testFenceZombiesConnectorNotFound() throws Throwable {
+        final Capture<Callback<Void>> cb = Capture.newInstance();
+        herder.fenceZombieSourceTasks(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb), EasyMock.anyObject(InternalRequestSignature.class));
+
+        expectAndCallbackException(cb, new NotFoundException("not found"));
+
+        PowerMock.replayAll();
+
+        assertThrows(NotFoundException.class,
+                () -> connectorsResource.fenceZombies(CONNECTOR_NAME, NULL_HEADERS, FORWARD, serializeAsBytes(null)));
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testRestartConnectorNotFound() {
         final Capture<Callback<Void>> cb = Capture.newInstance();
         herder.restartConnector(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));

@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.Collection;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.FenceProducersResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
@@ -33,10 +36,12 @@ import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverrid
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.storage.ClusterConfigState;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -44,10 +49,12 @@ import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
@@ -57,6 +64,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.ParameterizedTest;
 import org.apache.kafka.connect.util.ThreadedTest;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -74,6 +82,7 @@ import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -84,11 +93,28 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
+import static org.apache.kafka.clients.admin.AdminClientConfig.RETRY_BACKOFF_MS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
+
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG;
+import static org.apache.kafka.connect.sink.SinkTask.TOPICS_CONFIG;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -96,6 +122,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -225,7 +252,7 @@ public class WorkerTest extends ThreadedTest {
         defaultProducerConfigs.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
         defaultProducerConfigs.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
 
-        defaultConsumerConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        defaultConsumerConfigs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         defaultConsumerConfigs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         defaultConsumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         defaultConsumerConfigs
@@ -273,9 +300,8 @@ public class WorkerTest extends ThreadedTest {
 
     @Test
     public void testStartAndStopConnector() throws Throwable {
-
         final String connectorClass = SampleSourceConnector.class.getName();
-        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass);
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
 
         // Create
         when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
@@ -355,9 +381,8 @@ public class WorkerTest extends ThreadedTest {
 
     @Test
     public void testStartConnectorFailure() throws Exception {
-
         final String nonConnectorClass = "java.util.HashMap";
-        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, nonConnectorClass); // Bad connector class name
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, nonConnectorClass); // Bad connector class name
 
         Exception exception = new ConnectException("Failed to find Connector");
 
@@ -405,7 +430,6 @@ public class WorkerTest extends ThreadedTest {
 
     @Test
     public void testAddConnectorByAlias() throws Throwable {
-
         final String connectorAlias = "SampleSourceConnector";
 
         when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
@@ -419,7 +443,7 @@ public class WorkerTest extends ThreadedTest {
         connectUtilsMockedStatic.when(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)))
                                 .thenReturn("test-cluster");
 
-        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorAlias);
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorAlias);
         connectorProps.put(SinkConnectorConfig.TOPICS_CONFIG, "gfieyls, wfru");
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
@@ -463,7 +487,6 @@ public class WorkerTest extends ThreadedTest {
 
     @Test
     public void testAddConnectorByShortAlias() throws Throwable {
-
         final String shortConnectorAlias = "WorkerTest";
 
         when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
@@ -474,6 +497,7 @@ public class WorkerTest extends ThreadedTest {
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
         connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, shortConnectorAlias);
+
         connectorProps.put(SinkConnectorConfig.TOPICS_CONFIG, "gfieyls, wfru");
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
@@ -574,7 +598,7 @@ public class WorkerTest extends ThreadedTest {
         Map<String, String> expectedTaskProps = new HashMap<>();
         expectedTaskProps.put("foo", "bar");
         expectedTaskProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
-        expectedTaskProps.put(SinkTask.TOPICS_CONFIG, "foo,bar");
+        expectedTaskProps.put(TOPICS_CONFIG, "foo,bar");
         assertEquals(2, taskConfigs.size());
         assertEquals(expectedTaskProps, taskConfigs.get(0));
         assertEquals(expectedTaskProps, taskConfigs.get(1));
@@ -607,7 +631,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testAddRemoveTask() {
+    public void testAddRemoveSourceTask() {
         when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
         when(delegatingLoader.connectorLoader(SampleSourceConnector.class.getName())).thenReturn(pluginLoader);
@@ -631,7 +655,7 @@ public class WorkerTest extends ThreadedTest {
 
         assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
-        worker.startTask(TASK_ID, ClusterConfigState.EMPTY, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
+        worker.startSourceTask(TASK_ID, ClusterConfigState.EMPTY, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
         assertStatistics(worker, 0, 1);
         assertEquals(Collections.singleton(TASK_ID), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
@@ -656,7 +680,136 @@ public class WorkerTest extends ThreadedTest {
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), times(2));
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
         connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)));
+    }
 
+    @Test
+    public void testAddRemoveSinkTask() {
+        // Most of the other cases use source tasks; we make sure to get code coverage for sink tasks here as well
+        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
+        when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
+        when(delegatingLoader.connectorLoader(SampleSinkConnector.class.getName())).thenReturn(pluginLoader);
+
+        SinkTask task = mock(TestSinkTask.class);
+        when(plugins.newTask(TestSinkTask.class)).thenReturn(task);
+        when(task.version()).thenReturn("1.0");
+        mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, taskKeyConverter);
+        mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, taskValueConverter);
+        mockTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
+        when(executorService.submit(any(WorkerSinkTask.class))).thenReturn(null);
+        doReturn(SampleSinkConnector.class).when(plugins).connectorClass(SampleSinkConnector.class.getName());
+        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
+        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
+
+        Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, TestSinkTask.class.getName());
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                noneConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
+        worker.start();
+
+        assertStatistics(worker, 0, 0);
+        assertEquals(Collections.emptySet(), worker.taskIds());
+        Map<String, String> connectorConfigs = anyConnectorConfigMap();
+        connectorConfigs.put(TOPICS_CONFIG, "t1");
+        connectorConfigs.put(CONNECTOR_CLASS_CONFIG, SampleSinkConnector.class.getName());
+
+        worker.startSinkTask(TASK_ID, ClusterConfigState.EMPTY, connectorConfigs, origProps, taskStatusListener, TargetState.STARTED);
+        assertStatistics(worker, 0, 1);
+        assertEquals(Collections.singleton(TASK_ID), worker.taskIds());
+        worker.stopAndAwaitTask(TASK_ID);
+        assertStatistics(worker, 0, 0);
+        assertEquals(Collections.emptySet(), worker.taskIds());
+        // Nothing should be left, so this should effectively be a nop
+        worker.stop();
+        assertStatistics(worker, 0, 0);
+
+        verify(plugins, times(2)).currentThreadLoader();
+        verify(plugins).newTask(TestSinkTask.class);
+        verify(task).version();
+        verifyTaskConverter(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG);
+        verifyTaskConverter(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG);
+        verifyTaskHeaderConverter();
+
+        verify(executorService).submit(any(WorkerSinkTask.class));
+        verify(plugins).delegatingLoader();
+        verify(delegatingLoader).connectorLoader(SampleSinkConnector.class.getName());
+        verify(plugins).connectorClass(SampleSinkConnector.class.getName());
+
+        pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), times(2));
+        pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
+        connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)));
+    }
+
+    @Test
+    public void testAddRemoveExactlyOnceSourceTask() {
+        Map<String, String> workerProps = new HashMap<>();
+        workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        workerProps.put("config.providers", "file");
+        workerProps.put("config.providers.file.class", MockFileConfigProvider.class.getName());
+        mockFileProviderTestId = UUID.randomUUID().toString();
+        workerProps.put("config.providers.file.param.testId", mockFileProviderTestId);
+        workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(enableTopicCreation));
+        workerProps.put(GROUP_ID_CONFIG, "connect-cluster");
+        workerProps.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:2606");
+        workerProps.put(OFFSET_STORAGE_TOPIC_CONFIG, "connect-offsets");
+        workerProps.put(CONFIG_TOPIC_CONFIG, "connect-configs");
+        workerProps.put(STATUS_STORAGE_TOPIC_CONFIG, "connect-statuses");
+        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
+        config = new DistributedConfig(workerProps);
+
+        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
+        when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
+        when(delegatingLoader.connectorLoader(SampleSourceConnector.class.getName())).thenReturn(pluginLoader);
+
+        when(plugins.newTask(TestSourceTask.class)).thenReturn(task);
+        when(task.version()).thenReturn("1.0");
+        mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, taskKeyConverter);
+        mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, taskValueConverter);
+        mockTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
+        when(executorService.submit(any(ExactlyOnceWorkerSourceTask.class))).thenReturn(null);
+        doReturn(SampleSourceConnector.class).when(plugins).connectorClass(SampleSourceConnector.class.getName());
+        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
+        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
+
+        Runnable preProducer = mock(Runnable.class);
+        Runnable postProducer = mock(Runnable.class);
+
+        Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                noneConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
+        worker.start();
+
+        assertStatistics(worker, 0, 0);
+        assertEquals(Collections.emptySet(), worker.taskIds());
+        worker.startExactlyOnceSourceTask(TASK_ID, ClusterConfigState.EMPTY,  anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED, preProducer, postProducer);
+        assertStatistics(worker, 0, 1);
+        assertEquals(Collections.singleton(TASK_ID), worker.taskIds());
+        worker.stopAndAwaitTask(TASK_ID);
+        assertStatistics(worker, 0, 0);
+        assertEquals(Collections.emptySet(), worker.taskIds());
+        // Nothing should be left, so this should effectively be a nop
+        worker.stop();
+        assertStatistics(worker, 0, 0);
+
+        verify(plugins, times(2)).currentThreadLoader();
+        verify(plugins).newTask(TestSourceTask.class);
+        verify(task).version();
+        verifyTaskConverter(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG);
+        verifyTaskConverter(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG);
+        verifyTaskHeaderConverter();
+
+        verify(executorService).submit(any(ExactlyOnceWorkerSourceTask.class));
+        verify(plugins).delegatingLoader();
+        verify(delegatingLoader).connectorLoader(SampleSourceConnector.class.getName());
+        verify(plugins).connectorClass(SampleSourceConnector.class.getName());
+
+        pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), times(2));
+        pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
+        connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)));
     }
 
     @Test
@@ -664,7 +817,6 @@ public class WorkerTest extends ThreadedTest {
         mockInternalConverters();
         mockStorage();
         mockFileConfigProvider();
-
 
 
         when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
@@ -693,7 +845,6 @@ public class WorkerTest extends ThreadedTest {
         doReturn(SampleSourceConnector.class).when(plugins).connectorClass(SampleSourceConnector.class.getName());
 
 
-
         // Each time we check the task metrics, the worker will call the herder
         when(herder.taskStatus(TASK_ID)).thenReturn(
                 new ConnectorStateInfo.TaskState(0, "RUNNING", "worker", "msg"),
@@ -717,7 +868,7 @@ public class WorkerTest extends ThreadedTest {
         assertStatistics(worker, 0, 0);
         assertStartupStatistics(worker, 0, 0, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
-        worker.startTask(
+        worker.startSourceTask(
             TASK_ID,
             ClusterConfigState.EMPTY,
             anyConnectorConfigMap(),
@@ -758,7 +909,6 @@ public class WorkerTest extends ThreadedTest {
         verifyTaskConverter(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG);
         verifyTaskHeaderConverter();
         verify(plugins, times(2)).currentThreadLoader();
-
     }
 
     @Test
@@ -811,7 +961,7 @@ public class WorkerTest extends ThreadedTest {
         assertStatistics(worker, 0, 0);
         assertStartupStatistics(worker, 0, 0, 0, 0);
 
-        assertFalse(worker.startTask(TASK_ID, ClusterConfigState.EMPTY, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED));
+        assertFalse(worker.startSourceTask(TASK_ID, ClusterConfigState.EMPTY, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED));
         assertStartupStatistics(worker, 0, 0, 1, 1);
 
         assertStatistics(worker, 0, 0);
@@ -862,7 +1012,7 @@ public class WorkerTest extends ThreadedTest {
         worker.herder = herder;
         worker.start();
         assertStatistics(worker, 0, 0);
-        worker.startTask(TASK_ID, ClusterConfigState.EMPTY, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
+        worker.startSourceTask(TASK_ID, ClusterConfigState.EMPTY, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
         assertStatistics(worker, 0, 1);
         worker.stop();
         assertStatistics(worker, 0, 0);
@@ -931,7 +1081,7 @@ public class WorkerTest extends ThreadedTest {
         Map<String, String> connProps = anyConnectorConfigMap();
         connProps.put(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, SampleConverterWithHeaders.class.getName());
         connProps.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, SampleConverterWithHeaders.class.getName());
-        worker.startTask(TASK_ID, ClusterConfigState.EMPTY, connProps, origProps, taskStatusListener, TargetState.STARTED);
+        worker.startSourceTask(TASK_ID, ClusterConfigState.EMPTY, connProps, origProps, taskStatusListener, TargetState.STARTED);
         assertStatistics(worker, 0, 1);
         assertEquals(Collections.singleton(TASK_ID), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
@@ -968,8 +1118,7 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("client.id", "connector-producer-job-0");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
         assertEquals(expectedConfigs,
-                     Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, config, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
-
+                Worker.baseProducerConfigs(CONNECTOR_ID, "connector-producer-" + TASK_ID, config, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX);
     }
 
@@ -988,8 +1137,9 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
 
         when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX)).thenReturn(new HashMap<>());
+
         assertEquals(expectedConfigs,
-            Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, configWithOverrides, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
+                Worker.baseProducerConfigs(CONNECTOR_ID, "connector-producer-" + TASK_ID, configWithOverrides, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX);
     }
 
@@ -1015,28 +1165,27 @@ public class WorkerTest extends ThreadedTest {
         when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX)).thenReturn(connConfig);
 
         assertEquals(expectedConfigs,
-            Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, configWithOverrides, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
-
+                Worker.baseProducerConfigs(CONNECTOR_ID, "connector-producer-" + TASK_ID, configWithOverrides, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX);
     }
 
     @Test
     public void testConsumerConfigsWithoutOverrides() {
         Map<String, String> expectedConfigs = new HashMap<>(defaultConsumerConfigs);
-        expectedConfigs.put("group.id", "connect-test");
-        expectedConfigs.put("client.id", "connector-consumer-test-1");
+        expectedConfigs.put("group.id", "connect-test-connector");
+        expectedConfigs.put("client.id", "connector-consumer-job-0");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
 
         when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).thenReturn(new HashMap<>());
-        assertEquals(expectedConfigs, Worker.consumerConfigs(new ConnectorTaskId("test", 1), config, connectorConfig,
-            null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
 
-        verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX);
+        assertEquals(expectedConfigs, Worker.baseConsumerConfigs(CONNECTOR_ID, "connector-consumer-" + TASK_ID, config, connectorConfig,
+                null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID, ConnectorType.SINK));
     }
 
     @Test
     public void testConsumerConfigsWithOverrides() {
         Map<String, String> props = new HashMap<>(workerProps);
+        props.put("consumer.group.id", "connect-test");
         props.put("consumer.auto.offset.reset", "latest");
         props.put("consumer.max.poll.records", "1000");
         props.put("consumer.client.id", "consumer-test-id");
@@ -1051,9 +1200,8 @@ public class WorkerTest extends ThreadedTest {
 
         when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).thenReturn(new HashMap<>());
 
-        assertEquals(expectedConfigs, Worker.consumerConfigs(new ConnectorTaskId("test", 1), configWithOverrides, connectorConfig,
-            null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
-
+        assertEquals(expectedConfigs, Worker.baseConsumerConfigs(CONNECTOR_ID, "connector-consumer-" + TASK_ID, configWithOverrides, connectorConfig,
+                null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID, ConnectorType.SINK));
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX);
     }
 
@@ -1065,11 +1213,11 @@ public class WorkerTest extends ThreadedTest {
         WorkerConfig configWithOverrides = new StandaloneConfig(props);
 
         Map<String, String> expectedConfigs = new HashMap<>(defaultConsumerConfigs);
-        expectedConfigs.put("group.id", "connect-test");
+        expectedConfigs.put("group.id", "connect-test-connector");
         expectedConfigs.put("auto.offset.reset", "latest");
         expectedConfigs.put("max.poll.records", "5000");
         expectedConfigs.put("max.poll.interval.ms", "1000");
-        expectedConfigs.put("client.id", "connector-consumer-test-1");
+        expectedConfigs.put("client.id", "connector-consumer-job-0");
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
 
         Map<String, Object> connConfig = new HashMap<>();
@@ -1078,9 +1226,8 @@ public class WorkerTest extends ThreadedTest {
 
         when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).thenReturn(connConfig);
 
-        assertEquals(expectedConfigs, Worker.consumerConfigs(new ConnectorTaskId("test", 1), configWithOverrides, connectorConfig,
-            null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
-
+        assertEquals(expectedConfigs, Worker.baseConsumerConfigs(CONNECTOR_ID, "connector-consumer-" + TASK_ID, configWithOverrides, connectorConfig,
+                null, allConnectorClientConfigOverridePolicy, CLUSTER_ID, ConnectorType.SINK));
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX);
     }
 
@@ -1096,9 +1243,8 @@ public class WorkerTest extends ThreadedTest {
         connConfig.put("max.poll.interval.ms", "1000");
         when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).thenReturn(connConfig);
 
-        assertThrows(ConnectException.class, () -> Worker.consumerConfigs(new ConnectorTaskId("test", 1),
-            configWithOverrides, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
-
+        assertThrows(ConnectException.class, () -> Worker.baseConsumerConfigs(CONNECTOR_ID, "connector-consumer-" + TASK_ID,
+                configWithOverrides, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID, ConnectorType.SINK));
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX);
     }
 
@@ -1121,9 +1267,9 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("metrics.context.connect.kafka.cluster.id", CLUSTER_ID);
 
         when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX)).thenReturn(connConfig);
-        assertEquals(expectedConfigs, Worker.adminConfigs(new ConnectorTaskId("test", 1), "", configWithOverrides, connectorConfig,
-                                                             null, allConnectorClientConfigOverridePolicy, CLUSTER_ID));
 
+        assertEquals(expectedConfigs, Worker.adminConfigs(CONNECTOR_ID, "", configWithOverrides, connectorConfig,
+                null, allConnectorClientConfigOverridePolicy, CLUSTER_ID, ConnectorType.SINK));
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX);
     }
 
@@ -1133,14 +1279,470 @@ public class WorkerTest extends ThreadedTest {
         props.put("admin.client.id", "testid");
         props.put("admin.metadata.max.age.ms", "5000");
         WorkerConfig configWithOverrides = new StandaloneConfig(props);
-
         Map<String, Object> connConfig = Collections.singletonMap("metadata.max.age.ms", "10000");
 
         when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX)).thenReturn(connConfig);
-        assertThrows(ConnectException.class, () -> Worker.adminConfigs(new ConnectorTaskId("test", 1),
-            "", configWithOverrides, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID));
 
+        assertThrows(ConnectException.class, () -> Worker.adminConfigs("test",
+                "", configWithOverrides, connectorConfig, null, noneConnectorClientConfigOverridePolicy, CLUSTER_ID, ConnectorType.SINK));
         verify(connectorConfig).originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX);
+    }
+
+    @Test
+    public void testRegularSourceOffsetsConsumerConfigs() {
+        final Map<String, Object> connectorConsumerOverrides = new HashMap<>();
+        when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).thenReturn(connectorConsumerOverrides);
+
+        Map<String, String> workerProps = new HashMap<>(this.workerProps);
+        workerProps.put("exactly.once.source.support", "enabled");
+        workerProps.put("bootstrap.servers", "localhost:4761");
+        workerProps.put("group.id", "connect-cluster");
+        workerProps.put("config.storage.topic", "connect-configs");
+        workerProps.put("offset.storage.topic", "connect-offsets");
+        workerProps.put("status.storage.topic", "connect-statuses");
+        config = new DistributedConfig(workerProps);
+
+        Map<String, Object> consumerConfigs = Worker.regularSourceOffsetsConsumerConfigs(
+                "test", "", config, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        assertEquals("localhost:4761", consumerConfigs.get(BOOTSTRAP_SERVERS_CONFIG));
+        assertEquals("read_committed", consumerConfigs.get(ISOLATION_LEVEL_CONFIG));
+
+        workerProps.put("consumer." + BOOTSTRAP_SERVERS_CONFIG, "localhost:9021");
+        workerProps.put("consumer." + ISOLATION_LEVEL_CONFIG, "read_uncommitted");
+        config = new DistributedConfig(workerProps);
+        consumerConfigs = Worker.regularSourceOffsetsConsumerConfigs(
+                "test", "", config, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        assertEquals("localhost:9021", consumerConfigs.get(BOOTSTRAP_SERVERS_CONFIG));
+        // User is allowed to override the isolation level for regular (non-exactly-once) source connectors and their tasks
+        assertEquals("read_uncommitted", consumerConfigs.get(ISOLATION_LEVEL_CONFIG));
+
+        workerProps.remove("consumer." + ISOLATION_LEVEL_CONFIG);
+        connectorConsumerOverrides.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:489");
+        connectorConsumerOverrides.put(ISOLATION_LEVEL_CONFIG, "read_uncommitted");
+        config = new DistributedConfig(workerProps);
+        consumerConfigs = Worker.regularSourceOffsetsConsumerConfigs(
+                "test", "", config, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        assertEquals("localhost:489", consumerConfigs.get(BOOTSTRAP_SERVERS_CONFIG));
+        // User is allowed to override the isolation level for regular (non-exactly-once) source connectors and their tasks
+        assertEquals("read_uncommitted", consumerConfigs.get(ISOLATION_LEVEL_CONFIG));
+    }
+
+    @Test
+    public void testExactlyOnceSourceOffsetsConsumerConfigs() {
+        final Map<String, Object> connectorConsumerOverrides = new HashMap<>();
+        when(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).thenReturn(connectorConsumerOverrides);
+
+        Map<String, String> workerProps = new HashMap<>(this.workerProps);
+        workerProps.put("exactly.once.source.support", "enabled");
+        workerProps.put("bootstrap.servers", "localhost:4761");
+        workerProps.put("group.id", "connect-cluster");
+        workerProps.put("config.storage.topic", "connect-configs");
+        workerProps.put("offset.storage.topic", "connect-offsets");
+        workerProps.put("status.storage.topic", "connect-statuses");
+        config = new DistributedConfig(workerProps);
+
+        Map<String, Object> consumerConfigs = Worker.exactlyOnceSourceOffsetsConsumerConfigs(
+                "test", "", config, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        assertEquals("localhost:4761", consumerConfigs.get(BOOTSTRAP_SERVERS_CONFIG));
+        assertEquals("read_committed", consumerConfigs.get(ISOLATION_LEVEL_CONFIG));
+
+        workerProps.put("consumer." + BOOTSTRAP_SERVERS_CONFIG, "localhost:9021");
+        workerProps.put("consumer." + ISOLATION_LEVEL_CONFIG, "read_uncommitted");
+        config = new DistributedConfig(workerProps);
+        consumerConfigs = Worker.exactlyOnceSourceOffsetsConsumerConfigs(
+                "test", "", config, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        assertEquals("localhost:9021", consumerConfigs.get(BOOTSTRAP_SERVERS_CONFIG));
+        // User is not allowed to override isolation level when exactly-once support is enabled
+        assertEquals("read_committed", consumerConfigs.get(ISOLATION_LEVEL_CONFIG));
+
+        workerProps.remove("consumer." + ISOLATION_LEVEL_CONFIG);
+        connectorConsumerOverrides.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:489");
+        connectorConsumerOverrides.put(ISOLATION_LEVEL_CONFIG, "read_uncommitted");
+        config = new DistributedConfig(workerProps);
+        consumerConfigs = Worker.exactlyOnceSourceOffsetsConsumerConfigs(
+                "test", "", config, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        assertEquals("localhost:489", consumerConfigs.get(BOOTSTRAP_SERVERS_CONFIG));
+        // User is not allowed to override isolation level when exactly-once support is enabled
+        assertEquals("read_committed", consumerConfigs.get(ISOLATION_LEVEL_CONFIG));
+    }
+
+    @Test
+    public void testExactlyOnceSourceTaskProducerConfigs() {
+        final Map<String, Object> connectorProducerOverrides = new HashMap<>();
+        when(connectorConfig.originalsWithPrefix(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX)).thenReturn(connectorProducerOverrides);
+
+        final String groupId = "connect-cluster";
+        final String transactionalId = Worker.taskTransactionalId(groupId, TASK_ID.connector(), TASK_ID.task());
+
+        Map<String, String> workerProps = new HashMap<>(this.workerProps);
+        workerProps.put("exactly.once.source.support", "enabled");
+        workerProps.put("bootstrap.servers", "localhost:4761");
+        workerProps.put("group.id", groupId);
+        workerProps.put("config.storage.topic", "connect-configs");
+        workerProps.put("offset.storage.topic", "connect-offsets");
+        workerProps.put("status.storage.topic", "connect-statuses");
+        config = new DistributedConfig(workerProps);
+
+        Map<String, Object> producerConfigs = Worker.exactlyOnceSourceTaskProducerConfigs(
+                TASK_ID, config, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        assertEquals("localhost:4761", producerConfigs.get(BOOTSTRAP_SERVERS_CONFIG));
+        assertEquals("true", producerConfigs.get(ENABLE_IDEMPOTENCE_CONFIG));
+        assertEquals(transactionalId, producerConfigs.get(TRANSACTIONAL_ID_CONFIG));
+
+        workerProps.put("producer." + BOOTSTRAP_SERVERS_CONFIG, "localhost:9021");
+        workerProps.put("producer." + ENABLE_IDEMPOTENCE_CONFIG, "false");
+        workerProps.put("producer." + TRANSACTIONAL_ID_CONFIG, "some-other-transactional-id");
+        config = new DistributedConfig(workerProps);
+        producerConfigs = Worker.exactlyOnceSourceTaskProducerConfigs(
+                TASK_ID, config, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        assertEquals("localhost:9021", producerConfigs.get(BOOTSTRAP_SERVERS_CONFIG));
+        // User is not allowed to override idempotence or transactional ID for exactly-once source tasks
+        assertEquals("true", producerConfigs.get(ENABLE_IDEMPOTENCE_CONFIG));
+        assertEquals(transactionalId, producerConfigs.get(TRANSACTIONAL_ID_CONFIG));
+
+        workerProps.remove("producer." + ENABLE_IDEMPOTENCE_CONFIG);
+        workerProps.remove("producer." + TRANSACTIONAL_ID_CONFIG);
+        connectorProducerOverrides.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:489");
+        connectorProducerOverrides.put(ENABLE_IDEMPOTENCE_CONFIG, "false");
+        connectorProducerOverrides.put(TRANSACTIONAL_ID_CONFIG, "yet-another-transactional-id");
+        config = new DistributedConfig(workerProps);
+        producerConfigs = Worker.exactlyOnceSourceTaskProducerConfigs(
+                TASK_ID, config, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        assertEquals("localhost:489", producerConfigs.get(BOOTSTRAP_SERVERS_CONFIG));
+        // User is not allowed to override idempotence or transactional ID for exactly-once source tasks
+        assertEquals("true", producerConfigs.get(ENABLE_IDEMPOTENCE_CONFIG));
+        assertEquals(transactionalId, producerConfigs.get(TRANSACTIONAL_ID_CONFIG));
+
+        // Rare case: somehow, an explicit null has made it into the connector config
+        connectorProducerOverrides.put(TRANSACTIONAL_ID_CONFIG, null);
+        producerConfigs = Worker.exactlyOnceSourceTaskProducerConfigs(
+                TASK_ID, config, connectorConfig, null, allConnectorClientConfigOverridePolicy, CLUSTER_ID);
+        // User is still not allowed to override idempotence or transactional ID for exactly-once source tasks
+        assertEquals("true", producerConfigs.get(ENABLE_IDEMPOTENCE_CONFIG));
+        assertEquals(transactionalId, producerConfigs.get(TRANSACTIONAL_ID_CONFIG));
+    }
+
+    @Test
+    public void testOffsetStoreForRegularSourceConnector() {
+        mockInternalConverters();
+        mockFileConfigProvider();
+
+        final String workerOffsetsTopic = "worker-offsets";
+        final String workerBootstrapServers = "localhost:4761";
+        Map<String, String> workerProps = new HashMap<>(this.workerProps);
+        workerProps.put("exactly.once.source.support", "disabled");
+        workerProps.put("bootstrap.servers", workerBootstrapServers);
+        workerProps.put("group.id", "connect-cluster");
+        workerProps.put("config.storage.topic", "connect-configs");
+        workerProps.put("offset.storage.topic", workerOffsetsTopic);
+        workerProps.put("status.storage.topic", "connect-statuses");
+        config = new DistributedConfig(workerProps);
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, allConnectorClientConfigOverridePolicy);
+        worker.start();
+
+        Map<String, String> connectorProps = new HashMap<>();
+        connectorProps.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName());
+        connectorProps.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
+        SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With no connector-specific offsets topic in the config, we should only use the worker-global offsets store
+        ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        assertTrue(connectorStore.hasWorkerGlobalStore());
+        assertFalse(connectorStore.hasConnectorSpecificStore());
+
+        connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, "connector-offsets-topic");
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With a connector-specific offsets topic in the config (whose name differs from the worker's offsets topic), we should use both a
+        // connector-specific store and the worker-global store
+        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        assertTrue(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, workerOffsetsTopic);
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and no overridden bootstrap.servers
+        // for the connector, we should only use a connector-specific offsets store
+        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        assertFalse(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        connectorProps.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, workerBootstrapServers);
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
+        // for the connector that exactly matches the worker's, we should only use a connector-specific offsets store
+        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        assertFalse(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        connectorProps.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, "localhost:1111");
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
+        // for the connector that doesn't match the worker's, we should use both a connector-specific store and the worker-global store
+        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        assertTrue(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        connectorProps.remove(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG);
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With no connector-specific offsets topic in the config, even with an overridden bootstrap.servers
+        // for the connector that doesn't match the worker's, we should still only use the worker-global offsets store
+        connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        assertTrue(connectorStore.hasWorkerGlobalStore());
+        assertFalse(connectorStore.hasConnectorSpecificStore());
+
+        worker.stop();
+    }
+
+    @Test
+    public void testOffsetStoreForExactlyOnceSourceConnector() {
+        mockInternalConverters();
+        mockFileConfigProvider();
+
+        final String workerOffsetsTopic = "worker-offsets";
+        final String workerBootstrapServers = "localhost:4761";
+        Map<String, String> workerProps = new HashMap<>(this.workerProps);
+        workerProps.put("exactly.once.source.support", "enabled");
+        workerProps.put("bootstrap.servers", workerBootstrapServers);
+        workerProps.put("group.id", "connect-cluster");
+        workerProps.put("config.storage.topic", "connect-configs");
+        workerProps.put("offset.storage.topic", workerOffsetsTopic);
+        workerProps.put("status.storage.topic", "connect-statuses");
+        config = new DistributedConfig(workerProps);
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, allConnectorClientConfigOverridePolicy);
+        worker.start();
+
+        Map<String, String> connectorProps = new HashMap<>();
+        connectorProps.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName());
+        connectorProps.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
+        SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With no connector-specific offsets topic in the config, we should only use a connector-specific offsets store
+        ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        assertFalse(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, "connector-offsets-topic");
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With a connector-specific offsets topic in the config (whose name differs from the worker's offsets topic), we should use both a
+        // connector-specific store and the worker-global store
+        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        assertTrue(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, workerOffsetsTopic);
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and no overridden bootstrap.servers
+        // for the connector, we should only use a connector-specific store
+        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        assertFalse(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        connectorProps.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, workerBootstrapServers);
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
+        // for the connector that exactly matches the worker's, we should only use a connector-specific store
+        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        assertFalse(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        connectorProps.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, "localhost:1111");
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
+        // for the connector that doesn't match the worker's, we should use both a connector-specific store and the worker-global store
+        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        assertTrue(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        connectorProps.remove(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG);
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With no connector-specific offsets topic in the config and an overridden bootstrap.servers
+        // for the connector that doesn't match the worker's,  we should use both a connector-specific store and the worker-global store
+        connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector);
+        assertTrue(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        worker.stop();
+    }
+
+    @Test
+    public void testOffsetStoreForRegularSourceTask() {
+        mockInternalConverters();
+        mockFileConfigProvider();
+
+        Map<String, Object> producerProps = new HashMap<>();
+        @SuppressWarnings("unchecked")
+        Producer<byte[], byte[]> producer = mock(Producer.class);
+        TopicAdmin topicAdmin = mock(TopicAdmin.class);
+
+        final String workerOffsetsTopic = "worker-offsets";
+        final String workerBootstrapServers = "localhost:4761";
+        Map<String, String> workerProps = new HashMap<>(this.workerProps);
+        workerProps.put("exactly.once.source.support", "disabled");
+        workerProps.put("bootstrap.servers", workerBootstrapServers);
+        workerProps.put("group.id", "connect-cluster");
+        workerProps.put("config.storage.topic", "connect-configs");
+        workerProps.put("offset.storage.topic", workerOffsetsTopic);
+        workerProps.put("status.storage.topic", "connect-statuses");
+        config = new DistributedConfig(workerProps);
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, allConnectorClientConfigOverridePolicy);
+        worker.start();
+
+        Map<String, String> connectorProps = new HashMap<>();
+        connectorProps.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName());
+        connectorProps.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
+
+        final SourceConnectorConfig sourceConfigWithoutOffsetsTopic = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        producerProps.put(BOOTSTRAP_SERVERS_CONFIG, workerBootstrapServers);
+        // With no connector-specific offsets topic in the config, we should only use the worker-global store
+        // Pass in a null topic admin to make sure that with these parameters, the method doesn't require a topic admin
+        ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForRegularSourceTask(TASK_ID, sourceConfigWithoutOffsetsTopic, sourceConnector.getClass(), producer, producerProps, null);
+        assertTrue(connectorStore.hasWorkerGlobalStore());
+        assertFalse(connectorStore.hasConnectorSpecificStore());
+
+        connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, "connector-offsets-topic");
+        final SourceConnectorConfig sourceConfigWithOffsetsTopic = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With a connector-specific offsets topic in the config (whose name differs from the worker's offsets topic), we should use both a
+        // connector-specific store and the worker-global store
+        connectorStore = worker.offsetStoreForRegularSourceTask(TASK_ID, sourceConfigWithOffsetsTopic, sourceConnector.getClass(), producer, producerProps, topicAdmin);
+        assertTrue(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+        assertThrows(NullPointerException.class,
+                () -> worker.offsetStoreForRegularSourceTask(
+                        TASK_ID, sourceConfigWithOffsetsTopic, sourceConnector.getClass(), producer, producerProps, null
+                )
+        );
+
+        connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, workerOffsetsTopic);
+        final SourceConnectorConfig sourceConfigWithSameOffsetsTopicAsWorker = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and no overridden bootstrap.servers
+        // for the connector, we should only use a connector-specific store
+        connectorStore = worker.offsetStoreForRegularSourceTask(TASK_ID, sourceConfigWithSameOffsetsTopicAsWorker, sourceConnector.getClass(), producer, producerProps, topicAdmin);
+        assertFalse(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+        assertThrows(
+                NullPointerException.class,
+                () -> worker.offsetStoreForRegularSourceTask(
+                        TASK_ID, sourceConfigWithSameOffsetsTopicAsWorker, sourceConnector.getClass(), producer, producerProps, null
+                )
+        );
+
+        producerProps.put(BOOTSTRAP_SERVERS_CONFIG, workerBootstrapServers);
+        // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
+        // for the connector that exactly matches the worker's, we should only use a connector-specific store
+        connectorStore = worker.offsetStoreForRegularSourceTask(TASK_ID, sourceConfigWithSameOffsetsTopicAsWorker, sourceConnector.getClass(), producer, producerProps, topicAdmin);
+        assertFalse(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+        assertThrows(
+                NullPointerException.class,
+                () -> worker.offsetStoreForRegularSourceTask(
+                        TASK_ID, sourceConfigWithSameOffsetsTopicAsWorker, sourceConnector.getClass(), producer, producerProps, null
+                )
+        );
+
+        producerProps.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:1111");
+        // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
+        // for the connector that doesn't match the worker's, we should use both a connector-specific store and the worker-global store
+        connectorStore = worker.offsetStoreForRegularSourceTask(TASK_ID, sourceConfigWithSameOffsetsTopicAsWorker, sourceConnector.getClass(), producer, producerProps, topicAdmin);
+        assertTrue(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+        assertThrows(
+                NullPointerException.class,
+                () -> worker.offsetStoreForRegularSourceTask(
+                        TASK_ID, sourceConfigWithSameOffsetsTopicAsWorker, sourceConnector.getClass(), producer, producerProps, null
+                )
+        );
+
+        connectorProps.remove(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG);
+        // With no connector-specific offsets topic in the config and an overridden bootstrap.servers
+        // for the connector that doesn't match the worker's, we should still only use the worker-global store
+        // Pass in a null topic admin to make sure that with these parameters, the method doesn't require a topic admin
+        connectorStore = worker.offsetStoreForRegularSourceTask(TASK_ID, sourceConfigWithoutOffsetsTopic, sourceConnector.getClass(), producer, producerProps, null);
+        assertTrue(connectorStore.hasWorkerGlobalStore());
+        assertFalse(connectorStore.hasConnectorSpecificStore());
+
+        worker.stop();
+    }
+
+    @Test
+    public void testOffsetStoreForExactlyOnceSourceTask() {
+        mockInternalConverters();
+        mockFileConfigProvider();
+
+        Map<String, Object> producerProps = new HashMap<>();
+        @SuppressWarnings("unchecked")
+        Producer<byte[], byte[]> producer = mock(Producer.class);
+        TopicAdmin topicAdmin = mock(TopicAdmin.class);
+
+        final String workerOffsetsTopic = "worker-offsets";
+        final String workerBootstrapServers = "localhost:4761";
+        Map<String, String> workerProps = new HashMap<>(this.workerProps);
+        workerProps.put("exactly.once.source.support", "enabled");
+        workerProps.put("bootstrap.servers", workerBootstrapServers);
+        workerProps.put("group.id", "connect-cluster");
+        workerProps.put("config.storage.topic", "connect-configs");
+        workerProps.put("offset.storage.topic", workerOffsetsTopic);
+        workerProps.put("status.storage.topic", "connect-statuses");
+        config = new DistributedConfig(workerProps);
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, allConnectorClientConfigOverridePolicy);
+        worker.start();
+
+        Map<String, String> connectorProps = new HashMap<>();
+        connectorProps.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName());
+        connectorProps.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
+        SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        producerProps.put(BOOTSTRAP_SERVERS_CONFIG, workerBootstrapServers);
+        // With no connector-specific offsets topic in the config, we should only use a connector-specific offsets store
+        ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForExactlyOnceSourceTask(TASK_ID, sourceConfig, sourceConnector.getClass(), producer, producerProps, topicAdmin);
+        assertFalse(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, "connector-offsets-topic");
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With a connector-specific offsets topic in the config (whose name differs from the worker's offsets topic), we should use both a
+        // connector-specific store and the worker-global store
+        connectorStore = worker.offsetStoreForExactlyOnceSourceTask(TASK_ID, sourceConfig, sourceConnector.getClass(), producer, producerProps, topicAdmin);
+        assertTrue(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, workerOffsetsTopic);
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and no overridden bootstrap.servers
+        // for the connector, we should only use a connector-specific store
+        connectorStore = worker.offsetStoreForExactlyOnceSourceTask(TASK_ID, sourceConfig, sourceConnector.getClass(), producer, producerProps, topicAdmin);
+        assertFalse(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        producerProps.put(BOOTSTRAP_SERVERS_CONFIG, workerBootstrapServers);
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
+        // for the connector that exactly matches the worker's, we should only use a connector-specific store
+        connectorStore = worker.offsetStoreForExactlyOnceSourceTask(TASK_ID, sourceConfig, sourceConnector.getClass(), producer, producerProps, topicAdmin);
+        assertFalse(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        producerProps.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:1111");
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
+        // for the connector that doesn't match the worker's, we should use both a connector-specific store and the worker-global store
+        connectorStore = worker.offsetStoreForExactlyOnceSourceTask(TASK_ID, sourceConfig, sourceConnector.getClass(), producer, producerProps, topicAdmin);
+        assertTrue(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        connectorProps.remove(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG);
+        sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
+        // With no connector-specific offsets topic in the config and an overridden bootstrap.servers
+        // for the connector that doesn't match the worker's,  we should use both a connector-specific store and the worker-global store
+        connectorStore = worker.offsetStoreForExactlyOnceSourceTask(TASK_ID, sourceConfig, sourceConnector.getClass(), producer, producerProps, topicAdmin);
+        assertTrue(connectorStore.hasWorkerGlobalStore());
+        assertTrue(connectorStore.hasConnectorSpecificStore());
+
+        worker.stop();
     }
 
     @Test
@@ -1226,7 +1828,47 @@ public class WorkerTest extends ThreadedTest {
         verify(executorService, times(1)).shutdownNow();
         verify(executorService, times(1)).awaitTermination(1000L, TimeUnit.MILLISECONDS);
         verifyNoMoreInteractions(executorService);
+    }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testZombieFencing() {
+        Admin admin = mock(Admin.class);
+        FenceProducersResult fenceProducersResult = mock(FenceProducersResult.class);
+        KafkaFuture<Void> fenceProducersFuture = mock(KafkaFuture.class);
+        KafkaFuture<Void> expectedZombieFenceFuture = mock(KafkaFuture.class);
+        when(admin.fenceProducers(any(), any())).thenReturn(fenceProducersResult);
+        when(fenceProducersResult.all()).thenReturn(fenceProducersFuture);
+        when(fenceProducersFuture.whenComplete(any())).thenReturn(expectedZombieFenceFuture);
+
+        when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
+        when(delegatingLoader.connectorLoader(anyString())).thenReturn(pluginLoader);
+        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
+        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
+                allConnectorClientConfigOverridePolicy);
+        worker.herder = herder;
+        worker.start();
+
+        Map<String, String> connectorConfig = anyConnectorConfigMap();
+        connectorConfig.put(CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX + RETRY_BACKOFF_MS_CONFIG, "4761");
+
+        AtomicReference<Map<String, Object>> adminConfig = new AtomicReference<>();
+        Function<Map<String, Object>, Admin> mockAdminConstructor = actualAdminConfig -> {
+            adminConfig.set(actualAdminConfig);
+            return admin;
+        };
+
+        KafkaFuture<Void> actualZombieFenceFuture =
+                worker.fenceZombies(CONNECTOR_ID, 12, connectorConfig, mockAdminConstructor);
+
+        assertEquals(expectedZombieFenceFuture, actualZombieFenceFuture);
+        assertNotNull(adminConfig.get());
+        assertEquals("Admin should be configured with user-specified overrides",
+                "4761",
+                adminConfig.get().get(RETRY_BACKOFF_MS_CONFIG)
+        );
     }
 
     private void assertStatusMetrics(long expected, String metricName) {
@@ -1320,17 +1962,15 @@ public class WorkerTest extends ThreadedTest {
         verify(plugins).newHeaderConverter(any(AbstractConfig.class), eq(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG), eq(ClassLoaderUsage.CURRENT_CLASSLOADER));
     }
 
-
     private Map<String, String> anyConnectorConfigMap() {
         Map<String, String> props = new HashMap<>();
         props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
-        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName());
+        props.put(CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName());
         props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
         return props;
     }
-
 
     private static class TestSourceTask extends SourceTask {
         public TestSourceTask() {
@@ -1355,5 +1995,27 @@ public class WorkerTest extends ThreadedTest {
         }
     }
 
+    private static class TestSinkTask extends SinkTask {
+        public TestSinkTask() {
+        }
+
+        @Override
+        public String version() {
+            return "1.0";
+        }
+
+        @Override
+        public void start(Map<String, String> props) {
+        }
+
+        @Override
+        public void put(Collection<SinkRecord> records) {
+        }
+
+        @Override
+        public void stop() {
+        }
+
+    }
 
 }
