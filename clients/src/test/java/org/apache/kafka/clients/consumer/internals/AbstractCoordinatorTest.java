@@ -1176,7 +1176,7 @@ public class AbstractCoordinatorTest {
         LeaveGroupResponse response =
                 leaveGroupResponse(Collections.singletonList(memberResponse));
         String leaveReason = "Very looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong leaveReason that is 271 characters long to make sure that length limit logic handles the scenario nicely";
-        RequestFuture<Void> leaveGroupFuture = setupLeaveGroup(response, leaveReason.substring(0, 255), leaveReason);
+        RequestFuture<Void> leaveGroupFuture = setupLeaveGroup(response, leaveReason, leaveReason.substring(0, 255));
         assertNotNull(leaveGroupFuture);
         assertTrue(leaveGroupFuture.succeeded());
     }
@@ -1219,8 +1219,8 @@ public class AbstractCoordinatorTest {
     }
 
     private RequestFuture<Void> setupLeaveGroup(LeaveGroupResponse leaveGroupResponse,
-                                                String expectedLeaveReason,
-                                                String actualLeaveReason) {
+                                                String leaveReason,
+                                                String expectedLeaveReason) {
         setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, Optional.empty());
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -1232,11 +1232,11 @@ public class AbstractCoordinatorTest {
             }
             LeaveGroupRequestData leaveGroupRequest = ((LeaveGroupRequest) body).data();
             return leaveGroupRequest.members().get(0).memberId().equals(memberId) &&
-                    leaveGroupRequest.members().get(0).reason().equals(expectedLeaveReason);
+                   leaveGroupRequest.members().get(0).reason().equals(expectedLeaveReason);
         }, leaveGroupResponse);
 
         coordinator.ensureActiveGroup();
-        return coordinator.maybeLeaveGroup(actualLeaveReason);
+        return coordinator.maybeLeaveGroup(leaveReason);
     }
 
     @Test
