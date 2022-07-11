@@ -1465,13 +1465,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private class AppendCallbacks<K, V> implements RecordAccumulator.AppendCallbacks {
         private final Callback userCallback;
         private final ProducerInterceptors<K, V> interceptors;
-        private final ProducerRecord<K, V> record;
+        private ProducerRecord<K, V> record;
+        private final String topic;
         protected int partition = RecordMetadata.UNKNOWN_PARTITION;
 
         private AppendCallbacks(Callback userCallback, ProducerInterceptors<K, V> interceptors, ProducerRecord<K, V> record) {
             this.userCallback = userCallback;
             this.interceptors = interceptors;
             this.record = record;
+            topic = record.topic();
         }
 
         @Override
@@ -1491,8 +1493,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             if (log.isTraceEnabled()) {
                 // Log the message here, because we don't know the partition before that.
-                log.trace("Attempting to append record {} with callback {} to topic {} partition {}", record, userCallback, record.topic(), partition);
+                log.trace("Attempting to append record {} with callback {} to topic {} partition {}", record, userCallback, topic, partition);
             }
+
+            // Reset record to null here so that it doesn't have to be alive as long as the batch is.
+            record = null;
         }
 
         public int getPartition() {
@@ -1500,11 +1505,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         public TopicPartition topicPartition() {
-            if (record == null)
-                return null;
-            return partition == RecordMetadata.UNKNOWN_PARTITION
-                    ? ProducerInterceptors.extractTopicPartition(record)
-                    : new TopicPartition(record.topic(), partition);
+            if (partition != RecordMetadata.UNKNOWN_PARTITION)
+                return new TopicPartition(topic, partition);
+
+            assert record != null;
+            return ProducerInterceptors.extractTopicPartition(record);
         }
     }
 }
