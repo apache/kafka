@@ -73,8 +73,7 @@ public class JoinGroupRequest extends AbstractRequest {
     /**
      * Ensures that the provided {@code reason} remains within a range of 255 chars.
      * @param reason This is the reason that is sent to the broker over the wire
-     *               as a part of {@code JoinGroupRequest}, {@code LeaveGroupRequest}
-     *               or {@code RemoveMembersFromConsumerGroupOptions} messages.
+     *               as a part of {@code JoinGroupRequest} or {@code LeaveGroupRequest}.
      * @return a provided reason as is or truncated reason if it exceeds the 255 chars threshold.
      */
     public static String maybeTruncateReason(final String reason) {
