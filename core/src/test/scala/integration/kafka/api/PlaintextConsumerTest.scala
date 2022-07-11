@@ -974,7 +974,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array(CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME, RangeAssignor.RANGE_ASSIGNOR_NAME))
+  @ValueSource(strings = Array(
+    "org.apache.kafka.clients.consumer.CooperativeStickyAssignor",
+    "org.apache.kafka.clients.consumer.RangeAssignor"))
   def testRebalanceAndRejoin(assignmentStrategy: String): Unit = {
     // create 2 consumers
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "rebalance-and-rejoin-group")
@@ -998,9 +1000,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
       }
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
-        if (lock.tryLock(3000, TimeUnit.MILLISECONDS)) {
+        if (!lock.tryLock(3000, TimeUnit.MILLISECONDS)) {
           fail(s"Time out while awaiting for lock.")
-          return
         }
         try {
           generationId1 = consumer1.groupMetadata().generationId()
@@ -1019,9 +1020,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // the `onPartitionsAssigned` rebalance listener will be invoked to set the generationId and memberId
     var stableGeneration = -1
     var stableMemberId1 = ""
-    if (lock.tryLock(3000, TimeUnit.MILLISECONDS)) {
+    if (!lock.tryLock(3000, TimeUnit.MILLISECONDS)) {
       fail(s"Time out while awaiting for lock.")
-      return
     }
     try {
       stableGeneration = generationId1
@@ -1035,7 +1035,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       s"Timed out while awaiting expected assignment change to 1.")
     TestUtils.waitUntilTrue(() => consumerPoller2.consumerAssignment().size == 1,
       s"Timed out while awaiting expected assignment change to 1.")
-    lock.lock()
+
+    if (!lock.tryLock(3000, TimeUnit.MILLISECONDS)) {
+      fail(s"Time out while awaiting for lock.")
+    }
     try {
       if (assignmentStrategy.equals(classOf[CooperativeStickyAssignor].getName)) {
         // cooperative rebalance should rebalance twice before finally stable
