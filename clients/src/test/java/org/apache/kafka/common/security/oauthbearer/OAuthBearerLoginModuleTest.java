@@ -434,18 +434,19 @@ public class OAuthBearerLoginModuleTest {
     }
 
     /**
-     * We don't want to use mocks here as we want to make sure to test {@link SaslExtensions}'
-     * use of the default {@link Object#equals(Object)} and {@link Object#hashCode()} methods.
+     * We don't want to use mocks for our tests as we need to make sure to test
+     * {@link SaslExtensions}' {@link SaslExtensions#equals(Object)} and
+     * {@link SaslExtensions#hashCode()} methods.
      *
      * <p/>
      *
-     * We also can't use {@link SaslExtensions#NO_SASL_EXTENSIONS} here because we need to ensure
-     * the {@link SaslExtensions} instances are all be unique in order to mimic the behavior that
-     * is used during the token refresh logic.
+     * We need to make distinct calls to this method (vs. caching the result and reusing it
+     * multiple times) because we need to ensure the {@link SaslExtensions} instances are unique.
+     * This properly mimics the behavior that is used during the token refresh logic.
      *
      * @return Unique, newly-created {@link SaslExtensions} instance
      */
     private SaslExtensions saslExtensions() {
-        return new SaslExtensions(Collections.emptyMap());
+        return SaslExtensions.empty();
     }
 }

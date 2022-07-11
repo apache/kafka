@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.StringJoiner;
 import javax.security.auth.Subject;
 
 /**
@@ -28,9 +29,10 @@ import javax.security.auth.Subject;
  * <p/>
  *
  * <b>Note on object identity and equality</b>: <code>SaslExtensions</code> <em>intentionally</em>
- * does not override the standard {@link #equals(Object)} and {@link #hashCode()} methods. Thus, it
- * will only provide equality via reference identity and will not base equality based on the
- * underlying values of its {@link #extensionsMap extentions map}.
+ * overrides the standard {@link #equals(Object)} and {@link #hashCode()} methods calling their
+ * respective {@link Object#equals(Object)} and {@link Object#hashCode()} implementations. In so
+ * doing, it provides equality <em>only</em> via reference identity and will not base equality on
+ * the underlying values of its {@link #extensionsMap extentions map}.
  *
  * <p/>
  *
@@ -45,10 +47,6 @@ import javax.security.auth.Subject;
  * See <a href="https://issues.apache.org/jira/browse/KAFKA-14062">KAFKA-14062</a> for more detail.
  */
 public class SaslExtensions {
-    /**
-     * An "empty" instance indicating no SASL extensions
-     */
-    public static final SaslExtensions NO_SASL_EXTENSIONS = new SaslExtensions(Collections.emptyMap());
     private final Map<String, String> extensionsMap;
 
     public SaslExtensions(Map<String, String> extensionsMap) {
@@ -62,9 +60,59 @@ public class SaslExtensions {
         return extensionsMap;
     }
 
+    /**
+     * Creates an "empty" instance indicating no SASL extensions. <em>Do not cache the result of
+     * this method call</em> for use by multiple {@link Subject}s as the references need to be
+     * unique.
+     *
+     * <p/>
+     *
+     * See the class-level documentation for details.
+     * @return Unique, but empty, <code>SaslExtensions</code> instance
+     */
+    @SuppressWarnings("unchecked")
+    public static SaslExtensions empty() {
+        // It's ok to re-use the EMPTY_MAP instance as the object equality is on the outer
+        // SaslExtensions reference.
+        return new SaslExtensions(Collections.EMPTY_MAP);
+    }
+
+    /**
+     * Implements equals using the reference comparison implementation from
+     * {@link Object#equals(Object)}.
+     *
+     * <p/>
+     *
+     * See the class-level documentation for details.
+     *
+     * @param o Other object to compare
+     * @return True if <code>o == this</code>
+     */
+    @Override
+    public final boolean equals(Object o) {
+        return super.equals(o);
+    }
+
+    /**
+     * Implements <code>hashCode</code> using the native implementation from
+     * {@link Object#hashCode()}.
+     *
+     * <p/>
+     *
+     * See the class-level documentation for details.
+     *
+     * @return Hash code of instance
+     */
+    @Override
+    public final int hashCode() {
+        return super.hashCode();
+    }
+
     @Override
     public String toString() {
-        return extensionsMap.toString();
+        return new StringJoiner(", ", SaslExtensions.class.getSimpleName() + "[", "]")
+            .add("extensionsMap=" + extensionsMap)
+            .toString();
     }
 
 }
