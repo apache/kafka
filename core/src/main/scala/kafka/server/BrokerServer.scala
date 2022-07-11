@@ -129,7 +129,7 @@ class BrokerServer(
 
   var forwardingManager: ForwardingManager = null
 
-  var alterIsrManager: AlterPartitionManager = null
+  var alterPartitionManager: AlterPartitionManager = null
 
   var autoTopicCreationManager: AutoTopicCreationManager = null
 
@@ -241,24 +241,17 @@ class BrokerServer(
 
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
 
-      val alterIsrChannelManager = BrokerToControllerChannelManager(
-        controllerNodeProvider,
-        time,
-        metrics,
+      alterPartitionManager = AlterPartitionManager(
         config,
-        channelName = "alterIsr",
-        threadNamePrefix,
-        retryTimeoutMs = Long.MaxValue
-      )
-      alterIsrManager = new DefaultAlterPartitionManager(
-        controllerChannelManager = alterIsrChannelManager,
+        metadataCache,
         scheduler = kafkaScheduler,
+        controllerNodeProvider,
         time = time,
-        brokerId = config.nodeId,
-        brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
-        metadataVersionSupplier = () => metadataCache.metadataVersion()
+        metrics,
+        threadNamePrefix,
+        brokerEpochSupplier = () => lifecycleManager.brokerEpoch
       )
-      alterIsrManager.start()
+      alterPartitionManager.start()
 
       this._replicaManager = new ReplicaManager(
         config = config,
@@ -269,7 +262,7 @@ class BrokerServer(
         quotaManagers = quotaManagers,
         metadataCache = metadataCache,
         logDirFailureChannel = logDirFailureChannel,
-        alterPartitionManager = alterIsrManager,
+        alterPartitionManager = alterPartitionManager,
         brokerTopicStats = brokerTopicStats,
         isShuttingDown = isShuttingDown,
         zkClient = None,
@@ -343,10 +336,22 @@ class BrokerServer(
           k -> VersionRange.of(v.min, v.max)
       }.asJava
 
-      lifecycleManager.start(() => metadataListener.highestMetadataOffset,
-        BrokerToControllerChannelManager(controllerNodeProvider, time, metrics, config,
-          "heartbeat", threadNamePrefix, config.brokerSessionTimeoutMs.toLong),
-        metaProps.clusterId, networkListeners, featuresRemapped)
+      val brokerLifecycleChannelManager = BrokerToControllerChannelManager(
+        controllerNodeProvider,
+        time,
+        metrics,
+        config,
+        "heartbeat",
+        threadNamePrefix,
+        config.brokerSessionTimeoutMs.toLong
+      )
+      lifecycleManager.start(
+        () => metadataListener.highestMetadataOffset,
+        brokerLifecycleChannelManager,
+        metaProps.clusterId,
+        networkListeners,
+        featuresRemapped
+      )
 
       // Register a listener with the Raft layer to receive metadata event notifications
       raftManager.register(metadataListener)
@@ -544,8 +549,8 @@ class BrokerServer(
       if (replicaManager != null)
         CoreUtils.swallow(replicaManager.shutdown(), this)
 
-      if (alterIsrManager != null)
-        CoreUtils.swallow(alterIsrManager.shutdown(), this)
+      if (alterPartitionManager != null)
+        CoreUtils.swallow(alterPartitionManager.shutdown(), this)
 
       if (clientToControllerChannelManager != null)
         CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)

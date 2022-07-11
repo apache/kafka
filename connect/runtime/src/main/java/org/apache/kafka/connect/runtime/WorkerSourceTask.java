@@ -174,8 +174,6 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
             );
             commitTaskRecord(preTransformRecord, null);
         } else {
-            log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
-            log.trace("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
             producerSendException.compareAndSet(null, e);
         }
     }

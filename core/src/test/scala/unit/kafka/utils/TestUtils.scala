@@ -41,7 +41,7 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
 import kafka.utils.Implicits._
 import kafka.zk._
-import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.{ClientResponse, CommonClientConfigs}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer._
@@ -61,7 +61,7 @@ import org.apache.kafka.common.network.{ClientInformation, ListenerName, Mode}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{AbstractRequest, EnvelopeRequest, RequestContext, RequestHeader}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, RequestContext, RequestHeader}
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
@@ -2183,6 +2183,7 @@ object TestUtils extends Logging {
     principalSerde: KafkaPrincipalSerde,
     requestChannelMetrics: RequestChannel.Metrics,
     startTimeNanos: Long,
+    dequeueTimeNanos: Long = -1,
     fromPrivilegedListener: Boolean = true
   ): RequestChannel.Request = {
     val clientId = "id"
@@ -2204,7 +2205,7 @@ object TestUtils extends Logging {
       KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
       fromPrivilegedListener, Optional.of(principalSerde))
 
-    new RequestChannel.Request(
+    val envelopRequest = new RequestChannel.Request(
       processor = 1,
       context = envelopeContext,
       startTimeNanos = startTimeNanos,
@@ -2213,6 +2214,8 @@ object TestUtils extends Logging {
       metrics = requestChannelMetrics,
       envelope = None
     )
+    envelopRequest.requestDequeueTimeNanos = dequeueTimeNanos
+    envelopRequest
   }
 
   def verifyNoUnexpectedThreads(context: String): Unit = {
@@ -2240,4 +2243,22 @@ object TestUtils extends Logging {
         s"${unexpected.mkString("`", ",", "`")}")
   }
 
+  class TestControllerRequestCompletionHandler(expectedResponse: Option[AbstractResponse] = None)
+    extends ControllerRequestCompletionHandler {
+    var actualResponse: Option[ClientResponse] = Option.empty
+    val completed: AtomicBoolean = new AtomicBoolean(false)
+    val timedOut: AtomicBoolean = new AtomicBoolean(false)
+
+    override def onComplete(response: ClientResponse): Unit = {
+      actualResponse = Some(response)
+      expectedResponse.foreach { expected =>
+        assertEquals(expected, response.responseBody())
+      }
+      completed.set(true)
+    }
+
+    override def onTimeout(): Unit = {
+      timedOut.set(true)
+    }
+  }
 }

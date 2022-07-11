@@ -46,7 +46,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -60,16 +59,12 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private final ChangelogReader changelogReader;
         private final AtomicBoolean isRunning = new AtomicBoolean(true);
-        private final Consumer<Set<TopicPartition>> offsetResetter;
         private final Map<TaskId, Task> updatingTasks = new ConcurrentHashMap<>();
         private final Logger log;
 
-        public StateUpdaterThread(final String name,
-                                  final ChangelogReader changelogReader,
-                                  final Consumer<Set<TopicPartition>> offsetResetter) {
+        public StateUpdaterThread(final String name, final ChangelogReader changelogReader) {
             super(name);
             this.changelogReader = changelogReader;
-            this.offsetResetter = offsetResetter;
 
             final String logPrefix = String.format("%s ", name);
             final LogContext logContext = new LogContext(logPrefix);
@@ -265,7 +260,6 @@ public class DefaultStateUpdater implements StateUpdater {
             final Task task = updatingTasks.get(taskId);
             if (task != null) {
                 task.maybeCheckpoint(true);
-
                 final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
                 changelogReader.unregister(changelogPartitions);
                 removedTasks.add(task);
@@ -286,7 +280,6 @@ public class DefaultStateUpdater implements StateUpdater {
                                               final Set<TopicPartition> restoredChangelogs) {
             final Collection<TopicPartition> taskChangelogPartitions = task.changelogPartitions();
             if (restoredChangelogs.containsAll(taskChangelogPartitions)) {
-                task.completeRestoration(offsetResetter);
                 task.maybeCheckpoint(true);
                 addToRestoredTasks(task);
                 updatingTasks.remove(task.id());
@@ -316,7 +309,7 @@ public class DefaultStateUpdater implements StateUpdater {
             final long elapsedMsSinceLastCommit = now - lastCommitMs;
             if (elapsedMsSinceLastCommit > commitIntervalMs) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Committing all restoring tasks since {}ms has elapsed (commit interval is {}ms)",
+                    log.debug("Checkpointing all restoring tasks since {}ms has elapsed (commit interval is {}ms)",
                         elapsedMsSinceLastCommit, commitIntervalMs);
                 }
 
@@ -332,7 +325,6 @@ public class DefaultStateUpdater implements StateUpdater {
 
     private final Time time;
     private final ChangelogReader changelogReader;
-    private final Consumer<Set<TopicPartition>> offsetResetter;
     private final Queue<TaskAndAction> tasksAndActions = new LinkedList<>();
     private final Lock tasksAndActionsLock = new ReentrantLock();
     private final Condition tasksAndActionsCondition = tasksAndActionsLock.newCondition();
@@ -350,17 +342,15 @@ public class DefaultStateUpdater implements StateUpdater {
 
     public DefaultStateUpdater(final StreamsConfig config,
                                final ChangelogReader changelogReader,
-                               final Consumer<Set<TopicPartition>> offsetResetter,
                                final Time time) {
         this.changelogReader = changelogReader;
-        this.offsetResetter = offsetResetter;
         this.time = time;
         this.commitIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
     }
 
     public void start() {
         if (stateUpdaterThread == null) {
-            stateUpdaterThread = new StateUpdaterThread("state-updater", changelogReader, offsetResetter);
+            stateUpdaterThread = new StateUpdaterThread("state-updater", changelogReader);
             stateUpdaterThread.start();
             shutdownGate = new CountDownLatch(1);
 

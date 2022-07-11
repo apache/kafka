@@ -29,7 +29,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(clusterType = Type.BOTH, brokers = 1)
+@ClusterTestDefaults(clusterType = Type.ALL, brokers = 1)
 class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(cluster) {
 
   @BeforeEach
