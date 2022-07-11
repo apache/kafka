@@ -103,12 +103,15 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 KafkaClusterTestKit cluster = builder.build();
                 clusterReference.set(cluster);
                 cluster.format();
-                cluster.startup();
-                kafka.utils.TestUtils.waitUntilTrue(
-                    () -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
-                    () -> "Broker never made it to RUNNING state.",
-                    org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
-                    100L);
+                if (clusterConfig.isAutoStart()) {
+                    cluster.startup();
+                    kafka.utils.TestUtils.waitUntilTrue(
+                            () -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
+                            () -> "Broker never made it to RUNNING state.",
+                            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
+                            100L);
+                }
+
             },
             (AfterTestExecutionCallback) context -> clusterInstance.stop(),
             new ClusterInstanceParameterResolver(clusterInstance),
