@@ -39,7 +39,7 @@ class LogDirsCommandTest extends KafkaServerTestHarness {
     val byteArrayOutputStream = new ByteArrayOutputStream
     val printStream = new PrintStream(byteArrayOutputStream, false, StandardCharsets.UTF_8.name())
     //input exist brokerList
-    LogDirsCommand.describe(Array("--bootstrap-server", brokerList, "--broker-list", "0", "--describe"), printStream)
+    LogDirsCommand.describe(Array("--bootstrap-server", bootstrapServers(), "--broker-list", "0", "--describe"), printStream)
     val existingBrokersContent = new String(byteArrayOutputStream.toByteArray, StandardCharsets.UTF_8)
     val existingBrokersLineIter = existingBrokersContent.split("\n").iterator
 
@@ -48,7 +48,7 @@ class LogDirsCommandTest extends KafkaServerTestHarness {
 
     //input nonexistent brokerList
     byteArrayOutputStream.reset()
-    LogDirsCommand.describe(Array("--bootstrap-server", brokerList, "--broker-list", "0,1,2", "--describe"), printStream)
+    LogDirsCommand.describe(Array("--bootstrap-server", bootstrapServers(), "--broker-list", "0,1,2", "--describe"), printStream)
     val nonExistingBrokersContent = new String(byteArrayOutputStream.toByteArray, StandardCharsets.UTF_8)
     val nonExistingBrokersLineIter = nonExistingBrokersContent.split("\n").iterator
 
@@ -57,7 +57,7 @@ class LogDirsCommandTest extends KafkaServerTestHarness {
 
     //input duplicate ids
     byteArrayOutputStream.reset()
-    LogDirsCommand.describe(Array("--bootstrap-server", brokerList, "--broker-list", "0,0,1,2,2", "--describe"), printStream)
+    LogDirsCommand.describe(Array("--bootstrap-server", bootstrapServers(), "--broker-list", "0,0,1,2,2", "--describe"), printStream)
     val duplicateBrokersContent = new String(byteArrayOutputStream.toByteArray, StandardCharsets.UTF_8)
     val duplicateBrokersLineIter = duplicateBrokersContent.split("\n").iterator
 
@@ -66,7 +66,7 @@ class LogDirsCommandTest extends KafkaServerTestHarness {
 
     //use all brokerList for current cluster
     byteArrayOutputStream.reset()
-    LogDirsCommand.describe(Array("--bootstrap-server", brokerList, "--describe"), printStream)
+    LogDirsCommand.describe(Array("--bootstrap-server", bootstrapServers(), "--describe"), printStream)
     val allBrokersContent = new String(byteArrayOutputStream.toByteArray, StandardCharsets.UTF_8)
     val allBrokersLineIter = allBrokersContent.split("\n").iterator
 

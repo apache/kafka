@@ -59,6 +59,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.RequestManager.ConnectionState;
+import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.raft.internals.BlockingMessageQueue;
@@ -71,8 +72,10 @@ import org.apache.kafka.raft.internals.ThresholdPurgatory;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
-import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriter;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -307,7 +310,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 if (nextExpectedOffset < log.startOffset() && nextExpectedOffset < highWatermark) {
                     SnapshotReader<T> snapshot = latestSnapshot().orElseThrow(() -> new IllegalStateException(
                         String.format(
-                            "Snapshot expected since next offset of %s is %s, log start offset is %s and high-watermark is %s",
+                            "Snapshot expected since next offset of %s is %d, log start offset is %d and high-watermark is %d",
                             listenerContext.listenerName(),
                             nextExpectedOffset,
                             log.startOffset(),
@@ -330,7 +333,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private Optional<SnapshotReader<T>> latestSnapshot() {
         return log.latestSnapshot().map(reader ->
-            SnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES)
+            RecordsSnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES)
         );
     }
 
@@ -440,7 +443,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private void flushLeaderLog(LeaderState<T> state, long currentTimeMs) {
         // We update the end offset before flushing so that parked fetches can return sooner.
         updateLeaderEndOffsetAndTimestamp(state, currentTimeMs);
-        log.flush();
+        log.flush(false);
     }
 
     private boolean maybeTransitionToLeader(CandidateState state, long currentTimeMs) {
@@ -1031,7 +1034,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private static String listenerName(Listener<?> listener) {
-        return String.format("%s@%s", listener.getClass().getTypeName(), System.identityHashCode(listener));
+        return String.format("%s@%d", listener.getClass().getTypeName(), System.identityHashCode(listener));
     }
 
     private boolean handleFetchResponse(
@@ -1133,7 +1136,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         Records records
     ) {
         LogAppendInfo info = log.appendAsFollower(records);
-        log.flush();
+        log.flush(false);
 
         OffsetAndEpoch endOffset = endOffset();
         kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
@@ -1258,7 +1261,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (partitionSnapshot.position() > Integer.MAX_VALUE) {
             throw new IllegalStateException(
                 String.format(
-                    "Trying to fetch a snapshot with size (%s) and a position (%s) larger than %s",
+                    "Trying to fetch a snapshot with size (%d) and a position (%d) larger than %d",
                     snapshotSize,
                     partitionSnapshot.position(),
                     Integer.MAX_VALUE
@@ -1331,7 +1334,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             partitionSnapshot.snapshotId().epoch() < 0) {
 
             /* The leader deleted the snapshot before the follower could download it. Start over by
-             * reseting the fetching snapshot state and sending another fetch request.
+             * resetting the fetching snapshot state and sending another fetch request.
              */
             logger.trace(
                 "Leader doesn't know about snapshot id {}, returned error {} and snapshot id {}",
@@ -1370,7 +1373,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (snapshot.sizeInBytes() != partitionSnapshot.position()) {
             throw new IllegalStateException(
                 String.format(
-                    "Received fetch snapshot response with an invalid position. Expected %s; Received %s",
+                    "Received fetch snapshot response with an invalid position. Expected %d; Received %d",
                     snapshot.sizeInBytes(),
                     partitionSnapshot.position()
                 )
@@ -1397,7 +1400,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             } else {
                 throw new IllegalStateException(
                     String.format(
-                        "Full log truncation expected but didn't happen. Snapshot of %s, log end offset %s, last fetched %s",
+                        "Full log truncation expected but didn't happen. Snapshot of %s, log end offset %s, last fetched %d",
                         snapshot.snapshotId(),
                         log.endOffset(),
                         log.lastFetchedEpoch()
@@ -2248,24 +2251,23 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public Long scheduleAppend(int epoch, List<T> records) {
+    public long scheduleAppend(int epoch, List<T> records) {
         return append(epoch, records, false);
     }
 
     @Override
-    public Long scheduleAtomicAppend(int epoch, List<T> records) {
+    public long scheduleAtomicAppend(int epoch, List<T> records) {
         return append(epoch, records, true);
     }
 
-    private Long append(int epoch, List<T> records, boolean isAtomic) {
-        Optional<LeaderState<T>> leaderStateOpt = quorum.maybeLeaderState();
-        if (!leaderStateOpt.isPresent()) {
-            return Long.MAX_VALUE;
-        }
+    private long append(int epoch, List<T> records, boolean isAtomic) {
+        LeaderState<T> leaderState = quorum.<T>maybeLeaderState().orElseThrow(
+            () -> new NotLeaderException("Append failed because the replication is not the current leader")
+        );
 
-        BatchAccumulator<T> accumulator = leaderStateOpt.get().accumulator();
+        BatchAccumulator<T> accumulator = leaderState.accumulator();
         boolean isFirstAppend = accumulator.isEmpty();
-        final Long offset;
+        final long offset;
         if (isAtomic) {
             offset = accumulator.appendAtomic(epoch, records);
         } else {
@@ -2347,7 +2349,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         int committedEpoch,
         long lastContainedLogTime
     ) {
-        return SnapshotWriter.createWithHeader(
+        return RecordsSnapshotWriter.createWithHeader(
                 () -> log.createNewSnapshot(new OffsetAndEpoch(committedOffset + 1, committedEpoch)),
                 MAX_BATCH_SIZE_BYTES,
                 memoryPool,
@@ -2360,6 +2362,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public void close() {
+        log.flush(true);
         if (kafkaRaftMetrics != null) {
             kafkaRaftMetrics.close();
         }
@@ -2432,7 +2435,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             return listener;
         }
 
-        private static enum Ops {
+        private enum Ops {
             REGISTER, UNREGISTER
         }
 
@@ -2448,7 +2451,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private final class ListenerContext implements CloseListener<BatchReader<T>> {
         private final RaftClient.Listener<T> listener;
         // This field is used only by the Raft IO thread
-        private LeaderAndEpoch lastFiredLeaderChange = new LeaderAndEpoch(OptionalInt.empty(), 0);
+        private LeaderAndEpoch lastFiredLeaderChange = LeaderAndEpoch.UNKNOWN;
 
         // These fields are visible to both the Raft IO thread and the listener
         // and are protected through synchronization on this ListenerContext instance

@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
 
 import joptsimple.OptionException
-import kafka.network.SocketServer
+import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, MetaProperties, SimpleApiVersionManager}
@@ -36,6 +36,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
+import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, RaftConfig}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.snapshot.SnapshotReader
@@ -74,7 +75,6 @@ class TestRaftServer(
 
     val apiVersionManager = new SimpleApiVersionManager(ListenerType.CONTROLLER)
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
-    socketServer.startup(startProcessingRequests = false)
 
     val metaProperties = MetaProperties(
       clusterId = Uuid.ZERO_UUID.toString,
@@ -90,7 +90,7 @@ class TestRaftServer(
       time,
       metrics,
       Some(threadNamePrefix),
-      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters))
+      CompletableFuture.completedFuture(RaftConfig.parseVoterConnections(config.quorumVoters)),
     )
 
     workloadGenerator = new RaftWorkloadGenerator(
@@ -113,13 +113,13 @@ class TestRaftServer(
       requestHandler,
       time,
       config.numIoThreads,
-      s"${SocketServer.DataPlaneMetricPrefix}RequestHandlerAvgIdlePercent",
-      SocketServer.DataPlaneThreadPrefix
+      s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
+      DataPlaneAcceptor.ThreadPrefix
     )
 
     workloadGenerator.start()
     raftManager.startup()
-    socketServer.startProcessingRequests(Map.empty)
+    socketServer.enableRequestProcessing(Map.empty)
   }
 
   def shutdown(): Unit = {
@@ -193,10 +193,13 @@ class TestRaftServer(
       currentTimeMs: Long
     ): Unit = {
       recordCount.incrementAndGet()
-
-      raftManager.scheduleAppend(leaderEpoch, Seq(payload)) match {
-        case Some(offset) => pendingAppends.offer(PendingAppend(offset, currentTimeMs))
-        case None => time.sleep(10)
+      try {
+        val offset = raftManager.client.scheduleAppend(leaderEpoch, List(payload).asJava)
+        pendingAppends.offer(PendingAppend(offset, currentTimeMs))
+      } catch {
+        case e: NotLeaderException =>
+          logger.debug(s"Append failed because this node is no longer leader in epoch $leaderEpoch", e)
+          time.sleep(10)
       }
     }
 
@@ -287,7 +290,7 @@ object TestRaftServer extends Logging {
     }
   }
 
-  private class ByteArraySerde extends RecordSerde[Array[Byte]] {
+  class ByteArraySerde extends RecordSerde[Array[Byte]] {
     override def recordSize(data: Array[Byte], serializationCache: ObjectSerializationCache): Int = {
       data.length
     }

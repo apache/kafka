@@ -17,11 +17,13 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
+import org.apache.kafka.server.common.MetadataVersion;
 
 
 /**
@@ -31,11 +33,16 @@ import java.util.function.Consumer;
  */
 public final class MetadataImage {
     public final static MetadataImage EMPTY = new MetadataImage(
+        new OffsetAndEpoch(0, 0),
         FeaturesImage.EMPTY,
         ClusterImage.EMPTY,
         TopicsImage.EMPTY,
         ConfigurationsImage.EMPTY,
-        ClientQuotasImage.EMPTY);
+        ClientQuotasImage.EMPTY,
+        ProducerIdsImage.EMPTY,
+        AclsImage.EMPTY);
+
+    private final OffsetAndEpoch highestOffsetAndEpoch;
 
     private final FeaturesImage features;
 
@@ -47,16 +54,28 @@ public final class MetadataImage {
 
     private final ClientQuotasImage clientQuotas;
 
-    public MetadataImage(FeaturesImage features,
-                         ClusterImage cluster,
-                         TopicsImage topics,
-                         ConfigurationsImage configs,
-                         ClientQuotasImage clientQuotas) {
+    private final ProducerIdsImage producerIds;
+
+    private final AclsImage acls;
+
+    public MetadataImage(
+        OffsetAndEpoch highestOffsetAndEpoch,
+        FeaturesImage features,
+        ClusterImage cluster,
+        TopicsImage topics,
+        ConfigurationsImage configs,
+        ClientQuotasImage clientQuotas,
+        ProducerIdsImage producerIds,
+        AclsImage acls
+    ) {
+        this.highestOffsetAndEpoch = highestOffsetAndEpoch;
         this.features = features;
         this.cluster = cluster;
         this.topics = topics;
         this.configs = configs;
         this.clientQuotas = clientQuotas;
+        this.producerIds = producerIds;
+        this.acls = acls;
     }
 
     public boolean isEmpty() {
@@ -64,7 +83,13 @@ public final class MetadataImage {
             cluster.isEmpty() &&
             topics.isEmpty() &&
             configs.isEmpty() &&
-            clientQuotas.isEmpty();
+            clientQuotas.isEmpty() &&
+            producerIds.isEmpty() &&
+            acls.isEmpty();
+    }
+
+    public OffsetAndEpoch highestOffsetAndEpoch() {
+        return highestOffsetAndEpoch;
     }
 
     public FeaturesImage features() {
@@ -87,37 +112,63 @@ public final class MetadataImage {
         return clientQuotas;
     }
 
+    public ProducerIdsImage producerIds() {
+        return producerIds;
+    }
+
+    public AclsImage acls() {
+        return acls;
+    }
+
     public void write(Consumer<List<ApiMessageAndVersion>> out) {
+        MetadataVersion metadataVersion = features.metadataVersion();
+        // Features should be written out first so we can include the metadata.version at the beginning of the
+        // snapshot
         features.write(out);
-        cluster.write(out);
+        cluster.write(out, metadataVersion);
         topics.write(out);
         configs.write(out);
         clientQuotas.write(out);
+        producerIds.write(out);
+        acls.write(out);
     }
 
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof MetadataImage)) return false;
         MetadataImage other = (MetadataImage) o;
-        return features.equals(other.features) &&
+        return highestOffsetAndEpoch.equals(other.highestOffsetAndEpoch) &&
+            features.equals(other.features) &&
             cluster.equals(other.cluster) &&
             topics.equals(other.topics) &&
             configs.equals(other.configs) &&
-            clientQuotas.equals(other.clientQuotas);
+            clientQuotas.equals(other.clientQuotas) &&
+            producerIds.equals(other.producerIds) &&
+            acls.equals(other.acls);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(features, cluster, topics, configs, clientQuotas);
+        return Objects.hash(highestOffsetAndEpoch,
+            features,
+            cluster,
+            topics,
+            configs,
+            clientQuotas,
+            producerIds,
+            acls);
     }
 
     @Override
     public String toString() {
-        return "MetadataImage(features=" + features +
+        return "MetadataImage(highestOffsetAndEpoch=" + highestOffsetAndEpoch +
+            ", features=" + features +
             ", cluster=" + cluster +
             ", topics=" + topics +
             ", configs=" + configs +
             ", clientQuotas=" + clientQuotas +
+            ", producerIdsImage=" + producerIds +
+            ", acls=" + acls +
             ")";
     }
 }

@@ -42,6 +42,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -65,11 +66,12 @@ import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
-import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.TopologyConfig.TaskConfig;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -112,9 +114,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.AT_LEAST_ONCE;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 /**
@@ -238,7 +240,7 @@ public class TopologyTestDriver implements Closeable {
     private final Map<TopicPartition, AtomicLong> offsetsByTopicOrPatternPartition = new HashMap<>();
 
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
-    private final StreamThread.ProcessingMode processingMode;
+    private final StreamsConfigUtils.ProcessingMode processingMode;
 
     private final StateRestoreListener stateRestoreListener = new StateRestoreListener() {
         @Override
@@ -320,7 +322,7 @@ public class TopologyTestDriver implements Closeable {
 
         logContext = new LogContext("topology-test-driver ");
         mockWallClockTime = new MockTime(initialWallClockTimeMs);
-        processingMode = StreamThread.processingMode(streamsConfig);
+        processingMode = StreamsConfigUtils.processingMode(streamsConfig);
 
         final StreamsMetricsImpl streamsMetrics = setupMetrics(streamsConfig);
         setupTopology(builder, streamsConfig);
@@ -362,11 +364,12 @@ public class TopologyTestDriver implements Closeable {
                     throw new IllegalStateException();
                 }
             },
-            logContext
+            logContext,
+            mockWallClockTime
         );
 
         setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
-        setupTask(streamsConfig, streamsMetrics, cache);
+        setupTask(streamsConfig, streamsMetrics, cache, internalTopologyBuilder.topologyConfigs().getTaskConfig());
     }
 
     private static void logIfTaskIdleEnabled(final StreamsConfig streamsConfig) {
@@ -417,7 +420,6 @@ public class TopologyTestDriver implements Closeable {
             offsetsByTopicOrPatternPartition.put(tp, new AtomicLong());
         }
 
-        // TODO KAFKA-12648: The TTD does not yet work with NamedTopologies, so just pass in false
         stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, internalTopologyBuilder.hasPersistentStores(), false);
     }
 
@@ -469,7 +471,8 @@ public class TopologyTestDriver implements Closeable {
     @SuppressWarnings("deprecation")
     private void setupTask(final StreamsConfig streamsConfig,
                            final StreamsMetricsImpl streamsMetrics,
-                           final ThreadCache cache) {
+                           final ThreadCache cache,
+                           final TaskConfig taskConfig) {
         if (!partitionsByInputTopic.isEmpty()) {
             consumer.assign(partitionsByInputTopic.values());
             final Map<TopicPartition, Long> startOffsets = new HashMap<>();
@@ -493,7 +496,8 @@ public class TopologyTestDriver implements Closeable {
                 TASK_ID,
                 testDriverProducer,
                 streamsConfig.defaultProductionExceptionHandler(),
-                streamsMetrics
+                streamsMetrics,
+                processorTopology
             );
 
             final InternalProcessorContext context = new ProcessorContextImpl(
@@ -509,7 +513,7 @@ public class TopologyTestDriver implements Closeable {
                 new HashSet<>(partitionsByInputTopic.values()),
                 processorTopology,
                 consumer,
-                streamsConfig,
+                taskConfig,
                 streamsMetrics,
                 stateDirectory,
                 cache,
@@ -639,7 +643,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     private void validateSourceTopicNameRegexPattern(final String inputRecordTopic) {
-        for (final String sourceTopicName : internalTopologyBuilder.sourceTopicNames()) {
+        for (final String sourceTopicName : internalTopologyBuilder.fullSourceTopicNames()) {
             if (!sourceTopicName.equals(inputRecordTopic) && Pattern.compile(sourceTopicName).matcher(inputRecordTopic).matches()) {
                 throw new TopologyException("Topology add source of type String for topic: " + sourceTopicName +
                                                 " cannot contain regex pattern for input record topic: " + inputRecordTopic +
@@ -649,7 +653,7 @@ public class TopologyTestDriver implements Closeable {
     }
 
     private TopicPartition getInputTopicOrPatternPartition(final String topicName) {
-        if (!internalTopologyBuilder.sourceTopicNames().isEmpty()) {
+        if (!internalTopologyBuilder.fullSourceTopicNames().isEmpty()) {
             validateSourceTopicNameRegexPattern(topicName);
         }
 
@@ -1235,6 +1239,11 @@ public class TopologyTestDriver implements Closeable {
         public boolean isOpen() {
             return inner.isOpen();
         }
+
+        @Override
+        public Position getPosition() {
+            return inner.getPosition();
+        }
     }
 
     static class WindowStoreFacade<K, V> extends ReadOnlyWindowStoreFacade<K, V> implements WindowStore<K, V> {
@@ -1329,14 +1338,20 @@ public class TopologyTestDriver implements Closeable {
         public boolean isOpen() {
             return inner.isOpen();
         }
+
+        @Override
+        public Position getPosition() {
+            return inner.getPosition();
+        }
     }
 
     private static class TestDriverProducer extends StreamsProducer {
 
         public TestDriverProducer(final StreamsConfig config,
                                   final KafkaClientSupplier clientSupplier,
-                                  final LogContext logContext) {
-            super(config, "TopologyTestDriver-StreamThread-1", clientSupplier, new TaskId(0, 0), UUID.randomUUID(), logContext);
+                                  final LogContext logContext,
+                                  final Time time) {
+            super(config, "TopologyTestDriver-StreamThread-1", clientSupplier, new TaskId(0, 0), UUID.randomUUID(), logContext, time);
         }
 
         @Override

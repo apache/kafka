@@ -29,13 +29,17 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.common.utils.Utils.filterMap;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
+
 class StandbyTaskCreator {
     private final TopologyMetadata topologyMetadata;
-    private final StreamsConfig config;
+    private final StreamsConfig applicationConfig;
     private final StreamsMetricsImpl streamsMetrics;
     private final StateDirectory stateDirectory;
     private final ChangelogReader storeChangelogReader;
@@ -43,15 +47,18 @@ class StandbyTaskCreator {
     private final Logger log;
     private final Sensor createTaskSensor;
 
+    // tasks may be assigned for a NamedTopology that is not yet known by this host, and saved for later creation
+    private final Map<TaskId, Set<TopicPartition>> unknownTasksToBeCreated = new HashMap<>();
+
     StandbyTaskCreator(final TopologyMetadata topologyMetadata,
-                       final StreamsConfig config,
+                       final StreamsConfig applicationConfig,
                        final StreamsMetricsImpl streamsMetrics,
                        final StateDirectory stateDirectory,
                        final ChangelogReader storeChangelogReader,
                        final String threadId,
                        final Logger log) {
         this.topologyMetadata = topologyMetadata;
-        this.config = config;
+        this.applicationConfig = applicationConfig;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
         this.storeChangelogReader = storeChangelogReader;
@@ -66,20 +73,37 @@ class StandbyTaskCreator {
         );
     }
 
+    void removeRevokedUnknownTasks(final Set<TaskId> assignedTasks) {
+        unknownTasksToBeCreated.keySet().retainAll(assignedTasks);
+    }
+
+    Map<TaskId, Set<TopicPartition>> uncreatedTasksForTopologies(final Set<String> currentTopologies) {
+        return filterMap(unknownTasksToBeCreated, t -> currentTopologies.contains(t.getKey().topologyName()));
+    }
+
     // TODO: change return type to `StandbyTask`
     Collection<Task> createTasks(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
         // TODO: change type to `StandbyTask`
         final List<Task> createdTasks = new ArrayList<>();
+        final Map<TaskId, Set<TopicPartition>>  newUnknownTasks = new HashMap<>();
+
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();
             final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
+
+            // task belongs to a named topology that hasn't been added yet, wait until it has to create this
+            if (taskId.topologyName() != null && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
+                newUnknownTasks.put(taskId, partitions);
+                continue;
+            }
+
             final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
 
             if (topology.hasStateWithChangelogs()) {
                 final ProcessorStateManager stateManager = new ProcessorStateManager(
                     taskId,
                     Task.TaskType.STANDBY,
-                    StreamThread.eosEnabled(config),
+                    eosEnabled(applicationConfig),
                     getLogContext(taskId),
                     stateDirectory,
                     storeChangelogReader,
@@ -89,7 +113,7 @@ class StandbyTaskCreator {
 
                 final InternalProcessorContext context = new ProcessorContextImpl(
                     taskId,
-                    config,
+                    applicationConfig,
                     stateManager,
                     streamsMetrics,
                     dummyCache
@@ -103,7 +127,11 @@ class StandbyTaskCreator {
                     taskId, partitions
                 );
             }
-
+            unknownTasksToBeCreated.remove(taskId);
+        }
+        if (!newUnknownTasks.isEmpty()) {
+            log.info("Delaying creation of tasks not yet known by this instance: {}", newUnknownTasks.keySet());
+            unknownTasksToBeCreated.putAll(newUnknownTasks);
         }
         return createdTasks;
     }
@@ -134,7 +162,7 @@ class StandbyTaskCreator {
             taskId,
             inputPartitions,
             topology,
-            config,
+            topologyMetadata.getTaskConfigFor(taskId),
             streamsMetrics,
             stateManager,
             stateDirectory,

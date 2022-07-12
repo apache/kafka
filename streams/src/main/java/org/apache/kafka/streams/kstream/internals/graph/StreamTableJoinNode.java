@@ -21,7 +21,6 @@ import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Arrays;
-import java.util.Properties;
 
 /**
  * Represents a join between a KStream and a KTable or GlobalKTable
@@ -55,7 +54,7 @@ public class StreamTableJoinNode<K, V> extends GraphNode {
     }
 
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final String processorName = processorParameters.processorName();
         final ProcessorSupplier<K, V, ?, ?> processorSupplier = processorParameters.processorSupplier();
 

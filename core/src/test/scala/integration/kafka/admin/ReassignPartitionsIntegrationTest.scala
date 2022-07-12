@@ -17,29 +17,28 @@
 
 package kafka.admin
 
-import java.io.Closeable
-import java.util.{Collections, HashMap, List}
 import kafka.admin.ReassignPartitionsCommand._
-import kafka.api.KAFKA_2_7_IV1
-import kafka.server.{IsrChangePropagationConfig, KafkaConfig, KafkaServer, ZkIsrManager}
+import kafka.server._
 import kafka.utils.Implicits._
-import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, ConfigEntry, DescribeLogDirsResult, NewTopic}
+import kafka.utils.{TestInfoUtils, TestUtils}
+import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV1
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
-import org.junit.jupiter.api.{AfterEach, Test, Timeout}
+import org.junit.jupiter.api.{AfterEach, Timeout}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
+import java.io.Closeable
+import java.util.{Collections, HashMap, List}
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
 @Timeout(300)
-class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
+class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
   var cluster: ReassignPartitionsTestCluster = null
 
@@ -55,52 +54,55 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
     }.toMap
 
 
-  @Test
-  def testReassignment(): Unit = {
-    cluster = new ReassignPartitionsTestCluster(zkConnect)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testReassignment(quorum: String): Unit = {
+    cluster = new ReassignPartitionsTestCluster()
     cluster.setup()
     executeAndVerifyReassignment()
   }
 
-  @Test
-  def testReassignmentWithAlterIsrDisabled(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk")) // Note: KRaft requires AlterPartition
+  def testReassignmentWithAlterPartitionDisabled(quorum: String): Unit = {
     // Test reassignment when the IBP is on an older version which does not use
-    // the `AlterIsr` API. In this case, the controller will register individual
+    // the `AlterPartition` API. In this case, the controller will register individual
     // watches for each reassigning partition so that the reassignment can be
     // completed as soon as the ISR is expanded.
-    val configOverrides = Map(KafkaConfig.InterBrokerProtocolVersionProp -> KAFKA_2_7_IV1.version)
-    cluster = new ReassignPartitionsTestCluster(zkConnect, configOverrides = configOverrides)
+    val configOverrides = Map(KafkaConfig.InterBrokerProtocolVersionProp -> IBP_2_7_IV1.version)
+    cluster = new ReassignPartitionsTestCluster(configOverrides = configOverrides)
     cluster.setup()
     executeAndVerifyReassignment()
   }
 
-  @Test
-  def testReassignmentCompletionDuringPartialUpgrade(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk")) // Note: KRaft requires AlterPartition
+  def testReassignmentCompletionDuringPartialUpgrade(quorum: String): Unit = {
     // Test reassignment during a partial upgrade when some brokers are relying on
-    // `AlterIsr` and some rely on the old notification logic through Zookeeper.
+    // `AlterPartition` and some rely on the old notification logic through Zookeeper.
     // In this test case, broker 0 starts up first on the latest IBP and is typically
     // elected as controller. The three remaining brokers start up on the older IBP.
     // We want to ensure that reassignment can still complete through the ISR change
-    // notification path even though the controller expects `AlterIsr`.
+    // notification path even though the controller expects `AlterPartition`.
 
     // Override change notification settings so that test is not delayed by ISR
     // change notification delay
-    ZkIsrManager.DefaultIsrPropagationConfig = IsrChangePropagationConfig(
+    ZkAlterPartitionManager.DefaultIsrPropagationConfig = IsrChangePropagationConfig(
       checkIntervalMs = 500,
       lingerMs = 100,
       maxDelayMs = 500
     )
 
-    val oldIbpConfig = Map(KafkaConfig.InterBrokerProtocolVersionProp -> KAFKA_2_7_IV1.version)
+    val oldIbpConfig = Map(KafkaConfig.InterBrokerProtocolVersionProp -> IBP_2_7_IV1.version)
     val brokerConfigOverrides = Map(1 -> oldIbpConfig, 2 -> oldIbpConfig, 3 -> oldIbpConfig)
 
-    cluster = new ReassignPartitionsTestCluster(zkConnect, brokerConfigOverrides = brokerConfigOverrides)
+    cluster = new ReassignPartitionsTestCluster(brokerConfigOverrides = brokerConfigOverrides)
     cluster.setup()
 
     executeAndVerifyReassignment()
   }
 
-  def executeAndVerifyReassignment(): Unit = {
+  private def executeAndVerifyReassignment(): Unit = {
     val assignment = """{"version":1,"partitions":""" +
       """[{"topic":"foo","partition":0,"replicas":[0,1,3],"log_dirs":["any","any","any"]},""" +
       """{"topic":"bar","partition":0,"replicas":[3,2,0],"log_dirs":["any","any","any"]}""" +
@@ -127,7 +129,6 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
     )
 
     val verifyAssignmentResult = runVerifyAssignment(cluster.adminClient, assignment, false)
-    assertTrue(verifyAssignmentResult.partsOngoing)
     assertFalse(verifyAssignmentResult.movesOngoing)
 
     // Wait for the assignment to complete
@@ -138,9 +139,10 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
       describeBrokerLevelThrottles(unthrottledBrokerConfigs.keySet.toSeq))
   }
 
-  @Test
-  def testHighWaterMarkAfterPartitionReassignment(): Unit = {
-    cluster = new ReassignPartitionsTestCluster(zkConnect)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testHighWaterMarkAfterPartitionReassignment(quorum: String): Unit = {
+    cluster = new ReassignPartitionsTestCluster()
     cluster.setup()
     val assignment = """{"version":1,"partitions":""" +
       """[{"topic":"foo","partition":0,"replicas":[3,1,2],"log_dirs":["any","any","any"]}""" +
@@ -167,9 +169,10 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
       s"Expected broker 3 to have the correct high water mark for the partition.")
   }
 
-  @Test
-  def testAlterReassignmentThrottle(): Unit = {
-    cluster = new ReassignPartitionsTestCluster(zkConnect)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAlterReassignmentThrottle(quorum: String): Unit = {
+    cluster = new ReassignPartitionsTestCluster()
     cluster.setup()
     cluster.produceMessages("foo", 0, 50)
     cluster.produceMessages("baz", 2, 60)
@@ -203,9 +206,10 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
   /**
    * Test running a reassignment with the interBrokerThrottle set.
    */
-  @Test
-  def testThrottledReassignment(): Unit = {
-    cluster = new ReassignPartitionsTestCluster(zkConnect)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testThrottledReassignment(quorum: String): Unit = {
+    cluster = new ReassignPartitionsTestCluster()
     cluster.setup()
     cluster.produceMessages("foo", 0, 50)
     cluster.produceMessages("baz", 2, 60)
@@ -260,9 +264,10 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
     waitForBrokerLevelThrottles(unthrottledBrokerConfigs)
   }
 
-  @Test
-  def testProduceAndConsumeWithReassignmentInProgress(): Unit = {
-    cluster = new ReassignPartitionsTestCluster(zkConnect)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testProduceAndConsumeWithReassignmentInProgress(quorum: String): Unit = {
+    cluster = new ReassignPartitionsTestCluster()
     cluster.setup()
     cluster.produceMessages("baz", 2, 60)
     val assignment = """{"version":1,"partitions":""" +
@@ -288,9 +293,10 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
   /**
    * Test running a reassignment and then cancelling it.
    */
-  @Test
-  def testCancellation(): Unit = {
-    cluster = new ReassignPartitionsTestCluster(zkConnect)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCancellation(quorum: String): Unit = {
+    cluster = new ReassignPartitionsTestCluster()
     cluster.setup()
     cluster.produceMessages("foo", 0, 200)
     cluster.produceMessages("baz", 1, 200)
@@ -371,9 +377,16 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
    */
   private def describeBrokerLevelThrottles(brokerIds: Seq[Int]): Map[Int, Map[String, Long]] = {
     brokerIds.map { brokerId =>
-      val props = zkClient.getEntityConfigs("brokers", brokerId.toString)
+      val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString)
+      val brokerConfigs = cluster.adminClient.describeConfigs(Collections.singleton(brokerResource)).values()
+        .get(brokerResource)
+        .get()
+
       val throttles = brokerLevelThrottles.map { throttleName =>
-        (throttleName, props.getOrDefault(throttleName, "-1").asInstanceOf[String].toLong)
+        val configValue = Option(brokerConfigs.get(throttleName))
+          .map(_.value)
+          .getOrElse("-1")
+        (throttleName, configValue.toLong)
       }.toMap
       brokerId -> throttles
     }.toMap
@@ -382,11 +395,12 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
   /**
    * Test moving partitions between directories.
    */
-  @Test
-  def testLogDirReassignment(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk")) // JBOD not yet implemented for KRaft
+  def testLogDirReassignment(quorum: String): Unit = {
     val topicPartition = new TopicPartition("foo", 0)
 
-    cluster = new ReassignPartitionsTestCluster(zkConnect)
+    cluster = new ReassignPartitionsTestCluster()
     cluster.setup()
     cluster.produceMessages(topicPartition.topic, topicPartition.partition, 700)
 
@@ -432,11 +446,12 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
     assertEquals(reassignment.targetDir, info1.curLogDirs.getOrElse(topicPartition, ""))
   }
 
-  @Test
-  def testAlterLogDirReassignmentThrottle(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk")) // JBOD not yet implemented for KRaft
+  def testAlterLogDirReassignmentThrottle(quorum: String): Unit = {
     val topicPartition = new TopicPartition("foo", 0)
 
-    cluster = new ReassignPartitionsTestCluster(zkConnect)
+    cluster = new ReassignPartitionsTestCluster()
     cluster.setup()
     cluster.produceMessages(topicPartition.topic, topicPartition.partition, 700)
 
@@ -562,7 +577,6 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
   }
 
   class ReassignPartitionsTestCluster(
-    val zkConnect: String,
     configOverrides: Map[String, String] = Map.empty,
     brokerConfigOverrides: Map[Int, Map[String, String]] = Map.empty
   ) extends Closeable {
@@ -584,7 +598,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
       case (brokerId, rack) =>
         val config = TestUtils.createBrokerConfig(
           nodeId = brokerId,
-          zkConnect = zkConnect,
+          zkConnect = zkConnectOrNull,
           rack = Some(rack),
           enableControlledShutdown = false, // shorten test time
           logDirCount = 3)
@@ -599,10 +613,10 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
           overrides.forKeyValue(config.setProperty)
         }
 
-        config
+        new KafkaConfig(config)
     }.toBuffer
 
-    var servers = new mutable.ArrayBuffer[KafkaServer]
+    var servers = new mutable.ArrayBuffer[KafkaBroker]
 
     var brokerList: String = null
 
@@ -615,14 +629,13 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
 
     def createServers(): Unit = {
       brokers.keySet.foreach { brokerId =>
-        servers += TestUtils.createServer(KafkaConfig(brokerConfigs(brokerId)))
+        servers += createBroker(brokerConfigs(brokerId))
       }
     }
 
     def createTopics(): Unit = {
       TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
-      brokerList = TestUtils.bootstrapServers(servers,
-        ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+      brokerList = TestUtils.plaintextBootstrapServers(servers)
       adminClient = Admin.create(Map[String, Object](
         AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> brokerList
       ).asJava)
@@ -637,6 +650,13 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
       topics.foreach {
         case (topicName, parts) =>
           TestUtils.waitForAllPartitionsMetadata(servers, topicName, parts.size)
+      }
+
+      if (isKRaftTest()) {
+        TestUtils.ensureConsistentKRaftMetadata(
+          cluster.servers,
+          controllerServer
+        )
       }
     }
 

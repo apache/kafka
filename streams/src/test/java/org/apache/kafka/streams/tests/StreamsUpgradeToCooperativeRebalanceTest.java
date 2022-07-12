@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.tests;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Exit;
@@ -54,7 +53,6 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
-        config.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10 * 1000);
         config.putAll(streamsProperties);
 
         final String sourceTopic = streamsProperties.getProperty("source.topic", "source");

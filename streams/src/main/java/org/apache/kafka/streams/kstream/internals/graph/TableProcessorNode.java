@@ -23,7 +23,6 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.Properties;
 
 public class TableProcessorNode<K, V> extends GraphNode {
 
@@ -58,7 +57,7 @@ public class TableProcessorNode<K, V> extends GraphNode {
     }
 
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final String processorName = processorParameters.processorName();
         topologyBuilder.addProcessor(processorName, processorParameters.processorSupplier(), parentNodeNames());
 

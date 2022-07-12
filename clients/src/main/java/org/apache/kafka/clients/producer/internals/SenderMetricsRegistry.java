@@ -30,7 +30,6 @@ import org.apache.kafka.common.metrics.Sensor;
 
 public class SenderMetricsRegistry {
 
-    final static String METRIC_GROUP_NAME = "producer-metrics";
     final static String TOPIC_METRIC_GROUP_NAME = "producer-topic-metrics";
 
     private final List<MetricNameTemplate> allTemplates;
@@ -154,7 +153,7 @@ public class SenderMetricsRegistry {
     }
 
     private MetricName createMetricName(String name, String description) {
-        return this.metrics.metricInstance(createTemplate(name, METRIC_GROUP_NAME, description, this.tags));
+        return this.metrics.metricInstance(createTemplate(name, KafkaProducerMetrics.GROUP, description, this.tags));
     }
 
     private MetricNameTemplate createTopicTemplate(String name, String description) {

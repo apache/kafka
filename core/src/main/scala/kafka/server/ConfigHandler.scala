@@ -42,7 +42,7 @@ import scala.collection.Seq
 import scala.util.Try
 
 /**
-  * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
+  * The ConfigHandler is used to process broker configuration change notifications.
   */
 trait ConfigHandler {
   def processConfigChanges(entityName: String, value: Properties): Unit
@@ -55,30 +55,17 @@ trait ConfigHandler {
 class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig,
                          val quotas: QuotaManagers, kafkaController: Option[KafkaController]) extends ConfigHandler with Logging  {
 
-  private def updateLogConfig(topic: String,
-                              topicConfig: Properties,
-                              configNamesToExclude: Set[String]): Unit = {
-    logManager.topicConfigUpdated(topic)
-    val logs = logManager.logsByTopic(topic)
-    if (logs.nonEmpty) {
-      /* combine the default properties with the overrides in zk to create the new LogConfig */
-      val props = new Properties()
-      topicConfig.asScala.forKeyValue { (key, value) =>
-        if (!configNamesToExclude.contains(key)) props.put(key, value)
-      }
-      val logConfig = LogConfig.fromProps(logManager.currentDefaultConfig.originals, props)
-      logs.foreach(_.updateConfig(logConfig))
-    }
-  }
-
   def processConfigChanges(topic: String, topicConfig: Properties): Unit = {
     // Validate the configurations.
     val configNamesToExclude = excludedConfigs(topic, topicConfig)
+    val props = new Properties()
+    topicConfig.asScala.forKeyValue { (key, value) =>
+      if (!configNamesToExclude.contains(key)) props.put(key, value)
+    }
+    logManager.updateTopicConfig(topic, props)
 
-    updateLogConfig(topic, topicConfig, configNamesToExclude)
-
-    def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager) = {
-      if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).length > 0) {
+    def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager): Unit = {
+      if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).nonEmpty) {
         val partitions = parseThrottledPartitions(topicConfig, kafkaConfig.brokerId, prop)
         quotaManager.markThrottled(topic, partitions)
         debug(s"Setting $prop on broker ${kafkaConfig.brokerId} for topic: $topic and partitions $partitions")
@@ -118,7 +105,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
         if (messageFormatVersion.shouldWarn)
           warn(messageFormatVersion.topicWarningMessage(topic))
         Some(LogConfig.MessageFormatVersionProp)
-      } else if (kafkaConfig.interBrokerProtocolVersion < messageFormatVersion.messageFormatVersion) {
+      } else if (kafkaConfig.interBrokerProtocolVersion.isLessThan(messageFormatVersion.messageFormatVersion)) {
         warn(s"Topic configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
           s"is higher than what is allowed by the inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
         Some(LogConfig.MessageFormatVersionProp)
@@ -190,7 +177,7 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers, val credential
     val sanitizedUser = entities(0)
     val sanitizedClientId = if (entities.length == 3) Some(entities(2)) else None
     updateQuotaConfig(Some(sanitizedUser), sanitizedClientId, config)
-    if (!sanitizedClientId.isDefined && sanitizedUser != ConfigEntityName.Default)
+    if (sanitizedClientId.isEmpty && sanitizedUser != ConfigEntityName.Default)
       credentialProvider.updateCredentials(Sanitizer.desanitize(sanitizedUser), config)
   }
 }

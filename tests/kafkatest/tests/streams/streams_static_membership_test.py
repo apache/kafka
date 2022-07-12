@@ -96,7 +96,7 @@ class StreamsStaticMembershipTest(Test):
         stop_processors(processors, self.stopped_message)
 
         self.producer.stop()
-        self.kafka.stop()
+        self.kafka.stop(timeout_sec=120)
         self.zookeeper.stop()
 
     def verify_processing(self, processors):

@@ -32,10 +32,10 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.MockAggregator;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 import java.util.Properties;
@@ -49,12 +49,11 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.junit.Assert.assertEquals;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class KTableAggregateTest {
     private final Serde<String> stringSerde = Serdes.String();
     private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
     private final Grouped<String, String> stringSerialized = Grouped.with(stringSerde, stringSerde);
-    private final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
+    private final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
     private final static Properties CONFIG = mkProperties(mkMap(
         mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())));
 
@@ -169,7 +168,7 @@ public class KTableAggregateTest {
 
     private static void testCountHelper(final StreamsBuilder builder,
                                         final String input,
-                                        final MockProcessorSupplier<String, Object> supplier) {
+                                        final MockApiProcessorSupplier<String, Object, Void, Void> supplier) {
         try (
             final TopologyTestDriver driver = new TopologyTestDriver(
                 builder.build(), CONFIG, Instant.ofEpochMilli(0L))) {
@@ -229,7 +228,7 @@ public class KTableAggregateTest {
     public void testRemoveOldBeforeAddNew() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
-        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
 
         builder
             .table(input, consumed)
@@ -253,7 +252,7 @@ public class KTableAggregateTest {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(input, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            final MockProcessor<String, String> proc = supplier.theCapturedProcessor();
+            final MockApiProcessor<String, String, Void, Void> proc = supplier.theCapturedProcessor();
 
             inputTopic.pipeInput("11", "A", 10L);
             inputTopic.pipeInput("12", "B", 8L);

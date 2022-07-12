@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
@@ -23,16 +27,15 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
+public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, K, V> {
 
-    private final KTableProcessorSupplier<K, ?, V> parent1;
-    private final KTableProcessorSupplier<K, ?, V> parent2;
+    private final KTableProcessorSupplier<K, ?, K, V> parent1;
+    private final KTableProcessorSupplier<K, ?, K, V> parent2;
     private final String queryableName;
     private boolean sendOldValues = false;
 
-    KTableKTableJoinMerger(final KTableProcessorSupplier<K, ?, V> parent1,
-                           final KTableProcessorSupplier<K, ?, V> parent2,
+    KTableKTableJoinMerger(final KTableProcessorSupplier<K, ?, K, V> parent1,
+                           final KTableProcessorSupplier<K, ?, K, V> parent2,
                            final String queryableName) {
         this.parent1 = parent1;
         this.parent2 = parent2;
@@ -44,7 +47,7 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
     }
 
     @Override
-    public org.apache.kafka.streams.processor.Processor<K, Change<V>> get() {
+    public Processor<K, Change<V>, K, Change<V>> get() {
         return new KTableKTableJoinMergeProcessor();
     }
 
@@ -83,24 +86,24 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
         return true;
     }
 
-    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, V> parent1,
-                                                         final KTableProcessorSupplier<K, ?, V> parent2) {
+    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, K, V> parent1,
+                                                         final KTableProcessorSupplier<K, ?, K, V> parent2) {
         return of(parent1, parent2, null);
     }
 
-    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, V> parent1,
-                                                         final KTableProcessorSupplier<K, ?, V> parent2,
+    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, K, V> parent1,
+                                                         final KTableProcessorSupplier<K, ?, K, V> parent2,
                                                          final String queryableName) {
         return new KTableKTableJoinMerger<>(parent1, parent2, queryableName);
     }
 
-    private class KTableKTableJoinMergeProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<K, Change<V>> {
+    private class KTableKTableJoinMergeProcessor extends ContextualProcessor<K, Change<V>, K, Change<V>> {
         private TimestampedKeyValueStore<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+        public void init(final ProcessorContext<K, Change<V>> context) {
             super.init(context);
             if (queryableName != null) {
                 store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
@@ -113,15 +116,15 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
         }
 
         @Override
-        public void process(final K key, final Change<V> value) {
+        public void process(final Record<K, Change<V>> record) {
             if (queryableName != null) {
-                store.put(key, ValueAndTimestamp.make(value.newValue, context().timestamp()));
-                tupleForwarder.maybeForward(key, value.newValue, sendOldValues ? value.oldValue : null);
+                store.put(record.key(), ValueAndTimestamp.make(record.value().newValue, record.timestamp()));
+                tupleForwarder.maybeForward(record);
             } else {
                 if (sendOldValues) {
-                    context().forward(key, value);
+                    context().forward(record);
                 } else {
-                    context().forward(key, new Change<>(value.newValue, null));
+                    context().forward(record.withValue(new Change<>(record.value().newValue, null)));
                 }
             }
         }

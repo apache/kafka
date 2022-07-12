@@ -18,7 +18,6 @@
 package kafka.log
 
 import com.yammer.metrics.core.MetricName
-import kafka.metrics.KafkaYammerMetrics
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
 import kafka.server.{FetchDataInfo, FetchLogEnd}
@@ -32,11 +31,13 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentMatchers, Mockito}
 import org.mockito.Mockito.{doAnswer, mock, never, spy, times, verify}
-
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent.Future
 import java.util.{Collections, Properties}
+
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
+
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Try}
@@ -408,7 +409,7 @@ class LogManagerTest {
       for (_ <- 0 until 50)
         log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
 
-      log.flush()
+      log.flush(false)
     }
 
     logManager.checkpointLogRecoveryOffsets()
@@ -484,7 +485,7 @@ class LogManagerTest {
     allLogs.foreach { log =>
       for (_ <- 0 until 50)
         log.appendAsLeader(TestUtils.singletonRecords("test".getBytes), leaderEpoch = 0)
-      log.flush()
+      log.flush(false)
     }
 
     logManager.checkpointRecoveryOffsetsInDir(logDir)
@@ -497,7 +498,7 @@ class LogManagerTest {
     }
   }
 
-  private def readLog(log: Log, offset: Long, maxLength: Int = 1024): FetchDataInfo = {
+  private def readLog(log: UnifiedLog, offset: Long, maxLength: Int = 1024): FetchDataInfo = {
     log.read(offset, maxLength, isolation = FetchLogEnd, minOneMessage = true)
   }
 
@@ -511,7 +512,7 @@ class LogManagerTest {
     val spyConfigRepository = spy(new MockConfigRepository)
     logManager = createLogManager(configRepository = spyConfigRepository)
     val spyLogManager = spy(logManager)
-    val mockLog = mock(classOf[Log])
+    val mockLog = mock(classOf[UnifiedLog])
 
     val testTopicOne = "test-topic-one"
     val testTopicTwo = "test-topic-two"
@@ -566,7 +567,7 @@ class LogManagerTest {
     val spyConfigRepository = spy(new MockConfigRepository)
     logManager = createLogManager(configRepository = spyConfigRepository)
     val spyLogManager = spy(logManager)
-    val mockLog = mock(classOf[Log])
+    val mockLog = mock(classOf[UnifiedLog])
 
     val testTopicOne = "test-topic-one"
     val testTopicTwo = "test-topic-two"
@@ -583,6 +584,45 @@ class LogManagerTest {
 
     verify(spyConfigRepository, times(1)).topicConfig(testTopicOne)
     verify(spyConfigRepository, times(1)).topicConfig(testTopicTwo)
+  }
+
+  /**
+   * Test when compact is removed that cleaning of the partitions is aborted.
+   */
+  @Test
+  def testTopicConfigChangeStopCleaningIfCompactIsRemoved(): Unit = {
+    logManager.shutdown()
+    logManager = createLogManager(configRepository = new MockConfigRepository)
+    val spyLogManager = spy(logManager)
+
+    val topic = "topic"
+    val tp0 = new TopicPartition(topic, 0)
+    val tp1 = new TopicPartition(topic, 1)
+
+    val oldProperties = new Properties()
+    oldProperties.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    val oldLogConfig = LogConfig.fromProps(logConfig.originals, oldProperties)
+
+    val log0 = spyLogManager.getOrCreateLog(tp0, topicId = None)
+    log0.updateConfig(oldLogConfig)
+    val log1 = spyLogManager.getOrCreateLog(tp1, topicId = None)
+    log1.updateConfig(oldLogConfig)
+
+    assertEquals(Set(log0, log1), spyLogManager.logsByTopic(topic).toSet)
+
+    val newProperties = new Properties()
+    newProperties.put(LogConfig.CleanupPolicyProp, LogConfig.Delete)
+
+    spyLogManager.updateTopicConfig(topic, newProperties)
+
+    assertTrue(log0.config.delete)
+    assertTrue(log1.config.delete)
+    assertFalse(log0.config.compact)
+    assertFalse(log1.config.compact)
+
+    verify(spyLogManager, times(1)).topicConfigUpdated(topic)
+    verify(spyLogManager, times(1)).abortCleaning(tp0)
+    verify(spyLogManager, times(1)).abortCleaning(tp1)
   }
 
   /**

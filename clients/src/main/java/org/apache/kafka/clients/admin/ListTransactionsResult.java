@@ -35,9 +35,9 @@ import java.util.Set;
  */
 @InterfaceStability.Evolving
 public class ListTransactionsResult {
-    private final KafkaFutureImpl<Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>>> future;
+    private final KafkaFuture<Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>>> future;
 
-    ListTransactionsResult(KafkaFutureImpl<Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>>> future) {
+    ListTransactionsResult(KafkaFuture<Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>>> future) {
         this.future = future;
     }
 

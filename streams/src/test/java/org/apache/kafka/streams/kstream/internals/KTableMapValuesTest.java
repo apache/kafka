@@ -34,7 +34,6 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
@@ -56,7 +55,7 @@ public class KTableMapValuesTest {
 
     private void doTestKTable(final StreamsBuilder builder,
                               final String topic1,
-                              final MockProcessorSupplier<String, Integer> supplier) {
+                              final MockApiProcessorSupplier<String, Integer, Void, Void> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final TestInputTopic<String, String> inputTopic1 =
                     driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
@@ -71,7 +70,6 @@ public class KTableMapValuesTest {
         }
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -80,13 +78,12 @@ public class KTableMapValuesTest {
         final KTable<String, String> table1 = builder.table(topic1, consumed);
         final KTable<String, Integer> table2 = table1.mapValues(value -> value.charAt(0) - 48);
 
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         doTestKTable(builder, topic1, supplier);
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testQueryableKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -99,7 +96,7 @@ public class KTableMapValuesTest {
                 Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyName")
                     .withValueSerde(Serdes.Integer()));
 
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         doTestKTable(builder, topic1, supplier);

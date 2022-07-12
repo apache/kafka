@@ -17,14 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.time.Duration;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.Set;
-
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaFuture;
@@ -41,6 +33,14 @@ import org.apache.kafka.common.errors.FeatureUpdateFailedException;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
+
+import java.time.Duration;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
 
 /**
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
@@ -81,7 +81,7 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
  *   // Create a compacted topic
  *   CreateTopicsResult result = admin.createTopics(Collections.singleton(
  *     new NewTopic(topicName, partitions, replicationFactor)
- *       .configs(Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)));
+ *       .configs(Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT))));
  *
  *   // Call values() to get the result for a specific topic
  *   KafkaFuture<Void> future = result.values().get(topicName);
@@ -140,7 +140,7 @@ public interface Admin extends AutoCloseable {
      * @return The new KafkaAdminClient.
      */
     static Admin create(Map<String, Object> conf) {
-        return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null);
+        return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null, null);
     }
 
     /**
@@ -303,7 +303,33 @@ public interface Admin extends AutoCloseable {
      * @param options    The options to use when describing the topic.
      * @return The DescribeTopicsResult.
      */
-    DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options);
+    default DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options) {
+        return describeTopics(TopicCollection.ofTopicNames(topicNames), options);
+    }
+
+    /**
+     * This is a convenience method for {@link #describeTopics(TopicCollection, DescribeTopicsOptions)}
+     * with default options. See the overload for more details.
+     * <p>
+     * When using topic IDs, this operation is supported by brokers with version 3.1.0 or higher.
+     *
+     * @param topics The topics to describe.
+     * @return The DescribeTopicsResult.
+     */
+    default DescribeTopicsResult describeTopics(TopicCollection topics) {
+        return describeTopics(topics, new DescribeTopicsOptions());
+    }
+
+    /**
+     * Describe some topics in the cluster.
+     *
+     * When using topic IDs, this operation is supported by brokers with version 3.1.0 or higher.
+     *
+     * @param topics  The topics to describe.
+     * @param options The options to use when describing the topics.
+     * @return The DescribeTopicsResult.
+     */
+    DescribeTopicsResult describeTopics(TopicCollection topics, DescribeTopicsOptions options);
 
     /**
      * Get information about the nodes in the cluster, using the default options.
@@ -1421,6 +1447,35 @@ public interface Admin extends AutoCloseable {
     UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates, UpdateFeaturesOptions options);
 
     /**
+     * Describes the state of the metadata quorum.
+     * <p>
+     * This is a convenience method for {@link #describeMetadataQuorum(DescribeMetadataQuorumOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @return the {@link DescribeMetadataQuorumResult} containing the result
+     */
+    default DescribeMetadataQuorumResult describeMetadataQuorum() {
+        return describeMetadataQuorum(new DescribeMetadataQuorumOptions());
+    }
+
+    /**
+     * Describes the state of the metadata quorum.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@code DescribeMetadataQuorumResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   If the authenticated user didn't have {@code DESCRIBE} access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the controller could list the cluster links.</li>
+     * </ul>
+     *
+     * @param options The {@link DescribeMetadataQuorumOptions} to use when describing the quorum.
+     * @return the {@link DescribeMetadataQuorumResult} containing the result
+     */
+    DescribeMetadataQuorumResult describeMetadataQuorum(DescribeMetadataQuorumOptions options);
+
+    /**
      * Unregister a broker.
      * <p>
      * This operation does not have any effect on partition assignments. It is supported
@@ -1548,6 +1603,29 @@ public interface Admin extends AutoCloseable {
      * @return The result
      */
     ListTransactionsResult listTransactions(ListTransactionsOptions options);
+
+    /**
+     * Fence out all active producers that use any of the provided transactional IDs, with the default options.
+     * <p>
+     * This is a convenience method for {@link #fenceProducers(Collection, FenceProducersOptions)}
+     * with default options. See the overload for more details.
+     *
+     * @param transactionalIds The IDs of the producers to fence.
+     * @return The FenceProducersResult.
+     */
+    default FenceProducersResult fenceProducers(Collection<String> transactionalIds) {
+        return fenceProducers(transactionalIds, new FenceProducersOptions());
+    }
+
+    /**
+     * Fence out all active producers that use any of the provided transactional IDs.
+     *
+     * @param transactionalIds The IDs of the producers to fence.
+     * @param options          The options to use when fencing the producers.
+     * @return The FenceProducersResult.
+     */
+    FenceProducersResult fenceProducers(Collection<String> transactionalIds,
+                                        FenceProducersOptions options);
 
     /**
      * Get the metrics kept by the adminClient

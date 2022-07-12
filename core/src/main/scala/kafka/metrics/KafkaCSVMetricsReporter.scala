@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit
 
 import kafka.utils.{Logging, VerifiableProperties}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 private trait KafkaCSVMetricsReporterMBean extends KafkaMetricsReporterMBean
 
@@ -50,7 +51,7 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
         val metricsConfig = new KafkaMetricsConfig(props)
         csvDir = new File(props.getString("kafka.csv.metrics.dir", "kafka_metrics"))
         Utils.delete(csvDir)
-        Files.createDirectories(csvDir.toPath())
+        Files.createDirectories(csvDir.toPath)
         underlying = new CsvReporter(KafkaYammerMetrics.defaultRegistry(), csvDir)
         if (props.getBoolean("kafka.csv.metrics.reporter.enabled", default = false)) {
           initialized = true

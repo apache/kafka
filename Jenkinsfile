@@ -142,10 +142,10 @@ pipeline {
           }
         }
 
-        stage('JDK 16 and Scala 2.13') {
+        stage('JDK 17 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
-            jdk 'jdk_16_latest'
+            jdk 'jdk_17_latest'
           }
           options {
             timeout(time: 8, unit: 'HOURS') 
@@ -157,25 +157,73 @@ pipeline {
           steps {
             doValidation()
             doTest(env)
-            echo 'Skipping Kafka Streams archetype test for Java 16'
+            echo 'Skipping Kafka Streams archetype test for Java 17'
           }
         }
 
         stage('ARM') {
-          agent { label 'arm4' }
           options {
-            timeout(time: 2, unit: 'HOURS') 
             timestamps()
           }
           environment {
             SCALA_VERSION=2.12
           }
-          steps {
-            doValidation()
-            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-              doTest(env, 'unitTest')
+          stages {
+            stage('Check ARM Agent') {
+              agent { label 'arm4' }
+              options {
+                timeout(time: 5, unit: 'MINUTES')
+              }
+              steps {
+                echo 'ARM ok'
+              }
             }
-            echo 'Skipping Kafka Streams archetype test for ARM build'
+            stage('Run ARM Build') {
+              agent { label 'arm4' }
+              options {
+                timeout(time: 2, unit: 'HOURS')
+              }
+              steps {
+                doValidation()
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                  doTest(env, 'unitTest')
+                }
+                echo 'Skipping Kafka Streams archetype test for ARM build'
+              }
+            }
+          }
+        }
+
+        stage('PowerPC') {
+          options {
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.12
+          }
+          stages {
+            stage('Check PowerPC Agent') {
+              agent { label 'ppc64le' }
+              options {
+                timeout(time: 5, unit: 'MINUTES')
+              }
+              steps {
+                echo 'PowerPC ok'
+              }
+            }
+            stage('Run PowerPC Build') {
+              agent { label 'ppc64le' }
+              options {
+                timeout(time: 2, unit: 'HOURS')
+              }
+              steps {
+                doValidation()
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                  doTest(env, 'unitTest')
+                }
+                echo 'Skipping Kafka Streams archetype test for PowerPC build'
+              }
+            }
           }
         }
         
@@ -231,14 +279,14 @@ pipeline {
           }
         }
 
-        stage('JDK 16 and Scala 2.12') {
+        stage('JDK 17 and Scala 2.12') {
           when {
             not { changeRequest() }
             beforeAgent true
           }
           agent { label 'ubuntu' }
           tools {
-            jdk 'jdk_16_latest'
+            jdk 'jdk_17_latest'
           }
           options {
             timeout(time: 8, unit: 'HOURS') 
@@ -250,7 +298,7 @@ pipeline {
           steps {
             doValidation()
             doTest(env)
-            echo 'Skipping Kafka Streams archetype test for Java 16'
+            echo 'Skipping Kafka Streams archetype test for Java 17'
           }
         }
       }

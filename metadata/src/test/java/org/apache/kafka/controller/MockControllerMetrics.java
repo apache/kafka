@@ -18,20 +18,18 @@
 package org.apache.kafka.controller;
 
 public final class MockControllerMetrics implements ControllerMetrics {
-    private volatile boolean active;
-    private volatile int topics;
-    private volatile int partitions;
-    private volatile int offlinePartitions;
-    private volatile int preferredReplicaImbalances;
-    private volatile boolean closed = false;
+    private volatile boolean active = false;
+    private volatile int fencedBrokers = 0;
+    private volatile int activeBrokers = 0;
+    private volatile int topics = 0;
+    private volatile int partitions = 0;
+    private volatile int offlinePartitions = 0;
+    private volatile int preferredReplicaImbalances = 0;
+    private volatile long lastAppliedRecordOffset = 0;
+    private volatile long lastCommittedRecordOffset = 0;
+    private volatile long lastAppliedRecordTimestamp = 0;
 
-    public MockControllerMetrics() {
-        this.active = false;
-        this.topics = 0;
-        this.partitions = 0;
-        this.offlinePartitions = 0;
-        this.preferredReplicaImbalances = 0;
-    }
+    private volatile boolean closed = false;
 
     @Override
     public void setActive(boolean active) {
@@ -51,6 +49,26 @@ public final class MockControllerMetrics implements ControllerMetrics {
     @Override
     public void updateEventQueueProcessingTime(long durationMs) {
         // nothing to do
+    }
+
+    @Override
+    public void setFencedBrokerCount(int brokerCount) {
+        this.fencedBrokers = brokerCount;
+    }
+
+    @Override
+    public int fencedBrokerCount() {
+        return this.fencedBrokers;
+    }
+
+    @Override
+    public void setActiveBrokerCount(int brokerCount) {
+        this.activeBrokers = brokerCount;
+    }
+
+    @Override
+    public int activeBrokerCount() {
+        return activeBrokers;
     }
 
     @Override
@@ -91,6 +109,36 @@ public final class MockControllerMetrics implements ControllerMetrics {
     @Override
     public int preferredReplicaImbalanceCount() {
         return this.preferredReplicaImbalances;
+    }
+
+    @Override
+    public void setLastAppliedRecordOffset(long offset) {
+        lastAppliedRecordOffset = offset;
+    }
+
+    @Override
+    public long lastAppliedRecordOffset() {
+        return lastAppliedRecordOffset;
+    }
+
+    @Override
+    public void setLastCommittedRecordOffset(long offset) {
+        lastCommittedRecordOffset = offset;
+    }
+
+    @Override
+    public long lastCommittedRecordOffset() {
+        return lastCommittedRecordOffset;
+    }
+
+    @Override
+    public void setLastAppliedRecordTimestamp(long timestamp) {
+        lastAppliedRecordTimestamp = timestamp;
+    }
+
+    @Override
+    public long lastAppliedRecordTimestamp() {
+        return lastAppliedRecordTimestamp;
     }
 
     @Override

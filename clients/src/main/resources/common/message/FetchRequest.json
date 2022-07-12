@@ -92,7 +92,7 @@
     { "name": "ForgottenTopicsData", "type": "[]ForgottenTopic", "versions": "7+", "ignorable": false,
       "about": "In an incremental fetch request, the partitions to remove.", "fields": [
       { "name": "Topic", "type": "string", "versions": "7-12", "entityType": "topicName", "ignorable": true,
-        "about": "The partition name." },
+        "about": "The topic name." },
       { "name": "TopicId", "type": "uuid", "versions": "13+", "ignorable": true, "about": "The unique topic ID"},
       { "name": "Partitions", "type": "[]int32", "versions": "7+",
         "about": "The partitions indexes to forget." }

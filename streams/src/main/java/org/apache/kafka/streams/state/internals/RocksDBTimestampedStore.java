@@ -140,6 +140,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                 }
                 try {
                     db.put(newColumnFamily, wOptions, key, valueWithTimestamp);
+                    StoreQueryUtils.updatePosition(position, context);
                 } catch (final RocksDBException e) {
                     // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                     throw new ProcessorStateException("Error while putting key/value into store " + name, e);

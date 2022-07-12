@@ -30,6 +30,7 @@ import java.util.regex.Pattern;
  * In contrast, two sub-topologies are not connected but can be linked to each other via topics, i.e., if one
  * sub-topology {@link Topology#addSink(String, String, String...) writes} into a topic and another sub-topology
  * {@link Topology#addSource(String, String...) reads} from the same topic.
+ * Message {@link ProcessorContext#forward(Object, Object) forwards} using custom Processors and Transformers are not considered in the topology graph.
  * <p>
  * When {@link KafkaStreams#start()} is called, different sub-topologies will be constructed and executed as independent
  * {@link StreamTask tasks}.

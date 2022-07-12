@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.test.MockProcessorNode;
@@ -29,12 +28,7 @@ public class PunctuationQueueTest {
 
     private final MockProcessorNode<String, String, ?, ?> node = new MockProcessorNode<>();
     private final PunctuationQueue queue = new PunctuationQueue();
-    private final Punctuator punctuator = new Punctuator() {
-        @Override
-        public void punctuate(final long timestamp) {
-            node.mockProcessor.punctuatedStreamTime().add(timestamp);
-        }
-    };
+    private final Punctuator punctuator = timestamp -> node.mockProcessor.punctuatedStreamTime().add(timestamp);
 
     @Test
     public void testPunctuationInterval() {
@@ -43,12 +37,7 @@ public class PunctuationQueueTest {
 
         queue.schedule(sched);
 
-        final ProcessorNodePunctuator processorNodePunctuator = new ProcessorNodePunctuator() {
-            @Override
-            public void punctuate(final ProcessorNode node, final long timestamp, final PunctuationType type, final Punctuator punctuator) {
-                punctuator.punctuate(timestamp);
-            }
-        };
+        final ProcessorNodePunctuator processorNodePunctuator = (node, timestamp, type, punctuator) -> punctuator.punctuate(timestamp);
 
         queue.mayPunctuate(now, PunctuationType.STREAM_TIME, processorNodePunctuator);
         assertEquals(0, node.mockProcessor.punctuatedStreamTime().size());
@@ -82,12 +71,8 @@ public class PunctuationQueueTest {
 
         queue.schedule(sched);
 
-        final ProcessorNodePunctuator processorNodePunctuator = new ProcessorNodePunctuator() {
-            @Override
-            public void punctuate(final ProcessorNode node, final long timestamp, final PunctuationType type, final Punctuator punctuator) {
-                punctuator.punctuate(timestamp);
-            }
-        };
+        final ProcessorNodePunctuator processorNodePunctuator =
+            (node, timestamp, type, punctuator) -> punctuator.punctuate(timestamp);
 
         queue.mayPunctuate(now, PunctuationType.STREAM_TIME, processorNodePunctuator);
         assertEquals(0, node.mockProcessor.punctuatedStreamTime().size());
@@ -121,13 +106,10 @@ public class PunctuationQueueTest {
 
         final Cancellable cancellable = queue.schedule(sched);
 
-        final ProcessorNodePunctuator processorNodePunctuator = new ProcessorNodePunctuator() {
-            @Override
-            public void punctuate(final ProcessorNode node, final long timestamp, final PunctuationType type, final Punctuator punctuator) {
-                punctuator.punctuate(timestamp);
-                // simulate scheduler cancelled from within punctuator
-                cancellable.cancel();
-            }
+        final ProcessorNodePunctuator processorNodePunctuator = (node, timestamp, type, punctuator) -> {
+            punctuator.punctuate(timestamp);
+            // simulate scheduler cancelled from within punctuator
+            cancellable.cancel();
         };
 
         queue.mayPunctuate(now, PunctuationType.STREAM_TIME, processorNodePunctuator);
@@ -139,18 +121,4 @@ public class PunctuationQueueTest {
         queue.mayPunctuate(now + 200L, PunctuationType.STREAM_TIME, processorNodePunctuator);
         assertEquals(1, node.mockProcessor.punctuatedStreamTime().size());
     }
-
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    private static class TestProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, String> {
-
-        @Override
-        public void init(final ProcessorContext context) {}
-
-        @Override
-        public void process(final String key, final String value) {}
-
-        @Override
-        public void close() {}
-    }
-
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Optional;
 import java.util.Collections;
 import java.util.List;
@@ -264,6 +265,8 @@ public interface ConsumerPartitionAssignor {
      */
     static List<ConsumerPartitionAssignor> getAssignorInstances(List<String> assignorClasses, Map<String, Object> configs) {
         List<ConsumerPartitionAssignor> assignors = new ArrayList<>();
+        // a map to store assignor name -> assignor class name
+        Map<String, String> assignorNameMap = new HashMap<>();
 
         if (assignorClasses == null)
             return assignors;
@@ -284,6 +287,12 @@ public interface ConsumerPartitionAssignor {
                     ((Configurable) assignor).configure(configs);
 
                 if (assignor instanceof ConsumerPartitionAssignor) {
+                    String assignorName = ((ConsumerPartitionAssignor) assignor).name();
+                    if (assignorNameMap.containsKey(assignorName)) {
+                        throw new KafkaException("The assignor name: '" + assignorName + "' is used in more than one assignor: " +
+                            assignorNameMap.get(assignorName) + ", " + assignor.getClass().getName());
+                    }
+                    assignorNameMap.put(assignorName, assignor.getClass().getName());
                     assignors.add((ConsumerPartitionAssignor) assignor);
                 } else {
                     throw new KafkaException(klass + " is not an instance of " + ConsumerPartitionAssignor.class.getName());

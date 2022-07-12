@@ -19,16 +19,16 @@ package kafka.server
 
 import java.util.{Arrays, LinkedHashMap, Optional, Properties}
 
-import kafka.api.KAFKA_2_7_IV0
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, FetchRequest, FetchResponse, MetadataRequest, MetadataResponse}
+import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV0}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -36,22 +36,22 @@ import scala.jdk.CollectionConverters._
 class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, KAFKA_2_7_IV0.toString)
+    properties.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_7_IV0.toString)
     properties.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.setProperty(KafkaConfig.DefaultReplicationFactorProp, "2")
     properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    doSetup(createOffsetsTopic = false)
+  override def setUp(testInfo: TestInfo): Unit = {
+    doSetup(testInfo, createOffsetsTopic = false)
   }
 
   @Test
   def testMetadataTopicIdsWithOldIBP(): Unit = {
     val replicaAssignment = Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1))
     val topic1 = "topic1"
-    createTopic(topic1, replicaAssignment)
+    createTopicWithAssignment(topic1, replicaAssignment)
 
     val resp = sendMetadataRequest(new MetadataRequest.Builder(Seq(topic1, topic1).asJava, true, 10, 10).build(), Some(notControllerSocketServer))
     assertEquals(1, resp.topicMetadata.size)
@@ -71,14 +71,16 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     val maxPartitionBytes = 190
     val topicIds = Map("topic1" -> Uuid.randomUuid())
     val topicNames = topicIds.map(_.swap)
+    val tidp0 = new TopicIdPartition(topicIds(topic1), tp0)
 
-    val leadersMap = createTopic(topic1, replicaAssignment)
-    val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tp0),  Map.empty, topicIds, ApiKeys.FETCH.latestVersion())
+    val leadersMap = createTopicWithAssignment(topic1, replicaAssignment)
+    val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tidp0), Map.empty, ApiKeys.FETCH.latestVersion())
     val resp = sendFetchRequest(leadersMap(0), req)
 
     val responseData = resp.responseData(topicNames.asJava, ApiKeys.FETCH.latestVersion())
-    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, resp.error().code())
-    assertEquals(0, responseData.size());
+    assertEquals(Errors.NONE.code, resp.error().code())
+    assertEquals(1, responseData.size())
+    assertEquals(Errors.UNKNOWN_TOPIC_ID.code, responseData.get(tp0).errorCode)
   }
 
   @Test
@@ -90,9 +92,10 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     val maxPartitionBytes = 190
     val topicIds = Map("topic1" -> Uuid.randomUuid())
     val topicNames = topicIds.map(_.swap)
+    val tidp0 = new TopicIdPartition(topicIds(topic1), tp0)
 
-    val leadersMap = createTopic(topic1, replicaAssignment)
-    val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tp0), Map.empty, topicIds, 12)
+    val leadersMap = createTopicWithAssignment(topic1, replicaAssignment)
+    val req = createFetchRequest(maxResponseBytes, maxPartitionBytes, Seq(tidp0), Map.empty, 12)
     val resp = sendFetchRequest(leadersMap(0), req)
 
     assertEquals(Errors.NONE, resp.error())
@@ -141,19 +144,18 @@ class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
     connectAndReceive[MetadataResponse](request, destination = destination.getOrElse(anySocketServer))
   }
 
-  private def createFetchRequest(maxResponseBytes: Int, maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
+  private def createFetchRequest(maxResponseBytes: Int, maxPartitionBytes: Int, topicPartitions: Seq[TopicIdPartition],
                                  offsetMap: Map[TopicPartition, Long],
-                                 topicIds: Map[String, Uuid],
                                  version: Short): FetchRequest = {
-    FetchRequest.Builder.forConsumer(version, Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap), topicIds.asJava)
+    FetchRequest.Builder.forConsumer(version, Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap))
       .setMaxBytes(maxResponseBytes).build()
   }
 
-  private def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
+  private def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicIdPartition],
                                  offsetMap: Map[TopicPartition, Long]): LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
     val partitionMap = new LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     topicPartitions.foreach { tp =>
-      partitionMap.put(tp, new FetchRequest.PartitionData(offsetMap.getOrElse(tp, 0), 0L, maxPartitionBytes,
+      partitionMap.put(tp.topicPartition, new FetchRequest.PartitionData(tp.topicId, offsetMap.getOrElse(tp.topicPartition, 0), 0L, maxPartitionBytes,
         Optional.empty()))
     }
     partitionMap

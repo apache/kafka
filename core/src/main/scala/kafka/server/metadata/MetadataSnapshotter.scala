@@ -26,15 +26,10 @@ trait MetadataSnapshotter {
   /**
    * If there is no other snapshot being written out, start writing out a snapshot.
    *
-   * @param committedOffset       The highest metadata log offset of the snapshot.
-   * @param committedEpoch        The highest metadata log epoch of the snapshot.
    * @param lastContainedLogTime  The highest time contained in the snapshot.
    * @param image                 The metadata image to write out.
    *
    * @return                      True if we will write out a new snapshot; false otherwise.
    */
-  def maybeStartSnapshot(committedOffset: Long,
-                         committedEpoch: Int,
-                         lastContainedLogTime: Long,
-                         image: MetadataImage): Boolean
+  def maybeStartSnapshot(lastContainedLogTime: Long, image: MetadataImage): Boolean
 }

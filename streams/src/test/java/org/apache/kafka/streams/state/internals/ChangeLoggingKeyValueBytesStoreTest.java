@@ -16,16 +16,26 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -36,15 +46,23 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.replay;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasEntry;
 
 @SuppressWarnings("rawtypes")
 public class ChangeLoggingKeyValueBytesStoreTest {
@@ -52,14 +70,20 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     private final MockRecordCollector collector = new MockRecordCollector();
     private final InMemoryKeyValueStore inner = new InMemoryKeyValueStore("kv");
     private final ChangeLoggingKeyValueBytesStore store = new ChangeLoggingKeyValueBytesStore(inner);
+    private InternalMockProcessorContext context;
+    private final StreamsConfig streamsConfig = streamsConfigMock();
     private final Bytes hi = Bytes.wrap("hi".getBytes());
     private final Bytes hello = Bytes.wrap("hello".getBytes());
     private final byte[] there = "there".getBytes();
     private final byte[] world = "world".getBytes();
 
+    private static final String INPUT_TOPIC_NAME = "input-topic";
+    private static final Integer INPUT_PARTITION = 0;
+    private static final Long INPUT_OFFSET = 100L;
+
     @Before
     public void before() {
-        final InternalMockProcessorContext context = mockContext();
+        context = mockContext();
         context.setTime(0);
         store.init((StateStoreContext) context, store);
     }
@@ -69,8 +93,11 @@ public class ChangeLoggingKeyValueBytesStoreTest {
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
-            collector,
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
+            streamsConfig,
+            () -> collector,
+            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
+            Time.SYSTEM
         );
     }
 
@@ -228,5 +255,37 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     @Test
     public void shouldReturnNullOnGetWhenDoesntExist() {
         assertThat(store.get(hello), is(nullValue()));
+    }
+
+    @Test
+    public void shouldLogPositionOnPut() {
+        context.setRecordContext(new ProcessorRecordContext(-1, INPUT_OFFSET, INPUT_PARTITION, INPUT_TOPIC_NAME, new RecordHeaders()));
+        context.setTime(1L);
+        store.put(hi, there);
+        assertThat(collector.collected().size(), equalTo(1));
+        assertThat(collector.collected().get(0).headers(), is(notNullValue()));
+        final Header versionHeader = collector.collected().get(0).headers().lastHeader(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_KEY);
+        assertThat(versionHeader, is(notNullValue()));
+        assertThat(versionHeader.equals(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY), is(true));
+        final Header vectorHeader = collector.collected().get(0).headers().lastHeader(ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY);
+        assertThat(vectorHeader, is(notNullValue()));
+        final Position position = PositionSerde.deserialize(ByteBuffer.wrap(vectorHeader.value()));
+        assertThat(position.getPartitionPositions(INPUT_TOPIC_NAME), is(notNullValue()));
+        assertThat(position.getPartitionPositions(INPUT_TOPIC_NAME), hasEntry(0, 100L));
+
+    }
+
+    private StreamsConfig streamsConfigMock() {
+        final StreamsConfig streamsConfig = mock(StreamsConfig.class);
+
+        final Map<String, Object> myValues = new HashMap<>();
+        myValues.put(InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED, true);
+        expect(streamsConfig.originals()).andStubReturn(myValues);
+        expect(streamsConfig.values()).andStubReturn(Collections.emptyMap());
+        expect(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andStubReturn("add-id");
+        expect(streamsConfig.defaultValueSerde()).andStubReturn(Serdes.ByteArray());
+        expect(streamsConfig.defaultKeySerde()).andStubReturn(Serdes.ByteArray());
+        replay(streamsConfig);
+        return streamsConfig;
     }
 }

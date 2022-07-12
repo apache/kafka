@@ -38,8 +38,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public abstract class ShutdownableThread extends Thread {
     private static final Logger log = LoggerFactory.getLogger(ShutdownableThread.class);
 
-    private AtomicBoolean isRunning = new AtomicBoolean(true);
-    private CountDownLatch shutdownLatch = new CountDownLatch(1);
+    private final AtomicBoolean isRunning = new AtomicBoolean(true);
+    private final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
     /**
      * An UncaughtExceptionHandler to register on every instance of this class. This is useful for
@@ -136,7 +136,7 @@ public abstract class ShutdownableThread extends Thread {
      * default, threads are marked as daemon threads so they will not prevent the process from
      * exiting.
      */
-    public void forceShutdown() throws InterruptedException {
+    public void forceShutdown() {
         log.info("Forcing shutdown of thread {}", getName());
         isRunning.set(false);
         interrupt();

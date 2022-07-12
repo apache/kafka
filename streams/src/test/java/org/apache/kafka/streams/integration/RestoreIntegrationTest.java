@@ -40,9 +40,11 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.TrackingS
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -73,6 +75,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -88,6 +91,8 @@ import static org.junit.Assert.assertTrue;
 
 @Category({IntegrationTest.class})
 public class RestoreIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private static final int NUM_BROKERS = 1;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -291,10 +296,8 @@ public class RestoreIntegrationTest {
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void shouldProcessDataFromStoresWithLoggingDisabled() throws InterruptedException {
-
         IntegrationTestUtils.produceKeyValuesSynchronously(inputStream,
                                                            asList(KeyValue.pair(1, 1),
                                                                          KeyValue.pair(2, 2),
@@ -371,7 +374,7 @@ public class RestoreIntegrationTest {
         // Sometimes the store happens to have already been closed sometime during startup, so just keep track
         // of where it started and make sure it doesn't happen more times from there
         final int initialStoreCloseCount = CloseCountingInMemoryStore.numStoresClosed();
-        assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(0L));
+        final long initialNunRestoredCount = restoreListener.totalNumRestored();
 
         client2.close();
         waitForApplicationState(singletonList(client2), State.NOT_RUNNING, Duration.ofSeconds(60));
@@ -381,7 +384,7 @@ public class RestoreIntegrationTest {
         waitForCompletion(client1, 1, 30 * 1000L);
         waitForStandbyCompletion(client1, 1, 30 * 1000L);
 
-        assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(0L));
+        assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(initialNunRestoredCount));
 
         // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed just two stores
         // total: the active and standby tasks on instance 2
@@ -430,9 +433,7 @@ public class RestoreIntegrationTest {
         }
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    public static class KeyValueStoreProcessor implements org.apache.kafka.streams.processor.Processor<Integer, Integer> {
-
+    public static class KeyValueStoreProcessor implements Processor<Integer, Integer, Void, Void> {
         private final String topic;
         private final CountDownLatch processorLatch;
 
@@ -443,22 +444,18 @@ public class RestoreIntegrationTest {
             this.processorLatch = processorLatch;
         }
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            this.store = (KeyValueStore<Integer, Integer>) context.getStateStore(topic);
+        public void init(final ProcessorContext<Void, Void> context) {
+            this.store = context.getStateStore(topic);
         }
 
         @Override
-        public void process(final Integer key, final Integer value) {
-            if (key != null) {
-                store.put(key, value);
+        public void process(final Record<Integer, Integer> record) {
+            if (record.key() != null) {
+                store.put(record.key(), record.value());
                 processorLatch.countDown();
             }
         }
-
-        @Override
-        public void close() { }
     }
 
     private void createStateForRestoration(final String changelogTopic, final int startingOffset) {
@@ -499,5 +496,4 @@ public class RestoreIntegrationTest {
         consumer.commitSync();
         consumer.close();
     }
-
 }

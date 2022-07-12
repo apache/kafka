@@ -65,8 +65,9 @@ object Repartitioned {
    * @return A new [[Repartitioned]] instance configured with keySerde, valueSerde, and partitioner
    * @see KStream#repartition(Repartitioned)
    */
-  def `with`[K, V](partitioner: StreamPartitioner[K, V])(implicit keySerde: Serde[K],
-                                                         valueSerde: Serde[V]): RepartitionedJ[K, V] =
+  def `with`[K, V](
+    partitioner: StreamPartitioner[K, V]
+  )(implicit keySerde: Serde[K], valueSerde: Serde[V]): RepartitionedJ[K, V] =
     RepartitionedJ.`streamPartitioner`(partitioner).withKeySerde(keySerde).withValueSerde(valueSerde)
 
   /**

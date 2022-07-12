@@ -18,7 +18,7 @@
   "type": "request",
   "listeners": ["zkBroker", "broker"],
   "name": "MetadataRequest",
-  "validVersions": "0-11",
+  "validVersions": "0-12",
   "flexibleVersions": "9+",
   "fields": [
     // In version 0, an empty array indicates "request metadata for all topics."  In version 1 and
@@ -38,6 +38,7 @@
     //
     // Version 11 deprecates IncludeClusterAuthorizedOperations field. This is now exposed
     // by the DescribeCluster API (KIP-700).
+    // Version 12 supports topic Id.
     { "name": "Topics", "type": "[]MetadataRequestTopic", "versions": "0+", "nullableVersions": "1+",
       "about": "The topics to fetch metadata for.", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "10+", "ignorable": true, "about": "The topic id." },

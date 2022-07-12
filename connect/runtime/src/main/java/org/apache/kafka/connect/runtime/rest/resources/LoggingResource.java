@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
+import io.swagger.v3.oas.annotations.Operation;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.log4j.Level;
@@ -45,12 +46,17 @@ import java.util.TreeMap;
 @Path("/admin/loggers")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-public class LoggingResource {
+public class LoggingResource implements ConnectResource {
 
     /**
      * Log4j uses "root" (case insensitive) as name of the root logger.
      */
     private static final String ROOT_LOGGER_NAME = "root";
+
+    @Override
+    public void requestTimeout(long requestTimeoutMs) {
+        // No-op
+    }
 
     /**
      * List the current loggers that have their levels explicitly set and their log levels.
@@ -59,6 +65,7 @@ public class LoggingResource {
      */
     @GET
     @Path("/")
+    @Operation(summary = "List the current loggers that have their levels explicitly set and their log levels")
     public Response listLoggers() {
         Map<String, Map<String, String>> loggers = new TreeMap<>();
         Enumeration<Logger> enumeration = currentLoggers();
@@ -83,6 +90,7 @@ public class LoggingResource {
      */
     @GET
     @Path("/{logger}")
+    @Operation(summary = "Get the log level for the specified logger")
     public Response getLogger(final @PathParam("logger") String namedLogger) {
         Objects.requireNonNull(namedLogger, "require non-null name");
 
@@ -120,6 +128,7 @@ public class LoggingResource {
      */
     @PUT
     @Path("/{logger}")
+    @Operation(summary = "Set the level for the specified logger")
     public Response setLevel(final @PathParam("logger") String namedLogger,
                              final Map<String, String> levelMap) {
         String desiredLevelStr = levelMap.get("level");

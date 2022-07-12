@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
@@ -34,6 +35,8 @@ import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochResponse;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.errors.BufferAllocationException;
+import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -98,9 +101,7 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-            })
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withElectedLeader(epoch, localId)
             .build();
 
@@ -123,9 +124,7 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-            })
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withVotedCandidate(epoch, localId)
             .build();
 
@@ -148,11 +147,9 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .updateRandom(random -> {
-                    Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-                })
-                .withElectedLeader(epoch, localId)
-                .build();
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
+            .withElectedLeader(epoch, localId)
+            .build();
 
         // Resign from leader, will restart in resigned state
         assertTrue(context.client.quorum().isResigned());
@@ -178,11 +175,9 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .updateRandom(random -> {
-                    Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-                })
-                .withVotedCandidate(epoch, localId)
-                .build();
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
+            .withVotedCandidate(epoch, localId)
+            .build();
 
         // Resign from candidate, will restart in candidate state
         assertTrue(context.client.quorum().isCandidate());
@@ -232,11 +227,9 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .updateRandom(random -> {
-                    Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-                })
-                .withElectedLeader(epoch, localId)
-                .build();
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
+            .withElectedLeader(epoch, localId)
+            .build();
 
         // Resign from leader, will restart in resigned state
         assertTrue(context.client.quorum().isResigned());
@@ -259,9 +252,7 @@ public class KafkaRaftClientTest {
         int epoch = 2;
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-            })
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withElectedLeader(epoch, localId)
             .build();
 
@@ -270,7 +261,7 @@ public class KafkaRaftClientTest {
         assertEquals(0L, context.log.endOffset().offset);
         context.assertElectedLeader(epoch, localId);
         context.client.poll();
-        assertEquals(Long.MAX_VALUE, context.client.scheduleAppend(epoch, Arrays.asList("a", "b")));
+        assertThrows(NotLeaderException.class, () -> context.client.scheduleAppend(epoch, Arrays.asList("a", "b")));
 
         context.pollUntilRequest();
         int correlationId = context.assertSentEndQuorumEpochRequest(epoch, 1);
@@ -281,6 +272,84 @@ public class KafkaRaftClientTest {
         context.pollUntilRequest();
         context.assertVotedCandidate(epoch + 1, localId);
         context.assertSentVoteRequest(epoch + 1, 0, 0L, 1);
+    }
+
+    @Test
+    public void testAppendFailedWithNotLeaderException() throws Exception {
+        int localId = 0;
+        Set<Integer> voters = Utils.mkSet(localId, 1);
+        int epoch = 2;
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(epoch)
+            .build();
+
+        assertThrows(NotLeaderException.class, () -> context.client.scheduleAppend(epoch, Arrays.asList("a", "b")));
+    }
+
+    @Test
+    public void testAppendFailedWithBufferAllocationException() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
+        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
+        // Return null when allocation error
+        Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
+            .thenReturn(null);
+        Mockito.when(memoryPool.tryAllocate(256))
+            .thenReturn(leaderBuffer);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withMemoryPool(memoryPool)
+            .build();
+
+        context.becomeLeader();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+        int epoch = context.currentEpoch();
+
+        assertThrows(BufferAllocationException.class, () -> context.client.scheduleAppend(epoch, singletonList("a")));
+    }
+
+    @Test
+    public void testAppendFailedWithFencedEpoch() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .build();
+
+        context.becomeLeader();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+        int epoch = context.currentEpoch();
+
+        // Throws IllegalArgumentException on higher epoch
+        assertThrows(IllegalArgumentException.class, () -> context.client.scheduleAppend(epoch + 1, singletonList("a")));
+        // Throws NotLeaderException on smaller epoch
+        assertThrows(NotLeaderException.class, () -> context.client.scheduleAppend(epoch - 1, singletonList("a")));
+    }
+
+    @Test
+    public void testAppendFailedWithRecordBatchTooLargeException() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .build();
+
+        context.becomeLeader();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+        int epoch = context.currentEpoch();
+
+        int size = KafkaRaftClient.MAX_BATCH_SIZE_BYTES / 8 + 1; // 8 is the estimate min size of each record
+        List<String> batchToLarge = new ArrayList<>(size + 1);
+        for (int i = 0; i < size; i++)
+            batchToLarge.add("a");
+
+        assertThrows(RecordBatchTooLargeException.class, () -> context.client.scheduleAtomicAppend(epoch, batchToLarge));
     }
 
     @Test
@@ -647,9 +716,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(jitterMs).when(random).nextInt(Mockito.anyInt());
-            })
+            .updateRandom(r -> r.mockNextInt(jitterMs))
             .withUnknownLeader(epoch - 1)
             .build();
 
@@ -1157,9 +1224,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(exponentialFactor).when(random).nextInt(Mockito.anyInt());
-            })
+            .updateRandom(r -> r.mockNextInt(exponentialFactor))
             .build();
 
         context.assertUnknownLeader(0);
@@ -2103,9 +2168,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-            })
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withUnknownLeader(epoch - 1)
             .build();
 
@@ -2314,9 +2377,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .updateRandom(random -> {
-                Mockito.doReturn(0).when(random).nextInt(DEFAULT_ELECTION_TIMEOUT_MS);
-            })
+            .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
             .withUnknownLeader(epoch - 1)
             .build();
 
@@ -2718,4 +2779,5 @@ public class KafkaRaftClientTest {
     private static KafkaMetric getMetric(final Metrics metrics, final String name) {
         return metrics.metrics().get(metrics.metricName(name, "raft-metrics"));
     }
+
 }

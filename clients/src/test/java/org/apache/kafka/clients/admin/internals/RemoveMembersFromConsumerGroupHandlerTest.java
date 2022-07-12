@@ -55,7 +55,7 @@ public class RemoveMembersFromConsumerGroupHandlerTest {
     @Test
     public void testBuildRequest() {
         RemoveMembersFromConsumerGroupHandler handler = new RemoveMembersFromConsumerGroupHandler(groupId, members, logContext);
-        LeaveGroupRequest request = handler.buildRequest(1, singleton(CoordinatorKey.byGroupId(groupId))).build();
+        LeaveGroupRequest request = handler.buildBatchedRequest(1, singleton(CoordinatorKey.byGroupId(groupId))).build();
         assertEquals(groupId, request.data().groupId());
         assertEquals(2, request.data().members().size());
     }

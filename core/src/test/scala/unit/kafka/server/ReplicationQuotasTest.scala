@@ -25,7 +25,7 @@ import kafka.server.QuotaType._
 import kafka.utils.TestUtils._
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
@@ -42,7 +42,7 @@ import scala.jdk.CollectionConverters._
   *
   * Anything over 100MB/s tends to fail as this is the non-throttled replication rate
   */
-class ReplicationQuotasTest extends ZooKeeperTestHarness {
+class ReplicationQuotasTest extends QuorumTestHarness {
   def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100.0)
 
   val msg100KB = new Array[Byte](100000)
@@ -114,7 +114,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       adminZkClient.changeTopicConfig(topic, propsWith(FollowerReplicationThrottledReplicasProp, "0:106,1:106,2:106,3:107,4:107,5:107"))
 
     //Add data equally to each partition
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = 1)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = 1)
     (0 until msgCount).foreach { _ =>
       (0 to 7).foreach { partition =>
         producer.send(new ProducerRecord(topic, partition, null, msg))
@@ -210,7 +210,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
   }
 
   def addData(msgCount: Int, msg: Array[Byte]): Unit = {
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = 0)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = 0)
     (0 until msgCount).map(_ => producer.send(new ProducerRecord(topic, msg))).foreach(_.get)
     waitForOffsetsToMatch(msgCount, 0, 100)
   }

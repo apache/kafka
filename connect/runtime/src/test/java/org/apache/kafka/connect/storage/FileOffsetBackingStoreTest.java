@@ -18,27 +18,26 @@ package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.Callback;
-import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ThreadPoolExecutor;
 
+import static org.mockito.Mockito.isNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-@RunWith(PowerMockRunner.class)
 public class FileOffsetBackingStoreTest {
 
     FileOffsetBackingStore store;
@@ -55,7 +54,6 @@ public class FileOffsetBackingStoreTest {
         firstSet.put(null, null);
     }
 
-    @SuppressWarnings("deprecation")
     @Before
     public void setup() throws IOException {
         store = new FileOffsetBackingStore();
@@ -76,22 +74,21 @@ public class FileOffsetBackingStoreTest {
 
     @Test
     public void testGetSet() throws Exception {
-        Callback<Void> setCallback = expectSuccessfulSetCallback();
-        PowerMock.replayAll();
+        @SuppressWarnings("unchecked")
+        Callback<Void> setCallback = mock(Callback.class);
 
         store.set(firstSet, setCallback).get();
 
         Map<ByteBuffer, ByteBuffer> values = store.get(Arrays.asList(buffer("key"), buffer("bad"))).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
         assertNull(values.get(buffer("bad")));
-
-        PowerMock.verifyAll();
+        verify(setCallback).onCompletion(isNull(), isNull());
     }
 
     @Test
     public void testSaveRestore() throws Exception {
-        Callback<Void> setCallback = expectSuccessfulSetCallback();
-        PowerMock.replayAll();
+        @SuppressWarnings("unchecked")
+        Callback<Void> setCallback = mock(Callback.class);
 
         store.set(firstSet, setCallback).get();
         store.stop();
@@ -100,10 +97,9 @@ public class FileOffsetBackingStoreTest {
         FileOffsetBackingStore restore = new FileOffsetBackingStore();
         restore.configure(config);
         restore.start();
-        Map<ByteBuffer, ByteBuffer> values = restore.get(Arrays.asList(buffer("key"))).get();
+        Map<ByteBuffer, ByteBuffer> values = restore.get(Collections.singletonList(buffer("key"))).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
-
-        PowerMock.verifyAll();
+        verify(setCallback).onCompletion(isNull(), isNull());
     }
 
     @Test
@@ -116,11 +112,4 @@ public class FileOffsetBackingStoreTest {
         return ByteBuffer.wrap(v.getBytes());
     }
 
-    private Callback<Void> expectSuccessfulSetCallback() {
-        @SuppressWarnings("unchecked")
-        Callback<Void> setCallback = PowerMock.createMock(Callback.class);
-        setCallback.onCompletion(EasyMock.isNull(Throwable.class), EasyMock.isNull(Void.class));
-        PowerMock.expectLastCall();
-        return setCallback;
-    }
 }

@@ -120,8 +120,8 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    * @see #table(String)
    * @see `org.apache.kafka.streams.StreamsBuilder#table`
    */
-  def table[K, V](topic: String, materialized: Materialized[K, V, ByteArrayKeyValueStore])(
-    implicit consumed: Consumed[K, V]
+  def table[K, V](topic: String, materialized: Materialized[K, V, ByteArrayKeyValueStore])(implicit
+    consumed: Consumed[K, V]
   ): KTable[K, V] =
     new KTable(inner.table[K, V](topic, consumed, materialized))
 
@@ -146,8 +146,8 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    * @return a `GlobalKTable` for the specified topic
    * @see `org.apache.kafka.streams.StreamsBuilder#globalTable`
    */
-  def globalTable[K, V](topic: String, materialized: Materialized[K, V, ByteArrayKeyValueStore])(
-    implicit consumed: Consumed[K, V]
+  def globalTable[K, V](topic: String, materialized: Materialized[K, V, ByteArrayKeyValueStore])(implicit
+    consumed: Consumed[K, V]
   ): GlobalKTable[K, V] =
     inner.globalTable(topic, consumed, materialized)
 
@@ -177,10 +177,12 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
     "Use #addGlobalStore(StoreBuilder, String, Consumed, org.apache.kafka.streams.processor.api.ProcessorSupplier) instead.",
     "2.7.0"
   )
-  def addGlobalStore[K, V](storeBuilder: StoreBuilder[_ <: StateStore],
-                           topic: String,
-                           consumed: Consumed[K, V],
-                           stateUpdateSupplier: ProcessorSupplier[K, V]): StreamsBuilderJ =
+  def addGlobalStore[K, V](
+    storeBuilder: StoreBuilder[_ <: StateStore],
+    topic: String,
+    consumed: Consumed[K, V],
+    stateUpdateSupplier: ProcessorSupplier[K, V]
+  ): StreamsBuilderJ =
     inner.addGlobalStore(storeBuilder, topic, consumed, stateUpdateSupplier)
 
   /**

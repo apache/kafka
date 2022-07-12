@@ -27,6 +27,14 @@ public interface ControllerMetrics extends AutoCloseable {
 
     void updateEventQueueProcessingTime(long durationMs);
 
+    void setFencedBrokerCount(int brokerCount);
+
+    int fencedBrokerCount();
+
+    void setActiveBrokerCount(int brokerCount);
+
+    int activeBrokerCount();
+
     void setGlobalTopicsCount(int topicCount);
 
     int globalTopicsCount();
@@ -42,6 +50,18 @@ public interface ControllerMetrics extends AutoCloseable {
     void setPreferredReplicaImbalanceCount(int replicaImbalances);
 
     int preferredReplicaImbalanceCount();
+
+    void setLastAppliedRecordOffset(long offset);
+
+    long lastAppliedRecordOffset();
+
+    void setLastCommittedRecordOffset(long offset);
+
+    long lastCommittedRecordOffset();
+
+    void setLastAppliedRecordTimestamp(long timestamp);
+
+    long lastAppliedRecordTimestamp();
 
     void close();
 }

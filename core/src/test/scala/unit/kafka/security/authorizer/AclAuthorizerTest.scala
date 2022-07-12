@@ -16,40 +16,41 @@
  */
 package kafka.security.authorizer
 
+import kafka.Kafka
+import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
+import kafka.server.{KafkaConfig, QuorumTestHarness}
+import kafka.utils.TestUtils
+import kafka.zk.ZkAclStore
+import kafka.zookeeper.{GetChildrenRequest, GetDataRequest, ZooKeeperClient}
+import org.apache.kafka.common.acl.AclOperation._
+import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
+import org.apache.kafka.common.acl._
+import org.apache.kafka.common.errors.{ApiException, UnsupportedVersionException}
+import org.apache.kafka.common.requests.RequestContext
+import org.apache.kafka.common.resource.PatternType.{LITERAL, MATCH, PREFIXED}
+import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
+import org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE
+import org.apache.kafka.common.resource.ResourceType._
+import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
+import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.{IBP_2_0_IV0, IBP_2_0_IV1}
+import org.apache.zookeeper.client.ZKClientConfig
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+
 import java.io.File
 import java.net.InetAddress
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
-import java.util.{Collections, UUID}
 import java.util.concurrent.{Executors, Semaphore, TimeUnit}
-
-import kafka.Kafka
-import kafka.api.{ApiVersion, KAFKA_2_0_IV0, KAFKA_2_0_IV1}
-import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
-import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
-import kafka.zk.{ZkAclStore, ZooKeeperTestHarness}
-import kafka.zookeeper.{GetChildrenRequest, GetDataRequest, ZooKeeperClient}
-import org.apache.kafka.common.acl._
-import org.apache.kafka.common.acl.AclOperation._
-import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
-import org.apache.kafka.common.errors.{ApiException, UnsupportedVersionException}
-import org.apache.kafka.common.requests.RequestContext
-import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
-import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
-import org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE
-import org.apache.kafka.common.resource.ResourceType._
-import org.apache.kafka.common.resource.PatternType.{LITERAL, MATCH, PREFIXED}
-import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.server.authorizer._
-import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
-import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-
-import scala.jdk.CollectionConverters._
+import java.util.{Collections, UUID}
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
-class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
+class AclAuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
   private val allowReadAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, READ, ALLOW)
   private val allowWriteAcl = new AccessControlEntry(WildcardPrincipalString, WildcardHost, WRITE, ALLOW)
@@ -70,8 +71,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
   override def authorizer: Authorizer = aclAuthorizer
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     // Increase maxUpdateRetries to avoid transient failures
     aclAuthorizer.maxUpdateRetries = Int.MaxValue
@@ -86,7 +87,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
     resource = new ResourcePattern(TOPIC, "foo-" + UUID.randomUUID(), LITERAL)
 
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
-      Time.SYSTEM, "kafka.test", "AclAuthorizerTest")
+      Time.SYSTEM, "kafka.test", "AclAuthorizerTest", new ZKClientConfig, "AclAuthorizerTest")
   }
 
   @AfterEach
@@ -484,9 +485,9 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
   @Test
   def testAclInheritance(): Unit = {
     testImplicationsOfAllow(AclOperation.ALL, Set(READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE,
-      CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE))
+      CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, CREATE_TOKENS, DESCRIBE_TOKENS))
     testImplicationsOfDeny(AclOperation.ALL, Set(READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE,
-      CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE))
+      CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, CREATE_TOKENS, DESCRIBE_TOKENS))
     testImplicationsOfAllow(READ, Set(DESCRIBE))
     testImplicationsOfAllow(WRITE, Set(DESCRIBE))
     testImplicationsOfAllow(DELETE, Set(DESCRIBE))
@@ -714,10 +715,16 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
 
   @Test
   def testThrowsOnAddPrefixedAclIfInterBrokerProtocolVersionTooLow(): Unit = {
-    givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV0))
+    givenAuthorizerWithProtocolVersion(Option(IBP_2_0_IV0))
     val e = assertThrows(classOf[ApiException],
       () => addAcls(aclAuthorizer, Set(denyReadAcl), new ResourcePattern(TOPIC, "z_other", PREFIXED)))
     assertTrue(e.getCause.isInstanceOf[UnsupportedVersionException], s"Unexpected exception $e")
+  }
+
+  @Test
+  def testCreateAclWithInvalidResourceName(): Unit = {
+    assertThrows(classOf[ApiException],
+      () => addAcls(aclAuthorizer, Set(allowReadAcl), new ResourcePattern(TOPIC, "test/1", LITERAL)))
   }
 
   @Test
@@ -736,7 +743,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
 
   @Test
   def testWritesExtendedAclChangeEventWhenInterBrokerProtocolAtLeastKafkaV2(): Unit = {
-    givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV1))
+    givenAuthorizerWithProtocolVersion(Option(IBP_2_0_IV1))
     val resource = new ResourcePattern(TOPIC, "z_other", PREFIXED)
     val expected = new String(ZkAclStore(PREFIXED).changeStore
       .createChangeNode(resource).bytes, UTF_8)
@@ -750,7 +757,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
 
   @Test
   def testWritesLiteralWritesLiteralAclChangeEventWhenInterBrokerProtocolLessThanKafkaV2eralAclChangesForOlderProtocolVersions(): Unit = {
-    givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV0))
+    givenAuthorizerWithProtocolVersion(Option(IBP_2_0_IV0))
     val resource = new ResourcePattern(TOPIC, "z_other", LITERAL)
     val expected = new String(ZkAclStore(LITERAL).changeStore
       .createChangeNode(resource).bytes, UTF_8)
@@ -764,7 +771,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
 
   @Test
   def testWritesLiteralAclChangeEventWhenInterBrokerProtocolIsKafkaV2(): Unit = {
-    givenAuthorizerWithProtocolVersion(Option(KAFKA_2_0_IV1))
+    givenAuthorizerWithProtocolVersion(Option(IBP_2_0_IV1))
     val resource = new ResourcePattern(TOPIC, "z_other", LITERAL)
     val expected = new String(ZkAclStore(LITERAL).changeStore
       .createChangeNode(resource).bytes, UTF_8)
@@ -779,9 +786,12 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
   @Test
   def testAuthorizerNoZkConfig(): Unit = {
     val noTlsProps = Kafka.getPropsFromArgs(Array(prepareDefaultConfig))
-    assertEquals(None, AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
+    val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(noTlsProps),
-      mutable.Map(noTlsProps.asInstanceOf[java.util.Map[String, Any]].asScala.toSeq: _*)))
+      noTlsProps.asInstanceOf[java.util.Map[String, Any]].asScala)
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach { propName =>
+      assertNull(zkClientConfig.getProperty(propName))
+    }
   }
 
   @Test
@@ -799,20 +809,19 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
       KafkaConfig.ZkSslTrustStoreTypeProp -> kafkaValue,
       KafkaConfig.ZkSslEnabledProtocolsProp -> kafkaValue,
       KafkaConfig.ZkSslCipherSuitesProp -> kafkaValue)
-    configs.foreach{case (key, value) => props.put(key, value.toString) }
+    configs.foreach { case (key, value) => props.put(key, value) }
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
-    assertTrue(zkClientConfig.isDefined)
     // confirm we get all the values we expect
     KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(prop => prop match {
       case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
-        assertEquals("true", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+        assertEquals("true", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
       case KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp =>
-        assertEquals("false", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+        assertEquals("false", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
       case KafkaConfig.ZkSslProtocolProp =>
-        assertEquals("TLSv1.2", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
-      case _ => assertEquals(kafkaValue, KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+        assertEquals("TLSv1.2", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
+      case _ => assertEquals(kafkaValue, KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
     })
   }
 
@@ -839,14 +848,13 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
-    assertTrue(zkClientConfig.isDefined)
     // confirm we get all the values we expect
     KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(prop => prop match {
         case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
-          assertEquals("true", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+          assertEquals("true", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
         case KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp =>
-          assertEquals("false", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
-        case _ => assertEquals(kafkaValue, KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+          assertEquals("false", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
+        case _ => assertEquals(kafkaValue, KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
       })
   }
 
@@ -889,14 +897,13 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
-    assertTrue(zkClientConfig.isDefined)
     // confirm we get all the values we expect
     KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(prop => prop match {
       case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp =>
-        assertEquals("true", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+        assertEquals("true", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
       case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp =>
-        assertEquals("false", KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
-      case _ => assertEquals(prefixedValue, KafkaConfig.getZooKeeperClientProperty(zkClientConfig.get, prop).getOrElse("<None>"))
+        assertEquals("false", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
+      case _ => assertEquals(prefixedValue, KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
     })
   }
 
@@ -994,7 +1001,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
     }
   }
 
-  private def givenAuthorizerWithProtocolVersion(protocolVersion: Option[ApiVersion]): Unit = {
+  private def givenAuthorizerWithProtocolVersion(protocolVersion: Option[MetadataVersion]): Unit = {
     aclAuthorizer.close()
 
     val props = TestUtils.createBrokerConfig(0, zkConnect)

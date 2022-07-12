@@ -27,8 +27,8 @@ import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.After;
@@ -56,10 +56,9 @@ public class KStreamKTableLeftJoinTest {
     private final int[] expectedKeys = {0, 1, 2, 3};
 
     private TopologyTestDriver driver;
-    private MockProcessor<Integer, String> processor;
+    private MockApiProcessor<Integer, String, Void, Void> processor;
     private StreamsBuilder builder;
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Before
     public void setUp() {
         builder = new StreamsBuilder();
@@ -67,7 +66,7 @@ public class KStreamKTableLeftJoinTest {
         final KStream<Integer, String> stream;
         final KTable<Integer, String> table;
 
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
         stream = builder.stream(streamTopic, consumed);
         table = builder.table(tableTopic, consumed);

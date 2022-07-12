@@ -288,7 +288,7 @@ public class AdminApiDriver<K, V> {
     private <T extends ApiRequestScope> void collectRequests(
         List<RequestSpec<K>> requests,
         BiMultimap<T, K> multimap,
-        BiFunction<Set<K>, T, AbstractRequest.Builder<?>> buildRequest
+        BiFunction<Set<K>, T, Collection<AdminApiHandler.RequestAndKeys<K>>> buildRequest
     ) {
         for (Map.Entry<T, Set<K>> entry : multimap.entrySet()) {
             T scope = entry.getKey();
@@ -306,12 +306,19 @@ public class AdminApiDriver<K, V> {
             // Copy the keys to avoid exposing the underlying mutable set
             Set<K> copyKeys = Collections.unmodifiableSet(new HashSet<>(keys));
 
-            AbstractRequest.Builder<?> request = buildRequest.apply(copyKeys, scope);
+            Collection<AdminApiHandler.RequestAndKeys<K>> newRequests = buildRequest.apply(copyKeys, scope);
+            if (newRequests.isEmpty()) {
+                return;
+            }
+
+            // Only process the first request; all the remaining requests will be targeted at the same broker
+            // and we don't want to issue more than one fulfillment request per broker at a time
+            AdminApiHandler.RequestAndKeys<K> newRequest = newRequests.iterator().next();
             RequestSpec<K> spec = new RequestSpec<>(
-                handler.apiName() + "(api=" + request.apiKey() + ")",
+                handler.apiName() + "(api=" + newRequest.request.apiKey() + ")",
                 scope,
-                copyKeys,
-                request,
+                newRequest.keys,
+                newRequest.request,
                 requestState.nextAllowedRetryMs,
                 deadlineMs,
                 requestState.tries
@@ -326,7 +333,7 @@ public class AdminApiDriver<K, V> {
         collectRequests(
             requests,
             lookupMap,
-            (keys, scope) -> handler.lookupStrategy().buildRequest(keys)
+            (keys, scope) -> Collections.singletonList(new AdminApiHandler.RequestAndKeys<>(handler.lookupStrategy().buildRequest(keys), keys))
         );
     }
 

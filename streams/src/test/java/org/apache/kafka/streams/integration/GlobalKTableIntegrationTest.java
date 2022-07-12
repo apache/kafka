@@ -35,13 +35,14 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -51,6 +52,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -66,9 +68,11 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertNotNull;
 
-@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 @Category({IntegrationTest.class})
 public class GlobalKTableIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
+
     private static final int NUM_BROKERS = 1;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -95,7 +99,7 @@ public class GlobalKTableIntegrationTest {
     private String streamTopic;
     private GlobalKTable<Long, String> globalTable;
     private KStream<String, Long> stream;
-    private MockProcessorSupplier<String, String> supplier;
+    private MockApiProcessorSupplier<String, String, Void, Void> supplier;
 
     @Rule
     public TestName testName = new TestName();
@@ -118,7 +122,7 @@ public class GlobalKTableIntegrationTest {
                                                   .withValueSerde(Serdes.String()));
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
         stream = builder.stream(streamTopic, stringLongConsumed);
-        supplier = new MockProcessorSupplier<>();
+        supplier = new MockApiProcessorSupplier<>();
     }
 
     @After
@@ -176,7 +180,9 @@ public class GlobalKTableIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 globalState.clear();
-                replicatedStore.all().forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                try (final KeyValueIterator<Long, String> it = replicatedStore.all()) {
+                    it.forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                }
                 return globalState.equals(expectedState);
             },
             30000,
@@ -259,7 +265,9 @@ public class GlobalKTableIntegrationTest {
         TestUtils.waitForCondition(
             () -> {
                 globalState.clear();
-                replicatedStore.all().forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                try (final KeyValueIterator<Long, String> it = replicatedStore.all()) {
+                    it.forEachRemaining(pair -> globalState.put(pair.key, pair.value));
+                }
                 return globalState.equals(expectedState);
             },
             30000,

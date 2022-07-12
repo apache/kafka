@@ -17,14 +17,12 @@
 package kafka.server.metadata
 
 import java.util.concurrent.RejectedExecutionException
-
 import kafka.utils.Logging
 import org.apache.kafka.image.MetadataImage
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.SnapshotWriter
-
 
 trait SnapshotWriterBuilder {
   def build(committedOffset: Long,
@@ -38,7 +36,7 @@ class BrokerMetadataSnapshotter(
   threadNamePrefix: Option[String],
   writerBuilder: SnapshotWriterBuilder
 ) extends Logging with MetadataSnapshotter {
-  private val logContext = new LogContext(s"[BrokerMetadataSnapshotter id=${brokerId}] ")
+  private val logContext = new LogContext(s"[BrokerMetadataSnapshotter id=$brokerId] ")
   logIdent = logContext.logPrefix()
 
   /**
@@ -52,18 +50,19 @@ class BrokerMetadataSnapshotter(
    */
   val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""))
 
-  override def maybeStartSnapshot(committedOffset: Long,
-                                  committedEpoch: Int,
-                                  lastContainedLogTime: Long,
-                                  image: MetadataImage): Boolean = synchronized {
+  override def maybeStartSnapshot(lastContainedLogTime: Long, image: MetadataImage): Boolean = synchronized {
     if (_currentSnapshotOffset == -1L) {
-      val writer = writerBuilder.build(committedOffset, committedEpoch, lastContainedLogTime)
-      _currentSnapshotOffset = committedOffset
-      info(s"Creating a new snapshot at offset ${committedOffset}...")
+      val writer = writerBuilder.build(
+        image.highestOffsetAndEpoch().offset,
+        image.highestOffsetAndEpoch().epoch,
+        lastContainedLogTime
+      )
+      _currentSnapshotOffset = image.highestOffsetAndEpoch().offset
+      info(s"Creating a new snapshot at offset ${_currentSnapshotOffset}...")
       eventQueue.append(new CreateSnapshotEvent(image, writer))
       true
     } else {
-      warn(s"Declining to create a new snapshot at offset ${committedOffset} because " +
+      warn(s"Declining to create a new snapshot at ${image.highestOffsetAndEpoch()} because " +
            s"there is already a snapshot in progress at offset ${_currentSnapshotOffset}")
       false
     }
@@ -89,7 +88,7 @@ class BrokerMetadataSnapshotter(
 
     override def handleException(e: Throwable): Unit = {
       e match {
-        case _: RejectedExecutionException => 
+        case _: RejectedExecutionException =>
           info("Not processing CreateSnapshotEvent because the event queue is closed.")
         case _ => error("Unexpected error handling CreateSnapshotEvent", e)
       }

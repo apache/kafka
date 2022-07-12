@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -43,14 +44,17 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.filterMap;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.processingMode;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
-import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_V2;
 
 class ActiveTaskCreator {
     private final TopologyMetadata topologyMetadata;
-    private final StreamsConfig config;
+    private final StreamsConfig applicationConfig;
     private final StreamsMetricsImpl streamsMetrics;
     private final StateDirectory stateDirectory;
     private final ChangelogReader storeChangelogReader;
@@ -62,10 +66,15 @@ class ActiveTaskCreator {
     private final Sensor createTaskSensor;
     private final StreamsProducer threadProducer;
     private final Map<TaskId, StreamsProducer> taskProducers;
-    private final StreamThread.ProcessingMode processingMode;
+    private final ProcessingMode processingMode;
+
+    // Tasks may have been assigned for a NamedTopology that is not yet known by this host. When that occurs we stash
+    // these unknown tasks until either the corresponding NamedTopology is added and we can create them at last, or
+    // we receive a new assignment and they are revoked from the thread.
+    private final Map<TaskId, Set<TopicPartition>> unknownTasksToBeCreated = new HashMap<>();
 
     ActiveTaskCreator(final TopologyMetadata topologyMetadata,
-                      final StreamsConfig config,
+                      final StreamsConfig applicationConfig,
                       final StreamsMetricsImpl streamsMetrics,
                       final StateDirectory stateDirectory,
                       final ChangelogReader storeChangelogReader,
@@ -76,7 +85,7 @@ class ActiveTaskCreator {
                       final UUID processId,
                       final Logger log) {
         this.topologyMetadata = topologyMetadata;
-        this.config = config;
+        this.applicationConfig = applicationConfig;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
         this.storeChangelogReader = storeChangelogReader;
@@ -87,7 +96,7 @@ class ActiveTaskCreator {
         this.log = log;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
-        processingMode = StreamThread.processingMode(config);
+        processingMode = processingMode(applicationConfig);
 
         if (processingMode == EXACTLY_ONCE_ALPHA) {
             threadProducer = null;
@@ -99,12 +108,13 @@ class ActiveTaskCreator {
             final LogContext logContext = new LogContext(threadIdPrefix);
 
             threadProducer = new StreamsProducer(
-                config,
+                applicationConfig,
                 threadId,
                 clientSupplier,
                 null,
                 processId,
-                logContext);
+                logContext,
+                time);
             taskProducers = Collections.emptyMap();
         }
     }
@@ -132,23 +142,39 @@ class ActiveTaskCreator {
         return threadProducer;
     }
 
+    void removeRevokedUnknownTasks(final Set<TaskId> assignedTasks) {
+        unknownTasksToBeCreated.keySet().retainAll(assignedTasks);
+    }
+
+    Map<TaskId, Set<TopicPartition>> uncreatedTasksForTopologies(final Set<String> currentTopologies) {
+        return filterMap(unknownTasksToBeCreated, t -> currentTopologies.contains(t.getKey().topologyName()));
+    }
+
     // TODO: change return type to `StreamTask`
-    Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer,
+    public Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer,
                                  final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
         // TODO: change type to `StreamTask`
         final List<Task> createdTasks = new ArrayList<>();
+        final Map<TaskId, Set<TopicPartition>> newUnknownTasks = new HashMap<>();
+
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();
             final Set<TopicPartition> partitions = newTaskAndPartitions.getValue();
 
             final LogContext logContext = getLogContext(taskId);
 
+            // task belongs to a named topology that hasn't been added yet, wait until it has to create this
+            if (taskId.topologyName() != null && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
+                newUnknownTasks.put(taskId, partitions);
+                continue;
+            }
+
             final ProcessorTopology topology = topologyMetadata.buildSubtopology(taskId);
 
             final ProcessorStateManager stateManager = new ProcessorStateManager(
                 taskId,
                 Task.TaskType.ACTIVE,
-                StreamThread.eosEnabled(config),
+                eosEnabled(applicationConfig),
                 logContext,
                 stateDirectory,
                 storeChangelogReader,
@@ -158,7 +184,7 @@ class ActiveTaskCreator {
 
             final InternalProcessorContext context = new ProcessorContextImpl(
                 taskId,
-                config,
+                applicationConfig,
                 stateManager,
                 streamsMetrics,
                 cache
@@ -175,9 +201,15 @@ class ActiveTaskCreator {
                     context
                 )
             );
+            unknownTasksToBeCreated.remove(taskId);
+        }
+        if (!newUnknownTasks.isEmpty()) {
+            log.info("Delaying creation of tasks not yet known by this instance: {}", newUnknownTasks.keySet());
+            unknownTasksToBeCreated.putAll(newUnknownTasks);
         }
         return createdTasks;
     }
+
 
     StreamTask createActiveTaskFromStandby(final StandbyTask standbyTask,
                                            final Set<TopicPartition> inputPartitions,
@@ -208,15 +240,16 @@ class ActiveTaskCreator {
                                         final ProcessorStateManager stateManager,
                                         final InternalProcessorContext context) {
         final StreamsProducer streamsProducer;
-        if (processingMode == StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA) {
+        if (processingMode == ProcessingMode.EXACTLY_ONCE_ALPHA) {
             log.info("Creating producer client for task {}", taskId);
             streamsProducer = new StreamsProducer(
-                config,
+                applicationConfig,
                 threadId,
                 clientSupplier,
                 taskId,
                 null,
-                logContext);
+                logContext,
+                time);
             taskProducers.put(taskId, streamsProducer);
         } else {
             streamsProducer = threadProducer;
@@ -226,8 +259,9 @@ class ActiveTaskCreator {
             logContext,
             taskId,
             streamsProducer,
-            config.defaultProductionExceptionHandler(),
-            streamsMetrics
+            applicationConfig.defaultProductionExceptionHandler(),
+            streamsMetrics,
+            topology
         );
 
         final StreamTask task = new StreamTask(
@@ -235,7 +269,7 @@ class ActiveTaskCreator {
             inputPartitions,
             topology,
             consumer,
-            config,
+            topologyMetadata.getTaskConfigFor(taskId),
             streamsMetrics,
             stateDirectory,
             cache,
@@ -267,7 +301,7 @@ class ActiveTaskCreator {
             try {
                 taskProducer.close();
             } catch (final RuntimeException e) {
-                throw new StreamsException("[" + id + "] task producer encounter error trying to close.", e);
+                throw new StreamsException("[" + id + "] task producer encounter error trying to close.", e, id);
             }
         }
     }
@@ -299,4 +333,12 @@ class ActiveTaskCreator {
         return new LogContext(logPrefix);
     }
 
+    public double totalProducerBlockedTime() {
+        if (threadProducer != null) {
+            return threadProducer.totalBlockedTime();
+        }
+        return taskProducers.values().stream()
+            .mapToDouble(StreamsProducer::totalBlockedTime)
+            .sum();
+    }
 }

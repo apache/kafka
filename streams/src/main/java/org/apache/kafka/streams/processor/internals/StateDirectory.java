@@ -175,9 +175,9 @@ public class StateDirectory {
             stateDirLock = tryLock(stateDirLockChannel);
         } catch (final IOException e) {
             log.error("Unable to lock the state directory due to unexpected exception", e);
-            throw new ProcessorStateException("Failed to lock the state directory during startup", e);
+            throw new ProcessorStateException(String.format("Failed to lock the state directory [%s] during startup",
+                stateDir.getAbsolutePath()), e);
         }
-
         return stateDirLock != null;
     }
 
@@ -188,8 +188,9 @@ public class StateDirectory {
 
         if (!lockStateDirectory()) {
             log.error("Unable to obtain lock as state directory is already locked by another process");
-            throw new StreamsException("Unable to initialize state, this can happen if multiple instances of " +
-                                           "Kafka Streams are running in the same state directory");
+            throw new StreamsException(String.format("Unable to initialize state, this can happen if multiple instances of " +
+                                           "Kafka Streams are running in the same state directory " +
+                                           "(current state directory is [%s]", stateDir.getAbsolutePath()));
         }
 
         final File processFile = new File(stateDir, PROCESS_FILE_NAME);
@@ -253,15 +254,19 @@ public class StateDirectory {
     }
 
     private File getTaskDirectoryParentName(final TaskId taskId) {
-        final String namedTopology = taskId.namedTopology();
+        final String namedTopology = taskId.topologyName();
         if (namedTopology != null) {
             if (!hasNamedTopologies) {
                 throw new IllegalStateException("Tried to lookup taskId with named topology, but StateDirectory thinks hasNamedTopologies = false");
             }
-            return new File(stateDir, "__" + namedTopology + "__");
+            return new File(stateDir, getNamedTopologyDirName(namedTopology));
         } else {
             return stateDir;
         }
+    }
+
+    private String getNamedTopologyDirName(final String topologyName) {
+        return "__" + topologyName + "__";
     }
 
     /**
@@ -382,7 +387,7 @@ public class StateDirectory {
                 stateDirLockChannel = null;
             } catch (final IOException e) {
                 log.error("Unexpected exception while unlocking the state dir", e);
-                throw new StreamsException("Failed to release the lock on the state directory", e);
+                throw new StreamsException(String.format("Failed to release the lock on the state directory [%s]", stateDir.getAbsolutePath()), e);
             }
 
             // all threads should be stopped and cleaned up by now, so none should remain holding a lock
@@ -515,6 +520,25 @@ public class StateDirectory {
             }
         }
         return firstException.get();
+    }
+
+    /**
+     * Clears out any local state found for the given NamedTopology after it was removed
+     *
+     * @throws StreamsException if cleanup failed
+     */
+    public void clearLocalStateForNamedTopology(final String topologyName) {
+        final File namedTopologyDir = new File(stateDir, getNamedTopologyDirName(topologyName));
+        if (!namedTopologyDir.exists() || !namedTopologyDir.isDirectory()) {
+            log.debug("Tried to clear out the local state for NamedTopology {} but none was found", topologyName);
+        }
+        try {
+            Utils.delete(namedTopologyDir);
+        } catch (final IOException e) {
+            log.error("Hit an unexpected error while clearing local state for topology " + topologyName, e);
+            throw new StreamsException("Unable to delete state for the named topology " + topologyName,
+                                       e, new TaskId(-1, -1, topologyName)); // use dummy taskid to report source topology for this error
+        }
     }
 
     private void cleanStateAndTaskDirectoriesCalledByUser() throws Exception {

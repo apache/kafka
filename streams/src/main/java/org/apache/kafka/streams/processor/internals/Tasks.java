@@ -22,14 +22,13 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-
-import java.util.HashSet;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -38,9 +37,8 @@ import java.util.stream.Collectors;
 class Tasks {
     private final Logger log;
     private final TopologyMetadata topologyMetadata;
-    private final StreamsMetricsImpl streamsMetrics;
 
-    private final Map<TaskId, Task> allTasksPerId = new TreeMap<>();
+    private final Map<TaskId, Task> allTasksPerId = Collections.synchronizedSortedMap(new TreeMap<>());
     private final Map<TaskId, Task> readOnlyTasksPerId = Collections.unmodifiableMap(allTasksPerId);
     private final Collection<Task> readOnlyTasks = Collections.unmodifiableCollection(allTasksPerId.values());
 
@@ -59,29 +57,47 @@ class Tasks {
     // TODO: change type to `StandbyTask`
     private final Map<TaskId, Task> readOnlyStandbyTasksPerId = Collections.unmodifiableMap(standbyTasksPerId);
     private final Set<TaskId> readOnlyStandbyTaskIds = Collections.unmodifiableSet(standbyTasksPerId.keySet());
+    private final Collection<Task> successfullyProcessed = new HashSet<>();
 
     private final ActiveTaskCreator activeTaskCreator;
     private final StandbyTaskCreator standbyTaskCreator;
 
     private Consumer<byte[], byte[]> mainConsumer;
 
-    Tasks(final String logPrefix,
+    Tasks(final LogContext logContext,
           final TopologyMetadata topologyMetadata,
-          final StreamsMetricsImpl streamsMetrics,
           final ActiveTaskCreator activeTaskCreator,
           final StandbyTaskCreator standbyTaskCreator) {
 
-        final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
 
         this.topologyMetadata = topologyMetadata;
-        this.streamsMetrics = streamsMetrics;
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
     }
 
     void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
         this.mainConsumer = mainConsumer;
+    }
+
+    void handleNewAssignmentAndCreateTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+                                           final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
+                                           final Set<TaskId> assignedActiveTasks,
+                                           final Set<TaskId> assignedStandbyTasks) {
+        activeTaskCreator.removeRevokedUnknownTasks(assignedActiveTasks);
+        standbyTaskCreator.removeRevokedUnknownTasks(assignedStandbyTasks);
+        createTasks(activeTasksToCreate, standbyTasksToCreate);
+    }
+
+    void maybeCreateTasksFromNewTopologies(final Set<String> currentNamedTopologies) {
+        createTasks(
+            activeTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies),
+            standbyTaskCreator.uncreatedTasksForTopologies(currentNamedTopologies)
+        );
+    }
+
+    double totalProducerBlockedTime() {
+        return activeTaskCreator.totalProducerBlockedTime();
     }
 
     void createTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
@@ -253,6 +269,20 @@ class Tasks {
         return readOnlyTasks;
     }
 
+    Collection<Task> notPausedActiveTasks() {
+        return new ArrayList<>(readOnlyActiveTasks)
+            .stream()
+            .filter(t -> !topologyMetadata.isPaused(t.id().topologyName()))
+            .collect(Collectors.toList());
+    }
+
+    Collection<Task> notPausedTasks() {
+        return new ArrayList<>(readOnlyTasks)
+            .stream()
+            .filter(t -> !topologyMetadata.isPaused(t.id().topologyName()))
+            .collect(Collectors.toList());
+    }
+
     Set<TaskId> activeTaskIds() {
         return readOnlyActiveTaskIds;
     }
@@ -293,6 +323,26 @@ class Tasks {
 
     Set<String> producerClientIds() {
         return activeTaskCreator.producerClientIds();
+    }
+
+    Consumer<byte[], byte[]> mainConsumer() {
+        return mainConsumer;
+    }
+
+    Collection<Task> successfullyProcessed() {
+        return successfullyProcessed;
+    }
+
+    void addToSuccessfullyProcessed(final Task task) {
+        successfullyProcessed.add(task);
+    }
+
+    void removeTaskFromCuccessfullyProcessedBeforeClosing(final Task task) {
+        successfullyProcessed.remove(task);
+    }
+
+    void clearSuccessfullyProcessed() {
+        successfullyProcessed.clear();
     }
 
     // for testing only

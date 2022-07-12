@@ -420,7 +420,7 @@ public class MockLogTest {
     public void testUnflushedRecordsLostAfterReopen() {
         appendBatch(5, 1);
         appendBatch(10, 2);
-        log.flush();
+        log.flush(false);
 
         appendBatch(5, 3);
         appendBatch(10, 4);

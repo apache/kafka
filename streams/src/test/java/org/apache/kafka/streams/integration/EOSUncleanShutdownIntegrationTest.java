@@ -36,9 +36,11 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -66,6 +68,8 @@ import static org.junit.Assert.assertTrue;
 @RunWith(Parameterized.class)
 @Category(IntegrationTest.class)
 public class EOSUncleanShutdownIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     @SuppressWarnings("deprecation")
     @Parameterized.Parameters(name = "{0}")
