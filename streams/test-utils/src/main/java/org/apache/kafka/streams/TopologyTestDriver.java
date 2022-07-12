@@ -117,7 +117,6 @@ import java.util.regex.Pattern;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 /**
@@ -156,7 +155,7 @@ import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
  *
  * <p> Note that the {@code TopologyTestDriver} processes input records synchronously.
  * This implies that {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit.interval.ms} and
- * {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG cache.max.bytes.buffering} configuration have no effect.
+ * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache.max.bytes.buffering} configuration have no effect.
  * The driver behaves as if both configs would be set to zero, i.e., as if a "commit" (and thus "flush") would happen
  * after each input record.
  *
@@ -310,7 +309,6 @@ public class TopologyTestDriver implements Closeable {
      * @param config the configuration for the topology
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
      */
-    @SuppressWarnings({"unchecked", "deprecation"})
     private TopologyTestDriver(final InternalTopologyBuilder builder,
                                final Properties config,
                                final long initialWallClockTimeMs) {
@@ -331,7 +329,7 @@ public class TopologyTestDriver implements Closeable {
 
         final ThreadCache cache = new ThreadCache(
             logContext,
-            Math.max(0, getTotalCacheSize(streamsConfig)),
+            Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
             streamsMetrics
         );
 

@@ -478,11 +478,11 @@ public abstract class AbstractCoordinator implements Closeable {
 
                 resetJoinGroupFuture();
                 synchronized (AbstractCoordinator.this) {
-                    final String shortReason = String.format("rebalance failed due to %s",
-                        exception.getClass().getSimpleName());
+                    final String simpleName = exception.getClass().getSimpleName();
+                    final String shortReason = String.format("rebalance failed due to %s", simpleName);
                     final String fullReason = String.format("rebalance failed due to '%s' (%s)",
                         exception.getMessage(),
-                        exception.getClass().getSimpleName());
+                        simpleName);
                     requestRejoin(shortReason, fullReason);
                 }
 
@@ -559,7 +559,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         .setProtocolType(protocolType())
                         .setProtocols(metadata())
                         .setRebalanceTimeoutMs(this.rebalanceConfig.rebalanceTimeoutMs)
-                        .setReason(this.rejoinReason)
+                        .setReason(JoinGroupRequest.maybeTruncateReason(this.rejoinReason))
         );
 
         log.debug("Sending JoinGroup ({}) to coordinator {}", requestBuilder, this.coordinator);
@@ -1114,7 +1114,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 generation.memberId, coordinator, leaveReason);
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(
                 rebalanceConfig.groupId,
-                Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId).setReason(leaveReason))
+                Collections.singletonList(new MemberIdentity().setMemberId(generation.memberId).setReason(JoinGroupRequest.maybeTruncateReason(leaveReason)))
             );
 
             future = client.send(coordinator, request).compose(new LeaveGroupResponseHandler(generation));

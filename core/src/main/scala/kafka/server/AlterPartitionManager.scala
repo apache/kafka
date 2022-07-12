@@ -78,15 +78,14 @@ object AlterPartitionManager {
     config: KafkaConfig,
     metadataCache: MetadataCache,
     scheduler: KafkaScheduler,
+    controllerNodeProvider: ControllerNodeProvider,
     time: Time,
     metrics: Metrics,
     threadNamePrefix: Option[String],
     brokerEpochSupplier: () => Long,
   ): AlterPartitionManager = {
-    val nodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
-
     val channelManager = BrokerToControllerChannelManager(
-      controllerNodeProvider = nodeProvider,
+      controllerNodeProvider,
       time = time,
       metrics = metrics,
       config = config,

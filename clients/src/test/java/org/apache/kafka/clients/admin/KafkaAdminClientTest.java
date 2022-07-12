@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.ClientDnsLookup;
+import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -128,6 +129,7 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -188,6 +190,7 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
+import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.requests.UnregisterBrokerResponse;
@@ -3053,6 +3056,36 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testListConsumerGroupOffsetsOptions() throws Exception {
+        final Cluster cluster = mockCluster(3, 0);
+        final Time time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+                AdminClientConfig.RETRIES_CONFIG, "0")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            final TopicPartition tp1 = new TopicPartition("A", 0);
+            final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions();
+            options.topicPartitions(Collections.singletonList(tp1)).requireStable(true);
+            final ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(GROUP_ID, options);
+
+            final MockClient mockClient = env.kafkaClient();
+            TestUtils.waitForCondition(() -> {
+                final ClientRequest clientRequest = mockClient.requests().peek();
+                if (clientRequest != null) {
+                    OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).data;
+                    return data.requireStable() &&
+                        data.topics().get(0).name().equals("A") &&
+                        data.topics().get(0).partitionIndexes().equals(Collections.singletonList(0));
+                }
+                return false;
+            }, "Failed awaiting ListConsumerGroupOffsets request");
+        }
+    }
+
+    @Test
     public void testListConsumerGroupOffsetsNumRetries() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
         final Time time = new MockTime();
@@ -4082,6 +4115,13 @@ public class KafkaAdminClientTest {
     @Test
     public void testRemoveMembersFromGroupReason() throws Exception {
         testRemoveMembersFromGroup("testing remove members reason", "testing remove members reason");
+    }
+
+    @Test
+    public void testRemoveMembersFromGroupTruncatesReason() throws Exception {
+        final String reason = "Very looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong reason that is 271 characters long to make sure that length limit logic handles the scenario nicely";
+        final String truncatedReason = reason.substring(0, 255);
+        testRemoveMembersFromGroup(reason, truncatedReason);
     }
 
     @Test
