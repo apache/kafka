@@ -20,14 +20,13 @@ package kafka.server.metadata
 import java.util
 import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Optional}
-
-import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
+import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Endpoint, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{BrokerRegistration, RecordTestUtils, VersionRange}
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -240,6 +239,43 @@ class BrokerMetadataListenerTest {
     }
   }
 
+  @Test
+  def testNotSnapshotAfterMetadataVersionChangeBeforePublishing(): Unit = {
+    val snapshotter = new MockMetadataSnapshotter()
+    val listener = newBrokerMetadataListener(snapshotter = Some(snapshotter),
+      maxBytesBetweenSnapshots = 1000L)
+
+    updateFeature(listener, feature = MetadataVersion.FEATURE_NAME, MetadataVersion.latest.featureLevel(), 100L)
+    listener.getImageRecords().get()
+    assertEquals(-1L, snapshotter.activeSnapshotOffset, "We won't generate snapshot on metadata version change before starting publishing")
+  }
+
+  @Test
+  def testSnapshotAfterMetadataVersionChangeWhenStarting(): Unit = {
+    val snapshotter = new MockMetadataSnapshotter()
+    val listener = newBrokerMetadataListener(snapshotter = Some(snapshotter),
+      maxBytesBetweenSnapshots = 1000L)
+
+    val endOffset = 100L
+    updateFeature(listener, feature = MetadataVersion.FEATURE_NAME, MetadataVersion.latest.featureLevel(), endOffset)
+    listener.startPublishing(new MockMetadataPublisher()).get()
+    assertEquals(endOffset, snapshotter.activeSnapshotOffset, "We should try to generate snapshot when starting publishing")
+  }
+
+  @Test
+  def testSnapshotAfterMetadataVersionChange(): Unit = {
+    val snapshotter = new MockMetadataSnapshotter()
+    val listener = newBrokerMetadataListener(snapshotter = Some(snapshotter),
+      maxBytesBetweenSnapshots = 1000L)
+    listener.startPublishing(new MockMetadataPublisher()).get()
+
+    val endOffset = 100L
+    updateFeature(listener, feature = MetadataVersion.FEATURE_NAME, (MetadataVersion.latest().featureLevel() - 1).toShort, endOffset)
+    // Waiting for the metadata version update to get processed
+    listener.getImageRecords().get()
+    assertEquals(endOffset, snapshotter.activeSnapshotOffset, "We should generate snapshot on feature update")
+  }
+
   private def registerBrokers(
     listener: BrokerMetadataListener,
     brokerIds: Iterable[Int],
@@ -280,6 +316,25 @@ class BrokerMetadataListenerTest {
             setIsr(replicas.map(Int.box).asJava).
             setLeader(0).
             setReplicas(replicas.map(Int.box).asJava), 0.toShort)
+        )
+      )
+    )
+  }
+
+  private def updateFeature(
+    listener: BrokerMetadataListener,
+    feature: String,
+    version: Short,
+    endOffset: Long
+  ): Unit = {
+    listener.handleCommit(
+      RecordTestUtils.mockBatchReader(
+        endOffset,
+        0,
+        util.Arrays.asList(
+          new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName(feature).
+            setFeatureLevel(version), 0.toShort)
         )
       )
     )
