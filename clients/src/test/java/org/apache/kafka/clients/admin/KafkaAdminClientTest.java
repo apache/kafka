@@ -4118,6 +4118,13 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testRemoveMembersFromGroupTruncatesReason() throws Exception {
+        final String reason = "Very looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong reason that is 271 characters long to make sure that length limit logic handles the scenario nicely";
+        final String truncatedReason = reason.substring(0, 255);
+        testRemoveMembersFromGroup(reason, truncatedReason);
+    }
+
+    @Test
     public void testRemoveMembersFromGroupDefaultReason() throws Exception {
         testRemoveMembersFromGroup(null, DEFAULT_LEAVE_GROUP_REASON);
         testRemoveMembersFromGroup("", DEFAULT_LEAVE_GROUP_REASON);

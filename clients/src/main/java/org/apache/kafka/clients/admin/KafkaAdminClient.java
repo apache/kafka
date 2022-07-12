@@ -218,6 +218,7 @@ import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
 import org.apache.kafka.common.requests.ExpireDelegationTokenResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -3756,7 +3757,7 @@ public class KafkaAdminClient extends AdminClient {
     public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId,
                                                                                RemoveMembersFromConsumerGroupOptions options) {
         String reason = options.reason() == null || options.reason().isEmpty() ?
-            DEFAULT_LEAVE_GROUP_REASON : options.reason();
+            DEFAULT_LEAVE_GROUP_REASON : JoinGroupRequest.maybeTruncateReason(options.reason());
 
         List<MemberIdentity> members;
         if (options.removeAll()) {
