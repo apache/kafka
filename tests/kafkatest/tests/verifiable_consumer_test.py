@@ -49,10 +49,6 @@ class VerifiableConsumerTest(KafkaTest):
         partitions = self._partitions(assignment)
         return len(partitions) == num_partitions and set(partitions) == all_partitions
 
-    def min_cluster_size(self):
-        """Override this since we're adding services outside of the constructor"""
-        return super(VerifiableConsumerTest, self).min_cluster_size() + self.num_consumers + self.num_producers
-
     def setup_consumer(self, topic, static_membership=False, enable_autocommit=False,
                        assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor", **kwargs):
         return VerifiableConsumer(self.test_context, self.num_consumers, self.kafka,

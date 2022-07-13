@@ -27,6 +27,7 @@ from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_0_10_1, LATEST_0
     LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, \
     LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, KafkaVersion
 
+
 class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
     """
     These tests validate that we can use a new client to produce and consume from older brokers.
@@ -51,10 +52,6 @@ class ClientCompatibilityProduceConsumeTest(ProduceConsumeValidateTest):
     def setUp(self):
         if self.zk:
             self.zk.start()
-
-    def min_cluster_size(self):
-        # Override this since we're adding services outside of the constructor
-        return super(ClientCompatibilityProduceConsumeTest, self).min_cluster_size() + self.num_producers + self.num_consumers
 
     @cluster(num_nodes=9)
     @matrix(broker_version=[str(DEV_BRANCH)], metadata_quorum=quorum.all_non_upgrade)

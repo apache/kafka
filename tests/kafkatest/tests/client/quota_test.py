@@ -122,10 +122,6 @@ class QuotaTest(Test):
     def setUp(self):
         self.zk.start()
 
-    def min_cluster_size(self):
-        """Override this since we're adding services outside of the constructor"""
-        return super(QuotaTest, self).min_cluster_size() + self.num_producers + self.num_consumers
-
     @cluster(num_nodes=5)
     @matrix(quota_type=[QuotaConfig.CLIENT_ID, QuotaConfig.USER, QuotaConfig.USER_CLIENT], override_quota=[True, False])
     @parametrize(quota_type=QuotaConfig.CLIENT_ID, consumer_num=2)

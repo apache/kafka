@@ -69,10 +69,6 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         if self.zk:
             self.zk.start()
 
-    def min_cluster_size(self):
-        # Override this since we're adding services outside of the constructor
-        return super(ReassignPartitionsTest, self).min_cluster_size() + self.num_producers + self.num_consumers
-
     def clean_bounce_some_brokers(self):
         """Bounce every other broker"""
         for node in self.kafka.nodes[::2]:

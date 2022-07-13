@@ -61,9 +61,6 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         self.num_producers = 1
         self.num_consumers = 1
 
-    def min_cluster_size(self):
-        return super(FetchFromFollowerTest, self).min_cluster_size() + self.num_producers * 2 + self.num_consumers * 2
-
     def setUp(self):
         if self.zk:
             self.zk.start()
