@@ -331,7 +331,7 @@ object ReassignPartitionsCommand extends Logging {
       val state = states(topicPartition)
       if (state.done) {
         if (state.currentReplicas.equals(state.targetReplicas)) {
-          bld.append("Reassignment of partition %s is complete.".
+          bld.append("Reassignment of partition %s is completed.".
             format(topicPartition.toString))
         } else {
           bld.append(s"There is no active reassignment of partition ${topicPartition}, " +
@@ -376,7 +376,7 @@ object ReassignPartitionsCommand extends Logging {
         topicNamesToLookUp.add(part.topic)
     }
     val topicDescriptions = adminClient.
-      describeTopics(topicNamesToLookUp.asJava).values().asScala
+      describeTopics(topicNamesToLookUp.asJava).topicNameValues().asScala
     val notFoundResults = notFoundReassignments.map {
       case (part, targetReplicas) =>
         currentReassignments.get(part) match {
@@ -618,7 +618,7 @@ object ReassignPartitionsCommand extends Logging {
   private def describeTopics(adminClient: Admin,
                              topics: Set[String])
                              : Map[String, TopicDescription] = {
-    adminClient.describeTopics(topics.asJava).values.asScala.map { case (topicName, topicDescriptionFuture) =>
+    adminClient.describeTopics(topics.asJava).topicNameValues().asScala.map { case (topicName, topicDescriptionFuture) =>
       try topicName -> topicDescriptionFuture.get
       catch {
         case t: ExecutionException if t.getCause.isInstanceOf[UnknownTopicOrPartitionException] =>

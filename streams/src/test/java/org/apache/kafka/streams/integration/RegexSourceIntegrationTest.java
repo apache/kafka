@@ -51,9 +51,11 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -81,6 +83,8 @@ import static org.hamcrest.Matchers.greaterThan;
  */
 @Category({IntegrationTest.class})
 public class RegexSourceIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private static final int NUM_BROKERS = 1;
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
@@ -309,7 +313,7 @@ public class RegexSourceIntegrationTest {
         streams.start();
 
         final TestCondition stateStoreNameBoundToSourceTopic = () -> {
-            final Map<String, List<String>> stateStoreToSourceTopic = topology.getInternalBuilder().stateStoreNameToSourceTopics();
+            final Map<String, List<String>> stateStoreToSourceTopic = topology.getInternalBuilder().stateStoreNameToFullSourceTopicNames();
             final List<String> topicNamesList = stateStoreToSourceTopic.get("testStateStore");
             return topicNamesList != null && !topicNamesList.isEmpty() && topicNamesList.get(0).equals("topic-1");
         };

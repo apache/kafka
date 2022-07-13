@@ -98,10 +98,10 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
         }
       }
       quotaDelta.changes().entrySet().forEach { e =>
-        handleUserClientQuotaChange(userClientEntity, e.getKey(), e.getValue().asScala.map(_.toDouble))
+        handleUserClientQuotaChange(userClientEntity, e.getKey, e.getValue.asScala.map(_.toDouble))
       }
     } else {
-      warn(s"Ignoring unsupported quota entity ${entity}.")
+      warn(s"Ignoring unsupported quota entity $entity.")
     }
   }
 
@@ -119,10 +119,10 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
 
     quotaDelta.changes().entrySet().forEach { e =>
       // The connection quota only understands the connection rate limit
-      val quotaName = e.getKey()
-      val quotaValue = e.getValue()
+      val quotaName = e.getKey
+      val quotaValue = e.getValue
       if (!quotaName.equals(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG)) {
-        warn(s"Ignoring unexpected quota key ${quotaName} for entity $ipEntity")
+        warn(s"Ignoring unexpected quota key $quotaName for entity $ipEntity")
       } else {
         try {
           connectionQuotas.updateIpConnectionRateQuota(inetAddress, quotaValue.asScala.map(_.toInt))
@@ -140,7 +140,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
       case QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG => quotaManagers.request
       case QuotaConfigs.CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG => quotaManagers.controllerMutation
       case _ =>
-        warn(s"Ignoring unexpected quota key ${key} for entity $quotaEntity")
+        warn(s"Ignoring unexpected quota key $key for entity $quotaEntity")
         return
     }
 

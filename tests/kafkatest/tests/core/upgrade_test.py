@@ -24,7 +24,10 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
 from kafkatest.utils.remote_account import java_version
-from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, V_0_11_0_0, V_2_8_0, DEV_BRANCH, KafkaVersion
+from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, \
+    LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, \
+    LATEST_2_6, LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, V_0_11_0_0, V_2_8_0, V_3_0_0, DEV_BRANCH, \
+    KafkaVersion
 from kafkatest.services.kafka.util import new_jdk_not_supported
 
 class TestUpgrade(ProduceConsumeValidateTest):
@@ -51,10 +54,10 @@ class TestUpgrade(ProduceConsumeValidateTest):
         self.logger.info("Upgrade ZooKeeper from %s to %s" % (str(self.zk.nodes[0].version), str(DEV_BRANCH)))
         self.zk.set_version(DEV_BRANCH)
         self.zk.restart_cluster()
-        # Confirm we have a successful ZooKeeper upgrade by describing the topic.
+        # Confirm we have a successful ZooKeeper upgrade by List ACLs for the topic.
         # Not trying to detect a problem here leads to failure in the ensuing Kafka roll, which would be a less
         # intuitive failure than seeing a problem here, so detect ZooKeeper upgrade problems before involving Kafka.
-        self.zk.describe(self.topic)
+        self.zk.list_acls(self.topic)
         # Do some stuff that exercises the use of ZooKeeper before we upgrade to the latest ZooKeeper client version
         self.logger.info("First pass bounce - rolling Kafka with old ZooKeeper client")
         for node in self.kafka.nodes:
@@ -83,11 +86,23 @@ class TestUpgrade(ProduceConsumeValidateTest):
             if to_message_format_version is None:
                 del node.config[config_property.MESSAGE_FORMAT_VERSION]
             else:
+                # older message formats are not supported with IBP 3.0 or higher
+                if to_message_format_version < V_0_11_0_0:
+                    node.config[config_property.INTER_BROKER_PROTOCOL_VERSION] = str(V_2_8_0)
                 node.config[config_property.MESSAGE_FORMAT_VERSION] = to_message_format_version
             self.kafka.start_node(node)
             self.wait_until_rejoin()
 
     @cluster(num_nodes=6)
+    @parametrize(from_kafka_version=str(LATEST_3_2), to_message_format_version=None, compression_types=["none"])
+    @parametrize(from_kafka_version=str(LATEST_3_2), to_message_format_version=None, compression_types=["lz4"])
+    @parametrize(from_kafka_version=str(LATEST_3_2), to_message_format_version=None, compression_types=["snappy"])
+    @parametrize(from_kafka_version=str(LATEST_3_1), to_message_format_version=None, compression_types=["none"])
+    @parametrize(from_kafka_version=str(LATEST_3_1), to_message_format_version=None, compression_types=["lz4"])
+    @parametrize(from_kafka_version=str(LATEST_3_1), to_message_format_version=None, compression_types=["snappy"])
+    @parametrize(from_kafka_version=str(LATEST_3_0), to_message_format_version=None, compression_types=["none"])
+    @parametrize(from_kafka_version=str(LATEST_3_0), to_message_format_version=None, compression_types=["lz4"])
+    @parametrize(from_kafka_version=str(LATEST_3_0), to_message_format_version=None, compression_types=["snappy"])
     @parametrize(from_kafka_version=str(LATEST_2_8), to_message_format_version=None, compression_types=["none"])
     @parametrize(from_kafka_version=str(LATEST_2_8), to_message_format_version=None, compression_types=["lz4"])
     @parametrize(from_kafka_version=str(LATEST_2_8), to_message_format_version=None, compression_types=["snappy"])

@@ -4,7 +4,7 @@ See our [web site](https://kafka.apache.org) for details on the project.
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with Java 8, 11 and 16. We set the `release` parameter in javac and scalac
+We build and test Apache Kafka with Java 8, 11 and 17. We set the `release` parameter in javac and scalac
 to `8` to ensure the generated binaries are compatible with Java 8 or higher (independently of the Java version
 used for compilation). Java 8 support has been deprecated since Apache Kafka 3.0 and will be removed in Apache
 Kafka 4.0 (see [KIP-750](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223) for more details).
@@ -37,16 +37,19 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew integrationTest
     
 ### Force re-running tests without code change ###
-    ./gradlew cleanTest test
-    ./gradlew cleanTest unitTest
-    ./gradlew cleanTest integrationTest
+    ./gradlew -Prerun-tests test
+    ./gradlew -Prerun-tests unitTest
+    ./gradlew -Prerun-tests integrationTest
 
 ### Running a particular unit/integration test ###
     ./gradlew clients:test --tests RequestResponseTest
 
+### Repeatedly running a particular unit/integration test ###
+    I=0; while ./gradlew clients:test -Prerun-tests --tests RequestResponseTest --fail-fast; do (( I=$I+1 )); echo "Completed run: $I"; sleep 1; done
+
 ### Running a particular test method within a unit/integration test ###
     ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
-    ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testMetadataUpdateWaitTime
+    ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testTimeToNextUpdate
 
 ### Running a particular unit/integration test with log4j output ###
 Change the log4j setting in either `clients/src/test/resources/log4j.properties` or `core/src/test/resources/log4j.properties`
@@ -132,7 +135,7 @@ The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as 
 build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
 to avoid known issues with this configuration.
 
-### Publishing the jar for all version of Scala and for all projects to maven ###
+### Publishing the jar for all versions of Scala and for all projects to maven ###
 The recommended command is:
 
     ./gradlewAll publish
@@ -180,14 +183,20 @@ Please note for this to work you should create/update user maven settings (typic
      ...
 
 
-### Installing the jars to the local Maven repository ###
-The recommended command is:
+### Installing ALL the jars to the local Maven repository ###
+The recommended command to build for both Scala 2.12 and 2.13 is:
 
     ./gradlewAll publishToMavenLocal
 
 For backwards compatibility, the following also works:
 
     ./gradlewAll install
+
+### Installing specific projects to the local Maven repository ###
+
+    ./gradlew -PskipSigning :streams:publishToMavenLocal
+    
+If needed, you can specify the Scala version with `-PscalaVersion=2.13`.
 
 ### Building the test jar ###
     ./gradlew testJar
@@ -230,13 +239,15 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 
 * `commitId`: sets the build commit ID as .git/HEAD might not be correct if there are local commits added for build purposes.
 * `mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
-* `maxParallelForks`: limits the maximum number of processes for each task.
+* `maxParallelForks`: maximum number of test processes to start in parallel. Defaults to the number of processors available to the JVM.
+* `maxScalacThreads`: maximum number of worker threads for the scalac backend. Defaults to the lowest of `8` and the number of processors
+available to the JVM. The value must be between 1 and 16 (inclusive). 
 * `ignoreFailures`: ignore test failures from junit
 * `showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
 * `skipSigning`: skips signing of artifacts.
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
 * `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
-* `maxTestRetries`: the maximum number of retries for a failing test case.
+* `maxTestRetries`: maximum number of retries for a failing test case.
 * `maxTestRetryFailures`: maximum number of test failures before retrying is disabled for subsequent tests.
 * `enableTestCoverage`: enables test coverage plugins and tasks, including bytecode enhancement of classes required to track said
 coverage. Note that this introduces some overhead when running tests and hence why it's disabled by default (the overhead
@@ -257,7 +268,7 @@ Alternatively, use the `allDeps` or `allDepInsight` tasks for recursively iterat
 
     ./gradlew allDeps
 
-    ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
+    ./gradlew allDepInsight --configuration runtimeClasspath --dependency com.fasterxml.jackson.core:jackson-databind
 
 These take the same arguments as the builtin variants.
 

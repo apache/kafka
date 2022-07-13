@@ -29,6 +29,11 @@ import java.util.List;
 
 
 public final class MessageUtil {
+
+    public static final long UNSIGNED_INT_MAX = 4294967295L;
+
+    public static final int UNSIGNED_SHORT_MAX = 65535;
+
     /**
      * Copy a byte buffer into an array.  This will not affect the buffer's
      * position or mark.
@@ -87,9 +92,18 @@ public final class MessageUtil {
 
     public static int jsonNodeToUnsignedShort(JsonNode node, String about) {
         int value = jsonNodeToInt(node, about);
-        if (value < 0 || value > 65535) {
+        if (value < 0 || value > UNSIGNED_SHORT_MAX) {
             throw new RuntimeException(about + ": value " + value +
                 " does not fit in a 16-bit unsigned integer.");
+        }
+        return value;
+    }
+
+    public static long jsonNodeToUnsignedInt(JsonNode node, String about) {
+        long value = jsonNodeToLong(node, about);
+        if (value < 0 || value > UNSIGNED_INT_MAX) {
+            throw new RuntimeException(about + ": value " + value +
+                    " does not fit in a 32-bit unsigned integer.");
         }
         return value;
     }

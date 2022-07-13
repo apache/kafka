@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -132,7 +133,7 @@ public class SubscriptionState {
     public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {
         this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
-        this.subscription = new HashSet<>();
+        this.subscription = new TreeSet<>(); // use a sorted set for better logging
         this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;
@@ -548,6 +549,25 @@ public class SubscriptionState {
         }
     }
 
+    public synchronized Long partitionEndOffset(TopicPartition tp, IsolationLevel isolationLevel) {
+        TopicPartitionState topicPartitionState = assignedState(tp);
+        if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+            return topicPartitionState.lastStableOffset;
+        } else {
+            return topicPartitionState.highWatermark;
+        }
+    }
+
+    public synchronized void requestPartitionEndOffset(TopicPartition tp) {
+        TopicPartitionState topicPartitionState = assignedState(tp);
+        topicPartitionState.requestEndOffset();
+    }
+
+    public synchronized boolean partitionEndOffsetRequested(TopicPartition tp) {
+        TopicPartitionState topicPartitionState = assignedState(tp);
+        return topicPartitionState.endOffsetRequested();
+    }
+
     synchronized Long partitionLead(TopicPartition tp) {
         TopicPartitionState topicPartitionState = assignedState(tp);
         return topicPartitionState.logStartOffset == null ? null : topicPartitionState.position.offset - topicPartitionState.logStartOffset;
@@ -597,7 +617,7 @@ public class SubscriptionState {
      * Unset the preferred read replica. This causes the fetcher to go back to the leader for fetches.
      *
      * @param tp The topic partition
-     * @return true if the preferred read replica was set, false otherwise.
+     * @return the removed preferred read replica if set, None otherwise.
      */
     public synchronized Optional<Integer> clearPreferredReadReplica(TopicPartition tp) {
         return assignedState(tp).clearPreferredReadReplica();
@@ -753,9 +773,11 @@ public class SubscriptionState {
         private Long nextRetryTimeMs;
         private Integer preferredReadReplica;
         private Long preferredReadReplicaExpireTimeMs;
-
+        private boolean endOffsetRequested;
+        
         TopicPartitionState() {
             this.paused = false;
+            this.endOffsetRequested = false;
             this.fetchState = FetchStates.INITIALIZING;
             this.position = null;
             this.highWatermark = null;
@@ -764,6 +786,14 @@ public class SubscriptionState {
             this.resetStrategy = null;
             this.nextRetryTimeMs = null;
             this.preferredReadReplica = null;
+        }
+
+        public boolean endOffsetRequested() {
+            return endOffsetRequested;
+        }
+
+        public void requestEndOffset() {
+            endOffsetRequested = true;
         }
 
         private void transitionState(FetchState newState, Runnable runIfTransitioned) {
@@ -946,6 +976,7 @@ public class SubscriptionState {
 
         private void highWatermark(Long highWatermark) {
             this.highWatermark = highWatermark;
+            this.endOffsetRequested = false;
         }
 
         private void logStartOffset(Long logStartOffset) {
@@ -954,6 +985,7 @@ public class SubscriptionState {
 
         private void lastStableOffset(Long lastStableOffset) {
             this.lastStableOffset = lastStableOffset;
+            this.endOffsetRequested = false;
         }
 
         private OffsetResetStrategy resetStrategy() {

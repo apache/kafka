@@ -40,7 +40,7 @@ class UserScramCredentialsCommandTest extends BaseRequestTest {
       exitStatus = Some(status)
       throw new RuntimeException
     }
-    val commandArgs = Array("--bootstrap-server", brokerList) ++ args
+    val commandArgs = Array("--bootstrap-server", bootstrapServers()) ++ args
     try {
       Console.withOut(printStream) {
         ConfigCommand.main(commandArgs)

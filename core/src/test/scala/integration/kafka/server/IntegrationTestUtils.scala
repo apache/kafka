@@ -17,19 +17,23 @@
 
 package kafka.server
 
+import java.io.{DataInputStream, DataOutputStream}
+import java.net.Socket
+import java.nio.ByteBuffer
+import java.util.{Collections, Properties}
+
 import kafka.network.SocketServer
+import kafka.utils.Implicits._
 import kafka.utils.{NotNothing, TestUtils}
+import org.apache.kafka.clients.admin.{Admin, NewTopic}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestHeader, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 
-import java.io.{DataInputStream, DataOutputStream}
-import java.net.Socket
-import java.nio.ByteBuffer
-import java.util.Properties
 import scala.annotation.nowarn
+import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 object IntegrationTestUtils {
@@ -99,6 +103,32 @@ object IntegrationTestUtils {
     val socket = connect(destination, listenerName)
     try sendAndReceive[T](request, socket)
     finally socket.close()
+  }
+
+  def createTopic(
+    admin: Admin,
+    topic: String,
+    numPartitions: Int,
+    replicationFactor: Short
+  ): Unit = {
+    val newTopics = Collections.singletonList(new NewTopic(topic, numPartitions, replicationFactor))
+    val createTopicResult = admin.createTopics(newTopics)
+    createTopicResult.all().get()
+  }
+
+  def createTopic(
+    admin: Admin,
+    topic: String,
+    replicaAssignment: Map[Int, Seq[Int]]
+  ): Unit = {
+    val javaAssignment = new java.util.HashMap[Integer, java.util.List[Integer]]()
+    replicaAssignment.forKeyValue { (partitionId, assignment) =>
+      javaAssignment.put(partitionId, assignment.map(Int.box).asJava)
+    }
+    val newTopic = new NewTopic(topic, javaAssignment)
+    val newTopics = Collections.singletonList(newTopic)
+    val createTopicResult = admin.createTopics(newTopics)
+    createTopicResult.all().get()
   }
 
   protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT

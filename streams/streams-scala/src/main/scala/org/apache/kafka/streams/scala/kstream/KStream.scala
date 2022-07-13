@@ -28,7 +28,7 @@ import org.apache.kafka.streams.kstream.{
   KStream => KStreamJ
 }
 import org.apache.kafka.streams.processor.TopicNameExtractor
-import org.apache.kafka.streams.processor.api.ProcessorSupplier
+import org.apache.kafka.streams.processor.api.{FixedKeyProcessorSupplier, ProcessorSupplier}
 import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
   FlatValueMapperFromFunction,
   FlatValueMapperWithKeyFromFunction,
@@ -558,8 +558,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transform`
    */
-  def transform[K1, V1](transformerSupplier: TransformerSupplier[K, V, KeyValue[K1, V1]],
-                        stateStoreNames: String*): KStream[K1, V1] =
+  @deprecated(since = "3.3", message = "Use process(ProcessorSupplier, String*) instead.")
+  def transform[K1, V1](
+    transformerSupplier: TransformerSupplier[K, V, KeyValue[K1, V1]],
+    stateStoreNames: String*
+  ): KStream[K1, V1] =
     new KStream(inner.transform(transformerSupplier, stateStoreNames: _*))
 
   /**
@@ -578,9 +581,12 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transform`
    */
-  def transform[K1, V1](transformerSupplier: TransformerSupplier[K, V, KeyValue[K1, V1]],
-                        named: Named,
-                        stateStoreNames: String*): KStream[K1, V1] =
+  @deprecated(since = "3.3", message = "Use process(ProcessorSupplier, Named, String*) instead.")
+  def transform[K1, V1](
+    transformerSupplier: TransformerSupplier[K, V, KeyValue[K1, V1]],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[K1, V1] =
     new KStream(inner.transform(transformerSupplier, named, stateStoreNames: _*))
 
   /**
@@ -598,8 +604,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transform`
    */
-  def flatTransform[K1, V1](transformerSupplier: TransformerSupplier[K, V, Iterable[KeyValue[K1, V1]]],
-                            stateStoreNames: String*): KStream[K1, V1] =
+  @deprecated(since = "3.3", message = "Use process(ProcessorSupplier, String*) instead.")
+  def flatTransform[K1, V1](
+    transformerSupplier: TransformerSupplier[K, V, Iterable[KeyValue[K1, V1]]],
+    stateStoreNames: String*
+  ): KStream[K1, V1] =
     new KStream(inner.flatTransform(transformerSupplier.asJava, stateStoreNames: _*))
 
   /**
@@ -618,9 +627,12 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains more or less records with new key and value (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transform`
    */
-  def flatTransform[K1, V1](transformerSupplier: TransformerSupplier[K, V, Iterable[KeyValue[K1, V1]]],
-                            named: Named,
-                            stateStoreNames: String*): KStream[K1, V1] =
+  @deprecated(since = "3.3", message = "Use process(ProcessorSupplier, Named, String*) instead.")
+  def flatTransform[K1, V1](
+    transformerSupplier: TransformerSupplier[K, V, Iterable[KeyValue[K1, V1]]],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[K1, V1] =
     new KStream(inner.flatTransform(transformerSupplier.asJava, named, stateStoreNames: _*))
 
   /**
@@ -638,8 +650,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def flatTransformValues[VR](valueTransformerSupplier: ValueTransformerSupplier[V, Iterable[VR]],
-                              stateStoreNames: String*): KStream[K, VR] =
+  @deprecated(since = "3.3", message = "Use processValues(FixedKeyProcessorSupplier, Named, String*) instead.")
+  def flatTransformValues[VR](
+    valueTransformerSupplier: ValueTransformerSupplier[V, Iterable[VR]],
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.flatTransformValues[VR](valueTransformerSupplier.asJava, stateStoreNames: _*))
 
   /**
@@ -658,9 +673,12 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def flatTransformValues[VR](valueTransformerSupplier: ValueTransformerSupplier[V, Iterable[VR]],
-                              named: Named,
-                              stateStoreNames: String*): KStream[K, VR] =
+  @deprecated(since = "3.3", message = "Use processValues(FixedKeyProcessorSupplier, Named, String*) instead.")
+  def flatTransformValues[VR](
+    valueTransformerSupplier: ValueTransformerSupplier[V, Iterable[VR]],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.flatTransformValues[VR](valueTransformerSupplier.asJava, named, stateStoreNames: _*))
 
   /**
@@ -678,8 +696,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def flatTransformValues[VR](valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, Iterable[VR]],
-                              stateStoreNames: String*): KStream[K, VR] =
+  @deprecated(since = "3.3", message = "Use processValues(FixedKeyProcessorSupplier, String*) instead.")
+  def flatTransformValues[VR](
+    valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, Iterable[VR]],
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.flatTransformValues[VR](valueTransformerSupplier.asJava, stateStoreNames: _*))
 
   /**
@@ -698,9 +719,12 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def flatTransformValues[VR](valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, Iterable[VR]],
-                              named: Named,
-                              stateStoreNames: String*): KStream[K, VR] =
+  @deprecated(since = "3.3", message = "Use processValues(FixedKeyProcessorSupplier, Named, String*) instead.")
+  def flatTransformValues[VR](
+    valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, Iterable[VR]],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.flatTransformValues[VR](valueTransformerSupplier.asJava, named, stateStoreNames: _*))
 
   /**
@@ -717,8 +741,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def transformValues[VR](valueTransformerSupplier: ValueTransformerSupplier[V, VR],
-                          stateStoreNames: String*): KStream[K, VR] =
+  @deprecated(since = "3.3", message = "Use processValues(FixedKeyProcessorSupplier, String*) instead.")
+  def transformValues[VR](
+    valueTransformerSupplier: ValueTransformerSupplier[V, VR],
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.transformValues[VR](valueTransformerSupplier, stateStoreNames: _*))
 
   /**
@@ -736,9 +763,12 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def transformValues[VR](valueTransformerSupplier: ValueTransformerSupplier[V, VR],
-                          named: Named,
-                          stateStoreNames: String*): KStream[K, VR] =
+  @deprecated(since = "3.3", message = "Use processValues(FixedKeyProcessorSupplier, Named, String*) instead.")
+  def transformValues[VR](
+    valueTransformerSupplier: ValueTransformerSupplier[V, VR],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.transformValues[VR](valueTransformerSupplier, named, stateStoreNames: _*))
 
   /**
@@ -755,8 +785,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def transformValues[VR](valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, VR],
-                          stateStoreNames: String*): KStream[K, VR] =
+  @deprecated(since = "3.3", message = "Use processValues(FixedKeyProcessorSupplier, String*) instead.")
+  def transformValues[VR](
+    valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, VR],
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.transformValues[VR](valueTransformerSupplier, stateStoreNames: _*))
 
   /**
@@ -774,9 +807,12 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KStream]] that contains records with unmodified key and new values (possibly of different type)
    * @see `org.apache.kafka.streams.kstream.KStream#transformValues`
    */
-  def transformValues[VR](valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, VR],
-                          named: Named,
-                          stateStoreNames: String*): KStream[K, VR] =
+  @deprecated(since = "3.3", message = "Use processValues(FixedKeyProcessorSupplier, Named, String*) instead.")
+  def transformValues[VR](
+    valueTransformerSupplier: ValueTransformerWithKeySupplier[K, V, VR],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[K, VR] =
     new KStream(inner.transformValues[VR](valueTransformerSupplier, named, stateStoreNames: _*))
 
   /**
@@ -792,29 +828,13 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
   @deprecated(since = "3.0", message = "Use process(ProcessorSupplier, String*) instead.")
-  def process(processorSupplier: () => org.apache.kafka.streams.processor.Processor[K, V],
-              stateStoreNames: String*): Unit = {
+  def process(
+    processorSupplier: () => org.apache.kafka.streams.processor.Processor[K, V],
+    stateStoreNames: String*
+  ): Unit = {
     val processorSupplierJ: org.apache.kafka.streams.processor.ProcessorSupplier[K, V] = () => processorSupplier()
     inner.process(processorSupplierJ, stateStoreNames: _*)
   }
-
-  /**
-   * Process all records in this stream, one record at a time, by applying a `Processor` (provided by the given
-   * `processorSupplier`).
-   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
-   * to the `Processor`.
-   * It's not required to connect global state stores that are added via `addGlobalStore`;
-   * read-only access to global state stores is available by default.
-   *
-   * Note that this overload takes a ProcessorSupplier instead of a Function to avoid post-erasure ambiguity with
-   * the older (deprecated) overload.
-   *
-   * @param processorSupplier a supplier for [[org.apache.kafka.streams.processor.api.Processor]]
-   * @param stateStoreNames   the names of the state store used by the processor
-   * @see `org.apache.kafka.streams.kstream.KStream#process`
-   */
-  def process(processorSupplier: ProcessorSupplier[K, V, Void, Void], stateStoreNames: String*): Unit =
-    inner.process(processorSupplier, stateStoreNames: _*)
 
   /**
    * Process all records in this stream, one record at a time, by applying a `Processor` (provided by the given
@@ -830,9 +850,11 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
   @deprecated(since = "3.0", message = "Use process(ProcessorSupplier, String*) instead.")
-  def process(processorSupplier: () => org.apache.kafka.streams.processor.Processor[K, V],
-              named: Named,
-              stateStoreNames: String*): Unit = {
+  def process(
+    processorSupplier: () => org.apache.kafka.streams.processor.Processor[K, V],
+    named: Named,
+    stateStoreNames: String*
+  ): Unit = {
     val processorSupplierJ: org.apache.kafka.streams.processor.ProcessorSupplier[K, V] = () => processorSupplier()
     inner.process(processorSupplierJ, named, stateStoreNames: _*)
   }
@@ -849,12 +871,78 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * the older (deprecated) overload.
    *
    * @param processorSupplier a supplier for [[org.apache.kafka.streams.processor.api.Processor]]
+   * @param stateStoreNames   the names of the state store used by the processor
+   * @see `org.apache.kafka.streams.kstream.KStream#process`
+   */
+  def process[KR, VR](processorSupplier: ProcessorSupplier[K, V, KR, VR], stateStoreNames: String*): KStream[KR, VR] =
+    new KStream(inner.process(processorSupplier, stateStoreNames: _*))
+
+  /**
+   * Process all records in this stream, one record at a time, by applying a `Processor` (provided by the given
+   * `processorSupplier`).
+   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
+   * to the `Processor`.
+   * It's not required to connect global state stores that are added via `addGlobalStore`;
+   * read-only access to global state stores is available by default.
+   *
+   * Note that this overload takes a ProcessorSupplier instead of a Function to avoid post-erasure ambiguity with
+   * the older (deprecated) overload.
+   *
+   * @param processorSupplier a supplier for [[org.apache.kafka.streams.processor.api.Processor]]
    * @param named             a [[Named]] config used to name the processor in the topology
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
-  def process(processorSupplier: ProcessorSupplier[K, V, Void, Void], named: Named, stateStoreNames: String*): Unit =
-    inner.process(processorSupplier, named, stateStoreNames: _*)
+  def process[KR, VR](
+    processorSupplier: ProcessorSupplier[K, V, KR, VR],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[KR, VR] =
+    new KStream(inner.process(processorSupplier, named, stateStoreNames: _*))
+
+  /**
+   * Process all records in this stream, one record at a time, by applying a `FixedKeyProcessor` (provided by the given
+   * `processorSupplier`).
+   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
+   * to the `FixedKeyProcessor`.
+   * It's not required to connect global state stores that are added via `addGlobalStore`;
+   * read-only access to global state stores is available by default.
+   *
+   * Note that this overload takes a FixedKeyProcessorSupplier instead of a Function to avoid post-erasure ambiguity with
+   * the older (deprecated) overload.
+   *
+   * @param processorSupplier a supplier for [[org.apache.kafka.streams.processor.api.FixedKeyProcessor]]
+   * @param stateStoreNames   the names of the state store used by the processor
+   * @see `org.apache.kafka.streams.kstream.KStream#process`
+   */
+  def processValues[VR](
+    processorSupplier: FixedKeyProcessorSupplier[K, V, VR],
+    stateStoreNames: String*
+  ): KStream[K, VR] =
+    new KStream(inner.processValues(processorSupplier, stateStoreNames: _*))
+
+  /**
+   * Process all records in this stream, one record at a time, by applying a `FixedKeyProcessor` (provided by the given
+   * `processorSupplier`).
+   * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
+   * to the `FixedKeyProcessor`.
+   * It's not required to connect global state stores that are added via `addGlobalStore`;
+   * read-only access to global state stores is available by default.
+   *
+   * Note that this overload takes a ProcessorSupplier instead of a Function to avoid post-erasure ambiguity with
+   * the older (deprecated) overload.
+   *
+   * @param processorSupplier a supplier for [[org.apache.kafka.streams.processor.api.FixedKeyProcessor]]
+   * @param named             a [[Named]] config used to name the processor in the topology
+   * @param stateStoreNames   the names of the state store used by the processor
+   * @see `org.apache.kafka.streams.kstream.KStream#process`
+   */
+  def processValues[VR](
+    processorSupplier: FixedKeyProcessorSupplier[K, V, VR],
+    named: Named,
+    stateStoreNames: String*
+  ): KStream[K, VR] =
+    new KStream(inner.processValues(processorSupplier, named, stateStoreNames: _*))
 
   /**
    * Group the records by their current key into a [[KGroupedStream]]
@@ -1039,7 +1127,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    */
   def join[GK, GV, RV](globalKTable: GlobalKTable[GK, GV])(
     keyValueMapper: (K, V) => GK,
-    joiner: (V, GV) => RV,
+    joiner: (V, GV) => RV
   ): KStream[K, RV] =
     new KStream(
       inner.join[GK, GV, RV](

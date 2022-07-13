@@ -58,7 +58,7 @@ import java.util.function.Function;
  */
 public class PartitionGroup {
 
-    private  final Logger logger;
+    private final Logger logger;
     private final Map<TopicPartition, RecordQueue> partitionQueues;
     private final Function<TopicPartition, OptionalLong> lagProvider;
     private final Sensor enforcedProcessingSensor;
@@ -118,11 +118,11 @@ public class PartitionGroup {
                     }
                 }
                 logger.trace("Ready for processing because max.task.idle.ms is disabled." +
-                              "\n\tThere may be out-of-order processing for this task as a result." +
-                              "\n\tBuffered partitions: {}" +
-                              "\n\tNon-buffered partitions: {}",
-                          bufferedPartitions,
-                          emptyPartitions);
+                                "\n\tThere may be out-of-order processing for this task as a result." +
+                                "\n\tBuffered partitions: {}" +
+                                "\n\tNon-buffered partitions: {}",
+                        bufferedPartitions,
+                        emptyPartitions);
             }
             return true;
         }
@@ -151,9 +151,9 @@ public class PartitionGroup {
                     // must wait to poll the data we know to be on the broker
                     idlePartitionDeadlines.remove(partition);
                     logger.trace(
-                        "Lag for {} is currently {}, but no data is buffered locally. Waiting to buffer some records.",
-                        partition,
-                        fetchedLag.getAsLong()
+                            "Lag for {} is currently {}, but no data is buffered locally. Waiting to buffer some records.",
+                            partition,
+                            fetchedLag.getAsLong()
                     );
                     return false;
                 } else {
@@ -167,11 +167,11 @@ public class PartitionGroup {
                     final long deadline = idlePartitionDeadlines.get(partition);
                     if (wallClockTime < deadline) {
                         logger.trace(
-                            "Lag for {} is currently 0 and current time is {}. Waiting for new data to be produced for configured idle time {} (deadline is {}).",
-                            partition,
-                            wallClockTime,
-                            maxTaskIdleMs,
-                            deadline
+                                "Lag for {} is currently 0 and current time is {}. Waiting for new data to be produced for configured idle time {} (deadline is {}).",
+                                partition,
+                                wallClockTime,
+                                maxTaskIdleMs,
+                                deadline
                         );
                         return false;
                     } else {
@@ -193,15 +193,15 @@ public class PartitionGroup {
         } else {
             enforcedProcessingSensor.record(1.0d, wallClockTime);
             logger.trace("Continuing to process although some partitions are empty on the broker." +
-                         "\n\tThere may be out-of-order processing for this task as a result." +
-                         "\n\tPartitions with local data: {}." +
-                         "\n\tPartitions we gave up waiting for, with their corresponding deadlines: {}." +
-                         "\n\tConfigured max.task.idle.ms: {}." +
-                         "\n\tCurrent wall-clock time: {}.",
-                     queued,
-                     enforced,
-                     maxTaskIdleMs,
-                     wallClockTime);
+                            "\n\tThere may be out-of-order processing for this task as a result." +
+                            "\n\tPartitions with local data: {}." +
+                            "\n\tPartitions we gave up waiting for, with their corresponding deadlines: {}." +
+                            "\n\tConfigured max.task.idle.ms: {}." +
+                            "\n\tCurrent wall-clock time: {}.",
+                    queued,
+                    enforced,
+                    maxTaskIdleMs,
+                    wallClockTime);
             return true;
         }
     }
@@ -261,7 +261,7 @@ public class PartitionGroup {
 
         if (queue != null) {
             // get the first record from this queue.
-            record = queue.poll();
+            record = queue.poll(wallClockTime);
 
             if (record != null) {
                 --totalBuffered;
@@ -289,8 +289,8 @@ public class PartitionGroup {
     /**
      * Adds raw records to this partition group
      *
-     * @param partition the partition
-     * @param rawRecords  the raw records
+     * @param partition  the partition
+     * @param rawRecords the raw records
      * @return the queue size for the partition
      */
     int addRawRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
@@ -369,5 +369,11 @@ public class PartitionGroup {
         nonEmptyQueuesByTime.clear();
         totalBuffered = 0;
         streamTime = RecordQueue.UNKNOWN;
+    }
+
+    void close() {
+        for (final RecordQueue queue : partitionQueues.values()) {
+            queue.close();
+        }
     }
 }

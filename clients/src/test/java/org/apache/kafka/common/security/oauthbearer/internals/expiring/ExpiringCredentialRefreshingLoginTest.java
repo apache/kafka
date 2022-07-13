@@ -48,6 +48,7 @@ import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
+import org.mockito.internal.util.MockUtil;
 
 public class ExpiringCredentialRefreshingLoginTest {
     private static final Configuration EMPTY_WILDCARD_CONFIGURATION;
@@ -188,8 +189,7 @@ public class ExpiringCredentialRefreshingLoginTest {
             super("contextName", null, null, EMPTY_WILDCARD_CONFIGURATION);
             this.testExpiringCredentialRefreshingLogin = Objects.requireNonNull(testExpiringCredentialRefreshingLogin);
             // sanity check to make sure it is likely a mock
-            if (Objects.requireNonNull(mockLoginContext).getClass().equals(LoginContext.class)
-                    || mockLoginContext.getClass().equals(getClass()))
+            if (!MockUtil.isMock(mockLoginContext))
                 throw new IllegalArgumentException();
             this.mockLoginContext = mockLoginContext;
         }
@@ -233,8 +233,7 @@ public class ExpiringCredentialRefreshingLoginTest {
         public void configure(LoginContext mockLoginContext,
                 TestExpiringCredentialRefreshingLogin testExpiringCredentialRefreshingLogin) throws LoginException {
             // sanity check to make sure it is likely a mock
-            if (Objects.requireNonNull(mockLoginContext).getClass().equals(LoginContext.class)
-                    || mockLoginContext.getClass().equals(TestLoginContext.class))
+            if (!MockUtil.isMock(mockLoginContext))
                 throw new IllegalArgumentException();
             this.testLoginContext = new TestLoginContext(Objects.requireNonNull(testExpiringCredentialRefreshingLogin),
                     mockLoginContext);

@@ -49,7 +49,7 @@ public enum ScramMechanism {
      *
      * @param mechanismName the SASL SCRAM mechanism name
      * @return the corresponding SASL SCRAM mechanism enum, otherwise {@link #UNKNOWN}
-     * @see <a href="https://tools.ietf.org/html/rfc5802#section-4>
+     * @see <a href="https://tools.ietf.org/html/rfc5802#section-4">
      *     Salted Challenge Response Authentication Mechanism (SCRAM) SASL and GSS-API Mechanisms, Section 4</a>
      */
     public static ScramMechanism fromMechanismName(String mechanismName) {
@@ -62,7 +62,7 @@ public enum ScramMechanism {
     /**
      *
      * @return the corresponding SASL SCRAM mechanism name
-     * @see <a href="https://tools.ietf.org/html/rfc5802#section-4>
+     * @see <a href="https://tools.ietf.org/html/rfc5802#section-4">
      *     Salted Challenge Response Authentication Mechanism (SCRAM) SASL and GSS-API Mechanisms, Section 4</a>
      */
     public String mechanismName() {

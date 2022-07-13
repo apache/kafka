@@ -28,7 +28,6 @@ import org.apache.kafka.connect.storage.ConverterType;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StringConverterConfig;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -122,6 +121,6 @@ abstract class NumberConverter<T extends Number> implements Converter, HeaderCon
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
     }
 }

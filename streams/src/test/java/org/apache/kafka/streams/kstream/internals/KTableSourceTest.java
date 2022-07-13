@@ -39,7 +39,6 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -61,7 +60,6 @@ public class KTableSourceTest {
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
     @Test
     public void testKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -69,7 +67,7 @@ public class KTableSourceTest {
 
         final KTable<String, Integer> table1 = builder.table(topic1, Consumed.with(Serdes.String(), Serdes.Integer()));
 
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -157,6 +155,36 @@ public class KTableSourceTest {
                     .map(Event::getMessage)
                     .collect(Collectors.toList()),
                 hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]")
+            );
+        }
+    }
+
+    @Test
+    public void kTableShouldLogOnOutOfOrder() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic = "topic";
+        builder.table(topic, stringConsumed, Materialized.as("store"));
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KTableSource.class);
+            final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(
+                    topic,
+                    new StringSerializer(),
+                    new StringSerializer(),
+                    Instant.ofEpochMilli(0L),
+                    Duration.ZERO
+                );
+            inputTopic.pipeInput("key", "value", 10L);
+            inputTopic.pipeInput("key", "value", 5L);
+
+            assertThat(
+                appender.getEvents().stream()
+                    .filter(e -> e.getLevel().equals("WARN"))
+                    .map(Event::getMessage)
+                    .collect(Collectors.toList()),
+                hasItem("Detected out-of-order KTable update for store, old timestamp=[10] new timestamp=[5]. topic=[topic] partition=[0] offset=[1].")
             );
         }
     }

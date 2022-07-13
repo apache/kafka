@@ -229,7 +229,7 @@ public class AbstractConfigTest {
         TestConfig config = new TestConfig(props);
 
         assertTrue(config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG),
-            ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked unused before getConfiguredInstances is called");
+                ConfiguredFakeMetricsReporter.EXTRA_CONFIG + " should be marked unused before getConfiguredInstances is called");
 
         config.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
         assertFalse(config.unused().contains(ConfiguredFakeMetricsReporter.EXTRA_CONFIG),

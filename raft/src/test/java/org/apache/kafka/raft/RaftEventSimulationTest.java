@@ -39,6 +39,7 @@ import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.SnapshotReader;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -95,7 +96,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 @Tag("integration")
 public class RaftEventSimulationTest {
-    private static final TopicPartition METADATA_PARTITION = new TopicPartition("@metadata", 0);
+    private static final TopicPartition METADATA_PARTITION = new TopicPartition("__cluster_metadata", 0);
     private static final int ELECTION_TIMEOUT_MS = 1000;
     private static final int ELECTION_JITTER_MS = 100;
     private static final int FETCH_TIMEOUT_MS = 3000;
@@ -256,12 +257,20 @@ public class RaftEventSimulationTest {
         router.filter(3, new DropOutboundRequestsFrom(Utils.mkSet(0, 1)));
         router.filter(4, new DropOutboundRequestsFrom(Utils.mkSet(0, 1)));
 
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(20));
+        long partitionLogEndOffset = cluster.maxLogEndOffset();
+        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(2 * partitionLogEndOffset));
 
         long minorityHighWatermark = cluster.maxHighWatermarkReached(Utils.mkSet(0, 1));
         long majorityHighWatermark = cluster.maxHighWatermarkReached(Utils.mkSet(2, 3, 4));
 
-        assertTrue(majorityHighWatermark > minorityHighWatermark);
+        assertTrue(
+            majorityHighWatermark > minorityHighWatermark,
+            String.format(
+                "majorityHighWatermark = %s, minorityHighWatermark = %s",
+                majorityHighWatermark,
+                minorityHighWatermark
+            )
+        );
 
         // Now restore the partition and verify everyone catches up
         router.filter(0, new PermitAllTraffic());
@@ -270,7 +279,8 @@ public class RaftEventSimulationTest {
         router.filter(3, new PermitAllTraffic());
         router.filter(4, new PermitAllTraffic());
 
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(30));
+        long restoredLogEndOffset = cluster.maxLogEndOffset();
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(2 * restoredLogEndOffset));
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
@@ -541,9 +551,21 @@ public class RaftEventSimulationTest {
             return voters.size() / 2 + 1;
         }
 
+        long maxLogEndOffset() {
+            return running
+                .values()
+                .stream()
+                .mapToLong(RaftNode::logEndOffset)
+                .max()
+                .orElse(0L);
+        }
+
         OptionalLong leaderHighWatermark() {
-            Optional<RaftNode> leaderWithMaxEpoch = running.values().stream().filter(node -> node.client.quorum().isLeader())
-                    .max((node1, node2) -> Integer.compare(node2.client.quorum().epoch(), node1.client.quorum().epoch()));
+            Optional<RaftNode> leaderWithMaxEpoch = running
+                .values()
+                .stream()
+                .filter(node -> node.client.quorum().isLeader())
+                .max((node1, node2) -> Integer.compare(node2.client.quorum().epoch(), node1.client.quorum().epoch()));
             if (leaderWithMaxEpoch.isPresent()) {
                 return leaderWithMaxEpoch.get().client.highWatermark();
             } else {
@@ -558,27 +580,27 @@ public class RaftEventSimulationTest {
 
         long maxHighWatermarkReached() {
             return running.values().stream()
-                .map(RaftNode::highWatermark)
-                .max(Long::compareTo)
+                .mapToLong(RaftNode::highWatermark)
+                .max()
                 .orElse(0L);
         }
 
         long maxHighWatermarkReached(Set<Integer> nodeIds) {
             return running.values().stream()
                 .filter(node -> nodeIds.contains(node.nodeId))
-                .map(RaftNode::highWatermark)
-                .max(Long::compareTo)
+                .mapToLong(RaftNode::highWatermark)
+                .max()
                 .orElse(0L);
         }
 
         boolean allReachedHighWatermark(long offset, Set<Integer> nodeIds) {
             return nodeIds.stream()
-                .allMatch(nodeId -> running.get(nodeId).highWatermark() > offset);
+                .allMatch(nodeId -> running.get(nodeId).highWatermark() >= offset);
         }
 
         boolean allReachedHighWatermark(long offset) {
             return running.values().stream()
-                .allMatch(node -> node.highWatermark() > offset);
+                .allMatch(node -> node.highWatermark() >= offset);
         }
 
         boolean hasLeader(int nodeId) {
@@ -799,9 +821,18 @@ public class RaftEventSimulationTest {
                 .orElse(0L);
         }
 
+        long logEndOffset() {
+            return log.endOffset().offset;
+        }
+
         @Override
         public String toString() {
-            return "Node(id=" + nodeId + ", hw=" + highWatermark() + ")";
+            return String.format(
+                "Node(id=%s, hw=%s, logEndOffset=%s)",
+                nodeId,
+                highWatermark(),
+                logEndOffset()
+            );
         }
     }
 
@@ -1081,7 +1112,7 @@ public class RaftEventSimulationTest {
                 startOffset.set(snapshotId.offset);
 
                 try (SnapshotReader<Integer> snapshot =
-                        SnapshotReader.of(log.readSnapshot(snapshotId).get(), node.intSerde, BufferSupplier.create(), Integer.MAX_VALUE)) {
+                        RecordsSnapshotReader.of(log.readSnapshot(snapshotId).get(), node.intSerde, BufferSupplier.create(), Integer.MAX_VALUE)) {
                     // Expect only one batch with only one record
                     assertTrue(snapshot.hasNext());
                     Batch<Integer> batch = snapshot.next();

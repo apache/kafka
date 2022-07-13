@@ -193,7 +193,7 @@ KGroupedStream&lt;String, String&gt; groupedByWord = textLines
   .groupBy((key, word) -&gt; word, Grouped.with(stringSerde, stringSerde));
 
 // Create a window state store named &quot;CountsWindowStore&quot; that contains the word counts for every minute
-groupedByWord.windowedBy(TimeWindows.of(Duration.ofSeconds(60)))
+groupedByWord.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofSeconds(60)))
   .count(Materialized.&lt;String, Long, WindowStore&lt;Bytes, byte[]&gt;as(&quot;CountsWindowStore&quot;));</code></pre>
                 <p>After the application has started, you can get access to &#8220;CountsWindowStore&#8221; and then query it via the <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyWindowStore.java">ReadOnlyWindowStore</a> API:</p>
                 <pre class="line-numbers"><code class="language-java">// Get the window store named &quot;CountsWindowStore&quot;

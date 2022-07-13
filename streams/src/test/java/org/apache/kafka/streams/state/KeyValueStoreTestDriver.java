@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
@@ -31,7 +32,9 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
@@ -44,6 +47,7 @@ import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -52,6 +56,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * A component that provides a {@link #context() ProcessingContext} that can be supplied to a {@link KeyValueStore} so that
@@ -198,6 +205,9 @@ public class KeyValueStoreTestDriver<K, V> {
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
 
+        final ProcessorTopology topology = mock(ProcessorTopology.class);
+        when(topology.sinkTopics()).thenReturn(Collections.emptySet());
+
         final LogContext logContext = new LogContext("KeyValueStoreTestDriver ");
         final RecordCollector recordCollector = new RecordCollectorImpl(
             logContext,
@@ -208,9 +218,11 @@ public class KeyValueStoreTestDriver<K, V> {
                 new MockClientSupplier(),
                 null,
                 null,
-                logContext),
+                logContext,
+                Time.SYSTEM),
             new DefaultProductionExceptionHandler(),
-            new MockStreamsMetrics(new Metrics())
+            new MockStreamsMetrics(new Metrics()),
+            topology
         ) {
             @Override
             public <K1, V1> void send(final String topic,
@@ -220,11 +232,16 @@ public class KeyValueStoreTestDriver<K, V> {
                                       final Integer partition,
                                       final Long timestamp,
                                       final Serializer<K1> keySerializer,
-                                      final Serializer<V1> valueSerializer) {
+                                      final Serializer<V1> valueSerializer,
+                                      final String processorNodeId,
+                                      final InternalProcessorContext<Void, Void> context) {
                 // for byte arrays we need to wrap it for comparison
 
-                final K keyTest = serdes.keyFrom(keySerializer.serialize(topic, headers, key));
-                final V valueTest = serdes.valueFrom(valueSerializer.serialize(topic, headers, value));
+                final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
+                final byte[] valueBytes = valueSerializer.serialize(topic, headers, value);
+
+                final K keyTest = serdes.keyFrom(keyBytes);
+                final V valueTest = serdes.valueFrom(valueBytes);
 
                 recordFlushed(keyTest, valueTest);
             }
@@ -237,6 +254,8 @@ public class KeyValueStoreTestDriver<K, V> {
                                       final Long timestamp,
                                       final Serializer<K1> keySerializer,
                                       final Serializer<V1> valueSerializer,
+                                      final String processorNodeId,
+                                      final InternalProcessorContext<Void, Void> context,
                                       final StreamPartitioner<? super K1, ? super V1> partitioner) {
                 throw new UnsupportedOperationException();
             }

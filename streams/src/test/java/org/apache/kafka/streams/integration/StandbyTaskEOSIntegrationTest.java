@@ -48,6 +48,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -74,7 +75,8 @@ import static org.junit.Assert.assertTrue;
 @RunWith(Parameterized.class)
 @Category(IntegrationTest.class)
 public class StandbyTaskEOSIntegrationTest {
-
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private final static long REBALANCE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
     private final static int KEY_0 = 0;
     private final static int KEY_1 = 1;
@@ -186,7 +188,7 @@ public class StandbyTaskEOSIntegrationTest {
         final Properties props = props(stateDirPath);
 
         final StateDirectory stateDirectory = new StateDirectory(
-            new StreamsConfig(props), new MockTime(), true);
+            new StreamsConfig(props), new MockTime(), true, false);
 
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(taskId), ".checkpoint"))
             .write(Collections.singletonMap(new TopicPartition("unknown-topic", 0), 5L));
@@ -342,6 +344,7 @@ public class StandbyTaskEOSIntegrationTest {
         );
     }
 
+    @SuppressWarnings("deprecation")
     private KafkaStreams buildWithDeduplicationTopology(final String stateDirPath) {
         final StreamsBuilder builder = new StreamsBuilder();
 

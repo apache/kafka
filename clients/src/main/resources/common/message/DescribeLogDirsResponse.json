@@ -18,12 +18,16 @@
   "type": "response",
   "name": "DescribeLogDirsResponse",
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
-  "validVersions": "0-2",
+  "validVersions": "0-4",
   // Version 2 is the first flexible version.
+  // Version 3 adds the top-level ErrorCode field
+  // Version 4 adds the TotalBytes and UsableBytes fields
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "ErrorCode", "type": "int16", "versions": "3+",
+      "ignorable": true, "about": "The error code, or 0 if there was no error." },
     { "name": "Results", "type": "[]DescribeLogDirsResult", "versions": "0+",
       "about": "The log directories.", "fields": [
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
@@ -44,7 +48,13 @@
           { "name": "IsFutureKey", "type": "bool", "versions": "0+",
             "about": "True if this log is created by AlterReplicaLogDirsRequest and will replace the current log of the replica in the future." }
         ]}
-      ]}
+      ]},
+      { "name": "TotalBytes", "type": "int64", "versions": "4+", "ignorable": true, "default": "-1",
+        "about": "The total size in bytes of the volume the log directory is in."
+      },
+      { "name": "UsableBytes", "type": "int64", "versions": "4+", "ignorable": true, "default": "-1",
+        "about": "The usable size in bytes of the volume the log directory is in."
+      }
     ]}
   ]
 }

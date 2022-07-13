@@ -253,9 +253,13 @@ public final class RemoteLogManagerConfig {
              config.getInt(REMOTE_LOG_READER_THREADS_PROP),
              config.getInt(REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP),
              config.getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP),
-             config.originalsWithPrefix(config.getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP)),
+             config.getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP) != null
+                 ? config.originalsWithPrefix(config.getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP))
+                 : Collections.emptyMap(),
              config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP),
-             config.originalsWithPrefix(config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP)));
+             config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP) != null
+                 ? config.originalsWithPrefix(config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP))
+                 : Collections.emptyMap());
     }
 
     // Visible for testing

@@ -60,6 +60,11 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
+    public boolean allChangelogsCompleted() {
+        return false;
+    }
+
+    @Override
     public void clear() {
         restoringPartitions.clear();
     }

@@ -29,8 +29,9 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderOrFollowerException}
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
+import java.nio.file.Files
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
@@ -50,8 +51,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
   this.serverConfig.setProperty(KafkaConfig.NumReplicaFetchersProp, "1")
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     createTopic(topic, partitionNum, brokerCount)
   }
 
@@ -84,7 +85,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
       val logDir = new File(kafkaConfig.logDirs.head)
       // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
       CoreUtils.swallow(Utils.delete(logDir), this)
-      logDir.createNewFile()
+      Files.createFile(logDir.toPath)
       assertTrue(logDir.isFile)
 
       server = TestUtils.createServer(kafkaConfig)
@@ -109,6 +110,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   @Test
   def testReplicaFetcherThreadAfterLogDirFailureOnFollower(): Unit = {
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
+    this.producerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
     val producer = createProducer()
     val partition = new TopicPartition(topic, 0)
 
@@ -140,6 +142,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   def testProduceErrorsFromLogDirFailureOnLeader(failureType: LogDirFailureType): Unit = {
     // Disable retries to allow exception to bubble up for validation
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
+    this.producerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
     val producer = createProducer()
 
     val partition = new TopicPartition(topic, 0)

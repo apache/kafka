@@ -18,31 +18,41 @@ package org.apache.kafka.streams.state.internals;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
 
 import static java.time.Duration.ofMillis;
 import static java.time.Instant.ofEpochMilli;
 import static java.util.Arrays.asList;
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
+@RunWith(Parameterized.class)
 public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     private static final String STORE_NAME = "rocksDB window store";
@@ -51,21 +61,66 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
     private final KeyValueSegments segments =
         new KeyValueSegments(STORE_NAME, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
 
+    enum StoreType {
+        RocksDBWindowStore,
+        RocksDBTimeOrderedWindowStoreWithIndex,
+        RocksDBTimeOrderedWindowStoreWithoutIndex
+    }
+
+    @Parameter
+    public StoreType storeType;
+
+    @Parameterized.Parameters(name = "{0}")
+    public static Collection<Object[]> getKeySchema() {
+        return asList(new Object[][] {
+            {StoreType.RocksDBWindowStore},
+            {StoreType.RocksDBTimeOrderedWindowStoreWithIndex},
+            {StoreType.RocksDBTimeOrderedWindowStoreWithoutIndex}
+        });
+    }
+
     @Override
     <K, V> WindowStore<K, V> buildWindowStore(final long retentionPeriod,
                                               final long windowSize,
                                               final boolean retainDuplicates,
                                               final Serde<K> keySerde,
                                               final Serde<V> valueSerde) {
-        return Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(
-                STORE_NAME,
-                ofMillis(retentionPeriod),
-                ofMillis(windowSize),
-                retainDuplicates),
-            keySerde,
-            valueSerde)
-            .build();
+
+        switch (storeType) {
+            case RocksDBWindowStore: {
+                return Stores.windowStoreBuilder(
+                        Stores.persistentWindowStore(
+                            STORE_NAME,
+                            ofMillis(retentionPeriod),
+                            ofMillis(windowSize),
+                            retainDuplicates),
+                        keySerde,
+                        valueSerde)
+                    .build();
+            }
+            case RocksDBTimeOrderedWindowStoreWithIndex: {
+                final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
+                return Stores.windowStoreBuilder(
+                    new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
+                        retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
+                        true),
+                    keySerde,
+                    valueSerde
+                ).build();
+            }
+            case RocksDBTimeOrderedWindowStoreWithoutIndex: {
+                final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
+                return Stores.windowStoreBuilder(
+                    new RocksDbIndexedTimeOrderedWindowBytesStoreSupplier(STORE_NAME,
+                        retentionPeriod, defaultSegmentInterval, windowSize, retainDuplicates,
+                        false),
+                    keySerde,
+                    valueSerde
+                ).build();
+            }
+            default:
+                throw new IllegalStateException("Unknown StoreType: " + storeType);
+        }
     }
 
     @Test
@@ -79,16 +134,17 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
         windowStore.put(1, "three", currentTime);
 
-        final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0L, currentTime);
+        try (final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0L, currentTime)) {
 
-        // roll to the next segment that will close the first
-        currentTime = currentTime + SEGMENT_INTERVAL;
-        windowStore.put(1, "four", currentTime);
+            // roll to the next segment that will close the first
+            currentTime = currentTime + SEGMENT_INTERVAL;
+            windowStore.put(1, "four", currentTime);
 
-        // should only have 2 values as the first segment is no longer open
-        assertEquals(new KeyValue<>(SEGMENT_INTERVAL, "two"), iterator.next());
-        assertEquals(new KeyValue<>(2 * SEGMENT_INTERVAL, "three"), iterator.next());
-        assertFalse(iterator.hasNext());
+            // should only have 2 values as the first segment is no longer open
+            assertEquals(new KeyValue<>(SEGMENT_INTERVAL, "two"), iterator.next());
+            assertEquals(new KeyValue<>(2 * SEGMENT_INTERVAL, "three"), iterator.next());
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -634,6 +690,26 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
                 segments.segmentName(6L)),
             segmentDirs(baseDir)
         );
+    }
+
+    @Test
+    public void shouldMatchPositionAfterPut() {
+        final MeteredWindowStore<Integer, String> meteredSessionStore = (MeteredWindowStore<Integer, String>) windowStore;
+        final ChangeLoggingWindowBytesStore changeLoggingSessionBytesStore = (ChangeLoggingWindowBytesStore) meteredSessionStore.wrapped();
+        final WrappedStateStore rocksDBWindowStore = (WrappedStateStore) changeLoggingSessionBytesStore.wrapped();
+
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "", new RecordHeaders()));
+        windowStore.put(0, "0", SEGMENT_INTERVAL);
+        context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "", new RecordHeaders()));
+        windowStore.put(1, "1", SEGMENT_INTERVAL);
+        context.setRecordContext(new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders()));
+        windowStore.put(2, "2", SEGMENT_INTERVAL);
+        context.setRecordContext(new ProcessorRecordContext(0, 4, 0, "", new RecordHeaders()));
+        windowStore.put(3, "3", SEGMENT_INTERVAL);
+
+        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 4L)))));
+        final Position actual = rocksDBWindowStore.getPosition();
+        assertEquals(expected, actual);
     }
 
     private Set<String> segmentDirs(final File baseDir) {

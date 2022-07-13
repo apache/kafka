@@ -109,8 +109,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.emptyList;
-
 /**
  * This class manages the fetching process with the brokers.
  * <p>
@@ -161,7 +159,6 @@ public class Fetcher<K, V> implements Closeable {
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final ApiVersions apiVersions;
     private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
-
 
     private CompletedFetch nextInLineFetch = null;
 
@@ -263,11 +260,12 @@ public class Fetcher<K, V> implements Closeable {
                 maxVersion = ApiKeys.FETCH.latestVersion();
             }
             final FetchRequest.Builder request = FetchRequest.Builder
-                    .forConsumer(maxVersion, this.maxWaitMs, this.minBytes, data.toSend(), data.topicIds())
+                    .forConsumer(maxVersion, this.maxWaitMs, this.minBytes, data.toSend())
                     .isolationLevel(isolationLevel)
                     .setMaxBytes(this.maxBytes)
                     .metadata(data.metadata())
-                    .toForget(data.toForget())
+                    .removed(data.toForget())
+                    .replaced(data.toReplace())
                     .rackId(clientRackId);
 
             if (log.isDebugEnabled()) {
@@ -292,15 +290,13 @@ public class Fetcher<K, V> implements Closeable {
                                 return;
                             }
                             if (!handler.handleResponse(response, resp.requestHeader().apiVersion())) {
-                                if (response.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR
-                                        || response.error() == Errors.UNKNOWN_TOPIC_ID
-                                        || response.error() == Errors.INCONSISTENT_TOPIC_ID) {
+                                if (response.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR) {
                                     metadata.requestUpdate();
                                 }
                                 return;
                             }
 
-                            Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(data.topicNames(), resp.requestHeader().apiVersion());
+                            Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(handler.sessionTopicNames(), resp.requestHeader().apiVersion());
                             Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 
@@ -315,8 +311,8 @@ public class Fetcher<K, V> implements Closeable {
                                                 new Object[]{partition, data.metadata()}).getMessage();
                                     } else {
                                         message = MessageFormatter.arrayFormat(
-                                                "Response for missing session request partition: partition={}; metadata={}; toSend={}; toForget={}",
-                                                new Object[]{partition, data.metadata(), data.toSend(), data.toForget()}).getMessage();
+                                                "Response for missing session request partition: partition={}; metadata={}; toSend={}; toForget={}; toReplace={}",
+                                                new Object[]{partition, data.metadata(), data.toSend(), data.toForget(), data.toReplace()}).getMessage();
                                     }
 
                                     // Received fetch response for missing session partition
@@ -553,19 +549,54 @@ public class Fetcher<K, V> implements Closeable {
         Map<TopicPartition, Long> remainingToSearch = new HashMap<>(timestampsToSearch);
         do {
             RequestFuture<ListOffsetResult> future = sendListOffsetsRequests(remainingToSearch, requireTimestamps);
+
+            future.addListener(new RequestFutureListener<ListOffsetResult>() {
+                @Override
+                public void onSuccess(ListOffsetResult value) {
+                    synchronized (future) {
+                        result.fetchedOffsets.putAll(value.fetchedOffsets);
+                        remainingToSearch.keySet().retainAll(value.partitionsToRetry);
+
+                        for (final Map.Entry<TopicPartition, ListOffsetData> entry: value.fetchedOffsets.entrySet()) {
+                            final TopicPartition partition = entry.getKey();
+
+                            // if the interested partitions are part of the subscriptions, use the returned offset to update
+                            // the subscription state as well:
+                            //   * with read-committed, the returned offset would be LSO;
+                            //   * with read-uncommitted, the returned offset would be HW;
+                            if (subscriptions.isAssigned(partition)) {
+                                final long offset = entry.getValue().offset;
+                                if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+                                    log.trace("Updating last stable offset for partition {} to {}", partition, offset);
+                                    subscriptions.updateLastStableOffset(partition, offset);
+                                } else {
+                                    log.trace("Updating high watermark for partition {} to {}", partition, offset);
+                                    subscriptions.updateHighWatermark(partition, offset);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                @Override
+                public void onFailure(RuntimeException e) {
+                    if (!(e instanceof RetriableException)) {
+                        throw future.exception();
+                    }
+                }
+            });
+
+            // if timeout is set to zero, do not try to poll the network client at all
+            // and return empty immediately; otherwise try to get the results synchronously
+            // and throw timeout exception if cannot complete in time
+            if (timer.timeoutMs() == 0L)
+                return result;
+
             client.poll(future, timer);
 
             if (!future.isDone()) {
                 break;
-            } else if (future.succeeded()) {
-                ListOffsetResult value = future.value();
-                result.fetchedOffsets.putAll(value.fetchedOffsets);
-                remainingToSearch.keySet().retainAll(value.partitionsToRetry);
-            } else if (!future.isRetriable()) {
-                throw future.exception();
-            }
-
-            if (remainingToSearch.isEmpty()) {
+            } else if (remainingToSearch.isEmpty()) {
                 return result;
             } else {
                 client.awaitMetadataUpdate(timer);
@@ -604,15 +635,15 @@ public class Fetcher<K, V> implements Closeable {
     /**
      * Return the fetched records, empty the record buffer and update the consumed position.
      *
-     * NOTE: returning empty records guarantees the consumed position are NOT updated.
+     * NOTE: returning an {@link Fetch#isEmpty empty} fetch guarantees the consumed position is not updated.
      *
-     * @return The fetched records per partition
+     * @return A {@link Fetch} for the requested partitions
      * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
      *         the defaultResetPolicy is NONE
      * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
      */
-    public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
-        Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();
+    public Fetch<K, V> collectFetch() {
+        Fetch<K, V> fetch = Fetch.empty();
         Queue<CompletedFetch> pausedCompletedFetches = new ArrayDeque<>();
         int recordsRemaining = maxPollRecords;
 
@@ -632,7 +663,7 @@ public class Fetcher<K, V> implements Closeable {
                             // in cases such as the TopicAuthorizationException, and the second condition ensures that no
                             // potential data loss due to an exception in a following record.
                             FetchResponseData.PartitionData partition = records.partitionData;
-                            if (fetched.isEmpty() && FetchResponse.recordsOrFail(partition).sizeInBytes() == 0) {
+                            if (fetch.isEmpty() && FetchResponse.recordsOrFail(partition).sizeInBytes() == 0) {
                                 completedFetches.poll();
                             }
                             throw e;
@@ -648,28 +679,13 @@ public class Fetcher<K, V> implements Closeable {
                     pausedCompletedFetches.add(nextInLineFetch);
                     nextInLineFetch = null;
                 } else {
-                    List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineFetch, recordsRemaining);
-
-                    if (!records.isEmpty()) {
-                        TopicPartition partition = nextInLineFetch.partition;
-                        List<ConsumerRecord<K, V>> currentRecords = fetched.get(partition);
-                        if (currentRecords == null) {
-                            fetched.put(partition, records);
-                        } else {
-                            // this case shouldn't usually happen because we only send one fetch at a time per partition,
-                            // but it might conceivably happen in some rare cases (such as partition leader changes).
-                            // we have to copy to a new list because the old one may be immutable
-                            List<ConsumerRecord<K, V>> newRecords = new ArrayList<>(records.size() + currentRecords.size());
-                            newRecords.addAll(currentRecords);
-                            newRecords.addAll(records);
-                            fetched.put(partition, newRecords);
-                        }
-                        recordsRemaining -= records.size();
-                    }
+                    Fetch<K, V> nextFetch = fetchRecords(nextInLineFetch, recordsRemaining);
+                    recordsRemaining -= nextFetch.numRecords();
+                    fetch.add(nextFetch);
                 }
             }
         } catch (KafkaException e) {
-            if (fetched.isEmpty())
+            if (fetch.isEmpty())
                 throw e;
         } finally {
             // add any polled completed fetches for paused partitions back to the completed fetches queue to be
@@ -677,10 +693,10 @@ public class Fetcher<K, V> implements Closeable {
             completedFetches.addAll(pausedCompletedFetches);
         }
 
-        return fetched;
+        return fetch;
     }
 
-    private List<ConsumerRecord<K, V>> fetchRecords(CompletedFetch completedFetch, int maxRecords) {
+    private Fetch<K, V> fetchRecords(CompletedFetch completedFetch, int maxRecords) {
         if (!subscriptions.isAssigned(completedFetch.partition)) {
             // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
             log.debug("Not returning fetched records for partition {} since it is no longer assigned",
@@ -702,13 +718,17 @@ public class Fetcher<K, V> implements Closeable {
                 log.trace("Returning {} fetched records at offset {} for assigned partition {}",
                         partRecords.size(), position, completedFetch.partition);
 
+                boolean positionAdvanced = false;
+
                 if (completedFetch.nextFetchOffset > position.offset) {
                     FetchPosition nextPosition = new FetchPosition(
                             completedFetch.nextFetchOffset,
                             completedFetch.lastEpoch,
                             position.currentLeader);
-                    log.trace("Update fetching position to {} for partition {}", nextPosition, completedFetch.partition);
+                    log.trace("Updating fetch position from {} to {} for partition {} and returning {} records from `poll()`",
+                            position, nextPosition, completedFetch.partition, partRecords.size());
                     subscriptions.position(completedFetch.partition, nextPosition);
+                    positionAdvanced = true;
                 }
 
                 Long partitionLag = subscriptions.partitionLag(completedFetch.partition, isolationLevel);
@@ -720,7 +740,7 @@ public class Fetcher<K, V> implements Closeable {
                     this.sensors.recordPartitionLead(completedFetch.partition, lead);
                 }
 
-                return partRecords;
+                return Fetch.forPartition(completedFetch.partition, partRecords, positionAdvanced);
             } else {
                 // these records aren't next in line based on the last consumed position, ignore them
                 // they must be from an obsolete request
@@ -732,7 +752,7 @@ public class Fetcher<K, V> implements Closeable {
         log.trace("Draining fetched records for partition {}", completedFetch.partition);
         completedFetch.drain();
 
-        return emptyList();
+        return Fetch.empty();
     }
 
     // Visible for testing
@@ -907,8 +927,7 @@ public class Fetcher<K, V> implements Closeable {
         final AtomicInteger remainingResponses = new AtomicInteger(timestampsToSearchByNode.size());
 
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetsPartition>> entry : timestampsToSearchByNode.entrySet()) {
-            RequestFuture<ListOffsetResult> future =
-                sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps);
+            RequestFuture<ListOffsetResult> future = sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps);
             future.addListener(new RequestFutureListener<ListOffsetResult>() {
                 @Override
                 public void onSuccess(ListOffsetResult partialResult) {
@@ -1182,7 +1201,7 @@ public class Fetcher<K, V> implements Closeable {
                 continue;
             }
 
-            // Use the preferred read replica if set, otherwise the position's leader
+            // Use the preferred read replica if set, otherwise the partition's leader
             Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
             if (client.isUnavailable(node)) {
                 client.maybeThrowAuthFailure(node);
@@ -1205,9 +1224,9 @@ public class Fetcher<K, V> implements Closeable {
                     builder = handler.newBuilder();
                     fetchable.put(node, builder);
                 }
-
-                builder.add(partition, topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID), new FetchRequest.PartitionData(position.offset,
-                    FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize,
+                builder.add(partition, new FetchRequest.PartitionData(
+                    topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID),
+                    position.offset, FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize,
                     position.currentLeader.epoch, Optional.empty()));
 
                 log.debug("Added {} fetch request for partition {} at position {} to node {}", isolationLevel,
@@ -1319,6 +1338,12 @@ public class Fetcher<K, V> implements Closeable {
                 this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                 log.warn("Received unknown topic or partition error in fetch for partition {}", tp);
+                this.metadata.requestUpdate();
+            } else if (error == Errors.UNKNOWN_TOPIC_ID) {
+                log.warn("Received unknown topic ID error in fetch for partition {}", tp);
+                this.metadata.requestUpdate();
+            } else if (error == Errors.INCONSISTENT_TOPIC_ID) {
+                log.warn("Received inconsistent topic ID error in fetch for partition {}", tp);
                 this.metadata.requestUpdate();
             } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
                 Optional<Integer> clearedReplicaId = subscriptions.clearPreferredReadReplica(tp);
@@ -1841,12 +1866,11 @@ public class Fetcher<K, V> implements Closeable {
                 for (TopicPartition tp : newAssignedPartitions) {
                     if (!this.assignedPartitions.contains(tp)) {
                         MetricName metricName = partitionPreferredReadReplicaMetricName(tp);
-                        if (metrics.metric(metricName) == null) {
-                            metrics.addMetric(
-                                metricName,
-                                (Gauge<Integer>) (config, now) -> subscription.preferredReadReplica(tp, 0L).orElse(-1)
-                            );
-                        }
+                        metrics.addMetricIfAbsent(
+                            metricName,
+                            null,
+                            (Gauge<Integer>) (config, now) -> subscription.preferredReadReplica(tp, 0L).orElse(-1)
+                        );
                     }
                 }
 

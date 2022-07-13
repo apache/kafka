@@ -29,40 +29,58 @@ public class ProducerIdsBlock {
 
     public static final ProducerIdsBlock EMPTY = new ProducerIdsBlock(-1, 0, 0);
 
-    private final int brokerId;
-    private final long producerIdStart;
-    private final int producerIdLen;
+    private final int assignedBrokerId;
+    private final long firstProducerId;
+    private final int blockSize;
 
-    public ProducerIdsBlock(int brokerId, long producerIdStart, int producerIdLen) {
-        this.brokerId = brokerId;
-        this.producerIdStart = producerIdStart;
-        this.producerIdLen = producerIdLen;
+    public ProducerIdsBlock(int assignedBrokerId, long firstProducerId, int blockSize) {
+        this.assignedBrokerId = assignedBrokerId;
+        this.firstProducerId = firstProducerId;
+        this.blockSize = blockSize;
     }
 
-    public int brokerId() {
-        return brokerId;
+    /**
+     * Get the ID of the broker that this block was assigned to.
+     */
+    public int assignedBrokerId() {
+        return assignedBrokerId;
     }
 
-    public long producerIdStart() {
-        return producerIdStart;
+    /**
+     * Get the first ID (inclusive) to be assigned from this block.
+     */
+    public long firstProducerId() {
+        return firstProducerId;
     }
 
-    public int producerIdLen() {
-        return producerIdLen;
+    /**
+     * Get the number of IDs contained in this block.
+     */
+    public int size() {
+        return blockSize;
     }
 
-    public long producerIdEnd() {
-        return producerIdStart + producerIdLen - 1;
+    /**
+     * Get the last ID (inclusive) to be assigned from this block.
+     */
+    public long lastProducerId() {
+        return firstProducerId + blockSize - 1;
     }
 
+    /**
+     * Get the first ID of the next block following this one.
+     */
+    public long nextBlockFirstId() {
+        return firstProducerId + blockSize;
+    }
 
     @Override
     public String toString() {
-        return "ProducerIdsBlock{" +
-                "brokerId=" + brokerId +
-                ", producerIdStart=" + producerIdStart +
-                ", producerIdLen=" + producerIdLen +
-                '}';
+        return "ProducerIdsBlock(" +
+                "assignedBrokerId=" + assignedBrokerId +
+                ", firstProducerId=" + firstProducerId +
+                ", size=" + blockSize +
+                ')';
     }
 
     @Override
@@ -70,11 +88,11 @@ public class ProducerIdsBlock {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ProducerIdsBlock that = (ProducerIdsBlock) o;
-        return brokerId == that.brokerId && producerIdStart == that.producerIdStart && producerIdLen == that.producerIdLen;
+        return assignedBrokerId == that.assignedBrokerId && firstProducerId == that.firstProducerId && blockSize == that.blockSize;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(brokerId, producerIdStart, producerIdLen);
+        return Objects.hash(assignedBrokerId, firstProducerId, blockSize);
     }
 }

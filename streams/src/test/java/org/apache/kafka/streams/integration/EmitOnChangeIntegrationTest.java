@@ -40,6 +40,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -53,6 +54,8 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 
 @Category(IntegrationTest.class)
 public class EmitOnChangeIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
@@ -70,7 +73,9 @@ public class EmitOnChangeIntegrationTest {
     public TestName testName = new TestName();
 
     private static String inputTopic;
+    private static String inputTopic2;
     private static String outputTopic;
+    private static String outputTopic2;
     private static String appId = "";
 
     @Before
@@ -78,8 +83,10 @@ public class EmitOnChangeIntegrationTest {
         final String testId = safeUniqueTestName(getClass(), testName);
         appId = "appId_" + testId;
         inputTopic = "input" + testId;
+        inputTopic2 = "input2" + testId;
         outputTopic = "output" + testId;
-        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic, outputTopic);
+        outputTopic2 = "output2" + testId;
+        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic, outputTopic, inputTopic2, outputTopic2);
     }
 
     @Test
@@ -104,12 +111,13 @@ public class EmitOnChangeIntegrationTest {
             .toStream()
             .map((key, value) -> {
                 if (shouldThrow.compareAndSet(true, false)) {
-                    throw new IllegalStateException("Kaboom");
+                    throw new RuntimeException("Kaboom");
                 } else {
                     return new KeyValue<>(key, value);
                 }
             })
             .to(outputTopic);
+        builder.stream(inputTopic2).to(outputTopic2);
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             kafkaStreams.setUncaughtExceptionHandler(exception -> StreamThreadExceptionResponse.REPLACE_THREAD);
@@ -128,6 +136,19 @@ public class EmitOnChangeIntegrationTest {
                     new Properties()),
                 0L);
 
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
+                inputTopic2,
+                Arrays.asList(
+                    new KeyValue<>(1, "A"),
+                    new KeyValue<>(1, "B")
+                ),
+                TestUtils.producerConfig(
+                    CLUSTER.bootstrapServers(),
+                    IntegerSerializer.class,
+                    StringSerializer.class,
+                    new Properties()),
+                0L);
+
             IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
                 TestUtils.consumerConfig(
                     CLUSTER.bootstrapServers(),
@@ -135,6 +156,18 @@ public class EmitOnChangeIntegrationTest {
                     StringDeserializer.class
                 ),
                 outputTopic,
+                Arrays.asList(
+                    new KeyValue<>(1, "A"),
+                    new KeyValue<>(1, "B")
+                )
+            );
+            IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+                TestUtils.consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    IntegerDeserializer.class,
+                    StringDeserializer.class
+                ),
+                outputTopic2,
                 Arrays.asList(
                     new KeyValue<>(1, "A"),
                     new KeyValue<>(1, "B")

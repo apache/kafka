@@ -47,8 +47,8 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#aggregate`
    */
-  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR)(
-    implicit materialized: Materialized[K, VR, ByteArrayWindowStore]
+  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR)(implicit
+    materialized: Materialized[K, VR, ByteArrayWindowStore]
   ): KTable[Windowed[K], VR] =
     new KTable(inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, materialized))
 
@@ -63,8 +63,8 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#aggregate`
    */
-  def aggregate[VR](initializer: => VR, named: Named)(aggregator: (K, V, VR) => VR)(
-    implicit materialized: Materialized[K, VR, ByteArrayWindowStore]
+  def aggregate[VR](initializer: => VR, named: Named)(aggregator: (K, V, VR) => VR)(implicit
+    materialized: Materialized[K, VR, ByteArrayWindowStore]
   ): KTable[Windowed[K], VR] =
     new KTable(inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, named, materialized))
 
@@ -120,8 +120,8 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#reduce`
    */
-  def reduce(reducer: (V, V) => V)(
-    implicit materialized: Materialized[K, V, ByteArrayWindowStore]
+  def reduce(reducer: (V, V) => V)(implicit
+    materialized: Materialized[K, V, ByteArrayWindowStore]
   ): KTable[Windowed[K], V] =
     new KTable(inner.reduce(reducer.asReducer, materialized))
 
@@ -135,8 +135,8 @@ class TimeWindowedKStream[K, V](val inner: TimeWindowedKStreamJ[K, V]) {
    *         latest (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.TimeWindowedKStream#reduce`
    */
-  def reduce(reducer: (V, V) => V, named: Named)(
-    implicit materialized: Materialized[K, V, ByteArrayWindowStore]
+  def reduce(reducer: (V, V) => V, named: Named)(implicit
+    materialized: Materialized[K, V, ByteArrayWindowStore]
   ): KTable[Windowed[K], V] =
     new KTable(inner.reduce(reducer.asReducer, materialized))
 }

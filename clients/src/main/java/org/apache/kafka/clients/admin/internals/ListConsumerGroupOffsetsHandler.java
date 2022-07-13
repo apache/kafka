@@ -36,10 +36,11 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> {
+public class ListConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> {
 
     private final CoordinatorKey groupId;
     private final List<TopicPartition> partitions;
+    private final boolean requireStable;
     private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
@@ -48,8 +49,18 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         List<TopicPartition> partitions,
         LogContext logContext
     ) {
+        this(groupId, partitions, false, logContext);
+    }
+
+    public ListConsumerGroupOffsetsHandler(
+        String groupId,
+        List<TopicPartition> partitions,
+        boolean requireStable,
+        LogContext logContext
+    ) {
         this.groupId = CoordinatorKey.byGroupId(groupId);
         this.partitions = partitions;
+        this.requireStable = requireStable;
         this.log = logContext.logger(ListConsumerGroupOffsetsHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
     }
@@ -70,9 +81,7 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
         return lookupStrategy;
     }
 
-    private void validateKeys(
-        Set<CoordinatorKey> groupIds
-    ) {
+    private void validateKeys(Set<CoordinatorKey> groupIds) {
         if (!groupIds.equals(Collections.singleton(groupId))) {
             throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
                 " (expected only " + Collections.singleton(groupId) + ")");
@@ -80,11 +89,9 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
     }
 
     @Override
-    public OffsetFetchRequest.Builder buildRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
+    public OffsetFetchRequest.Builder buildBatchedRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
         validateKeys(groupIds);
-        // Set the flag to false as for admin client request,
-        // we don't need to wait for any pending offset state to clear.
-        return new OffsetFetchRequest.Builder(groupId.idValue, false, partitions, false);
+        return new OffsetFetchRequest.Builder(groupId.idValue, requireStable, partitions, false);
     }
 
     @Override
@@ -108,13 +115,9 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
             return new ApiResult<>(Collections.emptyMap(), failed, new ArrayList<>(groupsToUnmap));
         } else {
             final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
-            Map<TopicPartition, OffsetFetchResponse.PartitionData> partitionDataMap =
-                response.partitionDataMap(groupId.idValue);
-            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : partitionDataMap.entrySet()) {
-                final TopicPartition topicPartition = entry.getKey();
-                OffsetFetchResponse.PartitionData partitionData = entry.getValue();
-                final Errors error = partitionData.error;
 
+            response.partitionDataMap(groupId.idValue).forEach((topicPartition, partitionData) -> {
+                final Errors error = partitionData.error;
                 if (error == Errors.NONE) {
                     final long offset = partitionData.offset;
                     final String metadata = partitionData.metadata;
@@ -128,13 +131,9 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
                 } else {
                     log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
                 }
-            }
+            });
 
-            return new ApiResult<>(
-                Collections.singletonMap(groupId, groupOffsetsListing),
-                Collections.emptyMap(),
-                Collections.emptyList()
-            );
+            return ApiResult.completed(groupId, groupOffsetsListing);
         }
     }
 
@@ -149,12 +148,12 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
                 log.debug("`OffsetFetch` request for group id {} failed due to error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception());
                 break;
-
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("`OffsetFetch` request for group id {} failed because the coordinator " +
                     "is still in the process of loading state. Will retry", groupId.idValue);
                 break;
+
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap

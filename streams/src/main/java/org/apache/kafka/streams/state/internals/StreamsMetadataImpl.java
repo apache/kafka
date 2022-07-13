@@ -33,16 +33,6 @@ import java.util.Set;
  * NOTE: This is a point in time view. It may change when rebalances happen.
  */
 public class StreamsMetadataImpl implements StreamsMetadata {
-    /**
-     * Sentinel to indicate that the StreamsMetadata is currently unavailable. This can occur during rebalance
-     * operations.
-     */
-    public final static StreamsMetadataImpl NOT_AVAILABLE = new StreamsMetadataImpl(
-        HostInfo.unavailable(),
-        Collections.emptySet(),
-        Collections.emptySet(),
-        Collections.emptySet(),
-        Collections.emptySet());
 
     private final HostInfo hostInfo;
 
@@ -54,17 +44,35 @@ public class StreamsMetadataImpl implements StreamsMetadata {
 
     private final Set<TopicPartition> standbyTopicPartitions;
 
+    private final String topologyName;
+
     public StreamsMetadataImpl(final HostInfo hostInfo,
                                final Set<String> stateStoreNames,
                                final Set<TopicPartition> topicPartitions,
-                               final Set<String> standbyStateStoreNames,
+                               final Set<String> standbyStoreNames,
                                final Set<TopicPartition> standbyTopicPartitions) {
+        this(
+            hostInfo,
+            stateStoreNames,
+            topicPartitions,
+            standbyStoreNames,
+            standbyTopicPartitions,
+            null
+        );
+    }
 
+    public StreamsMetadataImpl(final HostInfo hostInfo,
+                               final Set<String> stateStoreNames,
+                               final Set<TopicPartition> topicPartitions,
+                               final Set<String> standbyStoreNames,
+                               final Set<TopicPartition> standbyTopicPartitions,
+                               final String topologyName) {
         this.hostInfo = hostInfo;
         this.stateStoreNames = Collections.unmodifiableSet(stateStoreNames);
         this.topicPartitions = Collections.unmodifiableSet(topicPartitions);
         this.standbyTopicPartitions = Collections.unmodifiableSet(standbyTopicPartitions);
-        this.standbyStateStoreNames = Collections.unmodifiableSet(standbyStateStoreNames);
+        this.standbyStateStoreNames = Collections.unmodifiableSet(standbyStoreNames);
+        this.topologyName = topologyName;
     }
 
     /**
@@ -129,6 +137,10 @@ public class StreamsMetadataImpl implements StreamsMetadata {
         return hostInfo.port();
     }
 
+    public String topologyName() {
+        return topologyName;
+    }
+
     @Override
     public boolean equals(final Object o) {
         if (this == o) {
@@ -143,7 +155,8 @@ public class StreamsMetadataImpl implements StreamsMetadata {
             && Objects.equals(stateStoreNames, that.stateStoreNames)
             && Objects.equals(topicPartitions, that.topicPartitions)
             && Objects.equals(standbyStateStoreNames, that.standbyStateStoreNames)
-            && Objects.equals(standbyTopicPartitions, that.standbyTopicPartitions);
+            && Objects.equals(standbyTopicPartitions, that.standbyTopicPartitions)
+            && Objects.equals(topologyName, that.topologyName);
     }
 
     @Override
@@ -153,12 +166,19 @@ public class StreamsMetadataImpl implements StreamsMetadata {
 
     @Override
     public String toString() {
-        return "StreamsMetadata {" +
+        final String str =
+            "StreamsMetadata {" +
                 "hostInfo=" + hostInfo +
                 ", stateStoreNames=" + stateStoreNames +
                 ", topicPartitions=" + topicPartitions +
                 ", standbyStateStoreNames=" + standbyStateStoreNames +
-                ", standbyTopicPartitions=" + standbyTopicPartitions +
+                ", standbyTopicPartitions=" + standbyTopicPartitions;
+        if (topologyName == null) {
+            return str + '}';
+        } else {
+            return str +
+                ", topologyName=" + topologyName +
                 '}';
+        }
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
@@ -325,6 +326,13 @@ public class MirrorConnectorConfigTest {
         connectorProps.put("offset-syncs.topic.location", "target");
         config = new MirrorConnectorConfig(connectorProps);
         assertEquals(config.targetAdminConfig(), config.offsetSyncsTopicAdminConfig());
+    }
+
+    @Test
+    public void testInvalidSecurityProtocol() {
+        ConfigException ce = assertThrows(ConfigException.class,
+                () -> new MirrorConnectorConfig(makeProps(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc")));
+        assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 
 }

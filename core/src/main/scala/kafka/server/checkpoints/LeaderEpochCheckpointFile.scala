@@ -16,12 +16,13 @@
  */
 package kafka.server.checkpoints
 
-import java.io._
-import java.util.regex.Pattern
-
 import kafka.server.LogDirFailureChannel
 import kafka.server.epoch.EpochEntry
+import org.apache.kafka.server.common.CheckpointFile.EntryFormatter
 
+import java.io._
+import java.util.Optional
+import java.util.regex.Pattern
 import scala.collection._
 
 trait LeaderEpochCheckpoint {
@@ -36,15 +37,15 @@ object LeaderEpochCheckpointFile {
 
   def newFile(dir: File): File = new File(dir, LeaderEpochCheckpointFilename)
 
-  object Formatter extends CheckpointFileFormatter[EpochEntry] {
+  object Formatter extends EntryFormatter[EpochEntry] {
 
-    override def toLine(entry: EpochEntry): String = s"${entry.epoch} ${entry.startOffset}"
+    override def toString(entry: EpochEntry): String = s"${entry.epoch} ${entry.startOffset}"
 
-    override def fromLine(line: String): Option[EpochEntry] = {
+    override def fromString(line: String): Optional[EpochEntry] = {
       WhiteSpacesPattern.split(line) match {
         case Array(epoch, offset) =>
-          Some(EpochEntry(epoch.toInt, offset.toLong))
-        case _ => None
+          Optional.of(EpochEntry(epoch.toInt, offset.toLong))
+        case _ => Optional.empty()
       }
     }
 
@@ -65,7 +66,7 @@ object LeaderEpochCheckpointFile {
 class LeaderEpochCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureChannel = null) extends LeaderEpochCheckpoint {
   import LeaderEpochCheckpointFile._
 
-  val checkpoint = new CheckpointFile[EpochEntry](file, CurrentVersion, Formatter, logDirFailureChannel, file.getParentFile.getParent)
+  val checkpoint = new CheckpointFileWithFailureHandler[EpochEntry](file, CurrentVersion, Formatter, logDirFailureChannel, file.getParentFile.getParent)
 
   def write(epochs: Iterable[EpochEntry]): Unit = checkpoint.write(epochs)
 

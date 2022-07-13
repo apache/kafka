@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
 
@@ -81,14 +82,15 @@ public class DirectoryConfigProvider implements ConfigProvider {
             if (!Files.isDirectory(dir)) {
                 log.warn("The path {} is not a directory", path);
             } else {
-                try {
-                    map = Files.list(dir)
+                try (Stream<Path> stream = Files.list(dir)) {
+                    map = stream
                         .filter(fileFilter)
                         .collect(Collectors.toMap(
                             p -> p.getFileName().toString(),
                             p -> read(p)));
                 } catch (IOException e) {
-                    throw new ConfigException("Could not list directory " + dir, e);
+                    log.error("Could not list directory {}", dir, e);
+                    throw new ConfigException("Could not list directory " + dir);
                 }
             }
         }
@@ -99,7 +101,8 @@ public class DirectoryConfigProvider implements ConfigProvider {
         try {
             return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new ConfigException("Could not read file " + path + " for property " + path.getFileName(), e);
+            log.error("Could not read file {} for property {}", path, path.getFileName(), e);
+            throw new ConfigException("Could not read file " + path + " for property " + path.getFileName());
         }
     }
 

@@ -17,20 +17,36 @@
 
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.Test;
+import org.mockito.MockedStatic;
 
 import javax.crypto.KeyGenerator;
+import javax.crypto.Mac;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 
 public class DistributedConfigTest {
 
@@ -53,12 +69,95 @@ public class DistributedConfigTest {
     }
 
     @Test
+    public void testDefaultAlgorithmsNotPresent() {
+        final String fakeKeyGenerationAlgorithm = "FakeKeyGenerationAlgorithm";
+        final String fakeMacAlgorithm = "FakeMacAlgorithm";
+
+        final KeyGenerator fakeKeyGenerator = mock(KeyGenerator.class);
+        final Mac fakeMac = mock(Mac.class);
+
+        Map<String, String> configs = configs();
+        configs.put(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, fakeKeyGenerationAlgorithm);
+        configs.put(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, fakeMacAlgorithm);
+        configs.put(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, fakeMacAlgorithm);
+
+        try (
+                MockedStatic<KeyGenerator> keyGenerator = mockStatic(KeyGenerator.class);
+                MockedStatic<Mac> mac = mockStatic(Mac.class)
+        ) {
+            // Make it seem like the default key generation algorithm isn't available on this worker
+            keyGenerator.when(() -> KeyGenerator.getInstance(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT))
+                    .thenThrow(new NoSuchAlgorithmException());
+            // But the one specified in the worker config file is
+            keyGenerator.when(() -> KeyGenerator.getInstance(fakeKeyGenerationAlgorithm))
+                    .thenReturn(fakeKeyGenerator);
+
+            // And for the signature algorithm
+            mac.when(() -> Mac.getInstance(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT))
+                    .thenThrow(new NoSuchAlgorithmException());
+            // Likewise for key verification algorithms
+            DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT.forEach(verificationAlgorithm ->
+                keyGenerator.when(() -> Mac.getInstance(verificationAlgorithm))
+                        .thenThrow(new NoSuchAlgorithmException())
+            );
+            mac.when(() -> Mac.getInstance(fakeMacAlgorithm))
+                    .thenReturn(fakeMac);
+
+            // Should succeed; even though the defaults aren't present, the manually-specified algorithms are valid
+            new DistributedConfig(configs);
+
+            // Should fail; the default key generation algorithm isn't present, and no override is specified
+            String removed = configs.remove(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG);
+            assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
+            configs.put(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, removed);
+
+            // Should fail; the default key generation algorithm isn't present, and no override is specified
+            removed = configs.remove(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG);
+            assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
+            configs.put(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, removed);
+
+            // Should fail; the default key generation algorithm isn't present, and no override is specified
+            removed = configs.remove(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG);
+            assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
+            configs.put(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, removed);
+        }
+    }
+
+    @Test
+    public void testSupportedMacAlgorithms() {
+        // These algorithms are required to be supported on JVMs ranging from at least Java 8 through Java 17; see
+        // https://docs.oracle.com/javase/8/docs/api/javax/crypto/Mac.html
+        // and https://docs.oracle.com/en/java/javase/17/docs/api/java.base/javax/crypto/Mac.html
+        testSupportedAlgorithms(
+                "Mac",
+                "HmacSHA1", "HmacSHA256"
+        );
+    }
+
+    @Test
+    public void testSupportedKeyGeneratorAlgorithms() {
+        // These algorithms are required to be supported on JVMs ranging from at least Java 8 through Java 17; see
+        // https://docs.oracle.com/javase/8/docs/api/javax/crypto/KeyGenerator.html
+        // and https://docs.oracle.com/en/java/javase/17/docs/api/java.base/javax/crypto/KeyGenerator.html
+        testSupportedAlgorithms(
+                "KeyGenerator",
+                "AES", "DESede", "HmacSHA1", "HmacSHA256"
+        );
+    }
+
+    private void testSupportedAlgorithms(String type, String... expectedAlgorithms) {
+        Set<String> supportedAlgorithms = DistributedConfig.supportedAlgorithms(type);
+        Set<String> unuspportedAlgorithms = new HashSet<>(Arrays.asList(expectedAlgorithms));
+        unuspportedAlgorithms.removeAll(supportedAlgorithms);
+        assertEquals(type + " algorithms were found that should be supported by this JVM but are not", Collections.emptySet(), unuspportedAlgorithms);
+    }
+
+    @Test
     public void shouldCreateKeyGeneratorWithSpecificSettings() {
         final String algorithm = "HmacSHA1";
         Map<String, String> configs = configs();
         configs.put(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, algorithm);
         configs.put(DistributedConfig.INTER_WORKER_KEY_SIZE_CONFIG, "512");
-        configs.put(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, algorithm);
         DistributedConfig config = new DistributedConfig(configs);
         KeyGenerator keyGenerator = config.getInternalRequestKeyGenerator();
         assertNotNull(keyGenerator);
@@ -74,11 +173,20 @@ public class DistributedConfigTest {
     }
 
     @Test
-    public void shouldFailIfKeyAlgorithmNotInVerificationAlgorithmsList() {
+    public void shouldFailIfSignatureAlgorithmNotInVerificationAlgorithmsList() {
         Map<String, String> configs = configs();
-        configs.put(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, "HmacSHA1");
+        configs.put(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, "HmacSHA1");
         configs.put(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, "HmacSHA256");
         assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
+    }
+
+    @Test
+    public void shouldNotFailIfKeyAlgorithmNotInVerificationAlgorithmsList() {
+        Map<String, String> configs = configs();
+        configs.put(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, "HmacSHA1");
+        configs.put(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, "HmacSHA256");
+        configs.put(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, "HmacSHA256");
+        new DistributedConfig(configs);
     }
 
     @Test
@@ -294,4 +402,52 @@ public class DistributedConfigTest {
         assertEquals(expectedTopicSettings, actual);
         assertNotEquals(topicSettings, actual);
     }
+
+    @Test
+    public void testInvalidSecurityProtocol() {
+        Map<String, String> configs = configs();
+
+        configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc");
+        ConfigException ce = assertThrows(ConfigException.class,
+                () -> new DistributedConfig(configs));
+        assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+    }
+
+    @Test
+    public void shouldIdentifyNeedForTransactionalLeader() {
+        Map<String, String> workerProps = configs();
+
+        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
+        assertFalse(new DistributedConfig(workerProps).transactionalLeaderEnabled());
+
+        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "preparing");
+        assertTrue(new DistributedConfig(workerProps).transactionalLeaderEnabled());
+
+        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
+        assertTrue(new DistributedConfig(workerProps).transactionalLeaderEnabled());
+    }
+
+    @Test
+    public void shouldConstructExpectedTransactionalId() {
+        Map<String, String> workerProps = configs();
+
+        workerProps.put(GROUP_ID_CONFIG, "why did i stay up all night writing unit tests");
+        assertEquals(
+                "connect-cluster-why did i stay up all night writing unit tests",
+                new DistributedConfig(workerProps).transactionalProducerId()
+        );
+
+        workerProps.put(GROUP_ID_CONFIG, "connect-cluster");
+        assertEquals(
+                "connect-cluster-connect-cluster",
+                new DistributedConfig(workerProps).transactionalProducerId()
+        );
+
+        workerProps.put(GROUP_ID_CONFIG, "\u2603");
+        assertEquals(
+                "connect-cluster-\u2603",
+                new DistributedConfig(workerProps).transactionalProducerId()
+        );
+    }
+
 }

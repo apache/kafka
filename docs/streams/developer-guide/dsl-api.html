@@ -74,8 +74,8 @@
                 <li><a class="reference internal" href="#scala-dsl" id="id27">Kafka Streams DSL for Scala</a></li>
                 <ul>
                     <li><a class="reference internal" href="#scala-dsl-sample-usage" id="id28">Sample Usage</a></li>
-                    <li><a class="reference internal" href="#scala-dsl-implicit-serdes" id="id29">Implicit SerDes</a></li>
-                    <li><a class="reference internal" href="#scala-dsl-user-defined-serdes" id="id30">User-Defined SerDes</a></li>
+                    <li><a class="reference internal" href="#scala-dsl-implicit-serdes" id="id29">Implicit Serdes</a></li>
+                    <li><a class="reference internal" href="#scala-dsl-user-defined-serdes" id="id30">User-Defined Serdes</a></li>
                 </ul>
             </ul>
         </div>
@@ -254,11 +254,11 @@ KStream&lt;String, Long&gt; wordCounts = builder.stream(
       Serdes.String(), /* key serde */
       Serdes.Long()   /* value serde */
     );</code></pre>
-                        <p>If you do not specify SerDes explicitly, the default SerDes from the
+                        <p>If you do not specify Serdes explicitly, the default Serdes from the
                             <a class="reference internal" href="config-streams.html#streams-developer-guide-configuration"><span class="std std-ref">configuration</span></a> are used.</p>
-                        <p>You <strong>must specify SerDes explicitly</strong> if the key or value types of the records in the Kafka input
-                            topics do not match the configured default SerDes. For information about configuring default SerDes, available
-                            SerDes, and implementing your own custom SerDes see <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data Types and Serialization</span></a>.</p>
+                        <p>You <strong>must specify Serdes explicitly</strong> if the key or value types of the records in the Kafka input
+                            topics do not match the configured default Serdes. For information about configuring default Serdes, available
+                            Serdes, and implementing your own custom Serdes see <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data Types and Serialization</span></a>.</p>
                         <p class="last">Several variants of <code class="docutils literal"><span class="pre">stream</span></code> exist. For example, you can specify a regex pattern for input topics to read from (note that all matching topics will be part of the same input topic group, and the work will not be parallelized for different topics if subscribed to in this way).</p>
                     </td>
                 </tr>
@@ -278,11 +278,11 @@ KStream&lt;String, Long&gt; wordCounts = builder.stream(
                             <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">state store</span></a> that backs the table).  This is required for
                             supporting <a class="reference internal" href="interactive-queries.html#streams-developer-guide-interactive-queries"><span class="std std-ref">interactive queries</span></a> against the table. When a
                             name is not provided the table will not be queryable and an internal name will be provided for the state store.</p>
-                        <p>If you do not specify SerDes explicitly, the default SerDes from the
+                        <p>If you do not specify Serdes explicitly, the default Serdes from the
                             <a class="reference internal" href="config-streams.html#streams-developer-guide-configuration"><span class="std std-ref">configuration</span></a> are used.</p>
-                        <p>You <strong>must specify SerDes explicitly</strong> if the key or value types of the records in the Kafka input
-                            topics do not match the configured default SerDes. For information about configuring default SerDes, available
-                            SerDes, and implementing your own custom SerDes see <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data Types and Serialization</span></a>.</p>
+                        <p>You <strong>must specify Serdes explicitly</strong> if the key or value types of the records in the Kafka input
+                            topics do not match the configured default Serdes. For information about configuring default Serdes, available
+                            Serdes, and implementing your own custom Serdes see <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data Types and Serialization</span></a>.</p>
                         <p class="last">Several variants of <code class="docutils literal"><span class="pre">table</span></code> exist, for example to specify the <code class="docutils literal"><span class="pre">auto.offset.reset</span></code> policy to be used when
                             reading from the input topic.</p>
                     </td>
@@ -315,10 +315,10 @@ GlobalKTable&lt;String, Long&gt; wordCounts = builder.globalTable(
       .withKeySerde(Serdes.String()) /* key serde */
       .withValueSerde(Serdes.Long()) /* value serde */
     );</code></pre>
-                        <p>You <strong>must specify SerDes explicitly</strong> if the key or value types of the records in the Kafka input
-                            topics do not match the configured default SerDes. For information about configuring default SerDes, available
-                            SerDes, and implementing your own custom SerDes see <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data Types and Serialization</span></a>.</p>
-                        <p class="last">Several variants of <code class="docutils literal"><span class="pre">globalTable</span></code> exist to e.g. specify explicit SerDes.</p>
+                        <p>You <strong>must specify Serdes explicitly</strong> if the key or value types of the records in the Kafka input
+                            topics do not match the configured default Serdes. For information about configuring default Serdes, available
+                            Serdes, and implementing your own custom Serdes see <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data Types and Serialization</span></a>.</p>
+                        <p class="last">Several variants of <code class="docutils literal"><span class="pre">globalTable</span></code> exist to e.g. specify explicit Serdes.</p>
                     </td>
                 </tr>
                 </tbody>
@@ -360,14 +360,14 @@ GlobalKTable&lt;String, Long&gt; wordCounts = builder.globalTable(
                     <tbody valign="top">
                     <tr class="row-even"><td><p class="first"><strong>Branch</strong></p>
                         <ul class="last simple">
-                            <li>KStream &rarr; KStream[]</li>
+                            <li>KStream &rarr; BranchedKStream</li>
                         </ul>
                     </td>
                         <td><p class="first">Branch (or split) a <code class="docutils literal"><span class="pre">KStream</span></code> based on the supplied predicates into one or more <code class="docutils literal"><span class="pre">KStream</span></code> instances.
-                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#split">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#split()">details</a>)</p>
                             <p>Predicates are evaluated in order.  A record is placed to one and only one output stream on the first match:
-                                if the n-th predicate evaluates to true, the record is placed to n-th stream.  If no predicate matches, the
-                                the record is dropped.</p>
+                                if the n-th predicate evaluates to true, the record is placed to n-th stream. If a record does not match any predicates,
+                                it will be routed to the default branch, or dropped if no default branch is created.</p>
                             <p>Branching is useful, for example, to route records to different downstream topics.</p>
                             <pre class="line-numbers"><code class="language-java">KStream&lt;String, Long&gt; stream = ...;
 Map&lt;String, KStream&lt;String, Long&gt;&gt; branches =
@@ -376,7 +376,7 @@ Map&lt;String, KStream&lt;String, Long&gt;&gt; branches =
              Branched.as(&quot;A&quot;))
         .branch((key, value) -&gt; key.startsWith(&quot;B&quot;),  /* second predicate */
              Branched.as(&quot;B&quot;))
-.defaultBranch(Branched.as(&quot;C&quot;))
+        .defaultBranch(Branched.as(&quot;C&quot;))              /* default branch */
 );
 
 // KStream branches.get(&quot;Branch-A&quot;) contains all records whose keys start with &quot;A&quot;
@@ -518,10 +518,10 @@ stream.foreach(
                             (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#groupByKey--">details</a>)</p>
                             <p>Grouping is a prerequisite for <a class="reference internal" href="#streams-developer-guide-dsl-aggregating"><span class="std std-ref">aggregating a stream or a table</span></a>
                                 and ensures that data is properly partitioned (&#8220;keyed&#8221;) for subsequent operations.</p>
-                            <p><strong>When to set explicit SerDes:</strong>
-                                Variants of <code class="docutils literal"><span class="pre">groupByKey</span></code> exist to override the configured default SerDes of your application, which <strong>you</strong>
+                            <p><strong>When to set explicit Serdes:</strong>
+                                Variants of <code class="docutils literal"><span class="pre">groupByKey</span></code> exist to override the configured default Serdes of your application, which <strong>you</strong>
                                 <strong>must do</strong> if the key and/or value types of the resulting <code class="docutils literal"><span class="pre">KGroupedStream</span></code> do not match the configured default
-                                SerDes.</p>
+                                Serdes.</p>
                             <div class="admonition note">
                                 <p><b>Note</b></p>
                                 <p class="last"><strong>Grouping vs. Windowing:</strong>
@@ -562,10 +562,10 @@ KGroupedStream&lt;byte[], String&gt; groupedStream = stream.groupByKey(
                             <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KTable.html#groupBy-org.apache.kafka.streams.kstream.KeyValueMapper-">KTable details</a>)</p>
                             <p>Grouping is a prerequisite for <a class="reference internal" href="#streams-developer-guide-dsl-aggregating"><span class="std std-ref">aggregating a stream or a table</span></a>
                                 and ensures that data is properly partitioned (&#8220;keyed&#8221;) for subsequent operations.</p>
-                            <p><strong>When to set explicit SerDes:</strong>
-                                Variants of <code class="docutils literal"><span class="pre">groupBy</span></code> exist to override the configured default SerDes of your application, which <strong>you must</strong>
+                            <p><strong>When to set explicit Serdes:</strong>
+                                Variants of <code class="docutils literal"><span class="pre">groupBy</span></code> exist to override the configured default Serdes of your application, which <strong>you must</strong>
                                 <strong>do</strong> if the key and/or value types of the resulting <code class="docutils literal"><span class="pre">KGroupedStream</span></code> or <code class="docutils literal"><span class="pre">KGroupedTable</span></code> do not match the
-                                configured default SerDes.</p>
+                                configured default Serdes.</p>
                             <div class="admonition note">
                                 <p><b>Note</b></p>
                                 <p class="last"><strong>Grouping vs. Windowing:</strong>
@@ -650,7 +650,7 @@ CogroupedKStream&lt;byte[], String&gt; cogroupedStream = groupedStream.cogroup(a
 
 KTable&lt;byte[], String&gt; table = cogroupedStream.aggregate(initializer);
 
-KTable&lt;byte[], String&gt; table2 = cogroupedStream.windowedBy(TimeWindows.duration(500ms)).aggregate(initializer);</code></pre>
+KTable&lt;byte[], String&gt; table2 = cogroupedStream.windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMillis(500))).aggregate(initializer);</code></pre>
                         </td>
                     </tr>
                     <tr class="row-odd"><td><p class="first"><strong>Map</strong></p>
@@ -956,7 +956,7 @@ KGroupedTable&lt;byte[], String&gt; groupedTable = ...;
 KTable&lt;byte[], Long&gt; aggregatedStream = groupedStream.aggregate(
     () -&gt; 0L, /* initializer */
     (aggKey, newValue, aggValue) -&gt; aggValue + newValue.length(), /* adder */
-    Materialized.as(&quot;aggregated-stream-store&quot;) /* state store name */
+    Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as(&quot;aggregated-stream-store&quot;) /* state store name */
         .withValueSerde(Serdes.Long()); /* serde for aggregate value */
 
 // Aggregating a KGroupedTable (note how the value type changes from String to Long)
@@ -964,7 +964,7 @@ KTable&lt;byte[], Long&gt; aggregatedTable = groupedTable.aggregate(
     () -&gt; 0L, /* initializer */
     (aggKey, newValue, aggValue) -&gt; aggValue + newValue.length(), /* adder */
     (aggKey, oldValue, aggValue) -&gt; aggValue - oldValue.length(), /* subtractor */
-    Materialized.as(&quot;aggregated-table-store&quot;) /* state store name */
+    Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as(&quot;aggregated-table-store&quot;) /* state store name */
 	.withValueSerde(Serdes.Long()) /* serde for aggregate value */
 
 
@@ -1064,7 +1064,7 @@ KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupe
         .withValueSerde(Serdes.Long())); /* serde for aggregate value */
 
 // Aggregating with time-based windowing (here: with 5-minute sliding windows and 30-minute grace period)
-KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(SlidingWindows.withTimeDifferenceAndGrace(Duration.ofMinutes(5),Duration.ofMinutes(30)))
+KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(30)))
     .aggregate(
         () -&gt; 0L, /* initializer */
         (aggKey, newValue, aggValue) -&gt; aggValue + newValue, /* adder */
@@ -1072,7 +1072,7 @@ KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupe
         .withValueSerde(Serdes.Long())); /* serde for aggregate value */
 
 // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
-KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionizedAggregatedStream = groupedStream.windowedBy(SessionWindows.with(Duration.ofMinutes(5)).
+KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionizedAggregatedStream = groupedStream.windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5)).
     aggregate(
     	() -&gt; 0L, /* initializer */
     	(aggKey, newValue, aggValue) -&gt; aggValue + newValue, /* adder */
@@ -1101,7 +1101,7 @@ KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupe
           .withValueSerde(Serdes.Long()));
 
 // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
-KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionizedAggregatedStream = groupedStream.windowedBy(SessionWindows.with(Duration.ofMinutes(5)).
+KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionizedAggregatedStream = groupedStream.windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5)).
     aggregate(
         new Initializer&lt;Long&gt;() { /* initializer */
             @Override
@@ -1182,17 +1182,17 @@ KGroupedStream&lt;String, Long&gt; groupedStream = ...;
 
 // Counting a KGroupedStream with time-based windowing (here: with 5-minute tumbling windows)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; aggregatedStream = groupedStream.windowedBy(
-    TimeWindows.of(Duration.ofMinutes(5))) /* time-based window */
+    TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5))) /* time-based window */
     .count();
 
 // Counting a KGroupedStream with time-based windowing (here: with 5-minute sliding windows and 30-minute grace period)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; aggregatedStream = groupedStream.windowedBy(
-    SlidingWindows.withTimeDifferenceAndGrace(Duration.ofMinutes(5),Duration.ofMinutes(30))) /* time-based window */
+    SlidingWindows.ofTimeDifferenceAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(30))) /* time-based window */
     .count();
 
 // Counting a KGroupedStream with session-based windowing (here: with 5-minute inactivity gaps)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; aggregatedStream = groupedStream.windowedBy(
-    SessionWindows.with(Duration.ofMinutes(5))) /* session window */
+    SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5))) /* session window */
     .count();</code></pre>
                                 <p>Detailed behavior:</p>
                                 <ul class="last simple">
@@ -1303,21 +1303,21 @@ KGroupedStream&lt;String, Long&gt; groupedStream = ...;
 
 // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(
-  TimeWindows.of(Duration.ofMinutes(5)) /* time-based window */)
+  TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5)) /* time-based window */)
   .reduce(
     (aggValue, newValue) -&gt; aggValue + newValue /* adder */
   );
 
 // Aggregating with time-based windowing (here: with 5-minute sliding windows and 30-minute grace)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(
-  SlidingWindows.withTimeDifferenceAndGrace(Duration.ofMinutes(5),Duration.ofMinutes(30))) /* time-based window */)
+  SlidingWindows.ofTimeDifferenceAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(30))) /* time-based window */)
   .reduce(
     (aggValue, newValue) -&gt; aggValue + newValue /* adder */
   );
 
 // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionzedAggregatedStream = groupedStream.windowedBy(
-  SessionWindows.with(Duration.ofMinutes(5))) /* session window */
+  SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5))) /* session window */
   .reduce(
     (aggValue, newValue) -&gt; aggValue + newValue /* adder */
   );
@@ -1327,7 +1327,7 @@ KTable&lt;Windowed&lt;String&gt;, Long&gt; sessionzedAggregatedStream = groupedS
 
 // Aggregating with time-based windowing (here: with 5-minute tumbling windows)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream..windowedBy(
-  TimeWindows.of(Duration.ofMinutes(5)) /* time-based window */)
+  TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5)) /* time-based window */)
   .reduce(
     new Reducer&lt;Long&gt;() { /* adder */
       @Override
@@ -1338,7 +1338,7 @@ KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupe
 
 // Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)
 KTable&lt;Windowed&lt;String&gt;, Long&gt; timeWindowedAggregatedStream = groupedStream.windowedBy(
-  SessionWindows.with(Duration.ofMinutes(5))) /* session window */
+  SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5))) /* session window */
   .reduce(
     new Reducer&lt;Long&gt;() { /* adder */
       @Override
@@ -1732,7 +1732,7 @@ KTable&lt;String, Integer&gt; aggregated = groupedTable.aggregate(
                             You may follow a procedure such as outlined below.
                             It is recommended to repartition the topic with fewer partitions to match the larger partition number of avoid bottlenecks.
                             Technically it would also be possible to repartition the topic with more partitions to the smaller partition number.
-                            For stream-table joins, it's recommended to repartition the KStream because repartitioning a KTable might result is a second state store.
+                            For stream-table joins, it's recommended to repartition the KStream because repartitioning a KTable might result in a second state store.
                             For table-table joins, you might also consider to size of the KTables and repartition the smaller KTable.</p>
                         <ol class="arabic">
                             <li><p class="first">Identify the input KStream/KTable in the join whose underlying Kafka topic has the smaller number of partitions.
@@ -1799,7 +1799,7 @@ KStream&lt;String, Double&gt; right = ...;
 // Java 8+ example, using lambda expressions
 KStream&lt;String, String&gt; joined = left.join(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue, /* ValueJoiner */
-    JoinWindows.of(Duration.ofMinutes(5)),
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
     Joined.with(
       Serdes.String(), /* key */
       Serdes.Long(),   /* left value */
@@ -1814,7 +1814,7 @@ KStream&lt;String, String&gt; joined = left.join(right,
         return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
       }
     },
-    JoinWindows.of(Duration.ofMinutes(5)),
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
     Joined.with(
       Serdes.String(), /* key */
       Serdes.Long(),   /* left value */
@@ -1856,7 +1856,7 @@ KStream&lt;String, Double&gt; right = ...;
 // Java 8+ example, using lambda expressions
 KStream&lt;String, String&gt; joined = left.leftJoin(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue, /* ValueJoiner */
-    JoinWindows.of(Duration.ofMinutes(5)),
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
     Joined.with(
       Serdes.String(), /* key */
       Serdes.Long(),   /* left value */
@@ -1871,7 +1871,7 @@ KStream&lt;String, String&gt; joined = left.leftJoin(right,
         return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
       }
     },
-    JoinWindows.of(Duration.ofMinutes(5)),
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
     Joined.with(
       Serdes.String(), /* key */
       Serdes.Long(),   /* left value */
@@ -1891,7 +1891,8 @@ KStream&lt;String, String&gt; joined = left.leftJoin(right,
                                                 </div></blockquote>
                                         </li>
                                         <li><p class="first">For each input record on the left side that does not have any match on the right side, the <code class="docutils literal"><span class="pre">ValueJoiner</span></code> will be called with <code class="docutils literal"><span class="pre">ValueJoiner#apply(leftRecord.value,</span> <span class="pre">null)</span></code>;
-                                            this explains the row with timestamp=3 in the table below, which lists <code class="docutils literal"><span class="pre">[A,</span> <span class="pre">null]</span></code> in the LEFT JOIN column.</p>
+                                            this explains the row with timestamp=60 and timestampe=80 in the table below, which lists <code class="docutils literal"><span class="pre">[E,</span> <span class="pre">null]</span></code> and <code class="docutils literal"><span class="pre">[F,</span> <span class="pre">null]</span></code>in the LEFT JOIN column.
+                                            Note that these left results are emitted after the specified grace period passed. <strong>Caution:</strong> using the deprecated <code class="docutils literal"><span class="pre">JoinWindows.of(...).grace(...)</span></code> API might result in eagerly emitted spurious left results.</p>
                                         </li>
                                     </ul>
                                     <p class="last">See the semantics overview at the bottom of this section for a detailed description.</p>
@@ -1916,7 +1917,7 @@ KStream&lt;String, Double&gt; right = ...;
 // Java 8+ example, using lambda expressions
 KStream&lt;String, String&gt; joined = left.outerJoin(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue, /* ValueJoiner */
-    JoinWindows.of(Duration.ofMinutes(5)),
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
     Joined.with(
       Serdes.String(), /* key */
       Serdes.Long(),   /* left value */
@@ -1931,7 +1932,7 @@ KStream&lt;String, String&gt; joined = left.outerJoin(right,
         return &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue;
       }
     },
-    JoinWindows.of(Duration.ofMinutes(5)),
+    JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5)),
     Joined.with(
       Serdes.String(), /* key */
       Serdes.Long(),   /* left value */
@@ -1951,8 +1952,9 @@ KStream&lt;String, String&gt; joined = left.outerJoin(right,
                                                 </div></blockquote>
                                         </li>
                                         <li><p class="first">For each input record on one side that does not have any match on the other side, the <code class="docutils literal"><span class="pre">ValueJoiner</span></code> will be called with <code class="docutils literal"><span class="pre">ValueJoiner#apply(leftRecord.value,</span> <span class="pre">null)</span></code> or
-                                            <code class="docutils literal"><span class="pre">ValueJoiner#apply(null,</span> <span class="pre">rightRecord.value)</span></code>, respectively; this explains the row with timestamp=3 in the table below, which lists <code class="docutils literal"><span class="pre">[A,</span> <span class="pre">null]</span></code> in the OUTER JOIN column
-                                            (unlike LEFT JOIN, <code class="docutils literal"><span class="pre">[null,</span> <span class="pre">x]</span></code> is possible, too, but no such example is shown in the table).</p>
+                                            <code class="docutils literal"><span class="pre">ValueJoiner#apply(null,</span> <span class="pre">rightRecord.value)</span></code>, respectively; this explains the row with timestamp=60, timestamp=80, and timestamp=100 in the table below, which lists <code class="docutils literal"><span class="pre">[E,</span> <span class="pre">null]</span></code>,
+                                            <code class="docutils literal"><span class="pre">[F,</span> <span class="pre">null]</span></code>, and <code class="docutils literal"><span class="pre">[null,</span> <span class="pre">f]</span></code> in the OUTER JOIN column.
+                                            Note that these left and right results are emitted after the specified grace period passed. <strong>Caution:</strong> using the deprecated <code class="docutils literal"><span class="pre">JoinWindows.of(...).grace(...)</span></code> API might result in eagerly emitted spurious left/right results.</p>
                                         </li>
                                     </ul>
                                     <p class="last">See the semantics overview at the bottom of this section for a detailed description.</p>
@@ -1962,8 +1964,11 @@ KStream&lt;String, String&gt; joined = left.outerJoin(right,
                         </table>
                         <p><strong>Semantics of stream-stream joins:</strong>
                             The semantics of the various stream-stream join variants are explained below.
-                            To improve the readability of the table, assume that (1) all records have the same key (and thus the key in the table is omitted), (2) all records belong to a single join window, and (3) all records are processed in timestamp order.
-                            The columns INNER JOIN, LEFT JOIN, and OUTER JOIN denote what is passed as arguments to the user-supplied
+                            To improve the readability of the table, assume that (1) all records have the same key (and thus the key in the table is omitted), and (2) all records are processed in timestamp order.
+                            We assume a join window size of 10 seconds with a grace period of 5 seconds.</p>
+                        <p><b>Note:</b> If you use the old and now deprecated API to specify the grace period, i.e., <code class="docutils literal"><span class="pre">JoinWindows.of(...).grace(...)</span></code>,
+                            left/outer join results are emitted eagerly, and the observed result might differ from the result shown below.</p>
+                        <p>The columns INNER JOIN, LEFT JOIN, and OUTER JOIN denote what is passed as arguments to the user-supplied
                             <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html">ValueJoiner</a> for the <code class="docutils literal"><span class="pre">join</span></code>, <code class="docutils literal"><span class="pre">leftJoin</span></code>, and
                             <code class="docutils literal"><span class="pre">outerJoin</span></code> methods, respectively, whenever a new input record is received on either side of the join.  An empty table
                             cell denotes that the <code class="docutils literal"><span class="pre">ValueJoiner</span></code> is not called at all.</p>
@@ -1996,8 +2001,8 @@ KStream&lt;String, String&gt; joined = left.outerJoin(right,
                                 <td>A</td>
                                 <td>&nbsp;</td>
                                 <td>&nbsp;</td>
-                                <td>[A, null]</td>
-                                <td>[A, null]</td>
+                                <td> </td>
+                                <td> </td>
                             </tr>
                             <tr class="row-odd"><td>4</td>
                                 <td>&nbsp;</td>
@@ -2082,6 +2087,62 @@ KStream&lt;String, String&gt; joined = left.outerJoin(right,
                                 <td>[D, a], [D, b], [D, c], [D, d]</td>
                                 <td>[D, a], [D, b], [D, c], [D, d]</td>
                                 <td>[D, a], [D, b], [D, c], [D, d]</td>
+                            </tr>
+                            <tr class="row-odd"><td> ... </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                            </tr>
+                            <tr class="even-row"><td>40</td>
+                                <td>E</td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                            </tr>
+                            <tr class="row-odd"><td> ... </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                            </tr>
+                            <tr class="even-row"><td>60</td>
+                                <td>F</td>
+                                <td> </td>
+                                <td> </td>
+                                <td>[E, null]</td>
+                                <td>[E, null]</td>
+                            </tr>
+                            <tr class="row-odd"><td> ... </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                            </tr>
+                            <tr class="even-row"><td>80</td>
+                                <td> </td>
+                                <td>f</td>
+                                <td> </td>
+                                <td>[F, null]</td>
+                                <td>[F, null]</td>
+                            </tr>
+                            <tr class="row-odd"><td> ... </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                            </tr>
+                            <tr class="even-row"><td>100</td>
+                                <td>G</td>
+                                <td> </td>
+                                <td> </td>
+                                <td> </td>
+                                <td>[null, f]</td>
                             </tr>
                             </tbody>
                         </table>
@@ -3164,9 +3225,9 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 
 // A hopping time window with a size of 5 minutes and an advance interval of 1 minute.
 // The window&#39;s name -- the string parameter -- is used to e.g. name the backing state store.
-Duration windowSizeMs = Duration.ofMinutes(5);
-Duration advanceMs = Duration.ofMinutes(1);
-TimeWindows.of(windowSizeMs).advanceBy(advanceMs);</code></pre>
+Duration windowSize = Duration.ofMinutes(5);
+Duration advance = Duration.ofMinutes(1);
+TimeWindows.ofSizeWithNoGrace(windowSize).advanceBy(advance);</code></pre>
                         <div class="figure align-center" id="id4">
                             <img class="centered" src="/{{version}}/images/streams-time-windows-hopping.png">
                             <p class="caption"><span class="caption-text">This diagram shows windowing a stream of data records with hopping windows.  In this diagram the time numbers
@@ -3208,14 +3269,13 @@ become t=300,000).</span></p>
 import org.apache.kafka.streams.kstream.TimeWindows;
 
 // A tumbling time window with a size of 5 minutes (and, by definition, an implicit
-// advance interval of 5 minutes). Note the explicit grace period, as the current
-// default value is 24 hours, which may be larger than needed for smaller windows.
-Duration windowSizeMs = Duration.ofMinutes(5);
-Duration gracePeriodMs = Duration.ofMinutes(1);
-TimeWindows.of(windowSizeMs).grace(gracePeriodMs);
+// advance interval of 5 minutes), and grace period of 1 minute.
+Duration windowSize = Duration.ofMinutes(5);
+Duration gracePeriod = Duration.ofMinutes(1);
+TimeWindows.ofSizeAndGrace(windowSize, gracePeriod);
 
 // The above is equivalent to the following code:
-TimeWindows.of(windowSizeMs).advanceBy(windowSizeMs).grace(gracePeriodMs);</code></pre>
+TimeWindows.ofSizeAndGrace(windowSize, gracePeriod).advanceBy(windowSize);</code></pre>
                     </div>
                     <div class="section" id="sliding-time-windows">
                         <span id="windowing-sliding"></span><h5><a class="toc-backref" href="#id22">Sliding time windows</a><a class="headerlink" href="#sliding-time-windows" title="Permalink to this headline"></a></h5>
@@ -3230,14 +3290,9 @@ TimeWindows.of(windowSizeMs).advanceBy(windowSizeMs).grace(gracePeriodMs);</code
                         <pre class="line-numbers"><code class="language-java">import org.apache.kafka.streams.kstream.SlidingWindows;
 
 // A sliding time window with a time difference of 10 minutes and grace period of 30 minutes
-Duration timeDifferenceMs = Duration.ofMinutes(10);
-Duration gracePeriodMs = Duration.ofMinutes(30);
-SlidingWindows.withTimeDifferenceAndGrace(timeDifferenceMs,gracePeriodMs);</code></pre>
-                         <div class="admonition note">
-                             <p><b>Note</b></p>
-                             <p>Sliding windows <em>require</em> that you set a grace period, as shown above. For time windows and session windows,
-                                 setting the grace period is optional and defaults to 24 hours.</p>
-                         </div>
+Duration timeDifference = Duration.ofMinutes(10);
+Duration gracePeriod = Duration.ofMinutes(30);
+SlidingWindows.ofTimeDifferenceAndGrace(timeDifference, gracePeriod);</code></pre>
                          <div class="figure align-center" id="id35">
                              <img class="centered" src="/{{version}}/images/streams-sliding-windows.png">
                              <p class="caption"><span class="caption-text">This diagram shows windowing a stream of data records with sliding windows. The overlap of
@@ -3267,7 +3322,7 @@ SlidingWindows.withTimeDifferenceAndGrace(timeDifferenceMs,gracePeriodMs);</code
 import org.apache.kafka.streams.kstream.SessionWindows;
 
 // A session window with an inactivity gap of 5 minutes.
-SessionWindows.with(Duration.ofMinutes(5));</code></pre>
+SessionWindows.ofInactivityGapWithNoGrace(Duration.ofMinutes(5));</code></pre>
                         <p>Given the previous session window example, here&#8217;s what would happen on an input stream of six records.
                             When the first three records arrive (upper part of in the diagram below), we&#8217;d have three sessions (see lower part)
                             after having processed those records: two for the green record key, with one session starting and ending at the
@@ -3313,7 +3368,7 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
 			    <p>For example:</p>
                 <pre class="line-numbers"><code class="language-java">KGroupedStream&lt;UserId, Event&gt; grouped = ...;
 grouped
-    .windowedBy(TimeWindows.of(Duration.ofHours(1)).grace(ofMinutes(10)))
+    .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofHours(1), Duration.ofMinutes(10)))
     .count()
     .suppress(Suppressed.untilWindowCloses(unbounded()))
     .filter((windowedUserId, count) -&gt; count &lt; 3)
@@ -3322,8 +3377,8 @@ grouped
 			    </div></div>
 			    <p>The key parts of this program are:
 			    <dl>
-				    <dt><code>grace(ofMinutes(10))</code></dt>
-				    <dd>This allows us to bound the lateness of events the window will accept.
+				    <dt><code>ofSizeAndGrace(Duration.ofHours(1), Duration.ofMinutes(10))</code></dt>
+				    <dd>The specified grace period of 10 minutes (i.e., the <code>Duration.ofMinutes(10)</code> argument) allows us to bound the lateness of events the window will accept.
 				        For example, the 09:00 to 10:00 window will accept out-of-order records until 10:10, at which point, the window is <strong>closed</strong>.
 				    </dd>
 				    <dt><code>.suppress(Suppressed.untilWindowCloses(...))</code></dt>
@@ -3572,12 +3627,12 @@ groupedTable
                         (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#to(java.lang.String)">KStream details</a>)</p>
                         <p>When to provide serdes explicitly:</p>
                         <ul class="simple">
-                            <li>If you do not specify SerDes explicitly, the default SerDes from the
+                            <li>If you do not specify Serdes explicitly, the default Serdes from the
                                 <a class="reference internal" href="config-streams.html#streams-developer-guide-configuration"><span class="std std-ref">configuration</span></a> are used.</li>
-                            <li>You <strong>must specify SerDes explicitly</strong> via the <code class="docutils literal"><span class="pre">Produced</span></code> class if the key and/or value types of the
-                                <code class="docutils literal"><span class="pre">KStream</span></code> do not match the configured default SerDes.</li>
-                            <li>See <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data Types and Serialization</span></a> for information about configuring default SerDes, available SerDes,
-                                and implementing your own custom SerDes.</li>
+                            <li>You <strong>must specify Serdes explicitly</strong> via the <code class="docutils literal"><span class="pre">Produced</span></code> class if the key and/or value types of the
+                                <code class="docutils literal"><span class="pre">KStream</span></code> do not match the configured default Serdes.</li>
+                            <li>See <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data Types and Serialization</span></a> for information about configuring default Serdes, available Serdes,
+                                and implementing your own custom Serdes.</li>
                         </ul>
                         <p>A variant of <code class="docutils literal"><span class="pre">to</span></code> exists that enables you to specify how the data is produced by using a <code class="docutils literal"><span class="pre">Produced</span></code>
                             instance to specify, for example, a <code class="docutils literal"><span class="pre">StreamPartitioner</span></code> that gives you control over
@@ -3627,7 +3682,7 @@ stream.to(&quot;my-stream-output-topic&quot;, Produced.with(Serdes.String(), Ser
             <ol class="last arabic simple">
               <li><strong>Additional type annotations</strong> - The Java APIs use Java generics in a way that are not fully compatible with the type inferencer of the Scala compiler. Hence the user has to add type annotations to the Scala code, which seems rather non-idiomatic in Scala.</li>
               <li><strong>Verbosity</strong> - In some cases the Java APIs appear too verbose compared to idiomatic Scala.</li>
-              <li><strong>Type Unsafety</strong> - The Java APIs offer some options where the compile time type safety is sometimes subverted and can result in runtime errors. This stems from the fact that the SerDes defined as part of config are not type checked during compile time. Hence any missing SerDes can result in runtime errors.</li>
+              <li><strong>Type Unsafety</strong> - The Java APIs offer some options where the compile time type safety is sometimes subverted and can result in runtime errors. This stems from the fact that the Serdes defined as part of config are not type checked during compile time. Hence any missing Serdes can result in runtime errors.</li>
             </ol>
             <p id="scala-dsl-overview">The Kafka Streams DSL for Scala library is a wrapper over the existing Java APIs for Kafka Streams DSL that addresses the concerns raised above.
               It does not attempt to provide idiomatic Scala APIs that one would implement in a Scala library developed from scratch. The intention is to make the Java APIs more usable in Scala through better type inferencing, enhanced expressiveness, and lesser boilerplates.
@@ -3654,7 +3709,7 @@ stream.to(&quot;my-stream-output-topic&quot;, Produced.with(Serdes.String(), Ser
             <p>The library also has several utility abstractions and modules that the user needs to use for proper semantics.</p>
             <ul>
               <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.ImplicitConversions</span></code>: Module that brings into scope the implicit conversions between the Scala and Java classes.</li>
-              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.serialization.Serdes</span></code>: Module that contains all primitive SerDes that can be imported as implicits and a helper to create custom SerDes.</li>
+              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.serialization.Serdes</span></code>: Module that contains all primitive Serdes that can be imported as implicits and a helper to create custom Serdes.</li>
             </ul>
             <p>The library is cross-built with Scala 2.12 and 2.13. To reference the library compiled against Scala {{scalaVersion}} include the following in your maven <code>pom.xml</code> add the following:</p>
             <pre class="line-numbers"><code class="language-xml">&lt;dependency&gt;
@@ -3704,15 +3759,15 @@ object WordCountApplication extends App {
      streams.close(Duration.ofSeconds(10))
   }
 }</code></pre>
-              <p>In the above code snippet, we don't have to provide any SerDes, <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> explicitly. They will also not be dependent on any SerDes specified in the config.  <strong>In fact all SerDes specified in the config will be ignored by the Scala APIs</strong>. All SerDes and <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> will be handled through implicit SerDes as discussed later in the <a href="#scala-dsl-implicit-serdes">Implicit SerDes</a> section. The complete independence from configuration based SerDes is what makes this library completely typesafe.  Any missing instances of SerDes, <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> will be flagged as a compile time error.</p>
+              <p>In the above code snippet, we don't have to provide any Serdes, <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> explicitly. They will also not be dependent on any Serdes specified in the config.  <strong>In fact all Serdes specified in the config will be ignored by the Scala APIs</strong>. All Serdes and <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> will be handled through implicit Serdes as discussed later in the <a href="#scala-dsl-implicit-serdes">Implicit Serdes</a> section. The complete independence from configuration based Serdes is what makes this library completely typesafe.  Any missing instances of Serdes, <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> will be flagged as a compile time error.</p>
             </div>
             <div class="section" id="scala-dsl-implicit-serdes">
-              <span id="streams-developer-guide-dsl-scala-dsl-implicit-serdes"></span><h3><a class="toc-backref" href="#id29">Implicit SerDes</a><a class="headerlink" href="#scala-dsl-implicit-serdes" title="Permalink to this headline"></a></h3>
-              <p>One of the common complaints of Scala users with the Java API has been the repetitive usage of the SerDes in API invocations. Many of the APIs need to take the SerDes through abstractions like <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Repartitioned</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code>. And the user has to supply them every time through the with function of these classes.</p>
-              <p>The library uses the power of <a href="https://docs.scala-lang.org/tour/implicit-parameters.html">Scala implicit parameters</a> to alleviate this concern. As a user you can provide implicit SerDes or implicit values of <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Repartitioned</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> once and make your code less verbose. In fact you can just have the implicit SerDes in scope and the library will make the instances of <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> available in scope.</p>
-              <p>The library also bundles all implicit SerDes of the commonly used primitive types in a Scala module - so just import the module vals and have all SerDes in scope.  A similar strategy of modular implicits can be adopted for any user-defined SerDes as well (User-defined SerDes are discussed in the next section).</p>
+              <span id="streams-developer-guide-dsl-scala-dsl-implicit-serdes"></span><h3><a class="toc-backref" href="#id29">Implicit Serdes</a><a class="headerlink" href="#scala-dsl-implicit-serdes" title="Permalink to this headline"></a></h3>
+              <p>One of the common complaints of Scala users with the Java API has been the repetitive usage of the Serdes in API invocations. Many of the APIs need to take the Serdes through abstractions like <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Repartitioned</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code>. And the user has to supply them every time through the with function of these classes.</p>
+              <p>The library uses the power of <a href="https://docs.scala-lang.org/tour/implicit-parameters.html">Scala implicit parameters</a> to alleviate this concern. As a user you can provide implicit Serdes or implicit values of <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Repartitioned</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> once and make your code less verbose. In fact you can just have the implicit Serdes in scope and the library will make the instances of <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> available in scope.</p>
+              <p>The library also bundles all implicit Serdes of the commonly used primitive types in a Scala module - so just import the module vals and have all Serdes in scope.  A similar strategy of modular implicits can be adopted for any user-defined Serdes as well (User-defined Serdes are discussed in the next section).</p>
               <p>Here's an example:</p>
-              <pre class="line-numbers"><code class="language-scala">// DefaultSerdes brings into scope implicit SerDes (mostly for primitives)
+              <pre class="line-numbers"><code class="language-scala">// DefaultSerdes brings into scope implicit Serdes (mostly for primitives)
 // that will set up all Grouped, Produced, Consumed and Joined instances.
 // So all APIs below that accept Grouped, Produced, Consumed or Joined will
 // get these instances automatically
@@ -3726,7 +3781,7 @@ val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
 
 // The following code fragment does not have a single instance of Grouped,
 // Produced, Consumed or Joined supplied explicitly.
-// All of them are taken care of by the implicit SerDes imported by DefaultSerdes
+// All of them are taken care of by the implicit Serdes imported by DefaultSerdes
 val clicksPerRegion: KTable[String, Long] =
   userClicksStream
     .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks))
@@ -3737,15 +3792,15 @@ val clicksPerRegion: KTable[String, Long] =
 clicksPerRegion.toStream.to(outputTopic)</code></pre>
               <p>Quite a few things are going on in the above code snippet that may warrant a few lines of elaboration:</p>
               <ol>
-                <li>The code snippet does not depend on any config defined SerDes. In fact any SerDes defined as part of the config will be ignored.</li>
-                <li>All SerDes are picked up from the implicits in scope. And <code class="docutils literal"><span class="pre">import Serdes._</span></code> brings all necessary SerDes in scope.</li>
+                <li>The code snippet does not depend on any config defined Serdes. In fact any Serdes defined as part of the config will be ignored.</li>
+                <li>All Serdes are picked up from the implicits in scope. And <code class="docutils literal"><span class="pre">import Serdes._</span></code> brings all necessary Serdes in scope.</li>
                 <li>This is an example of compile time type safety that we don't have in the Java APIs.</li>
                 <li>The code looks less verbose and more focused towards the actual transformation that it does on the data stream.</li>
               </ol>
             </div>
             <div class="section" id="scala-dsl-user-defined-serdes">
-              <span id="streams-developer-guide-dsl-scala-dsl-user-defined-serdes"></span><h3><a class="toc-backref" href="#id30">User-Defined SerDes</a><a class="headerlink" href="#scala-dsl-user-defined-serdes" title="Permalink to this headline"></a></h3>
-              <p>When the default primitive SerDes are not enough and we need to define custom SerDes, the usage is exactly the same as above. Just define the implicit SerDes and start building the stream transformation. Here's an example with <code class="docutils literal"><span class="pre">AvroSerde</span></code>:</p>
+              <span id="streams-developer-guide-dsl-scala-dsl-user-defined-serdes"></span><h3><a class="toc-backref" href="#id30">User-Defined Serdes</a><a class="headerlink" href="#scala-dsl-user-defined-serdes" title="Permalink to this headline"></a></h3>
+              <p>When the default primitive Serdes are not enough and we need to define custom Serdes, the usage is exactly the same as above. Just define the implicit Serdes and start building the stream transformation. Here's an example with <code class="docutils literal"><span class="pre">AvroSerde</span></code>:</p>
               <pre class="line-numbers"><code class="language-scala">// domain object as a case class
 case class UserClicks(clicks: Long)
 
@@ -3753,7 +3808,7 @@ case class UserClicks(clicks: Long)
 // serialize as avro
 implicit val userClicksSerde: Serde[UserClicks] = new AvroSerde
 
-// Primitive SerDes
+// Primitive Serdes
 import Serdes._
 
 // And then business as usual ..
@@ -3778,7 +3833,7 @@ val clicksPerRegion: KTable[String, Long] =
 
 // Write the (continuously updating) results to the output topic.
 clicksPerRegion.toStream.to(outputTopic)</code></pre>
-              <p>A complete example of user-defined SerDes can be found in a test class within the library.</p>
+              <p>A complete example of user-defined Serdes can be found in a test class within the library.</p>
             </div>
         </div>
 </div>

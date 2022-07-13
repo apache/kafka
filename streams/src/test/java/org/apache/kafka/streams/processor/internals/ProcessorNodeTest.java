@@ -27,7 +27,8 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -49,29 +50,28 @@ import static org.junit.Assert.assertTrue;
 
 public class ProcessorNodeTest {
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() {
-        final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
+        final ProcessorNode<Object, Object, Object, Object> node =
+            new ProcessorNode<>("name", new ExceptionalProcessor(), Collections.emptySet());
         assertThrows(StreamsException.class, () -> node.init(null));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringClose() {
-        final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
+        final ProcessorNode<Object, Object, Object, Object> node =
+            new ProcessorNode<>("name", new ExceptionalProcessor(), Collections.emptySet());
         assertThrows(StreamsException.class, () -> node.init(null));
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    private static class ExceptionalProcessor implements org.apache.kafka.streams.processor.Processor<Object, Object> {
+    private static class ExceptionalProcessor implements Processor<Object, Object, Object, Object> {
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Object, Object> context) {
             throw new RuntimeException();
         }
 
         @Override
-        public void process(final Object key, final Object value) {
+        public void process(final Record<Object, Object> record) {
             throw new RuntimeException();
         }
 
@@ -81,21 +81,9 @@ public class ProcessorNodeTest {
         }
     }
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    private static class NoOpProcessor implements org.apache.kafka.streams.processor.Processor<Object, Object> {
+    private static class NoOpProcessor implements Processor<Object, Object, Object, Object> {
         @Override
-        public void init(final ProcessorContext context) {
-
-        }
-
-        @Override
-        public void process(final Object key, final Object value) {
-
-        }
-
-        @Override
-        public void close() {
-
+        public void process(final Record<Object, Object> record) {
         }
     }
 
@@ -105,7 +93,8 @@ public class ProcessorNodeTest {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
         final InternalMockProcessorContext<Object, Object> context = new InternalMockProcessorContext<>(streamsMetrics);
-        final ProcessorNode<Object, Object, Object, Object> node = new ProcessorNode<>("name", new NoOpProcessor(), Collections.<String>emptySet());
+        final ProcessorNode<Object, Object, Object, Object> node =
+            new ProcessorNode<>("name", new NoOpProcessor(), Collections.emptySet());
         node.init(context);
 
         final String threadId = Thread.currentThread().getName();
@@ -140,21 +129,20 @@ public class ProcessorNodeTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.<String, String>stream("streams-plaintext-input")
-            .flatMapValues(value -> {
-                return Collections.singletonList("");
-            });
+            .flatMapValues(value -> Collections.singletonList(""));
         final Topology topology = builder.build();
         final Properties config = new Properties();
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
 
-        final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config);
-        final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
+        try (final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config)) {
+            final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
 
-        final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));
-        final String msg = se.getMessage();
-        assertTrue("Error about class cast with serdes", msg.contains("ClassCastException"));
-        assertTrue("Error about class cast with serdes", msg.contains("Serdes"));
+            final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));
+            final String msg = se.getMessage();
+            assertTrue("Error about class cast with serdes", msg.contains("ClassCastException"));
+            assertTrue("Error about class cast with serdes", msg.contains("Serdes"));
+        }
     }
 
     @Test
@@ -163,9 +151,7 @@ public class ProcessorNodeTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         builder.<String, String>stream("streams-plaintext-input")
-            .flatMapValues(value -> {
-                return Collections.singletonList("");
-            });
+            .flatMapValues(value -> Collections.singletonList(""));
         final Topology topology = builder.build();
 
         final ConfigException se = assertThrows(ConfigException.class, () -> new TopologyTestDriver(topology));
@@ -177,11 +163,11 @@ public class ProcessorNodeTest {
     private static class ClassCastProcessor extends ExceptionalProcessor {
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Object, Object> context) {
         }
 
         @Override
-        public void process(final Object key, final Object value) {
+        public void process(final Record<Object, Object> record) {
             throw new ClassCastException("Incompatible types simulation exception.");
         }
     }
@@ -192,7 +178,8 @@ public class ProcessorNodeTest {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
         final InternalMockProcessorContext<Object, Object> context = new InternalMockProcessorContext<>(streamsMetrics);
-        final ProcessorNode<Object, Object, Object, Object> node = new ProcessorNode<>("name", new ClassCastProcessor(), Collections.emptySet());
+        final ProcessorNode<Object, Object, Object, Object> node =
+            new ProcessorNode<>("pname", new ClassCastProcessor(), Collections.emptySet());
         node.init(context);
         final StreamsException se = assertThrows(
             StreamsException.class,
@@ -201,5 +188,6 @@ public class ProcessorNodeTest {
         assertThat(se.getCause(), instanceOf(ClassCastException.class));
         assertThat(se.getMessage(), containsString("default Serdes"));
         assertThat(se.getMessage(), containsString("input types"));
+        assertThat(se.getMessage(), containsString("pname"));
     }
 }

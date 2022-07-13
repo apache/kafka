@@ -43,8 +43,10 @@ class CogroupedKStream[KIn, VOut](val inner: CogroupedKStreamJ[KIn, VOut]) {
    * @param aggregator    a function that computes a new aggregate result
    * @return a [[CogroupedKStream]]
    */
-  def cogroup[VIn](groupedStream: KGroupedStream[KIn, VIn],
-                   aggregator: (KIn, VIn, VOut) => VOut): CogroupedKStream[KIn, VOut] =
+  def cogroup[VIn](
+    groupedStream: KGroupedStream[KIn, VIn],
+    aggregator: (KIn, VIn, VOut) => VOut
+  ): CogroupedKStream[KIn, VOut] =
     new CogroupedKStream(inner.cogroup(groupedStream.inner, aggregator.asAggregator))
 
   /**
@@ -58,8 +60,8 @@ class CogroupedKStream[KIn, VOut](val inner: CogroupedKStreamJ[KIn, VOut]) {
    *         (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.CogroupedKStream#aggregate`
    */
-  def aggregate(initializer: => VOut)(
-    implicit materialized: Materialized[KIn, VOut, ByteArrayKeyValueStore]
+  def aggregate(initializer: => VOut)(implicit
+    materialized: Materialized[KIn, VOut, ByteArrayKeyValueStore]
   ): KTable[KIn, VOut] = new KTable(inner.aggregate((() => initializer).asInitializer, materialized))
 
   /**
@@ -74,8 +76,8 @@ class CogroupedKStream[KIn, VOut](val inner: CogroupedKStreamJ[KIn, VOut]) {
    *         (rolling) aggregate for each key
    * @see `org.apache.kafka.streams.kstream.CogroupedKStream#aggregate`
    */
-  def aggregate(initializer: => VOut, named: Named)(
-    implicit materialized: Materialized[KIn, VOut, ByteArrayKeyValueStore]
+  def aggregate(initializer: => VOut, named: Named)(implicit
+    materialized: Materialized[KIn, VOut, ByteArrayKeyValueStore]
   ): KTable[KIn, VOut] = new KTable(inner.aggregate((() => initializer).asInitializer, named, materialized))
 
   /**

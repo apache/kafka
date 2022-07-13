@@ -240,6 +240,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
             throw new IllegalArgumentException();
         }
 
+        // Read the metadata record body from the file input reader
         T record = serde.read(input, valueSize);
 
         int numHeaders = input.readVarint();

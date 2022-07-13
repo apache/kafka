@@ -92,7 +92,7 @@ public class VerifiableSourceTask extends SourceTask {
     }
 
     @Override
-    public List<SourceRecord> poll() throws InterruptedException {
+    public List<SourceRecord> poll() {
         long sendStartMs = System.currentTimeMillis();
         if (throttler.shouldThrottle(seqno - startingSeqno, sendStartMs))
             throttler.throttle();
@@ -121,7 +121,7 @@ public class VerifiableSourceTask extends SourceTask {
     }
 
     @Override
-    public void commitRecord(SourceRecord record, RecordMetadata metadata) throws InterruptedException {
+    public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         Map<String, Object> data = new HashMap<>();
         data.put("name", name);
         data.put("task", id);

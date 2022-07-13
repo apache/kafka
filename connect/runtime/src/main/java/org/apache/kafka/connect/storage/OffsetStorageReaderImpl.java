@@ -141,6 +141,7 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
         return result;
     }
 
+    @Override
     public void close() {
         if (!closed.getAndSet(true)) {
             synchronized (offsetReadFutures) {

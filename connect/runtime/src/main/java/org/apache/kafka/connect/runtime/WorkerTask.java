@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Frequencies;
@@ -52,10 +53,10 @@ abstract class WorkerTask implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(WorkerTask.class);
     private static final String THREAD_NAME_PREFIX = "task-thread-";
 
-    protected final ConnectorTaskId id;
     private final TaskStatus.Listener statusListener;
+    private final StatusBackingStore statusBackingStore;
+    protected final ConnectorTaskId id;
     protected final ClassLoader loader;
-    protected final StatusBackingStore statusBackingStore;
     protected final Time time;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private final TaskMetricsGroup taskMetricsGroup;
@@ -148,6 +149,8 @@ abstract class WorkerTask implements Runnable {
         taskMetricsGroup.close();
     }
 
+    protected abstract void initializeAndStart();
+
     protected abstract void execute();
 
     protected abstract void close();
@@ -179,10 +182,10 @@ abstract class WorkerTask implements Runnable {
                     onPause();
                     if (!awaitUnpause()) return;
                 }
-
-                statusListener.onStartup(id);
             }
 
+            initializeAndStart();
+            statusListener.onStartup(id);
             execute();
         } catch (Throwable t) {
             if (cancelled) {
@@ -305,7 +308,7 @@ abstract class WorkerTask implements Runnable {
      * @param duration the length of time in milliseconds for the commit attempt to complete
      */
     protected void recordCommitSuccess(long duration) {
-        taskMetricsGroup.recordCommit(duration, null);
+        taskMetricsGroup.recordCommit(duration, true, null);
     }
 
     /**
@@ -315,7 +318,7 @@ abstract class WorkerTask implements Runnable {
      * @param error the unexpected error that occurred; may be null in the case of timeouts or interruptions
      */
     protected void recordCommitFailure(long duration, Throwable error) {
-        taskMetricsGroup.recordCommit(duration, error);
+        taskMetricsGroup.recordCommit(duration, false, error);
     }
 
     /**
@@ -375,18 +378,16 @@ abstract class WorkerTask implements Runnable {
 
         private void addRatioMetric(final State matchingState, MetricNameTemplate template) {
             MetricName metricName = metricGroup.metricName(template);
-            if (metricGroup.metrics().metric(metricName) == null) {
-                metricGroup.metrics().addMetric(metricName, (config, now) ->
+            metricGroup.metrics().addMetricIfAbsent(metricName, null, (Gauge<Double>) (config, now) ->
                     taskStateTimer.durationRatio(matchingState, now));
-            }
         }
 
         void close() {
             metricGroup.close();
         }
 
-        void recordCommit(long duration, Throwable error) {
-            if (error == null) {
+        void recordCommit(long duration, boolean success, Throwable error) {
+            if (success) {
                 commitTime.record(duration);
                 commitAttempts.record(1.0d);
             } else {

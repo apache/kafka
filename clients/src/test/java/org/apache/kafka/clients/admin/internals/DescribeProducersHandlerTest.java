@@ -118,7 +118,7 @@ public class DescribeProducersHandlerTest {
         );
 
         int brokerId = 3;
-        DescribeProducersRequest.Builder request = handler.buildRequest(brokerId, topicPartitions);
+        DescribeProducersRequest.Builder request = handler.buildBatchedRequest(brokerId, topicPartitions);
 
         List<DescribeProducersRequestData.TopicRequest> topics = request.data.topics();
 

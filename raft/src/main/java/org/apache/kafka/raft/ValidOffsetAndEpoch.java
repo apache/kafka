@@ -22,7 +22,7 @@ public final class ValidOffsetAndEpoch {
     final private Kind kind;
     final private OffsetAndEpoch offsetAndEpoch;
 
-    ValidOffsetAndEpoch(Kind kind, OffsetAndEpoch offsetAndEpoch) {
+    private ValidOffsetAndEpoch(Kind kind, OffsetAndEpoch offsetAndEpoch) {
         this.kind = kind;
         this.offsetAndEpoch = offsetAndEpoch;
     }

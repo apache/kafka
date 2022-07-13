@@ -43,6 +43,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -55,6 +56,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Category({IntegrationTest.class})
 public class KTableSourceTopicRestartIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private static final int NUM_BROKERS = 3;
     private static final String SOURCE_TOPIC = "source-topic";
     private static final Properties PRODUCER_CONFIG = new Properties();

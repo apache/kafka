@@ -18,6 +18,7 @@
 package org.apache.kafka.jmh.common;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.network.Send;
@@ -63,7 +64,7 @@ public class FetchResponseBenchmark {
     @Param({"3", "10", "20"})
     private int partitionCount;
 
-    LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData;
+    LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData;
 
     Map<String, Uuid> topicIds;
 
@@ -96,18 +97,18 @@ public class FetchResponseBenchmark {
                                 .setLastStableOffset(0)
                                 .setLogStartOffset(0)
                                 .setRecords(records);
-                responseData.put(new TopicPartition(topic, partitionId), partitionData);
+                responseData.put(new TopicIdPartition(id, new TopicPartition(topic, partitionId)), partitionData);
             }
         }
 
         this.header = new ResponseHeader(100, ApiKeys.FETCH.responseHeaderVersion(ApiKeys.FETCH.latestVersion()));
-        this.fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData, topicIds);
+        this.fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
         this.fetchResponseData = this.fetchResponse.data();
     }
 
     @Benchmark
     public int testConstructFetchResponse() {
-        FetchResponse fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData, topicIds);
+        FetchResponse fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
         return fetchResponse.data().responses().size();
     }
 

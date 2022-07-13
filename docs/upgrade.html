@@ -19,9 +19,228 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h5><a id="upgrade_330_notable" href="#upgrade_330_notable">Notable changes in 3.3.0</a></h5>
+    <ul>
+        <li>Introduced a new API <code>addMetricIfAbsent</code> to <code>Metrics</code> which would create a new Metric if not existing or return the same metric
+            if already registered. Note that this behaviour is different from <code>addMetric</code> API which throws an <code>IllegalArgumentException</code> when
+            trying to create an already existing metric. (See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-843%3A+Adding+addMetricIfAbsent+method+to+Metrics">KIP-843</a>
+            for more details).
+        </li>
+    </ul>
+
+<h4><a id="upgrade_3_2_0" href="#upgrade_3_2_0">Upgrading to 3.2.0 from any version 0.8.x through 3.1.x</a></h4>
+
+<p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.
+    Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
+
+<p><b>For a rolling upgrade:</b></p>
+
+<ol>
+    <li>Update server.properties on all brokers and add the following properties. CURRENT_KAFKA_VERSION refers to the version you
+        are upgrading from. CURRENT_MESSAGE_FORMAT_VERSION refers to the message format version currently in use. If you have previously
+        overridden the message format version, you should keep its current value. Alternatively, if you are upgrading from a version prior
+        to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>3.1</code>, <code>3.0</code>, etc.)</li>
+            <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
+                following the upgrade</a> for the details on what this configuration does.)</li>
+        </ul>
+        If you are upgrading from version 0.11.0.x or above, and you have not overridden the message format, then you only need to override
+        the inter-broker protocol version.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>3.1</code>, <code>3.0</code>, etc.)</li>
+        </ul>
+    </li>
+    <li>Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
+        brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
+        It is still possible to downgrade at this point if there are any problems.
+    </li>
+    <li>Once the cluster's behavior and performance has been verified, bump the protocol version by editing
+        <code>inter.broker.protocol.version</code> and setting it to <code>3.2</code>.
+    </li>
+    <li>Restart the brokers one by one for the new protocol version to take effect. Once the brokers begin using the latest
+        protocol version, it will no longer be possible to downgrade the cluster to an older version.
+    </li>
+    <li>If you have overridden the message format version as instructed above, then you need to do one more rolling restart to
+        upgrade it to its latest version. Once all (or most) consumers have been upgraded to 0.11.0 or later,
+        change log.message.format.version to 3.2 on each broker and restart them one by one. Note that the older Scala clients,
+        which are no longer maintained, do not support the message format introduced in 0.11, so to avoid conversion costs
+        (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
+        the newer Java clients must be used.
+    </li>
+</ol>
+
+<h5><a id="upgrade_320_notable" href="#upgrade_320_notable">Notable changes in 3.2.0</a></h5>
+    <ul>
+        <li>Idempotence for the producer is enabled by default if no conflicting configurations are set. In 3.0.0 and 3.1.0, a bug prevented this default from being applied,
+            which meant that idempotence remained disabled unless the user had explicitly set <code>enable.idempotence</code> to true
+            (See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a> for more details).
+            This issue was fixed and the default is properly applied in 3.0.1, 3.1.1, and 3.2.0.</li>
+        <li>A notable exception is Connect that by default disables idempotent behavior for all of its
+            producers in order to uniformly support using a wide range of Kafka broker versions.
+            Users can change this behavior to enable idempotence for some or all producers
+            via Connect worker and/or connector configuration. Connect may enable idempotent producers
+            by default in a future major release.</li>
+        <li>Kafka has replaced log4j with reload4j due to security concerns.
+            This only affects modules that specify a logging backend (<code>connect-runtime</code> and <code>kafka-tools</code> are two such examples).
+            A number of modules, including <code>kafka-clients</code>, leave it to the application to specify the logging backend.
+            More information can be found at <a href="https://reload4j.qos.ch">reload4j</a>.
+            Projects that depend on the affected modules from the Kafka project should use
+            <a href="https://www.slf4j.org/manual.html#swapping">slf4j-log4j12 version 1.7.35 or above</a> or
+            slf4j-reload4j to avoid
+            <a href="https://www.slf4j.org/codes.html#no_tlm">possible compatibility issues originating from the logging framework</a>.</li>
+        <li>The example connectors, <code>FileStreamSourceConnector</code> and <code>FileStreamSinkConnector</code>, have been
+            removed from the default classpath. To use them in Kafka Connect standalone or distributed mode they need to be
+            explicitly added, for example <code>CLASSPATH=./lib/connect-file-3.2.0.jar ./bin/connect-distributed.sh</code>.</li>
+    </ul>
+
+<h4><a id="upgrade_3_1_0" href="#upgrade_3_1_0">Upgrading to 3.1.0 from any version 0.8.x through 3.0.x</a></h4>
+
+<p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.
+    Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
+
+<p><b>For a rolling upgrade:</b></p>
+
+<ol>
+    <li>Update server.properties on all brokers and add the following properties. CURRENT_KAFKA_VERSION refers to the version you
+        are upgrading from. CURRENT_MESSAGE_FORMAT_VERSION refers to the message format version currently in use. If you have previously
+        overridden the message format version, you should keep its current value. Alternatively, if you are upgrading from a version prior
+        to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>3.0</code>, <code>2.8</code>, etc.)</li>
+            <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
+                following the upgrade</a> for the details on what this configuration does.)</li>
+        </ul>
+        If you are upgrading from version 0.11.0.x or above, and you have not overridden the message format, then you only need to override
+        the inter-broker protocol version.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>3.0</code>, <code>2.8</code>, etc.)</li>
+        </ul>
+    </li>
+    <li>Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
+        brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
+        It is still possible to downgrade at this point if there are any problems.
+    </li>
+    <li>Once the cluster's behavior and performance has been verified, bump the protocol version by editing
+        <code>inter.broker.protocol.version</code> and setting it to <code>3.1</code>.
+    </li>
+    <li>Restart the brokers one by one for the new protocol version to take effect. Once the brokers begin using the latest
+        protocol version, it will no longer be possible to downgrade the cluster to an older version.
+    </li>
+    <li>If you have overridden the message format version as instructed above, then you need to do one more rolling restart to
+        upgrade it to its latest version. Once all (or most) consumers have been upgraded to 0.11.0 or later,
+        change log.message.format.version to 3.1 on each broker and restart them one by one. Note that the older Scala clients,
+        which are no longer maintained, do not support the message format introduced in 0.11, so to avoid conversion costs
+        (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
+        the newer Java clients must be used.
+    </li>
+</ol>
+
+<h5><a id="upgrade_311_notable" href="#upgrade_311_notable">Notable changes in 3.1.1</a></h5>
+<ul>
+    <li>Idempotence for the producer is enabled by default if no conflicting configurations are set.
+        A bug prevented the producer idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
+	<code>enable.idempotence</code> to true. See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a> for more details.
+        This issue was fixed and the default is properly applied.</li>
+    <li>A notable exception is Connect that by default disables idempotent behavior for all of its
+        producers in order to uniformly support using a wide range of Kafka broker versions.
+        Users can change this behavior to enable idempotence for some or all producers
+        via Connect worker and/or connector configuration. Connect may enable idempotent producers
+        by default in a future major release.</li>
+    <li>Kafka has replaced log4j with reload4j due to security concerns.
+        This only affects modules that specify a logging backend (<code>connect-runtime</code> and <code>kafka-tools</code> are two such examples).
+        A number of modules, including <code>kafka-clients</code>, leave it to the application to specify the logging backend.
+        More information can be found at <a href="https://reload4j.qos.ch">reload4j</a>.
+        Projects that depend on the affected modules from the Kafka project should use
+        <a href="https://www.slf4j.org/manual.html#swapping">slf4j-log4j12 version 1.7.35 or above</a> or
+        slf4j-reload4j to avoid
+        <a href="https://www.slf4j.org/codes.html#no_tlm">possible compatibility issues originating from the logging framework</a>.</li>
+</ul>
+
+<h5><a id="upgrade_310_notable" href="#upgrade_310_notable">Notable changes in 3.1.0</a></h5>
+<ul>
+    <li>Apache Kafka supports Java 17.</li>
+    <li>The following metrics have been deprecated: <code>bufferpool-wait-time-total</code>, <code>io-waittime-total</code>,
+        and <code>iotime-total</code>. Please use <code>bufferpool-wait-time-ns-total</code>, <code>io-wait-time-ns-total</code>,
+        and <code>io-time-ns-total</code> instead. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-773%3A+Differentiate+consistently+metric+latency+measured+in+millis+and+nanos">KIP-773</a>
+        for more details.</li>
+    <li>The cooperative rebalancing protocol has been the default since 2.4, but we have continued to support the
+        eager rebalancing protocol to provide users an upgrade path. This support will be dropped in a future release,
+        so any users still on the eager protocol should prepare to finish upgrading their applications to the cooperative protocol in version 3.1.
+        This only affects users who are still on a version older than 2.4, and users who have upgraded already but have not yet
+        removed the <code>upgrade.from</code> config that they set when upgrading from a version below 2.4.
+        Users fitting into the latter case will simply need to unset this config when upgrading beyond 3.1,
+        while users in the former case will need to follow a slightly different upgrade path if they attempt to upgrade from 2.3 or below to a version above 3.1.
+        Those applications will need to go through a bridge release, by first upgrading to a version between 2.4 - 3.1 and setting the <code>upgrade.from</code> config,
+        then removing that config and upgrading to the final version above 3.1. See <a href="https://issues.apache.org/jira/browse/KAFKA-8575">KAFKA-8575</a>
+        for more details.</li>
+    <li>IBP 3.1 introduces topic IDs to FetchRequest as a part of
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-516%3A+Topic+Identifiers">KIP-516</a>.</li>
+</ul>
+
+<h4><a id="upgrade_3_0_1" href="#upgrade_3_0_1">Upgrading to 3.0.1 from any version 0.8.x through 2.8.x</a></h4>
+
+<p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.
+    Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
+
+<p><b>For a rolling upgrade:</b></p>
+
+<ol>
+    <li>Update server.properties on all brokers and add the following properties. CURRENT_KAFKA_VERSION refers to the version you
+        are upgrading from. CURRENT_MESSAGE_FORMAT_VERSION refers to the message format version currently in use. If you have previously
+        overridden the message format version, you should keep its current value. Alternatively, if you are upgrading from a version prior
+        to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>2.8</code>, <code>2.7</code>, etc.)</li>
+            <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
+                following the upgrade</a> for the details on what this configuration does.)</li>
+        </ul>
+        If you are upgrading from version 0.11.0.x or above, and you have not overridden the message format, then you only need to override
+        the inter-broker protocol version.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>2.8</code>, <code>2.7</code>, etc.)</li>
+        </ul>
+    </li>
+    <li>Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
+        brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
+        It is still possible to downgrade at this point if there are any problems.
+    </li>
+    <li>Once the cluster's behavior and performance has been verified, bump the protocol version by editing
+        <code>inter.broker.protocol.version</code> and setting it to <code>3.0</code>.
+    </li>
+    <li>Restart the brokers one by one for the new protocol version to take effect. Once the brokers begin using the latest
+        protocol version, it will no longer be possible to downgrade the cluster to an older version.
+    </li>
+    <li>If you have overridden the message format version as instructed above, then you need to do one more rolling restart to
+        upgrade it to its latest version. Once all (or most) consumers have been upgraded to 0.11.0 or later,
+        change log.message.format.version to 3.0 on each broker and restart them one by one. Note that the older Scala clients,
+        which are no longer maintained, do not support the message format introduced in 0.11, so to avoid conversion costs
+        (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
+        the newer Java clients must be used.
+    </li>
+</ol>
+
+<h5><a id="upgrade_301_notable" href="#upgrade_301_notable">Notable changes in 3.0.1</a></h5>
+<ul>
+    <li>Idempotence for the producer is enabled by default if no conflicting configurations are set.
+        A bug prevented the producer idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
+	<code>enable.idempotence</code> to true. See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a> for more details.
+        This issue was fixed and the default is properly applied.</li>
+</ul>
+
 <h5><a id="upgrade_300_notable" href="#upgrade_300_notable">Notable changes in 3.0.0</a></h5>
 <ul>
+    <li>The producer has stronger delivery guarantees by default: <code>idempotence</code> is enabled and <code>acks</code> is set to <code>all</code> instead of <code>1</code>.
+        See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-679%3A+Producer+will+enable+the+strongest+delivery+guarantee+by+default">KIP-679</a> for details.
+	In 3.0.0 and 3.1.0, a bug prevented the idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
+	<code>enable.idempotence</code> to true. Note that the bug did not affect the <code>acks=all</code> change. See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a> for more details.
+        This issue was fixed and the default is properly applied in 3.0.1, 3.1.1, and 3.2.0.</li>
+    <li>Java 8 and Scala 2.12 support have been deprecated since Apache Kafka 3.0 and will be removed in Apache Kafka 4.0.
+        See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223">KIP-750</a>
+        and <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218">KIP-751</a> for more details.</li>
     <li>ZooKeeper has been upgraded to version 3.6.3.</li>
+    <li>A preview of KRaft mode is available, though upgrading to it from the 2.8 Early Access release is not possible. See
+        the <code>config/kraft/README.md</code> file for details.</li>
     <li>The release tarball no longer includes test, sources, javadoc and test sources jars. These are still published to the Maven Central repository. </li>
     <li>A number of implementation dependency jars are <a href="https://github.com/apache/kafka/pull/10203">now available in the runtime classpath
         instead of compile and runtime classpaths</a>. Compilation errors after the upgrade can be fixed by adding the missing dependency jar(s) explicitly
@@ -30,7 +249,7 @@
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-735%3A+Increase+default+consumer+session+timeout">KIP-735</a> for more details.</li>
     <li>The broker configuration <code>log.message.format.version</code> and topic configuration <code>message.format.version</code> have been deprecated.
         The value of both configurations is always assumed to be <code>3.0</code> if <code>inter.broker.protocol.version</code> is <code>3.0</code> or higher.
-        If <code>log.message.format.version</code> or <<code>message.format.version</code> are set, we recommend clearing them at the same time as the
+        If <code>log.message.format.version</code> or <code>message.format.version</code> are set, we recommend clearing them at the same time as the
         <code>inter.broker.protocol.version</code> upgrade to 3.0. This will avoid potential compatibility issues if the <code>inter.broker.protocol.version</code>
         is downgraded. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-724%3A+Drop+support+for+message+formats+v0+and+v1">KIP-724</a> for more details.</li>
     <li>The Streams API removed all deprecated APIs that were deprecated in version 2.5.0 or earlier.
@@ -116,6 +335,48 @@
     </li>
 </ul>
 
+<h4><a id="upgrade_2_8_1" href="#upgrade_2_8_1">Upgrading to 2.8.1 from any version 0.8.x through 2.7.x</a></h4>
+
+<p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.
+    Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
+
+<p><b>For a rolling upgrade:</b></p>
+
+<ol>
+    <li> Update server.properties on all brokers and add the following properties. CURRENT_KAFKA_VERSION refers to the version you
+        are upgrading from. CURRENT_MESSAGE_FORMAT_VERSION refers to the message format version currently in use. If you have previously
+        overridden the message format version, you should keep its current value. Alternatively, if you are upgrading from a version prior
+        to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>2.7</code>, <code>2.6</code>, etc.)</li>
+            <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
+                following the upgrade</a> for the details on what this configuration does.)</li>
+        </ul>
+        If you are upgrading from version 0.11.0.x or above, and you have not overridden the message format, then you only need to override
+        the inter-broker protocol version.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>2.7</code>, <code>2.6</code>, etc.)</li>
+        </ul>
+    </li>
+    <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
+        brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
+        It is still possible to downgrade at this point if there are any problems.
+    </li>
+    <li> Once the cluster's behavior and performance has been verified, bump the protocol version by editing
+        <code>inter.broker.protocol.version</code> and setting it to <code>2.8</code>.
+    </li>
+    <li> Restart the brokers one by one for the new protocol version to take effect. Once the brokers begin using the latest
+        protocol version, it will no longer be possible to downgrade the cluster to an older version.
+    </li>
+    <li> If you have overridden the message format version as instructed above, then you need to do one more rolling restart to
+        upgrade it to its latest version. Once all (or most) consumers have been upgraded to 0.11.0 or later,
+        change log.message.format.version to 2.8 on each broker and restart them one by one. Note that the older Scala clients,
+        which are no longer maintained, do not support the message format introduced in 0.11, so to avoid conversion costs
+        (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
+        the newer Java clients must be used.
+    </li>
+</ol>
+
 <h5><a id="upgrade_280_notable" href="#upgrade_280_notable">Notable changes in 2.8.0</a></h5>
 <ul>
     <li>
@@ -149,14 +410,14 @@
         overridden the message format version, you should keep its current value. Alternatively, if you are upgrading from a version prior
         to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
         <ul>
-            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g., <code>2.6</code>, <code>2.5</code>, etc.)</li>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>2.6</code>, <code>2.5</code>, etc.)</li>
             <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
                 following the upgrade</a> for the details on what this configuration does.)</li>
         </ul>
         If you are upgrading from version 0.11.0.x or above, and you have not overridden the message format, then you only need to override
         the inter-broker protocol version.
         <ul>
-            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g., <code>2.6</code>, <code>2.5</code>, etc.)</li>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>2.6</code>, <code>2.5</code>, etc.)</li>
         </ul>
     </li>
     <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
@@ -184,8 +445,8 @@
         The 2.7.0 release includes the core Raft implementation specified in
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-595%3A+A+Raft+Protocol+for+the+Metadata+Quorum">KIP-595</a>.
         There is a separate "raft" module containing most of the logic. Until integration with the
-        controller is complete, there is a standalone server that users can use for testing the p
-        erformance of the Raft implementation.  See the README.md in the raft module for details
+        controller is complete, there is a standalone server that users can use for testing the
+        performance of the Raft implementation.  See the README.md in the raft module for details
     </li>
     <li>
         KIP-651 <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-651+-+Support+PEM+format+for+SSL+certificates+and+private+key">adds support</a>
@@ -263,14 +524,14 @@
         overridden the message format version, you should keep its current value. Alternatively, if you are upgrading from a version prior
         to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
         <ul>
-            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g., <code>2.5</code>, <code>2.4</code>, etc.)</li>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>2.5</code>, <code>2.4</code>, etc.)</li>
             <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
                 following the upgrade</a> for the details on what this configuration does.)</li>
         </ul>
         If you are upgrading from version 0.11.0.x or above, and you have not overridden the message format, then you only need to override
         the inter-broker protocol version.
         <ul>
-            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g., <code>2.5</code>, <code>2.4</code>, etc.)</li>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>2.5</code>, <code>2.4</code>, etc.)</li>
         </ul>
     </li>
     <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
@@ -327,14 +588,14 @@
         overridden the message format version, you should keep its current value. Alternatively, if you are upgrading from a version prior
         to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
         <ul>
-            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g., <code>2.4</code>, <code>2.3</code>, etc.)</li>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>2.4</code>, <code>2.3</code>, etc.)</li>
             <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
                 following the upgrade</a> for the details on what this configuration does.)</li>
         </ul>
         If you are upgrading from version 0.11.0.x or above, and you have not overridden the message format, then you only need to override
         the inter-broker protocol version.
         <ul>
-            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g., <code>2.4</code>, <code>2.3</code>, etc.)</li>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>2.4</code>, <code>2.3</code>, etc.)</li>
         </ul>
     </li>
     <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
@@ -503,7 +764,7 @@
         can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-520%3A+Add+overloaded+Consumer%23committed+for+batching+partitions">KIP-520</a>).
     </li>
     <li>We've introduced a new <code>INVALID_RECORD</code> error in the produce response to distinguish from the <code>CORRUPT_MESSAGE</code> error.
-        To be more concrete, previously when a batch of records were sent as part of a single request to the broker and one or more of the records failed
+        To be more concrete, previously when a batch of records was sent as part of a single request to the broker and one or more of the records failed
         the validation due to various causes (mismatch magic bytes, crc checksum errors, null key for log compacted topics, etc), the whole batch would be rejected
         with the same and misleading <code>CORRUPT_MESSAGE</code>, and the caller of the producer client would see the corresponding exception from either
         the future object of <code>RecordMetadata</code> returned from the <code>send</code> call as well as in the <code>Callback#onCompletion(RecordMetadata metadata, Exception exception)</code>
@@ -1025,7 +1286,7 @@
         caused by hardware failure. Users need to monitor the per-broker metric <code>offlineLogDirectoryCount</code> to check
         whether there is offline log directory. </li>
     <li>Added KafkaStorageException which is a retriable exception. KafkaStorageException will be converted to NotLeaderForPartitionException in the response
-        if the version of client's FetchRequest or ProducerRequest does not support KafkaStorageException. </li>
+        if the version of the client's FetchRequest or ProducerRequest does not support KafkaStorageException. </li>
     <li>-XX:+DisableExplicitGC was replaced by -XX:+ExplicitGCInvokesConcurrent in the default JVM settings. This helps
         avoid out of memory exceptions during allocation of native memory by direct buffers in some cases.</li>
     <li>The overridden <code>handleError</code> method implementations have been removed from the following deprecated classes in
@@ -1532,9 +1793,9 @@ only support 0.10.1.x or later brokers while 0.10.1.x brokers also support older
     <li> The new Java Consumer now supports heartbeating from a background thread. There is a new configuration
          <code>max.poll.interval.ms</code> which controls the maximum time between poll invocations before the consumer
          will proactively leave the group (5 minutes by default). The value of the configuration
-         <code>request.timeout.ms</code> must always be larger than <code>max.poll.interval.ms</code> because this is the maximum
-         time that a JoinGroup request can block on the server while the consumer is rebalancing, so we have changed its default
-         value to just above 5 minutes. Finally, the default value of <code>session.timeout.ms</code> has been adjusted down to
+         <code>request.timeout.ms</code> (default to 30 seconds) must always be smaller than <code>max.poll.interval.ms</code>(default to 5 minutes),
+         since that is the maximum time that a JoinGroup request can block on the server while the consumer is rebalance.
+         Finally, the default value of <code>session.timeout.ms</code> has been adjusted down to
          10 seconds, and the default value of <code>max.poll.records</code> has been changed to 500.</li>
     <li> When using an Authorizer and a user doesn't have <b>Describe</b> authorization on a topic, the broker will no
          longer return TOPIC_AUTHORIZATION_FAILED errors to requests since this leaks topic names. Instead, the UNKNOWN_TOPIC_OR_PARTITION
@@ -1652,7 +1913,7 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
          To maintain compatibility with old clients, this change only applies to Message format 0.10.0 and later.
          Clients that Produce/Fetch LZ4-compressed messages using v0/v1 (Message format 0.9.0) should continue
          to use the 0.9.0 framing implementation. Clients that use Produce/Fetch protocols v2 or later
-         should use interoperable LZ4f framing. A list of interoperable LZ4 libraries is available at http://www.lz4.org/
+         should use interoperable LZ4f framing. A list of interoperable LZ4 libraries is available at <a href="https://www.lz4.org/">https://www.lz4.org/</a>
 </ul>
 
 <h5><a id="upgrade_10_notable" href="#upgrade_10_notable">Notable changes in 0.10.0.0</a></h5>

@@ -41,7 +41,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<CoordinatorKey, Map<TopicPartition, Errors>> {
+public class AlterConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<TopicPartition, Errors>> {
 
     private final CoordinatorKey groupId;
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
@@ -83,7 +83,7 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
     }
 
     @Override
-    public OffsetCommitRequest.Builder buildRequest(
+    public OffsetCommitRequest.Builder buildBatchedRequest(
         int coordinatorId,
         Set<CoordinatorKey> groupIds
     ) {
@@ -159,24 +159,24 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
         Set<CoordinatorKey> groupsToRetry
     ) {
         switch (error) {
-            // If the coordinator is in the middle of loading, then we just need to retry.
+            // If the coordinator is in the middle of loading, or rebalance is in progress, then we just need to retry.
             case COORDINATOR_LOAD_IN_PROGRESS:
-                log.debug("OffsetCommit request for group id {} failed because the coordinator" +
-                    " is still in the process of loading state. Will retry.", groupId.idValue);
+            case REBALANCE_IN_PROGRESS:
+                log.debug("OffsetCommit request for group id {} returned error {}. Will retry.",
+                    groupId.idValue, error);
                 groupsToRetry.add(groupId);
                 break;
 
             // If the coordinator is not available, then we unmap and retry.
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
-                log.debug("OffsetCommit request for group id {} returned error {}. Will retry.",
+                log.debug("OffsetCommit request for group id {} returned error {}. Will rediscover the coordinator and retry.",
                     groupId.idValue, error);
                 groupsToUnmap.add(groupId);
                 break;
 
             // Group level errors.
             case INVALID_GROUP_ID:
-            case REBALANCE_IN_PROGRESS:
             case INVALID_COMMIT_OFFSET_SIZE:
             case GROUP_AUTHORIZATION_FAILED:
                 log.debug("OffsetCommit request for group id {} failed due to error {}.",

@@ -37,12 +37,12 @@ public final class ValueAndTimestamp<V> {
     }
 
     /**
-     * Create a new {@link ValueAndTimestamp} instance if the provide {@code value} is not {@code null}.
+     * Create a new {@link ValueAndTimestamp} instance if the provided {@code value} is not {@code null}.
      *
      * @param value      the value
      * @param timestamp  the timestamp
      * @param <V> the type of the value
-     * @return a new {@link ValueAndTimestamp} instance if the provide {@code value} is not {@code null};
+     * @return a new {@link ValueAndTimestamp} instance if the provided {@code value} is not {@code null};
      *         otherwise {@code null} is returned
      */
     public static <V> ValueAndTimestamp<V> make(final V value,

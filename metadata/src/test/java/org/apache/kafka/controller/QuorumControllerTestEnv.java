@@ -17,31 +17,73 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.metalog.LocalLogManagerTestEnv;
-import org.apache.kafka.test.TestUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.controller.QuorumController.Builder;
+import org.apache.kafka.metalog.LocalLogManagerTestEnv;
+import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.test.TestUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class QuorumControllerTestEnv implements AutoCloseable {
     private static final Logger log =
         LoggerFactory.getLogger(QuorumControllerTestEnv.class);
 
     private final List<QuorumController> controllers;
+    private final LocalLogManagerTestEnv logEnv;
 
-    public QuorumControllerTestEnv(LocalLogManagerTestEnv logEnv,
-                                   Consumer<QuorumController.Builder> builderConsumer)
-                                   throws Exception {
+    public QuorumControllerTestEnv(
+        LocalLogManagerTestEnv logEnv,
+        Consumer<QuorumController.Builder> builderConsumer
+    ) throws Exception {
+        this(logEnv, builderConsumer, OptionalLong.empty(), OptionalLong.empty(), BootstrapMetadata.create(MetadataVersion.latest()));
+    }
+
+    public QuorumControllerTestEnv(
+            LocalLogManagerTestEnv logEnv,
+            Consumer<Builder> builderConsumer,
+            OptionalLong sessionTimeoutMillis,
+            OptionalLong leaderImbalanceCheckIntervalNs,
+            MetadataVersion metadataVersion
+    ) throws Exception {
+        this(logEnv, builderConsumer, sessionTimeoutMillis, leaderImbalanceCheckIntervalNs, BootstrapMetadata.create(metadataVersion));
+    }
+
+    public QuorumControllerTestEnv(
+        LocalLogManagerTestEnv logEnv,
+        Consumer<Builder> builderConsumer,
+        OptionalLong sessionTimeoutMillis,
+        OptionalLong leaderImbalanceCheckIntervalNs,
+        BootstrapMetadata bootstrapMetadata
+    ) throws Exception {
+        this.logEnv = logEnv;
         int numControllers = logEnv.logManagers().size();
         this.controllers = new ArrayList<>(numControllers);
         try {
+            ApiVersions apiVersions = new ApiVersions();
+            List<Integer> nodeIds = IntStream.range(0, numControllers).boxed().collect(Collectors.toList());
             for (int i = 0; i < numControllers; i++) {
-                QuorumController.Builder builder = new QuorumController.Builder(i);
+                QuorumController.Builder builder = new QuorumController.Builder(i, logEnv.clusterId());
                 builder.setRaftClient(logEnv.logManagers().get(i));
+                builder.setBootstrapMetadata(bootstrapMetadata);
+                builder.setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs);
+                builder.setQuorumFeatures(new QuorumFeatures(i, apiVersions, QuorumFeatures.defaultFeatureMap(), nodeIds));
+                sessionTimeoutMillis.ifPresent(timeout -> {
+                    builder.setSessionTimeoutNs(NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS));
+                });
                 builderConsumer.accept(builder);
                 this.controllers.add(builder.build());
             }
@@ -54,21 +96,20 @@ public class QuorumControllerTestEnv implements AutoCloseable {
     QuorumController activeController() throws InterruptedException {
         AtomicReference<QuorumController> value = new AtomicReference<>(null);
         TestUtils.retryOnExceptionWithTimeout(20000, 3, () -> {
-            QuorumController activeController = null;
+            LeaderAndEpoch leader = logEnv.leaderAndEpoch();
             for (QuorumController controller : controllers) {
-                if (controller.isActive()) {
-                    if (activeController != null) {
-                        throw new RuntimeException("node " + activeController.nodeId() +
-                            " thinks it's the leader, but so does " + controller.nodeId());
-                    }
-                    activeController = controller;
+                if (OptionalInt.of(controller.nodeId()).equals(leader.leaderId()) &&
+                    controller.curClaimEpoch() == leader.epoch()) {
+                    value.set(controller);
+                    break;
                 }
             }
-            if (activeController == null) {
-                throw new RuntimeException("No leader found.");
+
+            if (value.get() == null) {
+                throw new RuntimeException(String.format("Expected to see %s as leader", leader));
             }
-            value.set(activeController);
         });
+
         return value.get();
     }
 

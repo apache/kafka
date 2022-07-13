@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, NoSuchFileException, StandardOpenOption}
 import java.util.concurrent.ConcurrentSkipListMap
-import kafka.log.Log.offsetFromFile
+import kafka.log.UnifiedLog.offsetFromFile
 import kafka.server.LogOffsetMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe, threadsafe}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -346,6 +346,8 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
 }
 
 object ProducerStateManager {
+  val LateTransactionBufferMs = 5 * 60 * 1000
+
   private val ProducerSnapshotVersion: Short = 1
   private val VersionField = "version"
   private val CrcField = "crc"
@@ -452,7 +454,7 @@ object ProducerStateManager {
     }
   }
 
-  private def isSnapshotFile(file: File): Boolean = file.getName.endsWith(Log.ProducerSnapshotFileSuffix)
+  private def isSnapshotFile(file: File): Boolean = file.getName.endsWith(UnifiedLog.ProducerSnapshotFileSuffix)
 
   // visible for testing
   private[log] def listSnapshotFiles(dir: File): Seq[SnapshotFile] = {
@@ -481,10 +483,13 @@ object ProducerStateManager {
  * been deleted.
  */
 @nonthreadsafe
-class ProducerStateManager(val topicPartition: TopicPartition,
-                           @volatile var _logDir: File,
-                           val maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
-                           val time: Time = Time.SYSTEM) extends Logging {
+class ProducerStateManager(
+  val topicPartition: TopicPartition,
+  @volatile var _logDir: File,
+  val maxTransactionTimeoutMs: Int,
+  val maxProducerIdExpirationMs: Int,
+  val time: Time
+) extends Logging {
   import ProducerStateManager._
   import java.util
 
@@ -498,11 +503,22 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   private var lastMapOffset = 0L
   private var lastSnapOffset = 0L
 
+  // Keep track of the last timestamp from the oldest transaction. This is used
+  // to detect (approximately) when a transaction has been left hanging on a partition.
+  // We make the field volatile so that it can be safely accessed without a lock.
+  @volatile private var oldestTxnLastTimestamp: Long = -1L
+
   // ongoing transactions sorted by the first offset of the transaction
   private val ongoingTxns = new util.TreeMap[Long, TxnMetadata]
 
   // completed transactions whose markers are at offsets above the high watermark
   private val unreplicatedTxns = new util.TreeMap[Long, TxnMetadata]
+
+  @threadsafe
+  def hasLateTransaction(currentTimeMs: Long): Boolean = {
+    val lastTimestamp = oldestTxnLastTimestamp
+    lastTimestamp > 0 && (currentTimeMs - lastTimestamp) > maxTransactionTimeoutMs + ProducerStateManager.LateTransactionBufferMs
+  }
 
   /**
    * Load producer state snapshots by scanning the _logDir.
@@ -612,6 +628,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
             loadedProducers.foreach(loadProducerEntry)
             lastSnapOffset = snapshot.offset
             lastMapOffset = lastSnapOffset
+            updateOldestTxnTimestamp()
             return
           } catch {
             case e: CorruptSnapshotException =>
@@ -664,6 +681,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     if (logEndOffset != mapEndOffset) {
       producers.clear()
       ongoingTxns.clear()
+      updateOldestTxnTimestamp()
 
       // since we assume that the offset is less than or equal to the high watermark, it is
       // safe to clear the unreplicated transactions
@@ -700,6 +718,20 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     appendInfo.startedTransactions.foreach { txn =>
       ongoingTxns.put(txn.firstOffset.messageOffset, txn)
     }
+
+    updateOldestTxnTimestamp()
+  }
+
+  private def updateOldestTxnTimestamp(): Unit = {
+    val firstEntry = ongoingTxns.firstEntry()
+    if (firstEntry == null) {
+      oldestTxnLastTimestamp = -1
+    } else {
+      val oldestTxnMetadata = firstEntry.getValue
+      oldestTxnLastTimestamp = producers.get(oldestTxnMetadata.producerId)
+        .map(_.lastTimestamp)
+        .getOrElse(-1L)
+    }
   }
 
   def updateMapEndOffset(lastOffset: Long): Unit = {
@@ -717,7 +749,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   def takeSnapshot(): Unit = {
     // If not a new offset, then it is not worth taking another snapshot
     if (lastMapOffset > lastSnapOffset) {
-      val snapshotFile = SnapshotFile(Log.producerSnapshotFile(_logDir, lastMapOffset))
+      val snapshotFile = SnapshotFile(UnifiedLog.producerSnapshotFile(_logDir, lastMapOffset))
       val start = time.hiResClockMs()
       writeSnapshot(snapshotFile.file, producers)
       info(s"Wrote producer snapshot at offset $lastMapOffset with ${producers.size} producer ids in ${time.hiResClockMs() - start} ms.")
@@ -789,6 +821,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     }
     lastSnapOffset = 0L
     lastMapOffset = offset
+    updateOldestTxnTimestamp()
   }
 
   /**
@@ -813,6 +846,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
     txnMetadata.lastOffset = Some(completedTxn.lastOffset)
     unreplicatedTxns.put(completedTxn.firstOffset, txnMetadata)
+    updateOldestTxnTimestamp()
   }
 
   @threadsafe
@@ -857,7 +891,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       // deletion, so ignoring the exception here just means that the intended operation was
       // already completed.
       try {
-        snapshot.renameTo(Log.DeletedFileSuffix)
+        snapshot.renameTo(UnifiedLog.DeletedFileSuffix)
         Some(snapshot)
       } catch {
         case _: NoSuchFileException =>

@@ -1,10 +1,10 @@
-KRaft (aka KIP-500) mode Early Access Release
+KRaft (aka KIP-500) mode Preview Release
 =========================================================
 
 # Introduction
 It is now possible to run Apache Kafka without Apache ZooKeeper!  We call this the [Kafka Raft metadata mode](https://cwiki.apache.org/confluence/display/KAFKA/KIP-500%3A+Replace+ZooKeeper+with+a+Self-Managed+Metadata+Quorum), typically shortened to `KRaft mode`.
-`KRaft` is intended to be pronounced like `craft` (as in `craftsmanship`). It is currently *EARLY ACCESS AND SHOULD NOT BE USED IN PRODUCTION*, but it
-is available for testing in the Kafka 2.8 release.
+`KRaft` is intended to be pronounced like `craft` (as in `craftsmanship`). It is currently *PREVIEW AND SHOULD NOT BE USED IN PRODUCTION*, but it
+is available for testing in the Kafka 3.1 release.
 
 When the Kafka cluster is in KRaft mode, it does not store its metadata in ZooKeeper.  In fact, you do not have to run ZooKeeper at all, because it stores its metadata in a KRaft quorum of controller nodes.
 
@@ -14,8 +14,8 @@ Most important of all, KRaft mode is more scalable.  We expect to be able to [su
 # Quickstart
 
 ## Warning
-KRaft mode in Kafka 2.8 is provided for testing only, *NOT* for production.  We do not yet support upgrading existing ZooKeeper-based Kafka clusters into this mode.  In fact, when Kafka 3.0 is released,
-it will not be possible to upgrade your KRaft clusters from 2.8 to 3.0.  There may be bugs, including serious ones.  You should *assume that your data could be lost at any time* if you try the early access release of KRaft mode.
+KRaft mode in Kafka 3.1 is provided for testing only, *NOT* for production.  We do not yet support upgrading existing ZooKeeper-based Kafka clusters into this mode.  
+There may be bugs, including serious ones.  You should *assume that your data could be lost at any time* if you try the preview release of KRaft mode.
 
 ## Generate a cluster ID
 The first step is to generate an ID for your new cluster, using the kafka-storage tool:
@@ -35,6 +35,9 @@ Formatting /tmp/kraft-combined-logs
 
 If you are using multiple nodes, then you should run the format command on each node.  Be sure to use the same cluster ID for each one.
 
+This example configures the node as both a broker and controller (i.e. `process.roles=broker,controller`). It is also possible to run the broker and controller nodes separately.
+Please see [here](https://github.com/apache/kafka/blob/trunk/config/kraft/broker.properties) and [here](https://github.com/apache/kafka/blob/trunk/config/kraft/controller.properties) for example configurations.
+
 ## Start the Kafka Server
 Finally, you are ready to start the Kafka server on each node.
 
@@ -42,7 +45,7 @@ Finally, you are ready to start the Kafka server on each node.
 $ ./bin/kafka-server-start.sh ./config/kraft/server.properties
 [2021-02-26 15:37:11,071] INFO Registered kafka:type=kafka.Log4jController MBean (kafka.utils.Log4jControllerRegistration$)
 [2021-02-26 15:37:11,294] INFO Setting -D jdk.tls.rejectClientInitiatedRenegotiation=true to disable client-initiated TLS renegotiation (org.apache.zookeeper.common.X509Util)
-[2021-02-26 15:37:11,466] INFO [Log partition=@metadata-0, dir=/tmp/kraft-combined-logs] Loading producer state till offset 0 with message format version 2 (kafka.log.Log)
+[2021-02-26 15:37:11,466] INFO [Log partition=__cluster_metadata-0, dir=/tmp/kraft-combined-logs] Loading producer state till offset 0 with message format version 2 (kafka.log.Log)
 [2021-02-26 15:37:11,509] INFO [raft-expiration-reaper]: Starting (kafka.raft.TimingWheelExpirationService$ExpiredOperationReaper)
 [2021-02-26 15:37:11,640] INFO [RaftManager nodeId=1] Completed transition to Unattached(epoch=0, voters=[1], electionTimeoutMs=9037) (org.apache.kafka.raft.QuorumState)
 ...
@@ -93,7 +96,7 @@ controller.quorum.voters=1@controller1.example.com:9093,2@controller2.example.co
 
 Each broker and each controller must set `controller.quorum.voters`.  Note that the node ID supplied in the `controller.quorum.voters` configuration must match that supplied to the server.
 So on controller1, node.id must be set to 1, and so forth.  Note that there is no requirement for controller IDs to start at 0 or 1.  However, the easiest and least confusing way to allocate
-node IDs is probably just to give each server a numeric ID, starting from 0.
+node IDs is probably just to give each server a numeric ID, starting from 0.  Also note that each node ID must be unique across all the nodes in a particular cluster; no two nodes can have the same node ID regardless of their `process.roles` values.
 
 Note that clients never need to configure `controller.quorum.voters`; only servers do.
 
@@ -107,22 +110,18 @@ This is particularly important for the metadata log maintained by the controller
 nothing in the log, which would cause all metadata to be lost.
 
 # Missing Features
-We do not yet support generating or loading KIP-630 metadata snapshots.  This means that after a while, the time required to restart a broker will become very large.  This is a known issue and we are working on
-completing snapshots for the next release.
-
-We also don't support any kind of upgrade right now, either to or from KRaft mode.  This is another important gap that we are working on.
+We don't support any kind of upgrade right now, either to or from KRaft mode.  This is an important gap that we are working on.
 
 Finally, the following Kafka features have not yet been fully implemented:
 
-* Support for certain security features: configuring an Authorizer, setting up SCRAM, delegation tokens, and so forth
-* Support for transactions and exactly-once semantics
-* Support for adding partitions to existing topics
-* Support for partition reassignment
+* Configuring SCRAM users via the administrative API
+* Supporting JBOD configurations with multiple storage directories
+* Modifying certain dynamic configurations on the standalone KRaft controller
 * Support for some configurations, like enabling unclean leader election by default or dynamically changing broker endpoints
-* Support for KIP-112 "JBOD" modes
-* Support for KIP-631 controller metrics
+* Delegation tokens
+* Upgrade from ZooKeeper mode
 
-We've tried to make it clear when a feature is not supported in the early access release, but you may encounter some rough edges. We will cover these feature gaps incrementally in the `trunk` branch.
+We've tried to make it clear when a feature is not supported in the preview release, but you may encounter some rough edges. We will cover these feature gaps incrementally in the `trunk` branch.
 
 # Debugging
 If you encounter an issue, you might want to take a look at the metadata log.
@@ -131,8 +130,8 @@ If you encounter an issue, you might want to take a look at the metadata log.
 One way to view the metadata log is with kafka-dump-log.sh tool, like so:
 
 ~~~~
-$ ./bin/kafka-dump-log.sh  --cluster-metadata-decoder --skip-record-metadata --files /tmp/kraft-combined-logs/\@metadata-0/*.log
-Dumping /tmp/kraft-combined-logs/@metadata-0/00000000000000000000.log
+$ ./bin/kafka-dump-log.sh  --cluster-metadata-decoder --skip-record-metadata --files /tmp/kraft-combined-logs/__cluster_metadata-0/*.log
+Dumping /tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log
 Starting offset: 0
 baseOffset: 0 lastOffset: 0 count: 1 baseSequence: -1 lastSequence: -1 producerId: -1 producerEpoch: -1 partitionLeaderEpoch: 1 isTransactional: false isControl: true position: 0 CreateTime: 1614382631640 size: 89 magic: 2 compresscodec: NONE crc: 1438115474 isvalid: true
 
@@ -157,7 +156,7 @@ baseOffset: 7 lastOffset: 8 count: 2 baseSequence: -1 lastSequence: -1 producerI
 Another tool for examining the metadata logs is the Kafka metadata shell.  Just like the ZooKeeper shell, this allows you to inspect the metadata of the cluster.
 
 ~~~~
-$ ./bin/kafka-metadata-shell.sh  --snapshot /tmp/kraft-combined-logs/\@metadata-0/00000000000000000000.log
+$ ./bin/kafka-metadata-shell.sh  --snapshot /tmp/kraft-combined-logs/__cluster_metadata-0/00000000000000000000.log
 >> ls /
 brokers  local  metadataQuorum  topicIds  topics
 >> ls /topics

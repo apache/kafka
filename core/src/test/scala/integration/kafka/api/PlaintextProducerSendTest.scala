@@ -36,7 +36,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   @Test
   def testWrongSerializer(): Unit = {
     val producerProps = new Properties()
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
     val producer = registerProducer(new KafkaProducer(producerProps))
@@ -46,7 +46,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
 
   @Test
   def testBatchSizeZero(): Unit = {
-    val producer = createProducer(brokerList = brokerList,
+    val producer = createProducer(
       lingerMs = Int.MaxValue,
       deliveryTimeoutMs = Int.MaxValue,
       batchSize = 0)
@@ -55,7 +55,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
 
   @Test
   def testSendCompressedMessageWithLogAppendTime(): Unit = {
-    val producer = createProducer(brokerList = brokerList,
+    val producer = createProducer(
       compressionType = "gzip",
       lingerMs = Int.MaxValue,
       deliveryTimeoutMs = Int.MaxValue)
@@ -64,7 +64,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
 
   @Test
   def testSendNonCompressedMessageWithLogAppendTime(): Unit = {
-    val producer = createProducer(brokerList = brokerList, lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
+    val producer = createProducer(lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
     sendAndVerifyTimestamp(producer, TimestampType.LOG_APPEND_TIME)
   }
 
@@ -75,7 +75,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
    */
   @Test
   def testAutoCreateTopic(): Unit = {
-    val producer = createProducer(brokerList)
+    val producer = createProducer()
     try {
       // Send a message to auto-create the topic
       val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
@@ -95,7 +95,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     topicProps.setProperty(LogConfig.MessageTimestampDifferenceMaxMsProp, "1000")
     createTopic(topic, 1, 2, topicProps)
 
-    val producer = createProducer(brokerList = brokerList)
+    val producer = createProducer()
     try {
       val e = assertThrows(classOf[ExecutionException],
         () => producer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()).getCause
@@ -105,7 +105,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     }
 
     // Test compressed messages.
-    val compressedProducer = createProducer(brokerList = brokerList, compressionType = "gzip")
+    val compressedProducer = createProducer(compressionType = "gzip")
     try {
       val e = assertThrows(classOf[ExecutionException],
         () => compressedProducer.send(new ProducerRecord(topic, 0, System.currentTimeMillis() - 1001, "key".getBytes, "value".getBytes)).get()).getCause
@@ -158,7 +158,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     }
 
     // Topic metadata not available, send should fail without blocking
-    val producer = createProducer(brokerList = brokerList, maxBlockMs = 0)
+    val producer = createProducer(maxBlockMs = 0)
     verifyMetadataNotAvailable(send(producer))
 
     // Test that send starts succeeding once metadata is available
@@ -166,7 +166,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     verifySendSuccess(future)
 
     // Verify that send fails immediately without blocking when there is no space left in the buffer
-    val producer2 = createProducer(brokerList = brokerList, maxBlockMs = 0,
+    val producer2 = createProducer(maxBlockMs = 0,
                                    lingerMs = 15000, batchSize = 1100, bufferSize = 1500)
     val future2 = sendUntilQueued(producer2) // wait until metadata is available and one record is queued
     verifyBufferExhausted(send(producer2))       // should fail send since buffer is full
@@ -176,7 +176,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   @Test
   def testSendRecordBatchWithMaxRequestSizeAndHigher(): Unit = {
     val producerProps = new Properties()
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     val producer = registerProducer(new KafkaProducer(producerProps, new ByteArraySerializer, new ByteArraySerializer))
 
     val keyLengthSize = 1

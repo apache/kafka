@@ -19,18 +19,18 @@ package org.apache.kafka.connect.file;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.sink.SinkConnector;
-import org.easymock.EasyMockSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.mock;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class FileStreamSinkConnectorTest extends EasyMockSupport {
+public class FileStreamSinkConnectorTest {
 
     private static final String MULTIPLE_TOPICS = "test1,test2";
     private static final String FILENAME = "/afilename";
@@ -42,7 +42,7 @@ public class FileStreamSinkConnectorTest extends EasyMockSupport {
     @BeforeEach
     public void setup() {
         connector = new FileStreamSinkConnector();
-        ctx = createMock(ConnectorContext.class);
+        ctx = mock(ConnectorContext.class);
         connector.initialize(ctx);
 
         sinkProperties = new HashMap<>();
@@ -52,18 +52,14 @@ public class FileStreamSinkConnectorTest extends EasyMockSupport {
 
     @Test
     public void testConnectorConfigValidation() {
-        replayAll();
         List<ConfigValue> configValues = connector.config().validate(sinkProperties);
         for (ConfigValue val : configValues) {
             assertEquals(0, val.errorMessages().size(), "Config property errors: " + val.errorMessages());
         }
-        verifyAll();
     }
 
     @Test
     public void testSinkTasks() {
-        replayAll();
-
         connector.start(sinkProperties);
         List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
         assertEquals(1, taskConfigs.size());
@@ -74,30 +70,20 @@ public class FileStreamSinkConnectorTest extends EasyMockSupport {
         for (int i = 0; i < 2; i++) {
             assertEquals(FILENAME, taskConfigs.get(0).get(FileStreamSinkConnector.FILE_CONFIG));
         }
-
-        verifyAll();
     }
 
     @Test
     public void testSinkTasksStdout() {
-        replayAll();
-
         sinkProperties.remove(FileStreamSourceConnector.FILE_CONFIG);
         connector.start(sinkProperties);
         List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
         assertEquals(1, taskConfigs.size());
         assertNull(taskConfigs.get(0).get(FileStreamSourceConnector.FILE_CONFIG));
-
-        verifyAll();
     }
 
     @Test
     public void testTaskClass() {
-        replayAll();
-
         connector.start(sinkProperties);
         assertEquals(FileStreamSinkTask.class, connector.taskClass());
-
-        verifyAll();
     }
 }
