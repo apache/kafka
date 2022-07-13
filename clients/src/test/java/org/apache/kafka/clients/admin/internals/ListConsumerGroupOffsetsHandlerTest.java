@@ -36,6 +36,8 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -67,18 +69,19 @@ public class ListConsumerGroupOffsetsHandlerTest {
     private final TopicPartition t2p0 = new TopicPartition("t2", 0);
     private final TopicPartition t2p1 = new TopicPartition("t2", 1);
     private final TopicPartition t2p2 = new TopicPartition("t2", 2);
-    private final List<TopicPartition> tps = Arrays.asList(t0p0, t0p1, t1p0, t1p1);
-    private final Map<String, List<TopicPartition>> requestMap =
-            new HashMap<String, List<TopicPartition>>() {{
-                put(groupZero, singletonList(t0p0));
-                put(groupOne, Arrays.asList(t0p0, t1p0, t1p1));
-                put(groupTwo, Arrays.asList(t0p0, t1p0, t1p1, t2p0, t2p1, t2p2));
+    private final Map<String, ListConsumerGroupOffsetsSpec> singleRequestMap = Collections.singletonMap(groupZero,
+            new ListConsumerGroupOffsetsSpec().topicPartitions(Arrays.asList(t0p0, t0p1, t1p0, t1p1)));
+    private final Map<String, ListConsumerGroupOffsetsSpec> batchedRequestMap =
+            new HashMap<String, ListConsumerGroupOffsetsSpec>() {{
+                put(groupZero, new ListConsumerGroupOffsetsSpec().topicPartitions(singletonList(t0p0)));
+                put(groupOne, new ListConsumerGroupOffsetsSpec().topicPartitions(Arrays.asList(t0p0, t1p0, t1p1)));
+                put(groupTwo, new ListConsumerGroupOffsetsSpec().topicPartitions(Arrays.asList(t0p0, t1p0, t1p1, t2p0, t2p1, t2p2)));
             }};
 
     @Test
     public void testBuildRequest() {
         ListConsumerGroupOffsetsHandler handler =
-            new ListConsumerGroupOffsetsHandler(Collections.singletonMap(groupZero, tps), false, logContext);
+            new ListConsumerGroupOffsetsHandler(singleRequestMap, false, logContext);
         OffsetFetchRequest request = handler.buildBatchedRequest(1, coordinatorKeys(groupZero)).build();
         assertEquals(groupZero, request.data().groups().get(0).groupId());
         assertEquals(2, request.data().groups().get(0).topics().size());
@@ -88,9 +91,10 @@ public class ListConsumerGroupOffsetsHandlerTest {
 
     @Test
     public void testBuildRequestWithMultipleGroups() {
-        Map<String, List<TopicPartition>> requestMap = new HashMap<>(this.requestMap);
+        Map<String, ListConsumerGroupOffsetsSpec> requestMap = new HashMap<>(this.batchedRequestMap);
         String groupThree = "group3";
-        requestMap.put(groupThree, Arrays.asList(new TopicPartition("t3", 0), new TopicPartition("t3", 1)));
+        requestMap.put(groupThree, new ListConsumerGroupOffsetsSpec()
+                .topicPartitions(Arrays.asList(new TopicPartition("t3", 0), new TopicPartition("t3", 1))));
 
         ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(requestMap, false, logContext);
         OffsetFetchRequest request1 = handler.buildBatchedRequest(1, coordinatorKeys(groupZero, groupOne, groupTwo)).build();
@@ -99,9 +103,11 @@ public class ListConsumerGroupOffsetsHandlerTest {
         OffsetFetchRequest request2 = handler.buildBatchedRequest(2, coordinatorKeys(groupThree)).build();
         assertEquals(Utils.mkSet(groupThree), requestGroups(request2));
 
-        Map<String, List<TopicPartition>> builtRequests = new HashMap<>();
-        builtRequests.putAll(request1.groupIdsToPartitions());
-        builtRequests.putAll(request2.groupIdsToPartitions());
+        Map<String, ListConsumerGroupOffsetsSpec> builtRequests = new HashMap<>();
+        request1.groupIdsToPartitions().forEach((group, partitions) ->
+                builtRequests.put(group, new ListConsumerGroupOffsetsSpec().topicPartitions(partitions)));
+        request2.groupIdsToPartitions().forEach((group, partitions) ->
+                builtRequests.put(group, new ListConsumerGroupOffsetsSpec().topicPartitions(partitions)));
 
         assertEquals(requestMap, builtRequests);
         Map<String, List<OffsetFetchRequestTopics>> groupIdsToTopics = request1.groupIdsToTopics();
@@ -165,7 +171,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
     public void testSuccessfulHandleResponseWithMultipleGroups() {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> expected = new HashMap<>();
         Map<String, Errors> errorMap = errorMap(groups, Errors.NONE);
-        assertCompletedForMultipleGroups(handleWithErrorWithMultipleGroups(errorMap, requestMap), expected);
+        assertCompletedForMultipleGroups(handleWithErrorWithMultipleGroups(errorMap, batchedRequestMap), expected);
     }
 
     @Test
@@ -180,7 +186,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         errorMap.put(groupZero, Errors.NOT_COORDINATOR);
         errorMap.put(groupOne, Errors.COORDINATOR_NOT_AVAILABLE);
         errorMap.put(groupTwo, Errors.NOT_COORDINATOR);
-        assertUnmappedWithMultipleGroups(handleWithErrorWithMultipleGroups(errorMap, requestMap));
+        assertUnmappedWithMultipleGroups(handleWithErrorWithMultipleGroups(errorMap, batchedRequestMap));
     }
 
     @Test
@@ -191,7 +197,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
     @Test
     public void testRetriableHandleResponseWithMultipleGroups() {
         Map<String, Errors> errorMap = errorMap(groups, Errors.COORDINATOR_LOAD_IN_PROGRESS);
-        assertRetriable(handleWithErrorWithMultipleGroups(errorMap, requestMap));
+        assertRetriable(handleWithErrorWithMultipleGroups(errorMap, batchedRequestMap));
     }
 
     @Test
@@ -212,7 +218,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         groupToExceptionMap.put(groupOne, GroupIdNotFoundException.class);
         groupToExceptionMap.put(groupTwo, InvalidGroupIdException.class);
         assertFailedForMultipleGroups(groupToExceptionMap,
-            handleWithErrorWithMultipleGroups(errorMap, requestMap));
+            handleWithErrorWithMultipleGroups(errorMap, batchedRequestMap));
     }
 
     private OffsetFetchResponse buildResponse(Errors error) {
@@ -230,8 +236,8 @@ public class ListConsumerGroupOffsetsHandlerTest {
 
     private AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> handleWithErrorWithMultipleGroups(
             Map<String, Errors> errorMap,
-            Map<String, List<TopicPartition>> groupToPartitionMap) {
-        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(groupToPartitionMap, false, logContext);
+            Map<String, ListConsumerGroupOffsetsSpec> groupSpecs) {
+        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(groupSpecs, false, logContext);
         Map<String, Map<TopicPartition, PartitionData>> responseData = new HashMap<>();
         for (String group : errorMap.keySet()) {
             responseData.put(group, new HashMap<>());
@@ -285,7 +291,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
     private AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> handleWithPartitionError(
         Errors error
     ) {
-        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(Collections.singletonMap(groupZero, tps),
+        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(singleRequestMap,
             false, logContext);
         OffsetFetchResponse response = buildResponseWithPartitionError(error);
         return handler.handleResponse(new Node(1, "host", 1234),
@@ -295,7 +301,8 @@ public class ListConsumerGroupOffsetsHandlerTest {
     private AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> handleWithPartitionErrorMultipleGroups(
         Errors error
     ) {
-        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(requestMap, false, logContext);
+        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(
+                batchedRequestMap, false, logContext);
         OffsetFetchResponse response = buildResponseWithPartitionErrorWithMultipleGroups(error);
         return handler.handleResponse(
             new Node(1, "host", 1234),
@@ -307,7 +314,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         Errors error
     ) {
         ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(
-            Collections.singletonMap(groupZero, tps), false, logContext);
+            singleRequestMap, false, logContext);
         OffsetFetchResponse response = buildResponse(error);
         return handler.handleResponse(new Node(1, "host", 1234),
             singleton(CoordinatorKey.byGroupId(groupZero)),

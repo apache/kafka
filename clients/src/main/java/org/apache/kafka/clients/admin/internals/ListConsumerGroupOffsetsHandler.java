@@ -25,6 +25,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -39,18 +40,18 @@ import org.slf4j.Logger;
 public class ListConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> {
 
     private final boolean requireStable;
-    private final Map<String, List<TopicPartition>> groupIdToTopicPartitions;
+    private final Map<String, ListConsumerGroupOffsetsSpec> groupSpecs;
     private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public ListConsumerGroupOffsetsHandler(
-        Map<String, List<TopicPartition>> groupIdToTopicPartitions,
+        Map<String, ListConsumerGroupOffsetsSpec> groupSpecs,
         boolean requireStable,
         LogContext logContext
     ) {
         this.log = logContext.logger(ListConsumerGroupOffsetsHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
-        this.groupIdToTopicPartitions = groupIdToTopicPartitions;
+        this.groupSpecs = groupSpecs;
         this.requireStable = requireStable;
     }
 
@@ -69,7 +70,7 @@ public class ListConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Coo
     }
 
     private void validateKeys(Set<CoordinatorKey> groupIds) {
-        Set<CoordinatorKey> keys = coordinatorKeys(groupIdToTopicPartitions.keySet());
+        Set<CoordinatorKey> keys = coordinatorKeys(groupSpecs.keySet());
         if (!keys.containsAll(groupIds)) {
             throw new IllegalArgumentException("Received unexpected group ids " + groupIds +
                     " (expected one of " + keys + ")");
@@ -88,10 +89,12 @@ public class ListConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Coo
 
         // Create a map that only contains the consumer groups owned by the coordinator.
         Map<String, List<TopicPartition>> coordinatorGroupIdToTopicPartitions = new HashMap<>(groupIds.size());
-        groupIds.forEach(g -> coordinatorGroupIdToTopicPartitions.put(g.idValue, groupIdToTopicPartitions.get(g.idValue)));
+        groupIds.forEach(g -> {
+            ListConsumerGroupOffsetsSpec spec = groupSpecs.get(g.idValue);
+            List<TopicPartition> partitions = spec.topicPartitions() != null ? new ArrayList<>(spec.topicPartitions()) : null;
+            coordinatorGroupIdToTopicPartitions.put(g.idValue, partitions);
+        });
 
-        // Set the flag to false as for admin client request,
-        // we don't need to wait for any pending offset state to clear.
         return new OffsetFetchRequest.Builder(coordinatorGroupIdToTopicPartitions, requireStable, false);
     }
 

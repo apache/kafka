@@ -225,6 +225,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -501,6 +502,21 @@ public class KafkaAdminClientTest {
 
     private static FindCoordinatorResponse prepareOldFindCoordinatorResponse(Errors error, Node node) {
         return FindCoordinatorResponse.prepareOldResponse(error, node);
+    }
+
+    private static FindCoordinatorResponse prepareBatchedFindCoordinatorResponse(Errors error, Node node, Collection<String> groups) {
+        FindCoordinatorResponseData data = new FindCoordinatorResponseData();
+        List<FindCoordinatorResponseData.Coordinator> coordinators = groups.stream()
+                .map(group -> new FindCoordinatorResponseData.Coordinator()
+                        .setErrorCode(error.code())
+                        .setErrorMessage(error.message())
+                        .setKey(group)
+                        .setHost(node.host())
+                        .setPort(node.port())
+                        .setNodeId(node.id()))
+                .collect(Collectors.toList());
+        data.setCoordinators(coordinators);
+        return new FindCoordinatorResponse(data);
     }
 
     private static MetadataResponse prepareMetadataResponse(Cluster cluster, Errors error) {
@@ -3069,10 +3085,11 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             final TopicPartition tp1 = new TopicPartition("A", 0);
-            final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions();
-            options.requireStable(true);
-            env.adminClient().listConsumerGroupOffsets(
-                    Collections.singletonMap(GROUP_ID, Collections.singletonList(tp1)), options);
+            final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions()
+                    .requireStable(true);
+            final ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
+                    .topicPartitions(Collections.singletonList(tp1));
+            env.adminClient().listConsumerGroupOffsets(Collections.singletonMap(GROUP_ID, groupSpec), options);
 
             final MockClient mockClient = env.kafkaClient();
             TestUtils.waitForCondition(() -> {
@@ -3084,7 +3101,7 @@ public class KafkaAdminClientTest {
                         data.groups().get(0).topics().get(0).partitionIndexes().equals(Collections.singletonList(0));
                 }
                 return false;
-            }, "Failed awaiting ListConsumerGroupOffsets request");
+            }, "Failed awaiting ListConsumerGroupOfsets request");
         }
     }
 
@@ -3262,6 +3279,95 @@ public class KafkaAdminClientTest {
             assertEquals(20, partitionToOffsetAndMetadata.get(myTopicPartition2).offset());
             assertTrue(partitionToOffsetAndMetadata.containsKey(myTopicPartition3));
             assertNull(partitionToOffsetAndMetadata.get(myTopicPartition3));
+        }
+    }
+
+    @Test
+    public void testBatchedListConsumerGroupOffsets() throws Exception {
+        Cluster cluster = mockCluster(1, 0);
+        Time time = new MockTime();
+        Map<String, ListConsumerGroupOffsetsSpec> groupSpecs = batchedListConsumerGroupOffsetsSpec();
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster, AdminClientConfig.RETRIES_CONFIG, "0")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(prepareBatchedFindCoordinatorResponse(Errors.NONE, env.cluster().controller(), groupSpecs.keySet()));
+
+            ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(groupSpecs, new ListConsumerGroupOffsetsOptions());
+            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, true);
+
+            verifyListOffsetsForMultipleGroups(groupSpecs, result);
+        }
+    }
+
+    @Test
+    public void testBatchedListConsumerGroupOffsetsWithNoBatchingSupport() throws Exception {
+        Cluster cluster = mockCluster(1, 0);
+        Time time = new MockTime();
+        Map<String, ListConsumerGroupOffsetsSpec> groupSpecs = batchedListConsumerGroupOffsetsSpec();
+
+        ApiVersion findCoordinatorV3 = new ApiVersion()
+                .setApiKey(ApiKeys.FIND_COORDINATOR.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 3);
+        ApiVersion offsetFetchV7 = new ApiVersion()
+                .setApiKey(ApiKeys.OFFSET_FETCH.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 7);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster, AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(Arrays.asList(findCoordinatorV3, offsetFetchV7)));
+            env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(groupSpecs);
+            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, false);
+            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, false);
+
+            verifyListOffsetsForMultipleGroups(groupSpecs, result);
+        }
+    }
+
+    private Map<String, ListConsumerGroupOffsetsSpec> batchedListConsumerGroupOffsetsSpec() {
+        Set<TopicPartition> groupAPartitions = Collections.singleton(new TopicPartition("A", 1));
+        Set<TopicPartition> groupBPartitions =  Collections.singleton(new TopicPartition("B", 2));
+
+        ListConsumerGroupOffsetsSpec groupASpec = new ListConsumerGroupOffsetsSpec().topicPartitions(groupAPartitions);
+        ListConsumerGroupOffsetsSpec groupBSpec = new ListConsumerGroupOffsetsSpec().topicPartitions(groupBPartitions);
+        return Utils.mkMap(Utils.mkEntry("groupA", groupASpec), Utils.mkEntry("groupB", groupBSpec));
+    }
+
+    private void sendOffsetFetchResponse(MockClient mockClient, Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, boolean batched) throws Exception {
+        TestUtils.waitForCondition(() -> {
+            ClientRequest clientRequest = mockClient.requests().peek();
+            return clientRequest != null && clientRequest.apiKey() == ApiKeys.OFFSET_FETCH;
+        }, "Failed awaiting OffsetFetch request");
+
+        ClientRequest clientRequest = mockClient.requests().peek();
+        OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).data;
+        Map<String, Map<TopicPartition, PartitionData>> results = new HashMap<>();
+        Map<String, Errors> errors = new HashMap<>();
+        data.groups().forEach(group -> {
+            Map<TopicPartition, PartitionData> partitionResults = new HashMap<>();
+            for (TopicPartition tp : groupSpecs.get(group.groupId()).topicPartitions()) {
+                partitionResults.put(tp, new PartitionData(10, Optional.empty(), "", Errors.NONE));
+            }
+            results.put(group.groupId(), partitionResults);
+            errors.put(group.groupId(), Errors.NONE);
+        });
+        if (!batched) {
+            assertEquals(1, data.groups().size());
+            mockClient.respond(new OffsetFetchResponse(THROTTLE, Errors.NONE, results.values().iterator().next()));
+        } else
+            mockClient.respond(new OffsetFetchResponse(THROTTLE, errors, results));
+    }
+
+    private void verifyListOffsetsForMultipleGroups(Map<String, ListConsumerGroupOffsetsSpec> groupSpecs,
+                                                    ListConsumerGroupOffsetsResult result) throws Exception {
+        assertEquals(2, result.all().get(10, TimeUnit.SECONDS).size());
+        for (Map.Entry<String, ListConsumerGroupOffsetsSpec> entry : groupSpecs.entrySet()) {
+            assertEquals(entry.getValue().topicPartitions(),
+                    result.partitionsToOffsetAndMetadata(entry.getKey()).get().keySet());
         }
     }
 

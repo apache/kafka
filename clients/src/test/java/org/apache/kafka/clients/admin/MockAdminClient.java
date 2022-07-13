@@ -584,13 +584,13 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(Map<String, List<TopicPartition>> groupIdToTopicPartitions, ListConsumerGroupOffsetsOptions options) {
+    synchronized public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, ListConsumerGroupOffsetsOptions options) {
         // ignoring the groups and assume one test would only work on one group only
-        if (groupIdToTopicPartitions.size() != 1)
+        if (groupSpecs.size() != 1)
             throw new UnsupportedOperationException("Not implemented yet");
 
-        String group = groupIdToTopicPartitions.keySet().iterator().next();
-        List<TopicPartition> topicPartitions = groupIdToTopicPartitions.get(group);
+        String group = groupSpecs.keySet().iterator().next();
+        Collection<TopicPartition> topicPartitions = groupSpecs.get(group).topicPartitions();
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
 
         if (listConsumerGroupOffsetsException != null) {

@@ -927,7 +927,9 @@ public interface Admin extends AutoCloseable {
     default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
         ListConsumerGroupOffsetsOptions listOptions = new ListConsumerGroupOffsetsOptions()
             .requireStable(options.requireStable());
-        return listConsumerGroupOffsets(Collections.singletonMap(groupId, options.topicPartitions()), listOptions);
+        ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
+                .topicPartitions(options.topicPartitions());
+        return listConsumerGroupOffsets(Collections.singletonMap(groupId, groupSpec), listOptions);
     }
 
     /**
@@ -945,12 +947,12 @@ public interface Admin extends AutoCloseable {
     /**
      * List the consumer group offsets available in the cluster for the specified consumer groups.
      *
-     * @param groupIdToTopicPartitions Map of consumer group ids to the topic partitions of the group to list offsets for.
-     *                                 If value is null, offsets are listed for all partitions.
+     * @param groupSpecs Map of consumer group ids to a spec that specifies the topic partitions of the group to list offsets for.
+     *
      * @param options The options to use when listing the consumer group offsets.
-     * @return The ListGroupOffsetsResult
+     * @return The ListConsumerGroupOffsetsResult
      */
-    ListConsumerGroupOffsetsResult listConsumerGroupOffsets(Map<String, List<TopicPartition>> groupIdToTopicPartitions, ListConsumerGroupOffsetsOptions options);
+    ListConsumerGroupOffsetsResult listConsumerGroupOffsets(Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, ListConsumerGroupOffsetsOptions options);
 
     /**
      * List the consumer group offsets available in the cluster for the specified groups with the default options.
@@ -958,12 +960,11 @@ public interface Admin extends AutoCloseable {
      * This is a convenience method for
      * {@link #listConsumerGroupOffsets(Map, ListConsumerGroupOffsetsOptions)} with default options.
      *
-     * @param groupIdToTopicPartitions Map of consumer group ids to the topic partitions of the group to list offsets for.
-     *                                 If value is null, offsets are listed for all partitions.
-     * @return The ListGroupOffsetsResult.
+     * @param groupSpecs Map of consumer group ids to a spec that specifies the topic partitions of the group to list offsets for.
+     * @return The ListConsumerGroupOffsetsResult.
      */
-    default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(Map<String, List<TopicPartition>> groupIdToTopicPartitions) {
-        return listConsumerGroupOffsets(groupIdToTopicPartitions, new ListConsumerGroupOffsetsOptions());
+    default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(Map<String, ListConsumerGroupOffsetsSpec> groupSpecs) {
+        return listConsumerGroupOffsets(groupSpecs, new ListConsumerGroupOffsetsOptions());
     }
 
     /**
