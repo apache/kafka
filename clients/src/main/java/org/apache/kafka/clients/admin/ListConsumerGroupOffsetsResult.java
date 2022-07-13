@@ -52,15 +52,15 @@ public class ListConsumerGroupOffsetsResult {
     public KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> partitionsToOffsetAndMetadata() {
         if (futures.size() != 1) {
             throw new IllegalStateException("Offsets from multiple consumer groups were requested. " +
-                    "Use partitionsToOffsetAndMetadata(groupId) instead to get future for a group.");
+                    "Use partitionsToOffsetAndMetadata(groupId) instead to get future for a specific group.");
         }
         return futures.values().iterator().next();
     }
 
     /**
-     * Return a map of group ids to their corresponding futures that yield a map of topic partitions to
-     * OffsetAndMetadata objects. If the group doesn't have a committed offset for a specific
-     * partition, the corresponding value in the returned map for that group id will be null.
+     * Return a future which yields a map of topic partitions to OffsetAndMetadata objects for
+     * the specified group. If the group doesn't have a committed offset for a specific
+     * partition, the corresponding value in the returned map will be null.
      */
     public KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> partitionsToOffsetAndMetadata(String groupId) {
         return futures.get(groupId);

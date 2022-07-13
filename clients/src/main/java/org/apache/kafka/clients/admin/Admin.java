@@ -916,17 +916,14 @@ public interface Admin extends AutoCloseable {
 
     /**
      * List the consumer group offsets available in the cluster.
-     * <p>
-     * @deprecated Since 3.3.
-     * Use {@link #listConsumerGroupOffsets(Map, ListConsumerGroupOffsetsOptions)}.
      *
      * @param options The options to use when listing the consumer group offsets.
      * @return The ListGroupOffsetsResult
      */
-    @Deprecated
     default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
         ListConsumerGroupOffsetsOptions listOptions = new ListConsumerGroupOffsetsOptions()
             .requireStable(options.requireStable());
+        @SuppressWarnings("deprecation")
         ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
                 .topicPartitions(options.topicPartitions());
         return listConsumerGroupOffsets(Collections.singletonMap(groupId, groupSpec), listOptions);
