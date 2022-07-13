@@ -925,7 +925,7 @@ public interface Admin extends AutoCloseable {
             .requireStable(options.requireStable());
         @SuppressWarnings("deprecation")
         ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
-                .topicPartitions(options.topicPartitions());
+            .topicPartitions(options.topicPartitions());
         return listConsumerGroupOffsets(Collections.singletonMap(groupId, groupSpec), listOptions);
     }
 

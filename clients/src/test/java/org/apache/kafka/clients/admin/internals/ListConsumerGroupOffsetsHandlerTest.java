@@ -112,6 +112,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         assertEquals(requestMap, builtRequests);
         Map<String, List<OffsetFetchRequestTopics>> groupIdsToTopics = request1.groupIdsToTopics();
 
+        assertEquals(3, groupIdsToTopics.size());
         assertEquals(1, groupIdsToTopics.get(groupZero).size());
         assertEquals(2, groupIdsToTopics.get(groupOne).size());
         assertEquals(3, groupIdsToTopics.get(groupTwo).size());
@@ -124,6 +125,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         assertEquals(3, groupIdsToTopics.get(groupTwo).get(2).partitionIndexes().size());
 
         groupIdsToTopics = request2.groupIdsToTopics();
+        assertEquals(1, groupIdsToTopics.size());
         assertEquals(1, groupIdsToTopics.get(groupThree).size());
         assertEquals(2, groupIdsToTopics.get(groupThree).get(0).partitionIndexes().size());
     }
@@ -229,14 +231,16 @@ public class ListConsumerGroupOffsetsHandlerTest {
     }
 
     private OffsetFetchResponse buildResponseWithMultipleGroups(
-            Map<String, Errors> errorMap,
-            Map<String, Map<TopicPartition, PartitionData>> responseData) {
+        Map<String, Errors> errorMap,
+        Map<String, Map<TopicPartition, PartitionData>> responseData
+    ) {
         return new OffsetFetchResponse(throttleMs, errorMap, responseData);
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> handleWithErrorWithMultipleGroups(
-            Map<String, Errors> errorMap,
-            Map<String, ListConsumerGroupOffsetsSpec> groupSpecs) {
+        Map<String, Errors> errorMap,
+        Map<String, ListConsumerGroupOffsetsSpec> groupSpecs
+    ) {
         ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(groupSpecs, false, logContext);
         Map<String, Map<TopicPartition, PartitionData>> responseData = new HashMap<>();
         for (String group : errorMap.keySet()) {
@@ -322,14 +326,16 @@ public class ListConsumerGroupOffsetsHandlerTest {
     }
 
     private void assertUnmapped(
-        AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> result) {
+        AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> result
+    ) {
         assertEquals(emptySet(), result.completedKeys.keySet());
         assertEquals(emptySet(), result.failedKeys.keySet());
         assertEquals(singletonList(CoordinatorKey.byGroupId(groupZero)), result.unmappedKeys);
     }
 
     private void assertUnmappedWithMultipleGroups(
-            AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> result) {
+            AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> result
+    ) {
         assertEquals(emptySet(), result.completedKeys.keySet());
         assertEquals(emptySet(), result.failedKeys.keySet());
         assertEquals(coordinatorKeys(groupZero, groupOne, groupTwo), new HashSet<>(result.unmappedKeys));
@@ -356,7 +362,8 @@ public class ListConsumerGroupOffsetsHandlerTest {
 
     private void assertCompletedForMultipleGroups(
         AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> result,
-        Map<String, Map<TopicPartition, OffsetAndMetadata>> expected) {
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> expected
+    ) {
         assertEquals(emptySet(), result.failedKeys.keySet());
         assertEquals(emptyList(), result.unmappedKeys);
         for (String g : expected.keySet()) {
@@ -379,7 +386,8 @@ public class ListConsumerGroupOffsetsHandlerTest {
 
     private void assertFailedForMultipleGroups(
         Map<String, Class<? extends Throwable>> groupToExceptionMap,
-        AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> result) {
+        AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> result
+    ) {
         assertEquals(emptySet(), result.completedKeys.keySet());
         assertEquals(emptyList(), result.unmappedKeys);
         for (String g : groupToExceptionMap.keySet()) {

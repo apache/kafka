@@ -754,9 +754,8 @@ object ConsumerGroupCommand extends Logging {
     private def getCommittedOffsets(groupId: String): Map[TopicPartition, OffsetAndMetadata] = {
       adminClient.listConsumerGroupOffsets(
         Collections.singletonMap(groupId, new ListConsumerGroupOffsetsSpec),
-        withTimeoutMs(new ListConsumerGroupOffsetsOptions()))
-        .partitionsToOffsetAndMetadata(groupId)
-        .get().asScala
+        withTimeoutMs(new ListConsumerGroupOffsetsOptions())
+      ).partitionsToOffsetAndMetadata(groupId).get().asScala
     }
 
     type GroupMetadata = immutable.Map[String, immutable.Map[TopicPartition, OffsetAndMetadata]]

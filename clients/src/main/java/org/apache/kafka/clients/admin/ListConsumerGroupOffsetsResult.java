@@ -63,6 +63,8 @@ public class ListConsumerGroupOffsetsResult {
      * partition, the corresponding value in the returned map will be null.
      */
     public KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> partitionsToOffsetAndMetadata(String groupId) {
+        if (!futures.containsKey(groupId))
+            throw new IllegalArgumentException("Offsets for consumer group '" + groupId + "' were not requested.");
         return futures.get(groupId);
     }
 
