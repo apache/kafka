@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.integration;
 
-import java.util.*;
-
+import java.util.Collection;
+import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -61,6 +61,10 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Properties;
+import java.util.Collections;
 
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
