@@ -835,18 +835,24 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         bytesStore.put(serializeKey(new Windowed<>(keyB, windows[2])), expectedValue3);
         bytesStore.put(serializeKey(new Windowed<>(keyC, windows[3])), expectedValue4);
 
+        // Record expired as timestampFromRawKey = 1000 while observedStreamTime = 60,000 and retention = 1000.
         final byte[] value1 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
             key1, windows[0].start(), windows[0].end());
-        assertEquals(Bytes.wrap(value1), Bytes.wrap(expectedValue1));
+        assertNull(value1);
 
+        // Record expired as timestampFromRawKey = 1000 while observedStreamTime = 60,000 and retention = 1000.
         final byte[] value2 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
             key1, windows[1].start(), windows[1].end());
-        assertEquals(Bytes.wrap(value2), Bytes.wrap(expectedValue2));
+        assertNull(value2);
 
+        // expired record
+        // timestampFromRawKey = 1500 while observedStreamTime = 60,000 and retention = 1000.
         final byte[] value3 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
             key2, windows[2].start(), windows[2].end());
-        assertEquals(Bytes.wrap(value3), Bytes.wrap(expectedValue3));
+        assertNull(value3);
 
+        // only non-expired record
+        // timestampFromRawKey = 60,000 while observedStreamTime = 60,000 and retention = 1000.
         final byte[] value4 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
             key3, windows[3].start(), windows[3].end());
         assertEquals(Bytes.wrap(value4), Bytes.wrap(expectedValue4));

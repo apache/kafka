@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.util.Collection;
-import java.util.ArrayList;
-import java.util.Collections;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
