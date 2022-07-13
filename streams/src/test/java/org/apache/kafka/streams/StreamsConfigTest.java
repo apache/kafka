@@ -65,7 +65,6 @@ import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFI
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
 import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItem;
@@ -1254,36 +1253,6 @@ public class StreamsConfigTest {
                           value, StreamsConfig.CLIENT_TAG_PREFIX, StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH),
             exception.getMessage()
         );
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldUseStateStoreCacheMaxBytesWhenBothOldAndNewConfigsAreSet() {
-        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 100);
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
-        final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(getTotalCacheSize(config), 100);
-    }
-
-    @Test
-    @SuppressWarnings("deprecation")
-    public void shouldUseCacheMaxBytesBufferingConfigWhenOnlyDeprecatedConfigIsSet() {
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
-        final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(getTotalCacheSize(config), 10);
-    }
-
-    @Test
-    public void shouldUseStateStoreCacheMaxBytesWhenNewConfigIsSet() {
-        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 10);
-        final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(getTotalCacheSize(config), 10);
-    }
-
-    @Test
-    public void shouldUseDefaultStateStoreCacheMaxBytesConfigWhenNoConfigIsSet() {
-        final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(getTotalCacheSize(config), 10 * 1024 * 1024);
     }
 
     @Test

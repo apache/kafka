@@ -58,18 +58,16 @@ import java.util.function.Function;
  */
 public class PartitionGroup {
 
-    private  final Logger logger;
+    private final Logger logger;
     private final Map<TopicPartition, RecordQueue> partitionQueues;
     private final Function<TopicPartition, OptionalLong> lagProvider;
     private final Sensor enforcedProcessingSensor;
     private final long maxTaskIdleMs;
     private final Sensor recordLatenessSensor;
-    private final Sensor totalInputBufferBytesSensor;
     private final PriorityQueue<RecordQueue> nonEmptyQueuesByTime;
 
     private long streamTime;
     private int totalBuffered;
-    private long totalBytesBuffered;
     private boolean allBuffered;
     private final Map<TopicPartition, Long> idlePartitionDeadlines = new HashMap<>();
 
@@ -93,7 +91,6 @@ public class PartitionGroup {
                    final Map<TopicPartition, RecordQueue> partitionQueues,
                    final Function<TopicPartition, OptionalLong> lagProvider,
                    final Sensor recordLatenessSensor,
-                   final Sensor totalInputBufferBytesSensor,
                    final Sensor enforcedProcessingSensor,
                    final long maxTaskIdleMs) {
         this.logger = logContext.logger(PartitionGroup.class);
@@ -103,7 +100,6 @@ public class PartitionGroup {
         this.enforcedProcessingSensor = enforcedProcessingSensor;
         this.maxTaskIdleMs = maxTaskIdleMs;
         this.recordLatenessSensor = recordLatenessSensor;
-        this.totalInputBufferBytesSensor = totalInputBufferBytesSensor;
         totalBuffered = 0;
         allBuffered = false;
         streamTime = RecordQueue.UNKNOWN;
@@ -229,8 +225,6 @@ public class PartitionGroup {
             if (!newInputPartitions.contains(topicPartition)) {
                 // if partition is removed should delete its queue
                 totalBuffered -= queueEntry.getValue().size();
-                totalBytesBuffered -= queueEntry.getValue().getTotalBytesBuffered();
-                totalInputBufferBytesSensor.record(totalBytesBuffered);
                 queuesIterator.remove();
                 removedPartitions.add(topicPartition);
             }
@@ -266,17 +260,12 @@ public class PartitionGroup {
         info.queue = queue;
 
         if (queue != null) {
-            // get the buffer size of queue before poll
-            final long oldBufferSize = queue.getTotalBytesBuffered();
             // get the first record from this queue.
             record = queue.poll(wallClockTime);
-            // After polling, the buffer size would have reduced.
-            final long newBufferSize = queue.getTotalBytesBuffered();
 
             if (record != null) {
                 --totalBuffered;
-                totalBytesBuffered -= oldBufferSize - newBufferSize;
-                totalInputBufferBytesSensor.record(totalBytesBuffered);
+
                 if (queue.isEmpty()) {
                     // if a certain queue has been drained, reset the flag
                     allBuffered = false;
@@ -300,8 +289,8 @@ public class PartitionGroup {
     /**
      * Adds raw records to this partition group
      *
-     * @param partition the partition
-     * @param rawRecords  the raw records
+     * @param partition  the partition
+     * @param rawRecords the raw records
      * @return the queue size for the partition
      */
     int addRawRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
@@ -312,9 +301,7 @@ public class PartitionGroup {
         }
 
         final int oldSize = recordQueue.size();
-        final long oldBufferSize = recordQueue.getTotalBytesBuffered();
         final int newSize = recordQueue.addRawRecords(rawRecords);
-        final long newBufferSize = recordQueue.getTotalBytesBuffered();
 
         // add this record queue to be considered for processing in the future if it was empty before
         if (oldSize == 0 && newSize > 0) {
@@ -329,8 +316,7 @@ public class PartitionGroup {
         }
 
         totalBuffered += newSize - oldSize;
-        totalBytesBuffered += newBufferSize - oldBufferSize;
-        totalInputBufferBytesSensor.record(totalBytesBuffered);
+
         return newSize;
     }
 
@@ -368,20 +354,12 @@ public class PartitionGroup {
         return recordQueue.size();
     }
 
-    Set<TopicPartition> getNonEmptyTopicPartitions() {
-        final Set<TopicPartition> nonEmptyTopicPartitions = new HashSet<>();
-        for (final RecordQueue recordQueue : nonEmptyQueuesByTime) {
-            nonEmptyTopicPartitions.add(recordQueue.partition());
-        }
-        return nonEmptyTopicPartitions;
-    }
-
     int numBuffered() {
         return totalBuffered;
     }
 
-    long totalBytesBuffered() {
-        return totalBytesBuffered;
+    boolean allPartitionsBufferedLocally() {
+        return allBuffered;
     }
 
     void clear() {
@@ -397,11 +375,5 @@ public class PartitionGroup {
         for (final RecordQueue queue : partitionQueues.values()) {
             queue.close();
         }
-    }
-
-    // Below methods are for only testing.
-
-    boolean allPartitionsBufferedLocally() {
-        return allBuffered;
     }
 }

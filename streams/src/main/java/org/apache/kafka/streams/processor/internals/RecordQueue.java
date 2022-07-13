@@ -55,7 +55,6 @@ public class RecordQueue {
 
     private final Sensor droppedRecordsSensor;
     private final Sensor consumedSensor;
-    private long totalBytesBuffered;
     private long headRecordSizeInBytes;
 
     RecordQueue(final TopicPartition partition,
@@ -90,7 +89,6 @@ public class RecordQueue {
             droppedRecordsSensor
         );
         this.log = logContext.logger(RecordQueue.class);
-        this.totalBytesBuffered = 0L;
         this.headRecordSizeInBytes = 0L;
     }
 
@@ -125,7 +123,6 @@ public class RecordQueue {
     int addRawRecords(final Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
         for (final ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
             fifoQueue.addLast(rawRecord);
-            this.totalBytesBuffered += consumerRecordSizeInBytes(rawRecord);
         }
 
         updateHead();
@@ -143,7 +140,6 @@ public class RecordQueue {
 
         consumedSensor.record(headRecordSizeInBytes, wallClockTime);
 
-        totalBytesBuffered -= headRecordSizeInBytes;
         headRecord = null;
         headRecordSizeInBytes = 0L;
         partitionTime = Math.max(partitionTime, recordToReturn.timestamp);
@@ -250,12 +246,5 @@ public class RecordQueue {
      */
     long partitionTime() {
         return partitionTime;
-    }
-
-    /**
-     * @return the total bytes buffered for this particular RecordQueue
-     */
-    long getTotalBytesBuffered() {
-        return totalBytesBuffered;
     }
 }

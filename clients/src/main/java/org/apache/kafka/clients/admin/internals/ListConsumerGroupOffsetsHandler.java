@@ -40,6 +40,7 @@ public class ListConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Coo
 
     private final CoordinatorKey groupId;
     private final List<TopicPartition> partitions;
+    private final boolean requireStable;
     private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
@@ -48,8 +49,18 @@ public class ListConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Coo
         List<TopicPartition> partitions,
         LogContext logContext
     ) {
+        this(groupId, partitions, false, logContext);
+    }
+
+    public ListConsumerGroupOffsetsHandler(
+        String groupId,
+        List<TopicPartition> partitions,
+        boolean requireStable,
+        LogContext logContext
+    ) {
         this.groupId = CoordinatorKey.byGroupId(groupId);
         this.partitions = partitions;
+        this.requireStable = requireStable;
         this.log = logContext.logger(ListConsumerGroupOffsetsHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
     }
@@ -80,9 +91,7 @@ public class ListConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Coo
     @Override
     public OffsetFetchRequest.Builder buildBatchedRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
         validateKeys(groupIds);
-        // Set the flag to false as for admin client request,
-        // we don't need to wait for any pending offset state to clear.
-        return new OffsetFetchRequest.Builder(groupId.idValue, false, partitions, false);
+        return new OffsetFetchRequest.Builder(groupId.idValue, requireStable, partitions, false);
     }
 
     @Override
