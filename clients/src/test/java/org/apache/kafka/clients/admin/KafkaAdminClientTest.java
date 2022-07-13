@@ -108,6 +108,7 @@ import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.CredentialInfo;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
@@ -3300,7 +3301,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testBatchedListConsumerGroupOffsetsWithNoBatchingSupport() throws Exception {
+    public void testBatchedListConsumerGroupOffsetsWithNoFindCoordinatorBatching() throws Exception {
         Cluster cluster = mockCluster(1, 0);
         Time time = new MockTime();
         Map<String, ListConsumerGroupOffsetsSpec> groupSpecs = batchedListConsumerGroupOffsetsSpec();
@@ -3316,11 +3317,44 @@ public class KafkaAdminClientTest {
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster, AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0")) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(Arrays.asList(findCoordinatorV3, offsetFetchV7)));
-            env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode()));
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(groupSpecs);
+            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, false);
+            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, false);
+
+            verifyListOffsetsForMultipleGroups(groupSpecs, result);
+        }
+    }
+
+    @Test
+    public void testBatchedListConsumerGroupOffsetsWithNoOffsetFetchBatching() throws Exception {
+        Cluster cluster = mockCluster(1, 0);
+        Time time = new MockTime();
+        Map<String, ListConsumerGroupOffsetsSpec> groupSpecs = batchedListConsumerGroupOffsetsSpec();
+
+        ApiVersion offsetFetchV7 = new ApiVersion()
+                .setApiKey(ApiKeys.OFFSET_FETCH.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 7);
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster, AdminClientConfig.RETRY_BACKOFF_MS_CONFIG, "0")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(Collections.singleton(offsetFetchV7)));
+            env.kafkaClient().prepareResponse(prepareBatchedFindCoordinatorResponse(Errors.NONE, env.cluster().controller(), groupSpecs.keySet()));
+            // Prepare a response to force client to attempt batched request creation that throws
+            // NoBatchedOffsetFetchRequestException. This triggers creation of non-batched requests.
+            env.kafkaClient().prepareResponse(offsetFetchResponse(Errors.COORDINATOR_NOT_AVAILABLE, Collections.emptyMap()));
+
+            ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(groupSpecs);
+
+            // The request handler attempts both FindCoordinator and OffsetFetch requests. This seems
+            // ok since since we expect this scenario only during upgrades from versions < 3.0.0 where
+            // some upgraded brokers could handle batched FindCoordinator while non-upgraded coordinators
+            // rejected batched OffsetFetch requests.
+            sendFindCoordinatorResponse(env.kafkaClient(), env.cluster().controller());
+            sendFindCoordinatorResponse(env.kafkaClient(), env.cluster().controller());
             sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, false);
             sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, false);
 
@@ -3337,11 +3371,23 @@ public class KafkaAdminClientTest {
         return Utils.mkMap(Utils.mkEntry("groupA", groupASpec), Utils.mkEntry("groupB", groupBSpec));
     }
 
-    private void sendOffsetFetchResponse(MockClient mockClient, Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, boolean batched) throws Exception {
+    private void waitForRequest(MockClient mockClient, ApiKeys apiKeys) throws Exception {
         TestUtils.waitForCondition(() -> {
             ClientRequest clientRequest = mockClient.requests().peek();
-            return clientRequest != null && clientRequest.apiKey() == ApiKeys.OFFSET_FETCH;
-        }, "Failed awaiting OffsetFetch request");
+            return clientRequest != null && clientRequest.apiKey() == apiKeys;
+        }, "Failed awaiting " + apiKeys + " request");
+    }
+
+    private void sendFindCoordinatorResponse(MockClient mockClient, Node coordinator) throws Exception {
+        waitForRequest(mockClient, ApiKeys.FIND_COORDINATOR);
+
+        ClientRequest clientRequest = mockClient.requests().peek();
+        FindCoordinatorRequestData data = ((FindCoordinatorRequest.Builder) clientRequest.requestBuilder()).data();
+        mockClient.respond(prepareFindCoordinatorResponse(Errors.NONE, data.key(), coordinator));
+    }
+
+    private void sendOffsetFetchResponse(MockClient mockClient, Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, boolean batched) throws Exception {
+        waitForRequest(mockClient, ApiKeys.OFFSET_FETCH);
 
         ClientRequest clientRequest = mockClient.requests().peek();
         OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).data;
@@ -3364,7 +3410,7 @@ public class KafkaAdminClientTest {
 
     private void verifyListOffsetsForMultipleGroups(Map<String, ListConsumerGroupOffsetsSpec> groupSpecs,
                                                     ListConsumerGroupOffsetsResult result) throws Exception {
-        assertEquals(2, result.all().get(10, TimeUnit.SECONDS).size());
+        assertEquals(groupSpecs.size(), result.all().get(10, TimeUnit.SECONDS).size());
         for (Map.Entry<String, ListConsumerGroupOffsetsSpec> entry : groupSpecs.entrySet()) {
             assertEquals(entry.getValue().topicPartitions(),
                     result.partitionsToOffsetAndMetadata(entry.getKey()).get().keySet());
