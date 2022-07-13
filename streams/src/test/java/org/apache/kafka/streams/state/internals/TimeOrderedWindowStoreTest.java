@@ -942,20 +942,13 @@ public class TimeOrderedWindowStoreTest {
         cachingStore.put(bytesKey("aa"), bytesValue("0004"), 1);
         cachingStore.put(bytesKey("a"), bytesValue("0005"), SEGMENT_INTERVAL);
 
-        final List<KeyValue<Long, byte[]>> expected = new ArrayList<>();
-        if (hasIndex) {
-            // for indexed store, record with ts 0 gets expired as there's
-            // an extra get call which would filter that record.
-            // That's because 0 < 1 (100 (observedStreamTime - 100 (retentionPeriod) + 1)
-            expected.add(KeyValue.pair(1L, bytesValue("0003")));
-            expected.add(KeyValue.pair(SEGMENT_INTERVAL, bytesValue("0005")));
-        } else {
-            expected.add(KeyValue.pair(0L, bytesValue("0001")));
-            expected.add(KeyValue.pair(1L, bytesValue("0003")));
-            expected.add(KeyValue.pair(SEGMENT_INTERVAL, bytesValue("0005")));
-        }
+        final List<KeyValue<Long, byte[]>> expected = asList(
+            KeyValue.pair(0L, bytesValue("0001")),
+            KeyValue.pair(1L, bytesValue("0003")),
+            KeyValue.pair(SEGMENT_INTERVAL, bytesValue("0005"))
+        );
         final List<KeyValue<Long, byte[]>> actual =
-                toList(cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
+            toList(cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
         verifyKeyValueList(expected, actual);
     }
 
@@ -967,18 +960,11 @@ public class TimeOrderedWindowStoreTest {
         cachingStore.put(bytesKey("aa"), bytesValue("0004"), 1);
         cachingStore.put(bytesKey("a"), bytesValue("0005"), SEGMENT_INTERVAL);
 
-        final List<KeyValue<Long, byte[]>> expected = new ArrayList<>();
-        if (hasIndex) {
-            // for indexed store, record with ts 0 gets expired as there's
-            // an extra get call which would filter that record.
-            // That's because 0 < 1 (100 (observedStreamTime - 100 (retentionPeriod) + 1)
-            expected.add(KeyValue.pair(SEGMENT_INTERVAL, bytesValue("0005")));
-            expected.add(KeyValue.pair(1L, bytesValue("0003")));
-        } else {
-            expected.add(KeyValue.pair(SEGMENT_INTERVAL, bytesValue("0005")));
-            expected.add(KeyValue.pair(1L, bytesValue("0003")));
-            expected.add(KeyValue.pair(0L, bytesValue("0001")));
-        }
+        final List<KeyValue<Long, byte[]>> expected = asList(
+            KeyValue.pair(SEGMENT_INTERVAL, bytesValue("0005")),
+            KeyValue.pair(1L, bytesValue("0003")),
+            KeyValue.pair(0L, bytesValue("0001"))
+        );
         final List<KeyValue<Long, byte[]>> actual =
             toList(cachingStore.backwardFetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
         verifyKeyValueList(expected, actual);
@@ -992,47 +978,28 @@ public class TimeOrderedWindowStoreTest {
         cachingStore.put(bytesKey("aa"), bytesValue("0004"), 1);
         cachingStore.put(bytesKey("a"), bytesValue("0005"), SEGMENT_INTERVAL);
 
-        // Records with timestamp 0 would be expired in case of indexed stores
-        // as they have an extra get call and the timestamp
-        // ts 0 < (100(observedStreamTime) - 100 (retention) + 1).
-        if (hasIndex) {
-            verifyKeyValueList(
-                    asList(
-                            windowedPair("a", "0003", 1),
-                            windowedPair("a", "0005", SEGMENT_INTERVAL)
-                    ),
-                    toList(cachingStore.fetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
-            );
+        verifyKeyValueList(
+            asList(
+                windowedPair("a", "0001", 0),
+                windowedPair("a", "0003", 1),
+                windowedPair("a", "0005", SEGMENT_INTERVAL)
+            ),
+            toList(cachingStore.fetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+        );
 
-            verifyKeyValueList(
-                    Collections.singletonList(
-                            windowedPair("aa", "0004", 1)),
-                    toList(cachingStore.fetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
-            );
-
-        } else {
-            verifyKeyValueList(
-                    asList(
-                        windowedPair("a", "0001", 0),
-                        windowedPair("a", "0003", 1),
-                        windowedPair("a", "0005", SEGMENT_INTERVAL)
-                    ),
-                    toList(cachingStore.fetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
-            );
-
-            verifyKeyValueList(
-                    asList(
-                        windowedPair("aa", "0002", 0),
-                        windowedPair("aa", "0004", 1)),
-                    toList(cachingStore.fetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
-            );
-
-        }
+        verifyKeyValueList(
+            asList(
+                windowedPair("aa", "0002", 0),
+                windowedPair("aa", "0004", 1)),
+            toList(cachingStore.fetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+        );
 
         if (hasIndex) {
             verifyKeyValueList(
                 asList(
+                    windowedPair("a", "0001", 0),
                     windowedPair("a", "0003", 1),
+                    windowedPair("aa", "0002", 0),
                     windowedPair("aa", "0004", 1),
                     windowedPair("a", "0005", SEGMENT_INTERVAL)
                 ),
@@ -1062,45 +1029,21 @@ public class TimeOrderedWindowStoreTest {
         cachingStore.put(bytesKey("aa"), bytesValue("0004"), 1);
         cachingStore.put(bytesKey("a"), bytesValue("0005"), SEGMENT_INTERVAL);
 
-        if (hasIndex) {
-            // in case of indexed fetch, there's an extra get call which filters out the
-            // record with key a, value 0001 and windowStartTimestamp 0. That is because
-            // the record's timestamp 0 < (100(observedStreamTime) - 100 (retention) + 1)
-            verifyKeyValueList(
-                    asList(
-                            windowedPair("a", "0005", SEGMENT_INTERVAL),
-                            windowedPair("a", "0003", 1)
-                    ),
-                    toList(cachingStore.backwardFetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
-            );
-        } else {
-            verifyKeyValueList(
-                    asList(
-                            windowedPair("a", "0005", SEGMENT_INTERVAL),
-                            windowedPair("a", "0003", 1),
-                            windowedPair("a", "0001", 0)
-                    ),
-                    toList(cachingStore.backwardFetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
-            );
+        verifyKeyValueList(
+            asList(
+                windowedPair("a", "0005", SEGMENT_INTERVAL),
+                windowedPair("a", "0003", 1),
+                windowedPair("a", "0001", 0)
+            ),
+            toList(cachingStore.backwardFetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+        );
 
-        }
-
-        if (hasIndex) {
-            // in case of indexed fetch, there's an extra get call which filters out the
-            // record with key aa, value 0002 and windowStartTimestamp 0. That is because
-            // the record's timestamp 0 < (100(observedStreamTime) - 100 (retention) + 1)
-            verifyKeyValueList(
-                    Collections.singletonList(windowedPair("aa", "0004", 1)),
-                    toList(cachingStore.backwardFetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
-            );
-        } else {
-            verifyKeyValueList(
-                    asList(
-                            windowedPair("aa", "0004", 1),
-                            windowedPair("aa", "0002", 0)),
-                    toList(cachingStore.backwardFetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
-            );
-        }
+        verifyKeyValueList(
+            asList(
+                windowedPair("aa", "0004", 1),
+                windowedPair("aa", "0002", 0)),
+            toList(cachingStore.backwardFetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+        );
 
         if (!hasIndex) {
             verifyKeyValueList(
@@ -1119,12 +1062,11 @@ public class TimeOrderedWindowStoreTest {
             verifyKeyValueList(
                 asList(
                     // First because in larger segments
-                    // in case of indexed fetch, there's an extra get call which filters out all
-                    // records with windowStartTimestamp is 0. That is because
-                    // the record's timestamp 0 < (100(observedStreamTime) - 100 (retention) + 1)
                     windowedPair("a", "0005", SEGMENT_INTERVAL),
                     windowedPair("aa", "0004", 1),
-                    windowedPair("a", "0003", 1)
+                    windowedPair("aa", "0002", 0),
+                    windowedPair("a", "0003", 1),
+                    windowedPair("a", "0001", 0)
                 ),
                 toList(cachingStore.backwardFetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0),
                     ofEpochMilli(Long.MAX_VALUE)))

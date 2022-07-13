@@ -128,7 +128,10 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
     abstract protected KeyValue<Bytes, byte[]> getIndexKeyValue(final Bytes baseKey, final byte[] baseValue);
 
-    protected long getActualFrom(final long from, boolean isTimeFirstWindowSchema) {
+    // isTimeFirstWindowSchema true implies ON_WINDOW_CLOSE semantics. There's an edge case
+    // when retentionPeriod = grace Period. If we add 1, then actualFrom > to which would
+    // lead to no records being returned.
+    protected long getActualFrom(final long from, final boolean isTimeFirstWindowSchema) {
         return isTimeFirstWindowSchema ? Math.max(from, observedStreamTime - retentionPeriod) :
                 Math.max(from, observedStreamTime - retentionPeriod + 1);
 
