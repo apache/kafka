@@ -1473,7 +1473,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.userCallback = userCallback;
             this.interceptors = interceptors;
             this.record = record;
-            topic = record.topic();
+            // Note a record would be null only if the client application has a bug, but we don't want to
+            // have NPE here, because the interceptors would not be notified (see .doSend).
+            topic = record != null ? record.topic() : null;
         }
 
         @Override
@@ -1508,8 +1510,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (partition != RecordMetadata.UNKNOWN_PARTITION)
                 return new TopicPartition(topic, partition);
 
-            assert record != null;
-            return ProducerInterceptors.extractTopicPartition(record);
+            if (record != null)
+                return ProducerInterceptors.extractTopicPartition(record);
+
+            return null;
         }
     }
 }
