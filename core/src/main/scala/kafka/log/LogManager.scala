@@ -90,10 +90,6 @@ class LogManager(logDirs: Seq[File],
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
   @volatile private var _currentDefaultConfig = initialDefaultConfig
   @volatile private var numRecoveryThreadsPerDataDir = recoveryThreadsPerDataDir
-  // log dir path -> number of Remaining logs map for remainingLogsToRecover metric
-  private val numRemainingLogs: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]
-  // log recovery thread name -> number of remaining segments map for remainingSegmentsToRecover metric
-  private val numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]
 
   // This map contains all partitions whose logs are getting loaded and initialized. If log configuration
   // of these partitions get updated at the same time, the corresponding entry in this map is set to "true",
@@ -327,7 +323,7 @@ class LogManager(logDirs: Seq[File],
   // create a unique log recovery thread name for each log dir as the format: prefix-dirPath-threadNum, ex: "log-recovery-/tmp/kafkaLogs-0"
   private def logRecoveryThreadName(dirPath: String, threadNum: Int, prefix: String = "log-recovery"): String = s"$prefix-$dirPath-$threadNum"
 
-  private[log] def updateNumRemainingLogs(path: String, remainingLogs: Int): Unit = {
+  private[log] def updateNumRemainingLogs(numRemainingLogs: ConcurrentMap[String, Int], path: String, remainingLogs: Int): Unit = {
     require(path != null, "path cannot be null to update remaining logs metric.")
     numRemainingLogs.put(path, remainingLogs)
   }
@@ -343,6 +339,10 @@ class LogManager(logDirs: Seq[File],
     val jobs = ArrayBuffer.empty[Seq[Future[_]]]
     var numTotalLogs = 0
     val curNumRecoveryThreadsPerDataDir = numRecoveryThreadsPerDataDir
+    // log dir path -> number of Remaining logs map for remainingLogsToRecover metric
+    val numRemainingLogs: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]
+    // log recovery thread name -> number of remaining segments map for remainingSegmentsToRecover metric
+    val numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]
 
     def handleIOException(logDirAbsolutePath: String, e: IOException): Unit = {
       offlineDirs.add((logDirAbsolutePath, e))
@@ -392,22 +392,16 @@ class LogManager(logDirs: Seq[File],
         val numLogsLoaded = new AtomicInteger(0)
         numTotalLogs += logsToLoad.length
 
-        updateNumRemainingLogs(dir.getAbsolutePath, logsToLoad.length)
+        updateNumRemainingLogs(numRemainingLogs, dir.getAbsolutePath, logsToLoad.length)
 
         val jobsForDir = logsToLoad.map { logDir =>
           val runnable: Runnable = () => {
+            debug(s"Loading log $logDir")
+            var log = None: Option[UnifiedLog]
+            val logLoadStartMs = time.hiResClockMs()
             try {
-              debug(s"Loading log $logDir")
-
-              val logLoadStartMs = time.hiResClockMs()
-              val log = loadLog(logDir, hadCleanShutdown, recoveryPoints, logStartOffsets,
-                defaultConfig, topicConfigOverrides, numRemainingSegments)
-              val logLoadDurationMs = time.hiResClockMs() - logLoadStartMs
-              val currentNumLoaded = numLogsLoaded.incrementAndGet()
-
-              info(s"Completed load of $log with ${log.numberOfSegments} segments in ${logLoadDurationMs}ms " +
-                s"($currentNumLoaded/${logsToLoad.length} loaded in $logDirAbsolutePath)")
-              println("!!! numRemainingSegments:" + numRemainingSegments + ";" + log)
+              log = Some(loadLog(logDir, hadCleanShutdown, recoveryPoints, logStartOffsets,
+                defaultConfig, topicConfigOverrides, numRemainingSegments))
             } catch {
               case e: IOException =>
                 handleIOException(logDirAbsolutePath, e)
@@ -415,7 +409,14 @@ class LogManager(logDirs: Seq[File],
                 // KafkaStorageException might be thrown, ex: during writing LeaderEpochFileCache
                 // And while converting IOException to KafkaStorageException, we've already handled the exception. So we can ignore it here.
             } finally {
-              updateNumRemainingLogs(dir.getAbsolutePath, logsToLoad.length - numLogsLoaded.get())
+              val logLoadDurationMs = time.hiResClockMs() - logLoadStartMs
+              val currentNumLoaded = numLogsLoaded.incrementAndGet()
+              updateNumRemainingLogs(numRemainingLogs, dir.getAbsolutePath, logsToLoad.length - currentNumLoaded)
+              log match {
+                case Some(loadedLog) => info(s"Completed load of $loadedLog with ${loadedLog.numberOfSegments} segments in ${logLoadDurationMs}ms " +
+                  s"($currentNumLoaded/${logsToLoad.length} completed in $logDirAbsolutePath)")
+                case None => info(s"Error while loading logs in $logDir in ${logLoadDurationMs}ms ($currentNumLoaded/${logsToLoad.length} completed in $logDirAbsolutePath)")
+              }
             }
           }
           runnable
@@ -429,7 +430,7 @@ class LogManager(logDirs: Seq[File],
     }
 
     try {
-      addLogRecoveryMetrics(curNumRecoveryThreadsPerDataDir)
+      addLogRecoveryMetrics(numRemainingLogs, numRemainingSegments, curNumRecoveryThreadsPerDataDir)
       for (dirJobs <- jobs) {
         dirJobs.foreach(_.get)
       }
@@ -449,7 +450,9 @@ class LogManager(logDirs: Seq[File],
     info(s"Loaded $numTotalLogs logs in ${time.hiResClockMs() - startMs}ms.")
   }
 
-  private[log] def addLogRecoveryMetrics(curNumRecoveryThreadsPerDataDir: Int): Unit = {
+  private[log] def addLogRecoveryMetrics(numRemainingLogs: ConcurrentMap[String, Int],
+                                         numRemainingSegments: ConcurrentMap[String, Int],
+                                         curNumRecoveryThreadsPerDataDir: Int): Unit = {
     for (dir <- logDirs) {
       newGauge("remainingLogsToRecover", () => numRemainingLogs.get(dir.getAbsolutePath),
         Map("dir" -> dir.getAbsolutePath))

@@ -65,6 +65,7 @@ object LogLoader extends Logging {
  * @param recoveryPointCheckpoint The checkpoint of the offset at which to begin the recovery
  * @param leaderEpochCache An optional LeaderEpochFileCache instance to be updated during recovery
  * @param producerStateManager The ProducerStateManager instance to be updated during recovery
+ * @param numRemainingSegments The remaining segments to be recovered in this log
  */
 class LogLoader(
   dir: File,
@@ -407,16 +408,16 @@ class LogLoader(
     // If we have the clean shutdown marker, skip recovery.
     if (!hadCleanShutdown) {
       val unflushed = segments.values(recoveryPointCheckpoint, Long.MaxValue)
-      val unflushedSize = unflushed.size
+      val numUnflushed = unflushed.size
       val unflushedIter = unflushed.iterator
       var truncated = false
       var numFlushed = 0
       val threadName = Thread.currentThread().getName
-      numRemainingSegments.put(threadName, unflushedSize)
+      numRemainingSegments.put(threadName, numUnflushed)
 
       while (unflushedIter.hasNext && !truncated) {
         val segment = unflushedIter.next()
-        info(s"Recovering unflushed segment ${segment.baseOffset}. $numFlushed/$unflushedSize recovered for $topicPartition.")
+        info(s"Recovering unflushed segment ${segment.baseOffset}. $numFlushed/$numUnflushed recovered for $topicPartition.")
 
         val truncatedBytes =
           try {
@@ -434,9 +435,12 @@ class LogLoader(
             s" truncating to offset ${segment.readNextOffset}")
           removeAndDeleteSegmentsAsync(unflushedIter.toList)
           truncated = true
+          // segment is truncated, so set remaining segments to 0
+          numRemainingSegments.put(threadName, 0)
+        } else {
+          numFlushed += 1
+          numRemainingSegments.put(threadName, numUnflushed - numFlushed)
         }
-        numFlushed += 1
-        numRemainingSegments.put(threadName, unflushedSize - numFlushed)
       }
     }
 

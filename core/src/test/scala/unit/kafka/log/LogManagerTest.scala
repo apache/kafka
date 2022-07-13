@@ -675,7 +675,7 @@ class LogManagerTest {
 
     // Since we'll update numRemainingLogs from totalLogs to 0 for each log dir, so we need to add 1 here
     val expectedCallTimes = expectedParams.values.map( num => num + 1 ).sum
-    verify(spyLogManager, times(expectedCallTimes)).updateNumRemainingLogs(capturedPath.capture(), capturedNumRemainingLogs.capture());
+    verify(spyLogManager, times(expectedCallTimes)).updateNumRemainingLogs(any, capturedPath.capture(), capturedNumRemainingLogs.capture());
 
     val paths = capturedPath.getAllValues
     val numRemainingLogs = capturedNumRemainingLogs.getAllValues
@@ -814,8 +814,8 @@ class LogManagerTest {
     spyLogManager.startup(Set.empty)
 
     // make sure log recovery metrics are added and removed
-    verify(spyLogManager, times(1)).addLogRecoveryMetrics(recoveryThreadsPerDataDir)
-    verify(spyLogManager, times(1)).removeLogRecoveryMetrics(recoveryThreadsPerDataDir)
+    verify(spyLogManager, times(1)).addLogRecoveryMetrics(any, any, ArgumentMatchers.eq(recoveryThreadsPerDataDir))
+    verify(spyLogManager, times(1)).removeLogRecoveryMetrics(ArgumentMatchers.eq(recoveryThreadsPerDataDir))
 
     // expected 1 log in each log dir since we created 2 partitions with 2 log dirs
     val expectedRemainingLogsParams = Map[String, Int](logDir1.getAbsolutePath -> 1, logDir2.getAbsolutePath -> 1)
@@ -849,9 +849,9 @@ class LogManagerTest {
     // start the logManager to do log recovery
     spyLogManager.startup(Set.empty)
 
-    // make sure log recovery metrics are added and removed with the expected parameter
-    verify(spyLogManager, times(1)).addLogRecoveryMetrics(recoveryThreadsPerDataDir)
-    verify(spyLogManager, times(1)).removeLogRecoveryMetrics(recoveryThreadsPerDataDir)
+    // make sure log recovery metrics are added and removed with the expected recovery thread number
+    verify(spyLogManager, times(1)).addLogRecoveryMetrics(any, any, ArgumentMatchers.eq(recoveryThreadsPerDataDir))
+    verify(spyLogManager, times(1)).removeLogRecoveryMetrics(ArgumentMatchers.eq(recoveryThreadsPerDataDir))
 
     verifyLogRecoverMetricsRemoved(spyLogManager)
   }
