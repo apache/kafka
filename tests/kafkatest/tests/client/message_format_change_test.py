@@ -57,9 +57,9 @@ class MessageFormatChangeTest(ProduceConsumeValidateTest):
             err_msg="Producer did not produce all messages in reasonable amount of time"))
 
     @cluster(num_nodes=12)
-    @matrix(producer_version=[str(DEV_BRANCH)], consumer_version=[str(DEV_BRANCH)], metadata_quorum=quorum.all_non_upgrade)
-    @matrix(producer_version=[str(LATEST_0_10)], consumer_version=[str(LATEST_0_10)], metadata_quorum=quorum.all_non_upgrade)
-    @matrix(producer_version=[str(LATEST_0_9)], consumer_version=[str(LATEST_0_9)], metadata_quorum=quorum.all_non_upgrade)
+    @matrix(producer_version=[str(DEV_BRANCH)], consumer_version=[str(DEV_BRANCH)], metadata_quorum=[quorum.zk])
+    @matrix(producer_version=[str(LATEST_0_10)], consumer_version=[str(LATEST_0_10)], metadata_quorum=[quorum.zk])
+    @matrix(producer_version=[str(LATEST_0_9)], consumer_version=[str(LATEST_0_9)], metadata_quorum=[quorum.zk])
     def test_compatibility(self, producer_version, consumer_version, metadata_quorum=quorum.zk):
         """ This tests performs the following checks:
         The workload is a mix of 0.9.x, 0.10.x and 0.11.x producers and consumers
