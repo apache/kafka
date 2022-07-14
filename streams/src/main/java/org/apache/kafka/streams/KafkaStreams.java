@@ -105,6 +105,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
@@ -1524,39 +1525,37 @@ public class KafkaStreams implements AutoCloseable {
 
         final long startMs = time.milliseconds();
 
-        final boolean closeStatus = close(timeoutMs);
+        if (options.leaveGroup) {
+            final long remainingTimeMs = Math.max(0, timeoutMs - (time.milliseconds() - startMs));
 
-        final Optional<String> groupInstanceId = clientSupplier
-                .getConsumer(applicationConfigs.getGlobalConsumerConfigs(clientId))
-                .groupMetadata()
-                .groupInstanceId();
+            processStreamThread(thread -> {
+                final Optional<String> groupInstanceId = thread.getGroupInstanceID();
+                if (groupInstanceId.isPresent()) {
+                    log.debug("Sending leave group trigger to removing instance from consumer group");
+                    final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceId.get());
 
-        final long remainingTimeMs = Math.max(0, timeoutMs - (time.milliseconds() - startMs));
+                    final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
 
-        if (options.leaveGroup && groupInstanceId.isPresent()) {
-            log.debug("Sending leave group trigger to removing instance from consumer group");
-            //removing instance from consumer group
+                    final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = adminClient
+                        .removeMembersFromConsumerGroup(
+                            applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
+                            new RemoveMembersFromConsumerGroupOptions(membersToRemove)
+                        );
 
-            final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceId.get());
-
-            final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
-
-            final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = adminClient
-                    .removeMembersFromConsumerGroup(
-                        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
-                        new RemoveMembersFromConsumerGroupOptions(membersToRemove)
-                    );
-
-            try {
-                removeMembersFromConsumerGroupResult.memberResult(memberToRemove).get(remainingTimeMs, TimeUnit.MILLISECONDS);
-            } catch (final Exception e) {
-                log.error("Could not remove static member {} from consumer group {} due to a: {}", groupInstanceId.get(),
-                        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
-            }
+                    try {
+                        removeMembersFromConsumerGroupResult.memberResult(memberToRemove)
+                            .get(remainingTimeMs, TimeUnit.MILLISECONDS);
+                    } catch (final Exception e) {
+                        log.error("Could not remove static member {} from consumer group {} due to a: {}",
+                            groupInstanceId.get(),
+                            applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
+                    }
+                }
+            });
         }
 
+        final boolean closeStatus = close(timeoutMs);
         log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeoutMs);
-
         return closeStatus;
     }
 
