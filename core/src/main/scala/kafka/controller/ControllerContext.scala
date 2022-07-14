@@ -328,8 +328,9 @@ class ControllerContext {
   }
 
   def queueTopicDeletion(topics: Set[String]): Unit = {
+    val newlyDeletedTopics = topics.diff(topicsToBeDeleted)
     topicsToBeDeleted ++= topics
-    topics.foreach(cleanPreferredReplicaImbalanceMetric)
+    newlyDeletedTopics.foreach(cleanPreferredReplicaImbalanceMetric)
   }
 
   def beginTopicDeletion(topics: Set[String]): Unit = {
