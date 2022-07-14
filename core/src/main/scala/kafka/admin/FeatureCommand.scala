@@ -85,7 +85,7 @@ object FeatureCommand {
       0
     } catch {
       case e: TerseFailure =>
-        System.err.println(e.getMessage)
+        Console.err.println(e.getMessage)
         1
     }
   }
@@ -196,12 +196,17 @@ object FeatureCommand {
 
   def printReleaseFeatures(release: String): Unit = {
     println(s"Default feature versions for release $release:")
+    val features = supportedFeaturesForRelease(release)
+    features.foreach {
+      case (feature, range) =>
+        println(s"Feature: $feature\tSupportedMinVersion: ${range._1}\tSupportedMaxVersion: ${range._2}")
+    }
   }
 
   def handleUpgrade(namespace: Namespace, admin: Admin): Unit = {
     val featuresToUpgrade = parseFeaturesOrRelease(namespace) match {
       case Features(featureNames) => parseVersions(featureNames, namespace)
-      case Release(release) => featuresForRelease(release)
+      case Release(release) => finalizedFeaturesForRelease(release)
       case Neither() => throw new TerseFailure("Must specify either --release or at least one --feature and --version with upgrade sub-command.")
       case Both() => throw new TerseFailure("Cannot specify both --release and --feature with upgrade sub-command.")
     }
@@ -328,8 +333,21 @@ object FeatureCommand {
     Map.empty
   }
 
-  def featuresForRelease(release: String): Map[String, Short] = {
+  def supportedFeaturesForRelease(release: String): Map[String, (Short, Short)] = {
     val metadataVersion = MetadataVersion.fromVersionString(release)
-    Map(MetadataVersion.FEATURE_NAME -> metadataVersion.featureLevel())
+    if (metadataVersion.isLessThan(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
+      Map.empty
+    } else {
+      Map(MetadataVersion.FEATURE_NAME -> (MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(), metadataVersion.featureLevel()))
+    }
+  }
+
+  def finalizedFeaturesForRelease(release: String): Map[String, Short] = {
+    val metadataVersion = MetadataVersion.fromVersionString(release)
+    if (metadataVersion.isLessThan(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
+      Map.empty
+    } else {
+      Map(MetadataVersion.FEATURE_NAME -> metadataVersion.featureLevel())
+    }
   }
 }

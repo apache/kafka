@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-class FeatureCommandTest extends BaseRequestTest {
+class FeatureCommandIntegrationTest extends BaseRequestTest {
   override def brokerCount: Int = 3
 
   override def brokerPropertyOverrides(props: Properties): Unit = {
