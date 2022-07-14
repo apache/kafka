@@ -66,7 +66,6 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
-import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
@@ -96,6 +95,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -125,7 +125,7 @@ import static org.junit.Assert.fail;
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({DistributedHerder.class, Plugins.class, RestClient.class})
 @PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
-public class DistributedHerderTest extends ThreadedTest {
+public class DistributedHerderTest {
     private static final Map<String, String> HERDER_CONFIG = new HashMap<>();
     static {
         HERDER_CONFIG.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
@@ -220,6 +220,7 @@ public class DistributedHerderTest extends ThreadedTest {
     private ConfigBackingStore.UpdateListener configUpdateListener;
     private WorkerRebalanceListener rebalanceListener;
     private ExecutorService herderExecutor;
+    private Future<?> herderFuture;
 
     private SinkConnectorConfig conn1SinkConfig;
     private SinkConnectorConfig conn1SinkConfigUpdated;
@@ -3654,13 +3655,14 @@ public class DistributedHerderTest extends ThreadedTest {
 
     private void startBackgroundHerder() {
         herderExecutor = Executors.newSingleThreadExecutor();
-        herderExecutor.submit(herder);
+        herderFuture = herderExecutor.submit(herder);
     }
 
     private void stopBackgroundHerder() throws Exception {
         herder.stop();
         herderExecutor.shutdown();
-        herderExecutor.awaitTermination(10, TimeUnit.SECONDS);
+        assertTrue("herder thread did not finish in time", herderExecutor.awaitTermination(10, TimeUnit.SECONDS));
+        herderFuture.get();
     }
 
     private void expectHerderStartup() {

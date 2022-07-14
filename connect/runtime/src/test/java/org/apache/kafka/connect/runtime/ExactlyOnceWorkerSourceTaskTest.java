@@ -52,7 +52,6 @@ import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.ParameterizedTest;
-import org.apache.kafka.connect.util.ThreadedTest;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.easymock.Capture;
@@ -60,6 +59,7 @@ import org.easymock.EasyMock;
 import org.easymock.IAnswer;
 import org.easymock.IExpectationSetters;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -110,7 +110,7 @@ import static org.junit.Assert.fail;
         "org.apache.log4j.*"})
 @RunWith(PowerMockRunner.class)
 @PowerMockRunnerDelegate(ParameterizedTest.class)
-public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
+public class ExactlyOnceWorkerSourceTaskTest {
     private static final String TOPIC = "topic";
     private static final Map<String, byte[]> PARTITION = Collections.singletonMap("key", "partition".getBytes());
     private static final Map<String, Integer> OFFSET = Collections.singletonMap("key", 12);
@@ -175,9 +175,8 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         this.enableTopicCreation = enableTopicCreation;
     }
 
-    @Override
+    @Before
     public void setup() {
-        super.setup();
         Map<String, String> workerProps = workerProps();
         plugins = new Plugins(workerProps);
         config = new StandaloneConfig(workerProps);
