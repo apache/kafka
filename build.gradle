@@ -1325,7 +1325,7 @@ project(':clients') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/generated-test/java", "src/test/java"]
+        srcDirs = ["src/generated-test/java", "src/test/java"]
       }
     }
   }
