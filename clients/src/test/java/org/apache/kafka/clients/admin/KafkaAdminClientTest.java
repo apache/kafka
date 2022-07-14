@@ -3294,7 +3294,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareBatchedFindCoordinatorResponse(Errors.NONE, env.cluster().controller(), groupSpecs.keySet()));
 
             ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(groupSpecs, new ListConsumerGroupOffsetsOptions());
-            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, true);
+            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, true, Errors.NONE);
 
             verifyListOffsetsForMultipleGroups(groupSpecs, result);
         }
@@ -3322,8 +3322,12 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareOldFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(groupSpecs);
-            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, false);
-            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, false);
+
+            // Fail the first request in order to ensure that the group is not batched when retried.
+            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, false, Errors.COORDINATOR_LOAD_IN_PROGRESS);
+
+            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, false, Errors.NONE);
+            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, false, Errors.NONE);
 
             verifyListOffsetsForMultipleGroups(groupSpecs, result);
         }
@@ -3355,8 +3359,8 @@ public class KafkaAdminClientTest {
             // rejected batched OffsetFetch requests.
             sendFindCoordinatorResponse(env.kafkaClient(), env.cluster().controller());
             sendFindCoordinatorResponse(env.kafkaClient(), env.cluster().controller());
-            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, false);
-            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, false);
+            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, false, Errors.NONE);
+            sendOffsetFetchResponse(env.kafkaClient(), groupSpecs, false, Errors.NONE);
 
             verifyListOffsetsForMultipleGroups(groupSpecs, result);
         }
@@ -3386,7 +3390,7 @@ public class KafkaAdminClientTest {
         mockClient.respond(prepareFindCoordinatorResponse(Errors.NONE, data.key(), coordinator));
     }
 
-    private void sendOffsetFetchResponse(MockClient mockClient, Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, boolean batched) throws Exception {
+    private void sendOffsetFetchResponse(MockClient mockClient, Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, boolean batched, Errors error) throws Exception {
         waitForRequest(mockClient, ApiKeys.OFFSET_FETCH);
 
         ClientRequest clientRequest = mockClient.requests().peek();
@@ -3399,11 +3403,11 @@ public class KafkaAdminClientTest {
                 partitionResults.put(tp, new PartitionData(10, Optional.empty(), "", Errors.NONE));
             }
             results.put(group.groupId(), partitionResults);
-            errors.put(group.groupId(), Errors.NONE);
+            errors.put(group.groupId(), error);
         });
         if (!batched) {
             assertEquals(1, data.groups().size());
-            mockClient.respond(new OffsetFetchResponse(THROTTLE, Errors.NONE, results.values().iterator().next()));
+            mockClient.respond(new OffsetFetchResponse(THROTTLE, error, results.values().iterator().next()));
         } else
             mockClient.respond(new OffsetFetchResponse(THROTTLE, errors, results));
     }

@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,12 +38,12 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-public class ListConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> {
+public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> {
 
     private final boolean requireStable;
     private final Map<String, ListConsumerGroupOffsetsSpec> groupSpecs;
     private final Logger log;
-    private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
+    private final CoordinatorStrategy lookupStrategy;
 
     public ListConsumerGroupOffsetsHandler(
         Map<String, ListConsumerGroupOffsetsSpec> groupSpecs,
@@ -83,10 +84,7 @@ public class ListConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Coo
            .collect(Collectors.toSet());
     }
 
-    @Override
-    public OffsetFetchRequest.Builder buildBatchedRequest(int coordinatorId, Set<CoordinatorKey> groupIds) {
-        validateKeys(groupIds);
-
+    public OffsetFetchRequest.Builder buildBatchedRequest(Set<CoordinatorKey> groupIds) {
         // Create a map that only contains the consumer groups owned by the coordinator.
         Map<String, List<TopicPartition>> coordinatorGroupIdToTopicPartitions = new HashMap<>(groupIds.size());
         groupIds.forEach(g -> {
@@ -96,6 +94,22 @@ public class ListConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Coo
         });
 
         return new OffsetFetchRequest.Builder(coordinatorGroupIdToTopicPartitions, requireStable, false);
+    }
+
+    @Override
+    public Collection<RequestAndKeys<CoordinatorKey>> buildRequest(int brokerId, Set<CoordinatorKey> groupIds) {
+        validateKeys(groupIds);
+
+        // When the OffsetFetchRequest fails with NoBatchedOffsetFetchRequestException, we completely disable
+        // the batching end-to-end, including the FindCoordinatorRequest.
+        if (lookupStrategy.batch()) {
+            return Collections.singletonList(new RequestAndKeys<>(buildBatchedRequest(groupIds), groupIds));
+        } else {
+            return groupIds.stream().map(groupId -> {
+                Set<CoordinatorKey> keys = Collections.singleton(groupId);
+                return new RequestAndKeys<>(buildBatchedRequest(keys), keys);
+            }).collect(Collectors.toList());
+        }
     }
 
     @Override

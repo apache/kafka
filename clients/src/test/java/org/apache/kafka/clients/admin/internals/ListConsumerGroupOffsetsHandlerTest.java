@@ -38,6 +38,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
+import org.apache.kafka.clients.admin.internals.AdminApiHandler.RequestAndKeys;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -82,7 +83,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
     public void testBuildRequest() {
         ListConsumerGroupOffsetsHandler handler =
             new ListConsumerGroupOffsetsHandler(singleRequestMap, false, logContext);
-        OffsetFetchRequest request = handler.buildBatchedRequest(1, coordinatorKeys(groupZero)).build();
+        OffsetFetchRequest request = handler.buildBatchedRequest(coordinatorKeys(groupZero)).build();
         assertEquals(groupZero, request.data().groups().get(0).groupId());
         assertEquals(2, request.data().groups().get(0).topics().size());
         assertEquals(2, request.data().groups().get(0).topics().get(0).partitionIndexes().size());
@@ -97,10 +98,10 @@ public class ListConsumerGroupOffsetsHandlerTest {
                 .topicPartitions(Arrays.asList(new TopicPartition("t3", 0), new TopicPartition("t3", 1))));
 
         ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(requestMap, false, logContext);
-        OffsetFetchRequest request1 = handler.buildBatchedRequest(1, coordinatorKeys(groupZero, groupOne, groupTwo)).build();
+        OffsetFetchRequest request1 = handler.buildBatchedRequest(coordinatorKeys(groupZero, groupOne, groupTwo)).build();
         assertEquals(Utils.mkSet(groupZero, groupOne, groupTwo), requestGroups(request1));
 
-        OffsetFetchRequest request2 = handler.buildBatchedRequest(2, coordinatorKeys(groupThree)).build();
+        OffsetFetchRequest request2 = handler.buildBatchedRequest(coordinatorKeys(groupThree)).build();
         assertEquals(Utils.mkSet(groupThree), requestGroups(request2));
 
         Map<String, ListConsumerGroupOffsetsSpec> builtRequests = new HashMap<>();
@@ -128,6 +129,27 @@ public class ListConsumerGroupOffsetsHandlerTest {
         assertEquals(1, groupIdsToTopics.size());
         assertEquals(1, groupIdsToTopics.get(groupThree).size());
         assertEquals(2, groupIdsToTopics.get(groupThree).get(0).partitionIndexes().size());
+    }
+
+    @Test
+    public void testBuildRequestBatchGroups() {
+        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(batchedRequestMap, false, logContext);
+        Collection<RequestAndKeys<CoordinatorKey>> requests = handler.buildRequest(1, coordinatorKeys(groupZero, groupOne, groupTwo));
+        assertEquals(1, requests.size());
+        assertEquals(Utils.mkSet(groupZero, groupOne, groupTwo), requestGroups((OffsetFetchRequest) requests.iterator().next().request.build()));
+    }
+
+    @Test
+    public void testBuildRequestDoesNotBatchGroup() {
+        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(batchedRequestMap, false, logContext);
+        // Disable batching.
+        ((CoordinatorStrategy) handler.lookupStrategy()).disableBatch();
+        Collection<RequestAndKeys<CoordinatorKey>> requests = handler.buildRequest(1, coordinatorKeys(groupZero, groupOne, groupTwo));
+        assertEquals(3, requests.size());
+        assertEquals(
+            Utils.mkSet(Utils.mkSet(groupZero), Utils.mkSet(groupOne), Utils.mkSet(groupTwo)),
+            requests.stream().map(requestAndKey -> requestGroups((OffsetFetchRequest) requestAndKey.request.build())).collect(Collectors.toSet())
+        );
     }
 
     @Test
