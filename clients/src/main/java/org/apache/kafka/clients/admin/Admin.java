@@ -921,12 +921,13 @@ public interface Admin extends AutoCloseable {
      * @return The ListGroupOffsetsResult
      */
     default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
-        ListConsumerGroupOffsetsOptions listOptions = new ListConsumerGroupOffsetsOptions()
-            .requireStable(options.requireStable());
         @SuppressWarnings("deprecation")
         ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
             .topicPartitions(options.topicPartitions());
-        return listConsumerGroupOffsets(Collections.singletonMap(groupId, groupSpec), listOptions);
+
+        // We can use the provided options with the batched API, which uses topic partitions from
+        // the group spec and ignores any topic partitions set in the options.
+        return listConsumerGroupOffsets(Collections.singletonMap(groupId, groupSpec), options);
     }
 
     /**
