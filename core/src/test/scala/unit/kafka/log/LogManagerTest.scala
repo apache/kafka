@@ -28,7 +28,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
-import org.mockito.ArgumentMatchers.{any, anyInt}
+import org.mockito.ArgumentMatchers.any
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify}
 
@@ -38,6 +38,7 @@ import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
 import java.util.{Collections, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
+import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.{Map, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
@@ -642,16 +643,19 @@ class LogManagerTest {
   }
 
   private def appendRecordsToLog(time: MockTime, parentLogDir: File, partitionId: Int, brokerTopicStats: BrokerTopicStats, expectedSegmentsPerLog: Int): Unit = {
-    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
+    def createRecord = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
     val tpFile = new File(parentLogDir, s"$name-$partitionId")
+    val segmentBytes = 1024
 
     val log = LogTestUtils.createLog(tpFile, logConfig, brokerTopicStats, time.scheduler, time, 0, 0,
       5 * 60 * 1000, 60 * 60 * 1000, LogManager.ProducerIdExpirationCheckIntervalMs)
 
-    val numMessages = 20
+    assertTrue(expectedSegmentsPerLog > 0)
+    // calculate numMessages to append to logs. It'll create "expectedSegmentsPerLog" log segments with segment.bytes=1024
+    val numMessages = Math.floor(segmentBytes * expectedSegmentsPerLog / createRecord.sizeInBytes).asInstanceOf[Int]
     try {
       for (_ <- 0 until numMessages) {
-        log.appendAsLeader(createRecords, leaderEpoch = 0)
+        log.appendAsLeader(createRecord, leaderEpoch = 0)
       }
 
       assertEquals(expectedSegmentsPerLog, log.numberOfSegments)
@@ -671,30 +675,19 @@ class LogManagerTest {
     assertEquals(expectedParams.size, logMetrics.size)
 
     val capturedPath: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
-    val capturedNumRemainingLogs: ArgumentCaptor[Int] = ArgumentCaptor.forClass(classOf[Int])
 
-    // Since we'll update numRemainingLogs from totalLogs to 0 for each log dir, so we need to add 1 here
-    val expectedCallTimes = expectedParams.values.map( num => num + 1 ).sum
-    verify(spyLogManager, times(expectedCallTimes)).updateNumRemainingLogs(any, capturedPath.capture(), capturedNumRemainingLogs.capture());
+    val expectedCallTimes = expectedParams.values.sum
+    verify(spyLogManager, times(expectedCallTimes)).decNumRemainingLogs(any[ConcurrentMap[String, AtomicInteger]], capturedPath.capture());
 
     val paths = capturedPath.getAllValues
-    val numRemainingLogs = capturedNumRemainingLogs.getAllValues
+    expectedParams.foreach {
+      case (path, totalLogs) =>
+        // make sure each path is called "totalLogs" times, which means it is decremented to 0 in the end
+        assertEquals(totalLogs, Collections.frequency(paths, path))
+    }
 
     // expected the end value is 0
     logMetrics.foreach { gauge => assertEquals(0, gauge.value()) }
-
-    expectedParams.foreach {
-      case (path, totalLogs) =>
-        // make sure we update the numRemainingLogs from totalLogs to 0 in order for each log dir
-        var expectedCurRemainingLogs = totalLogs + 1
-        for (i <- 0 until paths.size()) {
-          if (paths.get(i).contains(path)) {
-            expectedCurRemainingLogs -= 1
-            assertEquals(expectedCurRemainingLogs, numRemainingLogs.get(i))
-          }
-        }
-        assertEquals(0, expectedCurRemainingLogs)
-    }
   }
 
   private def verifyRemainingSegmentsToRecoverMetric(spyLogManager: LogManager,
@@ -709,7 +702,7 @@ class LogManagerTest {
           .map { case (_, gauge) => gauge }
           .asInstanceOf[ArrayBuffer[Gauge[Int]]]
 
-    // expected each log dir has 2 metrics for each thread
+    // expected each log dir has 1 metrics for each thread
     assertEquals(recoveryThreadsPerDataDir * logDirs.size, logSegmentMetrics.size)
 
     val capturedThreadName: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
@@ -767,7 +760,6 @@ class LogManagerTest {
 
     assertEquals(2, spyLogManager.liveLogDirs.size)
 
-    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
     val mockTime = new MockTime()
     val mockMap = mock(classOf[ConcurrentHashMap[String, Int]])
     val mockBrokerTopicStats = mock(classOf[BrokerTopicStats])
@@ -804,18 +796,18 @@ class LogManagerTest {
         // pass mock map for verification later
         numRemainingSegments = mockMap)
 
-    } .when(spyLogManager).loadLog(any[File], any[Boolean], any[Map[TopicPartition, Long]], any[Map[TopicPartition, Long]],
+    }.when(spyLogManager).loadLog(any[File], any[Boolean], any[Map[TopicPartition, Long]], any[Map[TopicPartition, Long]],
       any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]])
 
     // do nothing for removeLogRecoveryMetrics for metrics verification
-    doNothing().when(spyLogManager).removeLogRecoveryMetrics(anyInt)
+    doNothing().when(spyLogManager).removeLogRecoveryMetrics()
 
     // start the logManager to do log recovery
     spyLogManager.startup(Set.empty)
 
     // make sure log recovery metrics are added and removed
-    verify(spyLogManager, times(1)).addLogRecoveryMetrics(any, any, ArgumentMatchers.eq(recoveryThreadsPerDataDir))
-    verify(spyLogManager, times(1)).removeLogRecoveryMetrics(ArgumentMatchers.eq(recoveryThreadsPerDataDir))
+    verify(spyLogManager, times(1)).addLogRecoveryMetrics(any[ConcurrentMap[String, AtomicInteger]], any[ConcurrentMap[String, Int]])
+    verify(spyLogManager, times(1)).removeLogRecoveryMetrics()
 
     // expected 1 log in each log dir since we created 2 partitions with 2 log dirs
     val expectedRemainingLogsParams = Map[String, Int](logDir1.getAbsolutePath -> 1, logDir2.getAbsolutePath -> 1)
@@ -839,19 +831,12 @@ class LogManagerTest {
 
     assertEquals(2, spyLogManager.liveLogDirs.size)
 
-    // intercept loadLog method to pass expected parameter to do log recovery
-    doAnswer { _ =>
-      // simulate the recovery thread is resized during log recovery
-      spyLogManager.resizeRecoveryThreadPool(recoveryThreadsPerDataDir - 1)
-    } .when(spyLogManager).loadLog(any[File], any[Boolean], any[Map[TopicPartition, Long]], any[Map[TopicPartition, Long]],
-      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]])
-
     // start the logManager to do log recovery
     spyLogManager.startup(Set.empty)
 
-    // make sure log recovery metrics are added and removed with the expected recovery thread number
-    verify(spyLogManager, times(1)).addLogRecoveryMetrics(any, any, ArgumentMatchers.eq(recoveryThreadsPerDataDir))
-    verify(spyLogManager, times(1)).removeLogRecoveryMetrics(ArgumentMatchers.eq(recoveryThreadsPerDataDir))
+    // make sure log recovery metrics are added and removed once
+    verify(spyLogManager, times(1)).addLogRecoveryMetrics(any[ConcurrentMap[String, AtomicInteger]], any[ConcurrentMap[String, Int]])
+    verify(spyLogManager, times(1)).removeLogRecoveryMetrics()
 
     verifyLogRecoverMetricsRemoved(spyLogManager)
   }
