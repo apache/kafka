@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -695,11 +696,12 @@ public class StoreChangelogReader implements ChangelogReader {
 
         try {
             // those which do not have a committed offset would default to 0
-            final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions();
-            options.topicPartitions(new ArrayList<>(partitions));
-            options.requireStable(true);
-            final Map<TopicPartition, Long> committedOffsets = adminClient.listConsumerGroupOffsets(groupId, options)
-                    .partitionsToOffsetAndMetadata().get().entrySet()
+            final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions()
+                    .requireStable(true);
+            final ListConsumerGroupOffsetsSpec spec = new ListConsumerGroupOffsetsSpec()
+                    .topicPartitions(new ArrayList<>(partitions));
+            final Map<TopicPartition, Long> committedOffsets = adminClient.listConsumerGroupOffsets(Collections.singletonMap(groupId, spec))
+                    .partitionsToOffsetAndMetadata(groupId).get().entrySet()
                     .stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
 
