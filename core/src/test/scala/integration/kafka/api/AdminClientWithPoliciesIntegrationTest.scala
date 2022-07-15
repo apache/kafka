@@ -20,17 +20,19 @@ import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig}
 import kafka.utils.TestUtils.assertFutureExceptionTypeEquals
 import kafka.utils.{Logging, TestInfoUtils, TestUtils}
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigsOptions, Config, ConfigEntry}
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsOptions, Config, ConfigEntry}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.policy.AlterConfigPolicy
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNull}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import scala.annotation.nowarn
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 /**
@@ -121,6 +123,14 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     val topicResource3 = new ConfigResource(ConfigResource.Type.TOPIC, topic3)
     createTopic(topic3, 1, 1)
 
+    // Set a mutable broker config
+    val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokers.head.config.brokerId.toString)
+    val brokerConfigs = Seq(new ConfigEntry(KafkaConfig.MessageMaxBytesProp, "50000")).asJava
+    val alterResult1 = client.alterConfigs(Map(brokerResource -> new Config(brokerConfigs)).asJava)
+    alterResult1.all.get
+    assertEquals(Set(KafkaConfig.MessageMaxBytesProp), validationsForResource(brokerResource).head.configs().keySet().asScala)
+    validations.clear()
+
     val topicConfigEntries1 = Seq(
       new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"),
       new ConfigEntry(LogConfig.MinInSyncReplicasProp, "2") // policy doesn't allow this
@@ -130,7 +140,6 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     val topicConfigEntries3 = Seq(new ConfigEntry(LogConfig.MinInSyncReplicasProp, "-1")).asJava
 
-    val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokers.head.config.brokerId.toString)
     val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.SslTruststorePasswordProp, "12313")).asJava
 
     // Alter configs: second is valid, the others are invalid
@@ -146,6 +155,9 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     alterResult.values.get(topicResource2).get
     assertFutureExceptionTypeEquals(alterResult.values.get(topicResource3), classOf[InvalidConfigurationException])
     assertFutureExceptionTypeEquals(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertTrue(validationsForResource(brokerResource).isEmpty,
+      "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.")
+    validations.clear()
 
     // Verify that the second resource was updated and the others were not
     ensureConsistentKRaftMetadata()
@@ -175,6 +187,9 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     alterResult.values.get(topicResource2).get
     assertFutureExceptionTypeEquals(alterResult.values.get(topicResource3), classOf[InvalidConfigurationException])
     assertFutureExceptionTypeEquals(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertTrue(validationsForResource(brokerResource).isEmpty,
+      "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.")
+    validations.clear()
 
     // Verify that no resources are updated since validate_only = true
     ensureConsistentKRaftMetadata()
@@ -188,11 +203,27 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     assertEquals("0.8", configs.get(topicResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
 
     assertNull(configs.get(brokerResource).get(KafkaConfig.SslTruststorePasswordProp).value)
+
+    // Do an incremental alter config on the broker, ensure we don't see the broker config we set earlier in the policy
+    alterResult = client.incrementalAlterConfigs(Map(
+      brokerResource ->
+        Seq(new AlterConfigOp(
+          new ConfigEntry(KafkaConfig.MaxConnectionsProp, "9999"), OpType.SET)
+        ).asJavaCollection
+    ).asJava)
+    alterResult.all.get
+    assertEquals(Set(KafkaConfig.MaxConnectionsProp), validationsForResource(brokerResource).head.configs().keySet().asScala)
   }
 
 }
 
 object AdminClientWithPoliciesIntegrationTest {
+
+  val validations = new mutable.ListBuffer[AlterConfigPolicy.RequestMetadata]()
+
+  def validationsForResource(resource: ConfigResource): Seq[AlterConfigPolicy.RequestMetadata] = {
+    validations.filter { req => req.resource().equals(resource) }.toSeq
+  }
 
   class Policy extends AlterConfigPolicy {
 
@@ -200,15 +231,16 @@ object AdminClientWithPoliciesIntegrationTest {
     var closed = false
 
     def configure(configs: util.Map[String, _]): Unit = {
+      validations.clear()
       this.configs = configs.asScala.toMap
     }
 
     def validate(requestMetadata: AlterConfigPolicy.RequestMetadata): Unit = {
+      validations.append(requestMetadata)
       require(!closed, "Policy should not be closed")
       require(!configs.isEmpty, "configure should have been called with non empty configs")
       require(!requestMetadata.configs.isEmpty, "request configs should not be empty")
       require(requestMetadata.resource.name.nonEmpty, "resource name should not be empty")
-      require(requestMetadata.resource.name.contains("topic"))
       if (requestMetadata.configs.containsKey(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG))
         throw new PolicyViolationException("Min in sync replicas cannot be updated")
     }
