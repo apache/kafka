@@ -131,6 +131,8 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestGroup;
+import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestTopics;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -3075,7 +3077,17 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testListConsumerGroupOffsetsOptions() throws Exception {
+    public void testListConsumerGroupOffsetsOptionsWithUnbatchedApi() throws Exception {
+        verifyListConsumerGroupOffsetsOptions(false);
+    }
+
+    @Test
+    public void testListConsumerGroupOffsetsOptionsWithBatchedApi() throws Exception {
+        verifyListConsumerGroupOffsetsOptions(true);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void verifyListConsumerGroupOffsetsOptions(boolean batchedApi) throws Exception {
         final Cluster cluster = mockCluster(3, 0);
         final Time time = new MockTime();
 
@@ -3085,24 +3097,32 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            final TopicPartition tp1 = new TopicPartition("A", 0);
+            final List<TopicPartition> partitions = Collections.singletonList(new TopicPartition("A", 0));
             final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions()
-                    .requireStable(true);
-            final ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
-                    .topicPartitions(Collections.singletonList(tp1));
-            env.adminClient().listConsumerGroupOffsets(Collections.singletonMap(GROUP_ID, groupSpec), options);
+                    .requireStable(true)
+                    .timeoutMs(300);
+            if (batchedApi) {
+                final ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
+                        .topicPartitions(partitions);
+                env.adminClient().listConsumerGroupOffsets(Collections.singletonMap(GROUP_ID, groupSpec), options);
+            } else {
+                env.adminClient().listConsumerGroupOffsets(GROUP_ID, options.topicPartitions(partitions));
+            }
 
             final MockClient mockClient = env.kafkaClient();
-            TestUtils.waitForCondition(() -> {
-                final ClientRequest clientRequest = mockClient.requests().peek();
-                if (clientRequest != null) {
-                    OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).data;
-                    return data.requireStable() &&
-                        data.groups().get(0).topics().get(0).name().equals("A") &&
-                        data.groups().get(0).topics().get(0).partitionIndexes().equals(Collections.singletonList(0));
-                }
-                return false;
-            }, "Failed awaiting ListConsumerGroupOfsets request");
+            waitForRequest(mockClient, ApiKeys.OFFSET_FETCH);
+
+            ClientRequest clientRequest = mockClient.requests().peek();
+            assertNotNull(clientRequest);
+            assertEquals(300, clientRequest.requestTimeoutMs());
+            OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).data;
+            assertTrue(data.requireStable());
+            assertEquals(Collections.singletonList(GROUP_ID),
+                    data.groups().stream().map(OffsetFetchRequestGroup::groupId).collect(Collectors.toList()));
+            assertEquals(Collections.singletonList("A"),
+                    data.groups().get(0).topics().stream().map(OffsetFetchRequestTopics::name).collect(Collectors.toList()));
+            assertEquals(Collections.singletonList(0),
+                    data.groups().get(0).topics().get(0).partitionIndexes());
         }
     }
 
