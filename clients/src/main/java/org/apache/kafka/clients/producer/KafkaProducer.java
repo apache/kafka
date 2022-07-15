@@ -1465,9 +1465,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private class AppendCallbacks<K, V> implements RecordAccumulator.AppendCallbacks {
         private final Callback userCallback;
         private final ProducerInterceptors<K, V> interceptors;
-        private ProducerRecord<K, V> record;
         private final String topic;
-        protected int partition = RecordMetadata.UNKNOWN_PARTITION;
+        private volatile ProducerRecord<K, V> record;
+        private volatile int partition = RecordMetadata.UNKNOWN_PARTITION;
 
         private AppendCallbacks(Callback userCallback, ProducerInterceptors<K, V> interceptors, ProducerRecord<K, V> record) {
             this.userCallback = userCallback;
@@ -1507,6 +1507,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         public TopicPartition topicPartition() {
+            // Note that this is called once in the success case (and maybe twice in error case)
+            // so there is not much benefit in caching the TopicPartition object.
             if (partition != RecordMetadata.UNKNOWN_PARTITION)
                 return new TopicPartition(topic, partition);
 
