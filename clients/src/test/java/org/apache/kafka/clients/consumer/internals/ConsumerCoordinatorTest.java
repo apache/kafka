@@ -1253,6 +1253,83 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testPatternSubscribeAndRejoinGroupAfterTopicDelete() {
+        // avoid sending heartbeat to make mock easy, set sessionTimeout & HeartbeatInterval to max
+        GroupRebalanceConfig rebalanceConfigHeartbeatMax = new GroupRebalanceConfig(Integer.MAX_VALUE,
+                rebalanceTimeoutMs,
+                Integer.MAX_VALUE - 1,
+                groupId,
+                groupInstanceId,
+                retryBackoffMs,
+                !groupInstanceId.isPresent());
+        ConsumerCoordinator coordinator = new ConsumerCoordinator(
+                rebalanceConfigHeartbeatMax,
+                new LogContext(),
+                consumerClient,
+                assignors,
+                metadata,
+                subscriptions,
+                new Metrics(),
+                consumerId + groupId,
+                time,
+                true,
+                Integer.MAX_VALUE,
+                null,
+                false);
+        subscriptions.subscribe(Pattern.compile("test.*"), rebalanceListener);
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+            {
+                put(topic1, 1);
+                put(topic2, 1);
+            }
+        }));
+        coordinator.maybeUpdateSubscriptionMetadata();
+        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), subscriptions.subscription());
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(t1p, t2p), Errors.NONE));
+        coordinator.ensureActiveGroup(time.timer(Long.MAX_VALUE));
+        // seek to have valid offset
+        subscriptions.seek(t1p, 100L);
+        subscriptions.seek(t2p, 100L);
+
+        MetadataResponse deletedMetadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+            {
+                put(topic1, 1);
+            }
+        });
+        // Instrument the test so that metadata will contain only one topic after next refresh.
+        client.prepareMetadataUpdate(deletedMetadataResponse);
+
+        Map<TopicPartition, Errors> offsetResponse = new HashMap<>();
+        offsetResponse.put(t1p, Errors.NONE);
+        offsetResponse.put(t2p, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+
+        coordinator.requestRejoin("test force rejoin");
+        time.sleep(100);
+
+        client.prepareResponse(offsetCommitResponse(offsetResponse));
+        assertFalse(coordinator.poll(time.timer(100)));
+
+        time.sleep(100);
+
+        client.prepareResponse(offsetCommitResponse(offsetResponse));
+        assertFalse(coordinator.poll(time.timer(100)));
+
+        time.sleep(rebalanceTimeoutMs / 2);
+        client.prepareResponse(offsetCommitResponse(offsetResponse));
+        assertFalse(coordinator.poll(time.timer(100)));
+
+        time.sleep(rebalanceTimeoutMs / 2);
+        client.prepareResponse(offsetCommitResponse(offsetResponse));
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
+        client.prepareResponse(syncGroupResponse(Arrays.asList(t1p), Errors.NONE));
+        assertTrue(coordinator.poll(time.timer(200)));
+        assertFalse(coordinator.rejoinNeededOrPending());
+    }
+
+    @Test
     public void testForceMetadataDeleteForPatternSubscriptionDuringRebalance() {
         try (ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig, new Metrics(), assignors, true, subscriptions)) {
             subscriptions.subscribe(Pattern.compile("test.*"), rebalanceListener);

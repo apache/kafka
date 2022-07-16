@@ -747,6 +747,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
         if (joinPrepareTimer == null) {
             joinPrepareTimer = time.timer(rebalanceConfig.rebalanceTimeoutMs);
+        } else {
+            joinPrepareTimer.update();
         }
         // async commit offsets prior to rebalance if auto-commit enabled
         if (autoCommitEnabled && autoCommitOffsetRequestFuture == null) {
