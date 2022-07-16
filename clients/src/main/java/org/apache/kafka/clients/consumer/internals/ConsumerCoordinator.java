@@ -762,14 +762,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // return false when:
         //   1. offset commit haven't done
-        //   2. offset commit failed with retriable exception and joinPrepare haven't expired
+        //   2. offset commit failed with retryable exception and joinPrepare haven't expired
         boolean onJoinPrepareAsyncCommitCompleted = true;
         if (autoCommitOffsetRequestFuture != null) {
             if (!autoCommitOffsetRequestFuture.isDone()) {
                 onJoinPrepareAsyncCommitCompleted = false;
             } else if (autoCommitOffsetRequestFuture.failed() && autoCommitOffsetRequestFuture.isRetriable()) {
                 onJoinPrepareAsyncCommitCompleted = joinPrepareTimer.isExpired();
-            } else if (autoCommitOffsetRequestFuture.failed() && autoCommitOffsetRequestFuture.isRetriable()) {
+            } else if (autoCommitOffsetRequestFuture.failed() && !autoCommitOffsetRequestFuture.isRetriable()) {
                 log.error("Asynchronous auto-commit of offsets failed: {}", autoCommitOffsetRequestFuture.exception().getMessage());
             } else if (joinPrepareTimer != null && joinPrepareTimer.isExpired()) {
                 log.error("Asynchronous auto-commit of offsets failed: joinPrepare timeout");
@@ -779,7 +779,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         }
         if (!onJoinPrepareAsyncCommitCompleted) {
-            timer.sleep(rebalanceConfig.retryBackoffMs);
+            timer.sleep(Math.min(timer.remainingMs(), rebalanceConfig.retryBackoffMs));
             return false;
         }
 
