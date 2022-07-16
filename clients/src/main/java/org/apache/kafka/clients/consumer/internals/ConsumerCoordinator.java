@@ -760,19 +760,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             client.poll(autoCommitOffsetRequestFuture, pollTimer);
         }
 
-        // return false when:
-        //   1. offset commit haven't done
-        //   2. offset commit failed with retryable exception and joinPrepare haven't expired
+        // 1. if joinPrepareTime has expired, return true
+        // 2. if offset commit haven't done or failed with retryable exception, return false
+        // 3. if offset commit failed with no-retryable exception, return true
+        // 4. if offset commit success, return true
         boolean onJoinPrepareAsyncCommitCompleted = true;
         if (autoCommitOffsetRequestFuture != null) {
-            if (!autoCommitOffsetRequestFuture.isDone()) {
+            if (joinPrepareTimer.isExpired()) {
+                log.error("Asynchronous auto-commit of offsets failed: joinPrepare timeout");
+            } else if (!autoCommitOffsetRequestFuture.isDone() ||
+                autoCommitOffsetRequestFuture.failed() && autoCommitOffsetRequestFuture.isRetriable()) {
                 onJoinPrepareAsyncCommitCompleted = false;
-            } else if (autoCommitOffsetRequestFuture.failed() && autoCommitOffsetRequestFuture.isRetriable()) {
-                onJoinPrepareAsyncCommitCompleted = joinPrepareTimer.isExpired();
             } else if (autoCommitOffsetRequestFuture.failed() && !autoCommitOffsetRequestFuture.isRetriable()) {
                 log.error("Asynchronous auto-commit of offsets failed: {}", autoCommitOffsetRequestFuture.exception().getMessage());
-            } else if (joinPrepareTimer != null && joinPrepareTimer.isExpired()) {
-                log.error("Asynchronous auto-commit of offsets failed: joinPrepare timeout");
             }
             if (autoCommitOffsetRequestFuture.isDone()) {
                 autoCommitOffsetRequestFuture = null;
