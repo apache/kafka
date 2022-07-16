@@ -696,24 +696,39 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         createWorkerTaskWithErrorToleration();
         expectTopicCreation(TOPIC);
 
+        //Use different offsets for each record so we can verify all were committed
+        final Map<String, Object> offset2 = Collections.singletonMap("key", 13);
+
         // send two records
         // record 1 will succeed
         // record 2 will invoke the producer's failure callback, but ignore the exception via retryOperator
         // and no ConnectException will be thrown
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
-        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
-
+        SourceRecord record2 = new SourceRecord(PARTITION, offset2, TOPIC, 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        expectOffsetFlush(true);
         expectSendRecordOnce();
         expectSendRecordProducerCallbackFail();
         sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class), EasyMock.isNull());
-        EasyMock.expectLastCall();
+
+        //As of KAFKA-14079 all offsets should be committed, even for failed records (if ignored)
+        //Only the last offset will be passed to the method as everything up to that point is committed
+        //Before KAFKA-14079 offset 12 would have been passed and not 13 as it would have been unacked
+        offsetWriter.offset(PARTITION, offset2);
+        PowerMock.expectLastCall();
 
         PowerMock.replayAll();
 
+        //Send records and then commit offsets and verify both were committed and no exception
         Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2));
         Whitebox.invokeMethod(workerTask, "sendRecords");
+        Whitebox.invokeMethod(workerTask, "updateCommittableOffsets");
+        workerTask.commitOffsets();
 
         PowerMock.verifyAll();
+
+        //Double check to make sure all submitted records were cleared
+        assertEquals(0, ((SubmittedRecords) Whitebox.getInternalState(workerTask,
+                "submittedRecords")).records.size());
     }
 
     @Test
