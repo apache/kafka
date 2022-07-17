@@ -652,6 +652,11 @@ public class Selector implements Selectable, AutoCloseable {
             if (send != null) {
                 this.completedSends.add(send);
                 this.sensors.recordCompletedSend(nodeId, send.size(), currentTimeMs);
+
+                // To fix KAFKA-13559, i.e. select(timeout) blocks for 300 ms when the socket has no data but the buffer
+                // has data. Only happens when using SSL.
+                if (channel.hasBytesBuffered())
+                    madeReadProgressLastPoll = true;
             }
         }
     }
