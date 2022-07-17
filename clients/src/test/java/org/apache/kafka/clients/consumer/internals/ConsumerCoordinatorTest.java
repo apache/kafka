@@ -1378,7 +1378,7 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testOnJoinPrepareWithOffsetCommit() throws InterruptedException {
+    public void testOnJoinPrepareWithOffsetCommit_SuccessAfterRetry() {
         rebalanceConfig = buildRebalanceConfig(Optional.of("group-id"));
         ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig,
                 new Metrics(),
@@ -1402,7 +1402,6 @@ public abstract class ConsumerCoordinatorTest {
         time.sleep(150);
         boolean res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
         assertFalse(res);
-
         pollTimer = time.timer(100L);
         time.sleep(150);
         client.respond(offsetCommitResponse(singletonMap(t1p, Errors.UNKNOWN_TOPIC_OR_PARTITION)));
@@ -1413,10 +1412,101 @@ public abstract class ConsumerCoordinatorTest {
         time.sleep(150);
         res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
         assertFalse(res);
-
         pollTimer = time.timer(100L);
         time.sleep(150);
         client.respond(offsetCommitResponse(singletonMap(t1p, Errors.NONE)));
+        res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
+        assertTrue(res);
+
+        assertFalse(client.hasPendingResponses());
+        assertFalse(client.hasInFlightRequests());
+        assertFalse(coordinator.coordinatorUnknown());
+    }
+
+    @Test
+    public void testOnJoinPrepareWithOffsetCommit_KeepJoinAfterNonRetryableException() {
+        rebalanceConfig = buildRebalanceConfig(Optional.of("group-id"));
+        ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig,
+                new Metrics(),
+                assignors,
+                true,
+                subscriptions);
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
+        client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+
+        coordinator.ensureActiveGroup();
+        subscriptions.seek(t1p, 100L);
+
+        int generationId = 42;
+        String memberId = "consumer-42";
+
+        Timer pollTimer = time.timer(100L);
+        time.sleep(150);
+        boolean res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
+        assertFalse(res);
+        pollTimer = time.timer(100L);
+        time.sleep(150);
+        client.respond(offsetCommitResponse(singletonMap(t1p, Errors.UNKNOWN_TOPIC_OR_PARTITION)));
+        res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
+        assertFalse(res);
+
+        pollTimer = time.timer(100L);
+        time.sleep(150);
+        res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
+        assertFalse(res);
+        pollTimer = time.timer(100L);
+        time.sleep(150);
+        client.respond(offsetCommitResponse(singletonMap(t1p, Errors.UNKNOWN_MEMBER_ID)));
+        res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
+        assertTrue(res);
+
+        assertFalse(client.hasPendingResponses());
+        assertFalse(client.hasInFlightRequests());
+        assertFalse(coordinator.coordinatorUnknown());
+    }
+
+    @Test
+    public void testOnJoinPrepareWithOffsetCommit_KeepJoinAfterRebalanceTimeout() {
+        rebalanceConfig = buildRebalanceConfig(Optional.of("group-id"));
+        ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig,
+                new Metrics(),
+                assignors,
+                true,
+                subscriptions);
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+        client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE));
+        client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+
+        coordinator.ensureActiveGroup();
+        subscriptions.seek(t1p, 100L);
+
+        int generationId = 42;
+        String memberId = "consumer-42";
+
+        Timer pollTimer = time.timer(100L);
+        time.sleep(150);
+        boolean res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
+        assertFalse(res);
+        pollTimer = time.timer(100L);
+        time.sleep(150);
+        client.respond(offsetCommitResponse(singletonMap(t1p, Errors.UNKNOWN_TOPIC_OR_PARTITION)));
+        res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
+        assertFalse(res);
+
+        pollTimer = time.timer(100L);
+        time.sleep(150);
+        res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
+        assertFalse(res);
+        pollTimer = time.timer(100L);
+        time.sleep(rebalanceTimeoutMs);
+        client.respond(offsetCommitResponse(singletonMap(t1p, Errors.UNKNOWN_TOPIC_OR_PARTITION)));
         res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
         assertTrue(res);
 

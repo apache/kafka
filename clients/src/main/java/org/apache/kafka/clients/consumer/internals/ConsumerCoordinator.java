@@ -143,6 +143,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final RebalanceProtocol protocol;
     // pending commit offset request in onJoinPrepare
     private RequestFuture<Void> autoCommitOffsetRequestFuture = null;
+    // a timer for join prepare to know when to stop.
+    // it'll set to rebalance timeout so that the member can join the group successfully
+    // even though offset commit failed.
     private Timer joinPrepareTimer = null;
 
     /**
@@ -750,31 +753,42 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         } else {
             joinPrepareTimer.update();
         }
+
         // async commit offsets prior to rebalance if auto-commit enabled
+        // and there is no in-flight offset commit request
         if (autoCommitEnabled && autoCommitOffsetRequestFuture == null) {
             autoCommitOffsetRequestFuture = maybeAutoCommitOffsetsAsync();
         }
 
-        // wait for commit offset response before timer.
+        // wait for commit offset response before timer expired.
         if (autoCommitOffsetRequestFuture != null) {
             Timer pollTimer = timer.remainingMs() < joinPrepareTimer.remainingMs() ?
                    timer : joinPrepareTimer;
             client.poll(autoCommitOffsetRequestFuture, pollTimer);
+            timer.update();
+            joinPrepareTimer.update();
         }
 
-        // 1. if joinPrepareTime has expired, return true
-        // 2. if offset commit haven't done or failed with retryable exception, return false
-        // 3. if offset commit failed with no-retryable exception, return true
-        // 4. if offset commit success, return true
+        // keep retrying the offset commit when:
+        // 1. offset commit haven't done (and joinPrepareTime not expired)
+        // 2. failed with retryable exception (and joinPrepareTime not expired)
+        // Otherwise, continue to revoke partitions, ex:
+        // 1. if joinPrepareTime has expired
+        // 2. if offset commit failed with no-retryable exception
+        // 3. if offset commit success
         boolean onJoinPrepareAsyncCommitCompleted = true;
         if (autoCommitOffsetRequestFuture != null) {
             if (joinPrepareTimer.isExpired()) {
-                log.error("Asynchronous auto-commit of offsets failed: joinPrepare timeout");
-            } else if (!autoCommitOffsetRequestFuture.isDone() ||
-                autoCommitOffsetRequestFuture.failed() && autoCommitOffsetRequestFuture.isRetriable()) {
+                log.error("Asynchronous auto-commit of offsets failed: joinPrepare timeout. Will continue to join group");
+            } else if (!autoCommitOffsetRequestFuture.isDone()) {
+                onJoinPrepareAsyncCommitCompleted = false;
+            } else if (autoCommitOffsetRequestFuture.failed() && autoCommitOffsetRequestFuture.isRetriable()) {
+                log.debug("Asynchronous auto-commit of offsets failed with retryable error: {}. Will retry it.",
+                          autoCommitOffsetRequestFuture.exception().getMessage());
                 onJoinPrepareAsyncCommitCompleted = false;
             } else if (autoCommitOffsetRequestFuture.failed() && !autoCommitOffsetRequestFuture.isRetriable()) {
-                log.error("Asynchronous auto-commit of offsets failed: {}", autoCommitOffsetRequestFuture.exception().getMessage());
+                log.error("Asynchronous auto-commit of offsets failed: {}. Will continue to join group.",
+                          autoCommitOffsetRequestFuture.exception().getMessage());
             }
             if (autoCommitOffsetRequestFuture.isDone()) {
                 autoCommitOffsetRequestFuture = null;
@@ -782,6 +796,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
         if (!onJoinPrepareAsyncCommitCompleted) {
             timer.sleep(Math.min(timer.remainingMs(), rebalanceConfig.retryBackoffMs));
+            joinPrepareTimer.update();
             return false;
         }
 
@@ -836,6 +851,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         isLeader = false;
         subscriptions.resetGroupSubscription();
         joinPrepareTimer = null;
+        autoCommitOffsetRequestFuture = null;
 
         if (exception != null) {
             throw new KafkaException("User rebalance callback throws an error", exception);
