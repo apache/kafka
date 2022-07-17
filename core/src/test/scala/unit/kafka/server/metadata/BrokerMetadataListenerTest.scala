@@ -123,7 +123,7 @@ class BrokerMetadataListenerTest {
     var prevCommittedEpoch = -1
     var prevLastContainedLogTime = -1L
 
-    override def maybeStartSnapshot(lastContainedLogTime: Long, newImage: MetadataImage): Boolean = {
+    override def maybeStartSnapshot(lastContainedLogTime: Long, newImage: MetadataImage, snapshotReason: String): Boolean = {
       try {
         if (activeSnapshotOffset == -1L) {
           assertTrue(prevCommittedOffset <= newImage.highestOffsetAndEpoch().offset)

@@ -50,7 +50,7 @@ class BrokerMetadataSnapshotter(
    */
   val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""))
 
-  override def maybeStartSnapshot(lastContainedLogTime: Long, image: MetadataImage): Boolean = synchronized {
+  override def maybeStartSnapshot(lastContainedLogTime: Long, image: MetadataImage, snapshotReason: String): Boolean = synchronized {
     if (_currentSnapshotOffset != -1) {
       info(s"Declining to create a new snapshot at ${image.highestOffsetAndEpoch()} because " +
         s"there is already a snapshot in progress at offset ${_currentSnapshotOffset}")
@@ -63,7 +63,7 @@ class BrokerMetadataSnapshotter(
       )
       if (writer.nonEmpty) {
         _currentSnapshotOffset = image.highestOffsetAndEpoch().offset
-        info(s"Creating a new snapshot at offset ${_currentSnapshotOffset}...")
+        info(s"Creating a new snapshot at offset ${_currentSnapshotOffset} because ${snapshotReason}...")
         eventQueue.append(new CreateSnapshotEvent(image, writer.get))
         true
       } else {

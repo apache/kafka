@@ -31,5 +31,5 @@ trait MetadataSnapshotter {
    *
    * @return                      True if we will write out a new snapshot; false otherwise.
    */
-  def maybeStartSnapshot(lastContainedLogTime: Long, image: MetadataImage): Boolean
+  def maybeStartSnapshot(lastContainedLogTime: Long, image: MetadataImage, snapshotReason: String): Boolean
 }

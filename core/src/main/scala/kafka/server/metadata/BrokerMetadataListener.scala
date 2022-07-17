@@ -90,6 +90,12 @@ class BrokerMetadataListener(
   private var _bytesSinceLastSnapshot: Long = 0L
 
   /**
+   * The reason as to why we are calling maybeStartSnapshot, can be either
+   * MaxBytesExceeded or MetadataVersionChanged
+   */
+  private var _reasonForSnapshot: String = ""
+
+  /**
    * The event queue which runs this listener.
    */
   val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""))
@@ -128,7 +134,15 @@ class BrokerMetadataListener(
   }
 
   private def shouldSnapshot(): Boolean = {
-    (_bytesSinceLastSnapshot >= maxBytesBetweenSnapshots) || metadataVersionChanged()
+    if (_bytesSinceLastSnapshot >= maxBytesBetweenSnapshots) {
+      _reasonForSnapshot = "MaxBytesExceeded"
+      return true
+    } else if (metadataVersionChanged()) {
+      _reasonForSnapshot = "MetadataVersionChanged"
+      return true
+    } else {
+      return false
+    }
   }
 
   private def metadataVersionChanged(): Boolean = {
@@ -141,7 +155,7 @@ class BrokerMetadataListener(
 
   private def maybeStartSnapshot(): Unit = {
     snapshotter.foreach { snapshotter =>
-      if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply())) {
+      if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply(), _reasonForSnapshot)) {
         _bytesSinceLastSnapshot = 0L
       }
     }
@@ -253,6 +267,7 @@ class BrokerMetadataListener(
       log.info(s"Starting to publish metadata events at offset $highestMetadataOffset.")
       try {
         if (metadataVersionChanged()) {
+          _reasonForSnapshot = "MetadataVersionChanged"
           maybeStartSnapshot()
         }
         publish(publisher)
