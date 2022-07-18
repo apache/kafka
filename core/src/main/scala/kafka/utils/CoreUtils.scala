@@ -289,7 +289,7 @@ object CoreUtils {
             case other =>
               checkDuplicateListenerNames(other, listeners)
               if (requireDistinctPorts)
-                throw new IllegalArgumentException(s"Each listener must have a different port unless exactly one listener has " +
+                throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has " +
                   s"an IPv4 address and the other IPv6 address, listeners: $listeners, port: $port")
           }
       }
