@@ -95,6 +95,19 @@ public interface StateUpdater {
     void remove(final TaskId taskId);
 
     /**
+     * Pause a task (active or standby) from restoring in the state updater.
+     *
+     * This method does not block until the task is paused.
+     *
+     * Restored tasks, removed tasks and failed tasks are not paused so this action would be an no-op for them.
+     * Stateless tasks will never be paused since they are immediately added to the
+     * restored active tasks.
+     *
+     * @param taskId ID of the task to remove
+     */
+    void pause(final TaskId taskId);
+
+    /**
      * Drains the restored active tasks from the state updater.
      *
      * The returned active tasks are removed from the state updater.

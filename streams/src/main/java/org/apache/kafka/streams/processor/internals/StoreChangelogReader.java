@@ -481,7 +481,7 @@ public class StoreChangelogReader implements ChangelogReader {
     }
 
     private void pauseResumePartitions(final Map<TaskId, Task> tasks,
-        final Set<TopicPartition> restoringChangelogs) {
+                                       final Set<TopicPartition> restoringChangelogs) {
         if (state == ChangelogReaderState.ACTIVE_RESTORING) {
             updatePartitionsByType(tasks, restoringChangelogs, TaskType.ACTIVE);
         }
