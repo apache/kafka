@@ -253,7 +253,6 @@ object CoreUtils {
 
   def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[EndPoint] = {
     def validate(endPoints: Seq[EndPoint]): Unit = {
-      // Exception case, lets allow duplicate ports if the host is on IPv4 and the other is on IPv6
       val (duplicatePorts, nonDuplicatePorts) = endPoints.filter {
         ep => ep.port != 0
       }.groupBy(_.port).partition {
@@ -266,6 +265,7 @@ object CoreUtils {
       if (requireDistinctPorts)
         checkDuplicateListenerPorts(nonDuplicatePortsOnlyEndpoints, listeners)
 
+      // Exception case, lets allow duplicate ports if the host is on IPv4 and the other is on IPv6
       val duplicatePortsPartitionedByValidIps = duplicatePorts.map{
         case (port, eps) =>
           (port, eps.partition(ep =>
