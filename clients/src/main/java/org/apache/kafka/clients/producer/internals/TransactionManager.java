@@ -172,7 +172,7 @@ public class TransactionManager {
                 case ABORTABLE_ERROR:
                     return source == IN_TRANSACTION || source == COMMITTING_TRANSACTION || source == ABORTABLE_ERROR;
                 case FATAL_BUMPABLE_ERROR:
-                    return source != FATAL_ERROR;
+                    return source != UNINITIALIZED && source != INITIALIZING && source != FATAL_ERROR;
                 case FATAL_ERROR:
                 default:
                     // We can transition to FATAL_ERROR unconditionally.
@@ -257,9 +257,10 @@ public class TransactionManager {
             // Already in a fatal state, skip
             return;
         }
+        String errorMessage = "Encountered unrecoverable error due to batch client side timeout";
         RuntimeException failure = cause == null
-                ? new KafkaException("Encountered unrecoverable error due to batch delivery timeout")
-                : new KafkaException("Encountered unrecoverable error due to batch delivery timeout", cause);
+                ? new KafkaException(errorMessage)
+                : new KafkaException(errorMessage, cause);
         transitionToFatalBumpableError(failure);
 
         // If an epoch bump is possible, try to fence the current transaction by bumping
@@ -382,7 +383,7 @@ public class TransactionManager {
     }
 
     synchronized boolean isSendToPartitionAllowed(TopicPartition tp) {
-        if (hasFatalError())
+        if (hasFatalError() || hasFatalBumpableError())
             return false;
         return !isTransactional() || partitionsInTransaction.contains(tp);
     }
@@ -676,7 +677,7 @@ public class TransactionManager {
             }
         }
 
-        if (hasFatalError()) {
+        if (hasFatalError() || hasFatalBumpableError()) {
             log.debug("Ignoring batch {} with producer id {}, epoch {}, and sequence number {} " +
                             "since the producer is already in fatal error state", batch, batch.producerId(),
                     batch.producerEpoch(), batch.baseSequence(), exception);
