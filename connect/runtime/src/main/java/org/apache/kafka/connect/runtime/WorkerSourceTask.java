@@ -375,6 +375,10 @@ class WorkerSourceTask extends WorkerTask {
                                 // executeFailed here allows the use of existing logging infrastructure/configuration
                                 retryWithToleranceOperator.executeFailed(Stage.KAFKA_PRODUCE, WorkerSourceTask.class,
                                         preTransformRecord, e);
+
+                                //Ack the record so it will be skipped and offsets are committed
+                                submittedRecord.ack();
+                                counter.skipRecord();
                                 commitTaskRecord(preTransformRecord, null);
                             } else {
                                 log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
