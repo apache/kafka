@@ -1468,13 +1468,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         private final String topic;
         private volatile ProducerRecord<K, V> record;
         private volatile int partition = RecordMetadata.UNKNOWN_PARTITION;
+        private volatile TopicPartition topicPartition;
 
         private AppendCallbacks(Callback userCallback, ProducerInterceptors<K, V> interceptors, ProducerRecord<K, V> record) {
             this.userCallback = userCallback;
             this.interceptors = interceptors;
             this.record = record;
-            // Note a record would be null only if the client application has a bug, but we don't want to
-            // have NPE here, because the interceptors would not be notified (see .doSend).
+            // We don't want to have an NPE here, because the interceptors would not be notified (see .doSend).
             topic = record != null ? record.topic() : null;
         }
 
@@ -1507,15 +1507,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         public TopicPartition topicPartition() {
-            // Note that this is called once in the success case (and maybe twice in error case)
-            // so there is not much benefit in caching the TopicPartition object.
-            if (partition != RecordMetadata.UNKNOWN_PARTITION)
-                return new TopicPartition(topic, partition);
-
-            if (record != null)
-                return ProducerInterceptors.extractTopicPartition(record);
-
-            return null;
+            if (topicPartition == null) {
+                if (partition != RecordMetadata.UNKNOWN_PARTITION)
+                    topicPartition = new TopicPartition(topic, partition);
+                else if (record != null)
+                    topicPartition = ProducerInterceptors.extractTopicPartition(record);
+            }
+            return topicPartition;
         }
     }
 }
