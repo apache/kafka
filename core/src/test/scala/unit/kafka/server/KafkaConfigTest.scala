@@ -229,6 +229,14 @@ class KafkaConfigTest {
     caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     assertTrue(caught.getMessage.contains("Each listener must have a different port"))
 
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://apache.org:9092,PLAINTEXT://[::1]:9092")
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("Each listener must have a different port"))
+
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://apache.org:9092,PLAINTEXT://127.0.0.1:9092")
+    caught = assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertTrue(caught.getMessage.contains("Each listener must have a different port"))
+
     // Happy case
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,PLAINTEXT://[::1]:9092")
     assertTrue(isValidKafkaConfig(props))
