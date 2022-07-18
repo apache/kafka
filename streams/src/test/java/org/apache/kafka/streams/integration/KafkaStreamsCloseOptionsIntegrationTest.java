@@ -58,7 +58,7 @@ import java.util.Properties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 
 @Category({IntegrationTest.class})
-public class KafkaStreamsCloseOptionsIntegrationTest {
+public class KafkaStreamsCloseOptionsIntegrationTest { //extends AbstractResetIntegrationTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);
     @Rule
