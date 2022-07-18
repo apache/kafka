@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import java.util.*;
 import java.util.Map.Entry;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -42,13 +43,6 @@ import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
 
-import java.util.Map;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Set;
-import java.util.HashSet;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -297,10 +291,18 @@ public class MirrorSourceConnector extends SourceConnector {
 
     private void syncTopicConfigs()
             throws InterruptedException, ExecutionException {
-        Map<String, Config> sourceConfigs = describeTopicConfigs(topicsBeingReplicated());
-        Map<String, Config> targetConfigs = sourceConfigs.entrySet().stream()
-            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue())));
-        updateTopicConfigs(targetConfigs);
+        Set<String> topics=this.topicsBeingReplicated();
+        Map<String, Config> configDiff=new HashMap<>();
+        Map<String, Config> sourceConfigs = describeTopicConfigs(topics,sourceAdminClient).entrySet().stream()
+                .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue())));
+        Map<String, Config> targetConfigs = describeTopicConfigs(topics,targetAdminClient).entrySet().stream()
+                .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue())));
+        for (String topic:sourceConfigs.keySet()){
+            if(targetConfigs.containsKey(topic)&&!targetConfigs.get(topic).equals(sourceConfigs.get(topic))){
+                configDiff.put(topic,sourceConfigs.get(topic));
+            }
+        }
+        updateTopicConfigs(configDiff);
     }
 
     private void createOffsetSyncsTopic() {
@@ -351,7 +353,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     private void createNewTopics(Set<String> newSourceTopics, Map<String, Long> sourceTopicToPartitionCounts)
             throws ExecutionException, InterruptedException {
-        Map<String, Config> sourceTopicToConfig = describeTopicConfigs(newSourceTopics);
+        Map<String, Config> sourceTopicToConfig = describeTopicConfigs(newSourceTopics,sourceAdminClient);
         Map<String, NewTopic> newTopics = newSourceTopics.stream()
                 .map(sourceTopic -> {
                     String remoteTopic = formatRemoteTopic(sourceTopic);
@@ -436,12 +438,12 @@ public class MirrorSourceConnector extends SourceConnector {
             .map(x -> new TopicPartition(topic, x.partition()));
     }
 
-    Map<String, Config> describeTopicConfigs(Set<String> topics)
+    Map<String, Config> describeTopicConfigs(Set<String> topics,AdminClient adminClient)
             throws InterruptedException, ExecutionException {
         Set<ConfigResource> resources = topics.stream()
             .map(x -> new ConfigResource(ConfigResource.Type.TOPIC, x))
             .collect(Collectors.toSet());
-        return sourceAdminClient.describeConfigs(resources).all().get().entrySet().stream()
+        return adminClient.describeConfigs(resources).all().get().entrySet().stream()
             .collect(Collectors.toMap(x -> x.getKey().name(), Entry::getValue));
     }
 
