@@ -84,10 +84,10 @@ class SocketServerTest {
 
   private val kafkaLogger = org.apache.log4j.LogManager.getLogger("kafka")
   private var logLevelToRestore: Level = _
-  def endpoint(c: KafkaConfig = config): EndPoint = {
-    c.dataPlaneListeners.head
+  def endpoint: EndPoint = {
+    KafkaConfig.fromProps(props, doLog = false).dataPlaneListeners.head
   }
-  def listener: String = endpoint().listenerName.value
+  def listener: String = endpoint.listenerName.value
   val uncaughtExceptions = new AtomicInteger(0)
 
   @BeforeEach
@@ -1910,6 +1910,7 @@ class SocketServerTest {
     // create server with SSL listener
     val testableServer = new TestableSocketServer(KafkaConfig.fromProps(props))
     testableServer.enableRequestProcessing(Map.empty)
+    //       dataPlaneAcceptors.get(endpoint).processors(0).selector.asInstanceOf[TestableSelector]
     val testableSelector = testableServer.testableSelector
     val proxyServer = new ProxyServer(testableServer)
 
@@ -1925,7 +1926,7 @@ class SocketServerTest {
 
       // then put 2 requests in SslTransportLayer.netReadBuffer via the ProxyServer
       val connectionId = request1.context.connectionId
-      val listener = endpoint(testableServer.config).listenerName.value
+      val listener = testableServer.config.dataPlaneListeners.head.listenerName.value
       val channel = testableServer.dataPlaneAcceptor(listener).get.processors(0).channel(connectionId).getOrElse(throw new IllegalStateException("Channel not found"))
       val transportLayer: SslTransportLayer = JTestUtils.fieldValue(channel, classOf[KafkaChannel], "transportLayer")
       val netReadBuffer: ByteBuffer = JTestUtils.fieldValue(transportLayer, classOf[SslTransportLayer], "netReadBuffer")
@@ -2134,10 +2135,12 @@ class SocketServerTest {
     }
 
     def testableSelector: TestableSelector =
-      dataPlaneAcceptors.get(endpoint(config)).processors(0).selector.asInstanceOf[TestableSelector]
+      testableProcessor.selector.asInstanceOf[TestableSelector]
 
-    def testableProcessor: TestableProcessor =
-      dataPlaneAcceptors.get(endpoint(config)).processors(0).asInstanceOf[TestableProcessor]
+    def testableProcessor: TestableProcessor = {
+      val endpoint = this.config.dataPlaneListeners.head
+      dataPlaneAcceptors.get(endpoint).processors(0).asInstanceOf[TestableProcessor]
+    }
 
     def waitForChannelClose(connectionId: String, locallyClosed: Boolean): Unit = {
       val selector = testableSelector
