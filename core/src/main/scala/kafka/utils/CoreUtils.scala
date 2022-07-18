@@ -254,6 +254,7 @@ object CoreUtils {
   def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[EndPoint] = {
     def validate(endPoints: Seq[EndPoint]): Unit = {
       val (duplicatePorts, nonDuplicatePorts) = endPoints.filter {
+        // filter port 0 for unit tests
         ep => ep.port != 0
       }.groupBy(_.port).partition {
         case (_, endpoints) => endpoints.size > 1
