@@ -20,8 +20,10 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.junit.jupiter.api.Test;
 
 import static org.apache.kafka.streams.processor.internals.TaskAndAction.Action.ADD;
+import static org.apache.kafka.streams.processor.internals.TaskAndAction.Action.PAUSE;
 import static org.apache.kafka.streams.processor.internals.TaskAndAction.Action.REMOVE;
 import static org.apache.kafka.streams.processor.internals.TaskAndAction.createAddTask;
+import static org.apache.kafka.streams.processor.internals.TaskAndAction.createPauseTask;
 import static org.apache.kafka.streams.processor.internals.TaskAndAction.createRemoveTask;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -55,6 +57,18 @@ class TaskAndActionTest {
     }
 
     @Test
+    public void shouldCreatePauseTaskAction() {
+        final TaskId taskId = new TaskId(0, 0);
+
+        final TaskAndAction pauseTask = createPauseTask(taskId);
+
+        assertEquals(PAUSE, pauseTask.getAction());
+        assertEquals(taskId, pauseTask.getTaskId());
+        final Exception exception = assertThrows(IllegalStateException.class, pauseTask::getTask);
+        assertEquals("Action type PAUSE cannot have a task!", exception.getMessage());
+    }
+
+    @Test
     public void shouldThrowIfAddTaskActionIsCreatedWithNullTask() {
         final Exception exception = assertThrows(NullPointerException.class, () -> createAddTask(null));
         assertTrue(exception.getMessage().contains("Task to add is null!"));
@@ -64,5 +78,11 @@ class TaskAndActionTest {
     public void shouldThrowIfRemoveTaskActionIsCreatedWithNullTaskId() {
         final Exception exception = assertThrows(NullPointerException.class, () -> createRemoveTask(null));
         assertTrue(exception.getMessage().contains("Task ID of task to remove is null!"));
+    }
+
+    @Test
+    public void shouldThrowIfPauseTaskActionIsCreatedWithNullTaskId() {
+        final Exception exception = assertThrows(NullPointerException.class, () -> createPauseTask(null));
+        assertTrue(exception.getMessage().contains("Task ID of task to pause is null!"));
     }
 }

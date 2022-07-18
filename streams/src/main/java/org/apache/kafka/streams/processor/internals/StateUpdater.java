@@ -99,7 +99,7 @@ public interface StateUpdater {
      *
      * This method does not block until the task is paused.
      *
-     * The task to be paused is not removed from the restored active tasks and the failed tasks.
+     * Restored tasks, removed tasks and failed tasks are not paused so this action would be an no-op for them.
      * Stateless tasks will never be paused since they are immediately added to the
      * restored active tasks.
      *
