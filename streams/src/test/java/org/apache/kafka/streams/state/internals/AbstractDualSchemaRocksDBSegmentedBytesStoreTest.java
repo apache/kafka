@@ -91,6 +91,7 @@ import static org.hamcrest.Matchers.hasEntry;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -821,6 +822,143 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
                 KeyValue.pair(new Windowed<>(keyA, maxWindow), 10L),
                 KeyValue.pair(new Windowed<>(keyB, maxWindow), 50L),
                 KeyValue.pair(new Windowed<>(keyC, maxWindow), 100L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+    }
+
+    @Test
+    public void shouldFetchSessionForSingleKey() {
+        // Only for TimeFirstSessionKeySchema schema
+        if (!(getBaseSchema() instanceof TimeFirstSessionKeySchema)) {
+            return;
+        }
+
+        final String keyA = "a";
+        final String keyB = "b";
+        final String keyC = "c";
+
+        final StateSerdes<String, Long> stateSerdes = StateSerdes.withBuiltinTypes("dummy", String.class, Long.class);
+        final Bytes key1 = Bytes.wrap(stateSerdes.keySerializer().serialize("dummy", keyA));
+        final Bytes key2 = Bytes.wrap(stateSerdes.keySerializer().serialize("dummy", keyB));
+        final Bytes key3 = Bytes.wrap(stateSerdes.keySerializer().serialize("dummy", keyC));
+
+        final byte[] expectedValue1 = serializeValue(10);
+        final byte[] expectedValue2 = serializeValue(50);
+        final byte[] expectedValue3 = serializeValue(100);
+        final byte[] expectedValue4 = serializeValue(200);
+
+        bytesStore.put(serializeKey(new Windowed<>(keyA, windows[0])), expectedValue1);
+        bytesStore.put(serializeKey(new Windowed<>(keyA, windows[1])), expectedValue2);
+        bytesStore.put(serializeKey(new Windowed<>(keyB, windows[2])), expectedValue3);
+        bytesStore.put(serializeKey(new Windowed<>(keyC, windows[3])), expectedValue4);
+
+        final byte[] value1 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+            key1, windows[0].start(), windows[0].end());
+        assertEquals(Bytes.wrap(value1), Bytes.wrap(expectedValue1));
+
+        final byte[] value2 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+            key1, windows[1].start(), windows[1].end());
+        assertEquals(Bytes.wrap(value2), Bytes.wrap(expectedValue2));
+
+        final byte[] value3 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+            key2, windows[2].start(), windows[2].end());
+        assertEquals(Bytes.wrap(value3), Bytes.wrap(expectedValue3));
+
+        final byte[] value4 = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+            key3, windows[3].start(), windows[3].end());
+        assertEquals(Bytes.wrap(value4), Bytes.wrap(expectedValue4));
+
+        final byte[] noValue = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSession(
+            key3, 2000, 3000);
+        assertNull(noValue);
+    }
+
+    @Test
+    public void shouldFetchSessionForTimeRange() {
+        // Only for TimeFirstSessionKeySchema schema
+        if (!(getBaseSchema() instanceof TimeFirstSessionKeySchema)) {
+            return;
+        }
+        final String keyA = "a";
+        final String keyB = "b";
+        final String keyC = "c";
+
+        final Window[] sessionWindows = new Window[4];
+        sessionWindows[0] = new SessionWindow(100L, 100L);
+        sessionWindows[1] = new SessionWindow(50L, 200L);
+        sessionWindows[2] = new SessionWindow(200L, 300L);
+        bytesStore.put(serializeKey(new Windowed<>(keyA, sessionWindows[0])), serializeValue(10));
+        bytesStore.put(serializeKey(new Windowed<>(keyB, sessionWindows[1])), serializeValue(100));
+        bytesStore.put(serializeKey(new Windowed<>(keyC, sessionWindows[2])), serializeValue(200));
+
+
+        // Fetch point
+        try (final KeyValueIterator<Bytes, byte[]> values = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(100L, 100L)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                KeyValue.pair(new Windowed<>(keyA, sessionWindows[0]), 10L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        // Fetch partial boundary
+        try (final KeyValueIterator<Bytes, byte[]> values = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(100L, 200L)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyA, sessionWindows[0]), 10L),
+                KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        // Fetch partial
+        try (final KeyValueIterator<Bytes, byte[]> values = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(99L, 201L)) {
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyA, sessionWindows[0]), 10L),
+                KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        // Fetch partial
+        try (final KeyValueIterator<Bytes, byte[]> values = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(101L, 199L)) {
+            assertTrue(toList(values).isEmpty());
+        }
+
+        // Fetch all boundary
+        try (final KeyValueIterator<Bytes, byte[]> values = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(100L, 300L)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyA, sessionWindows[0]), 10L),
+                KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L),
+                KeyValue.pair(new Windowed<>(keyC, sessionWindows[2]), 200L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        // Fetch all
+        try (final KeyValueIterator<Bytes, byte[]> values = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(99L, 301L)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = asList(
+                KeyValue.pair(new Windowed<>(keyA, sessionWindows[0]), 10L),
+                KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L),
+                KeyValue.pair(new Windowed<>(keyC, sessionWindows[2]), 200L)
+            );
+
+            assertEquals(expected, toList(values));
+        }
+
+        // Fetch all
+        try (final KeyValueIterator<Bytes, byte[]> values = ((RocksDBTimeOrderedSessionSegmentedBytesStore) bytesStore).fetchSessions(101L, 299L)) {
+
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                KeyValue.pair(new Windowed<>(keyB, sessionWindows[1]), 100L)
             );
 
             assertEquals(expected, toList(values));

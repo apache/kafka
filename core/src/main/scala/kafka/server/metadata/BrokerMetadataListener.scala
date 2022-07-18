@@ -117,26 +117,34 @@ class BrokerMetadataListener(
       } finally {
         reader.close()
       }
+
+      _bytesSinceLastSnapshot = _bytesSinceLastSnapshot + results.numBytes
+      if (shouldSnapshot()) {
+        maybeStartSnapshot()
+      }
+
       _publisher.foreach(publish)
-
-      // If we detected a change in metadata.version, generate a local snapshot
-      val metadataVersionChanged = Option(_delta.featuresDelta()).exists { featuresDelta =>
-        featuresDelta.metadataVersionChange().isPresent
-      }
-
-      snapshotter.foreach { snapshotter =>
-        _bytesSinceLastSnapshot = _bytesSinceLastSnapshot + results.numBytes
-        if (shouldSnapshot() || metadataVersionChanged) {
-          if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply())) {
-            _bytesSinceLastSnapshot = 0L
-          }
-        }
-      }
     }
   }
 
   private def shouldSnapshot(): Boolean = {
-    _bytesSinceLastSnapshot >= maxBytesBetweenSnapshots
+    (_bytesSinceLastSnapshot >= maxBytesBetweenSnapshots) || metadataVersionChanged()
+  }
+
+  private def metadataVersionChanged(): Boolean = {
+    // The _publisher is empty before starting publishing, and we won't compute feature delta
+    // until we starting publishing
+    _publisher.nonEmpty && Option(_delta.featuresDelta()).exists { featuresDelta =>
+      featuresDelta.metadataVersionChange().isPresent
+    }
+  }
+
+  private def maybeStartSnapshot(): Unit = {
+    snapshotter.foreach { snapshotter =>
+      if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply())) {
+        _bytesSinceLastSnapshot = 0L
+      }
+    }
   }
 
   /**
@@ -213,7 +221,7 @@ class BrokerMetadataListener(
             s" ${messageAndVersion.message}")
         }
 
-        _highestOffset  = lastCommittedOffset.getOrElse(batch.baseOffset() + index)
+        _highestOffset = lastCommittedOffset.getOrElse(batch.baseOffset() + index)
 
         delta.replay(highestMetadataOffset, epoch, messageAndVersion.message())
         numRecords += 1
@@ -244,6 +252,9 @@ class BrokerMetadataListener(
       _publisher = Some(publisher)
       log.info(s"Starting to publish metadata events at offset $highestMetadataOffset.")
       try {
+        if (metadataVersionChanged()) {
+          maybeStartSnapshot()
+        }
         publish(publisher)
         future.complete(null)
       } catch {

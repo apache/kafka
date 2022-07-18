@@ -121,6 +121,8 @@ object AclAuthorizer {
   private def validateAclBinding(aclBinding: AclBinding): Unit = {
     if (aclBinding.isUnknown)
       throw new IllegalArgumentException("ACL binding contains unknown elements")
+    if (aclBinding.pattern().name().contains("/"))
+      throw new IllegalArgumentException(s"ACL binding contains invalid resource name: ${aclBinding.pattern().name()}")
   }
 }
 
