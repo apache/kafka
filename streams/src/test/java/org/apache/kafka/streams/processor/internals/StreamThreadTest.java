@@ -2362,9 +2362,9 @@ public class StreamThreadTest {
         expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
         expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
         consumer.subscribe((Collection<String>) anyObject(), anyObject());
-        EasyMock.expectLastCall().atLeastOnce();
+        EasyMock.expectLastCall().anyTimes();
         consumer.unsubscribe();
-        EasyMock.expectLastCall().atLeastOnce();
+        EasyMock.expectLastCall().anyTimes();
         EasyMock.replay(consumerGroupMetadata);
         final Task task1 = mock(Task.class);
         final Task task2 = mock(Task.class);
