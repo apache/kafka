@@ -1063,8 +1063,8 @@ public class TransactionManager {
 
     private boolean maybeTerminateRequestWithError(TxnRequestHandler requestHandler) {
         if (hasError()) {
-            if (hasAbortableError() && requestHandler instanceof FindCoordinatorHandler)
-                // No harm letting the FindCoordinator request go through if we're expecting to abort
+            if ((hasAbortableError() || hasFatalBumpableError()) && requestHandler instanceof FindCoordinatorHandler)
+                // No harm letting the FindCoordinator request go through if we're expecting to abort or bump
                 return false;
             if (hasFatalBumpableError() && requestHandler instanceof InitProducerIdHandler)
                 // Should allow the fencing bump to complete
