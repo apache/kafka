@@ -617,7 +617,7 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
-    public void shouldIgnorePausingNotExistTasks() throws Exception {
+    public void shouldNotPausingNonExistTasks() throws Exception {
         stateUpdater.start();
         stateUpdater.pause(TASK_0_0);
 
@@ -753,7 +753,7 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
-    public void shouldIgnoreResumingNotPausedTasks() throws Exception {
+    public void shouldNotResumeNonExistingTasks() throws Exception {
         stateUpdater.start();
         stateUpdater.resume(TASK_0_0);
 
@@ -775,11 +775,6 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(controlTask);
 
         verifyRestoredActiveTasks(task);
-
-        stateUpdater.pause(task.id());
-        stateUpdater.pause(controlTask.id());
-
-        verifyPausedTasks(controlTask);
 
         stateUpdater.resume(task.id());
         stateUpdater.resume(controlTask.id());
@@ -807,20 +802,57 @@ class DefaultStateUpdaterTest {
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
         stateUpdater.start();
         stateUpdater.add(task);
-        stateUpdater.pause(task.id());
 
-        verifyPausedTasks(task);
-        verifyUpdatingTasks();
+        verifyUpdatingTasks(task);
         verifyExceptionsAndFailedTasks();
 
         stateUpdater.remove(task.id());
 
         verifyRemovedTasks(task);
+        verifyUpdatingTasks();
 
-        stateUpdater.pause(task.id());
+        stateUpdater.resume(task.id());
 
         verifyUpdatingTasks();
-        verifyPausedTasks();
+    }
+
+    @Test
+    public void shouldNotResumeActiveStatefulTaskInFailedTasks() throws Exception {
+        final StreamTask task = createActiveStatefulTaskInStateRestoring(TASK_0_0, Collections.singletonList(TOPIC_PARTITION_A_0));
+        shouldNotPauseTaskInFailedTasks(task);
+    }
+
+    @Test
+    public void shouldNotResumeStandbyTaskInFailedTasks() throws Exception {
+        final StandbyTask task = createStandbyTaskInStateRunning(TASK_0_0, Collections.singletonList(TOPIC_PARTITION_A_0));
+        shouldNotResumeTaskInFailedTasks(task);
+    }
+
+    private void shouldNotResumeTaskInFailedTasks(final Task task) throws Exception {
+        final StreamTask controlTask = createActiveStatefulTaskInStateRestoring(TASK_1_0, Collections.singletonList(TOPIC_PARTITION_B_0));
+        final StreamsException streamsException = new StreamsException("Something happened", task.id());
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        final Map<TaskId, Task> updatingTasks = mkMap(
+                mkEntry(task.id(), task),
+                mkEntry(controlTask.id(), controlTask)
+        );
+        doThrow(streamsException)
+                .doNothing()
+                .when(changelogReader).restore(updatingTasks);
+        stateUpdater.start();
+
+        stateUpdater.add(task);
+        stateUpdater.add(controlTask);
+        final ExceptionAndTasks expectedExceptionAndTasks = new ExceptionAndTasks(mkSet(task), streamsException);
+        verifyExceptionsAndFailedTasks(expectedExceptionAndTasks);
+        verifyUpdatingTasks(controlTask);
+
+        stateUpdater.resume(task.id());
+        stateUpdater.resume(controlTask.id());
+
+        verifyExceptionsAndFailedTasks(expectedExceptionAndTasks);
+        verifyUpdatingTasks(controlTask);
     }
 
     @Test
