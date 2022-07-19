@@ -55,7 +55,7 @@ public class TaskAndAction {
     }
 
     public static TaskAndAction createResumeTask(final TaskId taskId) {
-        Objects.requireNonNull(taskId, "Task ID of task to pause is null!");
+        Objects.requireNonNull(taskId, "Task ID of task to resume is null!");
         return new TaskAndAction(null, taskId, Action.RESUME);
     }
 

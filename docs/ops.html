@@ -2605,6 +2605,16 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
         <th>Mbean name</th>
       </tr>
       <tr>
+        <td>bytes-consumed-total</td>
+        <td>The total number of bytes consumed by a source processor node.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>bytes-produced-total</td>
+        <td>The total number of bytes produced by a sink processor node.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>process-rate</td>
         <td>The average number of records processed by a source processor node per second.</td>
         <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
@@ -2638,6 +2648,16 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
         <td>record-e2e-latency-min</td>
         <td>The minimum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
         <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>records-consumed-total</td>
+        <td>The total number of records consumed by a source processor node.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>records-produced-total</td>
+        <td>The total number of records produced by a sink processor node.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
       </tr>
       </tbody>
  </table>

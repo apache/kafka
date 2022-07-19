@@ -104,9 +104,9 @@ public class DefaultStateUpdater implements StateUpdater {
 
         public Collection<StreamTask> getUpdatingActiveTasks() {
             return updatingTasks.values().stream()
-                    .filter(t -> t.isActive())
-                    .map(t -> (StreamTask) t)
-                    .collect(Collectors.toList());
+                .filter(Task::isActive)
+                .map(t -> (StreamTask) t)
+                .collect(Collectors.toList());
         }
 
         public boolean onlyStandbyTasksLeft() {
@@ -638,7 +638,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
     public Set<StreamTask> getPausedActiveTasks() {
         return Collections.unmodifiableSet(pausedTasks.values().stream()
-                .filter(t -> t.isActive())
+                .filter(Task::isActive)
                 .map(t -> (StreamTask) t)
                 .collect(Collectors.toSet()));
     }

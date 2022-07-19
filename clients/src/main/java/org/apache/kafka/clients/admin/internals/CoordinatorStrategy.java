@@ -120,6 +120,10 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
         batch = false;
     }
 
+    public boolean batch() {
+        return batch;
+    }
+
     private CoordinatorKey requireSingletonAndType(Set<CoordinatorKey> keys) {
         if (keys.size() != 1) {
             throw new IllegalArgumentException("Unexpected size of key set: expected 1, but got " + keys.size());
