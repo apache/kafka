@@ -591,6 +591,11 @@ public class Selector implements Selectable, AutoCloseable {
                 long nowNanos = channelStartTimeNanos != 0 ? channelStartTimeNanos : currentTimeNanos;
                 try {
                     attemptWrite(key, channel, nowNanos);
+
+                    // Following is to fix KAFKA-13559. This will prevent poll() from blocking for 300 ms when the
+                    // socket has no data but the buffer has data. Only happens when using SSL.
+                    //if (channel.hasBytesBuffered())
+                    //    madeReadProgressLastPoll = true;
                 } catch (Exception e) {
                     sendFailed = true;
                     throw e;
@@ -652,11 +657,6 @@ public class Selector implements Selectable, AutoCloseable {
             if (send != null) {
                 this.completedSends.add(send);
                 this.sensors.recordCompletedSend(nodeId, send.size(), currentTimeMs);
-
-                // To fix KAFKA-13559, i.e. select(timeout) blocks for 300 ms when the socket has no data but the buffer
-                // has data. Only happens when using SSL.
-                if (channel.hasBytesBuffered())
-                    madeReadProgressLastPoll = true;
             }
         }
     }
