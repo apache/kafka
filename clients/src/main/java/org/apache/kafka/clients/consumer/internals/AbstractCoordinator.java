@@ -187,6 +187,7 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Invoked prior to each group join or rejoin. This is typically used to perform any
      * cleanup from the previous generation (such as committing offsets for the consumer)
+     * @param timer Timer bounding how long this method can block
      * @param generation The previous generation or -1 if there was none
      * @param memberId The identifier of this member in the previous group or "" if there was none
      * @return true If onJoinPrepare async commit succeeded, false otherwise

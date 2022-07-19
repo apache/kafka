@@ -1032,9 +1032,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val consumerPoller2 = subscribeConsumerAndStartPolling(consumer2, List(topic))
     TestUtils.waitUntilTrue(() => consumerPoller1.consumerAssignment().size == 1,
-      s"Timed out while awaiting expected assignment change to 1.")
+      s"Timed out while awaiting expected assignment size change to 1.")
     TestUtils.waitUntilTrue(() => consumerPoller2.consumerAssignment().size == 1,
-      s"Timed out while awaiting expected assignment change to 1.")
+      s"Timed out while awaiting expected assignment size change to 1.")
 
     if (!lock.tryLock(3000, TimeUnit.MILLISECONDS)) {
       fail(s"Time out while awaiting for lock.")
@@ -1044,7 +1044,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
         // cooperative rebalance should rebalance twice before finally stable
         assertEquals(stableGeneration + 2, generationId1)
       } else {
-        // eager rebalance should rebalance once once before finally stable
+        // eager rebalance should rebalance once before finally stable
         assertEquals(stableGeneration + 1, generationId1)
       }
       assertEquals(stableMemberId1, memberId1)
