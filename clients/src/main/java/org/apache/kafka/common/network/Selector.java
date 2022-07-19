@@ -594,8 +594,8 @@ public class Selector implements Selectable, AutoCloseable {
 
                     // Following is to fix KAFKA-13559. This will prevent poll() from blocking for 300 ms when the
                     // socket has no data but the buffer has data. Only happens when using SSL.
-                    //if (channel.hasBytesBuffered())
-                    //    madeReadProgressLastPoll = true;
+                    if (channel.hasBytesBuffered())
+                        madeReadProgressLastPoll = true;
                 } catch (Exception e) {
                     sendFailed = true;
                     throw e;
