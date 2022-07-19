@@ -90,12 +90,6 @@ class BrokerMetadataListener(
   private var _bytesSinceLastSnapshot: Long = 0L
 
   /**
-   * The reason as to why we are calling maybeStartSnapshot, can be either
-   * MaxBytesExceeded or MetadataVersionChanged
-   */
-  private var _reasonForSnapshot: String = ""
-
-  /**
    * The event queue which runs this listener.
    */
   val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""))
@@ -125,23 +119,23 @@ class BrokerMetadataListener(
       }
 
       _bytesSinceLastSnapshot = _bytesSinceLastSnapshot + results.numBytes
-      if (shouldSnapshot()) {
-        maybeStartSnapshot()
+      
+      val (takeSnapshot, snapshotReason) = shouldSnapshot()
+      if (takeSnapshot) {
+        maybeStartSnapshot(snapshotReason)
       }
 
       _publisher.foreach(publish)
     }
   }
 
-  private def shouldSnapshot(): Boolean = {
+  private def shouldSnapshot(): (Boolean, String) = {
     if (_bytesSinceLastSnapshot >= maxBytesBetweenSnapshots) {
-      _reasonForSnapshot = "MaxBytesExceeded"
-      return true
+      return (true, "max bytes exceeded")
     } else if (metadataVersionChanged()) {
-      _reasonForSnapshot = "MetadataVersionChanged"
-      return true
+      return (true, "metadata version changed")
     } else {
-      return false
+      return (false, "")
     }
   }
 
@@ -153,9 +147,9 @@ class BrokerMetadataListener(
     }
   }
 
-  private def maybeStartSnapshot(): Unit = {
+  private def maybeStartSnapshot(snapshotReason: String): Unit = {
     snapshotter.foreach { snapshotter =>
-      if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply(), _reasonForSnapshot)) {
+      if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply(), snapshotReason)) {
         _bytesSinceLastSnapshot = 0L
       }
     }
@@ -267,8 +261,7 @@ class BrokerMetadataListener(
       log.info(s"Starting to publish metadata events at offset $highestMetadataOffset.")
       try {
         if (metadataVersionChanged()) {
-          _reasonForSnapshot = "MetadataVersionChanged"
-          maybeStartSnapshot()
+          maybeStartSnapshot("metadata version changed")
         }
         publish(publisher)
         future.complete(null)
