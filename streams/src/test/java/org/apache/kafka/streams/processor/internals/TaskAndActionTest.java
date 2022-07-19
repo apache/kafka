@@ -22,9 +22,11 @@ import org.junit.jupiter.api.Test;
 import static org.apache.kafka.streams.processor.internals.TaskAndAction.Action.ADD;
 import static org.apache.kafka.streams.processor.internals.TaskAndAction.Action.PAUSE;
 import static org.apache.kafka.streams.processor.internals.TaskAndAction.Action.REMOVE;
+import static org.apache.kafka.streams.processor.internals.TaskAndAction.Action.RESUME;
 import static org.apache.kafka.streams.processor.internals.TaskAndAction.createAddTask;
 import static org.apache.kafka.streams.processor.internals.TaskAndAction.createPauseTask;
 import static org.apache.kafka.streams.processor.internals.TaskAndAction.createRemoveTask;
+import static org.apache.kafka.streams.processor.internals.TaskAndAction.createResumeTask;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -69,6 +71,18 @@ class TaskAndActionTest {
     }
 
     @Test
+    public void shouldCreateResumeTaskAction() {
+        final TaskId taskId = new TaskId(0, 0);
+
+        final TaskAndAction pauseTask = createResumeTask(taskId);
+
+        assertEquals(RESUME, pauseTask.getAction());
+        assertEquals(taskId, pauseTask.getTaskId());
+        final Exception exception = assertThrows(IllegalStateException.class, pauseTask::getTask);
+        assertEquals("Action type RESUME cannot have a task!", exception.getMessage());
+    }
+
+    @Test
     public void shouldThrowIfAddTaskActionIsCreatedWithNullTask() {
         final Exception exception = assertThrows(NullPointerException.class, () -> createAddTask(null));
         assertTrue(exception.getMessage().contains("Task to add is null!"));
@@ -84,5 +98,11 @@ class TaskAndActionTest {
     public void shouldThrowIfPauseTaskActionIsCreatedWithNullTaskId() {
         final Exception exception = assertThrows(NullPointerException.class, () -> createPauseTask(null));
         assertTrue(exception.getMessage().contains("Task ID of task to pause is null!"));
+    }
+
+    @Test
+    public void shouldThrowIfResumeTaskActionIsCreatedWithNullTaskId() {
+        final Exception exception = assertThrows(NullPointerException.class, () -> createResumeTask(null));
+        assertTrue(exception.getMessage().contains("Task ID of task to resume is null!"));
     }
 }

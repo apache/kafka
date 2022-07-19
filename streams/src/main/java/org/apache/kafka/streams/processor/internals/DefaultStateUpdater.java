@@ -128,6 +128,9 @@ public class DefaultStateUpdater implements StateUpdater {
                         case PAUSE:
                             pauseTask(taskAndAction.getTaskId());
                             break;
+                        case RESUME:
+                            resumeTask(taskAndAction.getTaskId());
+                            break;
                     }
                 }
             } finally {
@@ -249,7 +252,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 final Task existingTask = updatingTasks.putIfAbsent(task.id(), task);
                 if (existingTask != null) {
                     throw new IllegalStateException((existingTask.isActive() ? "Active" : "Standby") + " task " + task.id() + " already exist, " +
-                        "should not try to add another " + (task.isActive() ? "Active" : "Standby") + " task with the same id. " + BUG_ERROR_MESSAGE);
+                        "should not try to add another " + (task.isActive() ? "active" : "standby") + " task with the same id. " + BUG_ERROR_MESSAGE);
                 }
 
                 if (task.isActive()) {
@@ -301,6 +304,26 @@ public class DefaultStateUpdater implements StateUpdater {
                     + " task " + task.id() + " was paused from the updating tasks and added to the paused tasks.");
             } else {
                 log.debug("Task " + taskId + " was not paused since it is not updating.");
+            }
+        }
+
+        private void resumeTask(final TaskId taskId) {
+            final Task task = pausedTasks.get(taskId);
+            if (task != null) {
+                updatingTasks.put(taskId, task);
+                pausedTasks.remove(taskId);
+
+                if (task.isActive()) {
+                    log.debug("Stateful active task " + task.id() + " was resumed to the updating tasks of the state updater");
+                    changelogReader.enforceRestoreActive();
+                } else {
+                    log.debug("Standby task " + task.id() + " was resumed to the updating tasks of the state updater");
+                    if (updatingTasks.size() == 1) {
+                        changelogReader.transitToUpdateStandby();
+                    }
+                }
+            } else {
+                log.debug("Task " + taskId + " was not resumed since it is not paused.");
             }
         }
 
@@ -445,6 +468,17 @@ public class DefaultStateUpdater implements StateUpdater {
         tasksAndActionsLock.lock();
         try {
             tasksAndActions.add(TaskAndAction.createPauseTask(taskId));
+            tasksAndActionsCondition.signalAll();
+        } finally {
+            tasksAndActionsLock.unlock();
+        }
+    }
+
+    @Override
+    public void resume(final TaskId taskId) {
+        tasksAndActionsLock.lock();
+        try {
+            tasksAndActions.add(TaskAndAction.createResumeTask(taskId));
             tasksAndActionsCondition.signalAll();
         } finally {
             tasksAndActionsLock.unlock();
