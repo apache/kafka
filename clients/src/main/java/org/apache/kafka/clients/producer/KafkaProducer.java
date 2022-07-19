@@ -1466,16 +1466,20 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         private final Callback userCallback;
         private final ProducerInterceptors<K, V> interceptors;
         private final String topic;
-        private volatile ProducerRecord<K, V> record;
+        private final Integer recordPartition;
+        private final String recordLogString;
         private volatile int partition = RecordMetadata.UNKNOWN_PARTITION;
         private volatile TopicPartition topicPartition;
 
         private AppendCallbacks(Callback userCallback, ProducerInterceptors<K, V> interceptors, ProducerRecord<K, V> record) {
             this.userCallback = userCallback;
             this.interceptors = interceptors;
-            this.record = record;
+            // Extract record info as we don't want to keep a reference to the record during
+            // whole lifetime of the batch.
             // We don't want to have an NPE here, because the interceptors would not be notified (see .doSend).
             topic = record != null ? record.topic() : null;
+            recordPartition = record != null ? record.partition() : null;
+            recordLogString = log.isTraceEnabled() && record != null ? record.toString() : "";
         }
 
         @Override
@@ -1495,11 +1499,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             if (log.isTraceEnabled()) {
                 // Log the message here, because we don't know the partition before that.
-                log.trace("Attempting to append record {} with callback {} to topic {} partition {}", record, userCallback, topic, partition);
+                log.trace("Attempting to append record {} with callback {} to topic {} partition {}", recordLogString, userCallback, topic, partition);
             }
-
-            // Reset record to null here so that it doesn't have to be alive as long as the batch is.
-            record = null;
         }
 
         public int getPartition() {
@@ -1510,8 +1511,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (topicPartition == null) {
                 if (partition != RecordMetadata.UNKNOWN_PARTITION)
                     topicPartition = new TopicPartition(topic, partition);
-                else if (record != null)
-                    topicPartition = ProducerInterceptors.extractTopicPartition(record);
+                else if (recordPartition != null)
+                    topicPartition = new TopicPartition(topic, recordPartition);
+                else
+                    topicPartition = new TopicPartition(topic, RecordMetadata.UNKNOWN_PARTITION);
             }
             return topicPartition;
         }
