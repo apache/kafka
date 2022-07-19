@@ -1902,13 +1902,8 @@ class SocketServerTest {
   def testLatencyWithBufferedDataAndNoSocketData(): Unit = {
     shutdownServerAndMetrics(server)
 
-    // to ensure we only have 1 connection (channel)
-    val props = sslServerProps
-    val numConnections = 1
-    props.put("max.connections.per.ip", numConnections.toString)
-
     // create server with SSL listener
-    val testableServer = new TestableSocketServer(KafkaConfig.fromProps(props))
+    val testableServer = new TestableSocketServer(KafkaConfig.fromProps(sslServerProps))
     testableServer.enableRequestProcessing(Map.empty)
     val testableSelector = testableServer.testableSelector
     val proxyServer = new ProxyServer(testableServer)
