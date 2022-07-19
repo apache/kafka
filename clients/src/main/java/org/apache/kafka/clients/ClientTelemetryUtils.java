@@ -30,6 +30,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+
+import io.opentelemetry.proto.metrics.v1.MetricsData;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -358,4 +360,16 @@ public class ClientTelemetryUtils {
         }
     }
 
+    public static MetricsData deserializeMetricsData(ByteBuffer serializedMetricsData) {
+        MetricsData metricsData = null;
+
+        try {
+            ByteBuffer metricsBuffer = (ByteBuffer) serializedMetricsData.flip();
+            metricsData = MetricsData.parseFrom(metricsBuffer);
+        } catch (IOException e) {
+            log.warn("Unable to parse MetricsData payload ", e);
+            throw new RuntimeException(e);
+        }
+        return metricsData;
+    }
 }
