@@ -301,18 +301,22 @@ public class Sender implements Runnable {
             try {
                 transactionManager.maybeResolveSequences();
 
-                // do not continue sending if the transaction manager is in a failed state
                 if (transactionManager.hasFatalError() || transactionManager.hasFatalBumpableError()) {
+                    // abort batches if the transaction manager is in a failed state
                     RuntimeException lastError = transactionManager.lastError();
                     if (lastError != null)
                         maybeAbortBatches(lastError);
-                    client.poll(retryBackoffMs, time.milliseconds());
-                    return;
-                }
 
-                // Check whether we need a new producerId. If so, we will enqueue an InitProducerId
-                // request which will be sent below
-                transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
+                    // do not continue sending if the transaction manager is in fatal state
+                    if (transactionManager.hasFatalError()) {
+                        client.poll(retryBackoffMs, time.milliseconds());
+                        return;
+                    }
+                } else {
+                    // Check whether we need a new producerId. If so, we will enqueue an InitProducerId
+                    // request which will be sent below
+                    transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
+                }
 
                 if (maybeSendAndPollTransactionalRequest()) {
                     return;
