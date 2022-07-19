@@ -1907,7 +1907,7 @@ class SocketServerTest {
     testableServer.enableRequestProcessing(Map.empty)
     val testableSelector = testableServer.testableSelector
     val proxyServer = new ProxyServer(testableServer)
-    val selectTimeout = 1000  // in ms
+    val selectTimeout = 5000  // in ms
     // set pollTimeoutOverride to "selectTimeout" to ensure poll() timeout is distinct and can be identified
     testableSelector.pollTimeoutOverride = Some(selectTimeout)
 
@@ -1938,17 +1938,22 @@ class SocketServerTest {
 
       // process the first request in the server side
       // this would move bytes from netReadBuffer to appReadBuffer, then process only the first request
-      processRequest(testableServer.dataPlaneRequestChannel)
+      // we call wakeup() so Selector.poll() does not block in this step (because we artificially add data into netReadBuffer)
+      testableSelector.wakeup()
+      val req1 = receiveRequest(testableServer.dataPlaneRequestChannel, selectTimeout + 1000)
+      processRequest(testableServer.dataPlaneRequestChannel, req1)
 
       // receive response in the client side
       receiveResponse(sslSocket)
 
       // process the second request in the server side
       // this would process the second request in the appReadBuffer
-      // NOTE: this should not block because the data is already in the buffer, but without the fix for KAFKA-13559,
-      // this step will take more than 300 ms (in this test, we override poll() timeout to make it distinct)
+      // NOTE 1: this should not block because the data is already in the buffer, but without the fix for KAFKA-13559,
+      // this step will block for 300 ms (in this test, we override poll() timeout to 5000 ms to make it distinct)
+      // NOTE 2: we do not call wakeup() here so Selector.poll() would block if the fix is not in place
       val processTimeStart = System.nanoTime()  // using nanoTime() because it is meant to calculate elapsed time
-      processRequest(testableServer.dataPlaneRequestChannel)
+      val req2 = receiveRequest(testableServer.dataPlaneRequestChannel, selectTimeout + 1000)
+      processRequest(testableServer.dataPlaneRequestChannel, req2)
       val processTimeEnd = System.nanoTime()
 
       // receive response in the client side
