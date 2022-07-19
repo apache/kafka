@@ -20,7 +20,6 @@ package kafka.server.metadata
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CountDownLatch}
-
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.protocol.ByteBufferAccessor
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords}
@@ -34,6 +33,7 @@ import org.apache.kafka.snapshot.{MockRawSnapshotWriter, RecordsSnapshotWriter, 
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
+import scala.compat.java8.OptionConverters._
 
 class BrokerMetadataSnapshotterTest {
   @Test
@@ -48,7 +48,7 @@ class BrokerMetadataSnapshotterTest {
 
     override def build(committedOffset: Long,
                        committedEpoch: Int,
-                       lastContainedLogTime: Long): SnapshotWriter[ApiMessageAndVersion] = {
+                       lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]] = {
       val offsetAndEpoch = new OffsetAndEpoch(committedOffset, committedEpoch)
       RecordsSnapshotWriter.createWithHeader(
         () => {
@@ -62,7 +62,7 @@ class BrokerMetadataSnapshotterTest {
         lastContainedLogTime,
         CompressionType.NONE,
         MetadataRecordSerde.INSTANCE
-      ).get();
+      ).asScala
     }
 
     def consumeSnapshotBuffer(committedOffset: Long, committedEpoch: Int)(buffer: ByteBuffer): Unit = {

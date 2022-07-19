@@ -18,7 +18,7 @@
 package kafka.admin
 
 import java.time.{Duration, Instant}
-import java.util.Properties
+import java.util.{Collections, Properties}
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import kafka.utils._
@@ -753,9 +753,9 @@ object ConsumerGroupCommand extends Logging {
 
     private def getCommittedOffsets(groupId: String): Map[TopicPartition, OffsetAndMetadata] = {
       adminClient.listConsumerGroupOffsets(
-        groupId,
-        withTimeoutMs(new ListConsumerGroupOffsetsOptions)
-      ).partitionsToOffsetAndMetadata.get.asScala
+        Collections.singletonMap(groupId, new ListConsumerGroupOffsetsSpec),
+        withTimeoutMs(new ListConsumerGroupOffsetsOptions())
+      ).partitionsToOffsetAndMetadata(groupId).get().asScala
     }
 
     type GroupMetadata = immutable.Map[String, immutable.Map[TopicPartition, OffsetAndMetadata]]

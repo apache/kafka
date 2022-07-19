@@ -38,6 +38,7 @@ import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
+import org.apache.kafka.connect.runtime.errors.ToleranceType;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceTaskContext;
@@ -406,6 +407,10 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                             }
                             log.trace("{} Failed record: {}", AbstractWorkerSourceTask.this, preTransformRecord);
                             producerSendFailed(false, producerRecord, preTransformRecord, e);
+                            if (retryWithToleranceOperator.getErrorToleranceType() == ToleranceType.ALL) {
+                                counter.skipRecord();
+                                submittedRecord.ifPresent(SubmittedRecords.SubmittedRecord::ack);
+                            }
                         } else {
                             counter.completeRecord();
                             log.trace("{} Wrote record successfully: topic {} partition {} offset {}",

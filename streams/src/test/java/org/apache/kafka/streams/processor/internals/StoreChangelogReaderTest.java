@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
@@ -648,12 +649,12 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         final AtomicBoolean functionCalled = new AtomicBoolean(false);
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
-            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, final ListConsumerGroupOffsetsOptions options) {
                 if (functionCalled.get()) {
-                    return super.listConsumerGroupOffsets(groupId, options);
+                    return super.listConsumerGroupOffsets(groupSpecs, options);
                 } else {
                     functionCalled.set(true);
-                    return AdminClientTestUtils.listConsumerGroupOffsetsResult(new TimeoutException("KABOOM!"));
+                    return AdminClientTestUtils.listConsumerGroupOffsetsResult(groupSpecs.keySet().iterator().next(), new TimeoutException("KABOOM!"));
                 }
             }
         };
@@ -708,7 +709,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
-            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, final ListConsumerGroupOffsetsOptions options) {
                 throw kaboom;
             }
         };
@@ -790,7 +791,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
-            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
+            public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, final ListConsumerGroupOffsetsOptions options) {
                 throw new AssertionError("Should not try to fetch committed offsets");
             }
         };
