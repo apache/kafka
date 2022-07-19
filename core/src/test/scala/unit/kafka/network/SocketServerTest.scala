@@ -1910,9 +1910,11 @@ class SocketServerTest {
     // create server with SSL listener
     val testableServer = new TestableSocketServer(KafkaConfig.fromProps(props))
     testableServer.enableRequestProcessing(Map.empty)
-    //       dataPlaneAcceptors.get(endpoint).processors(0).selector.asInstanceOf[TestableSelector]
     val testableSelector = testableServer.testableSelector
     val proxyServer = new ProxyServer(testableServer)
+    val selectTimeout = 1000  // in ms
+    // set pollTimeoutOverride to "selectTimeout" to ensure poll() timeout is distinct and can be identified
+    testableSelector.pollTimeoutOverride = Some(selectTimeout)
 
     try {
       // trigger SSL handshake by sending the first request and receiving its response without buffering
@@ -1949,17 +1951,16 @@ class SocketServerTest {
       // process the second request in the server side
       // this would process the second request in the appReadBuffer
       // NOTE: this should not block because the data is already in the buffer, but without the fix for KAFKA-13559,
-      // this step will take more than 300 ms
-      val processTimeStart = System.currentTimeMillis()
+      // this step will take more than 300 ms (in this test, we override poll() timeout to make it distinct)
+      val processTimeStart = System.nanoTime()  // using nanoTime() because it is meant to calculate elapsed time
       processRequest(testableServer.dataPlaneRequestChannel)
-      val processTimeEnd = System.currentTimeMillis()
+      val processTimeEnd = System.nanoTime()
 
       // receive response in the client side
       receiveResponse(sslSocket)
 
       // check the duration of processing the second request
-      val selectTimeout = 300
-      val processTimeDuration = processTimeEnd - processTimeStart
+      val processTimeDuration = (processTimeEnd - processTimeStart) / 1000000.0  // in ms
       assertTrue(processTimeDuration < selectTimeout,
         "Time to process the second request (" + processTimeDuration + " ms) should be under " + selectTimeout + " ms")
 
