@@ -55,10 +55,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
+import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 
 @Category({IntegrationTest.class})
-public class KafkaStreamsCloseOptionsIntegrationTest { //extends AbstractResetIntegrationTest {
+public class KafkaStreamsCloseOptionsIntegrationTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);
     @Rule
@@ -70,11 +71,8 @@ public class KafkaStreamsCloseOptionsIntegrationTest { //extends AbstractResetIn
 
     protected static final String INPUT_TOPIC = "inputTopic";
     protected static final String OUTPUT_TOPIC = "outputTopic";
-    private static final String OUTPUT_TOPIC_2 = "outputTopic2";
-    private static final String OUTPUT_TOPIC_2_RERUN = "outputTopic2_rerun";
 
-    protected static final int STREAMS_CONSUMER_TIMEOUT = 2000;
-    protected static final int TIMEOUT_MULTIPLIER = 15;
+    protected static final int STREAMS_CONSUMER_TIMEOUT = 20000;
 
     protected Properties streamsConfig;
     protected static KafkaStreams streams;
@@ -138,7 +136,8 @@ public class KafkaStreamsCloseOptionsIntegrationTest { //extends AbstractResetIn
         }
 
         CLUSTER.deleteAllTopicsAndWait(120000);
-        CLUSTER.createTopics(INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN);
+        CLUSTER.createTopic(INPUT_TOPIC, 2, 1);
+        CLUSTER.createTopic(OUTPUT_TOPIC, 2, 1);
 
         add10InputElements();
     }
@@ -155,15 +154,16 @@ public class KafkaStreamsCloseOptionsIntegrationTest { //extends AbstractResetIn
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
         streamsConfig.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "someGroupInstance");
+        // Test with two threads to show that each of the threads is being called to remove clients from the CG.
         streamsConfig.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
 
         // RUN
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
-        streams.start();
+        IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(2));
         IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close(new CloseOptions().leaveGroup(true));
-        waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
+        waitForEmptyConsumerGroup(adminClient, appID, Integer.MAX_VALUE);
     }
 
     protected Topology setupTopologyWithoutIntermediateUserTopic() {
@@ -171,10 +171,8 @@ public class KafkaStreamsCloseOptionsIntegrationTest { //extends AbstractResetIn
 
         final KStream<Long, String> input = builder.stream(INPUT_TOPIC);
 
-        // use map to trigger internal re-partitioning before groupByKey
         input.map((key, value) -> new KeyValue<>(key, key))
             .to(OUTPUT_TOPIC, Produced.with(Serdes.Long(), Serdes.Long()));
-
         return builder.build();
     }
 
