@@ -66,7 +66,7 @@
         <li>A problem with OAuth token refresh was fixed. During token refresh, the Kafka client was not including
             the SASL extensions which were present during the initial authentication. This leads to authentication
             failures. See <a href="https://issues.apache.org/jira/browse/KAFKA-14062">KAFKA-14062</a> for details.</li>
-        <li>A problem in Connect with <code>error.tolerance</code> was fixed. Starting in 3.2.0, when
+        <li>A problem in Connect with <code>errors.tolerance</code> was fixed. Starting in 3.2.0, when
             a source connector uses <code>errors.tolerance=all</code> and Connect's producer fails to
             successfully send a source record to the topic, the error is properly reported and the connector
             continues, but Connect stops committing source offsets for that source connector and a
