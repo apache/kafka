@@ -66,6 +66,7 @@ ext {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16))
     defaultJvmArgs.addAll(
       "--add-opens=java.base/java.io=ALL-UNNAMED",
+      "--add-opens=java.base/java.lang=ALL-UNNAMED",
       "--add-opens=java.base/java.nio=ALL-UNNAMED",
       "--add-opens=java.base/java.nio.file=ALL-UNNAMED",
       "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
