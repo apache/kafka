@@ -268,6 +268,7 @@
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.authorizer" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.kafka.test" />
     <subpackage name="authorizer">
       <allow pkg="org.apache.kafka.common.acl" />

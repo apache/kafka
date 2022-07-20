@@ -127,13 +127,13 @@ public interface MetadataNode {
     }
 
     class FileNode implements MetadataNode {
-        private String contents;
+        private Object contents;
 
-        void setContents(String contents) {
+        void setContents(Object contents) {
             this.contents = contents;
         }
 
-        String contents() {
+        Object contents() {
             return contents;
         }
     }

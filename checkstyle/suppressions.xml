@@ -281,10 +281,12 @@
     <suppress checks="CyclomaticComplexity"
               files="KafkaLog4jAppender.java"/>
 
+    <suppress checks="MethodLength"
+              files="MetadataNodeManager.java"/>
     <suppress checks="NPathComplexity"
               files="KafkaLog4jAppender.java"/>
     <suppress checks="JavaNCSS"
-              files="RequestResponseTest.java"/>
+              files="(MetadataNodeManager|RequestResponseTest).java"/>
 
     <!-- metadata -->
     <suppress checks="ClassDataAbstractionCoupling"

@@ -473,6 +473,20 @@ public class KafkaClusterTestKit implements AutoCloseable {
         return brokers;
     }
 
+    public CompletableFuture<String> quorumVotersString() {
+        CompletableFuture<String> future = new CompletableFuture<>();
+        controllerQuorumVotersFutureManager.future.whenComplete((map, e) -> {
+            if (e != null) {
+                future.completeExceptionally(e);
+            } else {
+                future.complete(String.join(",", RaftConfig.voterConnectionsToNodes(map).stream().
+                                map(n -> String.format("%d@%s:%d", n.id(), n.host(), n.port())).
+                                collect(Collectors.toList())));
+            }
+        });
+        return future;
+    }
+
     public Map<Integer, KafkaRaftManager<ApiMessageAndVersion>> raftManagers() {
         return raftManagers;
     }
@@ -481,8 +495,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
         return nodes;
     }
 
-    @Override
-    public void close() throws Exception {
+    public void shutdownAll() throws Exception {
         List<Entry<String, Future<?>>> futureEntries = new ArrayList<>();
         try {
             controllerQuorumVotersFutureManager.close();
@@ -510,12 +523,19 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             waitForAllFutures(futureEntries);
             futureEntries.clear();
-            Utils.delete(baseDirectory);
         } catch (Exception e) {
             for (Entry<String, Future<?>> entry : futureEntries) {
                 entry.getValue().cancel(true);
             }
             throw e;
+        }
+    }
+
+    @Override
+    public void close() throws Exception {
+        try {
+            shutdownAll();
+            Utils.delete(baseDirectory);
         } finally {
             executorService.shutdownNow();
             executorService.awaitTermination(5, TimeUnit.MINUTES);

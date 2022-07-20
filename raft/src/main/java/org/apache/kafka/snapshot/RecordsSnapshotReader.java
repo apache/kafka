@@ -17,11 +17,13 @@
 
 package org.apache.kafka.snapshot;
 
+import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.OptionalLong;
 
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
@@ -29,17 +31,20 @@ import org.apache.kafka.raft.internals.RecordsIterator;
 
 public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
     private final OffsetAndEpoch snapshotId;
-    private final RecordsIterator<T> iterator;
+    private final Iterator<Batch<T>> iterator;
+    private final AutoCloseable cleanupHook;
 
     private Optional<Batch<T>> nextBatch = Optional.empty();
     private OptionalLong lastContainedLogTimestamp = OptionalLong.empty();
 
-    private RecordsSnapshotReader(
+    public RecordsSnapshotReader(
         OffsetAndEpoch snapshotId,
-        RecordsIterator<T> iterator
+        Iterator<Batch<T>> iterator,
+        AutoCloseable cleanupHook
     ) {
         this.snapshotId = snapshotId;
         this.iterator = iterator;
+        this.cleanupHook = cleanupHook;
     }
 
     @Override
@@ -97,7 +102,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
 
     @Override
     public void close() {
-        iterator.close();
+        Utils.closeQuietly(cleanupHook, "cleanupHook");
     }
 
     public static <T> RecordsSnapshotReader<T> of(
@@ -106,10 +111,8 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
         BufferSupplier bufferSupplier,
         int maxBatchSize
     ) {
-        return new RecordsSnapshotReader<>(
-            snapshot.snapshotId(),
-            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize)
-        );
+        RecordsIterator<T> iterator = new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize);
+        return new RecordsSnapshotReader<>(snapshot.snapshotId(), iterator, iterator);
     }
 
     /**

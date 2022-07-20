@@ -17,28 +17,38 @@
 
 package org.apache.kafka.shell;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.metadata.AccessControlEntryRecord;
+import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
-import org.apache.kafka.common.metadata.PartitionRecordJsonConverter;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
+import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
+import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
@@ -46,6 +56,7 @@ import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.shell.MetadataNode.DirectoryNode;
 import org.apache.kafka.shell.MetadataNode.FileNode;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -54,12 +65,13 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
-import static org.apache.kafka.metadata.LeaderRecoveryState.NO_CHANGE;
 
 /**
  * Maintains the in-memory metadata for the metadata tool.
@@ -98,6 +110,8 @@ public final class MetadataNodeManager implements AutoCloseable {
                     for (ApiMessageAndVersion messageAndVersion : batch.records()) {
                         handleMessage(messageAndVersion.message());
                     }
+                    dir.mkdirs("log").create(String.format("%07d", batch.baseOffset())).
+                            setContents(StoredRecordBatch.fromRaftBatch(batch));
                 }
             } finally {
                 reader.close();
@@ -107,13 +121,18 @@ public final class MetadataNodeManager implements AutoCloseable {
         @Override
         public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
             try {
+                DirectoryNode dir = data.root.mkdirs("metadataQuorum");
+                dir.rmrf("snapshot");
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();
+                    log.trace("handling new snapshot {} batch {}", reader.snapshotId(), batch);
                     for (ApiMessageAndVersion messageAndVersion : batch) {
                         handleMessage(messageAndVersion.message());
                     }
+                    dir.mkdirs("snapshot").create("" + batch.baseOffset()).setContents(StoredRecordBatch.fromRaftBatch(batch));
                 }
             } finally {
+                log.trace("closing snapshot reader for snapshot {}", reader.snapshotId());
                 reader.close();
             }
         }
@@ -145,12 +164,13 @@ public final class MetadataNodeManager implements AutoCloseable {
             new LogContext("[node-manager-event-queue] "), "");
     }
 
-    public void setup() throws Exception {
+    public void setup(Object source) throws Exception {
         CompletableFuture<Void> future = new CompletableFuture<>();
         appendEvent("createShellNodes", () -> {
-            DirectoryNode directory = data.root().mkdirs("local");
-            directory.create("version").setContents(AppInfoParser.getVersion());
+            DirectoryNode directory = data.root().mkdirs("shell");
+            directory.create("release").setContents(AppInfoParser.getVersion());
             directory.create("commitId").setContents(AppInfoParser.getCommitId());
+            directory.create("source").setContents(source);
             future.complete(null);
         }, future);
         future.get();
@@ -215,8 +235,8 @@ public final class MetadataNodeManager implements AutoCloseable {
                 DirectoryNode brokerNode = brokersNode.
                     mkdirs(Integer.toString(record.brokerId()));
                 FileNode registrationNode = brokerNode.create("registration");
-                registrationNode.setContents(record.toString());
-                brokerNode.create("isFenced").setContents("true");
+                registrationNode.setContents(BrokerRegistration.fromRecord(record));
+                brokerNode.create("isFenced").setContents(record.fenced());
                 break;
             }
             case UNREGISTER_BROKER_RECORD: {
@@ -236,13 +256,12 @@ public final class MetadataNodeManager implements AutoCloseable {
             }
             case PARTITION_RECORD: {
                 PartitionRecord record = (PartitionRecord) message;
+                PartitionRegistration registration = new PartitionRegistration(record);
                 DirectoryNode topicDirectory =
                     data.root.mkdirs("topicIds").mkdirs(record.topicId().toString());
                 DirectoryNode partitionDirectory =
                     topicDirectory.mkdirs(Integer.toString(record.partitionId()));
-                JsonNode node = PartitionRecordJsonConverter.
-                    write(record, PartitionRecord.HIGHEST_SUPPORTED_VERSION);
-                partitionDirectory.create("data").setContents(node.toPrettyString());
+                partitionDirectory.create("registration").setContents(registration);
                 break;
             }
             case CONFIG_RECORD: {
@@ -271,44 +290,57 @@ public final class MetadataNodeManager implements AutoCloseable {
             case PARTITION_CHANGE_RECORD: {
                 PartitionChangeRecord record = (PartitionChangeRecord) message;
                 FileNode file = data.root.file("topicIds", record.topicId().toString(),
-                    Integer.toString(record.partitionId()), "data");
-                JsonNode node = objectMapper.readTree(file.contents());
-                PartitionRecord partition = PartitionRecordJsonConverter.
-                    read(node, PartitionRecord.HIGHEST_SUPPORTED_VERSION);
-                if (record.isr() != null) {
-                    partition.setIsr(record.isr());
+                    Integer.toString(record.partitionId()), "registration");
+                PartitionRegistration registration = (PartitionRegistration) file.contents();
+                PartitionRegistration newRegistration = registration.merge(record);
+                file.setContents(newRegistration);
+                break;
+            }
+            case ACCESS_CONTROL_ENTRY_RECORD: {
+                AccessControlEntryRecord record = (AccessControlEntryRecord) message;
+                StandardAcl acl  = StandardAcl.fromRecord(record);
+                DirectoryNode aclsById = data.root.mkdirs("acls", "by-id");
+                aclsById.create(record.id().toString()).setContents(acl);
+                List<String> aclsByTypeDirectory = aclPath(record.resourceType(),
+                        record.patternType(),
+                        record.resourceName(),
+                        record.id());
+                DirectoryNode node = data.root;
+                for (String directory : aclsByTypeDirectory) {
+                    node = node.mkdirs(directory);
                 }
-                if (record.leader() != NO_LEADER_CHANGE) {
-                    partition.setLeader(record.leader());
-                    partition.setLeaderEpoch(partition.leaderEpoch() + 1);
-                }
-                if (record.leaderRecoveryState() != NO_CHANGE) {
-                    partition.setLeaderRecoveryState(record.leaderRecoveryState());
-                }
-                partition.setPartitionEpoch(partition.partitionEpoch() + 1);
-                file.setContents(PartitionRecordJsonConverter.write(partition,
-                    PartitionRecord.HIGHEST_SUPPORTED_VERSION).toPrettyString());
+                node.create(record.id().toString()).setContents(acl);
                 break;
             }
             case FENCE_BROKER_RECORD: {
                 FenceBrokerRecord record = (FenceBrokerRecord) message;
-                data.root.mkdirs("brokers", Integer.toString(record.id())).
-                    create("isFenced").setContents("true");
+                alterBrokerRegistration(record.id(), Optional.of(true), Optional.empty());
                 break;
             }
             case UNFENCE_BROKER_RECORD: {
                 UnfenceBrokerRecord record = (UnfenceBrokerRecord) message;
-                data.root.mkdirs("brokers", Integer.toString(record.id())).
-                    create("isFenced").setContents("false");
+                alterBrokerRegistration(record.id(), Optional.of(false), Optional.empty());
                 break;
             }
             case REMOVE_TOPIC_RECORD: {
                 RemoveTopicRecord record = (RemoveTopicRecord) message;
                 DirectoryNode topicsDirectory =
                     data.root.directory("topicIds", record.topicId().toString());
-                String name = topicsDirectory.file("name").contents();
+                String name = (String) topicsDirectory.file("name").contents();
                 data.root.rmrf("topics", name);
                 data.root.rmrf("topicIds", record.topicId().toString());
+                break;
+            }
+            case FEATURE_LEVEL_RECORD: {
+                FeatureLevelRecord record = (FeatureLevelRecord) message;
+                DirectoryNode featuresDirectory = data.root.mkdirs("features");
+                Short level = Short.valueOf(record.featureLevel());
+                if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
+                    MetadataVersion version = MetadataVersion.fromFeatureLevel(level);
+                    featuresDirectory.create(MetadataVersion.FEATURE_NAME).setContents(version);
+                } else {
+                    featuresDirectory.create(record.name()).setContents(level);
+                }
                 break;
             }
             case CLIENT_QUOTA_RECORD: {
@@ -333,9 +365,80 @@ public final class MetadataNodeManager implements AutoCloseable {
                 producerIds.create("nextBlockStartId").setContents(record.nextProducerId() + "");
                 break;
             }
+            case BROKER_REGISTRATION_CHANGE_RECORD: {
+                BrokerRegistrationChangeRecord record = (BrokerRegistrationChangeRecord) message;
+                alterBrokerRegistration(record.brokerId(),
+                    BrokerRegistrationFencingChange.fromValue(record.fenced()).
+                        flatMap(BrokerRegistrationFencingChange::asBoolean),
+                    BrokerRegistrationInControlledShutdownChange.fromValue(record.inControlledShutdown()).
+                        flatMap(BrokerRegistrationInControlledShutdownChange::asBoolean));
+                break;
+            }
+            case REMOVE_ACCESS_CONTROL_ENTRY_RECORD: {
+                RemoveAccessControlEntryRecord record = (RemoveAccessControlEntryRecord) message;
+                DirectoryNode aclsById = data.root.mkdirs("acls", "by-id");
+                aclsById.rmrf(record.id().toString());
+                StandardAcl acl = (StandardAcl) data.root.directory("acls", "by-id").file(record.id().toString()).contents();
+                List<String> aclsByTypeDirectory = aclPath(acl.resourceType(),
+                        acl.patternType(),
+                        acl.resourceName(),
+                        record.id());
+                aclsByTypeDirectory.remove(record.id().toString());
+                break;
+            }
+            case NO_OP_RECORD: {
+                // Nothing to do
+                break;
+            }
             default:
                 throw new RuntimeException("Unhandled metadata record type");
         }
+    }
+
+    private void alterBrokerRegistration(
+        int brokerId,
+        Optional<Boolean> fencingChange,
+        Optional<Boolean> shutdownChange
+    ) {
+        DirectoryNode brokerDirectory =
+                data.root.directory("brokers", String.valueOf(brokerId));
+        BrokerRegistration registration = (BrokerRegistration) brokerDirectory.file("registration").contents();
+        BrokerRegistration newRegistration = registration.cloneWith(fencingChange, shutdownChange);
+        brokerDirectory.file("registration").setContents(newRegistration);
+        if (registration.fenced() != newRegistration.fenced()) {
+            brokerDirectory.file("isFenced").setContents(newRegistration.fenced());
+        }
+    }
+
+    static List<String> aclPath(byte resourceType, byte patternType, String resourceName, Uuid id) {
+        return aclPath(ResourceType.fromCode(resourceType), PatternType.fromCode(patternType), resourceName, id);
+    }
+
+    static List<String> aclPath(ResourceType resourceType, PatternType patternType, String resourceName, Uuid id) {
+        List<String> results = new ArrayList<>();
+        results.add("acls");
+        results.add("by-type");
+        if (resourceType.isUnknown()) {
+            throw new RuntimeException("Unable to identify a valid ACL resource type for ACL " + id.toString());
+        }
+        results.add(resourceType.toString().toLowerCase(Locale.ROOT));
+        switch (patternType) {
+            case LITERAL:
+                if (resourceName.equals("*")) {
+                    results.add("wildcard");
+                } else {
+                    results.add("literal");
+                    results.add(resourceName);
+                }
+                break;
+            case PREFIXED:
+                results.add("prefixed");
+                results.add(resourceName);
+                break;
+            default:
+                throw new RuntimeException("Unable to identify a valid ACL pattern type for ACL " + id.toString());
+        }
+        return results;
     }
 
     static List<String> clientQuotaRecordDirectories(List<EntityData> entityData) {
