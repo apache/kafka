@@ -23,6 +23,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
@@ -128,7 +129,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
         resultConsumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, appID + "-result-consumer");
         resultConsumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         resultConsumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
-        resultConsumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
+        resultConsumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         resultConsumerConfig.putAll(commonClientConfig);
 
         if (adminClient == null) {
@@ -171,8 +172,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
 
         final KStream<Long, String> input = builder.stream(INPUT_TOPIC);
 
-        input.map((key, value) -> new KeyValue<>(key, key))
-            .to(OUTPUT_TOPIC, Produced.with(Serdes.Long(), Serdes.Long()));
+        input.to(OUTPUT_TOPIC, Produced.with(Serdes.Long(), Serdes.String()));
         return builder.build();
     }
 
