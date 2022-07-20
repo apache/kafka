@@ -18,6 +18,7 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
@@ -25,12 +26,17 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.StandbyTask;
+import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -48,6 +54,8 @@ import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertFalse;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public final class StreamsTestUtils {
     private StreamsTestUtils() {}
@@ -272,5 +280,71 @@ public final class StreamsTestUtils {
     public static boolean isCheckSupplierCall() {
         return Arrays.stream(Thread.currentThread().getStackTrace())
                 .anyMatch(caller -> "org.apache.kafka.streams.internals.ApiUtils".equals(caller.getClassName()) && "checkSupplier".equals(caller.getMethodName()));
+    }
+
+    public static StreamTask createStatefulTask(final TaskId taskId,
+                                                final Set<TopicPartition> changelogPartitions) {
+        final StreamTask task = mock(StreamTask.class);
+        setupStatefulTask(task, taskId, changelogPartitions);
+        when(task.isActive()).thenReturn(true);
+        return task;
+    }
+
+    public static StandbyTask createStandbyTask(final TaskId taskId,
+                                                final Set<TopicPartition> changelogPartitions) {
+        final StandbyTask task = mock(StandbyTask.class);
+        setupStatefulTask(task, taskId, changelogPartitions);
+        when(task.isActive()).thenReturn(false);
+        return task;
+    }
+
+    private static void setupStatefulTask(final Task task,
+                                          final TaskId taskId,
+                                          final Set<TopicPartition> changelogPartitions) {
+        when(task.changelogPartitions()).thenReturn(changelogPartitions);
+        when(task.id()).thenReturn(taskId);
+    }
+
+    public static class TaskBuilder<T extends Task> {
+        private final T task;
+
+        private TaskBuilder(final T task) {
+            this.task = task;
+        }
+
+        public static TaskBuilder<StreamTask> statelessTask(final TaskId taskId) {
+            final StreamTask task = mock(StreamTask.class);
+            when(task.changelogPartitions()).thenReturn(Collections.emptySet());
+            when(task.isActive()).thenReturn(true);
+            when(task.id()).thenReturn(taskId);
+            return new TaskBuilder<>(task);
+        }
+
+        public static TaskBuilder<StreamTask> statefulTask(final TaskId taskId,
+                                                           final Set<TopicPartition> changelogPartitions) {
+            final StreamTask task = mock(StreamTask.class);
+            when(task.isActive()).thenReturn(true);
+            setupStatefulTask(task, taskId, changelogPartitions);
+            return new TaskBuilder<>(task);
+        }
+
+        public static TaskBuilder<StandbyTask> standbyTask(final TaskId taskId,
+                                                           final Set<TopicPartition> changelogPartitions) {
+            final StandbyTask task = mock(StandbyTask.class);
+            when(task.isActive()).thenReturn(false);
+            setupStatefulTask(task, taskId, changelogPartitions);
+            return new TaskBuilder<>(task);
+        }
+
+        private static void setupStatefulTask(final Task task,
+                                              final TaskId taskId,
+                                              final Set<TopicPartition> changelogPartitions) {
+            when(task.changelogPartitions()).thenReturn(changelogPartitions);
+            when(task.id()).thenReturn(taskId);
+        }
+
+        public T build() {
+            return task;
+        }
     }
 }

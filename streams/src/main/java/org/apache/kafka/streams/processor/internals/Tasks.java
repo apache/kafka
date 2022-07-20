@@ -71,16 +71,19 @@ class Tasks {
 
     private final ActiveTaskCreator activeTaskCreator;
     private final StandbyTaskCreator standbyTaskCreator;
+    private final StateUpdater stateUpdater;
 
     private Consumer<byte[], byte[]> mainConsumer;
 
     Tasks(final LogContext logContext,
           final ActiveTaskCreator activeTaskCreator,
-          final StandbyTaskCreator standbyTaskCreator) {
+          final StandbyTaskCreator standbyTaskCreator,
+          final StateUpdater stateUpdater) {
 
         this.log = logContext.logger(getClass());
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
+        this.stateUpdater = stateUpdater;
     }
 
     void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
@@ -136,10 +139,14 @@ class Tasks {
 
         if (!activeTasksToCreate.isEmpty()) {
             for (final Task activeTask : activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate)) {
-                activeTasksPerId.put(activeTask.id(), activeTask);
-                pendingActiveTasks.remove(activeTask.id());
-                for (final TopicPartition topicPartition : activeTask.inputPartitions()) {
-                    activeTasksPerPartition.put(topicPartition, activeTask);
+                if (stateUpdater != null) {
+                    stateUpdater.add(activeTask);
+                } else {
+                    activeTasksPerId.put(activeTask.id(), activeTask);
+                    pendingActiveTasks.remove(activeTask.id());
+                    for (final TopicPartition topicPartition : activeTask.inputPartitions()) {
+                        activeTasksPerPartition.put(topicPartition, activeTask);
+                    }
                 }
             }
         }
@@ -160,8 +167,12 @@ class Tasks {
 
         if (!standbyTasksToCreate.isEmpty()) {
             for (final Task standbyTask : standbyTaskCreator.createTasks(standbyTasksToCreate)) {
-                standbyTasksPerId.put(standbyTask.id(), standbyTask);
-                pendingActiveTasks.remove(standbyTask.id());
+                if (stateUpdater != null) {
+                    stateUpdater.add(standbyTask);
+                } else {
+                    standbyTasksPerId.put(standbyTask.id(), standbyTask);
+                    pendingActiveTasks.remove(standbyTask.id());
+                }
             }
         }
     }
