@@ -19,7 +19,7 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
-<h4><a id="upgrade_3_2_0" href="#upgrade_3_2_0">Upgrading to 3.2.0 from any version 0.8.x through 3.1.x</a></h4>
+<h4><a id="upgrade_3_2_1" href="#upgrade_3_2_1">Upgrading to 3.2.1 from any version 0.8.x through 3.1.x</a></h4>
 
 <p><b>If you are upgrading from a version prior to 2.1.x, please see the note below about the change to the schema used to store consumer offsets.
     Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
@@ -60,6 +60,20 @@
         the newer Java clients must be used.
     </li>
 </ol>
+
+<h5><a id="upgrade_321_notable" href="#upgrade_321_notable">Notable changes in 3.2.1</a></h5>
+    <ul>
+        <li>A problem with OAuth token refresh was fixed. During token refresh, the Kafka client was not including
+            the SASL extensions which were present during the initial authentication. This leads to authentication
+            failures. See <a href="https://issues.apache.org/jira/browse/KAFKA-14062">KAFKA-14062</a> for details.</li>
+        <li>A problem in Connect with <code>error.tolerance</code> was fixed. When <code>error.tolerance</code>
+            was set to <code>all</code>, it was possible for offsets to not be committed and a memory leak to occur
+            (eventually resulting in an OutOfMemoryError). 
+            See <a href="https://issues.apache.org/jira/browse/KAFKA-14079">KAFKA-14079</a> for details.</li>
+        <li>A regression in the cooperative rebalance was fixed. Changes introduced in 3.2.0 to the offset commit 
+            behavior prior to rebalancing could lead to the consumer getting stuck. See 
+            <a href="https://issues.apache.org/jira/browse/KAFKA-14024">KAFKA-14024</a> for details.</li>
+    </ul>
 
 <h5><a id="upgrade_320_notable" href="#upgrade_320_notable">Notable changes in 3.2.0</a></h5>
     <ul>
