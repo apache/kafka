@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.common.config.ConfigChangeCallback;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.Mockito;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -38,6 +39,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.class)
 public class WorkerConfigTransformerTest {
 
     public static final String MY_KEY = "myKey";
@@ -50,9 +52,12 @@ public class WorkerConfigTransformerTest {
     public static final String TEST_RESULT_WITH_TTL = "testResultWithTTL";
     public static final String TEST_RESULT_WITH_LONGER_TTL = "testResultWithLongerTTL";
 
-    private final Herder herder = Mockito.mock(Herder.class);
-    private final Worker worker = Mockito.mock(Worker.class);
-    private final HerderRequest requestId = Mockito.mock(HerderRequest.class);
+    @Mock
+    private Herder herder;
+    @Mock
+    private Worker worker;
+    @Mock
+    private HerderRequest requestId;
     private WorkerConfigTransformer configTransformer;
 
     @Before
@@ -95,6 +100,7 @@ public class WorkerConfigTransformerTest {
 
         // Assertions
         assertEquals(TEST_RESULT_WITH_TTL, result.get(MY_KEY));
+        verify(herder).restartConnector(eq(1L), eq(MY_CONNECTOR), notNull());
     }
 
     @Test
@@ -109,6 +115,7 @@ public class WorkerConfigTransformerTest {
 
         // Assertions
         assertEquals(TEST_RESULT_WITH_TTL, result.get(MY_KEY));
+        verify(herder).restartConnector(eq(1L), eq(MY_CONNECTOR), notNull());
 
         // Execution
         result = configTransformer.transform(MY_CONNECTOR, Collections.singletonMap(MY_KEY, "${test:testPath:testKeyWithLongerTTL}"));
@@ -116,6 +123,7 @@ public class WorkerConfigTransformerTest {
         // Assertions
         assertEquals(TEST_RESULT_WITH_LONGER_TTL, result.get(MY_KEY));
         verify(requestId, times(1)).cancel();
+        verify(herder).restartConnector(eq(10L), eq(MY_CONNECTOR), notNull());
     }
 
     @Test
@@ -125,13 +133,16 @@ public class WorkerConfigTransformerTest {
 
     public static class TestConfigProvider implements ConfigProvider {
 
+        @Override
         public void configure(Map<String, ?> configs) {
         }
 
+        @Override
         public ConfigData get(String path) {
             return null;
         }
 
+        @Override
         public ConfigData get(String path, Set<String> keys) {
             if (path.equals(TEST_PATH)) {
                 if (keys.contains(TEST_KEY)) {
@@ -145,10 +156,7 @@ public class WorkerConfigTransformerTest {
             return new ConfigData(Collections.emptyMap());
         }
 
-        public void subscribe(String path, Set<String> keys, ConfigChangeCallback callback) {
-            throw new UnsupportedOperationException();
-        }
-
+        @Override
         public void close() {
         }
     }
