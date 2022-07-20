@@ -1508,7 +1508,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         public TopicPartition topicPartition() {
-            if (topicPartition == null) {
+            if (topicPartition == null && topic != null) {
                 if (partition != RecordMetadata.UNKNOWN_PARTITION)
                     topicPartition = new TopicPartition(topic, partition);
                 else if (recordPartition != null)
