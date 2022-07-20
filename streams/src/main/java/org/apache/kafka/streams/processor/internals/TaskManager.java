@@ -38,7 +38,6 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
 import org.apache.kafka.streams.processor.internals.Task.State;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 
 import org.slf4j.Logger;
@@ -98,7 +97,6 @@ public class TaskManager {
                 final ChangelogReader changelogReader,
                 final UUID processId,
                 final String logPrefix,
-                final StreamsMetricsImpl streamsMetrics,
                 final ActiveTaskCreator activeTaskCreator,
                 final StandbyTaskCreator standbyTaskCreator,
                 final TopologyMetadata topologyMetadata,
@@ -676,7 +674,7 @@ public class TaskManager {
     void handleLostAll() {
         log.debug("Closing lost active tasks as zombies.");
 
-        final Set<Task> allTask = new HashSet<>(tasks.allTasks());
+        final Set<Task> allTask = tasks.allTasks();
         for (final Task task : allTask) {
             // Even though we've apparently dropped out of the group, we can continue safely to maintain our
             // standby tasks while we rejoin.
@@ -1087,7 +1085,7 @@ public class TaskManager {
 
     // For testing only.
     int commitAll() {
-        return commit(new HashSet<>(tasks.allTasks()));
+        return commit(tasks.allTasks());
     }
 
     /**

@@ -33,10 +33,8 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -48,7 +46,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
 import org.apache.kafka.streams.processor.internals.Task.State;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
@@ -94,6 +91,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.union;
+import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.eq;
@@ -173,6 +171,7 @@ public class TaskManagerTest {
     private Admin adminClient;
 
     private TaskManager taskManager;
+    private TopologyMetadata topologyMetadata;
     private final Time time = new MockTime();
 
     @Rule
@@ -184,15 +183,15 @@ public class TaskManagerTest {
     }
 
     private void setUpTaskManager(final StreamsConfigUtils.ProcessingMode processingMode) {
+        topologyMetadata = new TopologyMetadata(topologyBuilder, new DummyStreamsConfig(processingMode));
         taskManager = new TaskManager(
             time,
             changeLogReader,
             UUID.randomUUID(),
             "taskManagerTest",
-            new StreamsMetricsImpl(new Metrics(), "clientId", StreamsConfig.METRICS_LATEST, time),
             activeTaskCreator,
             standbyTaskCreator,
-            new TopologyMetadata(topologyBuilder, new DummyStreamsConfig(processingMode)),
+            topologyMetadata,
             adminClient,
             stateDirectory
         );
@@ -3239,6 +3238,17 @@ public class TaskManagerTest {
         taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
 
         verify(standbyTaskCreator, activeTaskCreator);
+    }
+
+    @Test
+    public void shouldListNotPausedTasks() {
+        handleAssignment(taskId00Assignment, taskId01Assignment, emptyMap());
+
+        assertEquals(taskManager.notPausedTasks().size(), 2);
+
+        topologyMetadata.pauseTopology(UNNAMED_TOPOLOGY);
+
+        assertEquals(taskManager.notPausedTasks().size(), 0);
     }
 
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer,

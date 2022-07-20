@@ -754,7 +754,6 @@ public class StreamThreadTest {
             null,
             null,
             null,
-            null,
             topologyMetadata,
             null,
             null
@@ -850,7 +849,6 @@ public class StreamThreadTest {
         topologyMetadata.buildAndRewriteTopology();
 
         final TaskManager taskManager = new TaskManager(
-            null,
             null,
             null,
             null,

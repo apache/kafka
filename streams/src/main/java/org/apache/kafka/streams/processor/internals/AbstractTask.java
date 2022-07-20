@@ -62,8 +62,6 @@ public abstract class AbstractTask implements Task {
     protected final StateDirectory stateDirectory;
     protected final ProcessorStateManager stateMgr;
 
-    private final long taskTimeoutMs;
-
     AbstractTask(final TaskId id,
                  final ProcessorTopology topology,
                  final StateDirectory stateDirectory,
@@ -78,7 +76,6 @@ public abstract class AbstractTask implements Task {
         this.config = config;
         this.inputPartitions = inputPartitions;
         this.stateDirectory = stateDirectory;
-        this.taskTimeoutMs = config.taskTimeoutMs;
 
         final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
         logPrefix = threadIdPrefix + String.format("%s [%s] ", taskType, id);
@@ -165,12 +162,12 @@ public abstract class AbstractTask implements Task {
     public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
                                             final Exception cause) {
         if (deadlineMs == NO_DEADLINE) {
-            deadlineMs = currentWallClockMs + taskTimeoutMs;
+            deadlineMs = currentWallClockMs + config.taskTimeoutMs;
         } else if (currentWallClockMs > deadlineMs) {
             final String errorMessage = String.format(
                 "Task %s did not make progress within %d ms. Adjust `%s` if needed.",
                 id,
-                currentWallClockMs - deadlineMs + taskTimeoutMs,
+                currentWallClockMs - deadlineMs + config.taskTimeoutMs,
                 StreamsConfig.TASK_TIMEOUT_MS_CONFIG
             );
 

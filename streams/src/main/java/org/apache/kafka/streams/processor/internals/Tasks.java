@@ -57,7 +57,7 @@ class Tasks {
 
     // Tasks may have been assigned but not yet created because:
     // 1. They are for a NamedTopology that is yet known by this host.
-    // 2. They are to be recycled from an existing restoring task yet to be returned from the task updater.
+    // 2. They are to be recycled from an existing restoring task yet to be returned from the state updater.
     //
     // When that occurs we stash these pending tasks until either they are finally clear to be created,
     // or they are revoked from a new assignment.
@@ -170,7 +170,7 @@ class Tasks {
         final TaskId taskId = taskToRemove.id();
 
         if (taskToRemove.state() != Task.State.CLOSED) {
-            throw new IllegalStateException("Attempted to remove an task that is not closed: " + taskId);
+            throw new IllegalStateException("Attempted to remove a task that is not closed: " + taskId);
         }
 
         if (taskToRemove.isActive()) {
@@ -238,27 +238,12 @@ class Tasks {
         return requiresUpdate;
     }
 
-    RuntimeException cleanUpTaskProducerAfterClose(final TaskId taskId) {
-        RuntimeException exception = null;
-        try {
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId);
-        } catch (final RuntimeException e) {
-            exception = e;
-        }
-        return exception;
-    }
-
     void reInitializeThreadProducer() {
         activeTaskCreator.reInitializeThreadProducer();
     }
 
     void closeThreadProducerIfNeeded() {
         activeTaskCreator.closeThreadProducerIfNeeded();
-    }
-
-    // TODO: change type to `StreamTask`
-    void closeAndRemoveTaskProducerIfNeeded(final Task activeTask) {
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(activeTask.id());
     }
 
     private void removePartitionsForActiveTask(final TaskId taskId) {
@@ -316,11 +301,11 @@ class Tasks {
      * All tasks returned by any of the getters are read-only and should NOT be modified;
      * and the returned task could be modified by other threads concurrently
      */
-    Collection<Task> allTasks() {
-        return union(HashSet::new, activeTasksPerId.values(), standbyTasksPerId.values());
+    Set<Task> allTasks() {
+        return union(HashSet::new, new HashSet<>(activeTasksPerId.values()), new HashSet<>(standbyTasksPerId.values()));
     }
 
-    Collection<TaskId> allTaskIds() {
+    Set<TaskId> allTaskIds() {
         return union(HashSet::new, activeTasksPerId.keySet(), standbyTasksPerId.keySet());
     }
 

@@ -1307,9 +1307,9 @@ public final class Utils {
     }
 
     @SafeVarargs
-    public static <E> Set<E> union(final Supplier<Set<E>> constructor, final Collection<E>... set) {
+    public static <E> Set<E> union(final Supplier<Set<E>> constructor, final Set<E>... set) {
         final Set<E> result = constructor.get();
-        for (final Collection<E> s : set) {
+        for (final Set<E> s : set) {
             result.addAll(s);
         }
         return result;
