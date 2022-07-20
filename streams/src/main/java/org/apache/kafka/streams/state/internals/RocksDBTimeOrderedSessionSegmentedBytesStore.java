@@ -63,12 +63,12 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksD
     }
 
     public byte[] fetchSession(final Bytes key,
-                               final long earliestSessionEndTime,
-                               final long latestSessionStartTime) {
+                               final long sessionStartTime,
+                               final long sessionEndTime) {
         return get(TimeFirstSessionKeySchema.toBinary(
             key,
-            earliestSessionEndTime,
-            latestSessionStartTime
+            sessionStartTime,
+            sessionEndTime
         ));
     }
 

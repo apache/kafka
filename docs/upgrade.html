@@ -147,6 +147,14 @@
         Users can change this behavior to enable idempotence for some or all producers
         via Connect worker and/or connector configuration. Connect may enable idempotent producers
         by default in a future major release.</li>
+    <li>Kafka has replaced log4j with reload4j due to security concerns.
+        This only affects modules that specify a logging backend (<code>connect-runtime</code> and <code>kafka-tools</code> are two such examples).
+        A number of modules, including <code>kafka-clients</code>, leave it to the application to specify the logging backend.
+        More information can be found at <a href="https://reload4j.qos.ch">reload4j</a>.
+        Projects that depend on the affected modules from the Kafka project should use
+        <a href="https://www.slf4j.org/manual.html#swapping">slf4j-log4j12 version 1.7.35 or above</a> or
+        slf4j-reload4j to avoid
+        <a href="https://www.slf4j.org/codes.html#no_tlm">possible compatibility issues originating from the logging framework</a>.</li>
 </ul>
 
 <h5><a id="upgrade_310_notable" href="#upgrade_310_notable">Notable changes in 3.1.0</a></h5>
