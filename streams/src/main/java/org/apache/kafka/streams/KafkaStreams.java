@@ -1523,18 +1523,24 @@ public class KafkaStreams implements AutoCloseable {
 
         final long startMs = time.milliseconds();
 
+        log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeoutMs);
+        final boolean closeStatus = close(timeoutMs);
+
         if (options.leaveGroup) {
             final long remainingTimeMs = Math.max(0, timeoutMs - (time.milliseconds() - startMs));
+            // We use a new admin client since the existing one has been closed by the call to close() above.
+            final Admin localAdminClient = clientSupplier.getAdmin(
+                applicationConfigs.getAdminConfigs(ClientUtils.getSharedAdminClientId(clientId)));
 
             processStreamThread(thread -> {
                 final Optional<String> groupInstanceId = thread.getGroupInstanceID();
                 if (groupInstanceId.isPresent()) {
-                    log.debug("Sending leave group trigger to removing instance from consumer group");
+                    log.debug("Sending leave group trigger to removing instance from consumer group: {}.",
+                        groupInstanceId.get());
                     final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceId.get());
-
                     final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
 
-                    final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = adminClient
+                    final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = localAdminClient
                         .removeMembersFromConsumerGroup(
                             applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
                             new RemoveMembersFromConsumerGroupOptions(membersToRemove)
@@ -1550,10 +1556,9 @@ public class KafkaStreams implements AutoCloseable {
                     }
                 }
             });
+            localAdminClient.close();
         }
 
-        final boolean closeStatus = close(timeoutMs);
-        log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeoutMs);
         return closeStatus;
     }
 

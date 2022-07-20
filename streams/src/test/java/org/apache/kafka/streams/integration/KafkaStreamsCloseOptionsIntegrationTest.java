@@ -47,6 +47,8 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -60,6 +62,10 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.wa
 
 @Category({IntegrationTest.class})
 public class KafkaStreamsCloseOptionsIntegrationTest {
+
+    private static final Logger log = LoggerFactory.getLogger(KafkaStreamsCloseOptionsIntegrationTest.class);
+
+
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);
     @Rule
@@ -72,7 +78,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
     protected static final String INPUT_TOPIC = "inputTopic";
     protected static final String OUTPUT_TOPIC = "outputTopic";
 
-    protected static final int STREAMS_CONSUMER_TIMEOUT = 20000;
+    protected static final int STREAMS_CONSUMER_TIMEOUT = 10000;
 
     protected Properties streamsConfig;
     protected static KafkaStreams streams;
