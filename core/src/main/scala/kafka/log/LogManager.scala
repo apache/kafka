@@ -325,9 +325,9 @@ class LogManager(logDirs: Seq[File],
    * decrement the number of remaining logs
    * @return the number of remaining logs after decremented 1
    */
-  private[log] def decNumRemainingLogs(numRemainingLogs: ConcurrentMap[String, AtomicInteger], path: String): Int = {
+  private[log] def decNumRemainingLogs(numRemainingLogs: ConcurrentMap[String, Int], path: String): Int = {
     require(path != null, "path cannot be null to update remaining logs metric.")
-    numRemainingLogs.get(path).decrementAndGet()
+    numRemainingLogs.compute(path, (_, oldVal) => oldVal - 1)
   }
 
   /**
@@ -341,7 +341,7 @@ class LogManager(logDirs: Seq[File],
     val jobs = ArrayBuffer.empty[Seq[Future[_]]]
     var numTotalLogs = 0
     // log dir path -> number of Remaining logs map for remainingLogsToRecover metric
-    val numRemainingLogs: ConcurrentMap[String, AtomicInteger] = new ConcurrentHashMap[String, AtomicInteger]
+    val numRemainingLogs: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]
     // log recovery thread name -> number of remaining segments map for remainingSegmentsToRecover metric
     val numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]
 
@@ -391,7 +391,7 @@ class LogManager(logDirs: Seq[File],
         val logsToLoad = Option(dir.listFiles).getOrElse(Array.empty).filter(logDir =>
           logDir.isDirectory && UnifiedLog.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
         numTotalLogs += logsToLoad.length
-        numRemainingLogs.put(dir.getAbsolutePath, new AtomicInteger(logsToLoad.length))
+        numRemainingLogs.put(dir.getAbsolutePath, logsToLoad.length)
 
         val jobsForDir = logsToLoad.map { logDir =>
           val runnable: Runnable = () => {
@@ -449,11 +449,11 @@ class LogManager(logDirs: Seq[File],
     info(s"Loaded $numTotalLogs logs in ${time.hiResClockMs() - startMs}ms.")
   }
 
-  private[log] def addLogRecoveryMetrics(numRemainingLogs: ConcurrentMap[String, AtomicInteger],
+  private[log] def addLogRecoveryMetrics(numRemainingLogs: ConcurrentMap[String, Int],
                                          numRemainingSegments: ConcurrentMap[String, Int]): Unit = {
     debug("Adding log recovery metrics")
     for (dir <- logDirs) {
-      newGauge("remainingLogsToRecover", () => numRemainingLogs.get(dir.getAbsolutePath).get,
+      newGauge("remainingLogsToRecover", () => numRemainingLogs.get(dir.getAbsolutePath),
         Map("dir" -> dir.getAbsolutePath))
       for (i <- 0 until numRecoveryThreadsPerDataDir) {
         val threadName = logRecoveryThreadName(dir.getAbsolutePath, i)

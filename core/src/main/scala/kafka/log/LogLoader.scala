@@ -65,7 +65,7 @@ object LogLoader extends Logging {
  * @param recoveryPointCheckpoint The checkpoint of the offset at which to begin the recovery
  * @param leaderEpochCache An optional LeaderEpochFileCache instance to be updated during recovery
  * @param producerStateManager The ProducerStateManager instance to be updated during recovery
- * @param numRemainingSegments The remaining segments to be recovered in this log
+ * @param numRemainingSegments The remaining segments to be recovered in this log keyed by recovery thread name
  */
 class LogLoader(
   dir: File,

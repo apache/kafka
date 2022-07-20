@@ -38,7 +38,6 @@ import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
 import java.util.{Collections, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
-import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.{Map, mutable}
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
@@ -677,7 +676,7 @@ class LogManagerTest {
     val capturedPath: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
 
     val expectedCallTimes = expectedParams.values.sum
-    verify(spyLogManager, times(expectedCallTimes)).decNumRemainingLogs(any[ConcurrentMap[String, AtomicInteger]], capturedPath.capture());
+    verify(spyLogManager, times(expectedCallTimes)).decNumRemainingLogs(any[ConcurrentMap[String, Int]], capturedPath.capture());
 
     val paths = capturedPath.getAllValues
     expectedParams.foreach {
@@ -806,7 +805,7 @@ class LogManagerTest {
     spyLogManager.startup(Set.empty)
 
     // make sure log recovery metrics are added and removed
-    verify(spyLogManager, times(1)).addLogRecoveryMetrics(any[ConcurrentMap[String, AtomicInteger]], any[ConcurrentMap[String, Int]])
+    verify(spyLogManager, times(1)).addLogRecoveryMetrics(any[ConcurrentMap[String, Int]], any[ConcurrentMap[String, Int]])
     verify(spyLogManager, times(1)).removeLogRecoveryMetrics()
 
     // expected 1 log in each log dir since we created 2 partitions with 2 log dirs
@@ -835,7 +834,7 @@ class LogManagerTest {
     spyLogManager.startup(Set.empty)
 
     // make sure log recovery metrics are added and removed once
-    verify(spyLogManager, times(1)).addLogRecoveryMetrics(any[ConcurrentMap[String, AtomicInteger]], any[ConcurrentMap[String, Int]])
+    verify(spyLogManager, times(1)).addLogRecoveryMetrics(any[ConcurrentMap[String, Int]], any[ConcurrentMap[String, Int]])
     verify(spyLogManager, times(1)).removeLogRecoveryMetrics()
 
     verifyLogRecoverMetricsRemoved(spyLogManager)
