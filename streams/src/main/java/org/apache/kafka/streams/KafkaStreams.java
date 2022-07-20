@@ -1360,7 +1360,7 @@ public class KafkaStreams implements AutoCloseable {
      * This will block until all threads have stopped.
      */
     public void close() {
-        close(Long.MAX_VALUE);
+        close(Long.MAX_VALUE, false);
     }
 
     private Thread shutdownHelper(final boolean error, final long timeoutMs, final boolean leaveGroup) {
@@ -1431,10 +1431,6 @@ public class KafkaStreams implements AutoCloseable {
                 setState(State.ERROR);
             }
         }, clientId + "-CloseThread");
-    }
-
-    private boolean close(final long timeoutMs) {
-        return close(timeoutMs, false);
     }
 
     private boolean close(final long timeoutMs, final boolean leaveGroup) {
@@ -1510,7 +1506,7 @@ public class KafkaStreams implements AutoCloseable {
 
         log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeoutMs);
 
-        return close(timeoutMs);
+        return close(timeoutMs, false);
     }
 
     /**
@@ -1524,6 +1520,7 @@ public class KafkaStreams implements AutoCloseable {
      * @throws IllegalArgumentException if {@code timeout} can't be represented as {@code long milliseconds}
      */
     public synchronized boolean close(final CloseOptions options) throws IllegalArgumentException {
+        Objects.requireNonNull(options);
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(options.timeout, "timeout");
         final long timeoutMs = validateMillisecondDuration(options.timeout, msgPrefix);
         if (timeoutMs < 0) {
