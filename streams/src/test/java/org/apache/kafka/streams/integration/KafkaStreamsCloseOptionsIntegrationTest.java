@@ -163,7 +163,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
         IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close(new CloseOptions().leaveGroup(true));
-        waitForEmptyConsumerGroup(adminClient, appID, Integer.MAX_VALUE);
+        waitForEmptyConsumerGroup(adminClient, appID, 0);
     }
 
     protected Topology setupTopologyWithoutIntermediateUserTopic() {
