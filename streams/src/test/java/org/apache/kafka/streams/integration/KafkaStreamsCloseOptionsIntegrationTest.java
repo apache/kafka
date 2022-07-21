@@ -136,7 +136,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
             adminClient = Admin.create(commonClientConfig);
         }
 
-        CLUSTER.deleteAllTopicsAndWait(120000);
+        CLUSTER.deleteAllTopicsAndWait(120_000L);
         CLUSTER.createTopic(INPUT_TOPIC, 2, 1);
         CLUSTER.createTopic(OUTPUT_TOPIC, 2, 1);
 
