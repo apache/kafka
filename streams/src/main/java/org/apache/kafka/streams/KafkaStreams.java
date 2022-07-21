@@ -75,13 +75,11 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
-
 import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.function.BiConsumer;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -102,6 +100,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -1350,10 +1349,10 @@ public class KafkaStreams implements AutoCloseable {
      * This will block until all threads have stopped.
      */
     public void close() {
-        close(Long.MAX_VALUE);
+        close(Long.MAX_VALUE, false);
     }
 
-    private Thread shutdownHelper(final boolean error) {
+    private Thread shutdownHelper(final boolean error, final long timeoutMs, final boolean leaveGroup) {
         stateDirCleaner.shutdownNow();
         if (rocksDBMetricsRecordingService != null) {
             rocksDBMetricsRecordingService.shutdownNow();
@@ -1384,6 +1383,10 @@ public class KafkaStreams implements AutoCloseable {
                     Thread.currentThread().interrupt();
                 }
             });
+
+            if (leaveGroup) {
+                processStreamThread(streamThreadLeaveConsumerGroup(timeoutMs));
+            }
 
             log.info("Shutdown {} stream threads complete", numStreamThreads);
 
@@ -1419,7 +1422,7 @@ public class KafkaStreams implements AutoCloseable {
         }, clientId + "-CloseThread");
     }
 
-    private boolean close(final long timeoutMs) {
+    private boolean close(final long timeoutMs, final boolean leaveGroup) {
         if (state.hasCompletedShutdown()) {
             log.info("Streams client is already in the terminal {} state, all resources are closed and the client has stopped.", state);
             return true;
@@ -1444,7 +1447,8 @@ public class KafkaStreams implements AutoCloseable {
             log.error("Failed to transition to PENDING_SHUTDOWN, current state is {}", state);
             throw new StreamsException("Failed to shut down while in state " + state);
         } else {
-            final Thread shutdownThread = shutdownHelper(false);
+
+            final Thread shutdownThread = shutdownHelper(false, timeoutMs, leaveGroup);
 
             shutdownThread.setDaemon(true);
             shutdownThread.start();
@@ -1463,7 +1467,7 @@ public class KafkaStreams implements AutoCloseable {
         if (!setState(State.PENDING_ERROR)) {
             log.info("Skipping shutdown since we are already in " + state());
         } else {
-            final Thread shutdownThread = shutdownHelper(true);
+            final Thread shutdownThread = shutdownHelper(true, -1, false);
 
             shutdownThread.setDaemon(true);
             shutdownThread.start();
@@ -1491,7 +1495,7 @@ public class KafkaStreams implements AutoCloseable {
 
         log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeoutMs);
 
-        return close(timeoutMs);
+        return close(timeoutMs, false);
     }
 
     /**
@@ -1505,48 +1509,41 @@ public class KafkaStreams implements AutoCloseable {
      * @throws IllegalArgumentException if {@code timeout} can't be represented as {@code long milliseconds}
      */
     public synchronized boolean close(final CloseOptions options) throws IllegalArgumentException {
+        Objects.requireNonNull(options, "options cannot be null");
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(options.timeout, "timeout");
         final long timeoutMs = validateMillisecondDuration(options.timeout, msgPrefix);
         if (timeoutMs < 0) {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }
+        log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeoutMs);
+        return close(timeoutMs, options.leaveGroup);
+    }
 
-        final long startMs = time.milliseconds();
+    private Consumer<StreamThread> streamThreadLeaveConsumerGroup(final long remainingTimeMs) {
+        return thread -> {
+            final Optional<String> groupInstanceId = thread.getGroupInstanceID();
+            if (groupInstanceId.isPresent()) {
+                log.debug("Sending leave group trigger to removing instance from consumer group: {}.",
+                    groupInstanceId.get());
+                final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceId.get());
+                final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
 
-        final boolean closeStatus = close(timeoutMs);
-
-        final Optional<String> groupInstanceId = clientSupplier
-                .getConsumer(applicationConfigs.getGlobalConsumerConfigs(clientId))
-                .groupMetadata()
-                .groupInstanceId();
-
-        final long remainingTimeMs = Math.max(0, timeoutMs - (time.milliseconds() - startMs));
-
-        if (options.leaveGroup && groupInstanceId.isPresent()) {
-            log.debug("Sending leave group trigger to removing instance from consumer group");
-            //removing instance from consumer group
-
-            final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceId.get());
-
-            final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
-
-            final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = adminClient
+                final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = adminClient
                     .removeMembersFromConsumerGroup(
                         applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
                         new RemoveMembersFromConsumerGroupOptions(membersToRemove)
                     );
 
-            try {
-                removeMembersFromConsumerGroupResult.memberResult(memberToRemove).get(remainingTimeMs, TimeUnit.MILLISECONDS);
-            } catch (final Exception e) {
-                log.error("Could not remove static member {} from consumer group {} due to a: {}", groupInstanceId.get(),
+                try {
+                    removeMembersFromConsumerGroupResult.memberResult(memberToRemove)
+                        .get(remainingTimeMs, TimeUnit.MILLISECONDS);
+                } catch (final Exception e) {
+                    log.error("Could not remove static member {} from consumer group {} due to a: {}",
+                        groupInstanceId.get(),
                         applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG), e);
+                }
             }
-        }
-
-        log.debug("Stopping Streams client with timeoutMillis = {} ms.", timeoutMs);
-
-        return closeStatus;
+        };
     }
 
     /**
