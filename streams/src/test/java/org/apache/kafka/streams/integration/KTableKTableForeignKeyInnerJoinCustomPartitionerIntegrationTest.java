@@ -53,21 +53,19 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
 
 import kafka.utils.MockTime;
-import org.junit.rules.Timeout;
+import org.junit.experimental.categories.Category;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
-@Category({IntegrationTest.class})
+@Timeout(600)
+@Category(IntegrationTest.class)
 public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private final static int NUM_BROKERS = 1;
 
     public final static EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -86,7 +84,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
     private final static Properties PRODUCER_CONFIG_1 = new Properties();
     private final static Properties PRODUCER_CONFIG_2 = new Properties();
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {
         CLUSTER.start();
         //Use multiple partitions to ensure distribution of keys.
@@ -125,12 +123,12 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         CONSUMER_CONFIG.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
-    @Before
+    @BeforeEach
     public void before() throws IOException {
         final String stateDirBasePath = TestUtils.tempDirectory().getPath();
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-1");
@@ -138,7 +136,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         streamsConfigThree.put(StreamsConfig.STATE_DIR_CONFIG, stateDirBasePath + "-3");
     }
 
-    @After
+    @AfterEach
     public void after() throws IOException {
         if (streams != null) {
             streams.close();

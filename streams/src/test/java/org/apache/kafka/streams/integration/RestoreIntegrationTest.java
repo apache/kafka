@@ -56,13 +56,14 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.hamcrest.CoreMatchers;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
 import java.io.IOException;
@@ -74,8 +75,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -87,37 +86,34 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.wa
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForStandbyCompletion;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Category({IntegrationTest.class})
+@Timeout(600)
+@Category(IntegrationTest.class)
 public class RestoreIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final int NUM_BROKERS = 1;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
-    @Rule
-    public final TestName testName = new TestName();
     private String appId;
     private String inputStream;
 
     private final int numberOfKeys = 10000;
     private KafkaStreams kafkaStreams;
 
-    @Before
-    public void createTopics() throws InterruptedException {
-        appId = safeUniqueTestName(RestoreIntegrationTest.class, testName);
+    @BeforeEach
+    public void createTopics(final TestInfo testInfo) throws InterruptedException {
+        appId = safeUniqueTestName(RestoreIntegrationTest.class, testInfo);
         inputStream = appId + "-input-stream";
         CLUSTER.createTopic(inputStream, 2, 1);
     }
@@ -135,7 +131,7 @@ public class RestoreIntegrationTest {
         return streamsConfiguration;
     }
 
-    @After
+    @AfterEach
     public void shutdown() {
         if (kafkaStreams != null) {
             kafkaStreams.close(Duration.ofSeconds(30));

@@ -33,14 +33,13 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -52,25 +51,20 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 
+@Timeout(600)
 @Category(IntegrationTest.class)
 public class EmitOnChangeIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
-
     private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
-
-    @Rule
-    public TestName testName = new TestName();
 
     private static String inputTopic;
     private static String inputTopic2;
@@ -78,9 +72,9 @@ public class EmitOnChangeIntegrationTest {
     private static String outputTopic2;
     private static String appId = "";
 
-    @Before
-    public void setup() {
-        final String testId = safeUniqueTestName(getClass(), testName);
+    @BeforeEach
+    public void setup(final TestInfo testInfo) {
+        final String testId = safeUniqueTestName(getClass(), testInfo);
         appId = "appId_" + testId;
         inputTopic = "input" + testId;
         inputTopic2 = "input2" + testId;

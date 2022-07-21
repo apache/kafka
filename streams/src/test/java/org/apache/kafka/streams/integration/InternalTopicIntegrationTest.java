@@ -44,14 +44,13 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -67,27 +66,25 @@ import static java.time.Duration.ofSeconds;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests related to internal topics in streams
  */
 @SuppressWarnings("deprecation")
-@Category({IntegrationTest.class})
+@Timeout(600)
+@Category(IntegrationTest.class)
 public class InternalTopicIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
-
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {
         CLUSTER.start();
         CLUSTER.createTopics(DEFAULT_INPUT_TOPIC, DEFAULT_INPUT_TABLE_TOPIC);
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -101,7 +98,7 @@ public class InternalTopicIntegrationTest {
 
     private Properties streamsProp;
 
-    @Before
+    @BeforeEach
     public void before() {
         streamsProp = new Properties();
         streamsProp.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -113,7 +110,7 @@ public class InternalTopicIntegrationTest {
         streamsProp.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
     }
 
-    @After
+    @AfterEach
     public void after() throws IOException {
         // Remove any state from previous test runs
         IntegrationTestUtils.purgeLocalStreamsState(streamsProp);
