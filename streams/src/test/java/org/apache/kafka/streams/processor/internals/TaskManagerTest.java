@@ -35,6 +35,7 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -92,6 +93,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
+import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.eq;
@@ -193,7 +195,8 @@ public class TaskManagerTest {
             standbyTaskCreator,
             topologyMetadata,
             adminClient,
-            stateDirectory
+            stateDirectory,
+            new StreamsConfig(getStreamsConfig("test-app"))
         );
         taskManager.setMainConsumer(consumer);
         reset(topologyBuilder);
@@ -1615,8 +1618,8 @@ public class TaskManagerTest {
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public Collection<TopicPartition> changelogPartitions() {
-                return singletonList(changelog);
+            public Set<TopicPartition> changelogPartitions() {
+                return singleton(changelog);
             }
         };
         final AtomicBoolean closedDirtyTask01 = new AtomicBoolean(false);
@@ -1728,8 +1731,8 @@ public class TaskManagerTest {
         );
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public Collection<TopicPartition> changelogPartitions() {
-                return singletonList(changelog);
+            public Set<TopicPartition> changelogPartitions() {
+                return singleton(changelog);
             }
         };
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
@@ -1781,8 +1784,8 @@ public class TaskManagerTest {
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public Collection<TopicPartition> changelogPartitions() {
-                return singletonList(changelog);
+            public Set<TopicPartition> changelogPartitions() {
+                return singleton(changelog);
             }
         };
 
@@ -1896,8 +1899,8 @@ public class TaskManagerTest {
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public Collection<TopicPartition> changelogPartitions() {
-                return singletonList(changelog);
+            public Set<TopicPartition> changelogPartitions() {
+                return singleton(changelog);
             }
         };
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
@@ -2734,8 +2737,8 @@ public class TaskManagerTest {
     public void shouldReturnFalseWhenThereAreStillNonRunningTasks() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public Collection<TopicPartition> changelogPartitions() {
-                return singletonList(new TopicPartition("fake", 0));
+            public Set<TopicPartition> changelogPartitions() {
+                return singleton(new TopicPartition("fake", 0));
             }
         };
 
@@ -3453,7 +3456,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public Collection<TopicPartition> changelogPartitions() {
+        public Set<TopicPartition> changelogPartitions() {
             return changelogOffsets.keySet();
         }
 

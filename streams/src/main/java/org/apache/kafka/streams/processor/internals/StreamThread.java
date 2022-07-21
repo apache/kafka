@@ -384,6 +384,7 @@ public class StreamThread extends Thread {
             threadId,
             log
         );
+
         final TaskManager taskManager = new TaskManager(
             time,
             changelogReader,
@@ -393,7 +394,8 @@ public class StreamThread extends Thread {
             standbyTaskCreator,
             topologyMetadata,
             adminClient,
-            stateDirectory
+            stateDirectory,
+            config
         );
         referenceContainer.taskManager = taskManager;
 

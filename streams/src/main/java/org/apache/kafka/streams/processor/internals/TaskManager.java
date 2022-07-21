@@ -29,6 +29,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -93,6 +95,9 @@ public class TaskManager {
     // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
     private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
 
+    private final StateUpdater stateUpdater;
+
+
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
                 final UUID processId,
@@ -101,7 +106,8 @@ public class TaskManager {
                 final StandbyTaskCreator standbyTaskCreator,
                 final TopologyMetadata topologyMetadata,
                 final Admin adminClient,
-                final StateDirectory stateDirectory) {
+                final StateDirectory stateDirectory,
+                final StreamsConfig streamsConfig) {
         this.time = time;
         this.changelogReader = changelogReader;
         this.processId = processId;
@@ -114,7 +120,15 @@ public class TaskManager {
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
-        this.tasks = new Tasks(logContext, activeTaskCreator, standbyTaskCreator);
+        final boolean stateUpdaterEnabled =
+            InternalConfig.getBoolean(streamsConfig.originals(), InternalConfig.STATE_UPDATER_ENABLED, false);
+        if (stateUpdaterEnabled) {
+            stateUpdater = new DefaultStateUpdater(streamsConfig, changelogReader, time);
+            stateUpdater.start();
+        } else {
+            stateUpdater = null;
+        }
+        this.tasks = new Tasks(logContext, activeTaskCreator, standbyTaskCreator, stateUpdater);
         this.taskExecutor = new TaskExecutor(
             tasks,
             topologyMetadata.taskExecutionMetadata(),

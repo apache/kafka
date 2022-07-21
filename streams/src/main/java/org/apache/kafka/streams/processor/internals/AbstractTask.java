@@ -112,7 +112,7 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
-    public Collection<TopicPartition> changelogPartitions() {
+    public Set<TopicPartition> changelogPartitions() {
         return stateMgr.changelogPartitions();
     }
 

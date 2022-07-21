@@ -45,6 +45,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
@@ -364,7 +365,7 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
-    Collection<TopicPartition> changelogPartitions() {
+    Set<TopicPartition> changelogPartitions() {
         return changelogOffsets().keySet();
     }
 
