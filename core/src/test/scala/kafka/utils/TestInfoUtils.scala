@@ -16,11 +16,17 @@
  */
 package kafka.utils
 
+import java.nio.file.Files
+import java.nio.file.StandardOpenOption
+import java.nio.file.Paths
+
 import java.lang.reflect.Method
 import java.util
 import java.util.{Collections, Optional}
 
 import org.junit.jupiter.api.TestInfo
+
+import scala.compat.java8.OptionConverters._
 
 class EmptyTestInfo extends TestInfo {
   override def getDisplayName: String = ""
@@ -40,8 +46,14 @@ object TestInfoUtils {
         throw new RuntimeException(s"Unknown quorum value")
       }
     } else {
-      false
+      testInfo.getTestClass().asScala match {
+        case None => false
+        case Some(testClass) =>
+          Files.write(Paths.get("/Users/cmccabe/all_classes.txt"), (testClass.getCanonicalName + "\n").getBytes(), StandardOpenOption.APPEND)
+          false
+      }
     }
   }
+
   final val TestWithParameterizedQuorumName = "{displayName}.quorum={0}"
 }
