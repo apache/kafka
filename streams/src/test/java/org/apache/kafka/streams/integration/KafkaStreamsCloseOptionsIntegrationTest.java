@@ -163,7 +163,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(singletonList(streams), Duration.ofSeconds(30));
         IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
-        streams.close(new CloseOptions().leaveGroup(true).timeout(Duration.ofMillis(30_000L)));
+        streams.close(new CloseOptions().leaveGroup(true).timeout(Duration. ofSeconds(30)));
         waitForEmptyConsumerGroup(adminClient, appID, 0);
     }
 
