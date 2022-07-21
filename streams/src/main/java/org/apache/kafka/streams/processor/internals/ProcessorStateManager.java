@@ -576,17 +576,12 @@ public class ProcessorStateManager implements StateManager {
         changelogReader.unregister(allChangelogs);
     }
 
-    void transitionTaskType(final TaskType newType, final LogContext logContext) {
+    void transitionTaskType(final TaskType newType) {
         if (taskType.equals(newType)) {
             throw new IllegalStateException("Tried to recycle state for task type conversion but new type was the same.");
         }
 
-        final TaskType oldType = taskType;
         taskType = newType;
-        log = logContext.logger(ProcessorStateManager.class);
-        logPrefix = logContext.logPrefix();
-
-        log.debug("Transitioning state manager for {} task {} to {}", oldType, taskId, newType);
     }
 
     @Override

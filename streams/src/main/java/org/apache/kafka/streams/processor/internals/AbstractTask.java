@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,25 +57,25 @@ public abstract class AbstractTask implements Task {
     protected Map<TopicPartition, Long> offsetSnapshotSinceLastFlush = null;
 
     protected final TaskId id;
+    protected final TaskConfig config;
     protected final ProcessorTopology topology;
     protected final StateDirectory stateDirectory;
     protected final ProcessorStateManager stateMgr;
-    private final long taskTimeoutMs;
 
     AbstractTask(final TaskId id,
                  final ProcessorTopology topology,
                  final StateDirectory stateDirectory,
                  final ProcessorStateManager stateMgr,
                  final Set<TopicPartition> inputPartitions,
-                 final long taskTimeoutMs,
+                 final TaskConfig config,
                  final String taskType,
                  final Class<? extends AbstractTask> clazz) {
         this.id = id;
         this.stateMgr = stateMgr;
         this.topology = topology;
+        this.config = config;
         this.inputPartitions = inputPartitions;
         this.stateDirectory = stateDirectory;
-        this.taskTimeoutMs = taskTimeoutMs;
 
         final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
         logPrefix = threadIdPrefix + String.format("%s [%s] ", taskType, id);
@@ -106,7 +108,7 @@ public abstract class AbstractTask implements Task {
 
     @Override
     public Set<TopicPartition> inputPartitions() {
-        return inputPartitions;
+        return Collections.unmodifiableSet(inputPartitions);
     }
 
     @Override
@@ -151,7 +153,8 @@ public abstract class AbstractTask implements Task {
 
     @Override
     public void updateInputPartitions(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics) {
-        this.inputPartitions = topicPartitions;
+        this.inputPartitions.clear();
+        this.inputPartitions.addAll(topicPartitions);
         topology.updateSourceTopics(allTopologyNodesToSourceTopics);
     }
 
@@ -159,12 +162,12 @@ public abstract class AbstractTask implements Task {
     public void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
                                             final Exception cause) {
         if (deadlineMs == NO_DEADLINE) {
-            deadlineMs = currentWallClockMs + taskTimeoutMs;
+            deadlineMs = currentWallClockMs + config.taskTimeoutMs;
         } else if (currentWallClockMs > deadlineMs) {
             final String errorMessage = String.format(
                 "Task %s did not make progress within %d ms. Adjust `%s` if needed.",
                 id,
-                currentWallClockMs - deadlineMs + taskTimeoutMs,
+                currentWallClockMs - deadlineMs + config.taskTimeoutMs,
                 StreamsConfig.TASK_TIMEOUT_MS_CONFIG
             );
 

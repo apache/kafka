@@ -127,7 +127,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             stateDirectory,
             stateMgr,
             inputPartitions,
-            config.taskTimeoutMs,
+            config,
             "task",
             StreamTask.class
         );
@@ -292,7 +292,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     partitionGroup.clear();
                 } finally {
                     transitToSuspend();
-                    log.info("Suspended running");
                 }
 
                 break;
@@ -571,6 +570,45 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         transitionTo(State.CLOSED);
 
         log.info("Closed clean and recycled state");
+    }
+
+    /**
+     * Create a standby task from this active task without closing and re-initializing the state stores.
+     * The task should have been in suspended state when calling this function
+     *
+     * TODO: we should be able to not need the input partitions as input param in future but always reuse
+     *       the task's input partitions when we have fixed partitions -> tasks mapping
+     */
+    public StandbyTask recycle(final Set<TopicPartition> inputPartitions) {
+        if (state() != Task.State.CLOSED) {
+            throw new IllegalStateException("Attempted to convert an active task that's not closed: " + id);
+        }
+
+        if (!inputPartitions.equals(this.inputPartitions)) {
+            log.warn("Detected unmatched input partitions for task {} when recycling it from active to standby", id);
+        }
+
+        stateMgr.transitionTaskType(TaskType.STANDBY);
+
+        final ThreadCache dummyCache = new ThreadCache(
+            new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName())),
+            0,
+            streamsMetrics
+        );
+
+        log.debug("Recycling active task {} to standby", id);
+
+        return new StandbyTask(
+            id,
+            inputPartitions,
+            topology,
+            config,
+            streamsMetrics,
+            stateMgr,
+            stateDirectory,
+            dummyCache,
+            processorContext
+        );
     }
 
     /**
@@ -1217,7 +1255,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     private void transitToSuspend() {
-        log.info("Suspended {}", state());
+        log.info("Suspended from {}", state());
         transitionTo(State.SUSPENDED);
         timeCurrentIdlingStarted = Optional.of(System.currentTimeMillis());
     }
