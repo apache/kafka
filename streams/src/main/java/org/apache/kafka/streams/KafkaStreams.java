@@ -1520,7 +1520,7 @@ public class KafkaStreams implements AutoCloseable {
      * @throws IllegalArgumentException if {@code timeout} can't be represented as {@code long milliseconds}
      */
     public synchronized boolean close(final CloseOptions options) throws IllegalArgumentException {
-        Objects.requireNonNull(options);
+        Objects.requireNonNull(options, "options cannot be null");
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(options.timeout, "timeout");
         final long timeoutMs = validateMillisecondDuration(options.timeout, msgPrefix);
         if (timeoutMs < 0) {
