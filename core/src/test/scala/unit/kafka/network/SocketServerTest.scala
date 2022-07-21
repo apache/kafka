@@ -1891,8 +1891,8 @@ class SocketServerTest {
    * Step 2 - SslTransportLayer reads all of the bytes and stores it in SslTransportLayer.appReadBuffer.
    * Step 3 - Process the first request, leaving the second request in SslTransportLayer.appReadBuffer.
    * Step 4 - THIS IS WHERE THE DELAY IS. Process the second request. This request is read from
-   * SslTransportLayer.appReadBuffer, instead of the socket. Because of this, "select(timeout)" in Selector.poll()
-   * should not block for 300 ms.
+   * SslTransportLayer.appReadBuffer, instead of the socket. Because of this, "select(timeout)" in "Selector.poll()"
+   * should not block for the "poll timeout" (hardcoded to 300 in Selector.java, but in this test it is set to 5000).
    *
    * This test is implemented following "makeSocketWithBufferedRequests()" method by putting two requests directly
    * into SslTransportLayer.netReadBuffer and manually trigger the processing.
@@ -1940,7 +1940,7 @@ class SocketServerTest {
       // this would move bytes from netReadBuffer to appReadBuffer, then process only the first request
       // we call wakeup() so Selector.poll() does not block in this step (because we artificially add data into netReadBuffer)
       testableSelector.wakeup()
-      val req1 = receiveRequest(testableServer.dataPlaneRequestChannel, selectTimeout + 1000)
+      val req1 = receiveRequest(testableServer.dataPlaneRequestChannel, 1000)
       processRequest(testableServer.dataPlaneRequestChannel, req1)
 
       // receive response in the client side
@@ -1948,16 +1948,11 @@ class SocketServerTest {
 
       // process the second request in the server side
       // this would process the second request in the appReadBuffer
-      // NOTE 1: this should not block because the data is already in the buffer, but without the fix for KAFKA-13559,
-      // this step will block for 300 ms (in this test, we override poll() timeout to 5000 ms to make it distinct)
+      // NOTE 1: this should not block because the data is already in the buffer
       // NOTE 2: we do not call wakeup() here so Selector.poll() would block if the fix is not in place
       val processTimeStart = System.nanoTime()  // using nanoTime() because it is meant to calculate elapsed time
-      val req2 = receiveRequest(testableServer.dataPlaneRequestChannel, selectTimeout + 1000)
-      processRequest(testableServer.dataPlaneRequestChannel, req2)
+      receiveRequest(testableServer.dataPlaneRequestChannel, selectTimeout + 1000)
       val processTimeEnd = System.nanoTime()
-
-      // receive response in the client side
-      receiveResponse(sslSocket)
 
       // check the duration of processing the second request
       val processTimeDuration = (processTimeEnd - processTimeStart) / 1000000.0  // in ms
