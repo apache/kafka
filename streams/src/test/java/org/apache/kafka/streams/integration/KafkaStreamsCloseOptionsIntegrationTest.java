@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import kafka.server.KafkaConfig;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -73,8 +74,6 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
     protected static final String INPUT_TOPIC = "inputTopic";
     protected static final String OUTPUT_TOPIC = "outputTopic";
 
-    protected static final int STREAMS_CONSUMER_TIMEOUT = 10000;
-
     protected Properties streamsConfig;
     protected static KafkaStreams streams;
     protected static Admin adminClient;
@@ -86,6 +85,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
 
     static {
         final Properties brokerProps = new Properties();
+        brokerProps.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp(), Integer.toString(Integer.MAX_VALUE));
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
     }
 
@@ -116,7 +116,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(STREAMS_CONSUMER_TIMEOUT));
+        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
         streamsConfig.putAll(commonClientConfig);
 
         producerConfig = new Properties();
