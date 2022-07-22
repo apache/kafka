@@ -67,10 +67,8 @@ class StandbyTaskCreator {
         );
     }
 
-    // TODO: change return type to `StandbyTask`
-    Collection<Task> createTasks(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
-        // TODO: change type to `StandbyTask`
-        final List<Task> createdTasks = new ArrayList<>();
+    Collection<StandbyTask> createTasks(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+        final List<StandbyTask> createdTasks = new ArrayList<>();
 
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();

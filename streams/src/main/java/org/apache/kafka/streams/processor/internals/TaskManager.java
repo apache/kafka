@@ -95,8 +95,9 @@ public class TaskManager {
     // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
     private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
 
+    private final ActiveTaskCreator activeTaskCreator;
+    private final StandbyTaskCreator standbyTaskCreator;
     private final StateUpdater stateUpdater;
-
 
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
@@ -109,12 +110,14 @@ public class TaskManager {
                 final StateDirectory stateDirectory,
                 final StreamsConfig streamsConfig) {
         this.time = time;
-        this.changelogReader = changelogReader;
         this.processId = processId;
         this.logPrefix = logPrefix;
-        this.topologyMetadata = topologyMetadata;
         this.adminClient = adminClient;
         this.stateDirectory = stateDirectory;
+        this.changelogReader = changelogReader;
+        this.topologyMetadata = topologyMetadata;
+        this.activeTaskCreator = activeTaskCreator;
+        this.standbyTaskCreator = standbyTaskCreator;
         this.processingMode = topologyMetadata.processingMode();
 
         final LogContext logContext = new LogContext(logPrefix);
@@ -128,7 +131,7 @@ public class TaskManager {
         } else {
             stateUpdater = null;
         }
-        this.tasks = new Tasks(logContext, activeTaskCreator, standbyTaskCreator, stateUpdater);
+        this.tasks = new Tasks(logContext, activeTaskCreator, standbyTaskCreator);
         this.taskExecutor = new TaskExecutor(
             tasks,
             topologyMetadata.taskExecutionMetadata(),
@@ -140,7 +143,6 @@ public class TaskManager {
 
     void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
         this.mainConsumer = mainConsumer;
-        tasks.setMainConsumer(mainConsumer);
     }
 
     public double totalProducerBlockedTime() {
@@ -336,8 +338,8 @@ public class TaskManager {
             }
         }
 
-        tasks.addActivePendingTasks(pendingTasksToCreate(activeTasksToCreate));
-        tasks.addStandbyPendingTasks(pendingTasksToCreate(standbyTasksToCreate));
+        tasks.addPendingActiveTasks(pendingTasksToCreate(activeTasksToCreate));
+        tasks.addPendingStandbyTasks(pendingTasksToCreate(standbyTasksToCreate));
 
         // close and recycle those tasks
         closeAndRecycleTasks(
@@ -377,7 +379,26 @@ public class TaskManager {
             throw first.getValue();
         }
 
-        tasks.createTasks(activeTasksToCreate, standbyTasksToCreate);
+        createNewTasks(activeTasksToCreate, standbyTasksToCreate);
+    }
+
+    private void createNewTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+                                final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
+        final Collection<StreamTask> newActiveTasks = activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate);
+        final Collection<StandbyTask> newStandbyTask = standbyTaskCreator.createTasks(standbyTasksToCreate);
+        tasks.addNewActiveTasks(newActiveTasks);
+        tasks.addNewStandbyTasks(newStandbyTask);
+
+        maybeAddNewTasksToStateUpdater(newActiveTasks);
+        maybeAddNewTasksToStateUpdater(newStandbyTask);
+    }
+
+    private void maybeAddNewTasksToStateUpdater(Collection<? extends Task> tasks) {
+        if (stateUpdater != null) {
+            for (final Task task : tasks) {
+                stateUpdater.add(task);
+            }
+        }
     }
 
     private Map<TaskId, Set<TopicPartition>> pendingTasksToCreate(final Map<TaskId, Set<TopicPartition>> tasksToCreate) {
@@ -462,9 +483,9 @@ public class TaskManager {
             try {
                 oldTask.closeCleanAndRecycleState();
                 if (oldTask.isActive()) {
-                    tasks.convertActiveToStandby((StreamTask) oldTask, entry.getValue(), taskCloseExceptions);
+                    convertActiveToStandby((StreamTask) oldTask, entry.getValue(), taskCloseExceptions);
                 } else {
-                    tasks.convertStandbyToActive((StandbyTask) oldTask, entry.getValue());
+                    convertStandbyToActive((StandbyTask) oldTask, entry.getValue());
                 }
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format("Failed to recycle task %s cleanly. Attempting to close remaining tasks before re-throwing:", oldTask.id());
@@ -478,6 +499,27 @@ public class TaskManager {
         for (final Task task : tasksToCloseDirty) {
             closeTaskDirty(task);
         }
+    }
+
+    private void convertActiveToStandby(final StreamTask activeTask,
+                                        final Set<TopicPartition> partitions,
+                                        final Map<TaskId, RuntimeException> taskCloseExceptions) {
+        final TaskId taskId = activeTask.id();
+        try {
+            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId);
+        } catch (final RuntimeException e) {
+            taskCloseExceptions.putIfAbsent(taskId, e);
+        }
+        final StandbyTask standbyTask = standbyTaskCreator.createStandbyTaskFromActive(activeTask, partitions);
+
+        tasks.replaceActiveWithStandby(standbyTask);
+    }
+
+    void convertStandbyToActive(final StandbyTask standbyTask,
+                                final Set<TopicPartition> partitions) {
+        final StreamTask activeTask = activeTaskCreator.createActiveTaskFromStandby(standbyTask, partitions, mainConsumer);
+
+        tasks.replaceStandbyWithActive(activeTask);
     }
 
     /**
@@ -1185,7 +1227,7 @@ public class TaskManager {
      */
     void handleTopologyUpdates() {
         topologyMetadata.executeTopologyUpdatesAndBumpThreadVersion(
-            tasks::createPendingTasks,
+            this::createPendingTasks,
             this::maybeCloseTasksFromRemovedTopologies
         );
 
@@ -1221,6 +1263,13 @@ public class TaskManager {
             //  the user of an error in this named topology without killing the thread and delaying the others
             log.error("Caught the following exception while closing tasks from a removed topology:", e);
         }
+    }
+
+    void createPendingTasks(final Set<String> currentNamedTopologies) {
+        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = tasks.pendingActiveTasksForTopologies(currentNamedTopologies);
+        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = tasks.pendingStandbyTasksForTopologies(currentNamedTopologies);
+
+        createNewTasks(activeTasksToCreate, standbyTasksToCreate);
     }
 
     /**
