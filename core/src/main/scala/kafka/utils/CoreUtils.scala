@@ -282,7 +282,7 @@ object CoreUtils {
             checkDuplicateListenerPorts(duplicatesWithoutIpHosts, listeners)
 
           duplicatesWithIpHosts match {
-            case s if s.isEmpty =>
+            case eps if eps.isEmpty =>
             case Seq(ep1, ep2) =>
               if (requireDistinctPorts)
                 require(validateOneIsIpv4AndOtherIpv6(ep1.host, ep2.host), "If you have two listeners on " +
