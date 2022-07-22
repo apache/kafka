@@ -287,8 +287,8 @@ object CoreUtils {
               if (requireDistinctPorts)
                 require(validateOneIsIpv4AndOtherIpv6(one.host, two.host), "If you have two listeners on " +
                   s"the same port then one needs to be IPv4 and the other IPv6, listeners: $listeners, port: $port")
-            case other =>
-              checkDuplicateListenerNames(other, listeners)
+            case allEps =>
+              checkDuplicateListenerNames(allEps, listeners)
               if (requireDistinctPorts)
                 throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has " +
                   s"an IPv4 address and the other IPv6 address, listeners: $listeners, port: $port")
