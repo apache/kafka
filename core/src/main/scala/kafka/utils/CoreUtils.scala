@@ -267,7 +267,7 @@ object CoreUtils {
         checkDuplicateListenerPorts(nonDuplicatePortsOnlyEndpoints, listeners)
 
       // Exception case, let's allow duplicate ports if one host is on IPv4 and the other one is on IPv6
-      val duplicatePortsPartitionedByValidIps = duplicatePorts.map{
+      val duplicatePortsPartitionedByValidIps = duplicatePorts.map {
         case (port, eps) =>
           (port, eps.partition(ep =>
             ep.host != null && inetAddressValidator.isValid(ep.host)
