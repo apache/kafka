@@ -62,6 +62,7 @@ object TestInfoUtils {
     "kafka.api.MetricsTest",
     "kafka.api.PlaintextAdminIntegrationTest",
     "kafka.api.PlaintextConsumerTest",
+    "kafka.api.PlaintextEndToEndAuthorizationTest",
     "kafka.api.PlaintextEndToEndAuthorizerationTest",
     "kafka.api.PlaintextProducerSendTest",
     "kafka.api.ProducerFailureHandlingTest",
