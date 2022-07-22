@@ -275,7 +275,7 @@ object CoreUtils {
       }
 
       // Iterate through every grouping of duplicates by port to see if they are valid
-      duplicatePortsPartitionedByValidIps.foreach{
+      duplicatePortsPartitionedByValidIps.foreach {
         case (port, (duplicatesWithIpHosts, duplicatesWithoutIpHosts)) =>
           checkDuplicateListenerNames(duplicatesWithoutIpHosts, listeners)
           if (requireDistinctPorts)
