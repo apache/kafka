@@ -43,6 +43,7 @@ import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, T
 
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 trait QuorumImplementation {
@@ -123,9 +124,12 @@ abstract class QuorumTestHarness extends Logging {
 
   val bootstrapRecords: ListBuffer[ApiMessageAndVersion] = ListBuffer()
 
+  private var testInfo: TestInfo = null
   private var implementation: QuorumImplementation = null
 
-  def isKRaftTest(): Boolean = implementation.isInstanceOf[KRaftQuorumImplementation]
+  def isKRaftTest(): Boolean = {
+    TestInfoUtils.isKRaft(testInfo)
+  }
 
   def checkIsZKTest(): Unit = {
     if (isKRaftTest()) {
@@ -182,6 +186,7 @@ abstract class QuorumTestHarness extends Logging {
   // That way you control the initialization order.
   @BeforeEach
   def setUp(testInfo: TestInfo): Unit = {
+    this.testInfo = testInfo
     Exit.setExitProcedure((code, message) => {
       try {
         throw new RuntimeException(s"exit(${code}, ${message}) called!")
@@ -202,16 +207,14 @@ abstract class QuorumTestHarness extends Logging {
         tearDown()
       }
     })
-    val name = if (testInfo.getTestMethod().isPresent()) {
-      testInfo.getTestMethod().get().toString()
-    } else {
-      "[unspecified]"
-    }
+    val name = testInfo.getTestMethod.asScala
+      .map(_.toString)
+      .getOrElse("[unspecified]")
     if (TestInfoUtils.isKRaft(testInfo)) {
-      info(s"Running KRAFT test ${name}")
+      info(s"Running KRAFT test $name")
       implementation = newKRaftQuorum(testInfo)
     } else {
-      info(s"Running ZK test ${name}")
+      info(s"Running ZK test $name")
       implementation = newZooKeeperQuorum()
     }
   }

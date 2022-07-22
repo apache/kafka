@@ -956,7 +956,6 @@ public class ReplicationControlManager {
                     topic,
                     partitionId,
                     partition,
-                    clusterControl::active,
                     context.requestHeader().requestApiVersion(),
                     partitionData);
 
@@ -1048,7 +1047,6 @@ public class ReplicationControlManager {
      * @param topic current topic information store by the replication manager
      * @param partitionId partition id being altered
      * @param partition current partition registration for the partition being altered
-     * @param isEligibleReplica function telling if the replica is acceptable to join the ISR
      * @param partitionData partition data from the alter partition request
      *
      * @return Errors.NONE for valid alter partition data; otherwise the validation error
@@ -1058,7 +1056,6 @@ public class ReplicationControlManager {
         TopicControlInfo topic,
         int partitionId,
         PartitionRegistration partition,
-        Function<Integer, Boolean> isEligibleReplica,
         short requestApiVersion,
         AlterPartitionRequestData.PartitionData partitionData
     ) {
@@ -1125,9 +1122,7 @@ public class ReplicationControlManager {
             return INVALID_REQUEST;
         }
 
-        List<Integer> ineligibleReplicas = partitionData.newIsr().stream()
-            .filter(replica -> !isEligibleReplica.apply(replica))
-            .collect(Collectors.toList());
+        List<IneligibleReplica> ineligibleReplicas = ineligibleReplicasForIsr(newIsr);
         if (!ineligibleReplicas.isEmpty()) {
             log.info("Rejecting AlterPartition request from node {} for {}-{} because " +
                     "it specified ineligible replicas {} in the new ISR {}.",
@@ -1141,6 +1136,21 @@ public class ReplicationControlManager {
         }
 
         return Errors.NONE;
+    }
+
+    private List<IneligibleReplica> ineligibleReplicasForIsr(int[] replicas) {
+        List<IneligibleReplica> ineligibleReplicas = new ArrayList<>(0);
+        for (Integer replicaId : replicas) {
+            BrokerRegistration registration = clusterControl.registration(replicaId);
+            if (registration == null) {
+                ineligibleReplicas.add(new IneligibleReplica(replicaId, "not registered"));
+            } else if (registration.inControlledShutdown()) {
+                ineligibleReplicas.add(new IneligibleReplica(replicaId, "shutting down"));
+            } else if (registration.fenced()) {
+                ineligibleReplicas.add(new IneligibleReplica(replicaId, "fenced"));
+            }
+        }
+        return ineligibleReplicas;
     }
 
     /**
@@ -1905,5 +1915,20 @@ public class ReplicationControlManager {
 
     ReplicationControlIterator iterator(long epoch) {
         return new ReplicationControlIterator(epoch);
+    }
+
+    private static final class IneligibleReplica {
+        private final int replicaId;
+        private final String reason;
+
+        private IneligibleReplica(int replicaId, String reason) {
+            this.replicaId = replicaId;
+            this.reason = reason;
+        }
+
+        @Override
+        public String toString() {
+            return replicaId + " (" + reason + ")";
+        }
     }
 }

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
@@ -46,6 +47,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
@@ -54,6 +56,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -380,6 +384,87 @@ public class KafkaOffsetBackingStoreTest {
         }
 
         store.stop();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testConsumerPropertiesInsertedByDefaultWithExactlyOnceSourceEnabled() throws Exception {
+        Map<String, String> workerProps = new HashMap<>(DEFAULT_PROPS);
+        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
+        workerProps.remove(ISOLATION_LEVEL_CONFIG);
+        DistributedConfig config = new DistributedConfig(workerProps);
+
+        expectConfigure();
+        expectClusterId();
+        PowerMock.replayAll();
+
+        store.configure(config);
+
+        assertEquals(
+                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
+        );
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testConsumerPropertiesOverrideUserSuppliedValuesWithExactlyOnceSourceEnabled() throws Exception {
+        Map<String, String> workerProps = new HashMap<>(DEFAULT_PROPS);
+        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
+        workerProps.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
+        DistributedConfig config = new DistributedConfig(workerProps);
+
+        expectConfigure();
+        expectClusterId();
+        PowerMock.replayAll();
+
+        store.configure(config);
+
+        assertEquals(
+                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
+        );
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testConsumerPropertiesNotInsertedByDefaultWithoutExactlyOnceSourceEnabled() throws Exception {
+        Map<String, String> workerProps = new HashMap<>(DEFAULT_PROPS);
+        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
+        workerProps.remove(ISOLATION_LEVEL_CONFIG);
+        DistributedConfig config = new DistributedConfig(workerProps);
+
+        expectConfigure();
+        expectClusterId();
+        PowerMock.replayAll();
+
+        store.configure(config);
+
+        assertNull(capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG));
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testConsumerPropertiesDoNotOverrideUserSuppliedValuesWithoutExactlyOnceSourceEnabled() throws Exception {
+        Map<String, String> workerProps = new HashMap<>(DEFAULT_PROPS);
+        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
+        workerProps.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
+        DistributedConfig config = new DistributedConfig(workerProps);
+
+        expectConfigure();
+        expectClusterId();
+        PowerMock.replayAll();
+
+        store.configure(config);
+
+        assertEquals(
+                IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT),
+                capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
+        );
 
         PowerMock.verifyAll();
     }

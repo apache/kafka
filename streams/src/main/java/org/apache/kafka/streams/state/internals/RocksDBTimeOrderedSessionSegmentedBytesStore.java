@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -38,7 +39,7 @@ import org.rocksdb.WriteBatch;
  */
 public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksDBTimeOrderedSegmentedBytesStore {
 
-    private class SessionKeySchemaIndexToBaseStoreIterator  extends IndexToBaseStoreIterator {
+    private class SessionKeySchemaIndexToBaseStoreIterator extends IndexToBaseStoreIterator {
         SessionKeySchemaIndexToBaseStoreIterator(final KeyValueIterator<Bytes, byte[]> indexIterator) {
             super(indexIterator);
         }
@@ -62,13 +63,43 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksD
     }
 
     public byte[] fetchSession(final Bytes key,
-                               final long earliestSessionEndTime,
-                               final long latestSessionStartTime) {
+                               final long sessionStartTime,
+                               final long sessionEndTime) {
         return get(TimeFirstSessionKeySchema.toBinary(
             key,
-            earliestSessionEndTime,
-            latestSessionStartTime
+            sessionStartTime,
+            sessionEndTime
         ));
+    }
+
+    public KeyValueIterator<Bytes, byte[]> fetchSessions(final long earliestSessionEndTime,
+                                                         final long latestSessionEndTime) {
+        final List<KeyValueSegment> searchSpace = segments.segments(earliestSessionEndTime, latestSessionEndTime, true);
+
+        // here we want [0, latestSE, FF] as the upper bound to cover any possible keys,
+        // but since we can only get upper bound based on timestamps, we use a slight larger upper bound as [0, latestSE+1]
+        final Bytes binaryFrom = baseKeySchema.lowerRangeFixedSize(null, earliestSessionEndTime);
+        final Bytes binaryTo = baseKeySchema.lowerRangeFixedSize(null, latestSessionEndTime + 1);
+
+        return new SegmentIterator<>(
+                searchSpace.iterator(),
+                iterator -> {
+                    while (iterator.hasNext()) {
+                        final Bytes bytes = iterator.peekNextKey();
+
+                        final Windowed<Bytes> windowedKey = TimeFirstSessionKeySchema.from(bytes);
+                        final long endTime = windowedKey.window().end();
+
+                        if (endTime <= latestSessionEndTime && endTime >= earliestSessionEndTime) {
+                            return true;
+                        }
+                        iterator.next();
+                    }
+                    return false;
+                },
+                binaryFrom,
+                binaryTo,
+                true);
     }
 
     public void remove(final Windowed<Bytes> key) {

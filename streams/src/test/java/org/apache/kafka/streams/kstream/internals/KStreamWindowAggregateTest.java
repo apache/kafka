@@ -99,7 +99,7 @@ public class KStreamWindowAggregateTest {
     @Parameter(1)
     public boolean withCache;
 
-    public EmitStrategy emitStrategy;
+    private EmitStrategy emitStrategy;
 
     private boolean emitFinal;
 

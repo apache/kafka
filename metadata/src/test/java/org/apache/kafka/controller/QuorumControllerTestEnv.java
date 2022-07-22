@@ -53,6 +53,16 @@ public class QuorumControllerTestEnv implements AutoCloseable {
     }
 
     public QuorumControllerTestEnv(
+            LocalLogManagerTestEnv logEnv,
+            Consumer<Builder> builderConsumer,
+            OptionalLong sessionTimeoutMillis,
+            OptionalLong leaderImbalanceCheckIntervalNs,
+            MetadataVersion metadataVersion
+    ) throws Exception {
+        this(logEnv, builderConsumer, sessionTimeoutMillis, leaderImbalanceCheckIntervalNs, BootstrapMetadata.create(metadataVersion));
+    }
+
+    public QuorumControllerTestEnv(
         LocalLogManagerTestEnv logEnv,
         Consumer<Builder> builderConsumer,
         OptionalLong sessionTimeoutMillis,

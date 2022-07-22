@@ -20,7 +20,8 @@
   "name": "CreateAclsRequest",
   // Version 1 adds resource pattern type.
   // Version 2 enables flexible versions.
-  "validVersions": "0-2",
+  // Version 3 adds user resource type.
+  "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "Creations", "type": "[]AclCreation", "versions": "0+",

@@ -227,7 +227,6 @@ public class StreamTaskTest {
         return createConfig(eosConfig, enforcedProcessingValue, LogAndFailExceptionHandler.class.getName());
     }
 
-    @SuppressWarnings("deprecation")
     private static StreamsConfig createConfig(
         final String eosConfig,
         final String enforcedProcessingValue,
@@ -1941,6 +1940,49 @@ public class StreamTaskTest {
         task.closeClean();
 
         assertEquals(Task.State.CLOSED, task.state());
+
+        EasyMock.verify(stateManager);
+    }
+
+    @Test
+    public void shouldAlwaysCheckpointStateIfEnforced() {
+        stateManager.flush();
+        EasyMock.expectLastCall().once();
+        stateManager.checkpoint();
+        EasyMock.expectLastCall().once();
+        EasyMock.expect(stateManager.changelogOffsets()).andStubReturn(Collections.emptyMap());
+        EasyMock.expect(recordCollector.offsets()).andStubReturn(Collections.emptyMap());
+        EasyMock.replay(stateManager, recordCollector);
+
+        task = createOptimizedStatefulTask(createConfig("100"), consumer);
+
+        task.initializeIfNeeded();
+        task.maybeCheckpoint(true);
+
+        EasyMock.verify(stateManager);
+    }
+
+    @Test
+    public void shouldOnlyCheckpointStateWithBigAdvanceIfNotEnforced() {
+        stateManager.flush();
+        EasyMock.expectLastCall().once();
+        stateManager.checkpoint();
+        EasyMock.expectLastCall().once();
+        EasyMock.expect(stateManager.changelogOffsets())
+                .andReturn(Collections.singletonMap(partition1, 50L))
+                .andReturn(Collections.singletonMap(partition1, 11000L))
+                .andReturn(Collections.singletonMap(partition1, 12000L));
+        EasyMock.replay(stateManager);
+
+        task = createOptimizedStatefulTask(createConfig("100"), consumer);
+        task.initializeIfNeeded();
+
+        task.maybeCheckpoint(false);  // this should not checkpoint
+        assertTrue(task.offsetSnapshotSinceLastFlush.isEmpty());
+        task.maybeCheckpoint(false);  // this should checkpoint
+        assertEquals(Collections.singletonMap(partition1, 11000L), task.offsetSnapshotSinceLastFlush);
+        task.maybeCheckpoint(false);  // this should not checkpoint
+        assertEquals(Collections.singletonMap(partition1, 11000L), task.offsetSnapshotSinceLastFlush);
 
         EasyMock.verify(stateManager);
     }

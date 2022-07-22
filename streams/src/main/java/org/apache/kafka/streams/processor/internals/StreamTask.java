@@ -127,7 +127,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             stateDirectory,
             stateMgr,
             inputPartitions,
-            config.taskTimeoutMs,
+            config,
             "task",
             StreamTask.class
         );
@@ -184,7 +184,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             createPartitionQueues(),
             mainConsumer::currentLag,
             TaskMetrics.recordLatenessSensor(threadId, taskId, streamsMetrics),
-            TaskMetrics.totalInputBufferBytesSensor(threadId, taskId, streamsMetrics),
             enforcedProcessingSensor,
             maxTaskIdleMs
         );
@@ -293,7 +292,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     partitionGroup.clear();
                 } finally {
                     transitToSuspend();
-                    log.info("Suspended running");
                 }
 
                 break;
@@ -483,14 +481,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             case RESTORING:
             case SUSPENDED:
-                maybeWriteCheckpoint(enforceCheckpoint);
+                maybeCheckpoint(enforceCheckpoint);
                 log.debug("Finalized commit for {} task with enforce checkpoint {}", state(), enforceCheckpoint);
 
                 break;
 
             case RUNNING:
                 if (enforceCheckpoint || !eosEnabled) {
-                    maybeWriteCheckpoint(enforceCheckpoint);
+                    maybeCheckpoint(enforceCheckpoint);
                 }
                 log.debug("Finalized commit for {} task with eos {} enforce checkpoint {}", state(), eosEnabled, enforceCheckpoint);
 
@@ -575,6 +573,45 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     /**
+     * Create a standby task from this active task without closing and re-initializing the state stores.
+     * The task should have been in suspended state when calling this function
+     *
+     * TODO: we should be able to not need the input partitions as input param in future but always reuse
+     *       the task's input partitions when we have fixed partitions -> tasks mapping
+     */
+    public StandbyTask recycle(final Set<TopicPartition> inputPartitions) {
+        if (state() != Task.State.CLOSED) {
+            throw new IllegalStateException("Attempted to convert an active task that's not closed: " + id);
+        }
+
+        if (!inputPartitions.equals(this.inputPartitions)) {
+            log.warn("Detected unmatched input partitions for task {} when recycling it from active to standby", id);
+        }
+
+        stateMgr.transitionTaskType(TaskType.STANDBY);
+
+        final ThreadCache dummyCache = new ThreadCache(
+            new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName())),
+            0,
+            streamsMetrics
+        );
+
+        log.debug("Recycling active task {} to standby", id);
+
+        return new StandbyTask(
+            id,
+            inputPartitions,
+            topology,
+            config,
+            streamsMetrics,
+            stateMgr,
+            stateDirectory,
+            dummyCache,
+            processorContext
+        );
+    }
+
+    /**
      * The following exceptions maybe thrown from the state manager flushing call
      *
      * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
@@ -582,14 +619,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      *                          or flushing state store get IO errors; such error should cause the thread to die
      */
     @Override
-    protected void maybeWriteCheckpoint(final boolean enforceCheckpoint) {
+    public void maybeCheckpoint(final boolean enforceCheckpoint) {
         // commitNeeded indicates we may have processed some records since last commit
         // and hence we need to refresh checkpointable offsets regardless whether we should checkpoint or not
         if (commitNeeded || enforceCheckpoint) {
             stateMgr.updateChangelogOffsets(checkpointableOffsets());
         }
 
-        super.maybeWriteCheckpoint(enforceCheckpoint);
+        super.maybeCheckpoint(enforceCheckpoint);
     }
 
     private void validateClean() {
@@ -731,8 +768,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
-            // TODO maxBufferedSize != -1 would be removed once the deprecated config buffered.records.per.partition is removed
-            if (maxBufferedSize != -1 && recordInfo.queue().size() == maxBufferedSize) {
+            if (recordInfo.queue().size() == maxBufferedSize) {
                 mainConsumer.resume(singleton(partition));
             }
 
@@ -992,8 +1028,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
-        // We do this only if the deprecated config buffered.records.per.partition is set
-        if (maxBufferedSize != -1 && newQueueSize > maxBufferedSize) {
+        if (newQueueSize > maxBufferedSize) {
             mainConsumer.pause(singleton(partition));
         }
     }
@@ -1220,7 +1255,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     private void transitToSuspend() {
-        log.info("Suspended {}", state());
+        log.info("Suspended from {}", state());
         transitionTo(State.SUSPENDED);
         timeCurrentIdlingStarted = Optional.of(System.currentTimeMillis());
     }
@@ -1244,14 +1279,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     RecordCollector recordCollector() {
         return recordCollector;
-    }
-
-    Set<TopicPartition> getNonEmptyTopicPartitions() {
-        return this.partitionGroup.getNonEmptyTopicPartitions();
-    }
-
-    long totalBytesBuffered() {
-        return partitionGroup.totalBytesBuffered();
     }
 
     // below are visible for testing only

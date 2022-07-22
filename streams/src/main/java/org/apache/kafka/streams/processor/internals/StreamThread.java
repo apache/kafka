@@ -318,7 +318,6 @@ public class StreamThread extends Thread {
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
-    private final AtomicLong maxBufferSizeBytes = new AtomicLong(-1L);
     private final boolean eosEnabled;
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
@@ -331,7 +330,6 @@ public class StreamThread extends Thread {
                                       final Time time,
                                       final StreamsMetadataState streamsMetadataState,
                                       final long cacheSizeBytes,
-                                      final long maxBufferSizeBytes,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
                                       final int threadIdx,
@@ -386,17 +384,18 @@ public class StreamThread extends Thread {
             threadId,
             log
         );
+
         final TaskManager taskManager = new TaskManager(
             time,
             changelogReader,
             processId,
             logPrefix,
-            streamsMetrics,
             activeTaskCreator,
             standbyTaskCreator,
             topologyMetadata,
             adminClient,
-            stateDirectory
+            stateDirectory,
+            config
         );
         referenceContainer.taskManager = taskManager;
 
@@ -412,7 +411,6 @@ public class StreamThread extends Thread {
         }
 
         final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
-        changelogReader.setMainConsumer(mainConsumer);
         taskManager.setMainConsumer(mainConsumer);
         referenceContainer.mainConsumer = mainConsumer;
 
@@ -434,8 +432,7 @@ public class StreamThread extends Thread {
             referenceContainer.nonFatalExceptionsToHandle,
             shutdownErrorHook,
             streamsUncaughtExceptionHandler,
-            cache::resize,
-            maxBufferSizeBytes
+            cache::resize
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
@@ -458,8 +455,7 @@ public class StreamThread extends Thread {
                         final Queue<StreamsException> nonFatalExceptionsToHandle,
                         final Runnable shutdownErrorHook,
                         final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
-                        final java.util.function.Consumer<Long> cacheResizer,
-                        final long maxBufferSizeBytes) {
+                        final java.util.function.Consumer<Long> cacheResizer) {
         super(threadId);
         this.stateLock = new Object();
         this.adminClient = adminClient;
@@ -528,7 +524,6 @@ public class StreamThread extends Thread {
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
-        this.maxBufferSizeBytes.set(maxBufferSizeBytes);
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -711,17 +706,8 @@ public class StreamThread extends Thread {
         }
     }
 
-    public void resizeCacheAndBufferMemory(final long cacheSize, final long maxBufferSize) {
-        cacheResizeSize.set(cacheSize);
-        maxBufferSizeBytes.set(maxBufferSize);
-    }
-
-    public long getCacheSize() {
-        return cacheResizeSize.get();
-    }
-
-    public long getMaxBufferSize() {
-        return maxBufferSizeBytes.get();
+    public void resizeCache(final long size) {
+        cacheResizeSize.set(size);
     }
 
     /**
@@ -796,10 +782,6 @@ public class StreamThread extends Thread {
 
                     totalProcessed += processed;
                     totalRecordsProcessedSinceLastSummary += processed;
-                    final long bufferSize = taskManager.getInputBufferSizeInBytes();
-                    if (bufferSize <= maxBufferSizeBytes.get()) {
-                        mainConsumer.resume(mainConsumer.paused());
-                    }
                 }
 
                 log.debug("Processed {} records with {} iterations; invoking punctuators if necessary",
@@ -883,7 +865,7 @@ public class StreamThread extends Thread {
             if (taskManager.tryToCompleteRestoration(now, partitions -> resetOffsets(partitions, null))) {
                 changelogReader.transitToUpdateStandby();
                 log.info("Restoration took {} ms for all tasks {}", time.milliseconds() - lastPartitionAssignedMs,
-                    taskManager.tasks().keySet());
+                    taskManager.allTasks().keySet());
                 setState(State.RUNNING);
             }
 
@@ -918,8 +900,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    // Visible for testing
-    long pollPhase() {
+    private long pollPhase() {
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");
 
@@ -965,17 +946,6 @@ public class StreamThread extends Thread {
         if (!records.isEmpty()) {
             pollRecordsSensor.record(numRecords, now);
             taskManager.addRecordsToTasks(records);
-            // Check buffer size after adding records to tasks
-            final long bufferSize = taskManager.getInputBufferSizeInBytes();
-            // Pausing partitions as the buffer size now exceeds max buffer size
-            if (bufferSize > maxBufferSizeBytes.get()) {
-                log.info("Buffered records size {} bytes exceeds {}. Pausing the consumer", bufferSize, maxBufferSizeBytes.get());
-                // Only non-empty partitions are paused here. Reason is that, if a task has multiple partitions with
-                // some of them empty, then in that case pausing even empty partitions would sacrifice ordered processing
-                // and even lead to temporal deadlock. More explanation can be found here:
-                // https://issues.apache.org/jira/browse/KAFKA-13152?focusedCommentId=17400647&page=com.atlassian.jira.plugin.system.issuetabpanels%3Acomment-tabpanel#comment-17400647
-                mainConsumer.pause(taskManager.nonEmptyPartitions());
-            }
         }
 
         while (!nonFatalExceptionsToHandle.isEmpty()) {
@@ -1095,7 +1065,7 @@ public class StreamThread extends Thread {
             }
 
             committed = taskManager.commit(
-                taskManager.tasks()
+                taskManager.allTasks()
                     .values()
                     .stream()
                     .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
@@ -1155,7 +1125,7 @@ public class StreamThread extends Thread {
         // intentionally do not check the returned flag
         setState(State.PENDING_SHUTDOWN);
 
-        log.info("Shutting down");
+        log.info("Shutting down {}", cleanRun ? "clean" : "unclean");
 
         try {
             taskManager.shutdown(cleanRun);
@@ -1263,7 +1233,7 @@ public class StreamThread extends Thread {
     }
 
     public Map<TaskId, Task> allTasks() {
-        return taskManager.tasks();
+        return taskManager.allTasks();
     }
 
     /**

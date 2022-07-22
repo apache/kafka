@@ -27,12 +27,17 @@ import javax.ws.rs.core.MediaType;
 
 @Path("/")
 @Produces(MediaType.APPLICATION_JSON)
-public class RootResource {
+public class RootResource implements ConnectResource {
 
     private final Herder herder;
 
     public RootResource(Herder herder) {
         this.herder = herder;
+    }
+
+    @Override
+    public void requestTimeout(long requestTimeoutMs) {
+        // No-op
     }
 
     @GET

@@ -219,12 +219,13 @@ public class RecordCollectorImpl implements RecordCollector {
                 }
 
                 if (!topic.endsWith("-changelog")) {
-                    // we may not have created a sensor yet if the node uses dynamic topic routing
                     final Map<String, Sensor> producedSensorByTopic = sinkNodeToProducedSensorByTopic.get(processorNodeId);
                     if (producedSensorByTopic == null) {
                         log.error("Unable to records bytes produced to topic {} by sink node {} as the node is not recognized.\n"
                                       + "Known sink nodes are {}.", topic, processorNodeId, sinkNodeToProducedSensorByTopic.keySet());
                     } else {
+                        // we may not have created a sensor during initialization if the node uses dynamic topic routing,
+                        // as all topics are not known up front, so create the sensor for that topic if absent
                         final Sensor topicProducedSensor = producedSensorByTopic.computeIfAbsent(
                             topic,
                             t -> TopicMetrics.producedSensor(

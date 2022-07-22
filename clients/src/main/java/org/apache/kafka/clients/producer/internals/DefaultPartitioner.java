@@ -18,7 +18,6 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.producer.Partitioner;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.utils.Utils;
 
 import java.util.Map;
 
@@ -71,8 +70,7 @@ public class DefaultPartitioner implements Partitioner {
         if (keyBytes == null) {
             return stickyPartitionCache.partition(topic, cluster);
         }
-        // hash the keyBytes to choose a partition
-        return Utils.toPositive(Utils.murmur2(keyBytes)) % numPartitions;
+        return BuiltInPartitioner.partitionForKey(keyBytes, numPartitions);
     }
 
     public void close() {}

@@ -89,6 +89,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         connector.version();
         expectLastCall().andReturn(VERSION);
 
+        offsetStore.start();
+        expectLastCall();
+
         connector.initialize(EasyMock.notNull(SourceConnectorContext.class));
         expectLastCall().andThrow(exception);
 
@@ -172,6 +175,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         connector = sourceConnector;
         connector.version();
         expectLastCall().andReturn(VERSION);
+
+        offsetStore.start();
+        expectLastCall();
 
         connector.initialize(EasyMock.notNull(SourceConnectorContext.class));
         expectLastCall();
@@ -279,6 +285,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         expectLastCall().andReturn(VERSION);
 
         connector.initialize(EasyMock.notNull(SourceConnectorContext.class));
+        expectLastCall();
+
+        offsetStore.start();
         expectLastCall();
 
         listener.onPause(CONNECTOR);
@@ -429,6 +438,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         connector.version();
         expectLastCall().andReturn(VERSION);
 
+        offsetStore.start();
+        expectLastCall();
+
         connector.initialize(EasyMock.notNull(SourceConnectorContext.class));
         expectLastCall();
 
@@ -477,6 +489,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         connector = sourceConnector;
         connector.version();
         expectLastCall().andReturn(VERSION);
+
+        offsetStore.start();
+        expectLastCall();
 
         connector.initialize(EasyMock.notNull(SourceConnectorContext.class));
         expectLastCall();
@@ -529,6 +544,9 @@ public class WorkerConnectorTest extends EasyMockSupport {
         connector = sourceConnector;
         connector.version();
         expectLastCall().andReturn(VERSION);
+
+        offsetStore.start();
+        expectLastCall();
 
         connector.initialize(EasyMock.notNull(SourceConnectorContext.class));
         expectLastCall();

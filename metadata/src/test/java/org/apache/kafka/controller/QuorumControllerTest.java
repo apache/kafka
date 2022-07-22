@@ -32,6 +32,7 @@ import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -536,11 +537,16 @@ public class QuorumControllerTest {
     }
 
     private BrokerRegistrationRequestData.FeatureCollection brokerFeatures() {
+        return brokerFeatures(MetadataVersion.MINIMUM_KRAFT_VERSION, MetadataVersion.latest());
+    }
+
+    private BrokerRegistrationRequestData.FeatureCollection brokerFeatures(
+            MetadataVersion minVersion, MetadataVersion maxVersion) {
         BrokerRegistrationRequestData.FeatureCollection features = new BrokerRegistrationRequestData.FeatureCollection();
         features.add(new BrokerRegistrationRequestData.Feature()
             .setName(MetadataVersion.FEATURE_NAME)
-            .setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel())
-            .setMaxSupportedVersion(MetadataVersion.latest().featureLevel()));
+            .setMinSupportedVersion(minVersion.featureLevel())
+            .setMaxSupportedVersion(maxVersion.featureLevel()));
         return features;
     }
 
@@ -1184,18 +1190,86 @@ public class QuorumControllerTest {
 
     @Test
     public void testInvalidBootstrapMetadata() throws Exception {
-        // We can't actually create a BootstrapMetadata with an invalid version, so we have to fake it
+        // We can't actually create a BootstrapMetadata with an invalid version, so we have to mock it
         BootstrapMetadata bootstrapMetadata = Mockito.mock(BootstrapMetadata.class);
-        Mockito.when(bootstrapMetadata.metadataVersion()).thenReturn(MetadataVersion.IBP_2_8_IV0);
+        CyclicBarrier barrier = new CyclicBarrier(2);
+        Mockito.when(bootstrapMetadata.metadataVersion()).thenAnswer(__ -> {
+            // This barrier allows us to catch the controller after it becomes leader, but before the bootstrapping fails
+            barrier.await(10, TimeUnit.SECONDS);
+            return MetadataVersion.IBP_2_8_IV0;
+        });
         try (
                 LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty());
                 QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                     b.setConfigSchema(SCHEMA);
                 }, OptionalLong.empty(), OptionalLong.empty(), bootstrapMetadata);
         ) {
-            QuorumController active = controlEnv.activeController();
-            TestUtils.waitForCondition(() -> !active.isActive(),
+            QuorumController controller = controlEnv.activeController();
+            assertTrue(controller.isActive());
+            // Unblock the first call to BootstrapMetadata#metadataVersion
+            barrier.await(10, TimeUnit.SECONDS);
+            // Unblock the second call to BootstrapMetadata#metadataVersion
+            barrier.await(10, TimeUnit.SECONDS);
+            TestUtils.waitForCondition(() -> !controller.isActive(),
                 "Timed out waiting for controller to renounce itself after bad bootstrap metadata version.");
+        }
+    }
+
+    @Test
+    public void testBootstrapMetadataStartupRace() throws Throwable {
+        // KAFKA-13966: This tests a race condition between external RPC calls being handled before the bootstrap
+        // metadata is written. We instrument this by forcing the BootstrapMetadata#records method to block until a
+        // latch has been completed. This allows an asynchronous broker registration call to be handled before the
+        // handleLeaderChange callback completes. In this case, the registration should fail because the bootstrap
+        // metadata includes an unsupported metadata.version.
+        BootstrapMetadata bootstrapMetadata = BootstrapMetadata.create(MetadataVersion.latest());
+        BootstrapMetadata mockedMetadata = Mockito.mock(BootstrapMetadata.class);
+        CountDownLatch latch = new CountDownLatch(1);
+        Mockito.when(mockedMetadata.metadataVersion()).thenReturn(bootstrapMetadata.metadataVersion());
+        Mockito.when(mockedMetadata.records()).then(__ -> {
+            if (latch.await(30, TimeUnit.SECONDS)) {
+                return bootstrapMetadata.records();
+            } else {
+                throw new RuntimeException("Latch never completed");
+            }
+        });
+
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(1, Optional.empty())) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                b.setConfigSchema(SCHEMA);
+            }, OptionalLong.empty(), OptionalLong.empty(), mockedMetadata)) {
+                ListenerCollection listeners = new ListenerCollection();
+                listeners.add(new Listener().setName("PLAINTEXT").
+                    setHost("localhost").setPort(9092));
+                QuorumController active = controlEnv.activeController();
+
+                // Issue a register broker request concurrently as the controller is initializing
+                assertEquals(1, latch.getCount(), "Latch should not have been completed yet");
+                CompletableFuture<Void> registrationFuture = new CompletableFuture<>();
+                Thread registerThread = new Thread(() -> {
+                    try {
+                        CompletableFuture<BrokerRegistrationReply> reply = active.registerBroker(
+                            ANONYMOUS_CONTEXT,
+                            new BrokerRegistrationRequestData().
+                                setBrokerId(0).
+                                setClusterId(active.clusterId()).
+                                setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
+                                setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV0, MetadataVersion.IBP_3_3_IV0)).
+                                setListeners(listeners));
+                        // Once we have the future, the register broker event has been enqueued
+                        latch.countDown();
+                        reply.get();
+                        registrationFuture.complete(null);
+                    } catch (Throwable t) {
+                        registrationFuture.completeExceptionally(t);
+                    }
+                });
+                registerThread.start();
+                registerThread.join(30_000);
+                assertTrue(registrationFuture.isCompletedExceptionally(),
+                    "Should not be able to register broker since the bootstrap metadata specified an incompatible metadata.version");
+                assertEquals(0, active.clusterControl().brokerRegistrations().size());
+            }
         }
     }
 }

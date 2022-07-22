@@ -61,11 +61,12 @@ import java.util.stream.Collectors;
 @Path("/connector-plugins")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-public class ConnectorPluginsResource {
+public class ConnectorPluginsResource implements ConnectResource {
 
     private static final String ALIAS_SUFFIX = "Connector";
     private final Herder herder;
     private final List<PluginInfo> connectorPlugins;
+    private long requestTimeoutMs;
 
     static final List<Class<? extends SinkConnector>> SINK_CONNECTOR_EXCLUDES = Arrays.asList(
             VerifiableSinkConnector.class,
@@ -86,6 +87,7 @@ public class ConnectorPluginsResource {
     public ConnectorPluginsResource(Herder herder) {
         this.herder = herder;
         this.connectorPlugins = new ArrayList<>();
+        this.requestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
         // TODO: improve once plugins are allowed to be added/removed during runtime.
         addConnectorPlugins(herder.plugins().sinkConnectors(), SINK_CONNECTOR_EXCLUDES);
@@ -101,6 +103,11 @@ public class ConnectorPluginsResource {
                 .filter(p -> !excludes.contains(p.pluginClass()))
                 .map(PluginInfo::new)
                 .forEach(connectorPlugins::add);
+    }
+
+    @Override
+    public void requestTimeout(long requestTimeoutMs) {
+        this.requestTimeoutMs = requestTimeoutMs;
     }
 
     @PUT
@@ -124,7 +131,7 @@ public class ConnectorPluginsResource {
         herder.validateConnectorConfig(connectorConfig, validationCallback, false);
 
         try {
-            return validationCallback.get(ConnectorsResource.REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            return validationCallback.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
             // error is the best option

@@ -14,52 +14,120 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
+import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
+import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class TasksTest {
+
+    private final static TopicPartition TOPIC_PARTITION_A_0 = new TopicPartition("topicA", 0);
+    private final static TopicPartition TOPIC_PARTITION_A_1 = new TopicPartition("topicA", 1);
+    private final static TaskId TASK_0_0 = new TaskId(0, 0);
+    private final static TaskId TASK_0_1 = new TaskId(0, 1);
+    private final static TaskId TASK_1_0 = new TaskId(1, 0);
+
+    private final LogContext logContext = new LogContext();
+    private final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
+    private final StandbyTaskCreator standbyTaskCreator = mock(StandbyTaskCreator.class);
+    private final StateUpdater stateUpdater = mock(StateUpdater.class);
+
+    private Consumer<byte[], byte[]> mainConsumer = null;
+
     @Test
-    public void testNotPausedTasks() {
-        final TopologyMetadata topologyMetadata = mock(TopologyMetadata.class);
-        final String unnamedTopologyName = null;
-        when(topologyMetadata.isPaused(unnamedTopologyName))
-            .thenReturn(false)
-            .thenReturn(false).thenReturn(false)
-            .thenReturn(true)
-            .thenReturn(true).thenReturn(true);
-
-        final Tasks tasks = new Tasks(
-            new LogContext(),
-            topologyMetadata,
-            mock(ActiveTaskCreator.class),
-            mock(StandbyTaskCreator.class)
+    public void shouldCreateTasksWithStateUpdater() {
+        final Tasks tasks = new Tasks(logContext, activeTaskCreator, standbyTaskCreator, stateUpdater);
+        tasks.setMainConsumer(mainConsumer);
+        final StreamTask statefulTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).build();
+        final StandbyTask standbyTask = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_A_1)).build();
+        final StreamTask statelessTask = statelessTask(TASK_1_0).build();
+        final Map<TaskId, Set<TopicPartition>> activeTasks = mkMap(
+            mkEntry(statefulTask.id(), statefulTask.changelogPartitions()),
+            mkEntry(statelessTask.id(), statelessTask.changelogPartitions())
         );
+        final Map<TaskId, Set<TopicPartition>> standbyTasks =
+            mkMap(mkEntry(standbyTask.id(), standbyTask.changelogPartitions()));
+        when(activeTaskCreator.createTasks(mainConsumer, activeTasks)).thenReturn(Arrays.asList(statefulTask, statelessTask));
+        when(standbyTaskCreator.createTasks(standbyTasks)).thenReturn(Collections.singletonList(standbyTask));
 
-        final TaskId taskId1 = new TaskId(0, 1);
-        final TaskId taskId2 = new TaskId(0, 2);
+        tasks.createTasks(activeTasks, standbyTasks);
 
-        final StreamTask streamTask = mock(StreamTask.class);
-        when(streamTask.isActive()).thenReturn(true);
-        when(streamTask.id()).thenReturn(taskId1);
+        final Exception exceptionForStatefulTaskOnTask = assertThrows(IllegalStateException.class, () -> tasks.task(statefulTask.id()));
+        assertEquals("Task unknown: " + statefulTask.id(), exceptionForStatefulTaskOnTask.getMessage());
+        assertFalse(tasks.activeTasks().contains(statefulTask));
+        assertFalse(tasks.allTasks().contains(statefulTask));
+        final Exception exceptionForStatefulTaskOnTasks = assertThrows(IllegalStateException.class, () -> tasks.tasks(mkSet(statefulTask.id())));
+        assertEquals("Task unknown: " + statefulTask.id(), exceptionForStatefulTaskOnTasks.getMessage());
+        final Exception exceptionForStatelessTaskOnTask = assertThrows(IllegalStateException.class, () -> tasks.task(statelessTask.id()));
+        assertEquals("Task unknown: " + statelessTask.id(), exceptionForStatelessTaskOnTask.getMessage());
+        assertFalse(tasks.activeTasks().contains(statelessTask));
+        assertFalse(tasks.allTasks().contains(statelessTask));
+        final Exception exceptionForStatelessTaskOnTasks = assertThrows(IllegalStateException.class, () -> tasks.tasks(mkSet(statelessTask.id())));
+        assertEquals("Task unknown: " + statelessTask.id(), exceptionForStatelessTaskOnTasks.getMessage());
+        final Exception exceptionForStandbyTaskOnTask = assertThrows(IllegalStateException.class, () -> tasks.task(standbyTask.id()));
+        assertEquals("Task unknown: " + standbyTask.id(), exceptionForStandbyTaskOnTask.getMessage());
+        assertFalse(tasks.allTasks().contains(standbyTask));
+        final Exception exceptionForStandByTaskOnTasks = assertThrows(IllegalStateException.class, () -> tasks.tasks(mkSet(standbyTask.id())));
+        assertEquals("Task unknown: " + standbyTask.id(), exceptionForStandByTaskOnTasks.getMessage());
+        verify(activeTaskCreator).createTasks(mainConsumer, activeTasks);
+        verify(standbyTaskCreator).createTasks(standbyTasks);
+        verify(stateUpdater).add(statefulTask);
+    }
 
-        final StandbyTask standbyTask1 = mock(StandbyTask.class);
-        when(standbyTask1.isActive()).thenReturn(false);
-        when(standbyTask1.id()).thenReturn(taskId2);
+    @Test
+    public void shouldCreateTasksWithoutStateUpdater() {
+        final Tasks tasks = new Tasks(logContext, activeTaskCreator, standbyTaskCreator, null);
+        tasks.setMainConsumer(mainConsumer);
+        final StreamTask statefulTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).build();
+        final StandbyTask standbyTask = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_A_1)).build();
+        final StreamTask statelessTask = statelessTask(TASK_1_0).build();
+        final Map<TaskId, Set<TopicPartition>> activeTasks = mkMap(
+            mkEntry(statefulTask.id(), statefulTask.changelogPartitions()),
+            mkEntry(statelessTask.id(), statelessTask.changelogPartitions())
+        );
+        final Map<TaskId, Set<TopicPartition>> standbyTasks =
+            mkMap(mkEntry(standbyTask.id(), standbyTask.changelogPartitions()));
+        when(activeTaskCreator.createTasks(mainConsumer, activeTasks)).thenReturn(Arrays.asList(statefulTask, statelessTask));
+        when(standbyTaskCreator.createTasks(standbyTasks)).thenReturn(Collections.singletonList(standbyTask));
 
-        tasks.addTask(streamTask);
-        tasks.addTask(standbyTask1);
-        Assert.assertEquals(tasks.notPausedActiveTasks().size(), 1);
-        Assert.assertEquals(tasks.notPausedTasks().size(), 2);
+        tasks.createTasks(activeTasks, standbyTasks);
 
-        Assert.assertEquals(tasks.notPausedActiveTasks().size(), 0);
-        Assert.assertEquals(tasks.notPausedTasks().size(), 0);
+        assertEquals(statefulTask, tasks.task(statefulTask.id()));
+        assertTrue(tasks.activeTasks().contains(statefulTask));
+        assertTrue(tasks.allTasks().contains(statefulTask));
+        assertTrue(tasks.tasks(mkSet(statefulTask.id())).contains(statefulTask));
+        assertEquals(statelessTask, tasks.task(statelessTask.id()));
+        assertTrue(tasks.activeTasks().contains(statelessTask));
+        assertTrue(tasks.allTasks().contains(statelessTask));
+        assertTrue(tasks.tasks(mkSet(statelessTask.id())).contains(statelessTask));
+        assertEquals(standbyTask, tasks.task(standbyTask.id()));
+        assertTrue(tasks.allTasks().contains(standbyTask));
+        assertTrue(tasks.tasks(mkSet(standbyTask.id())).contains(standbyTask));
+        verify(activeTaskCreator).createTasks(mainConsumer, activeTasks);
+        verify(standbyTaskCreator).createTasks(standbyTasks);
+        verify(stateUpdater, never()).add(statefulTask);
     }
 }

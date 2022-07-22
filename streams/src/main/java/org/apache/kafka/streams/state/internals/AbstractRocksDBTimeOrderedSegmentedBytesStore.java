@@ -142,8 +142,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
                                           final long to,
                                           final boolean forward) {
         if (indexKeySchema.isPresent()) {
-            final List<KeyValueSegment> searchSpace = indexKeySchema.get().segmentsToSearch(segments, from, to,
-                forward);
+            final List<KeyValueSegment> searchSpace = indexKeySchema.get().segmentsToSearch(segments, from, to, forward);
 
             final Bytes binaryFrom = indexKeySchema.get().lowerRangeFixedSize(key, from);
             final Bytes binaryTo = indexKeySchema.get().upperRangeFixedSize(key, to);
@@ -156,8 +155,7 @@ public abstract class AbstractRocksDBTimeOrderedSegmentedBytesStore extends Abst
                 forward));
         }
 
-        final List<KeyValueSegment> searchSpace = baseKeySchema.segmentsToSearch(segments, from, to,
-            forward);
+        final List<KeyValueSegment> searchSpace = baseKeySchema.segmentsToSearch(segments, from, to, forward);
 
         final Bytes binaryFrom = baseKeySchema.lowerRangeFixedSize(key, from);
         final Bytes binaryTo = baseKeySchema.upperRangeFixedSize(key, to);

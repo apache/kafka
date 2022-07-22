@@ -342,15 +342,16 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
 
   protected class ConsumerAssignmentPoller(consumer: Consumer[Array[Byte], Array[Byte]],
                                            topicsToSubscribe: List[String],
-                                           partitionsToAssign: Set[TopicPartition])
+                                           partitionsToAssign: Set[TopicPartition],
+                                           userRebalanceListener: ConsumerRebalanceListener)
     extends ShutdownableThread("daemon-consumer-assignment", false) {
 
     def this(consumer: Consumer[Array[Byte], Array[Byte]], topicsToSubscribe: List[String]) = {
-      this(consumer, topicsToSubscribe, Set.empty[TopicPartition])
+      this(consumer, topicsToSubscribe, Set.empty[TopicPartition], null)
     }
 
     def this(consumer: Consumer[Array[Byte], Array[Byte]], partitionsToAssign: Set[TopicPartition]) = {
-      this(consumer, List.empty[String], partitionsToAssign)
+      this(consumer, List.empty[String], partitionsToAssign, null)
     }
 
     @volatile var thrownException: Option[Throwable] = None
@@ -363,10 +364,14 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     val rebalanceListener: ConsumerRebalanceListener = new ConsumerRebalanceListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
         partitionAssignment ++= partitions.toArray(new Array[TopicPartition](0))
+        if (userRebalanceListener != null)
+          userRebalanceListener.onPartitionsAssigned(partitions)
       }
 
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {
         partitionAssignment --= partitions.toArray(new Array[TopicPartition](0))
+        if (userRebalanceListener != null)
+          userRebalanceListener.onPartitionsRevoked(partitions)
       }
     }
 

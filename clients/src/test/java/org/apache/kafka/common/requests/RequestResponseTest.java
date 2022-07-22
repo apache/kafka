@@ -258,6 +258,7 @@ import static org.apache.kafka.common.protocol.ApiKeys.CREATE_TOPICS;
 import static org.apache.kafka.common.protocol.ApiKeys.DELETE_ACLS;
 import static org.apache.kafka.common.protocol.ApiKeys.DELETE_TOPICS;
 import static org.apache.kafka.common.protocol.ApiKeys.DESCRIBE_CONFIGS;
+import static org.apache.kafka.common.protocol.ApiKeys.DESCRIBE_DELEGATION_TOKEN;
 import static org.apache.kafka.common.protocol.ApiKeys.DESCRIBE_LOG_DIRS;
 import static org.apache.kafka.common.protocol.ApiKeys.ELECT_LEADERS;
 import static org.apache.kafka.common.protocol.ApiKeys.FETCH;
@@ -939,7 +940,7 @@ public class RequestResponseTest {
         assertEquals(2, createDescribeConfigsResponse(DESCRIBE_CONFIGS.latestVersion()).errorCounts().get(Errors.NONE));
         assertEquals(1, createDescribeGroupResponse().errorCounts().get(Errors.NONE));
         assertEquals(2, createDescribeLogDirsResponse().errorCounts().get(Errors.NONE));
-        assertEquals(1, createDescribeTokenResponse().errorCounts().get(Errors.NONE));
+        assertEquals(1, createDescribeTokenResponse(DESCRIBE_DELEGATION_TOKEN.latestVersion()).errorCounts().get(Errors.NONE));
         assertEquals(2, createElectLeadersResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createEndTxnResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createExpireTokenResponse().errorCounts().get(Errors.NONE));
@@ -1088,7 +1089,7 @@ public class RequestResponseTest {
             case CREATE_DELEGATION_TOKEN: return createCreateTokenResponse();
             case RENEW_DELEGATION_TOKEN: return createRenewTokenResponse();
             case EXPIRE_DELEGATION_TOKEN: return createExpireTokenResponse();
-            case DESCRIBE_DELEGATION_TOKEN: return createDescribeTokenResponse();
+            case DESCRIBE_DELEGATION_TOKEN: return createDescribeTokenResponse(version);
             case DELETE_GROUPS: return createDeleteGroupsResponse();
             case ELECT_LEADERS: return createElectLeadersResponse();
             case INCREMENTAL_ALTER_CONFIGS: return createIncrementalAlterConfigsResponse();
@@ -2980,7 +2981,7 @@ public class RequestResponseTest {
         return new DescribeDelegationTokenRequest.Builder(owners).build(version);
     }
 
-    private DescribeDelegationTokenResponse createDescribeTokenResponse() {
+    private DescribeDelegationTokenResponse createDescribeTokenResponse(short version) {
         List<KafkaPrincipal> renewers = new ArrayList<>();
         renewers.add(SecurityUtils.parseKafkaPrincipal("User:user1"));
         renewers.add(SecurityUtils.parseKafkaPrincipal("User:user2"));
@@ -2996,7 +2997,7 @@ public class RequestResponseTest {
         tokenList.add(new DelegationToken(tokenInfo1, "test".getBytes()));
         tokenList.add(new DelegationToken(tokenInfo2, "test".getBytes()));
 
-        return new DescribeDelegationTokenResponse(20, Errors.NONE, tokenList);
+        return new DescribeDelegationTokenResponse(version, 20, Errors.NONE, tokenList);
     }
 
     private ElectLeadersRequest createElectLeadersRequestNullPartitions() {

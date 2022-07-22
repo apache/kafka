@@ -42,13 +42,14 @@ import scala.collection.mutable
 object DelegationTokenManager {
   val DefaultHmacAlgorithm = "HmacSHA512"
   val OwnerKey ="owner"
+  val TokenRequesterKey = "tokenRequester"
   val RenewersKey = "renewers"
   val IssueTimestampKey = "issueTimestamp"
   val MaxTimestampKey = "maxTimestamp"
   val ExpiryTimestampKey = "expiryTimestamp"
   val TokenIdKey = "tokenId"
   val VersionKey = "version"
-  val CurrentVersion = 1
+  val CurrentVersion = 3
   val ErrorTimestamp = -1
 
   /**
@@ -103,6 +104,7 @@ object DelegationTokenManager {
     val tokenInfoMap = mutable.Map[String, Any]()
     tokenInfoMap(VersionKey) = CurrentVersion
     tokenInfoMap(OwnerKey) = Sanitizer.sanitize(tokenInfo.ownerAsString)
+    tokenInfoMap(TokenRequesterKey) = Sanitizer.sanitize(tokenInfo.tokenRequester.toString)
     tokenInfoMap(RenewersKey) = tokenInfo.renewersAsString.asScala.map(e => Sanitizer.sanitize(e)).asJava
     tokenInfoMap(IssueTimestampKey) = tokenInfo.issueTimestamp
     tokenInfoMap(MaxTimestampKey) = tokenInfo.maxTimestamp
@@ -118,8 +120,12 @@ object DelegationTokenManager {
     Json.parseBytes(bytes) match {
       case Some(js) =>
         val mainJs = js.asJsonObject
-        require(mainJs(VersionKey).to[Int] == CurrentVersion)
+        val version = mainJs(VersionKey).to[Int]
+        require(version > 0 && version <= CurrentVersion)
         val owner = SecurityUtils.parseKafkaPrincipal(Sanitizer.desanitize(mainJs(OwnerKey).to[String]))
+        var tokenRequester = owner
+        if (version >= 3)
+          tokenRequester = SecurityUtils.parseKafkaPrincipal(Sanitizer.desanitize(mainJs(TokenRequesterKey).to[String]))
         val renewerStr = mainJs(RenewersKey).to[Seq[String]]
         val renewers = renewerStr.map(Sanitizer.desanitize).map(SecurityUtils.parseKafkaPrincipal)
         val issueTimestamp = mainJs(IssueTimestampKey).to[Long]
@@ -127,7 +133,7 @@ object DelegationTokenManager {
         val maxTimestamp = mainJs(MaxTimestampKey).to[Long]
         val tokenId = mainJs(TokenIdKey).to[String]
 
-        val tokenInfo = new TokenInformation(tokenId, owner, renewers.asJava,
+        val tokenInfo = new TokenInformation(tokenId, owner, tokenRequester, renewers.asJava,
           issueTimestamp, maxTimestamp, expiryTimestamp)
 
         Some(tokenInfo)
@@ -136,17 +142,18 @@ object DelegationTokenManager {
     }
   }
 
-  def filterToken(requestedPrincipal: KafkaPrincipal, owners : Option[List[KafkaPrincipal]], token: TokenInformation, authorizeToken: String => Boolean) : Boolean = {
+  def filterToken(requesterPrincipal: KafkaPrincipal, owners : Option[List[KafkaPrincipal]], token: TokenInformation,
+                  authorizeToken: String => Boolean, authorizeRequester: KafkaPrincipal  => Boolean) : Boolean = {
 
     val allow =
     //exclude tokens which are not requested
       if (owners.isDefined && !owners.get.exists(owner => token.ownerOrRenewer(owner))) {
         false
         //Owners and the renewers can describe their own tokens
-      } else if (token.ownerOrRenewer(requestedPrincipal)) {
+      } else if (token.ownerOrRenewer(requesterPrincipal)) {
         true
         // Check permission for non-owned tokens
-      } else if (authorizeToken(token.tokenId)) {
+      } else if (authorizeToken(token.tokenId) || authorizeRequester(token.owner)) {
         true
       }
       else {
@@ -259,12 +266,13 @@ class DelegationTokenManager(val config: KafkaConfig,
    * @param responseCallback
    */
   def createToken(owner: KafkaPrincipal,
+                  tokenRequester: KafkaPrincipal,
                   renewers: List[KafkaPrincipal],
                   maxLifeTimeMs: Long,
                   responseCallback: CreateResponseCallback): Unit = {
 
     if (!config.tokenAuthEnabled) {
-      responseCallback(CreateTokenResult(-1, -1, -1, "", Array[Byte](), Errors.DELEGATION_TOKEN_AUTH_DISABLED))
+      responseCallback(CreateTokenResult(owner, tokenRequester, -1, -1, -1, "", Array[Byte](), Errors.DELEGATION_TOKEN_AUTH_DISABLED))
     } else {
       lock.synchronized {
         val tokenId = CoreUtils.generateUuidAsBase64()
@@ -274,13 +282,13 @@ class DelegationTokenManager(val config: KafkaConfig,
         val maxLifeTimeStamp = issueTimeStamp + maxLifeTime
         val expiryTimeStamp = Math.min(maxLifeTimeStamp, issueTimeStamp + defaultTokenRenewTime)
 
-        val tokenInfo = new TokenInformation(tokenId, owner, renewers.asJava, issueTimeStamp, maxLifeTimeStamp, expiryTimeStamp)
+        val tokenInfo = new TokenInformation(tokenId, owner, tokenRequester, renewers.asJava, issueTimeStamp, maxLifeTimeStamp, expiryTimeStamp)
 
         val hmac = createHmac(tokenId, secretKey)
         val token = new DelegationToken(tokenInfo, hmac)
         updateToken(token)
         info(s"Created a delegation token: $tokenId for owner: $owner")
-        responseCallback(CreateTokenResult(issueTimeStamp, expiryTimeStamp, maxLifeTimeStamp, tokenId, hmac, Errors.NONE))
+        responseCallback(CreateTokenResult(owner, tokenRequester, issueTimeStamp, expiryTimeStamp, maxLifeTimeStamp, tokenId, hmac, Errors.NONE))
       }
     }
   }
@@ -485,7 +493,9 @@ class DelegationTokenManager(val config: KafkaConfig,
 
 }
 
-case class CreateTokenResult(issueTimestamp: Long,
+case class CreateTokenResult(owner: KafkaPrincipal,
+                             tokenRequester: KafkaPrincipal,
+                             issueTimestamp: Long,
                              expiryTimestamp: Long,
                              maxTimestamp: Long,
                              tokenId: String,
@@ -496,6 +506,8 @@ case class CreateTokenResult(issueTimestamp: Long,
     other match {
       case that: CreateTokenResult =>
         error.equals(that.error) &&
+          owner.equals(that.owner) &&
+          tokenRequester.equals(that.tokenRequester) &&
           tokenId.equals(that.tokenId) &&
           issueTimestamp.equals(that.issueTimestamp) &&
           expiryTimestamp.equals(that.expiryTimestamp) &&
@@ -506,7 +518,7 @@ case class CreateTokenResult(issueTimestamp: Long,
   }
 
   override def hashCode(): Int = {
-    val fields = Seq(issueTimestamp, expiryTimestamp, maxTimestamp, tokenId, hmac, error)
+    val fields = Seq(owner, tokenRequester, issueTimestamp, expiryTimestamp, maxTimestamp, tokenId, hmac, error)
     fields.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
   }
 }

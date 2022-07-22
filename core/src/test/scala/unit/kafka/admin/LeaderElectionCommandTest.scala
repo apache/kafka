@@ -35,7 +35,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{BeforeEach, Tag}
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(clusterType = Type.BOTH, brokers = 3)
+@ClusterTestDefaults(clusterType = Type.ALL, brokers = 3)
 @Tag("integration")
 final class LeaderElectionCommandTest(cluster: ClusterInstance) {
   import LeaderElectionCommandTest._

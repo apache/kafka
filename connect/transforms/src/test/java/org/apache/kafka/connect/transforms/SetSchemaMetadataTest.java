@@ -44,11 +44,13 @@ public class SetSchemaMetadataTest {
     private static Stream<Arguments> buildSchemaNameTestParams() {
         return Stream.of(
                 Arguments.of("foo.bar", "", "foo.bar"),
+                Arguments.of("foo.bar", null, "foo.bar"),
                 Arguments.of("foo.bar.", "", "foo.bar"),
                 Arguments.of("foo.bar...", "", "foo.bar"),
                 Arguments.of(".foo.bar", "", ".foo.bar"),
                 Arguments.of("  foo.bar.  ", "", "foo.bar"),
                 Arguments.of("", "baz", "baz"),
+                Arguments.of(null, "baz", "baz"),
                 Arguments.of("", ".baz", ".baz"),
                 Arguments.of("", "...baz ", "...baz "),
                 Arguments.of("", " baz ", " baz "),
@@ -57,7 +59,11 @@ public class SetSchemaMetadataTest {
                 Arguments.of("foo.bar", "...baz ", "foo.bar.baz"),
                 Arguments.of("foo.bar", "  .baz  ", "foo.bar.baz"),
                 Arguments.of("foo.bar", "baz.", "foo.bar.baz."),
-                Arguments.of("", "", "")
+                Arguments.of("foo.bar", "foo.bar.baz", "foo.bar.foo.bar.baz"),
+                Arguments.of("", "", ""),
+                Arguments.of(null, "", ""),
+                Arguments.of("", null, null),
+                Arguments.of(null, null, null)
         );
     }
 

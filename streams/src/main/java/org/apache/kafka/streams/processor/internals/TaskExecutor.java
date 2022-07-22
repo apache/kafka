@@ -82,7 +82,7 @@ public class TaskExecutor {
                 }
             } catch (final Throwable t) {
                 taskExecutionMetadata.registerTaskError(task, t, now);
-                tasks.removeTaskFromCuccessfullyProcessedBeforeClosing(lastProcessed);
+                tasks.removeTaskFromSuccessfullyProcessedBeforeClosing(lastProcessed);
                 commitSuccessfullyProcessedTasks();
                 throw t;
             }
@@ -163,6 +163,7 @@ public class TaskExecutor {
                 task.postCommit(false);
             }
         }
+
         return committed;
     }
 
@@ -275,13 +276,15 @@ public class TaskExecutor {
     int punctuate() {
         int punctuated = 0;
 
-        for (final Task task : tasks.notPausedActiveTasks()) {
+        for (final Task task : tasks.activeTasks()) {
             try {
-                if (task.maybePunctuateStreamTime()) {
-                    punctuated++;
-                }
-                if (task.maybePunctuateSystemTime()) {
-                    punctuated++;
+                if (taskExecutionMetadata.canPunctuateTask(task)) {
+                    if (task.maybePunctuateStreamTime()) {
+                        punctuated++;
+                    }
+                    if (task.maybePunctuateSystemTime()) {
+                        punctuated++;
+                    }
                 }
             } catch (final TaskMigratedException e) {
                 log.info("Failed to punctuate stream task {} since it got migrated to another thread already. " +
