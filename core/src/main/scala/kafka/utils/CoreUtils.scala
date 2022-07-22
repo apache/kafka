@@ -283,9 +283,9 @@ object CoreUtils {
 
           duplicatesWithIpHosts match {
             case s if s.isEmpty =>
-            case Seq(one, two) =>
+            case Seq(ep1, ep2) =>
               if (requireDistinctPorts)
-                require(validateOneIsIpv4AndOtherIpv6(one.host, two.host), "If you have two listeners on " +
+                require(validateOneIsIpv4AndOtherIpv6(ep1.host, ep2.host), "If you have two listeners on " +
                   s"the same port then one needs to be IPv4 and the other IPv6, listeners: $listeners, port: $port")
             case allEps =>
               checkDuplicateListenerNames(allEps, listeners)
