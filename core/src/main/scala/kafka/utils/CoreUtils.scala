@@ -240,12 +240,6 @@ object CoreUtils {
     (inetAddressValidator.isValidInet4Address(first) && inetAddressValidator.isValidInet6Address(second)) ||
       (inetAddressValidator.isValidInet6Address(first) && inetAddressValidator.isValidInet4Address(second))
 
-  def checkDuplicateListenerNames(endpoints: Seq[EndPoint], listeners: String): Unit = {
-    val distinctListenerNames = endpoints.map(_.listenerName).distinct
-    require(distinctListenerNames.size == endpoints.size, s"Each listener must have a different name unless you have exactly " +
-      s"one listener on IPv4 and the other IPv6 on the same port, listeners: $listeners")
-  }
-
   def checkDuplicateListenerPorts(endpoints: Seq[EndPoint], listeners: String): Unit = {
     val distinctPorts = endpoints.map(_.port).distinct
     require(distinctPorts.size == endpoints.map(_.port).size, s"Each listener must have a different port, listeners: $listeners")
@@ -253,6 +247,9 @@ object CoreUtils {
 
   def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[EndPoint] = {
     def validate(endPoints: Seq[EndPoint]): Unit = {
+      val distinctListenerNames = endPoints.map(_.listenerName).distinct
+      require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
+
       val (duplicatePorts, nonDuplicatePorts) = endPoints.filter {
         // filter port 0 for unit tests
         ep => ep.port != 0
@@ -262,7 +259,6 @@ object CoreUtils {
 
       val nonDuplicatePortsOnlyEndpoints = nonDuplicatePorts.flatMap { case (_, eps) => eps }.toList
 
-      checkDuplicateListenerNames(nonDuplicatePortsOnlyEndpoints, listeners)
       if (requireDistinctPorts)
         checkDuplicateListenerPorts(nonDuplicatePortsOnlyEndpoints, listeners)
 
@@ -277,7 +273,6 @@ object CoreUtils {
       // Iterate through every grouping of duplicates by port to see if they are valid
       duplicatePortsPartitionedByValidIps.foreach {
         case (port, (duplicatesWithIpHosts, duplicatesWithoutIpHosts)) =>
-          checkDuplicateListenerNames(duplicatesWithoutIpHosts, listeners)
           if (requireDistinctPorts)
             checkDuplicateListenerPorts(duplicatesWithoutIpHosts, listeners)
 
@@ -288,7 +283,6 @@ object CoreUtils {
                 require(validateOneIsIpv4AndOtherIpv6(ep1.host, ep2.host), "If you have two listeners on " +
                   s"the same port then one needs to be IPv4 and the other IPv6, listeners: $listeners, port: $port")
             case allEps =>
-              checkDuplicateListenerNames(allEps, listeners)
               if (requireDistinctPorts)
                 throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has " +
                   s"an IPv4 address and the other IPv6 address, listeners: $listeners, port: $port")

@@ -781,7 +781,7 @@ object KafkaConfig {
     " Examples of legal listener lists:\n" +
     " PLAINTEXT://myhost:9092,SSL://:9091\n" +
     " CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093\n" +
-    " PLAINTEXT://127.0.0.1:9092,PLAINTEXT://[::1]:9092\n"
+    " PLAINTEXT://127.0.0.1:9092,SSL://[::1]:9092\n"
   val AdvertisedListenersDoc = s"Listeners to publish to ZooKeeper for clients to use, if different than the <code>$ListenersProp</code> config property." +
     " In IaaS environments, this may need to be different from the interface to which the broker binds." +
     s" If this is not set, the value for <code>$ListenersProp</code> will be used." +
