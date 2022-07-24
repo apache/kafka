@@ -297,8 +297,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
   }
 
   /*
-   * Return the watch list of the given key, note that we need to
-   * grab the removeWatchersLock to avoid the operation being added to a removed watcher list
+   * Note that we need to grab the removeWatchersLock to avoid the operation being added to a removed watcher list
    */
   private def watchForOperation(key: Any, operation: T): Unit = {
     val wl = watcherList(key)
