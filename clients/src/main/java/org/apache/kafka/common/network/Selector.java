@@ -591,11 +591,6 @@ public class Selector implements Selectable, AutoCloseable {
                 long nowNanos = channelStartTimeNanos != 0 ? channelStartTimeNanos : currentTimeNanos;
                 try {
                     attemptWrite(key, channel, nowNanos);
-
-                    // Following is to fix KAFKA-13559. This will prevent poll() from blocking for 300 ms when the
-                    // socket has no data but the buffer has data. Only happens when using SSL.
-                    if (channel.hasBytesBuffered())
-                        madeReadProgressLastPoll = true;
                 } catch (Exception e) {
                     sendFailed = true;
                     throw e;
@@ -762,6 +757,7 @@ public class Selector implements Selectable, AutoCloseable {
             explicitlyMutedChannels.remove(channel);
             if (channel.hasBytesBuffered()) {
                 keysWithBufferedRead.add(channel.selectionKey());
+                madeReadProgressLastPoll = true;
             }
         }
     }

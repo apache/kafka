@@ -1879,37 +1879,20 @@ class SocketServerTest {
   }
 
   /**
-   * Tests for KAFKA-13559 - Processing request got delayed by 300 ms in the following condition:
-   * 1. Client-Server communication uses SSL socket.
-   * 2. More than one requests are read from the socket into SslTransportLayer.netReadBuffer.
-   *
-   * This 300 ms delay occurs because the socket has no data but the buffer has data. And the sequence of events that
-   * leads to this situation is the following (from the server point of view):
-   *
-   * Step 1 - SslTransportLayer receives more than one requests in the socket and put it in the buffer
-   *          (SslTransportLayer.netReadBuffer).
-   * Step 2 - SslTransportLayer reads all of the bytes and stores it in SslTransportLayer.appReadBuffer.
-   * Step 3 - Process the first request, leaving the second request in SslTransportLayer.appReadBuffer.
-   * Step 4 - THIS IS WHERE THE DELAY IS. Process the second request. This request is read from
-   * SslTransportLayer.appReadBuffer, instead of the socket. Because of this, "select(timeout)" in "Selector.poll()"
-   * should not block for the "poll timeout" (hardcoded to 300 in Selector.java, but in this test it is set to 5000).
-   *
-   * This test is implemented following "makeSocketWithBufferedRequests()" method by putting two requests directly
-   * into SslTransportLayer.netReadBuffer and manually trigger the processing.
-   *
+   * Test to ensure "Selector.poll()" does not block at "select(timeout)" when there is no data in the socket but there
+   * is data in the buffer. This only happens when SSL protocol is used.
    */
   @Test
   def testLatencyWithBufferedDataAndNoSocketData(): Unit = {
     shutdownServerAndMetrics(server)
 
-    // create server with SSL listener
     val testableServer = new TestableSocketServer(KafkaConfig.fromProps(sslServerProps))
     testableServer.enableRequestProcessing(Map.empty)
     val testableSelector = testableServer.testableSelector
     val proxyServer = new ProxyServer(testableServer)
-    val selectTimeout = 5000  // in ms
+    val selectTimeoutMs = 5000
     // set pollTimeoutOverride to "selectTimeout" to ensure poll() timeout is distinct and can be identified
-    testableSelector.pollTimeoutOverride = Some(selectTimeout)
+    testableSelector.pollTimeoutOverride = Some(selectTimeoutMs)
 
     try {
       // trigger SSL handshake by sending the first request and receiving its response without buffering
@@ -1946,18 +1929,17 @@ class SocketServerTest {
       // receive response in the client side
       receiveResponse(sslSocket)
 
-      // process the second request in the server side
-      // this would process the second request in the appReadBuffer
+      // process the second request in the appReadBuffer
       // NOTE 1: this should not block because the data is already in the buffer
       // NOTE 2: we do not call wakeup() here so Selector.poll() would block if the fix is not in place
-      val processTimeStart = System.nanoTime()  // using nanoTime() because it is meant to calculate elapsed time
-      receiveRequest(testableServer.dataPlaneRequestChannel, selectTimeout + 1000)
-      val processTimeEnd = System.nanoTime()
+      val processTimeStartNanos = System.nanoTime()
+      receiveRequest(testableServer.dataPlaneRequestChannel, selectTimeoutMs + 1000)
+      val processTimeEndNanos = System.nanoTime()
 
       // check the duration of processing the second request
-      val processTimeDuration = (processTimeEnd - processTimeStart) / 1000000.0  // in ms
-      assertTrue(processTimeDuration < selectTimeout,
-        "Time to process the second request (" + processTimeDuration + " ms) should be under " + selectTimeout + " ms")
+      val processTimeDuration = TimeUnit.NANOSECONDS.toMillis(processTimeEndNanos - processTimeStartNanos)
+      assertTrue(processTimeDuration < selectTimeoutMs,
+        "Time to process the second request (" + processTimeDuration + " ms) should be under " + selectTimeoutMs + " ms")
 
       sslSocket.close()
     } finally {
