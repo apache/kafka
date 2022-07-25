@@ -286,6 +286,8 @@ object CoreUtils {
                   throw new IllegalArgumentException(errorMessage)
               }
             case _ =>
+              // Having more than 2 duplicate endpoints doesn't make sense since we only have 2 IP stacks (one is IPv4
+              // and the other is IPv6)
               if (requireDistinctPorts)
                 throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has " +
                   s"an IPv4 address and the other IPv6 address, listeners: $listeners, port: $port")
