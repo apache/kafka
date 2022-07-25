@@ -250,7 +250,7 @@ object CoreUtils {
       val distinctListenerNames = endPoints.map(_.listenerName).distinct
       require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
 
-      val (duplicatePorts, nonDuplicatePorts) = endPoints.filter {
+      val (duplicatePorts, _) = endPoints.filter {
         // filter port 0 for unit tests
         ep => ep.port != 0
       }.groupBy(_.port).partition {
@@ -285,7 +285,7 @@ object CoreUtils {
                 if (duplicatesWithoutIpHosts.nonEmpty)
                   throw new IllegalArgumentException(errorMessage)
               }
-            case allEps =>
+            case _ =>
               if (requireDistinctPorts)
                 throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has " +
                   s"an IPv4 address and the other IPv6 address, listeners: $listeners, port: $port")
