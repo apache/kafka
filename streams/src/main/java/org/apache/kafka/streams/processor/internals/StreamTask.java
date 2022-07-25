@@ -219,7 +219,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws StreamsException fatal error, should close the thread
      */
     @Override
-    public void initializeIfNeeded() {
+    public boolean initializeIfNeeded() {
         if (state() == State.CREATED) {
             recordCollector.initialize();
 
@@ -233,7 +233,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             transitionTo(State.RESTORING);
 
             log.info("Initialized");
+
+            return true;
         }
+
+        return false;
     }
 
     public void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {

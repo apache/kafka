@@ -401,17 +401,6 @@ public class TaskManager {
             Collections.emptySet() : standbyTaskCreator.createTasks(standbyTasksToCreate);
         tasks.addNewActiveTasks(newActiveTasks);
         tasks.addNewStandbyTasks(newStandbyTask);
-
-        maybeAddNewTasksToStateUpdater(newActiveTasks);
-        maybeAddNewTasksToStateUpdater(newStandbyTask);
-    }
-
-    private void maybeAddNewTasksToStateUpdater(final Collection<? extends Task> tasks) {
-        if (stateUpdater != null) {
-            for (final Task task : tasks) {
-                stateUpdater.add(task);
-            }
-        }
     }
 
     private Map<TaskId, Set<TopicPartition>> pendingTasksToCreate(final Map<TaskId, Set<TopicPartition>> tasksToCreate) {
@@ -542,7 +531,9 @@ public class TaskManager {
         final List<Task> activeTasks = new LinkedList<>();
         for (final Task task : tasks.allTasks()) {
             try {
-                task.initializeIfNeeded();
+                if (task.initializeIfNeeded() && stateUpdater != null) {
+                    stateUpdater.add(task);
+                }
                 task.clearTaskTimeout();
             } catch (final LockException lockException) {
                 // it is possible that if there are multiple threads within the instance that one thread
@@ -1418,5 +1409,9 @@ public class TaskManager {
     // for testing only
     void addTask(final Task task) {
         tasks.addTask(task);
+    }
+
+    StateUpdater stateUpdater() {
+        return stateUpdater;
     }
 }

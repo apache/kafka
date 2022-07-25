@@ -92,7 +92,7 @@ public class StandbyTask extends AbstractTask implements Task {
      * @throws StreamsException fatal error, should close the thread
      */
     @Override
-    public void initializeIfNeeded() {
+    public boolean initializeIfNeeded() {
         if (state() == State.CREATED) {
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
@@ -109,9 +109,13 @@ public class StandbyTask extends AbstractTask implements Task {
             processorContext.initialize();
 
             log.info("Initialized");
+
+            return true;
         } else if (state() == State.RESTORING) {
             throw new IllegalStateException("Illegal state " + state() + " while initializing standby task " + id);
         }
+
+        return false;
     }
 
     @Override
