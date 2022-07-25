@@ -76,6 +76,7 @@ import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 
 import static org.apache.kafka.clients.producer.ProducerConfig.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.CUSTOM_EXACTLY_ONCE_SUPPORT_CONFIG;
@@ -466,6 +467,7 @@ public class ExactlyOnceSourceIntegrationTest {
      */
     @Test
     public void testFencedLeaderRecovery() throws Exception {
+        connectBuilder.numWorkers(1);
         // Much slower offset commit interval; should never be triggered during this test
         workerProps.put(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG, "600000");
         startConnect();
@@ -494,7 +496,10 @@ public class ExactlyOnceSourceIntegrationTest {
         assertEquals(404, connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus());
 
         // fence out the leader of the cluster
-        Producer<?, ?> zombieLeader = transactionalProducer(DistributedConfig.transactionalProducerId(CLUSTER_GROUP_ID));
+        Producer<?, ?> zombieLeader = transactionalProducer(
+                "simulated-zombie-leader",
+                DistributedConfig.transactionalProducerId(CLUSTER_GROUP_ID)
+        );
         zombieLeader.initTransactions();
         zombieLeader.close();
 
@@ -1030,9 +1035,10 @@ public class ExactlyOnceSourceIntegrationTest {
 
         // create a collection of producers that simulate the producers used for the existing tasks
         List<KafkaProducer<byte[], byte[]>> producers = IntStream.range(0, currentNumTasks)
-                .mapToObj(i -> Worker.taskTransactionalId(CLUSTER_GROUP_ID, CONNECTOR_NAME, i))
-                .map(this::transactionalProducer)
-                .collect(Collectors.toList());
+                .mapToObj(i -> transactionalProducer(
+                        "simulated-task-producer-" + CONNECTOR_NAME + "-" + i,
+                        Worker.taskTransactionalId(CLUSTER_GROUP_ID, CONNECTOR_NAME, i)
+                )).collect(Collectors.toList());
 
         producers.forEach(KafkaProducer::initTransactions);
 
@@ -1047,8 +1053,9 @@ public class ExactlyOnceSourceIntegrationTest {
         producers.forEach(producer -> assertTransactionalProducerIsFenced(producer, topic));
     }
 
-    private KafkaProducer<byte[], byte[]> transactionalProducer(String transactionalId) {
+    private KafkaProducer<byte[], byte[]> transactionalProducer(String clientId, String transactionalId) {
         Map<String, Object> transactionalProducerProps = new HashMap<>();
+        transactionalProducerProps.put(CLIENT_ID_CONFIG, clientId);
         transactionalProducerProps.put(ENABLE_IDEMPOTENCE_CONFIG, true);
         transactionalProducerProps.put(TRANSACTIONAL_ID_CONFIG, transactionalId);
         return connect.kafka().createProducer(transactionalProducerProps);
