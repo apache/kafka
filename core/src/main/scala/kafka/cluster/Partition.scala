@@ -1217,15 +1217,20 @@ class Partition(val topicPartition: TopicPartition,
       )
     }
 
-    val localLog = localLogWithEpochOrThrow(
-      fetchPartitionData.currentLeaderEpoch,
-      fetchParams.fetchOnlyLeader
-    )
-
     if (fetchParams.isFromFollower) {
       // Check that the request is from a valid replica before doing the read
-      val replica = followerReplicaOrThrow(fetchParams.replicaId, fetchPartitionData)
-      val logReadInfo = readFromLocalLog(localLog)
+      val (replica, logReadInfo) = inReadLock(leaderIsrUpdateLock) {
+        val localLog = localLogWithEpochOrThrow(
+          fetchPartitionData.currentLeaderEpoch,
+          fetchParams.fetchOnlyLeader
+        )
+        val replica = followerReplicaOrThrow(
+          fetchParams.replicaId,
+          fetchPartitionData
+        )
+        val logReadInfo = readFromLocalLog(localLog)
+        (replica, logReadInfo)
+      }
 
       if (updateFetchState && logReadInfo.divergingEpoch.isEmpty) {
         updateFollowerFetchState(
@@ -1239,7 +1244,13 @@ class Partition(val topicPartition: TopicPartition,
 
       logReadInfo
     } else {
-      readFromLocalLog(localLog)
+      inReadLock(leaderIsrUpdateLock) {
+        val localLog = localLogWithEpochOrThrow(
+          fetchPartitionData.currentLeaderEpoch,
+          fetchParams.fetchOnlyLeader
+        )
+        readFromLocalLog(localLog)
+      }
     }
   }
 
@@ -1282,7 +1293,7 @@ class Partition(val topicPartition: TopicPartition,
     maxBytes: Int,
     fetchIsolation: FetchIsolation,
     minOneMessage: Boolean
-  ): LogReadInfo = inReadLock(leaderIsrUpdateLock) {
+  ): LogReadInfo = {
     // Note we use the log end offset prior to the read. This ensures that any appends following
     // the fetch do not prevent a follower from coming into sync.
     val initialHighWatermark = localLog.highWatermark
