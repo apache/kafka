@@ -67,8 +67,8 @@ class StandbyTaskCreator {
         );
     }
 
-    Collection<StandbyTask> createTasks(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
-        final List<StandbyTask> createdTasks = new ArrayList<>();
+    Collection<Task> createTasks(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+        final List<Task> createdTasks = new ArrayList<>();
 
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();
@@ -107,11 +107,30 @@ class StandbyTaskCreator {
         return createdTasks;
     }
 
+    /*
+     * TODO: we pass in the new input partitions to validate if they still match,
+     *       in the future we when we have fixed partitions -> tasks mapping,
+     *       we should always reuse the input partition and hence no need validations
+     */
     StandbyTask createStandbyTaskFromActive(final StreamTask streamTask,
                                             final Set<TopicPartition> inputPartitions) {
-        final StandbyTask task = streamTask.recycle(inputPartitions);
+        if (!inputPartitions.equals(streamTask.inputPartitions)) {
+            log.warn("Detected unmatched input partitions for task {} when recycling it from active to standby", streamTask.id);
+        }
 
-        log.trace("Created task {} with assigned partitions {}", task.id, inputPartitions);
+        final StandbyTask task = new StandbyTask(
+            streamTask.id,
+            inputPartitions,
+            streamTask.topology,
+            streamTask.config,
+            streamsMetrics,
+            streamTask.stateMgr,
+            stateDirectory,
+            dummyCache,
+            streamTask.processorContext
+        );
+
+        log.trace("Recycled standby task {} from recycled active with assigned partitions {}", task.id, inputPartitions);
         createTaskSensor.record();
         return task;
     }
@@ -120,7 +139,7 @@ class StandbyTaskCreator {
                                   final Set<TopicPartition> inputPartitions,
                                   final ProcessorTopology topology,
                                   final ProcessorStateManager stateManager,
-                                  final InternalProcessorContext context) {
+                                  final InternalProcessorContext<Object, Object> context) {
         final StandbyTask task = new StandbyTask(
             taskId,
             inputPartitions,
@@ -133,7 +152,7 @@ class StandbyTaskCreator {
             context
         );
 
-        log.trace("Created task {} with assigned partitions {}", taskId, inputPartitions);
+        log.trace("Created standby task {} with assigned partitions {}", taskId, inputPartitions);
         createTaskSensor.record();
         return task;
     }

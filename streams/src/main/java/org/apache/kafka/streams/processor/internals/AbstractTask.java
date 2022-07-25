@@ -43,10 +43,11 @@ public abstract class AbstractTask implements Task {
     private Task.State state = CREATED;
     private long deadlineMs = NO_DEADLINE;
 
-    protected Set<TopicPartition> inputPartitions;
     protected final Logger log;
-    protected final LogContext logContext;
     protected final String logPrefix;
+    protected final LogContext logContext;
+
+    protected Set<TopicPartition> inputPartitions;
 
     /**
      * If the checkpoint has not been loaded from the file yet (null), then we should not overwrite the checkpoint;

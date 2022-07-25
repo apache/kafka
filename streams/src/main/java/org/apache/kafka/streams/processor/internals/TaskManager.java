@@ -131,12 +131,11 @@ public class TaskManager {
         } else {
             stateUpdater = null;
         }
-        this.tasks = new Tasks(logContext, activeTaskCreator, standbyTaskCreator);
+        this.tasks = new Tasks(logContext);
         this.taskExecutor = new TaskExecutor(
             tasks,
+            this,
             topologyMetadata.taskExecutionMetadata(),
-            processingMode,
-            topologyMetadata.hasNamedTopologies(),
             logContext
         );
     }
@@ -146,7 +145,7 @@ public class TaskManager {
     }
 
     public double totalProducerBlockedTime() {
-        return tasks.totalProducerBlockedTime();
+        return activeTaskCreator.totalProducerBlockedTime();
     }
 
     public UUID processId() {
@@ -155,6 +154,18 @@ public class TaskManager {
 
     public TopologyMetadata topologyMetadata() {
         return topologyMetadata;
+    }
+
+    Consumer<byte[], byte[]> mainConsumer() {
+        return mainConsumer;
+    }
+
+    StreamsProducer streamsProducerForTask(final TaskId taskId) {
+        return activeTaskCreator.streamsProducerForTask(taskId);
+    }
+
+    StreamsProducer threadProducer() {
+        return activeTaskCreator.threadProducer();
     }
 
     boolean isRebalanceInProgress() {
@@ -384,8 +395,10 @@ public class TaskManager {
 
     private void createNewTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                                 final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
-        final Collection<StreamTask> newActiveTasks = activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate);
-        final Collection<StandbyTask> newStandbyTask = standbyTaskCreator.createTasks(standbyTasksToCreate);
+        final Collection<Task> newActiveTasks = activeTasksToCreate.isEmpty() ?
+            Collections.emptySet() : activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate);
+        final Collection<Task> newStandbyTask = standbyTasksToCreate.isEmpty() ?
+            Collections.emptySet() : standbyTaskCreator.createTasks(standbyTasksToCreate);
         tasks.addNewActiveTasks(newActiveTasks);
         tasks.addNewStandbyTasks(newStandbyTask);
 
@@ -393,7 +406,7 @@ public class TaskManager {
         maybeAddNewTasksToStateUpdater(newStandbyTask);
     }
 
-    private void maybeAddNewTasksToStateUpdater(Collection<? extends Task> tasks) {
+    private void maybeAddNewTasksToStateUpdater(final Collection<? extends Task> tasks) {
         if (stateUpdater != null) {
             for (final Task task : tasks) {
                 stateUpdater.add(task);
@@ -481,14 +494,14 @@ public class TaskManager {
         for (final Map.Entry<Task, Set<TopicPartition>> entry : tasksToRecycle.entrySet()) {
             final Task oldTask = entry.getKey();
             try {
-                oldTask.closeCleanAndRecycleState();
                 if (oldTask.isActive()) {
-                    convertActiveToStandby((StreamTask) oldTask, entry.getValue(), taskCloseExceptions);
+                    convertActiveToStandby((StreamTask) oldTask, entry.getValue());
                 } else {
                     convertStandbyToActive((StandbyTask) oldTask, entry.getValue());
                 }
             } catch (final RuntimeException e) {
-                final String uncleanMessage = String.format("Failed to recycle task %s cleanly. Attempting to close remaining tasks before re-throwing:", oldTask.id());
+                final String uncleanMessage = String.format("Failed to recycle task %s cleanly. " +
+                    "Attempting to close remaining tasks before re-throwing:", oldTask.id());
                 log.error(uncleanMessage, e);
                 taskCloseExceptions.putIfAbsent(oldTask.id(), e);
                 tasksToCloseDirty.add(oldTask);
@@ -502,23 +515,17 @@ public class TaskManager {
     }
 
     private void convertActiveToStandby(final StreamTask activeTask,
-                                        final Set<TopicPartition> partitions,
-                                        final Map<TaskId, RuntimeException> taskCloseExceptions) {
-        final TaskId taskId = activeTask.id();
-        try {
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId);
-        } catch (final RuntimeException e) {
-            taskCloseExceptions.putIfAbsent(taskId, e);
-        }
+                                        final Set<TopicPartition> partitions) {
+        activeTask.recycleAndConvert();
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(activeTask.id());
         final StandbyTask standbyTask = standbyTaskCreator.createStandbyTaskFromActive(activeTask, partitions);
-
         tasks.replaceActiveWithStandby(standbyTask);
     }
 
-    void convertStandbyToActive(final StandbyTask standbyTask,
-                                final Set<TopicPartition> partitions) {
+    private void convertStandbyToActive(final StandbyTask standbyTask,
+                                        final Set<TopicPartition> partitions) {
+        standbyTask.recycleAndConvert();
         final StreamTask activeTask = activeTaskCreator.createActiveTaskFromStandby(standbyTask, partitions, mainConsumer);
-
         tasks.replaceStandbyWithActive(activeTask);
     }
 
@@ -740,7 +747,7 @@ public class TaskManager {
         }
 
         if (processingMode == EXACTLY_ONCE_V2) {
-            tasks.reInitializeThreadProducer();
+            activeTaskCreator.reInitializeThreadProducer();
         }
     }
 
@@ -885,6 +892,10 @@ public class TaskManager {
 
         try {
             tasks.removeTask(task);
+
+            if (task.isActive()) {
+                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+            }
         } catch (final RuntimeException swallow) {
             log.error("Error removing dirty task {}: {}", task.id(), swallow.getMessage());
         }
@@ -894,6 +905,10 @@ public class TaskManager {
         task.closeClean();
         try {
             tasks.removeTask(task);
+
+            if (task.isActive()) {
+                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+            }
         } catch (final RuntimeException e) {
             log.error("Error removing active task {}: {}", task.id(), e.getMessage());
             return e;
@@ -917,7 +932,7 @@ public class TaskManager {
 
         executeAndMaybeSwallow(
             clean,
-            tasks::closeThreadProducerIfNeeded,
+            activeTaskCreator::closeThreadProducerIfNeeded,
             e -> firstException.compareAndSet(null, e),
             e -> log.warn("Ignoring an exception while closing thread producer.", e)
         );
@@ -1255,7 +1270,6 @@ public class TaskManager {
 
             final Set<Task> allTasksToRemove = union(HashSet::new, activeTasksToRemove, standbyTasksToRemove);
             closeAndCleanUpTasks(activeTasksToRemove, standbyTasksToRemove, true);
-            allTasksToRemove.forEach(tasks::removeTask);
             releaseLockedDirectoriesForTasks(allTasksToRemove.stream().map(Task::id).collect(Collectors.toSet()));
         } catch (final Exception e) {
             // TODO KAFKA-12648: for now just swallow the exception to avoid interfering with the other topologies
@@ -1347,11 +1361,11 @@ public class TaskManager {
     }
 
     Map<MetricName, Metric> producerMetrics() {
-        return tasks.producerMetrics();
+        return activeTaskCreator.producerMetrics();
     }
 
     Set<String> producerClientIds() {
-        return tasks.producerClientIds();
+        return activeTaskCreator.producerClientIds();
     }
 
     Set<TaskId> lockedTaskDirectories() {

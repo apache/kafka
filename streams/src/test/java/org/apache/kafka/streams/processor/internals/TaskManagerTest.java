@@ -3198,7 +3198,7 @@ public class TaskManagerTest {
             .andReturn(singletonList(activeTask));
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
         expectLastCall().anyTimes();
-        activeTask.closeCleanAndRecycleState();
+        activeTask.recycleAndConvert();
         expectLastCall().once();
 
         expect(standbyTaskCreator.createStandbyTaskFromActive(anyObject(), eq(taskId00Partitions)))
@@ -3222,7 +3222,7 @@ public class TaskManagerTest {
         expectLastCall().anyTimes();
         standbyTask.postCommit(true);
         expectLastCall().anyTimes();
-        standbyTask.closeCleanAndRecycleState();
+        standbyTask.recycleAndConvert();
         expectLastCall().once();
 
         final StreamTask activeTask = mock(StreamTask.class);
@@ -3434,7 +3434,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void closeCleanAndRecycleState() {
+        public void recycleAndConvert() {
             transitionTo(State.CLOSED);
         }
 

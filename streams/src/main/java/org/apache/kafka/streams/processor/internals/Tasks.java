@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
@@ -67,18 +64,8 @@ class Tasks {
     // TODO: change type to `StreamTask`
     private final Map<TopicPartition, Task> activeTasksPerPartition = new HashMap<>();
 
-    private final Collection<Task> successfullyProcessed = new HashSet<>();
-
-    private final ActiveTaskCreator activeTaskCreator;
-    private final StandbyTaskCreator standbyTaskCreator;
-
-    Tasks(final LogContext logContext,
-          final ActiveTaskCreator activeTaskCreator,
-          final StandbyTaskCreator standbyTaskCreator) {
-
+    Tasks(final LogContext logContext) {
         this.log = logContext.logger(getClass());
-        this.activeTaskCreator = activeTaskCreator;
-        this.standbyTaskCreator = standbyTaskCreator;
     }
 
     void purgePendingTasks(final Set<TaskId> assignedActiveTasks, final Set<TaskId> assignedStandbyTasks) {
@@ -102,9 +89,9 @@ class Tasks {
         return filterMap(pendingStandbyTasks, t -> currentTopologies.contains(t.getKey().topologyName()));
     }
 
-    void addNewActiveTasks(final Collection<StreamTask> newTasks) {
+    void addNewActiveTasks(final Collection<Task> newTasks) {
         if (!newTasks.isEmpty()) {
-            for (final StreamTask activeTask : newTasks) {
+            for (final Task activeTask : newTasks) {
                 final TaskId taskId = activeTask.id();
 
                 if (activeTasksPerId.containsKey(taskId)) {
@@ -124,9 +111,9 @@ class Tasks {
         }
     }
 
-    void addNewStandbyTasks(final Collection<StandbyTask> newTasks) {
+    void addNewStandbyTasks(final Collection<Task> newTasks) {
         if (!newTasks.isEmpty()) {
-            for (final StandbyTask standbyTask : newTasks) {
+            for (final Task standbyTask : newTasks) {
                 final TaskId taskId = standbyTask.id();
 
                 if (standbyTasksPerId.containsKey(taskId)) {
@@ -154,7 +141,6 @@ class Tasks {
             if (activeTasksPerId.remove(taskId) == null) {
                 throw new IllegalArgumentException("Attempted to remove an active task that is not owned: " + taskId);
             }
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId);
             removePartitionsForActiveTask(taskId);
             pendingActiveTasks.remove(taskId);
         } else {
@@ -202,14 +188,6 @@ class Tasks {
         }
 
         return requiresUpdate;
-    }
-
-    void reInitializeThreadProducer() {
-        activeTaskCreator.reInitializeThreadProducer();
-    }
-
-    void closeThreadProducerIfNeeded() {
-        activeTaskCreator.closeThreadProducerIfNeeded();
     }
 
     private void removePartitionsForActiveTask(final TaskId taskId) {
@@ -284,46 +262,6 @@ class Tasks {
 
     boolean owned(final TaskId taskId) {
         return getTask(taskId) != null;
-    }
-
-    StreamsProducer streamsProducerForTask(final TaskId taskId) {
-        return activeTaskCreator.streamsProducerForTask(taskId);
-    }
-
-    StreamsProducer threadProducer() {
-        return activeTaskCreator.threadProducer();
-    }
-
-    Map<MetricName, Metric> producerMetrics() {
-        return activeTaskCreator.producerMetrics();
-    }
-
-    Set<String> producerClientIds() {
-        return activeTaskCreator.producerClientIds();
-    }
-
-    Consumer<byte[], byte[]> mainConsumer() {
-        return mainConsumer;
-    }
-
-    Collection<Task> successfullyProcessed() {
-        return successfullyProcessed;
-    }
-
-    void addToSuccessfullyProcessed(final Task task) {
-        successfullyProcessed.add(task);
-    }
-
-    void removeTaskFromSuccessfullyProcessedBeforeClosing(final Task task) {
-        successfullyProcessed.remove(task);
-    }
-
-    void clearSuccessfullyProcessed() {
-        successfullyProcessed.clear();
-    }
-
-    double totalProducerBlockedTime() {
-        return activeTaskCreator.totalProducerBlockedTime();
     }
 
     // for testing only

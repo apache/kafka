@@ -135,9 +135,9 @@ class ActiveTaskCreator {
         return threadProducer;
     }
 
-    public Collection<StreamTask> createTasks(final Consumer<byte[], byte[]> consumer,
-                                              final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
-        final List<StreamTask> createdTasks = new ArrayList<>();
+    public Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer,
+                                        final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
+        final List<Task> createdTasks = new ArrayList<>();
 
         for (final Map.Entry<TaskId, Set<TopicPartition>> newTaskAndPartitions : tasksToBeCreated.entrySet()) {
             final TaskId taskId = newTaskAndPartitions.getKey();
@@ -209,13 +209,36 @@ class ActiveTaskCreator {
         );
     }
 
+    /*
+     * TODO: we pass in the new input partitions to validate if they still match,
+     *       in the future we when we have fixed partitions -> tasks mapping,
+     *       we should always reuse the input partition and hence no need validations
+     */
     StreamTask createActiveTaskFromStandby(final StandbyTask standbyTask,
                                            final Set<TopicPartition> inputPartitions,
                                            final Consumer<byte[], byte[]> consumer) {
-        final RecordCollector recordCollector = createRecordCollector(standbyTask.id, getLogContext(standbyTask.id), standbyTask.topology);
-        final StreamTask task = standbyTask.recycle(time, cache, recordCollector, inputPartitions, consumer);
+        if (!inputPartitions.equals(standbyTask.inputPartitions)) {
+            log.warn("Detected unmatched input partitions for task {} when recycling it from standby to active", standbyTask.id);
+        }
 
-        log.trace("Created active task {} with assigned partitions {}", task.id, inputPartitions);
+        final RecordCollector recordCollector = createRecordCollector(standbyTask.id, getLogContext(standbyTask.id), standbyTask.topology);
+        final StreamTask task = new StreamTask(
+            standbyTask.id,
+            inputPartitions,
+            standbyTask.topology,
+            consumer,
+            standbyTask.config,
+            streamsMetrics,
+            stateDirectory,
+            cache,
+            time,
+            standbyTask.stateMgr,
+            recordCollector,
+            standbyTask.processorContext,
+            standbyTask.logContext
+        );
+
+        log.trace("Recycled active task {} from recycled standby with assigned partitions {}", task.id, inputPartitions);
         createTaskSensor.record();
         return task;
     }
@@ -226,7 +249,7 @@ class ActiveTaskCreator {
                                         final LogContext logContext,
                                         final ProcessorTopology topology,
                                         final ProcessorStateManager stateManager,
-                                        final InternalProcessorContext context) {
+                                        final InternalProcessorContext<Object, Object> context) {
         final RecordCollector recordCollector = createRecordCollector(taskId, logContext, topology);
 
         final StreamTask task = new StreamTask(

@@ -155,10 +155,9 @@ public interface Task {
     void revive();
 
     /**
-     * Attempt a clean close but do not close the underlying state
+     * Recycle the task's state while closing, and convert its type (from active to standby, and vice versa)
      */
-    void closeCleanAndRecycleState();
-
+    void recycleAndConvert();
 
     // runtime methods (using in RUNNING state)
 
