@@ -274,9 +274,17 @@ object CoreUtils {
           duplicatesWithIpHosts match {
             case eps if eps.isEmpty =>
             case Seq(ep1, ep2) =>
-              if (requireDistinctPorts)
-                require(validateOneIsIpv4AndOtherIpv6(ep1.host, ep2.host), "If you have two listeners on " +
-                  s"the same port then one needs to be IPv4 and the other IPv6, listeners: $listeners, port: $port")
+              if (requireDistinctPorts) {
+                val errorMessage = "If you have two listeners on " +
+                  s"the same port then one needs to be IPv4 and the other IPv6, listeners: $listeners, port: $port"
+                require(validateOneIsIpv4AndOtherIpv6(ep1.host, ep2.host), errorMessage)
+
+                // If we reach this point it means that even though duplicatesWithIpHosts in isolation can be valid, if
+                // there happens to be ANOTHER listener on this port without an IP host (such as a null host) then its
+                // not valid.
+                if (duplicatesWithoutIpHosts.nonEmpty)
+                  throw new IllegalArgumentException(errorMessage)
+              }
             case allEps =>
               if (requireDistinctPorts)
                 throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has " +
