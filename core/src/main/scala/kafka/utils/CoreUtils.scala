@@ -257,11 +257,6 @@ object CoreUtils {
         case (_, endpoints) => endpoints.size > 1
       }
 
-      val nonDuplicatePortsOnlyEndpoints = nonDuplicatePorts.flatMap { case (_, eps) => eps }.toList
-
-      if (requireDistinctPorts)
-        checkDuplicateListenerPorts(nonDuplicatePortsOnlyEndpoints, listeners)
-
       // Exception case, let's allow duplicate ports if one host is on IPv4 and the other one is on IPv6
       val duplicatePortsPartitionedByValidIps = duplicatePorts.map {
         case (port, eps) =>
