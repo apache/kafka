@@ -406,12 +406,12 @@ public class ExactlyOnceSourceIntegrationTest {
         Map<String, Object> consumerProps = new HashMap<>();
         consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
         // consume all records from the source topic or fail, to ensure that they were correctly produced
-        ConsumerRecords<byte[], byte[]> sourceRecords = connect.kafka()
-                .consume(
-                        recordsProduced,
-                        TimeUnit.MINUTES.toMillis(1),
-                        consumerProps,
-                        "test-topic");
+        ConsumerRecords<byte[], byte[]> sourceRecords = connect.kafka().consumeAll(
+                CONSUME_RECORDS_TIMEOUT_MS,
+                Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
+                null,
+                topic
+        );
         assertTrue("Not enough records produced by source connector. Expected at least: " + recordsProduced + " + but got " + sourceRecords.count(),
                 sourceRecords.count() >= recordsProduced);
 
@@ -710,6 +710,20 @@ public class ExactlyOnceSourceIntegrationTest {
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, tasksMax, "Connector and task should have restarted successfully");
     }
 
+    /**
+     * This test focuses extensively on the per-connector offsets feature.
+     * <p>
+     * First, a connector is brought up whose producer is configured to write to a different Kafka cluster
+     * than the one the Connect cluster users for its internal topics, then the contents of the connector's
+     * dedicated offsets topic and the worker's internal offsets topic are inspected to ensure that offsets
+     * have been backed up from the dedicated topic to the global topic.
+     * <p>
+     * Then, a "soft downgrade" is simulated: the Connect cluster is shut down and reconfigured to disable
+     * exactly-once support. The cluster is brought up again, the connector is allowed to produce some data,
+     * the connector is shut down, and this time, the records the connector has produced are inspected for
+     * accuracy. Because of the downgrade, exactly-once guarantees are lost, but we check to make sure that
+     * the task has maintained exactly-once delivery <i>up to the last-committed record</i>.
+     */
     @Test
     public void testSeparateOffsetsTopic() throws Exception {
         final String globalOffsetsTopic = "connect-worker-offsets-topic";
@@ -755,7 +769,7 @@ public class ExactlyOnceSourceIntegrationTest {
             // wait for the connector tasks to commit enough records
             connectorHandle.awaitCommits(TimeUnit.MINUTES.toMillis(1));
 
-            // consume all records from the source topic or fail, to ensure that they were correctly produced
+            // consume at least the expected number of records from the source topic or fail, to ensure that they were correctly produced
             int recordNum = connectorTargetedCluster
                     .consume(
                             recordsProduced,
@@ -766,7 +780,7 @@ public class ExactlyOnceSourceIntegrationTest {
             assertTrue("Not enough records produced by source connector. Expected at least: " + recordsProduced + " + but got " + recordNum,
                     recordNum >= recordsProduced);
 
-            // also consume from the connector's dedicated offsets topic; just need to read one offset record
+            // also consume from the connector's dedicated offsets topic
             ConsumerRecords<byte[], byte[]> offsetRecords = connectorTargetedCluster
                     .consumeAll(
                             TimeUnit.MINUTES.toMillis(1),
@@ -780,7 +794,7 @@ public class ExactlyOnceSourceIntegrationTest {
                         0, seqno % recordsProduced)
             );
 
-            // also consume from the cluster's global offsets topic; again, just need to read one offset record
+            // also consume from the cluster's global offsets topic
             offsetRecords = connect.kafka()
                     .consumeAll(
                             TimeUnit.MINUTES.toMillis(1),

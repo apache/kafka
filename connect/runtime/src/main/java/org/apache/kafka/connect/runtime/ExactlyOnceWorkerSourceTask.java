@@ -218,7 +218,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
             log.debug("Skipping final offset commit as task has failed");
             return;
         } else if (isCancelled()) {
-            log.debug("Skipping final offset commit as task has been cancelled and its producer has already been closed");
+            log.debug("Skipping final offset commit as task has been cancelled");
             return;
         }
 
