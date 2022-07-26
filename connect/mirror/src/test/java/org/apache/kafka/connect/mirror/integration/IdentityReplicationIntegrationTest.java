@@ -88,23 +88,23 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
                 "topic config was not synced");
         createAndTestNewTopicWithConfigFilter();
 
-        assertEquals(NUM_RECORDS_PRODUCED, primary.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic-1").count(),
+        assertEquals(NUM_RECORDS_PRODUCED, primary.kafka().consumeAtLeast(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic-1").count(),
                 "Records were not produced to primary cluster.");
-        assertEquals(NUM_RECORDS_PRODUCED, backup.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic-1").count(),
+        assertEquals(NUM_RECORDS_PRODUCED, backup.kafka().consumeAtLeast(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic-1").count(),
                 "Records were not replicated to backup cluster.");
 
-        assertTrue(primary.kafka().consume(1, RECORD_TRANSFER_DURATION_MS, "heartbeats").count() > 0,
+        assertTrue(primary.kafka().consumeAtLeast(1, RECORD_TRANSFER_DURATION_MS, "heartbeats").count() > 0,
                 "Heartbeats were not emitted to primary cluster.");
-        assertTrue(backup.kafka().consume(1, RECORD_TRANSFER_DURATION_MS, "heartbeats").count() > 0,
+        assertTrue(backup.kafka().consumeAtLeast(1, RECORD_TRANSFER_DURATION_MS, "heartbeats").count() > 0,
                 "Heartbeats were not emitted to backup cluster.");
-        assertTrue(backup.kafka().consume(1, RECORD_TRANSFER_DURATION_MS, "primary.heartbeats").count() > 0,
+        assertTrue(backup.kafka().consumeAtLeast(1, RECORD_TRANSFER_DURATION_MS, "primary.heartbeats").count() > 0,
                 "Heartbeats were not replicated downstream to backup cluster.");
-        assertTrue(primary.kafka().consume(1, RECORD_TRANSFER_DURATION_MS, "heartbeats").count() > 0,
+        assertTrue(primary.kafka().consumeAtLeast(1, RECORD_TRANSFER_DURATION_MS, "heartbeats").count() > 0,
                 "Heartbeats were not replicated downstream to primary cluster.");
 
         assertTrue(backupClient.upstreamClusters().contains(PRIMARY_CLUSTER_ALIAS), "Did not find upstream primary cluster.");
         assertEquals(1, backupClient.replicationHops(PRIMARY_CLUSTER_ALIAS), "Did not calculate replication hops correctly.");
-        assertTrue(backup.kafka().consume(1, CHECKPOINT_DURATION_MS, "primary.checkpoints.internal").count() > 0,
+        assertTrue(backup.kafka().consumeAtLeast(1, CHECKPOINT_DURATION_MS, "primary.checkpoints.internal").count() > 0,
                 "Checkpoints were not emitted downstream to backup cluster.");
 
         Map<TopicPartition, OffsetAndMetadata> backupOffsets = backupClient.remoteConsumerOffsets(consumerGroupName, PRIMARY_CLUSTER_ALIAS,
@@ -138,9 +138,9 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
         produceMessages(primary, "test-topic-2", 1);
 
         // expect total consumed messages equals to NUM_RECORDS_PER_PARTITION
-        assertEquals(NUM_RECORDS_PER_PARTITION, primary.kafka().consume(NUM_RECORDS_PER_PARTITION, RECORD_TRANSFER_DURATION_MS, "test-topic-2").count(),
+        assertEquals(NUM_RECORDS_PER_PARTITION, primary.kafka().consumeAtLeast(NUM_RECORDS_PER_PARTITION, RECORD_TRANSFER_DURATION_MS, "test-topic-2").count(),
                 "Records were not produced to primary cluster.");
-        assertEquals(NUM_RECORDS_PER_PARTITION, backup.kafka().consume(NUM_RECORDS_PER_PARTITION, 2 * RECORD_TRANSFER_DURATION_MS, "test-topic-2").count(),
+        assertEquals(NUM_RECORDS_PER_PARTITION, backup.kafka().consumeAtLeast(NUM_RECORDS_PER_PARTITION, 2 * RECORD_TRANSFER_DURATION_MS, "test-topic-2").count(),
                 "New topic was not replicated to backup cluster.");
     }
 

@@ -161,7 +161,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         long recordTransferDurationMs = TimeUnit.SECONDS.toMillis(30);
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced
-        int recordNum = connect.kafka().consume(numRecordsProduced, recordTransferDurationMs, TOPIC_NAME).count();
+        int recordNum = connect.kafka().consumeAtLeast(numRecordsProduced, recordTransferDurationMs, TOPIC_NAME).count();
         assertTrue("Not enough records produced by source connector. Expected at least: " + numRecordsProduced + " + but got " + recordNum,
                 recordNum >= numRecordsProduced);
 
@@ -182,7 +182,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 "Connector tasks did not start in time.");
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced
-        recordNum = connect.kafka().consume(numRecordsProduced, recordTransferDurationMs, anotherTopic).count();
+        recordNum = connect.kafka().consumeAtLeast(numRecordsProduced, recordTransferDurationMs, anotherTopic).count();
         assertTrue("Not enough records produced by source connector. Expected at least: " + numRecordsProduced + " + but got " + recordNum,
                 recordNum >= numRecordsProduced);
     }

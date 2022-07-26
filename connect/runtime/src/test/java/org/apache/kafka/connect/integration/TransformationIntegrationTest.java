@@ -162,9 +162,9 @@ public class TransformationIntegrationTest {
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced.
         assertEquals("Unexpected number of records consumed", numFooRecords,
-                connect.kafka().consume(numFooRecords, RECORD_TRANSFER_DURATION_MS, fooTopic).count());
+                connect.kafka().consumeAtLeast(numFooRecords, RECORD_TRANSFER_DURATION_MS, fooTopic).count());
         assertEquals("Unexpected number of records consumed", numBarRecords,
-                connect.kafka().consume(numBarRecords, RECORD_TRANSFER_DURATION_MS, barTopic).count());
+                connect.kafka().consumeAtLeast(numBarRecords, RECORD_TRANSFER_DURATION_MS, barTopic).count());
 
         // wait for the connector tasks to consume all records.
         connectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
@@ -250,7 +250,7 @@ public class TransformationIntegrationTest {
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced.
         assertEquals("Unexpected number of records consumed", numRecords,
-                connect.kafka().consume(numRecords, RECORD_TRANSFER_DURATION_MS, topic).count());
+                connect.kafka().consumeAtLeast(numRecords, RECORD_TRANSFER_DURATION_MS, topic).count());
 
         // wait for the connector tasks to consume all records.
         connectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
@@ -316,7 +316,7 @@ public class TransformationIntegrationTest {
         connectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced
-        for (ConsumerRecord<byte[], byte[]> record : connect.kafka().consume(1, RECORD_TRANSFER_DURATION_MS, "test-topic")) {
+        for (ConsumerRecord<byte[], byte[]> record : connect.kafka().consumeAtLeast(1, RECORD_TRANSFER_DURATION_MS, "test-topic")) {
             assertNotNull("Expected header to exist",
                     record.headers().lastHeader("header-8"));
         }

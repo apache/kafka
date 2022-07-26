@@ -444,18 +444,32 @@ public class EmbeddedKafkaCluster {
 
     /**
      * Consume at least n records in a given duration or throw an exception.
+     * <p>
+     * Be cautious when verifying data produced to multi-partition topics, as ordering is only
+     * guaranteed within a single partition. The set of records consumed from multi-partition
+     * topics may be returned in a different order than they were produced in, and may only
+     * contain data from a subset of the partitions on the topic, even if none of the partitions
+     * are empty. If desired, {@link #consumeAll(long, Map, Map, String...)} can be used to
+     * ensure that all currently-available records across all partitions on each topic are read.
      *
      * @param n the number of expected records in this topic.
      * @param maxDuration the max duration to wait for these records (in milliseconds).
      * @param topics the topics to subscribe and consume records from.
      * @return a {@link ConsumerRecords} collection containing at least n records.
      */
-    public ConsumerRecords<byte[], byte[]> consume(int n, long maxDuration, String... topics) {
-        return consume(n, maxDuration, Collections.emptyMap(), topics);
+    public ConsumerRecords<byte[], byte[]> consumeAtLeast(int n, long maxDuration, String... topics) {
+        return consumeAtLeast(n, maxDuration, Collections.emptyMap(), topics);
     }
 
     /**
      * Consume at least n records in a given duration or throw an exception.
+     * <p>
+     * Be cautious when verifying data produced to multi-partition topics, as ordering is only
+     * guaranteed within a single partition. The set of records consumed from multi-partition
+     * topics may be returned in a different order than they were produced in, and may only
+     * contain data from a subset of the partitions on the topic, even if none of the partitions
+     * are empty. If desired, {@link #consumeAll(long, Map, Map, String...)} can be used to
+     * ensure that all currently-available records across all partitions on each topic are read.
      *
      * @param n the number of expected records in this topic.
      * @param maxDuration the max duration to wait for these records (in milliseconds).
@@ -464,7 +478,7 @@ public class EmbeddedKafkaCluster {
      *                      may not be null
      * @return a {@link ConsumerRecords} collection containing at least n records.
      */
-    public ConsumerRecords<byte[], byte[]> consume(int n, long maxDuration, Map<String, Object> consumerProps, String... topics) {
+    public ConsumerRecords<byte[], byte[]> consumeAtLeast(int n, long maxDuration, Map<String, Object> consumerProps, String... topics) {
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records = new HashMap<>();
         int consumedRecords = 0;
         try (KafkaConsumer<byte[], byte[]> consumer = createConsumerAndSubscribeTo(consumerProps, topics)) {

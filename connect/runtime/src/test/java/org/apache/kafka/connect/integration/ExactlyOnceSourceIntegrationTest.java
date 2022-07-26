@@ -426,7 +426,7 @@ public class ExactlyOnceSourceIntegrationTest {
             lastExpectedOffsetSeqno = nextExpectedOffsetSeqno - lastExpectedOffsetSeqno;
         }
         ConsumerRecords<byte[], byte[]> offsetRecords = connect.kafka()
-                .consume(
+                .consumeAtLeast(
                         expectedOffsetSeqnos.size(),
                         TimeUnit.MINUTES.toMillis(1),
                         consumerProps,
@@ -771,7 +771,7 @@ public class ExactlyOnceSourceIntegrationTest {
 
             // consume at least the expected number of records from the source topic or fail, to ensure that they were correctly produced
             int recordNum = connectorTargetedCluster
-                    .consume(
+                    .consumeAtLeast(
                             recordsProduced,
                             TimeUnit.MINUTES.toMillis(1),
                             Collections.singletonMap(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed"),
