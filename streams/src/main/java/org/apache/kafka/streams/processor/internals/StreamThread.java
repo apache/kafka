@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -395,7 +396,7 @@ public class StreamThread extends Thread {
             topologyMetadata,
             adminClient,
             stateDirectory,
-            config
+            maybeCreateAndStartStateUpdater(config, changelogReader, time)
         );
         referenceContainer.taskManager = taskManager;
 
@@ -436,6 +437,20 @@ public class StreamThread extends Thread {
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
+    }
+
+    private static StateUpdater maybeCreateAndStartStateUpdater(final StreamsConfig streamsConfig,
+                                                                final ChangelogReader changelogReader,
+                                                                final Time time) {
+        final boolean stateUpdaterEnabled =
+            InternalConfig.getBoolean(streamsConfig.originals(), InternalConfig.STATE_UPDATER_ENABLED, false);
+        if (stateUpdaterEnabled) {
+            final StateUpdater stateUpdater = new DefaultStateUpdater(streamsConfig, changelogReader, time);
+            stateUpdater.start();
+            return stateUpdater;
+        } else {
+            return null;
+        }
     }
 
     public StreamThread(final Time time,

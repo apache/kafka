@@ -35,7 +35,6 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -63,6 +62,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
+import org.mockito.Mockito;
 
 import java.io.File;
 import java.util.Arrays;
@@ -75,7 +75,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -94,7 +93,8 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
-import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
+import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
+import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.eq;
@@ -112,7 +112,6 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -137,6 +136,7 @@ public class TaskManagerTest {
 
     private final TaskId taskId01 = new TaskId(0, 1);
     private final TopicPartition t1p1 = new TopicPartition(topic1, 1);
+    private final TopicPartition t2p2 = new TopicPartition(topic2, 1);
     private final TopicPartition t1p1changelog = new TopicPartition("changelog", 1);
     private final Set<TopicPartition> taskId01Partitions = mkSet(t1p1);
     private final Set<TopicPartition> taskId01ChangelogPartitions = mkSet(t1p1changelog);
@@ -176,6 +176,7 @@ public class TaskManagerTest {
     private StandbyTaskCreator standbyTaskCreator;
     @Mock(type = MockType.NICE)
     private Admin adminClient;
+    final StateUpdater stateUpdater = Mockito.mock(StateUpdater.class);
 
     private TaskManager taskManager;
     private TopologyMetadata topologyMetadata;
@@ -186,12 +187,12 @@ public class TaskManagerTest {
 
     @Before
     public void setUp() {
-        setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE);
+        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, false);
     }
 
-    private void setUpTaskManager(final StreamsConfigUtils.ProcessingMode processingMode) {
+    private TaskManager setUpTaskManager(final ProcessingMode processingMode, final boolean stateUpdaterEnabled) {
         topologyMetadata = new TopologyMetadata(topologyBuilder, new DummyStreamsConfig(processingMode));
-        taskManager = new TaskManager(
+        final TaskManager taskManager = new TaskManager(
             time,
             changeLogReader,
             UUID.randomUUID(),
@@ -201,16 +202,61 @@ public class TaskManagerTest {
             topologyMetadata,
             adminClient,
             stateDirectory,
-            new StreamsConfig(getStreamsConfig("test-app"))
+            stateUpdaterEnabled ? stateUpdater : null
         );
         taskManager.setMainConsumer(consumer);
         reset(topologyBuilder);
         expect(topologyBuilder.hasNamedTopology()).andStubReturn(false);
         expect(topologyBuilder.nodeToSourceTopics()).andStubReturn(emptyMap());
+        return taskManager;
     }
 
     @Test
-    public void shouldCreateStateUpdaterAndUpdateOnTaskInitialization() {
+    public void shouldClassifyExistingTasksWithoutStateUpdater() {
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, false);
+        final Map<TaskId, Set<TopicPartition>> runningActiveTasks = mkMap(mkEntry(taskId01, mkSet(t1p1)));
+        final Map<TaskId, Set<TopicPartition>> standbyTasks = mkMap(mkEntry(taskId02, mkSet(t2p2)));
+        final Map<TaskId, Set<TopicPartition>> restoringActiveTasks = mkMap(mkEntry(taskId03, mkSet(t1p3)));
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>(runningActiveTasks);
+        activeTasks.putAll(restoringActiveTasks);
+        handleAssignment(runningActiveTasks, standbyTasks, restoringActiveTasks);
+
+        taskManager.handleAssignment(activeTasks, standbyTasks);
+
+        Mockito.verifyNoInteractions(stateUpdater);
+    }
+
+    @Test
+    public void shouldClassifyExistingTasksWithStateUpdater() {
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, true);
+        final StandbyTask standbyTaskToRecycle = standbyTask(taskId02, mkSet(t2p2)).build();
+        final StandbyTask standbyTaskToClose = standbyTask(taskId04, mkSet(t2p0)).build();
+        final StreamTask restoringActiveTaskToRecycle = statefulTask(taskId03, mkSet(t1p3)).build();
+        final StreamTask restoringActiveTaskToClose = statefulTask(taskId01, mkSet(t1p1)).build();
+        final Map<TaskId, Set<TopicPartition>> standbyTasks =
+            mkMap(mkEntry(standbyTaskToRecycle.id(), standbyTaskToRecycle.changelogPartitions()));
+        final Map<TaskId, Set<TopicPartition>> restoringActiveTasks = mkMap(
+            mkEntry(restoringActiveTaskToRecycle.id(), restoringActiveTaskToRecycle.changelogPartitions())
+        );
+        when(stateUpdater.getTasks()).thenReturn(mkSet(
+            standbyTaskToRecycle,
+            restoringActiveTaskToRecycle,
+            restoringActiveTaskToClose,
+            standbyTaskToClose
+        ));
+        handleAssignment(Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+
+        taskManager.handleAssignment(standbyTasks, restoringActiveTasks);
+
+        Mockito.verify(stateUpdater).getTasks();
+        Mockito.verify(stateUpdater).remove(standbyTaskToRecycle.id());
+        Mockito.verify(stateUpdater).remove(standbyTaskToClose.id());
+        Mockito.verify(stateUpdater).remove(restoringActiveTaskToRecycle.id());
+        Mockito.verify(stateUpdater).remove(restoringActiveTaskToClose.id());
+    }
+
+    @Test
+    public void shouldAddTasksToStateUpdater() {
         final StreamTask task00 = mock(StreamTask.class);
         final StandbyTask task01 = mock(StandbyTask.class);
         when(task00.id()).thenReturn(taskId00);
@@ -229,8 +275,6 @@ public class TaskManagerTest {
         expect(standbyTaskCreator.createTasks(eq(taskId01Assignment))).andStubReturn(singletonList(task01));
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
-        final Properties prop = getStreamsConfig("test-app");
-        prop.put(StreamsConfig.InternalConfig.STATE_UPDATER_ENABLED, true);
         taskManager = new TaskManager(
             time,
             changeLogReader,
@@ -241,17 +285,15 @@ public class TaskManagerTest {
             topologyMetadata,
             adminClient,
             stateDirectory,
-            new StreamsConfig(prop)
+            stateUpdater
         );
         taskManager.setMainConsumer(consumer);
-
-        assertNotNull(taskManager.stateUpdater());
-
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
+
         taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter -> { });
 
-        assertEquals(Collections.singleton(task00), taskManager.stateUpdater().getActiveTasks());
-        assertEquals(Collections.singleton(task01), taskManager.stateUpdater().getStandbyTasks());
+        Mockito.verify(stateUpdater).add(task00);
+        Mockito.verify(stateUpdater).add(task01);
     }
 
     @Test
@@ -641,7 +683,7 @@ public class TaskManagerTest {
         activeTaskCreator.reInitializeThreadProducer();
         expectLastCall();
 
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
 
         replay(activeTaskCreator);
 
@@ -1014,7 +1056,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringHandleCorruptedWithEOS() {
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.threadProducer()).andStubReturn(producer);
         final ProcessorStateManager stateManager = EasyMock.createMock(ProcessorStateManager.class);
@@ -1154,7 +1196,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringRevocationWithEOS() {
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.threadProducer()).andStubReturn(producer);
         final ProcessorStateManager stateManager = EasyMock.createMock(ProcessorStateManager.class);
@@ -1441,7 +1483,7 @@ public class TaskManagerTest {
     @Test
     public void shouldCommitAllActiveTasksThatNeedCommittingOnHandleRevocationWithEosV2() {
         final StreamsProducer producer = mock(StreamsProducer.class);
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
 
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final Map<TopicPartition, OffsetAndMetadata> offsets00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
@@ -1906,7 +1948,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldOnlyCommitRevokedStandbyTaskAndPropagatePrepareCommitException() {
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_ALPHA);
+        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_ALPHA, false);
 
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, false);
 
@@ -2326,7 +2368,7 @@ public class TaskManagerTest {
                                                      final StreamsProducer producer,
                                                      final Map<TopicPartition, OffsetAndMetadata> offsetsT01,
                                                      final Map<TopicPartition, OffsetAndMetadata> offsetsT02) {
-        setUpTaskManager(processingMode);
+        final TaskManager taskManager = setUpTaskManager(processingMode, false);
 
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
         task01.setCommittableOffsetsAndMetadata(offsetsT01);
@@ -3100,7 +3142,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldNotFailForTimeoutExceptionOnCommitWithEosAlpha() {
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_ALPHA);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_ALPHA, false);
 
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.streamsProducerForTask(anyObject(TaskId.class)))
@@ -3144,7 +3186,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldThrowTaskCorruptedExceptionForTimeoutExceptionOnCommitWithEosV2() {
-        setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
 
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.threadProducer())

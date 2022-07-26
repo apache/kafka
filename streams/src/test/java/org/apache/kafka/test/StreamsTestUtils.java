@@ -282,29 +282,6 @@ public final class StreamsTestUtils {
                 .anyMatch(caller -> "org.apache.kafka.streams.internals.ApiUtils".equals(caller.getClassName()) && "checkSupplier".equals(caller.getMethodName()));
     }
 
-    public static StreamTask createStatefulTask(final TaskId taskId,
-                                                final Set<TopicPartition> changelogPartitions) {
-        final StreamTask task = mock(StreamTask.class);
-        setupStatefulTask(task, taskId, changelogPartitions);
-        when(task.isActive()).thenReturn(true);
-        return task;
-    }
-
-    public static StandbyTask createStandbyTask(final TaskId taskId,
-                                                final Set<TopicPartition> changelogPartitions) {
-        final StandbyTask task = mock(StandbyTask.class);
-        setupStatefulTask(task, taskId, changelogPartitions);
-        when(task.isActive()).thenReturn(false);
-        return task;
-    }
-
-    private static void setupStatefulTask(final Task task,
-                                          final TaskId taskId,
-                                          final Set<TopicPartition> changelogPartitions) {
-        when(task.changelogPartitions()).thenReturn(changelogPartitions);
-        when(task.id()).thenReturn(taskId);
-    }
-
     public static class TaskBuilder<T extends Task> {
         private final T task;
 
