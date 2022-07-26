@@ -76,9 +76,6 @@ public class WorkerConfigTransformerTest {
 
     @Test
     public void testReplaceVariableWithTTL() {
-        // Setup
-        when(worker.herder()).thenReturn(herder);
-
         // Execution
         Map<String, String> props = new HashMap<>();
         props.put(MY_KEY, "${test:testPath:testKeyWithTTL}");
