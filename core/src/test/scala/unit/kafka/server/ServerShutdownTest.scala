@@ -255,7 +255,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   // ZK-only for now.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk"))
-  def testControllerShutdownDuringSend(): Unit = {
+  def testControllerShutdownDuringSend(quorum: String): Unit = {
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
 
