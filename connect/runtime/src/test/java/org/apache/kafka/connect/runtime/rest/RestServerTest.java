@@ -29,6 +29,7 @@ import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -48,6 +49,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.connect.runtime.WorkerConfig.ADMIN_LISTENERS_CONFIG;
@@ -336,6 +338,34 @@ public class RestServerTest {
         HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
         CloseableHttpResponse response = httpClient.execute(httpHost, request);
         Assert.assertEquals(404, response.getStatusLine().getStatusCode());
+    }
+
+    @Test
+    public void testRequestLogs() throws IOException, InterruptedException {
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        DistributedConfig workerConfig = new DistributedConfig(configMap);
+
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
+
+        server = new RestServer(workerConfig);
+        server.initializeServer();
+        server.initializeResources(herder);
+
+        try (LogCaptureAppender restServerAppender = LogCaptureAppender.createAndRegister(RestServer.class)) {
+            HttpRequest request = new HttpGet("/");
+            CloseableHttpClient httpClient = HttpClients.createMinimal();
+            HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
+            CloseableHttpResponse response = httpClient.execute(httpHost, request);
+
+            // Stop the server to flush all logs
+            server.stop();
+
+            List<String> logMessages = restServerAppender.getMessages();
+            String expectedlogContent = "\"GET / HTTP/1.1\" " + String.valueOf(response.getStatusLine().getStatusCode());
+            assertTrue(logMessages.stream().anyMatch(logMessage -> logMessage.contains(expectedlogContent)));
+        }
     }
 
     @Test

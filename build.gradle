@@ -1281,6 +1281,7 @@ project(':clients') {
     testRuntimeOnly libs.jacksonJDK8Datatypes
     testImplementation libs.jose4j
     testImplementation libs.jacksonJaxrsJsonProvider
+    testImplementation libs.log4j
 
     generator project(':generator')
   }

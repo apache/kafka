@@ -198,6 +198,7 @@
 
     <subpackage name="utils">
       <allow pkg="org.apache.kafka.common" />
+      <allow pkg="org.apache.log4j" />
     </subpackage>
 
     <subpackage name="quotas">
