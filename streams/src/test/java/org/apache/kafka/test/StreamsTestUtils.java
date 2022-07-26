@@ -343,6 +343,11 @@ public final class StreamsTestUtils {
             when(task.id()).thenReturn(taskId);
         }
 
+        public TaskBuilder<T> inState(final Task.State state) {
+            when(task.state()).thenReturn(state);
+            return this;
+        }
+
         public T build() {
             return task;
         }
