@@ -236,16 +236,16 @@ object CoreUtils {
     listenerListToEndPoints(listeners, securityProtocolMap, true)
   }
 
-  def validateOneIsIpv4AndOtherIpv6(first: String, second: String): Boolean =
-    (inetAddressValidator.isValidInet4Address(first) && inetAddressValidator.isValidInet6Address(second)) ||
-      (inetAddressValidator.isValidInet6Address(first) && inetAddressValidator.isValidInet4Address(second))
-
   def checkDuplicateListenerPorts(endpoints: Seq[EndPoint], listeners: String): Unit = {
     val distinctPorts = endpoints.map(_.port).distinct
     require(distinctPorts.size == endpoints.map(_.port).size, s"Each listener must have a different port, listeners: $listeners")
   }
 
   def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[EndPoint] = {
+    def validateOneIsIpv4AndOtherIpv6(first: String, second: String): Boolean =
+      (inetAddressValidator.isValidInet4Address(first) && inetAddressValidator.isValidInet6Address(second)) ||
+        (inetAddressValidator.isValidInet6Address(first) && inetAddressValidator.isValidInet4Address(second))
+
     def validate(endPoints: Seq[EndPoint]): Unit = {
       val distinctListenerNames = endPoints.map(_.listenerName).distinct
       require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
