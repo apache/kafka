@@ -118,6 +118,9 @@ class StandbyTaskCreator {
             log.warn("Detected unmatched input partitions for task {} when recycling it from active to standby", streamTask.id);
         }
 
+        streamTask.prepareRecycle();
+        streamTask.stateMgr.transitionTaskType(Task.TaskType.STANDBY);
+
         final StandbyTask task = new StandbyTask(
             streamTask.id,
             inputPartitions,
@@ -130,7 +133,7 @@ class StandbyTaskCreator {
             streamTask.processorContext
         );
 
-        log.trace("Recycled standby task {} from recycled active with assigned partitions {}", task.id, inputPartitions);
+        log.trace("Created standby task {} from recycled active task with assigned partitions {}", task.id, inputPartitions);
         createTaskSensor.record();
         return task;
     }

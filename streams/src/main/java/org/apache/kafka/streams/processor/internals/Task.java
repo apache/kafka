@@ -105,7 +105,7 @@ public interface Task {
      * @throws LockException    could happen when multi-threads within the single instance, could retry
      * @throws StreamsException fatal error, should close the thread
      */
-    boolean initializeIfNeeded();
+    void initializeIfNeeded();
 
     default void addPartitionsForOffsetReset(final Set<TopicPartition> partitionsForOffsetReset) {
         throw new UnsupportedOperationException();
@@ -155,9 +155,9 @@ public interface Task {
     void revive();
 
     /**
-     * Recycle the task's state while closing, and convert its type (from active to standby, and vice versa)
+     * Close the task except the state, so that the states can be later recycled
      */
-    void recycleAndConvert();
+    void prepareRecycle();
 
     // runtime methods (using in RUNNING state)
 

@@ -58,8 +58,10 @@ class Tasks {
     //
     // When that occurs we stash these pending tasks until either they are finally clear to be created,
     // or they are revoked from a new assignment.
-    private final Map<TaskId, Set<TopicPartition>> pendingActiveTasks = new HashMap<>();
-    private final Map<TaskId, Set<TopicPartition>> pendingStandbyTasks = new HashMap<>();
+    private final Map<TaskId, Set<TopicPartition>> pendingActiveTasksToCreate = new HashMap<>();
+    private final Map<TaskId, Set<TopicPartition>> pendingStandbyTasksToCreate = new HashMap<>();
+
+    private final Set<Task> pendingTasksToRestore = new HashSet<>();
 
     // TODO: change type to `StreamTask`
     private final Map<TopicPartition, Task> activeTasksPerPartition = new HashMap<>();
@@ -69,24 +71,34 @@ class Tasks {
     }
 
     void purgePendingTasks(final Set<TaskId> assignedActiveTasks, final Set<TaskId> assignedStandbyTasks) {
-        pendingActiveTasks.keySet().retainAll(assignedActiveTasks);
-        pendingStandbyTasks.keySet().retainAll(assignedStandbyTasks);
+        pendingActiveTasksToCreate.keySet().retainAll(assignedActiveTasks);
+        pendingStandbyTasksToCreate.keySet().retainAll(assignedStandbyTasks);
     }
 
     void addPendingActiveTasks(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
-        pendingActiveTasks.putAll(pendingTasks);
+        pendingActiveTasksToCreate.putAll(pendingTasks);
     }
 
     void addPendingStandbyTasks(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
-        pendingStandbyTasks.putAll(pendingTasks);
+        pendingStandbyTasksToCreate.putAll(pendingTasks);
+    }
+
+    void addPendingTaskToRestore(final Collection<Task> tasks) {
+        pendingTasksToRestore.addAll(tasks);
+    }
+
+    Set<Task> drainPendingTaskToRestore() {
+        final Set<Task> result = new HashSet<>(pendingTasksToRestore);
+        pendingTasksToRestore.clear();
+        return result;
     }
 
     Map<TaskId, Set<TopicPartition>> pendingActiveTasksForTopologies(final Set<String> currentTopologies) {
-        return filterMap(pendingActiveTasks, t -> currentTopologies.contains(t.getKey().topologyName()));
+        return filterMap(pendingActiveTasksToCreate, t -> currentTopologies.contains(t.getKey().topologyName()));
     }
 
     Map<TaskId, Set<TopicPartition>> pendingStandbyTasksForTopologies(final Set<String> currentTopologies) {
-        return filterMap(pendingStandbyTasks, t -> currentTopologies.contains(t.getKey().topologyName()));
+        return filterMap(pendingStandbyTasksToCreate, t -> currentTopologies.contains(t.getKey().topologyName()));
     }
 
     void addNewActiveTasks(final Collection<Task> newTasks) {
@@ -103,7 +115,7 @@ class Tasks {
                 }
 
                 activeTasksPerId.put(activeTask.id(), activeTask);
-                pendingActiveTasks.remove(activeTask.id());
+                pendingActiveTasksToCreate.remove(activeTask.id());
                 for (final TopicPartition topicPartition : activeTask.inputPartitions()) {
                     activeTasksPerPartition.put(topicPartition, activeTask);
                 }
@@ -125,7 +137,7 @@ class Tasks {
                 }
 
                 standbyTasksPerId.put(standbyTask.id(), standbyTask);
-                pendingStandbyTasks.remove(standbyTask.id());
+                pendingStandbyTasksToCreate.remove(standbyTask.id());
             }
         }
     }
@@ -142,12 +154,12 @@ class Tasks {
                 throw new IllegalArgumentException("Attempted to remove an active task that is not owned: " + taskId);
             }
             removePartitionsForActiveTask(taskId);
-            pendingActiveTasks.remove(taskId);
+            pendingActiveTasksToCreate.remove(taskId);
         } else {
             if (standbyTasksPerId.remove(taskId) == null) {
                 throw new IllegalArgumentException("Attempted to remove a standby task that is not owned: " + taskId);
             }
-            pendingStandbyTasks.remove(taskId);
+            pendingStandbyTasksToCreate.remove(taskId);
         }
     }
 

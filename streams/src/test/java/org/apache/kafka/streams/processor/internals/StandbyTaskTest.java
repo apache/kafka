@@ -571,13 +571,13 @@ public class StandbyTaskTest {
         EasyMock.replay(stateManager);
 
         task = createStandbyTask();
-        assertThrows(IllegalStateException.class, () -> task.recycleAndConvert()); // CREATED
+        assertThrows(IllegalStateException.class, () -> task.prepareRecycle()); // CREATED
 
         task.initializeIfNeeded();
-        assertThrows(IllegalStateException.class, () -> task.recycleAndConvert()); // RUNNING
+        assertThrows(IllegalStateException.class, () -> task.prepareRecycle()); // RUNNING
 
         task.suspend();
-        task.recycleAndConvert(); // SUSPENDED
+        task.prepareRecycle(); // SUSPENDED
 
         // Currently, there are no metrics registered for standby tasks.
         // This is a regression test so that, if we add some, we will be sure to deregister them.
