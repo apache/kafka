@@ -232,6 +232,7 @@
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.authorizer" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.fault" />
     <allow pkg="org.apache.kafka.server.metrics" />
     <allow pkg="org.apache.kafka.server.policy"/>
     <allow pkg="org.apache.kafka.snapshot" />
@@ -275,6 +276,9 @@
       <allow pkg="org.apache.kafka.common.resource" />
       <allow pkg="org.apache.kafka.controller" />
       <allow pkg="org.apache.kafka.metadata" />
+    </subpackage>
+    <subpackage name="fault">
+      <allow pkg="org.apache.kafka.server.fault" />
     </subpackage>
   </subpackage>
 
