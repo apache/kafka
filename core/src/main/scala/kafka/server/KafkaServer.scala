@@ -55,6 +55,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
+import scala.collection.mutable.{ArrayBuffer, Buffer}
 
 object KafkaServer {
 
@@ -160,7 +161,7 @@ class KafkaServer(
   var quotaManagers: QuotaFactory.QuotaManagers = null
 
   val zkClientConfig: ZKClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(config)
-  private var _zkClient: KafkaZkClient = null
+  private val _zkClients: Buffer[KafkaZkClient] = new ArrayBuffer(config.liNumControllerInitThreads)
   private var configRepository: ZkConfigRepository = null
 
   val correlationId: AtomicInteger = new AtomicInteger(0)
@@ -194,7 +195,10 @@ class KafkaServer(
   def clusterId: String = _clusterId
 
   // Visible for testing
-  private[kafka] def zkClient = _zkClient
+  private[kafka] def zkClient(i: Int): KafkaZkClient = {
+    _zkClients(i)
+  }
+  private[kafka] def zkClient: KafkaZkClient = zkClient(0)
 
   private[kafka] def brokerTopicStats = _brokerTopicStats
 
@@ -225,7 +229,7 @@ class KafkaServer(
         configRepository = new ZkConfigRepository(new AdminZkClient(zkClient))
 
         /* initialize features */
-        _featureChangeListener = new FinalizedFeatureChangeListener(featureCache, _zkClient)
+        _featureChangeListener = new FinalizedFeatureChangeListener(featureCache, zkClient)
         if (config.isFeatureVersioningSupported) {
           _featureChangeListener.initOrThrow(config.zkConnectionTimeoutMs)
         }
@@ -369,7 +373,7 @@ class KafkaServer(
         tokenManager.startup()
 
         /* start kafka controller */
-        kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, featureCache, threadNamePrefix)
+        kafkaController = new KafkaController(config, _zkClients, time, metrics, brokerInfo, brokerEpoch, tokenManager, brokerFeatures, featureCache, threadNamePrefix)
         kafkaController.startup()
 
         adminManager = new ZkAdminManager(config, metrics, metadataCache, zkClient, kafkaController)
@@ -526,10 +530,21 @@ class KafkaServer(
       throw new java.lang.SecurityException(s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but ZooKeeper client TLS configuration identifying at least $KafkaConfig.ZkSslClientEnableProp, $KafkaConfig.ZkClientCnxnSocketProp, and $KafkaConfig.ZkSslKeyStoreLocationProp was not present and the " +
         s"verification of the JAAS login file failed ${JaasUtils.zkSecuritySysConfigString}")
 
-    _zkClient = KafkaZkClient(config.zkConnect, secureAclsEnabled, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
-      config.zkMaxInFlightRequests, time, name = "Kafka server", zkClientConfig = zkClientConfig,
-      createChrootIfNecessary = true)
-    _zkClient.createTopLevelPaths()
+    // TODO?  should multi-ZK init be dependent on preferred controller config?  highly unlikely for regular
+    //   brokers to become controller if preferred controllers exist (=> equally unlikely to need more than
+    //   one ZK client), but if NO preferred controllers are defined and someone still wants parallel init,
+    //   would be problematic to ignore config...
+    (0 until config.liNumControllerInitThreads).map { i =>
+      debug(s"creating zkClient ${i+1} of ${config.liNumControllerInitThreads}")
+      // alas, this is called upstream of brokerId generation (which comes _from_ ZK via brokerMetadata), so we
+      // can't include the Kafka server's brokerId as part of the ZK client's name (which would be super-useful
+      // for tests with multiple brokers running and probably useful for multi-host log-grepping in prod)
+      _zkClients += KafkaZkClient(config.zkConnect, secureAclsEnabled, config.zkSessionTimeoutMs,
+        config.zkConnectionTimeoutMs, config.zkMaxInFlightRequests, time, name = s"zk${i} Kafka server",
+        zkClientConfig = zkClientConfig, createChrootIfNecessary = true)
+    }
+
+    zkClient.createTopLevelPaths()
   }
 
   private def getOrGenerateClusterId(zkClient: KafkaZkClient): String = {
@@ -816,8 +831,15 @@ class KafkaServer(
         if (featureChangeListener != null)
           CoreUtils.swallow(featureChangeListener.close(), this)
 
-        if (zkClient != null)
-          CoreUtils.swallow(zkClient.close(), this)
+        if (!_zkClients.isEmpty) {
+          (0 until config.liNumControllerInitThreads).map { i =>
+            debug(s"shutting down zkClient ${i+1} of ${config.liNumControllerInitThreads}: ${_zkClients(i)}")
+            if (_zkClients(i) != null) {
+              CoreUtils.swallow(_zkClients(i).close(), this)
+            }
+          }
+          _zkClients.clear // _zkClients(0) is special (backward-compatibility), and tests reuse same server instance
+        }
 
         if (quotaManagers != null)
           CoreUtils.swallow(quotaManagers.shutdown(), this)

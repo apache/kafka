@@ -82,9 +82,11 @@ abstract class MultiClusterAbstractConsumerTest extends MultiClusterBaseRequestT
       this.consumerConfigs(i).setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "6000")
     }
 
-    // create the test topics
+    // create the test topic(s)
     createTopic(topicNameCluster0, numPartitions = 2, replicaCount, clusterIndex = 0)
-    createTopic(topicNameCluster1, 1, replicaCount, clusterIndex = 1)  // single-partition topic in 2nd cluster for simplicity
+    if (numClusters > 1) {
+      createTopic(topicNameCluster1, 1, replicaCount, clusterIndex = 1)  // single-partition topic in 2nd cluster for simplicity
+    }
   }
 
   protected class TestConsumerReassignmentListener extends ConsumerRebalanceListener {
@@ -113,6 +115,14 @@ abstract class MultiClusterAbstractConsumerTest extends MultiClusterBaseRequestT
                             tp: TopicPartition):
                             Seq[ProducerRecord[Array[Byte], Array[Byte]]] = {
     val records = (0 until numRecords).map { i =>
+      // NOTE:  The use of i as a "timestamp" is strongly tied to the default TimestampType.CREATE_TIME in
+      // consumeAndVerifyRecords() below, but it also means test cases are implicitly limited to no more
+      // than 30 seconds between produce and consume (30 sec = default periodicity of checking for beyond-
+      // retention log segments, and single-digit "times" are from January 1970 => WAY past any reasonable
+      // expiry), OR they must explicitly set log.retention.ms to something extremely large.  An alternative
+      // would be to add a boolean to this method to allow the caller to select record-index-as-time vs.
+      // real time (Time.SYSTEM.milliseconds), but since 30-second+ test cases are highly undesirable in the
+      // first place, we simply point out the issue here.
       val record = new ProducerRecord(tp.topic(), tp.partition(), i.toLong, s"key $i".getBytes, s"value $i".getBytes)
       producer.send(record)
       record
