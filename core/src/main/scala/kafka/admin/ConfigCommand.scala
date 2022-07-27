@@ -20,7 +20,6 @@ package kafka.admin
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
-
 import joptsimple._
 import kafka.log.LogConfig
 import kafka.server.DynamicConfig.QuotaConfigs
@@ -211,7 +210,7 @@ object ConfigCommand extends Logging {
     encoderConfigs.get(KafkaConfig.PasswordEncoderSecretProp)
     val encoderSecret = encoderConfigs.getOrElse(KafkaConfig.PasswordEncoderSecretProp,
       throw new IllegalArgumentException("Password encoder secret not specified"))
-    new PasswordEncoder(new Password(encoderSecret),
+    PasswordEncoder.encrypting(new Password(encoderSecret),
       None,
       encoderConfigs.get(KafkaConfig.PasswordEncoderCipherAlgorithmProp).getOrElse(Defaults.PasswordEncoderCipherAlgorithm),
       encoderConfigs.get(KafkaConfig.PasswordEncoderKeyLengthProp).map(_.toInt).getOrElse(Defaults.PasswordEncoderKeyLength),
