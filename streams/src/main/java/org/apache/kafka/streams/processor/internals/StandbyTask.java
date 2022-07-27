@@ -227,7 +227,6 @@ public class StandbyTask extends AbstractTask implements Task {
         streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
         if (state() == State.SUSPENDED) {
             stateMgr.recycle();
-            stateMgr.transitionTaskType(TaskType.ACTIVE);
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while closing standby task " + id);
         }
