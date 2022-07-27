@@ -98,7 +98,8 @@ object QuotaFactory extends Logging {
     ClientQuotaManagerConfig(
       quotaDefault = cfg.producerQuotaBytesPerSecondDefault,
       numQuotaSamples = cfg.numQuotaSamples,
-      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
+      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds,
+      inactiveSensorExpirationTimeSeconds = cfg.inactiveSensorExpirationTimeSeconds
     )
   }
 
@@ -108,21 +109,24 @@ object QuotaFactory extends Logging {
     ClientQuotaManagerConfig(
       quotaDefault = cfg.consumerQuotaBytesPerSecondDefault,
       numQuotaSamples = cfg.numQuotaSamples,
-      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
+      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds,
+      inactiveSensorExpirationTimeSeconds = cfg.inactiveSensorExpirationTimeSeconds
     )
   }
 
   def clientRequestConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
     ClientQuotaManagerConfig(
       numQuotaSamples = cfg.numQuotaSamples,
-      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
+      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds,
+      inactiveSensorExpirationTimeSeconds = cfg.inactiveSensorExpirationTimeSeconds
     )
   }
 
   def clientControllerMutationConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
     ClientQuotaManagerConfig(
       numQuotaSamples = cfg.numControllerQuotaSamples,
-      quotaWindowSizeSeconds = cfg.controllerQuotaWindowSizeSeconds
+      quotaWindowSizeSeconds = cfg.controllerQuotaWindowSizeSeconds,
+      inactiveSensorExpirationTimeSeconds = cfg.inactiveSensorExpirationTimeSeconds
     )
   }
 

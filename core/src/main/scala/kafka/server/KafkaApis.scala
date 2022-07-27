@@ -643,14 +643,21 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (produceRequest.acks == 0) 0
         else quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
       val maxThrottleTimeMs = Math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
-      if (maxThrottleTimeMs > 0) {
+      // [LIKAFKA-45345] even if the throttleTimeMs is 0, we still record it so that
+      // the throttle-time sensor does not expire before the byte-rate sensor in quotas.produce or
+      // the request-time sensor in quotas.request.
+      val (effectiveBandWidthThrottleTime, effectiveRequestThrottleTime) = if (maxThrottleTimeMs > 0) {
         request.apiThrottleTimeMs = maxThrottleTimeMs
         if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
-          requestHelper.throttle(quotas.produce, request, bandwidthThrottleTimeMs)
+          (bandwidthThrottleTimeMs, 0)
         } else {
-          requestHelper.throttle(quotas.request, request, requestThrottleTimeMs)
+          (0, requestThrottleTimeMs)
         }
+      } else {
+        (0, 0)
       }
+      requestHelper.throttle(quotas.produce, request, effectiveBandWidthThrottleTime)
+      requestHelper.throttle(quotas.request, request, effectiveRequestThrottleTime)
 
       // Send the response immediately. In case of throttling, the channel has already been muted.
       if (produceRequest.acks == 0) {
@@ -936,23 +943,29 @@ class KafkaApis(val requestChannel: RequestChannel,
         val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request, responseSize, timeMs)
 
         val maxThrottleTimeMs = math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
-        if (maxThrottleTimeMs > 0) {
+        // [LIKAFKA-45345] even if the throttleTimeMs is 0, we still record it so that
+        // the throttle-time sensor does not expire before the byte-rate sensor in quotas.fetch
+        // or the request-time sensor in quotas.request.
+        val (effectiveBandwidthThrottleTime, effectiveRequestThrottleTime) = if (maxThrottleTimeMs > 0) {
           request.apiThrottleTimeMs = maxThrottleTimeMs
           // Even if we need to throttle for request quota violation, we should "unrecord" the already recorded value
           // from the fetch quota because we are going to return an empty response.
           quotas.fetch.unrecordQuotaSensor(request, responseSize, timeMs)
-          if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
-            requestHelper.throttle(quotas.fetch, request, bandwidthThrottleTimeMs)
-          } else {
-            requestHelper.throttle(quotas.request, request, requestThrottleTimeMs)
-          }
           // If throttling is required, return an empty response.
           unconvertedFetchResponse = fetchContext.getThrottledResponse(maxThrottleTimeMs)
+          if (bandwidthThrottleTimeMs > requestThrottleTimeMs) {
+            (bandwidthThrottleTimeMs, 0)
+          } else {
+            (0, requestThrottleTimeMs)
+          }
         } else {
           // Get the actual response. This will update the fetch context.
           unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
           trace(s"Sending Fetch response with partitions.size=$responseSize, metadata=${unconvertedFetchResponse.sessionId}")
+          (0, 0)
         }
+        requestHelper.throttle(quotas.fetch, request, effectiveBandwidthThrottleTime)
+        requestHelper.throttle(quotas.request, request, effectiveRequestThrottleTime)
 
         // Send the response immediately.
         requestChannel.sendResponse(request, createResponse(maxThrottleTimeMs), Some(updateConversionStats))

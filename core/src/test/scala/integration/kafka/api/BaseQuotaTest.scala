@@ -277,7 +277,7 @@ abstract class QuotaTestClients(topic: String,
     if (expectThrottle) {
       assertTrue(throttleMetricValue > 0, s"Client with id=$clientId should have been throttled")
     } else {
-      assertTrue(throttleMetricValue.isNaN, s"Client with id=$clientId should not have been throttled")
+      assertTrue(throttleMetricValue == 0, s"Client with id=$clientId should not have been throttled")
     }
   }
 

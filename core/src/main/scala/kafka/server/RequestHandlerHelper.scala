@@ -106,18 +106,20 @@ class RequestHandlerHelper(
   // response immediately.
   def sendResponseMaybeThrottle(request: RequestChannel.Request,
                                 createResponse: Int => AbstractResponse): Unit = {
-    val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
     // Only throttle non-forwarded requests
-    if (!request.isForwarded)
-      throttle(quotas.request, request, throttleTimeMs)
+    val throttleTimeMs = if (!request.isForwarded) {
+      maybeRecordAndGetThrottleTimeMs(request)
+    } else 0
+    throttle(quotas.request, request, throttleTimeMs)
     requestChannel.sendResponse(request, createResponse(throttleTimeMs), None)
   }
 
   def sendErrorResponseMaybeThrottle(request: RequestChannel.Request, error: Throwable): Unit = {
-    val throttleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
     // Only throttle non-forwarded requests or cluster authorization failures
-    if (error.isInstanceOf[ClusterAuthorizationException] || !request.isForwarded)
-      throttle(quotas.request, request, throttleTimeMs)
+    val throttleTimeMs = if (error.isInstanceOf[ClusterAuthorizationException] || !request.isForwarded) {
+      maybeRecordAndGetThrottleTimeMs(request)
+    } else 0
+    throttle(quotas.request, request, throttleTimeMs)
     sendErrorOrCloseConnection(request, error, throttleTimeMs)
   }
 
@@ -139,14 +141,18 @@ class RequestHandlerHelper(
     val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
     val maxThrottleTimeMs = Math.max(controllerThrottleTimeMs, requestThrottleTimeMs)
     // Only throttle non-forwarded requests
-    if (maxThrottleTimeMs > 0 && !request.isForwarded) {
+    val (effectiveControllerThrottleTime, effectiveRequestThrottleTime) = if (maxThrottleTimeMs > 0 && !request.isForwarded) {
       request.apiThrottleTimeMs = maxThrottleTimeMs
       if (controllerThrottleTimeMs > requestThrottleTimeMs) {
-        throttle(quotas.controllerMutation, request, controllerThrottleTimeMs)
+        (controllerThrottleTimeMs, 0)
       } else {
-        throttle(quotas.request, request, requestThrottleTimeMs)
+        (0, requestThrottleTimeMs)
       }
+    } else {
+      (0, 0)
     }
+    throttle(quotas.controllerMutation, request, effectiveControllerThrottleTime)
+    throttle(quotas.request, request, effectiveRequestThrottleTime)
 
     requestChannel.sendResponse(request, createResponse(maxThrottleTimeMs), None)
   }

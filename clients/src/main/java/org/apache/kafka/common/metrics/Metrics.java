@@ -76,6 +76,10 @@ public class Metrics implements Closeable {
     private final Time time;
     private final ScheduledThreadPoolExecutor metricsScheduler;
     private static final Logger log = LoggerFactory.getLogger(Metrics.class);
+    // Allowing the initial delay and period of the metrics scheduler to be changed
+    // so that metrics can be expired faster in tests
+    private static long metricsSchedulerInitialDelaySeconds = 30;
+    private static long metricsSchedulerPeriodSeconds = 30;
 
     private volatile boolean replaceOnDuplicate = false;
 
@@ -174,7 +178,8 @@ public class Metrics implements Closeable {
             this.metricsScheduler = new ScheduledThreadPoolExecutor(1);
             // Creating a daemon thread to not block shutdown
             this.metricsScheduler.setThreadFactory(runnable -> KafkaThread.daemon("SensorExpiryThread", runnable));
-            this.metricsScheduler.scheduleAtFixedRate(new ExpireSensorTask(), 30, 30, TimeUnit.SECONDS);
+            this.metricsScheduler.scheduleAtFixedRate(new ExpireSensorTask(), metricsSchedulerInitialDelaySeconds,
+                metricsSchedulerPeriodSeconds, TimeUnit.SECONDS);
         } else {
             this.metricsScheduler = null;
         }
@@ -183,7 +188,15 @@ public class Metrics implements Closeable {
             (config, now) -> metrics.size());
     }
 
-    /**
+    public static void setMetricsSchedulerInitialDelaySeconds(long metricsSchedulerInitialDelaySeconds) {
+        Metrics.metricsSchedulerInitialDelaySeconds = metricsSchedulerInitialDelaySeconds;
+    }
+
+    public static void setMetricsSchedulerPeriodSeconds(long metricsSchedulerPeriodSeconds) {
+        Metrics.metricsSchedulerPeriodSeconds = metricsSchedulerPeriodSeconds;
+    }
+
+  /**
      * Create a MetricName with the given name, group, description and tags, plus default tags specified in the metric
      * configuration. Tag in tags takes precedence if the same tag key is specified in the default metric configuration.
      *

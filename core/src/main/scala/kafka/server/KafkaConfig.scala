@@ -250,7 +250,7 @@ object Defaults {
   val AlterLogDirsReplicationQuotaWindowSizeSeconds: Int = ReplicationQuotaManagerConfig.DefaultQuotaWindowSizeSeconds
   val NumControllerQuotaSamples: Int = ClientQuotaManagerConfig.DefaultNumQuotaSamples
   val ControllerQuotaWindowSizeSeconds: Int = ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds
-
+  val InactiveSensorExpirationTimeSeconds = ClientQuotaManagerConfig.DefaultInactiveSensorExpirationTimeSeconds
   /** ********* Transaction Configuration ***********/
   val TransactionalIdExpirationMsDefault = 604800000
 
@@ -599,7 +599,7 @@ object KafkaConfig {
   val AlterLogDirsReplicationQuotaWindowSizeSecondsProp = "alter.log.dirs.replication.quota.window.size.seconds"
   val ControllerQuotaWindowSizeSecondsProp = "controller.quota.window.size.seconds"
   val ClientQuotaCallbackClassProp = "client.quota.callback.class"
-
+  val InactiveSensorExpirationTimeSecondsProp = "inactive.sensor.expiration.time.seconds"
   val DeleteTopicEnableProp = "delete.topic.enable"
   val CompressionTypeProp = "compression.type"
 
@@ -1036,6 +1036,7 @@ object KafkaConfig {
     "which is used to determine quota limits applied to client requests. By default, <user, client-id>, <user> or <client-id> " +
     "quotas stored in ZooKeeper are applied. For any given request, the most specific quota that matches the user principal " +
     "of the session and the client-id of the request is applied."
+  val InactiveSensorExpirationTimeSecondsDoc = "The time it takes an inactive sensor to expire and be removed from JMX"
 
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +
@@ -1385,6 +1386,7 @@ object KafkaConfig {
       .define(AlterLogDirsReplicationQuotaWindowSizeSecondsProp, INT, Defaults.AlterLogDirsReplicationQuotaWindowSizeSeconds, atLeast(1), LOW, AlterLogDirsReplicationQuotaWindowSizeSecondsDoc)
       .define(ControllerQuotaWindowSizeSecondsProp, INT, Defaults.ControllerQuotaWindowSizeSeconds, atLeast(1), LOW, ControllerQuotaWindowSizeSecondsDoc)
       .define(ClientQuotaCallbackClassProp, CLASS, null, LOW, ClientQuotaCallbackClassDoc)
+      .define(InactiveSensorExpirationTimeSecondsProp, LONG, Defaults.InactiveSensorExpirationTimeSeconds, atLeast(1), LOW, InactiveSensorExpirationTimeSecondsDoc)
 
       /** ********* General Security Configuration ****************/
       .define(ConnectionsMaxReauthMsProp, LONG, Defaults.ConnectionsMaxReauthMsDefault, MEDIUM, ConnectionsMaxReauthMsDoc)
@@ -1932,6 +1934,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val alterLogDirsReplicationQuotaWindowSizeSeconds = getInt(KafkaConfig.AlterLogDirsReplicationQuotaWindowSizeSecondsProp)
   val numControllerQuotaSamples = getInt(KafkaConfig.NumControllerQuotaSamplesProp)
   val controllerQuotaWindowSizeSeconds = getInt(KafkaConfig.ControllerQuotaWindowSizeSecondsProp)
+  val inactiveSensorExpirationTimeSeconds = getLong(KafkaConfig.InactiveSensorExpirationTimeSecondsProp)
 
   /** ********* Fetch Configuration **************/
   val maxIncrementalFetchSessionCacheSlots = getInt(KafkaConfig.MaxIncrementalFetchSessionCacheSlots)

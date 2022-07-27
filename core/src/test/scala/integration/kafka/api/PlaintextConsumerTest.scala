@@ -29,7 +29,7 @@ import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{Disabled, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
@@ -631,7 +631,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0L, consumer.position(tp), "position() on a partition that we are subscribed to should reset the offset")
     consumer.commitSync()
     assertEquals(0L, consumer.committed(Set(tp).asJava).get(tp).offset)
-    
+
     consumeAndVerifyRecords(consumer = consumer, numRecords = 5, startingOffset = 0, startingTimestamp = startingTimestamp)
     assertEquals(5L, consumer.position(tp), "After consuming 5 records, position should be 5")
     consumer.commitSync()
@@ -1524,7 +1524,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(numMessages - records.count, lag.metricValue.asInstanceOf[Double], epsilon, s"The lag should be ${numMessages - records.count}")
   }
 
+  // Due to LIKAFKA-45569, we make the change to always record a throttle-time of 0 as long as there is traffic,
+  // even when the traffic is not causing quota violations. Thus, this test is no longer applicable.
   @Test
+  @Disabled
   def testQuotaMetricsNotCreatedIfNoQuotasConfigured(): Unit = {
     val numRecords = 1000
     val producer = createProducer()
