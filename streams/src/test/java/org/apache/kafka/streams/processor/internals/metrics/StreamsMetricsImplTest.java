@@ -439,11 +439,10 @@ public class StreamsMetricsImplTest {
         assertThat(sensorKeys.getAllValues().get(0), not(sensorKeys.getAllValues().get(1)));
     }
 
-/*
     @Test
     public void shouldNotUseSameStoreLevelSensorKeyWithDifferentThreadIds() throws InterruptedException {
-        final Metrics metrics = niceMock(Metrics.class);
-        final Capture<String> sensorKeys = setUpSensorKeyTests(metrics);
+        final Metrics metrics = mock(Metrics.class);
+        final ArgumentCaptor<String> sensorKeys = setUpSensorKeyTests(metrics);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
@@ -452,21 +451,20 @@ public class StreamsMetricsImplTest {
         otherThread.start();
         otherThread.join();
 
-        assertThat(sensorKeys.getValues().get(0), not(sensorKeys.getValues().get(1)));
+        assertThat(sensorKeys.getAllValues().get(0), not(sensorKeys.getAllValues().get(1)));
     }
 
     @Test
     public void shouldUseSameStoreLevelSensorKeyWithSameSensorNames() {
-        final Metrics metrics = niceMock(Metrics.class);
-        final Capture<String> sensorKeys = setUpSensorKeyTests(metrics);
+        final Metrics metrics = mock(Metrics.class);
+        final ArgumentCaptor<String> sensorKeys = setUpSensorKeyTests(metrics);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
 
-        assertThat(sensorKeys.getValues().get(0), is(sensorKeys.getValues().get(1)));
+        assertThat(sensorKeys.getAllValues().get(0), is(sensorKeys.getAllValues().get(1)));
     }
-*/
 
     private ArgumentCaptor<String> setUpSensorKeyTests(final Metrics metrics) {
         final ArgumentCaptor<String> sensorKeyArgumentCaptor = ArgumentCaptor.forClass(String.class);
