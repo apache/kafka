@@ -17,8 +17,6 @@
 
 package org.apache.kafka.server.fault;
 
-import org.slf4j.Logger;
-
 
 /**
  * Handle a server fault.
@@ -28,9 +26,11 @@ public interface FaultHandler {
      * Handle a fault.
      *
      * @param failureMessage        The failure message to log.
+     *
+     * @return                      The fault exception.
      */
-    default void handleFault(String failureMessage) {
-        handleFault(failureMessage, null);
+    default RuntimeException handleFault(String failureMessage) {
+        return handleFault(failureMessage, null);
     }
 
     /**
@@ -38,21 +38,8 @@ public interface FaultHandler {
      *
      * @param failureMessage        The failure message to log.
      * @param cause                 The exception that caused the problem, or null.
-     */
-    void handleFault(String failureMessage, Throwable cause);
-
-    /**
-     * Log a failure message about a fault.
      *
-     * @param log               The log4j logger.
-     * @param failureMessage    The failure message.
-     * @param cause             The exception which caused the failure, or null.
+     * @return                      The fault exception.
      */
-    static void logFailureMessage(Logger log, String failureMessage, Throwable cause) {
-        if (cause == null) {
-            log.error("Encountered fatal fault: {}", failureMessage);
-        } else {
-            log.error("Encountered fatal fault: {}", failureMessage, cause);
-        }
-    }
+    RuntimeException handleFault(String failureMessage, Throwable cause);
 }

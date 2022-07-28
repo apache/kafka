@@ -27,12 +27,20 @@ import org.apache.kafka.common.{Endpoint, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{BrokerRegistration, RecordTestUtils, VersionRange}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.fault.MockFaultHandler
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.jdk.CollectionConverters._
 
 class BrokerMetadataListenerTest {
+  private val metadataLoadingFaultHandler = new MockFaultHandler("metadata loading")
+
+  @AfterEach
+  def verifyNoFaults(): Unit = {
+    metadataLoadingFaultHandler.maybeRethrowFirstException()
+  }
+
   private def newBrokerMetadataListener(
     metrics: BrokerServerMetrics = BrokerServerMetrics(new Metrics()),
     snapshotter: Option[MetadataSnapshotter] = None,
@@ -44,7 +52,8 @@ class BrokerMetadataListenerTest {
       threadNamePrefix = None,
       maxBytesBetweenSnapshots = maxBytesBetweenSnapshots,
       snapshotter = snapshotter,
-      brokerMetrics = metrics
+      brokerMetrics = metrics,
+      metadataLoadingFaultHandler = metadataLoadingFaultHandler
     )
   }
 
@@ -77,6 +86,8 @@ class BrokerMetadataListenerTest {
       assertEquals(100L, listener.highestMetadataOffset)
       assertEquals(0L, metrics.lastAppliedRecordOffset.get)
       assertEquals(0L, metrics.lastAppliedRecordTimestamp.get)
+      assertEquals(0L, metrics.metadataLoadErrorCount.get)
+      assertEquals(0L, metrics.metadataApplyErrorCount.get)
 
       val fencedTimestamp = 500L
       val fencedLastOffset = 200L
@@ -110,6 +121,8 @@ class BrokerMetadataListenerTest {
 
       assertEquals(fencedLastOffset, metrics.lastAppliedRecordOffset.get)
       assertEquals(fencedTimestamp, metrics.lastAppliedRecordTimestamp.get)
+      assertEquals(0L, metrics.metadataLoadErrorCount.get)
+      assertEquals(0L, metrics.metadataApplyErrorCount.get)
     } finally {
       listener.close()
     }

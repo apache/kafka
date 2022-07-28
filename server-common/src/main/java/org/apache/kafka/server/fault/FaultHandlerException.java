@@ -15,18 +15,24 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.metadata.fault;
+package org.apache.kafka.server.fault;
 
 
 /**
- * A fault that we encountered while we replayed cluster metadata.
+ * An exception thrown by a fault handler.
  */
-public class MetadataFaultException extends RuntimeException {
-    public MetadataFaultException(String message, Throwable cause) {
-        super(message, cause);
+public class FaultHandlerException extends RuntimeException {
+    public FaultHandlerException(String failureMessage, Throwable cause) {
+        super(failureMessage, cause);
+        // If a cause exception was provided, set our the stack trace its stack trace. This is
+        // useful in junit tests where a limited number of stack frames are printed, and usually
+        // the stack frames of cause exceptions get trimmed.
+        if (cause != null) {
+            setStackTrace(cause.getStackTrace());
+        }
     }
 
-    public MetadataFaultException(String message) {
-        super(message);
+    public FaultHandlerException(String failureMessage) {
+        this(failureMessage, null);
     }
 }
