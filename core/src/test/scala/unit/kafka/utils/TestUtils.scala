@@ -919,6 +919,76 @@ object TestUtils extends Logging {
   }
 
   /**
+   *  If neither oldLeaderOpt nor newLeaderOpt is defined, wait until the leader of a partition is elected.
+   *  If oldLeaderOpt is defined, it waits until the new leader is different from the old leader.
+   *  If newLeaderOpt is defined, it waits until the new leader becomes the expected new leader.
+   *
+   * @return The new leader (note that negative values are used to indicate conditions like NoLeader and
+   *         LeaderDuringDelete).
+   * @throws AssertionError if the expected condition is not true within the timeout.
+   */
+  def waitUntilLeaderIsElectedOrChangedWithAdmin(
+    admin: Admin,
+    topic: String,
+    partition: Int,
+    timeoutMs: Long = 30000L,
+    oldLeaderOpt: Option[Int] = None,
+    newLeaderOpt: Option[Int] = None
+  ): Int = {
+    require(!(oldLeaderOpt.isDefined && newLeaderOpt.isDefined), "Can't define both the old and the new leader")
+    val startTime = System.currentTimeMillis()
+    val topicPartition = new TopicPartition(topic, partition)
+
+    trace(s"Waiting for leader to be elected or changed for partition $topicPartition, old leader is $oldLeaderOpt, " +
+      s"new leader is $newLeaderOpt")
+
+    var leader: Option[Int] = None
+    var electedOrChangedLeader: Option[Int] = None
+    while (electedOrChangedLeader.isEmpty && System.currentTimeMillis() < startTime + timeoutMs) {
+      // check if leader is elected
+      leader = admin.describeTopics(Collections.singletonList(topic)).allTopicNames().get().get(topic).partitions().asScala.
+        find(_.partition() == partition).
+        flatMap { p =>
+          if (p.leader().id() == -1) {
+            None
+          } else {
+            Some(p.leader().id())
+          }
+        }
+      leader match {
+        case Some(l) => (newLeaderOpt, oldLeaderOpt) match {
+          case (Some(newLeader), _) if newLeader == l =>
+            trace(s"Expected new leader $l is elected for partition $topicPartition")
+            electedOrChangedLeader = leader
+          case (_, Some(oldLeader)) if oldLeader != l =>
+            trace(s"Leader for partition $topicPartition is changed from $oldLeader to $l")
+            electedOrChangedLeader = leader
+          case (None, None) =>
+            trace(s"Leader $l is elected for partition $topicPartition")
+            electedOrChangedLeader = leader
+          case _ =>
+            trace(s"Current leader for partition $topicPartition is $l")
+        }
+        case None =>
+          trace(s"Leader for partition $topicPartition is not elected yet")
+      }
+      Thread.sleep(math.min(timeoutMs, 100L))
+    }
+    electedOrChangedLeader.getOrElse {
+      val errorMessage = (newLeaderOpt, oldLeaderOpt) match {
+        case (Some(newLeader), _) =>
+          s"Timing out after $timeoutMs ms since expected new leader $newLeader was not elected for partition $topicPartition, leader is $leader"
+        case (_, Some(oldLeader)) =>
+          s"Timing out after $timeoutMs ms since a new leader that is different from $oldLeader was not elected for partition $topicPartition, " +
+            s"leader is $leader"
+        case _ =>
+          s"Timing out after $timeoutMs ms since a leader was not elected for partition $topicPartition"
+      }
+      throw new AssertionError(errorMessage)
+    }
+  }
+
+  /**
    * Execute the given block. If it throws an assert error, retry. Repeat
    * until no error is thrown or the time limit elapses
    */

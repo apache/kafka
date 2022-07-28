@@ -19,13 +19,14 @@ package kafka.api
 
 import java.time.Duration
 import java.nio.charset.StandardCharsets
-import java.util.Properties
+import java.util.{Collections, Properties}
 import java.util.concurrent.TimeUnit
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
+import kafka.utils.TestUtils.{createAdminClient, resource}
+import kafka.utils.{TestInfoUtils, TestUtils}
+import org.apache.kafka.clients.admin.{Admin, NewPartitions}
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.errors.TimeoutException
@@ -34,7 +35,9 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
@@ -42,11 +45,11 @@ import scala.concurrent.ExecutionException
 
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
-  def generateConfigs = {
+  def generateConfigs: scala.collection.Seq[KafkaConfig] = {
     val overridingProps = new Properties()
     val numServers = 2
     overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
-    TestUtils.createBrokerConfigs(numServers, zkConnect, false, interBrokerSecurityProtocol = Some(securityProtocol),
+    TestUtils.createBrokerConfigs(numServers, zkConnectOrNull, false, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties).map(KafkaConfig.fromProps(_, overridingProps))
   }
 
@@ -105,8 +108,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
    * 1. Send with null key/value/partition-id should be accepted; send with null topic should be rejected.
    * 2. Last message of the non-blocking send should return the correct offset metadata
    */
-  @Test
-  def testSendOffset(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendOffset(quorum: String): Unit = {
     val producer = createProducer()
     val partition = 0
 
@@ -134,7 +138,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
     try {
       // create topic
-      createTopic(topic, 1, 2)
+      createTopic(topic, 1, 2, listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
 
       // send a normal record
       val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "key".getBytes(StandardCharsets.UTF_8),
@@ -166,8 +170,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     }
   }
 
-  @Test
-  def testSendCompressedMessageWithCreateTime(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendCompressedMessageWithCreateTime(quorum: String): Unit = {
     val producer = createProducer(
       compressionType = "gzip",
       lingerMs = Int.MaxValue,
@@ -175,8 +180,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     sendAndVerifyTimestamp(producer, TimestampType.CREATE_TIME)
   }
 
-  @Test
-  def testSendNonCompressedMessageWithCreateTime(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendNonCompressedMessageWithCreateTime(quorum: String): Unit = {
     val producer = createProducer(lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
     sendAndVerifyTimestamp(producer, TimestampType.CREATE_TIME)
   }
@@ -267,8 +273,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
    *
    * After close() returns, all messages should be sent with correct returned offset metadata
    */
-  @Test
-  def testClose(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testClose(quorum: String): Unit = {
     val producer = createProducer()
 
     try {
@@ -300,8 +307,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
    *
    * The specified partition-id should be respected
    */
-  @Test
-  def testSendToPartition(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendToPartition(quorum: String): Unit = {
     val producer = createProducer()
 
     try {
@@ -345,8 +353,15 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     * Producer will attempt to send messages to the partition specified in each record, and should
     * succeed as long as the partition is included in the metadata.
     */
-  @Test
-  def testSendBeforeAndAfterPartitionExpansion(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSendBeforeAndAfterPartitionExpansion(quorum: String): Unit = {
+    resource(createAdminClient(brokers, listenerName)) { admin =>
+      testSendBeforeAndAfterPartitionExpansion(admin)
+    }
+  }
+
+  private def testSendBeforeAndAfterPartitionExpansion(admin: Admin): Unit = {
     val producer = createProducer(maxBlockMs = 5 * 1000L)
 
     // create topic
@@ -369,13 +384,11 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val e = assertThrows(classOf[ExecutionException], () => producer.send(new ProducerRecord(topic, partition1, null, "value".getBytes(StandardCharsets.UTF_8))).get())
     assertEquals(classOf[TimeoutException], e.getCause.getClass)
 
-    val existingAssignment = zkClient.getFullReplicaAssignmentForTopics(Set(topic)).map {
-      case (topicPartition, assignment) => topicPartition.partition -> assignment
-    }
-    adminZkClient.addPartitions(topic, existingAssignment, adminZkClient.getBrokerMetadatas(), 2)
+    admin.createPartitions(Collections.singletonMap(topic, NewPartitions.increaseTo(2))).all().get()
+
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitForPartitionMetadata(servers, topic, 0)
-    TestUtils.waitForPartitionMetadata(servers, topic, 1)
+    TestUtils.waitForPartitionMetadata(brokers, topic, 0)
+    TestUtils.waitForPartitionMetadata(brokers, topic, 1)
 
     // send records to the newly added partition after confirming that metadata have been updated.
     val futures1 = (1 to numRecords).map { i =>
@@ -404,8 +417,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   /**
    * Test that flush immediately sends all accumulated requests.
    */
-  @Test
-  def testFlush(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFlush(quorum: String): Unit = {
     val producer = createProducer(lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
     try {
       createTopic(topic, 2, 2)
@@ -425,8 +439,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   /**
    * Test close with zero timeout from caller thread
    */
-  @Test
-  def testCloseWithZeroTimeoutFromCallerThread(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCloseWithZeroTimeoutFromCallerThread(quorum: String): Unit = {
     createTopic(topic, 2, 2)
     val partition = 0
     consumer.assign(List(new TopicPartition(topic, partition)).asJava)
@@ -450,8 +465,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   /**
    * Test close with zero and non-zero timeout from sender thread
    */
-  @Test
-  def testCloseWithZeroTimeoutFromSenderThread(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testCloseWithZeroTimeoutFromSenderThread(quorum: String): Unit = {
     createTopic(topic, 1, 2)
     val partition = 0
     consumer.assign(List(new TopicPartition(topic, partition)).asJava)
