@@ -17,6 +17,8 @@
 
 package org.apache.kafka.controller;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 public final class MockControllerMetrics implements ControllerMetrics {
     private volatile boolean active = false;
     private volatile int fencedBrokers = 0;
@@ -25,6 +27,7 @@ public final class MockControllerMetrics implements ControllerMetrics {
     private volatile int partitions = 0;
     private volatile int offlinePartitions = 0;
     private volatile int preferredReplicaImbalances = 0;
+    private volatile AtomicInteger metadataErrors = new AtomicInteger(0);
     private volatile long lastAppliedRecordOffset = 0;
     private volatile long lastCommittedRecordOffset = 0;
     private volatile long lastAppliedRecordTimestamp = 0;
@@ -109,6 +112,16 @@ public final class MockControllerMetrics implements ControllerMetrics {
     @Override
     public int preferredReplicaImbalanceCount() {
         return this.preferredReplicaImbalances;
+    }
+
+    @Override
+    public void incrementMetadataErrorCount() {
+        this.metadataErrors.getAndIncrement();
+    }
+
+    @Override
+    public int metadataErrorCount() {
+        return this.metadataErrors.get();
     }
 
     @Override
