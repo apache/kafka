@@ -349,7 +349,6 @@ public class StreamsMetricsImplTest {
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
-    /*
     @Test
     public void shouldGetExistingTopicLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
@@ -366,10 +365,9 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        verify(metrics);
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
-
+    /*
     @Test
     public void shouldGetNewStoreLevelSensorIfNoneExists() {
         final Metrics metrics = mock(Metrics.class);
