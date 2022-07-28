@@ -37,12 +37,14 @@ final class BrokerServerMetricsTest {
     val expectedMetrics = Set(
       new MetricName("last-applied-record-offset", expectedGroup, "", Collections.emptyMap()),
       new MetricName("last-applied-record-timestamp", expectedGroup, "", Collections.emptyMap()),
-      new MetricName("last-applied-record-lag-ms", expectedGroup, "", Collections.emptyMap())
+      new MetricName("last-applied-record-lag-ms", expectedGroup, "", Collections.emptyMap()),
+      new MetricName("publisher-error-count", expectedGroup, "", Collections.emptyMap()),
+      new MetricName("listener-batch-load-error-count", expectedGroup, "", Collections.emptyMap())
     )
      
     TestUtils.resource(BrokerServerMetrics(metrics)) { brokerMetrics =>
       val metricsMap = metrics.metrics().asScala.filter{ case (name, _) => name.group == expectedGroup }
-      assertEquals(3, metricsMap.size)
+      assertEquals(expectedMetrics.size, metricsMap.size)
       metricsMap.foreach { case (name, metric) =>
         assertTrue(expectedMetrics.contains(name))
       }
