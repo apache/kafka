@@ -68,6 +68,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.modules.junit4.PowerMockRunnerDelegate;
 import org.powermock.reflect.Whitebox;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
@@ -1090,6 +1091,13 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         EasyMock.expectLastCall();
 
         offsetStore.stop();
+        EasyMock.expectLastCall();
+
+        try {
+            headerConverter.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         EasyMock.expectLastCall();
     }
 

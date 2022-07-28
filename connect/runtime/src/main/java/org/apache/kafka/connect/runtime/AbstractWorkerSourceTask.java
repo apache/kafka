@@ -313,6 +313,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
         Utils.closeQuietly(offsetReader, "offset reader");
         Utils.closeQuietly(offsetStore::stop, "offset backing store");
+        Utils.closeQuietly(headerConverter, "header converter");
     }
 
     private void closeProducer(Duration duration) {
