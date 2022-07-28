@@ -403,19 +403,19 @@ public class StreamsMetricsImplTest {
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
-/*
     @Test
     public void shouldUseSameStoreLevelSensorKeyWithTwoDifferentSensorNames() {
-        final Metrics metrics = niceMock(Metrics.class);
-        final Capture<String> sensorKeys = setUpSensorKeyTests(metrics);
+        final Metrics metrics = mock(Metrics.class);
+        final ArgumentCaptor<String> sensorKeys = setUpSensorKeyTests(metrics);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
         streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_2, INFO_RECORDING_LEVEL);
 
-        assertThat(sensorKeys.getValues().get(0), not(sensorKeys.getValues().get(1)));
+        assertThat(sensorKeys.getAllValues().get(0), not(sensorKeys.getAllValues().get(1)));
     }
 
+/*
     @Test
     public void shouldNotUseSameStoreLevelSensorKeyWithDifferentTaskIds() {
         final Metrics metrics = niceMock(Metrics.class);
@@ -466,14 +466,15 @@ public class StreamsMetricsImplTest {
 
         assertThat(sensorKeys.getValues().get(0), is(sensorKeys.getValues().get(1)));
     }
+*/
 
-    private Capture<String> setUpSensorKeyTests(final Metrics metrics) {
-        final Capture<String> sensorKeys = newCapture(CaptureType.ALL);
-        expect(metrics.getSensor(capture(sensorKeys))).andStubReturn(sensor);
-        replay(metrics);
-        return sensorKeys;
+    private ArgumentCaptor<String> setUpSensorKeyTests(final Metrics metrics) {
+        final ArgumentCaptor<String> sensorKeyArgumentCaptor = ArgumentCaptor.forClass(String.class);
+        when(metrics.getSensor(sensorKeyArgumentCaptor.capture())).thenReturn(sensor);
+        return sensorKeyArgumentCaptor;
     }
 
+/*
     @Test
     public void shouldAddNewStoreLevelMutableMetric() {
         final Metrics metrics = mock(Metrics.class);
