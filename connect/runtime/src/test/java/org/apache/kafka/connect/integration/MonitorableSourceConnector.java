@@ -172,7 +172,7 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
             batchSize = Integer.parseInt(props.getOrDefault(MESSAGES_PER_POLL_CONFIG, "1"));
             taskHandle = RuntimeHandles.get().connectorHandle(connectorName).taskHandle(taskId);
             Map<String, Object> offset = Optional.ofNullable(
-                    context.offsetStorageReader().offset(Collections.singletonMap("task.id", taskId)))
+                    context.offsetStorageReader().offset(sourcePartition(taskId)))
                     .orElse(Collections.emptyMap());
             startingSeqno = Optional.ofNullable((Long) offset.get("saved")).orElse(0L);
             seqno = startingSeqno;
