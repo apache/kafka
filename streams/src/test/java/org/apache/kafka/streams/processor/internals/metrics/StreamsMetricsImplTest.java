@@ -386,7 +386,6 @@ public class StreamsMetricsImplTest {
         assertThat(sensorKeys.getAllValues().get(0), is(sensorKeys.getAllValues().get(1)));
     }
 
-/*
     @Test
     public void shouldGetExistingStoreLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
@@ -401,10 +400,10 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        verify(metrics);
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
+/*
     @Test
     public void shouldUseSameStoreLevelSensorKeyWithTwoDifferentSensorNames() {
         final Metrics metrics = niceMock(Metrics.class);
