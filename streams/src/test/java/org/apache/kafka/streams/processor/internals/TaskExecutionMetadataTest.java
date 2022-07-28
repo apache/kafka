@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Assert;
 import org.junit.Test;
@@ -41,7 +42,7 @@ public class TaskExecutionMetadataTest {
         final Set<String> topologies = Collections.singleton(UNNAMED_TOPOLOGY);
         final Set<String> pausedTopologies = new HashSet<>();
 
-        final TaskExecutionMetadata metadata = new TaskExecutionMetadata(topologies, pausedTopologies);
+        final TaskExecutionMetadata metadata = new TaskExecutionMetadata(topologies, pausedTopologies, ProcessingMode.AT_LEAST_ONCE);
 
         final Task mockTask = createMockTask(UNNAMED_TOPOLOGY);
 
@@ -55,7 +56,7 @@ public class TaskExecutionMetadataTest {
     @Test
     public void testNamedTopologiesCanBePausedIndependently() {
         final Set<String> pausedTopologies = new HashSet<>();
-        final TaskExecutionMetadata metadata = new TaskExecutionMetadata(NAMED_TOPOLOGIES, pausedTopologies);
+        final TaskExecutionMetadata metadata = new TaskExecutionMetadata(NAMED_TOPOLOGIES, pausedTopologies, ProcessingMode.AT_LEAST_ONCE);
 
         final Task mockTask1 = createMockTask(TOPOLOGY1);
         final Task mockTask2 = createMockTask(TOPOLOGY2);
@@ -77,8 +78,7 @@ public class TaskExecutionMetadataTest {
         final Set<String> pausedTopologies = new HashSet<>();
         pausedTopologies.add(TOPOLOGY1);
 
-        final TaskExecutionMetadata metadata = new TaskExecutionMetadata(NAMED_TOPOLOGIES,
-            pausedTopologies);
+        final TaskExecutionMetadata metadata = new TaskExecutionMetadata(NAMED_TOPOLOGIES, pausedTopologies, ProcessingMode.AT_LEAST_ONCE);
 
         final Task mockTask1 = createMockTask(TOPOLOGY1);
         final Task mockTask2 = createMockTask(TOPOLOGY2);
@@ -95,8 +95,7 @@ public class TaskExecutionMetadataTest {
     public void testNamedTopologiesCanBackoff() {
         final Set<String> pausedTopologies = new HashSet<>();
 
-        final TaskExecutionMetadata metadata = new TaskExecutionMetadata(NAMED_TOPOLOGIES,
-            pausedTopologies);
+        final TaskExecutionMetadata metadata = new TaskExecutionMetadata(NAMED_TOPOLOGIES, pausedTopologies, ProcessingMode.AT_LEAST_ONCE);
 
         final Task mockTask1 = createMockTask(TOPOLOGY1);
         final Task mockTask2 = createMockTask(TOPOLOGY2);

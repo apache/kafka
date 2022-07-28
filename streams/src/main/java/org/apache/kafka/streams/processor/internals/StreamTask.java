@@ -83,7 +83,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Map<TopicPartition, Long> committedOffsets;
     private final Map<TopicPartition, Long> highWatermark;
     private final Set<TopicPartition> resetOffsetsForPartitions;
-    private Optional<Long> timeCurrentIdlingStarted;
     private final PunctuationQueue streamTimePunctuationQueue;
     private final PunctuationQueue systemTimePunctuationQueue;
     private final StreamsMetricsImpl streamsMetrics;
@@ -97,15 +96,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor bufferedRecordsSensor;
     private final Map<String, Sensor> e2eLatencySensors = new HashMap<>();
 
-    @SuppressWarnings("rawtypes")
-    private final InternalProcessorContext processorContext;
-
     private final RecordQueueCreator recordQueueCreator;
+
+    @SuppressWarnings("rawtypes")
+    protected final InternalProcessorContext processorContext;
 
     private StampedRecord record;
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
     private boolean hasPendingTxCommit = false;
+    private Optional<Long> timeCurrentIdlingStarted;
 
     @SuppressWarnings("rawtypes")
     public StreamTask(final TaskId id,
@@ -544,7 +544,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void closeCleanAndRecycleState() {
+    public void prepareRecycle() {
         validateClean();
         removeAllSensors();
         clearCommitStatuses();
@@ -566,49 +566,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         closeTaskSensor.record();
-
         transitionTo(State.CLOSED);
 
-        log.info("Closed clean and recycled state");
-    }
-
-    /**
-     * Create a standby task from this active task without closing and re-initializing the state stores.
-     * The task should have been in suspended state when calling this function
-     *
-     * TODO: we should be able to not need the input partitions as input param in future but always reuse
-     *       the task's input partitions when we have fixed partitions -> tasks mapping
-     */
-    public StandbyTask recycle(final Set<TopicPartition> inputPartitions) {
-        if (state() != Task.State.CLOSED) {
-            throw new IllegalStateException("Attempted to convert an active task that's not closed: " + id);
-        }
-
-        if (!inputPartitions.equals(this.inputPartitions)) {
-            log.warn("Detected unmatched input partitions for task {} when recycling it from active to standby", id);
-        }
-
-        stateMgr.transitionTaskType(TaskType.STANDBY);
-
-        final ThreadCache dummyCache = new ThreadCache(
-            new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName())),
-            0,
-            streamsMetrics
-        );
-
-        log.debug("Recycling active task {} to standby", id);
-
-        return new StandbyTask(
-            id,
-            inputPartitions,
-            topology,
-            config,
-            streamsMetrics,
-            stateMgr,
-            stateDirectory,
-            dummyCache,
-            processorContext
-        );
+        log.info("Closed and recycled state, and converted type to standby");
     }
 
     /**

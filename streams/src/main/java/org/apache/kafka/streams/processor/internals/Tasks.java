@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
@@ -61,118 +58,86 @@ class Tasks {
     //
     // When that occurs we stash these pending tasks until either they are finally clear to be created,
     // or they are revoked from a new assignment.
-    private final Map<TaskId, Set<TopicPartition>> pendingActiveTasks = new HashMap<>();
-    private final Map<TaskId, Set<TopicPartition>> pendingStandbyTasks = new HashMap<>();
+    private final Map<TaskId, Set<TopicPartition>> pendingActiveTasksToCreate = new HashMap<>();
+    private final Map<TaskId, Set<TopicPartition>> pendingStandbyTasksToCreate = new HashMap<>();
+
+    private final Set<Task> pendingTasksToRestore = new HashSet<>();
 
     // TODO: change type to `StreamTask`
     private final Map<TopicPartition, Task> activeTasksPerPartition = new HashMap<>();
 
-    private final Collection<Task> successfullyProcessed = new HashSet<>();
-
-    private final ActiveTaskCreator activeTaskCreator;
-    private final StandbyTaskCreator standbyTaskCreator;
-    private final StateUpdater stateUpdater;
-
-    private Consumer<byte[], byte[]> mainConsumer;
-
-    Tasks(final LogContext logContext,
-          final ActiveTaskCreator activeTaskCreator,
-          final StandbyTaskCreator standbyTaskCreator,
-          final StateUpdater stateUpdater) {
-
+    Tasks(final LogContext logContext) {
         this.log = logContext.logger(getClass());
-        this.activeTaskCreator = activeTaskCreator;
-        this.standbyTaskCreator = standbyTaskCreator;
-        this.stateUpdater = stateUpdater;
-    }
-
-    void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
-        this.mainConsumer = mainConsumer;
     }
 
     void purgePendingTasks(final Set<TaskId> assignedActiveTasks, final Set<TaskId> assignedStandbyTasks) {
-        pendingActiveTasks.keySet().retainAll(assignedActiveTasks);
-        pendingStandbyTasks.keySet().retainAll(assignedStandbyTasks);
+        pendingActiveTasksToCreate.keySet().retainAll(assignedActiveTasks);
+        pendingStandbyTasksToCreate.keySet().retainAll(assignedStandbyTasks);
     }
 
-    void addActivePendingTasks(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
-        pendingActiveTasks.putAll(pendingTasks);
+    void addPendingActiveTasks(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
+        pendingActiveTasksToCreate.putAll(pendingTasks);
     }
 
-    void addStandbyPendingTasks(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
-        pendingStandbyTasks.putAll(pendingTasks);
+    void addPendingStandbyTasks(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
+        pendingStandbyTasksToCreate.putAll(pendingTasks);
     }
 
-    void createPendingTasks(final Set<String> currentNamedTopologies) {
-        createTasks(
-            pendingActiveTasksForTopologies(currentNamedTopologies),
-            pendingStandbyTasksForTopologies(currentNamedTopologies)
-        );
+    void addPendingTaskToRestore(final Collection<Task> tasks) {
+        pendingTasksToRestore.addAll(tasks);
     }
 
-    private Map<TaskId, Set<TopicPartition>> pendingActiveTasksForTopologies(final Set<String> currentTopologies) {
-        return filterMap(pendingActiveTasks, t -> currentTopologies.contains(t.getKey().topologyName()));
+    Set<Task> drainPendingTaskToRestore() {
+        final Set<Task> result = new HashSet<>(pendingTasksToRestore);
+        pendingTasksToRestore.clear();
+        return result;
     }
 
-    private Map<TaskId, Set<TopicPartition>> pendingStandbyTasksForTopologies(final Set<String> currentTopologies) {
-        return filterMap(pendingStandbyTasks, t -> currentTopologies.contains(t.getKey().topologyName()));
+    Map<TaskId, Set<TopicPartition>> pendingActiveTasksForTopologies(final Set<String> currentTopologies) {
+        return filterMap(pendingActiveTasksToCreate, t -> currentTopologies.contains(t.getKey().topologyName()));
     }
 
-    void createTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
-                     final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
-        createActiveTasks(activeTasksToCreate);
-        createStandbyTasks(standbyTasksToCreate);
+    Map<TaskId, Set<TopicPartition>> pendingStandbyTasksForTopologies(final Set<String> currentTopologies) {
+        return filterMap(pendingStandbyTasksToCreate, t -> currentTopologies.contains(t.getKey().topologyName()));
     }
 
-    private void createActiveTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate) {
-        for (final Map.Entry<TaskId, Set<TopicPartition>> taskToBeCreated : activeTasksToCreate.entrySet()) {
-            final TaskId taskId = taskToBeCreated.getKey();
+    void addNewActiveTasks(final Collection<Task> newTasks) {
+        if (!newTasks.isEmpty()) {
+            for (final Task activeTask : newTasks) {
+                final TaskId taskId = activeTask.id();
 
-            if (activeTasksPerId.containsKey(taskId)) {
-                throw new IllegalStateException("Attempted to create an active task that we already own: " + taskId);
-            }
+                if (activeTasksPerId.containsKey(taskId)) {
+                    throw new IllegalStateException("Attempted to create an active task that we already own: " + taskId);
+                }
 
-            if (pendingStandbyTasks.containsKey(taskId)) {
-                throw new IllegalStateException("Attempted to create an active task while we already own its standby: " + taskId);
-            }
-        }
+                if (standbyTasksPerId.containsKey(taskId)) {
+                    throw new IllegalStateException("Attempted to create an active task while we already own its standby: " + taskId);
+                }
 
-        if (!activeTasksToCreate.isEmpty()) {
-            for (final Task activeTask : activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate)) {
-                if (stateUpdater != null) {
-                    stateUpdater.add(activeTask);
-                } else {
-                    activeTasksPerId.put(activeTask.id(), activeTask);
-                    pendingActiveTasks.remove(activeTask.id());
-                    for (final TopicPartition topicPartition : activeTask.inputPartitions()) {
-                        activeTasksPerPartition.put(topicPartition, activeTask);
-                    }
+                activeTasksPerId.put(activeTask.id(), activeTask);
+                pendingActiveTasksToCreate.remove(activeTask.id());
+                for (final TopicPartition topicPartition : activeTask.inputPartitions()) {
+                    activeTasksPerPartition.put(topicPartition, activeTask);
                 }
             }
         }
     }
 
-    private void createStandbyTasks(final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
-        for (final Map.Entry<TaskId, Set<TopicPartition>> taskToBeCreated : standbyTasksToCreate.entrySet()) {
-            final TaskId taskId = taskToBeCreated.getKey();
+    void addNewStandbyTasks(final Collection<Task> newTasks) {
+        if (!newTasks.isEmpty()) {
+            for (final Task standbyTask : newTasks) {
+                final TaskId taskId = standbyTask.id();
 
-            if (standbyTasksPerId.containsKey(taskId)) {
-                throw new IllegalStateException("Attempted to create an active task that we already own: " + taskId);
-            }
-
-            if (pendingActiveTasks.containsKey(taskId)) {
-                throw new IllegalStateException("Attempted to create an active task while we already own its standby: " + taskId);
-            }
-        }
-
-        if (!standbyTasksToCreate.isEmpty()) {
-            for (final Task standbyTask : standbyTaskCreator.createTasks(standbyTasksToCreate)) {
-                if (stateUpdater != null) {
-                    stateUpdater.add(standbyTask);
-                } else {
-                    standbyTasksPerId.put(standbyTask.id(), standbyTask);
-                    pendingActiveTasks.remove(standbyTask.id());
+                if (standbyTasksPerId.containsKey(taskId)) {
+                    throw new IllegalStateException("Attempted to create an standby task that we already own: " + taskId);
                 }
+
+                if (activeTasksPerId.containsKey(taskId)) {
+                    throw new IllegalStateException("Attempted to create an standby task while we already own its active: " + taskId);
+                }
+
+                standbyTasksPerId.put(standbyTask.id(), standbyTask);
+                pendingStandbyTasksToCreate.remove(standbyTask.id());
             }
         }
     }
@@ -188,44 +153,32 @@ class Tasks {
             if (activeTasksPerId.remove(taskId) == null) {
                 throw new IllegalArgumentException("Attempted to remove an active task that is not owned: " + taskId);
             }
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId);
             removePartitionsForActiveTask(taskId);
-            pendingActiveTasks.remove(taskId);
+            pendingActiveTasksToCreate.remove(taskId);
         } else {
             if (standbyTasksPerId.remove(taskId) == null) {
                 throw new IllegalArgumentException("Attempted to remove a standby task that is not owned: " + taskId);
             }
-            pendingStandbyTasks.remove(taskId);
+            pendingStandbyTasksToCreate.remove(taskId);
         }
     }
 
-    void convertActiveToStandby(final StreamTask activeTask,
-                                final Set<TopicPartition> partitions,
-                                final Map<TaskId, RuntimeException> taskCloseExceptions) {
-        final TaskId taskId = activeTask.id();
+    void replaceActiveWithStandby(final StandbyTask standbyTask) {
+        final TaskId taskId = standbyTask.id();
         if (activeTasksPerId.remove(taskId) == null) {
-            throw new IllegalStateException("Attempted to convert unknown active task to standby task: " + taskId);
+            throw new IllegalStateException("Attempted to replace unknown active task with standby task: " + taskId);
         }
         removePartitionsForActiveTask(taskId);
 
-        try {
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId);
-        } catch (final RuntimeException e) {
-            taskCloseExceptions.putIfAbsent(taskId, e);
-        }
-
-        final StandbyTask standbyTask = standbyTaskCreator.createStandbyTaskFromActive(activeTask, partitions);
         standbyTasksPerId.put(standbyTask.id(), standbyTask);
     }
 
-    void convertStandbyToActive(final StandbyTask standbyTask,
-                                final Set<TopicPartition> partitions) {
-        final TaskId taskId = standbyTask.id();
+    void replaceStandbyWithActive(final StreamTask activeTask) {
+        final TaskId taskId = activeTask.id();
         if (standbyTasksPerId.remove(taskId) == null) {
             throw new IllegalStateException("Attempted to convert unknown standby task to stream task: " + taskId);
         }
 
-        final StreamTask activeTask = activeTaskCreator.createActiveTaskFromStandby(standbyTask, partitions, mainConsumer);
         activeTasksPerId.put(activeTask.id(), activeTask);
         for (final TopicPartition topicPartition : activeTask.inputPartitions()) {
             activeTasksPerPartition.put(topicPartition, activeTask);
@@ -247,14 +200,6 @@ class Tasks {
         }
 
         return requiresUpdate;
-    }
-
-    void reInitializeThreadProducer() {
-        activeTaskCreator.reInitializeThreadProducer();
-    }
-
-    void closeThreadProducerIfNeeded() {
-        activeTaskCreator.closeThreadProducerIfNeeded();
     }
 
     private void removePartitionsForActiveTask(final TaskId taskId) {
@@ -329,46 +274,6 @@ class Tasks {
 
     boolean owned(final TaskId taskId) {
         return getTask(taskId) != null;
-    }
-
-    StreamsProducer streamsProducerForTask(final TaskId taskId) {
-        return activeTaskCreator.streamsProducerForTask(taskId);
-    }
-
-    StreamsProducer threadProducer() {
-        return activeTaskCreator.threadProducer();
-    }
-
-    Map<MetricName, Metric> producerMetrics() {
-        return activeTaskCreator.producerMetrics();
-    }
-
-    Set<String> producerClientIds() {
-        return activeTaskCreator.producerClientIds();
-    }
-
-    Consumer<byte[], byte[]> mainConsumer() {
-        return mainConsumer;
-    }
-
-    Collection<Task> successfullyProcessed() {
-        return successfullyProcessed;
-    }
-
-    void addToSuccessfullyProcessed(final Task task) {
-        successfullyProcessed.add(task);
-    }
-
-    void removeTaskFromSuccessfullyProcessedBeforeClosing(final Task task) {
-        successfullyProcessed.remove(task);
-    }
-
-    void clearSuccessfullyProcessed() {
-        successfullyProcessed.clear();
-    }
-
-    double totalProducerBlockedTime() {
-        return activeTaskCreator.totalProducerBlockedTime();
     }
 
     // for testing only

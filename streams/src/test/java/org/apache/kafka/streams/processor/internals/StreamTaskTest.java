@@ -2187,7 +2187,7 @@ public class StreamTaskTest {
 
         task.suspend();
         assertThat(getTaskMetrics(), not(empty()));
-        task.closeCleanAndRecycleState();
+        task.prepareRecycle();
         assertThat(getTaskMetrics(), empty());
     }
 
@@ -2266,7 +2266,7 @@ public class StreamTaskTest {
         task.process(0L);
         assertTrue(task.commitNeeded());
 
-        assertThrows(TaskMigratedException.class, () -> task.closeCleanAndRecycleState());
+        assertThrows(TaskMigratedException.class, () -> task.prepareRecycle());
     }
 
     @Test
@@ -2277,16 +2277,16 @@ public class StreamTaskTest {
         EasyMock.replay(stateManager, recordCollector);
 
         task = createStatefulTask(createConfig("100"), true);
-        assertThrows(IllegalStateException.class, () -> task.closeCleanAndRecycleState()); // CREATED
+        assertThrows(IllegalStateException.class, () -> task.prepareRecycle()); // CREATED
 
         task.initializeIfNeeded();
-        assertThrows(IllegalStateException.class, () -> task.closeCleanAndRecycleState()); // RESTORING
+        assertThrows(IllegalStateException.class, () -> task.prepareRecycle()); // RESTORING
 
         task.completeRestoration(noOpResetter -> { });
-        assertThrows(IllegalStateException.class, () -> task.closeCleanAndRecycleState()); // RUNNING
+        assertThrows(IllegalStateException.class, () -> task.prepareRecycle()); // RUNNING
 
         task.suspend();
-        task.closeCleanAndRecycleState(); // SUSPENDED
+        task.prepareRecycle(); // SUSPENDED
 
         EasyMock.verify(stateManager, recordCollector);
     }

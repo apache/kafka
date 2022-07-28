@@ -155,10 +155,9 @@ public interface Task {
     void revive();
 
     /**
-     * Attempt a clean close but do not close the underlying state
+     * Close the task except the state, so that the states can be later recycled
      */
-    void closeCleanAndRecycleState();
-
+    void prepareRecycle();
 
     // runtime methods (using in RUNNING state)
 

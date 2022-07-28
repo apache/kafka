@@ -17,8 +17,11 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,12 +39,25 @@ public class TaskExecutionMetadata {
 
     private final boolean hasNamedTopologies;
     private final Set<String> pausedTopologies;
+    private final ProcessingMode processingMode;
+    private final Collection<Task> successfullyProcessed = new HashSet<>();
     // map of topologies experiencing errors/currently under backoff
     private final ConcurrentHashMap<String, NamedTopologyMetadata> topologyNameToErrorMetadata = new ConcurrentHashMap<>();
 
-    public TaskExecutionMetadata(final Set<String> allTopologyNames, final Set<String> pausedTopologies) {
+    public TaskExecutionMetadata(final Set<String> allTopologyNames,
+                                 final Set<String> pausedTopologies,
+                                 final ProcessingMode processingMode) {
         this.hasNamedTopologies = !(allTopologyNames.size() == 1 && allTopologyNames.contains(UNNAMED_TOPOLOGY));
         this.pausedTopologies = pausedTopologies;
+        this.processingMode = processingMode;
+    }
+
+    public boolean hasNamedTopologies() {
+        return hasNamedTopologies;
+    }
+
+    public ProcessingMode processingMode() {
+        return processingMode;
     }
 
     public boolean canProcessTask(final Task task, final long now) {
@@ -77,6 +93,22 @@ public class TaskExecutionMetadata {
         }
     }
 
+    Collection<Task> successfullyProcessed() {
+        return successfullyProcessed;
+    }
+
+    void addToSuccessfullyProcessed(final Task task) {
+        successfullyProcessed.add(task);
+    }
+
+    void removeTaskFromSuccessfullyProcessedBeforeClosing(final Task task) {
+        successfullyProcessed.remove(task);
+    }
+
+    void clearSuccessfullyProcessed() {
+        successfullyProcessed.clear();
+    }
+
     private class NamedTopologyMetadata {
         private final Logger log;
         private final Map<TaskId, Long> tasksToErrorTime = new ConcurrentHashMap<>();
@@ -109,7 +141,7 @@ public class TaskExecutionMetadata {
         }
 
         public synchronized void registerTaskError(final Task task, final Throwable t, final long now) {
-            log.info("Begin backoff for unhealthy task {} at t={}", task.id(), now);
+            log.info("Begin backoff for unhealthy task {} at t={} due to {}", task.id(), now, t.getClass().getName());
             tasksToErrorTime.put(task.id(), now);
         }
     }

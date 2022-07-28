@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.junit.Test;
 
 import static org.mockito.Mockito.mock;
@@ -28,10 +27,10 @@ public class TaskExecutorTest {
     @Test
     public void testPunctuateWithPause() {
         final Tasks tasks = mock(Tasks.class);
+        final TaskManager taskManager = mock(TaskManager.class);
         final TaskExecutionMetadata metadata = mock(TaskExecutionMetadata.class);
 
-        final TaskExecutor taskExecutor =
-            new TaskExecutor(tasks, metadata, ProcessingMode.AT_LEAST_ONCE, false, new LogContext());
+        final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext());
 
         taskExecutor.punctuate();
         verify(tasks).activeTasks();

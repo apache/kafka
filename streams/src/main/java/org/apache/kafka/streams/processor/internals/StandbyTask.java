@@ -16,12 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -41,10 +39,12 @@ import java.util.Set;
  * A StandbyTask
  */
 public class StandbyTask extends AbstractTask implements Task {
-    private final Sensor closeTaskSensor;
     private final boolean eosEnabled;
-    private final InternalProcessorContext processorContext;
+    private final Sensor closeTaskSensor;
     private final StreamsMetricsImpl streamsMetrics;
+
+    @SuppressWarnings("rawtypes")
+    protected final InternalProcessorContext processorContext;
 
     /**
      * @param id              the ID of this task
@@ -55,6 +55,7 @@ public class StandbyTask extends AbstractTask implements Task {
      * @param stateMgr        the {@link ProcessorStateManager} for this task
      * @param stateDirectory  the {@link StateDirectory} created by the thread
      */
+    @SuppressWarnings("rawtypes")
     StandbyTask(final TaskId id,
                 final Set<TopicPartition> inputPartitions,
                 final ProcessorTopology topology,
@@ -222,7 +223,7 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void closeCleanAndRecycleState() {
+    public void prepareRecycle() {
         streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
         if (state() == State.SUSPENDED) {
             stateMgr.recycle();
@@ -233,44 +234,7 @@ public class StandbyTask extends AbstractTask implements Task {
         closeTaskSensor.record();
         transitionTo(State.CLOSED);
 
-        log.info("Closed clean and recycled state");
-    }
-
-    /**
-     * Create an active task from this standby task without closing and re-initializing the state stores.
-     * The task should have been in suspended state when calling this function
-     *
-     * TODO: we should be able to not need the input partitions as input param in future but always reuse
-     *       the task's input partitions when we have fixed partitions -> tasks mapping
-     */
-    public StreamTask recycle(final Time time,
-                              final ThreadCache cache,
-                              final RecordCollector recordCollector,
-                              final Set<TopicPartition> inputPartitions,
-                              final Consumer<byte[], byte[]> mainConsumer) {
-        if (!inputPartitions.equals(this.inputPartitions)) {
-            log.warn("Detected unmatched input partitions for task {} when recycling it from active to standby", id);
-        }
-
-        stateMgr.transitionTaskType(TaskType.ACTIVE);
-
-        log.debug("Recycling standby task {} to active", id);
-
-        return new StreamTask(
-            id,
-            inputPartitions,
-            topology,
-            mainConsumer,
-            config,
-            streamsMetrics,
-            stateDirectory,
-            cache,
-            time,
-            stateMgr,
-            recordCollector,
-            processorContext,
-            logContext
-        );
+        log.info("Closed and recycled state, and converted type to active");
     }
 
     private void close(final boolean clean) {
@@ -342,6 +306,7 @@ public class StandbyTask extends AbstractTask implements Task {
         throw new IllegalStateException("Attempted to add records to task " + id() + " for invalid input partition " + partition);
     }
 
+    @SuppressWarnings("rawtypes")
     InternalProcessorContext processorContext() {
         return processorContext;
     }
