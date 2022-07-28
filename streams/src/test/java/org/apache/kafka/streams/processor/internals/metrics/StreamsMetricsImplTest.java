@@ -367,12 +367,12 @@ public class StreamsMetricsImplTest {
 
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
-    /*
+
     @Test
     public void shouldGetNewStoreLevelSensorIfNoneExists() {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
-        final Capture<String> sensorKeys = setupGetNewSensorTest(metrics, recordingLevel);
+        final ArgumentCaptor<String> sensorKeys = setupGetNewSensorTest(metrics, recordingLevel);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         final Sensor actualSensor = streamsMetrics.storeLevelSensor(
@@ -382,11 +382,11 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        verify(metrics);
         assertThat(actualSensor, is(equalToObject(sensor)));
-        assertThat(sensorKeys.getValues().get(0), is(sensorKeys.getValues().get(1)));
+        assertThat(sensorKeys.getAllValues().get(0), is(sensorKeys.getAllValues().get(1)));
     }
 
+/*
     @Test
     public void shouldGetExistingStoreLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
