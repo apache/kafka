@@ -63,6 +63,11 @@ class Tasks {
 
     private final Set<Task> pendingTasksToRestore = new HashSet<>();
 
+    private final Set<TaskId> pendingActiveTasksToRecycle = new HashSet<>();
+    private final Set<TaskId> pendingStandbyTasksToRecycle = new HashSet<>();
+    private final Set<TaskId> pendingTasksThatNeedInputPartitionUpdate = new HashSet<>();
+    private final Set<TaskId> pendingTasksToClose = new HashSet<>();
+
     // TODO: change type to `StreamTask`
     private final Map<TopicPartition, Task> activeTasksPerPartition = new HashMap<>();
 
@@ -81,6 +86,22 @@ class Tasks {
 
     void addPendingStandbyTasks(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
         pendingStandbyTasksToCreate.putAll(pendingTasks);
+    }
+
+    void addPendingActiveTaskToRecycle(final TaskId taskId) {
+        pendingActiveTasksToRecycle.add(taskId);
+    }
+
+    void addPendingStandbyTaskToRecycle(final TaskId taskId) {
+        pendingStandbyTasksToRecycle.add(taskId);
+    }
+
+    void addPendingTaskThatNeedsInputPartitionsUpdate(final TaskId taskId) {
+        pendingTasksThatNeedInputPartitionUpdate.add(taskId);
+    }
+
+    void addPendingTaskToClose(final TaskId taskId) {
+        pendingTasksToClose.add(taskId);
     }
 
     void addPendingTaskToRestore(final Collection<Task> tasks) {
