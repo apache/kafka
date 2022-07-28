@@ -117,8 +117,7 @@ class BrokerMetadataListener(
       } catch {
         case e: Throwable =>
           brokerMetrics.listenerBatchLoadErrorCount.getAndIncrement()
-          log.error(e.toString)
-          BatchLoadResults(0, 0, 0, 0)
+          throw e
       } finally {
         reader.close()
       }
@@ -177,7 +176,7 @@ class BrokerMetadataListener(
       } catch {
         case e: Throwable =>
           brokerMetrics.listenerBatchLoadErrorCount.getAndIncrement()
-          log.error(e.toString)
+          throw e
       } finally {
         reader.close()
       }
