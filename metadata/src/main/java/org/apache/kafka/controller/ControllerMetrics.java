@@ -51,6 +51,10 @@ public interface ControllerMetrics extends AutoCloseable {
 
     int preferredReplicaImbalanceCount();
 
+    void incrementForceRenounceCount();
+
+    int forceRenounceCount();
+
     void setLastAppliedRecordOffset(long offset);
 
     long lastAppliedRecordOffset();

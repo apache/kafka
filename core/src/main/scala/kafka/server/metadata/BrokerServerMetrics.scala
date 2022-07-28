@@ -28,6 +28,8 @@ final class BrokerServerMetrics private (metrics: Metrics) extends AutoCloseable
 
   val lastAppliedRecordOffset: AtomicLong = new AtomicLong(0)
   val lastAppliedRecordTimestamp: AtomicLong = new AtomicLong(0)
+  val publisherErrorCount: AtomicLong = new AtomicLong(0)
+  val listenerBatchLoadErrorCount: AtomicLong = new AtomicLong(0)
 
   val lastAppliedRecordOffsetName = metrics.metricName(
     "last-applied-record-offset",
@@ -47,6 +49,18 @@ final class BrokerServerMetrics private (metrics: Metrics) extends AutoCloseable
     "The difference between now and the timestamp of the last record from the cluster metadata partition that was applied by the broker"
   )
 
+  val publisherErrorCountName = metrics.metricName(
+    "publisher-error-count",
+    metricGroupName,
+    "The number of errors encountered by the BrokerMetadataPublisher while publishing a new MetadataImage based on the MetadataDelta"
+  )
+
+  val listenerBatchLoadErrorCountName = metrics.metricName(
+    "listener-batch-load-error-count",
+    metricGroupName,
+    "The number of errors encountered by the BrokerMetadataListener while generating a new MetadataDelta based on the log it has received thus far"
+  )
+
   addMetric(metrics, lastAppliedRecordOffsetName) { _ =>
     lastAppliedRecordOffset.get
   }
@@ -59,11 +73,21 @@ final class BrokerServerMetrics private (metrics: Metrics) extends AutoCloseable
     now - lastAppliedRecordTimestamp.get
   }
 
+  addMetric(metrics, publisherErrorCountName) { _ =>
+    publisherErrorCount.get
+  }
+
+  addMetric(metrics, listenerBatchLoadErrorCountName) { _ =>
+    listenerBatchLoadErrorCount.get
+  }
+
   override def close(): Unit = {
     List(
       lastAppliedRecordOffsetName,
       lastAppliedRecordTimestampName,
-      lastAppliedRecordLagMsName
+      lastAppliedRecordLagMsName,
+      publisherErrorCountName,
+      listenerBatchLoadErrorCountName
     ).foreach(metrics.removeMetric)
   }
 }

@@ -196,7 +196,8 @@ class BrokerMetadataPublisherTest {
         txnCoordinator = broker.transactionCoordinator,
         clientQuotaMetadataManager = broker.clientQuotaMetadataManager,
         dynamicConfigHandlers = broker.dynamicConfigHandlers.toMap,
-        _authorizer = Option.empty
+        _authorizer = Option.empty,
+        null
       ))
       val numTimesReloadCalled = new AtomicInteger(0)
       Mockito.when(publisher.reloadUpdatedFilesWithoutConfigChange(any[Properties]())).

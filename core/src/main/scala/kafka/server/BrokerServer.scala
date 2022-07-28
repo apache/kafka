@@ -309,13 +309,16 @@ class BrokerServer(
         ))
       }
 
+      // The metrics object for accessing broker related metrics
+      val brokerMetrics = BrokerServerMetrics(metrics)
+
       metadataListener = new BrokerMetadataListener(
         config.nodeId,
         time,
         threadNamePrefix,
         config.metadataSnapshotMaxNewRecordBytes,
         metadataSnapshotter,
-        BrokerServerMetrics(metrics)
+        brokerMetrics
       )
 
       val networkListeners = new ListenerCollection()
@@ -432,7 +435,8 @@ class BrokerServer(
         transactionCoordinator,
         clientQuotaMetadataManager,
         dynamicConfigHandlers.toMap,
-        authorizer)
+        authorizer,
+        brokerMetrics)
 
       // Tell the metadata listener to start publishing its output, and wait for the first
       // publish operation to complete. This first operation will initialize logManager,

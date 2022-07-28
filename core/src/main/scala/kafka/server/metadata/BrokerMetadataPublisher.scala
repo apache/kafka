@@ -102,7 +102,8 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                               txnCoordinator: TransactionCoordinator,
                               clientQuotaMetadataManager: ClientQuotaMetadataManager,
                               dynamicConfigHandlers: Map[String, ConfigHandler],
-                              private val _authorizer: Option[Authorizer]) extends MetadataPublisher with Logging {
+                              private val _authorizer: Option[Authorizer],
+                              brokerMetrics: BrokerServerMetrics) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${conf.nodeId}] "
 
   import BrokerMetadataPublisher._
@@ -259,6 +260,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       publishedOffsetAtomic.set(newImage.highestOffsetAndEpoch().offset)
     } catch {
       case t: Throwable => error(s"Error publishing broker metadata at $highestOffsetAndEpoch", t)
+        brokerMetrics.publisherErrorCount.getAndIncrement()
         throw t
     } finally {
       _firstPublish = false

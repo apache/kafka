@@ -450,6 +450,7 @@ public final class QuorumController implements Controller {
                     "Renouncing leadership and reverting to the last committed offset {}.",
                     name, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
                     lastCommittedOffset, exception);
+            controllerMetrics.incrementForceRenounceCount();
             renounce();
         } else {
             log.warn("{}: failed with unknown server exception {} in {} us.  " +

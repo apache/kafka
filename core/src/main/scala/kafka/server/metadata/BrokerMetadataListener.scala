@@ -114,6 +114,11 @@ class BrokerMetadataListener(
           debug(s"Loaded new commits: $loadResults")
         }
         loadResults
+      } catch {
+        case e: Throwable =>
+          brokerMetrics.listenerBatchLoadErrorCount.getAndIncrement()
+          log.error(e.toString)
+          BatchLoadResults(0, 0, 0, 0)
       } finally {
         reader.close()
       }
@@ -169,6 +174,10 @@ class BrokerMetadataListener(
         _delta.finishSnapshot()
         info(s"Loaded snapshot ${reader.snapshotId().offset}-${reader.snapshotId().epoch}: " +
           s"$loadResults")
+      } catch {
+        case e: Throwable =>
+          brokerMetrics.listenerBatchLoadErrorCount.getAndIncrement()
+          log.error(e.toString)
       } finally {
         reader.close()
       }

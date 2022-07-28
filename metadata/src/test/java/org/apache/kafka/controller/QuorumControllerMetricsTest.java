@@ -36,10 +36,13 @@ public class QuorumControllerMetricsTest {
         String expectedType = "KafkaController";
         Set<String> expectedMetricNames = Utils.mkSet(
             "ActiveControllerCount",
+            "FencedBrokerCount",
+            "ActiveBrokerCount",
             "GlobalTopicCount",
             "GlobalPartitionCount",
             "OfflinePartitionsCount",
             "PreferredReplicaImbalanceCount",
+            "ForceRenounceCount",
             "LastAppliedRecordLagMs",
             "LastAppliedRecordOffset",
             "LastAppliedRecordTimestamp",
@@ -151,9 +154,17 @@ public class QuorumControllerMetricsTest {
     }
 
     private static void assertMetricsCreated(MetricsRegistry registry, Set<String> expectedMetricNames, String expectedType) {
+        assertEquals(registry.allMetrics().keySet().stream()
+                .filter(k -> k.getType() == expectedType).count(),
+                expectedMetricNames.size());
         expectedMetricNames.forEach(expectedName -> {
             MetricName expectMetricName = metricName(expectedType, expectedName);
             assertTrue(registry.allMetrics().containsKey(expectMetricName), "Missing metric: " + expectMetricName);
+        });
+        registry.allMetrics().forEach((actualMetricName, actualMetric) -> {
+            if (actualMetricName.getType() == expectedType) {
+                assertTrue(expectedMetricNames.contains(actualMetricName.getName()), "Unexpected metric: " + actualMetricName);
+            }
         });
     }
 
