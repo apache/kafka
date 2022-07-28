@@ -29,7 +29,7 @@ public class MockFaultHandler implements FaultHandler {
     private static final Logger log = LoggerFactory.getLogger(MockFaultHandler.class);
 
     private final String name;
-    private MockFaultHandlerException firstException = null;
+    private FaultHandlerException firstException = null;
     private boolean ignore = false;
 
     public MockFaultHandler(String name) {
@@ -37,16 +37,20 @@ public class MockFaultHandler implements FaultHandler {
     }
 
     @Override
-    public synchronized void handleFault(String failureMessage, Throwable cause) {
-        FaultHandler.logFailureMessage(log, failureMessage, cause);
-        MockFaultHandlerException e = (cause == null) ?
-                new MockFaultHandlerException(name + ": " + failureMessage) :
-                new MockFaultHandlerException(name + ": " + failureMessage +
+    public synchronized RuntimeException handleFault(String failureMessage, Throwable cause) {
+        if (cause == null) {
+            log.error("Encountered {} fault: {}", name, failureMessage);
+        } else {
+            log.error("Encountered {} fault: {}", name, failureMessage, cause);
+        }
+        FaultHandlerException e = (cause == null) ?
+                new FaultHandlerException(name + ": " + failureMessage) :
+                new FaultHandlerException(name + ": " + failureMessage +
                         ": " + cause.getMessage(), cause);
         if (firstException == null) {
             firstException = e;
         }
-        throw e;
+        return firstException;
     }
 
     public synchronized void maybeRethrowFirstException() {
@@ -55,7 +59,7 @@ public class MockFaultHandler implements FaultHandler {
         }
     }
 
-    public synchronized MockFaultHandlerException firstException() {
+    public synchronized FaultHandlerException firstException() {
         return firstException;
     }
 

@@ -31,6 +31,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.fault.FaultHandler
 
 import scala.collection.mutable
 
@@ -94,15 +95,19 @@ object BrokerMetadataPublisher extends Logging {
   }
 }
 
-class BrokerMetadataPublisher(conf: KafkaConfig,
-                              metadataCache: KRaftMetadataCache,
-                              logManager: LogManager,
-                              replicaManager: ReplicaManager,
-                              groupCoordinator: GroupCoordinator,
-                              txnCoordinator: TransactionCoordinator,
-                              clientQuotaMetadataManager: ClientQuotaMetadataManager,
-                              dynamicConfigHandlers: Map[String, ConfigHandler],
-                              private val _authorizer: Option[Authorizer]) extends MetadataPublisher with Logging {
+class BrokerMetadataPublisher(
+  conf: KafkaConfig,
+  metadataCache: KRaftMetadataCache,
+  logManager: LogManager,
+  replicaManager: ReplicaManager,
+  groupCoordinator: GroupCoordinator,
+  txnCoordinator: TransactionCoordinator,
+  clientQuotaMetadataManager: ClientQuotaMetadataManager,
+  dynamicConfigHandlers: Map[String, ConfigHandler],
+  private val _authorizer: Option[Authorizer],
+  fatalFaultHandler: FaultHandler,
+  metadataPublishingFaultHandler: FaultHandler
+) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${conf.nodeId}] "
 
   import BrokerMetadataPublisher._
@@ -125,8 +130,15 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
   override def publish(delta: MetadataDelta, newImage: MetadataImage): Unit = {
     val highestOffsetAndEpoch = newImage.highestOffsetAndEpoch()
 
+    val deltaName = if (_firstPublish) {
+      s"initial MetadataDelta up to ${highestOffsetAndEpoch.offset}"
+    } else {
+      s"MetadataDelta up to ${highestOffsetAndEpoch.offset}"
+    }
     try {
-      trace(s"Publishing delta $delta with highest offset $highestOffsetAndEpoch")
+      if (isTraceEnabled) {
+        trace(s"Publishing delta $delta with highest offset $highestOffsetAndEpoch")
+      }
 
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
@@ -151,37 +163,50 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
 
       // Apply topic deltas.
       Option(delta.topicsDelta()).foreach { topicsDelta =>
-        // Notify the replica manager about changes to topics.
-        replicaManager.applyDelta(topicsDelta, newImage)
-
-        // Update the group coordinator of local changes
-        updateCoordinator(
-          newImage,
-          delta,
-          Topic.GROUP_METADATA_TOPIC_NAME,
-          groupCoordinator.onElection,
-          groupCoordinator.onResignation
-        )
-
-        // Update the transaction coordinator of local changes
-        updateCoordinator(
-          newImage,
-          delta,
-          Topic.TRANSACTION_STATE_TOPIC_NAME,
-          txnCoordinator.onElection,
-          txnCoordinator.onResignation
-        )
-
-        // Notify the group coordinator about deleted topics.
-        val deletedTopicPartitions = new mutable.ArrayBuffer[TopicPartition]()
-        topicsDelta.deletedTopicIds().forEach { id =>
-          val topicImage = topicsDelta.image().getTopic(id)
-          topicImage.partitions().keySet().forEach {
-            id => deletedTopicPartitions += new TopicPartition(topicImage.name(), id)
-          }
+        try {
+          // Notify the replica manager about changes to topics.
+          replicaManager.applyDelta(topicsDelta, newImage)
+        } catch {
+          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error applying topics " +
+            s"delta in ${deltaName}", t)
         }
-        if (deletedTopicPartitions.nonEmpty) {
-          groupCoordinator.handleDeletedPartitions(deletedTopicPartitions, RequestLocal.NoCaching)
+        try {
+          // Update the group coordinator of local changes
+          updateCoordinator(newImage,
+            delta,
+            Topic.GROUP_METADATA_TOPIC_NAME,
+            groupCoordinator.onElection,
+            groupCoordinator.onResignation)
+        } catch {
+          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
+            s"coordinator with local changes in ${deltaName}", t)
+        }
+        try {
+          // Update the transaction coordinator of local changes
+          updateCoordinator(newImage,
+            delta,
+            Topic.TRANSACTION_STATE_TOPIC_NAME,
+            txnCoordinator.onElection,
+            txnCoordinator.onResignation)
+        } catch {
+          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating txn " +
+            s"coordinator with local changes in ${deltaName}", t)
+        }
+        try {
+          // Notify the group coordinator about deleted topics.
+          val deletedTopicPartitions = new mutable.ArrayBuffer[TopicPartition]()
+          topicsDelta.deletedTopicIds().forEach { id =>
+            val topicImage = topicsDelta.image().getTopic(id)
+            topicImage.partitions().keySet().forEach {
+              id => deletedTopicPartitions += new TopicPartition(topicImage.name(), id)
+            }
+          }
+          if (deletedTopicPartitions.nonEmpty) {
+            groupCoordinator.handleDeletedPartitions(deletedTopicPartitions, RequestLocal.NoCaching)
+          }
+        } catch {
+          case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating group " +
+            s"coordinator with deleted partitions in ${deltaName}", t)
         }
       }
 
@@ -191,39 +216,62 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
           val props = newImage.configs().configProperties(resource)
           resource.`type`() match {
             case TOPIC =>
-              // Apply changes to a topic's dynamic configuration.
-              info(s"Updating topic ${resource.name()} with new configuration : " +
-                toLoggableProps(resource, props).mkString(","))
-              dynamicConfigHandlers(ConfigType.Topic).
-                processConfigChanges(resource.name(), props)
+              try {
+                // Apply changes to a topic's dynamic configuration.
+                info(s"Updating topic ${resource.name()} with new configuration : " +
+                  toLoggableProps(resource, props).mkString(","))
+                dynamicConfigHandlers(ConfigType.Topic).
+                  processConfigChanges(resource.name(), props)
+              } catch {
+                case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating topic " +
+                  s"${resource.name()} with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
+                  s"in ${deltaName}", t)
+              }
             case BROKER =>
               if (resource.name().isEmpty) {
-                // Apply changes to "cluster configs" (also known as default BROKER configs).
-                // These are stored in KRaft with an empty name field.
-                info("Updating cluster configuration : " +
-                  toLoggableProps(resource, props).mkString(","))
-                dynamicConfigHandlers(ConfigType.Broker).
-                  processConfigChanges(ConfigEntityName.Default, props)
+                try {
+                  // Apply changes to "cluster configs" (also known as default BROKER configs).
+                  // These are stored in KRaft with an empty name field.
+                  info("Updating cluster configuration : " +
+                    toLoggableProps(resource, props).mkString(","))
+                  dynamicConfigHandlers(ConfigType.Broker).
+                    processConfigChanges(ConfigEntityName.Default, props)
+                } catch {
+                  case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating " +
+                    s"cluster with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
+                    s"in ${deltaName}", t)
+                }
               } else if (resource.name() == brokerId.toString) {
-                // Apply changes to this broker's dynamic configuration.
-                info(s"Updating broker $brokerId with new configuration : " +
-                  toLoggableProps(resource, props).mkString(","))
-                dynamicConfigHandlers(ConfigType.Broker).
-                  processConfigChanges(resource.name(), props)
-                // When applying a per broker config (not a cluster config), we also
-                // reload any associated file. For example, if the ssl.keystore is still
-                // set to /tmp/foo, we still want to reload /tmp/foo in case its contents
-                // have changed. This doesn't apply to topic configs or cluster configs.
-                reloadUpdatedFilesWithoutConfigChange(props)
+                try {
+                  // Apply changes to this broker's dynamic configuration.
+                  info(s"Updating broker $brokerId with new configuration : " +
+                    toLoggableProps(resource, props).mkString(","))
+                  dynamicConfigHandlers(ConfigType.Broker).
+                    processConfigChanges(resource.name(), props)
+                  // When applying a per broker config (not a cluster config), we also
+                  // reload any associated file. For example, if the ssl.keystore is still
+                  // set to /tmp/foo, we still want to reload /tmp/foo in case its contents
+                  // have changed. This doesn't apply to topic configs or cluster configs.
+                  reloadUpdatedFilesWithoutConfigChange(props)
+                } catch {
+                  case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating " +
+                    s"broker with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
+                    s"in ${deltaName}", t)
+                }
               }
             case _ => // nothing to do
           }
         }
       }
 
-      // Apply client quotas delta.
-      Option(delta.clientQuotasDelta()).foreach { clientQuotasDelta =>
-        clientQuotaMetadataManager.update(clientQuotasDelta)
+      try {
+        // Apply client quotas delta.
+        Option(delta.clientQuotasDelta()).foreach { clientQuotasDelta =>
+          clientQuotaMetadataManager.update(clientQuotasDelta)
+        }
+      } catch {
+        case t: Throwable => metadataPublishingFaultHandler.handleFault("Error updating client " +
+          s"quotas in ${deltaName}", t)
       }
 
       // Apply changes to ACLs. This needs to be handled carefully because while we are
@@ -235,20 +283,30 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       Option(delta.aclsDelta()).foreach( aclsDelta =>
         _authorizer match {
           case Some(authorizer: ClusterMetadataAuthorizer) => if (aclsDelta.isSnapshotDelta) {
-            // If the delta resulted from a snapshot load, we want to apply the new changes
-            // all at once using ClusterMetadataAuthorizer#loadSnapshot. If this is the
-            // first snapshot load, it will also complete the futures returned by
-           // Authorizer#start (which we wait for before processing RPCs).
-            authorizer.loadSnapshot(newImage.acls().acls())
+            try {
+              // If the delta resulted from a snapshot load, we want to apply the new changes
+              // all at once using ClusterMetadataAuthorizer#loadSnapshot. If this is the
+              // first snapshot load, it will also complete the futures returned by
+              // Authorizer#start (which we wait for before processing RPCs).
+              authorizer.loadSnapshot(newImage.acls().acls())
+            } catch {
+              case t: Throwable => metadataPublishingFaultHandler.handleFault("Error loading " +
+                s"authorizer snapshot in ${deltaName}", t)
+            }
           } else {
-            // Because the changes map is a LinkedHashMap, the deltas will be returned in
-            // the order they were performed.
-            aclsDelta.changes().entrySet().forEach(e =>
-              if (e.getValue.isPresent) {
-                authorizer.addAcl(e.getKey, e.getValue.get())
-              } else {
-                authorizer.removeAcl(e.getKey)
-              })
+            try {
+              // Because the changes map is a LinkedHashMap, the deltas will be returned in
+              // the order they were performed.
+              aclsDelta.changes().entrySet().forEach(e =>
+                if (e.getValue.isPresent) {
+                  authorizer.addAcl(e.getKey, e.getValue.get())
+                } else {
+                  authorizer.removeAcl(e.getKey)
+                })
+            } catch {
+              case t: Throwable => metadataPublishingFaultHandler.handleFault("Error loading " +
+                s"authorizer changes in ${deltaName}", t)
+            }
           }
           case _ => // No ClusterMetadataAuthorizer is configured. There is nothing to do.
         })
@@ -258,8 +316,8 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       }
       publishedOffsetAtomic.set(newImage.highestOffsetAndEpoch().offset)
     } catch {
-      case t: Throwable => error(s"Error publishing broker metadata at $highestOffsetAndEpoch", t)
-        throw t
+      case t: Throwable => metadataPublishingFaultHandler.handleFault("Uncaught exception while " +
+        s"publishing broker metadata from ${deltaName}", t)
     } finally {
       _firstPublish = false
     }
@@ -282,7 +340,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
    * @param resignation function to call on resignation; the first parameter is the partition id;
    *                    the second parameter is the leader epoch
    */
-  private def updateCoordinator(
+  def updateCoordinator(
     image: MetadataImage,
     delta: MetadataDelta,
     topicName: String,
@@ -317,38 +375,60 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
   }
 
   private def initializeManagers(): Unit = {
-    // Start log manager, which will perform (potentially lengthy)
-    // recovery-from-unclean-shutdown if required.
-    logManager.startup(metadataCache.getAllTopics())
+    try {
+      // Start log manager, which will perform (potentially lengthy)
+      // recovery-from-unclean-shutdown if required.
+      logManager.startup(metadataCache.getAllTopics())
 
-    // Make the LogCleaner available for reconfiguration. We can't do this prior to this
-    // point because LogManager#startup creates the LogCleaner object, if
-    // log.cleaner.enable is true. TODO: improve this (see KAFKA-13610)
-    Option(logManager.cleaner).foreach(conf.dynamicConfig.addBrokerReconfigurable)
-
-    // Start the replica manager.
-    replicaManager.startup()
-
-    // Start the group coordinator.
-    groupCoordinator.startup(() => metadataCache.numPartitions(
-      Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(conf.offsetsTopicPartitions))
-
-    // Start the transaction coordinator.
-    txnCoordinator.startup(() => metadataCache.numPartitions(
-      Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(conf.transactionTopicPartitions))
+      // Make the LogCleaner available for reconfiguration. We can't do this prior to this
+      // point because LogManager#startup creates the LogCleaner object, if
+      // log.cleaner.enable is true. TODO: improve this (see KAFKA-13610)
+      Option(logManager.cleaner).foreach(conf.dynamicConfig.addBrokerReconfigurable)
+    } catch {
+      case t: Throwable => fatalFaultHandler.handleFault("Error starting LogManager", t)
+    }
+    try {
+      // Start the replica manager.
+      replicaManager.startup()
+    } catch {
+      case t: Throwable => fatalFaultHandler.handleFault("Error starting ReplicaManager", t)
+    }
+    try {
+      // Start the group coordinator.
+      groupCoordinator.startup(() => metadataCache.numPartitions(
+        Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(conf.offsetsTopicPartitions))
+    } catch {
+      case t: Throwable => fatalFaultHandler.handleFault("Error starting GroupCoordinator", t)
+    }
+    try {
+      // Start the transaction coordinator.
+      txnCoordinator.startup(() => metadataCache.numPartitions(
+        Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(conf.transactionTopicPartitions))
+    } catch {
+      case t: Throwable => fatalFaultHandler.handleFault("Error starting TransactionCoordinator", t)
+    }
   }
 
   private def finishInitializingReplicaManager(newImage: MetadataImage): Unit = {
-    // Delete log directories which we're not supposed to have, according to the
-    // latest metadata. This is only necessary to do when we're first starting up. If
-    // we have to load a snapshot later, these topics will appear in deletedTopicIds.
-    val strayPartitions = findStrayPartitions(brokerId, newImage.topics, logManager.allLogs)
-    if (strayPartitions.nonEmpty) {
-      replicaManager.deleteStrayReplicas(strayPartitions)
+    try {
+      // Delete log directories which we're not supposed to have, according to the
+      // latest metadata. This is only necessary to do when we're first starting up. If
+      // we have to load a snapshot later, these topics will appear in deletedTopicIds.
+      val strayPartitions = findStrayPartitions(brokerId, newImage.topics, logManager.allLogs)
+      if (strayPartitions.nonEmpty) {
+        replicaManager.deleteStrayReplicas(strayPartitions)
+      }
+    } catch {
+      case t: Throwable => metadataPublishingFaultHandler.handleFault("Error deleting stray " +
+        "partitions during startup", t)
     }
-
-    // Make sure that the high water mark checkpoint thread is running for the replica
-    // manager.
-    replicaManager.startHighWatermarkCheckPointThread()
-  }
+    try {
+      // Make sure that the high water mark checkpoint thread is running for the replica
+      // manager.
+      replicaManager.startHighWatermarkCheckPointThread()
+    } catch {
+      case t: Throwable => metadataPublishingFaultHandler.handleFault("Error starting high " +
+        "watermark checkpoint thread during startup", t)
+    }
+}
 }

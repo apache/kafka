@@ -37,12 +37,14 @@ final class BrokerServerMetricsTest {
     val expectedMetrics = Set(
       new MetricName("last-applied-record-offset", expectedGroup, "", Collections.emptyMap()),
       new MetricName("last-applied-record-timestamp", expectedGroup, "", Collections.emptyMap()),
-      new MetricName("last-applied-record-lag-ms", expectedGroup, "", Collections.emptyMap())
+      new MetricName("last-applied-record-lag-ms", expectedGroup, "", Collections.emptyMap()),
+      new MetricName("metadata-load-error-count", expectedGroup, "", Collections.emptyMap()),
+      new MetricName("metadata-apply-error-count", expectedGroup, "", Collections.emptyMap())
     )
      
     TestUtils.resource(BrokerServerMetrics(metrics)) { brokerMetrics =>
       val metricsMap = metrics.metrics().asScala.filter{ case (name, _) => name.group == expectedGroup }
-      assertEquals(3, metricsMap.size)
+      assertEquals(expectedMetrics.size, metricsMap.size)
       metricsMap.foreach { case (name, metric) =>
         assertTrue(expectedMetrics.contains(name))
       }
@@ -83,6 +85,38 @@ final class BrokerServerMetricsTest {
       brokerMetrics.lastAppliedRecordTimestamp.set(timestamp)
       assertEquals(timestamp, timestampMetric.metricValue.asInstanceOf[Long])
       assertEquals(time.milliseconds - timestamp, lagMetric.metricValue.asInstanceOf[Long])
+    }
+  }
+
+  @Test
+  def testMetadataLoadErrorCount(): Unit = {
+    val time = new MockTime()
+    val metrics = new Metrics(time)
+    TestUtils.resource(BrokerServerMetrics(metrics)) { brokerMetrics =>
+      val metadataLoadErrorCountMetric = metrics.metrics().get(brokerMetrics.metadataLoadErrorCountName)
+
+      assertEquals(0L, metadataLoadErrorCountMetric.metricValue.asInstanceOf[Long])
+
+      // Update metric value and check
+      val errorCount = 100
+      brokerMetrics.metadataLoadErrorCount.set(errorCount)
+      assertEquals(errorCount, metadataLoadErrorCountMetric.metricValue.asInstanceOf[Long])
+    }
+  }
+
+  @Test
+  def testMetadataApplyErrorCount(): Unit = {
+    val time = new MockTime()
+    val metrics = new Metrics(time)
+    TestUtils.resource(BrokerServerMetrics(metrics)) { brokerMetrics =>
+      val metadataApplyErrorCountMetric = metrics.metrics().get(brokerMetrics.metadataApplyErrorCountName)
+
+      assertEquals(0L, metadataApplyErrorCountMetric.metricValue.asInstanceOf[Long])
+
+      // Update metric value and check
+      val errorCount = 100
+      brokerMetrics.metadataApplyErrorCount.set(errorCount)
+      assertEquals(errorCount, metadataApplyErrorCountMetric.metricValue.asInstanceOf[Long])
     }
   }
 }

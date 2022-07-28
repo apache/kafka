@@ -24,6 +24,7 @@ import java.util.{Collections, Properties}
 import java.util.concurrent.CompletableFuture
 import javax.security.auth.login.Configuration
 import kafka.raft.KafkaRaftManager
+import kafka.server.metadata.BrokerServerMetrics
 import kafka.tools.StorageTool
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
@@ -32,11 +33,12 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
-import org.apache.kafka.controller.BootstrapMetadata
+import org.apache.kafka.controller.{BootstrapMetadata, QuorumControllerMetrics}
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.apache.kafka.server.fault.MockFaultHandler
+import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 import org.junit.jupiter.api.Assertions._
@@ -82,26 +84,34 @@ class ZooKeeperQuorumImplementation(
   }
 }
 
-class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndVersion],
-                                val controllerServer: ControllerServer,
-                                val metadataDir: File,
-                                val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
-                                val clusterId: String,
-                                val log: Logging) extends QuorumImplementation {
+class KRaftQuorumImplementation(
+  val raftManager: KafkaRaftManager[ApiMessageAndVersion],
+  val controllerServer: ControllerServer,
+  val metadataDir: File,
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
+  val clusterId: String,
+  val log: Logging,
+  val faultHandler: FaultHandler
+) extends QuorumImplementation {
   override def createBroker(
     config: KafkaConfig,
     time: Time,
     startup: Boolean,
     threadNamePrefix: Option[String],
   ): KafkaBroker = {
+    val metrics = new Metrics()
     val broker = new BrokerServer(config = config,
       metaProps = new MetaProperties(clusterId, config.nodeId),
       raftManager = raftManager,
       time = time,
-      metrics = new Metrics(),
+      metrics = metrics,
+      brokerMetrics = BrokerServerMetrics(metrics),
       threadNamePrefix = Some("Broker%02d_".format(config.nodeId)),
       initialOfflineDirs = Seq(),
-      controllerQuorumVotersFuture = controllerQuorumVotersFuture)
+      controllerQuorumVotersFuture = controllerQuorumVotersFuture,
+      fatalFaultHandler = faultHandler,
+      metadataLoadingFaultHandler = faultHandler,
+      metadataPublishingFaultHandler = faultHandler)
     if (startup) broker.startup()
     broker
   }
@@ -306,6 +316,7 @@ abstract class QuorumTestHarness extends Logging {
         raftManager = raftManager,
         time = Time.SYSTEM,
         metrics = controllerMetrics,
+        controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), Time.SYSTEM),
         threadNamePrefix = Option(threadNamePrefix),
         controllerQuorumVotersFuture = controllerQuorumVotersFuture,
         configSchema = KafkaRaftServer.configSchema,
@@ -336,7 +347,8 @@ abstract class QuorumTestHarness extends Logging {
       metadataDir,
       controllerQuorumVotersFuture,
       metaProperties.clusterId,
-      this)
+      this,
+      faultHandler)
   }
 
   private def newZooKeeperQuorum(): ZooKeeperQuorumImplementation = {

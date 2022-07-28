@@ -19,13 +19,13 @@ package kafka.server.metadata
 import java.util
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.function.Consumer
-
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.snapshot.SnapshotReader
 
 
@@ -40,7 +40,8 @@ class BrokerMetadataListener(
   threadNamePrefix: Option[String],
   val maxBytesBetweenSnapshots: Long,
   val snapshotter: Option[MetadataSnapshotter],
-  brokerMetrics: BrokerServerMetrics
+  brokerMetrics: BrokerServerMetrics,
+  metadataLoadingFaultHandler: FaultHandler
 ) extends RaftClient.Listener[ApiMessageAndVersion] with KafkaMetricsGroup {
   private val logContext = new LogContext(s"[BrokerMetadataListener id=$brokerId] ")
   private val log = logContext.logger(classOf[BrokerMetadataListener])
@@ -109,11 +110,16 @@ class BrokerMetadataListener(
       extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
       val results = try {
-        val loadResults = loadBatches(_delta, reader, None, None, None)
+        val loadResults = loadBatches(_delta, reader, None, None, None, None)
         if (isDebugEnabled) {
           debug(s"Loaded new commits: $loadResults")
         }
         loadResults
+      } catch {
+        case e: Throwable =>
+          metadataLoadingFaultHandler.handleFault(s"Unable to load metadata commits " +
+            s"from the BatchReader starting at base offset ${reader.baseOffset()}", e)
+          return
       } finally {
         reader.close()
       }
@@ -156,19 +162,26 @@ class BrokerMetadataListener(
   class HandleSnapshotEvent(reader: SnapshotReader[ApiMessageAndVersion])
     extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
+      val snapshotName = s"${reader.snapshotId().offset}-${reader.snapshotId().epoch}"
       try {
-        info(s"Loading snapshot ${reader.snapshotId().offset}-${reader.snapshotId().epoch}.")
+        info(s"Loading snapshot ${snapshotName}")
         _delta = new MetadataDelta(_image) // Discard any previous deltas.
-        val loadResults = loadBatches(
-          _delta,
+        val loadResults = loadBatches(_delta,
           reader,
           Some(reader.lastContainedLogTimestamp),
           Some(reader.lastContainedLogOffset),
-          Some(reader.lastContainedLogEpoch)
-        )
-        _delta.finishSnapshot()
-        info(s"Loaded snapshot ${reader.snapshotId().offset}-${reader.snapshotId().epoch}: " +
-          s"$loadResults")
+          Some(reader.lastContainedLogEpoch),
+          Some(snapshotName))
+        try {
+          _delta.finishSnapshot()
+        } catch {
+          case e: Throwable => metadataLoadingFaultHandler.handleFault(
+              s"Error finishing snapshot ${snapshotName}", e)
+        }
+        info(s"Loaded snapshot ${snapshotName}: ${loadResults}")
+      } catch {
+        case t: Throwable => metadataLoadingFaultHandler.handleFault("Uncaught exception while " +
+          s"loading broker metadata from Metadata snapshot ${snapshotName}", t)
       } finally {
         reader.close()
       }
@@ -201,7 +214,8 @@ class BrokerMetadataListener(
     iterator: util.Iterator[Batch[ApiMessageAndVersion]],
     lastAppendTimestamp: Option[Long],
     lastCommittedOffset: Option[Long],
-    lastCommittedEpoch: Option[Int]
+    lastCommittedEpoch: Option[Int],
+    snapshotName: Option[String]
   ): BatchLoadResults = {
     val startTimeNs = time.nanoseconds()
     var numBatches = 0
@@ -220,12 +234,20 @@ class BrokerMetadataListener(
           trace(s"Metadata batch ${batch.lastOffset}: processing [${index + 1}/${batch.records.size}]:" +
             s" ${messageAndVersion.message}")
         }
-
         _highestOffset = lastCommittedOffset.getOrElse(batch.baseOffset() + index)
-
-        delta.replay(highestMetadataOffset, epoch, messageAndVersion.message())
-        numRecords += 1
-        index += 1
+        try {
+          delta.replay(highestMetadataOffset, epoch, messageAndVersion.message())
+        } catch {
+          case e: Throwable => snapshotName match {
+            case None => metadataLoadingFaultHandler.handleFault(
+              s"Error replaying metadata log record at offset ${_highestOffset}", e)
+            case Some(name) => metadataLoadingFaultHandler.handleFault(
+              s"Error replaying record ${index} from snapshot ${name} at offset ${_highestOffset}", e)
+          }
+        } finally {
+          numRecords += 1
+          index += 1
+        }
       }
       numBytes = numBytes + batch.sizeInBytes()
       metadataBatchSizeHist.update(batch.records().size())
