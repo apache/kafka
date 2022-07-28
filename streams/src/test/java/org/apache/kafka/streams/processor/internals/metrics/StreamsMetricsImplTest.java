@@ -290,6 +290,7 @@ public class StreamsMetricsImplTest {
 
         final Sensor actualSensor = streamsMetrics.threadLevelSensor(THREAD_ID1, SENSOR_NAME_1, recordingLevel);
 
+        verify(metrics).getSensor("internal.test-thread-1.s.sensor1");
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
@@ -311,7 +312,6 @@ public class StreamsMetricsImplTest {
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
-    /*
     @Test
     public void shouldGetExistingTaskLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
@@ -326,10 +326,11 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        verify(metrics);
+        verify(metrics).getSensor("internal.test-thread-1.task.test-task-1.s.sensor1");
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
+    /*
     @Test
     public void shouldGetNewTopicLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
