@@ -30,14 +30,17 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ImmutableMetricValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.easymock.Capture;
-import org.easymock.CaptureType;
-import org.easymock.EasyMock;
-import org.easymock.IArgumentMatcher;
+//import org.easymock.Capture;
+//import org.easymock.CaptureType;
+//import org.easymock.EasyMock;
+//import org.easymock.IArgumentMatcher;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
+import org.mockito.junit.MockitoJUnitRunner;
+//import org.powermock.core.classloader.annotations.PrepareForTest;
+//import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -63,17 +66,17 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxLatencyToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.anyString;
-import static org.easymock.EasyMock.capture;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.newCapture;
-import static org.easymock.EasyMock.niceMock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.resetToDefault;
-import static org.easymock.EasyMock.verify;
-import static org.easymock.EasyMock.eq;
+//import static org.easymock.EasyMock.anyObject;
+//import static org.easymock.EasyMock.anyString;
+//import static org.easymock.EasyMock.capture;
+//import static org.easymock.EasyMock.expect;
+//import static org.easymock.EasyMock.mock;
+//import static org.easymock.EasyMock.newCapture;
+//import static org.easymock.EasyMock.niceMock;
+//import static org.easymock.EasyMock.replay;
+//import static org.easymock.EasyMock.resetToDefault;
+//import static org.easymock.EasyMock.verify;
+//import static org.easymock.EasyMock.eq;
 import static org.hamcrest.CoreMatchers.equalToObject;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
@@ -87,10 +90,12 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertNotNull;
-import static org.powermock.api.easymock.PowerMock.createMock;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+//import static org.powermock.api.easymock.PowerMock.createMock;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({Sensor.class, KafkaMetric.class})
+@RunWith(MockitoJUnitRunner.class)
 public class StreamsMetricsImplTest {
 
     private final static String SENSOR_PREFIX_DELIMITER = ".";
@@ -146,7 +151,7 @@ public class StreamsMetricsImplTest {
     private final MockTime time = new MockTime(0);
     private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
-    private static MetricConfig eqMetricConfig(final MetricConfig metricConfig) {
+/*    private static MetricConfig eqMetricConfig(final MetricConfig metricConfig) {
         EasyMock.reportMatcher(new IArgumentMatcher() {
             private final StringBuffer message = new StringBuffer();
 
@@ -197,9 +202,9 @@ public class StreamsMetricsImplTest {
             }
         });
         return null;
-    }
+    }*/
 
-    private Capture<String> addSensorsOnAllLevels(final Metrics metrics, final StreamsMetricsImpl streamsMetrics) {
+/*    private Capture<String> addSensorsOnAllLevels(final Metrics metrics, final StreamsMetricsImpl streamsMetrics) {
         final Capture<String> sensorKeys = newCapture(CaptureType.ALL);
         final Sensor[] parents = {};
         expect(metrics.sensor(capture(sensorKeys), eq(INFO_RECORDING_LEVEL), parents))
@@ -248,36 +253,35 @@ public class StreamsMetricsImplTest {
             VALUE_PROVIDER
         );
         return sensorKeys;
-    }
+    }*/
 
-    private Capture<String> setupGetNewSensorTest(final Metrics metrics,
+    private ArgumentCaptor<String> setupGetNewSensorTest(final Metrics metrics,
                                                   final RecordingLevel recordingLevel) {
-        final Capture<String> sensorKey = newCapture(CaptureType.ALL);
-        expect(metrics.getSensor(capture(sensorKey))).andStubReturn(null);
+        final ArgumentCaptor<String> sensorKeyArgumentCaptor = ArgumentCaptor.forClass(String.class);
+        Mockito.when(metrics.getSensor(sensorKeyArgumentCaptor.capture())).thenReturn(null);
         final Sensor[] parents = {};
-        expect(metrics.sensor(capture(sensorKey), eq(recordingLevel), parents)).andReturn(sensor);
-        replay(metrics);
-        return sensorKey;
+        Mockito.when(metrics.sensor(sensorKeyArgumentCaptor.capture(), Mockito.eq(recordingLevel), parents)).thenReturn(sensor);
+        return sensorKeyArgumentCaptor;
     }
 
-    private void setupGetExistingSensorTest(final Metrics metrics) {
+/*    private void setupGetExistingSensorTest(final Metrics metrics) {
         expect(metrics.getSensor(anyString())).andStubReturn(sensor);
         replay(metrics);
-    }
+    }*/
 
     @Test
     public void shouldGetNewThreadLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
-        setupGetNewSensorTest(metrics, recordingLevel);
+        final ArgumentCaptor<String> sensorNameArgumentCaptor = setupGetNewSensorTest(metrics, recordingLevel);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         final Sensor actualSensor = streamsMetrics.threadLevelSensor(THREAD_ID1, SENSOR_NAME_1, recordingLevel);
 
-        verify(metrics);
+        verify(metrics).sensor(sensorNameArgumentCaptor.getValue(), recordingLevel, new Sensor[]{});
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
-
+    /*
     @Test
     public void shouldGetExistingThreadLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
@@ -1419,4 +1423,6 @@ public class StreamsMetricsImplTest {
         );
         assertThat(metrics.metric(name), nullValue());
     }
+
+     */
 }
