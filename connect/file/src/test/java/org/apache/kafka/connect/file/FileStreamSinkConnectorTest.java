@@ -86,4 +86,13 @@ public class FileStreamSinkConnectorTest {
         connector.start(sinkProperties);
         assertEquals(FileStreamSinkTask.class, connector.taskClass());
     }
+
+    @Test
+    public void testConnectorConfigsPropagateToTaskConfigs() {
+        sinkProperties.put("transforms", "insert");
+        connector.start(sinkProperties);
+        List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
+        assertEquals(1, taskConfigs.size());
+        assertEquals("insert", taskConfigs.get(0).get("transforms"));
+    }
 }

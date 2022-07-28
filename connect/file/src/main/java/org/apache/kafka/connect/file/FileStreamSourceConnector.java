@@ -26,13 +26,11 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Very simple connector that works with the console. This connector supports both source and
- * sink modes via its 'mode' setting.
+ * Very simple source connector that works with stdin or a file.
  */
 public class FileStreamSourceConnector extends SourceConnector {
     public static final String TOPIC_CONFIG = "topic";
@@ -47,9 +45,7 @@ public class FileStreamSourceConnector extends SourceConnector {
         .define(TASK_BATCH_SIZE_CONFIG, Type.INT, DEFAULT_TASK_BATCH_SIZE, Importance.LOW,
                 "The maximum number of records the Source task can read from file one time");
 
-    private String filename;
-    private String topic;
-    private int batchSize;
+    private Map<String, String> props;
 
     @Override
     public String version() {
@@ -58,14 +54,12 @@ public class FileStreamSourceConnector extends SourceConnector {
 
     @Override
     public void start(Map<String, String> props) {
+        this.props = props;
         AbstractConfig parsedConfig = new AbstractConfig(CONFIG_DEF, props);
-        filename = parsedConfig.getString(FILE_CONFIG);
         List<String> topics = parsedConfig.getList(TOPIC_CONFIG);
         if (topics.size() != 1) {
             throw new ConfigException("'topic' in FileStreamSourceConnector configuration requires definition of a single topic");
         }
-        topic = topics.get(0);
-        batchSize = parsedConfig.getInt(TASK_BATCH_SIZE_CONFIG);
     }
 
     @Override
@@ -77,12 +71,7 @@ public class FileStreamSourceConnector extends SourceConnector {
     public List<Map<String, String>> taskConfigs(int maxTasks) {
         ArrayList<Map<String, String>> configs = new ArrayList<>();
         // Only one input stream makes sense.
-        Map<String, String> config = new HashMap<>();
-        if (filename != null)
-            config.put(FILE_CONFIG, filename);
-        config.put(TOPIC_CONFIG, topic);
-        config.put(TASK_BATCH_SIZE_CONFIG, String.valueOf(batchSize));
-        configs.add(config);
+        configs.add(props);
         return configs;
     }
 

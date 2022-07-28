@@ -118,4 +118,13 @@ public class FileStreamSourceConnectorTest {
         sourceProperties.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "abcd");
         assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
     }
+
+    @Test
+    public void testConnectorConfigsPropagateToTaskConfigs() {
+        sourceProperties.put("transforms", "insert");
+        connector.start(sourceProperties);
+        List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
+        assertEquals(1, taskConfigs.size());
+        assertEquals("insert", taskConfigs.get(0).get("transforms"));
+    }
 }
