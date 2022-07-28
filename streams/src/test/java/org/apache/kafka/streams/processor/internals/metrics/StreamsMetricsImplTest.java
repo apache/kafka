@@ -90,9 +90,9 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertNotNull;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 //import static org.powermock.api.easymock.PowerMock.createMock;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -258,16 +258,15 @@ public class StreamsMetricsImplTest {
     private ArgumentCaptor<String> setupGetNewSensorTest(final Metrics metrics,
                                                   final RecordingLevel recordingLevel) {
         final ArgumentCaptor<String> sensorKeyArgumentCaptor = ArgumentCaptor.forClass(String.class);
-        Mockito.when(metrics.getSensor(sensorKeyArgumentCaptor.capture())).thenReturn(null);
+        when(metrics.getSensor(sensorKeyArgumentCaptor.capture())).thenReturn(null);
         final Sensor[] parents = {};
-        Mockito.when(metrics.sensor(sensorKeyArgumentCaptor.capture(), Mockito.eq(recordingLevel), parents)).thenReturn(sensor);
+        when(metrics.sensor(sensorKeyArgumentCaptor.capture(), Mockito.eq(recordingLevel), parents)).thenReturn(sensor);
         return sensorKeyArgumentCaptor;
     }
 
-/*    private void setupGetExistingSensorTest(final Metrics metrics) {
-        expect(metrics.getSensor(anyString())).andStubReturn(sensor);
-        replay(metrics);
-    }*/
+    private void setupGetExistingSensorTest(final Metrics metrics) {
+        when(metrics.getSensor(anyString())).thenReturn(sensor);
+    }
 
     @Test
     public void shouldGetNewThreadLevelSensor() {
@@ -281,7 +280,7 @@ public class StreamsMetricsImplTest {
         verify(metrics).sensor(sensorNameArgumentCaptor.getValue(), recordingLevel, new Sensor[]{});
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
-    /*
+
     @Test
     public void shouldGetExistingThreadLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
@@ -291,10 +290,10 @@ public class StreamsMetricsImplTest {
 
         final Sensor actualSensor = streamsMetrics.threadLevelSensor(THREAD_ID1, SENSOR_NAME_1, recordingLevel);
 
-        verify(metrics);
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
+    /*
     @Test
     public void shouldGetNewTaskLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
