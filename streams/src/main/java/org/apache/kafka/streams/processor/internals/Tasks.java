@@ -43,9 +43,7 @@ import static org.apache.kafka.common.utils.Utils.union;
 class Tasks {
     private final Logger log;
 
-    // TODO: change type to `StreamTask`
     private final Map<TaskId, Task> activeTasksPerId = new TreeMap<>();
-    // TODO: change type to `StandbyTask`
     private final Map<TaskId, Task> standbyTasksPerId = new TreeMap<>();
 
     // Tasks may have been assigned for a NamedTopology that is not yet known by this host. When that occurs we stash
@@ -60,58 +58,62 @@ class Tasks {
     // or they are revoked from a new assignment.
     private final Map<TaskId, Set<TopicPartition>> pendingActiveTasksToCreate = new HashMap<>();
     private final Map<TaskId, Set<TopicPartition>> pendingStandbyTasksToCreate = new HashMap<>();
-
-    private final Set<Task> pendingTasksToRestore = new HashSet<>();
-
-    private final Set<TaskId> pendingActiveTasksToRecycle = new HashSet<>();
-    private final Set<TaskId> pendingStandbyTasksToRecycle = new HashSet<>();
-    private final Set<TaskId> pendingTasksThatNeedInputPartitionUpdate = new HashSet<>();
+    private final Map<TaskId, Set<TopicPartition>> pendingTasksToRecycle = new HashMap<>();
+    private final Map<TaskId, Set<TopicPartition>> pendingTasksToUpdateInputPartitions = new HashMap<>();
+    private final Set<Task> pendingTasksToInit = new HashSet<>();
     private final Set<TaskId> pendingTasksToClose = new HashSet<>();
 
-    // TODO: change type to `StreamTask`
     private final Map<TopicPartition, Task> activeTasksPerPartition = new HashMap<>();
 
     Tasks(final LogContext logContext) {
         this.log = logContext.logger(getClass());
     }
 
-    void purgePendingTasks(final Set<TaskId> assignedActiveTasks, final Set<TaskId> assignedStandbyTasks) {
+    void purgePendingTasksToCreate(final Set<TaskId> assignedActiveTasks, final Set<TaskId> assignedStandbyTasks) {
         pendingActiveTasksToCreate.keySet().retainAll(assignedActiveTasks);
         pendingStandbyTasksToCreate.keySet().retainAll(assignedStandbyTasks);
     }
 
-    void addPendingActiveTasks(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
+    void addPendingActiveTasksToCreate(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
         pendingActiveTasksToCreate.putAll(pendingTasks);
     }
 
-    void addPendingStandbyTasks(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
+    void addPendingStandbyTasksToCreate(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
         pendingStandbyTasksToCreate.putAll(pendingTasks);
     }
 
-    void addPendingActiveTaskToRecycle(final TaskId taskId) {
-        pendingActiveTasksToRecycle.add(taskId);
+    Set<TopicPartition> removePendingTaskToRecycle(final TaskId taskId) {
+        return pendingTasksToRecycle.remove(taskId);
     }
 
-    void addPendingStandbyTaskToRecycle(final TaskId taskId) {
-        pendingStandbyTasksToRecycle.add(taskId);
+    void addPendingTaskToRecycle(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
+        pendingTasksToRecycle.put(taskId, inputPartitions);
     }
 
-    void addPendingTaskThatNeedsInputPartitionsUpdate(final TaskId taskId) {
-        pendingTasksThatNeedInputPartitionUpdate.add(taskId);
+    Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId) {
+        return pendingTasksToUpdateInputPartitions.remove(taskId);
+    }
+
+    void addPendingTaskToUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
+        pendingTasksToUpdateInputPartitions.put(taskId, inputPartitions);
+    }
+
+    boolean removePendingTaskToClose(final TaskId taskId) {
+        return pendingTasksToClose.remove(taskId);
     }
 
     void addPendingTaskToClose(final TaskId taskId) {
         pendingTasksToClose.add(taskId);
     }
 
-    void addPendingTaskToRestore(final Collection<Task> tasks) {
-        pendingTasksToRestore.addAll(tasks);
+    Set<Task> drainPendingTaskToInit() {
+        final Set<Task> result = new HashSet<>(pendingTasksToInit);
+        pendingTasksToInit.clear();
+        return result;
     }
 
-    Set<Task> drainPendingTaskToRestore() {
-        final Set<Task> result = new HashSet<>(pendingTasksToRestore);
-        pendingTasksToRestore.clear();
-        return result;
+    void addPendingTaskToInit(final Collection<Task> tasks) {
+        pendingTasksToInit.addAll(tasks);
     }
 
     Map<TaskId, Set<TopicPartition>> pendingActiveTasksForTopologies(final Set<String> currentTopologies) {
@@ -269,7 +271,6 @@ class Tasks {
         return tasks;
     }
 
-    // TODO: change return type to `StreamTask`
     Collection<Task> activeTasks() {
         return Collections.unmodifiableCollection(activeTasksPerId.values());
     }

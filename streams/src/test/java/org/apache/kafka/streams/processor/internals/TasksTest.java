@@ -23,12 +23,15 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 public class TasksTest {
 
@@ -41,7 +44,7 @@ public class TasksTest {
     private final LogContext logContext = new LogContext();
 
     @Test
-    public void shouldCreateTasks() {
+    public void shouldKeepAddedTasks() {
         final Tasks tasks = new Tasks(logContext);
         final StreamTask statefulTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).build();
         final StandbyTask standbyTask = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_A_1)).build();
@@ -51,15 +54,22 @@ public class TasksTest {
         tasks.addNewStandbyTasks(Collections.singletonList(standbyTask));
 
         assertEquals(statefulTask, tasks.task(statefulTask.id()));
-        assertTrue(tasks.activeTasks().contains(statefulTask));
-        assertTrue(tasks.allTasks().contains(statefulTask));
-        assertTrue(tasks.tasks(mkSet(statefulTask.id())).contains(statefulTask));
         assertEquals(statelessTask, tasks.task(statelessTask.id()));
-        assertTrue(tasks.activeTasks().contains(statelessTask));
-        assertTrue(tasks.allTasks().contains(statelessTask));
-        assertTrue(tasks.tasks(mkSet(statelessTask.id())).contains(statelessTask));
         assertEquals(standbyTask, tasks.task(standbyTask.id()));
-        assertTrue(tasks.allTasks().contains(standbyTask));
-        assertTrue(tasks.tasks(mkSet(standbyTask.id())).contains(standbyTask));
+
+        assertEquals(mkSet(statefulTask, statelessTask), tasks.activeTasks());
+        assertEquals(mkSet(statefulTask, statelessTask, standbyTask), tasks.allTasks());
+        assertEquals(mkSet(statefulTask, standbyTask), tasks.tasks(mkSet(statefulTask.id(), standbyTask.id())));
+        assertEquals(mkSet(statefulTask.id(), statelessTask.id(), standbyTask.id()), tasks.allTaskIds());
+        assertEquals(
+            mkMap(
+                mkEntry(statefulTask.id(), statefulTask),
+                mkEntry(statelessTask.id(), statelessTask),
+                mkEntry(standbyTask.id(), standbyTask)
+            ),
+            tasks.allTasksPerId());
+        assertTrue(tasks.owned(statefulTask.id()));
+        assertTrue(tasks.owned(statelessTask.id()));
+        assertTrue(tasks.owned(statefulTask.id()));
     }
 }
