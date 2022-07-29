@@ -47,9 +47,12 @@ import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 trait QuorumImplementation {
-  def createBroker(config: KafkaConfig,
-                   time: Time,
-                   startup: Boolean): KafkaBroker
+  def createBroker(
+    config: KafkaConfig,
+    time: Time = Time.SYSTEM,
+    startup: Boolean = true,
+    threadNamePrefix: Option[String] = None,
+  ): KafkaBroker
 
   def shutdown(): Unit
 }
@@ -61,10 +64,13 @@ class ZooKeeperQuorumImplementation(
   val adminZkClient: AdminZkClient,
   val log: Logging
 ) extends QuorumImplementation {
-  override def createBroker(config: KafkaConfig,
-                            time: Time,
-                            startup: Boolean): KafkaBroker = {
-    val server = new KafkaServer(config, time, None, false)
+  override def createBroker(
+    config: KafkaConfig,
+    time: Time,
+    startup: Boolean,
+    threadNamePrefix: Option[String],
+  ): KafkaBroker = {
+    val server = new KafkaServer(config, time, threadNamePrefix, false)
     if (startup) server.startup()
     server
   }
@@ -81,9 +87,12 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
                                 val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
                                 val clusterId: String,
                                 val log: Logging) extends QuorumImplementation {
-  override def createBroker(config: KafkaConfig,
-                            time: Time,
-                            startup: Boolean): KafkaBroker = {
+  override def createBroker(
+    config: KafkaConfig,
+    time: Time,
+    startup: Boolean,
+    threadNamePrefix: Option[String],
+  ): KafkaBroker = {
     val broker = new BrokerServer(config = config,
       metaProps = new MetaProperties(clusterId, config.nodeId),
       raftManager = raftManager,
@@ -219,10 +228,13 @@ abstract class QuorumTestHarness extends Logging {
     }
   }
 
-  def createBroker(config: KafkaConfig,
-                   time: Time = Time.SYSTEM,
-                   startup: Boolean = true): KafkaBroker = {
-    implementation.createBroker(config, time, startup)
+  def createBroker(
+    config: KafkaConfig,
+    time: Time = Time.SYSTEM,
+    startup: Boolean = true,
+    threadNamePrefix: Option[String] = None
+  ): KafkaBroker = {
+    implementation.createBroker(config, time, startup, threadNamePrefix)
   }
 
   def shutdownZooKeeper(): Unit = asZk().shutdown()

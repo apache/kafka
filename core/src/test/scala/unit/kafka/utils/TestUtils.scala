@@ -47,7 +47,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.TopicIdPartition
+import org.apache.kafka.common.{KafkaFuture, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type.TOPIC
@@ -67,7 +67,6 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerd
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaFuture, TopicPartition, Uuid}
 import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.MetadataVersion
@@ -871,8 +870,59 @@ object TestUtils extends Logging {
    *         LeaderDuringDelete).
    * @throws AssertionError if the expected condition is not true within the timeout.
    */
-  def waitUntilLeaderIsElectedOrChanged(zkClient: KafkaZkClient, topic: String, partition: Int, timeoutMs: Long = 30000L,
-                                        oldLeaderOpt: Option[Int] = None, newLeaderOpt: Option[Int] = None): Int = {
+  def waitUntilLeaderIsElectedOrChanged(
+    zkClient: KafkaZkClient,
+    topic: String,
+    partition: Int,
+    timeoutMs: Long = 30000L,
+    oldLeaderOpt: Option[Int] = None,
+    newLeaderOpt: Option[Int] = None
+  ): Int = {
+    def getPartitionLeader(topic: String, partition: Int): Option[Int] = {
+      zkClient.getLeaderForPartition(new TopicPartition(topic, partition))
+    }
+    doWaitUntilLeaderIsElectedOrChanged(getPartitionLeader, topic, partition, timeoutMs, oldLeaderOpt, newLeaderOpt)
+  }
+
+  /**
+   *  If neither oldLeaderOpt nor newLeaderOpt is defined, wait until the leader of a partition is elected.
+   *  If oldLeaderOpt is defined, it waits until the new leader is different from the old leader.
+   *  If newLeaderOpt is defined, it waits until the new leader becomes the expected new leader.
+   *
+   * @return The new leader (note that negative values are used to indicate conditions like NoLeader and
+   *         LeaderDuringDelete).
+   * @throws AssertionError if the expected condition is not true within the timeout.
+   */
+  def waitUntilLeaderIsElectedOrChangedWithAdmin(
+    admin: Admin,
+    topic: String,
+    partition: Int,
+    timeoutMs: Long = 30000L,
+    oldLeaderOpt: Option[Int] = None,
+    newLeaderOpt: Option[Int] = None
+  ): Int = {
+    def getPartitionLeader(topic: String, partition: Int): Option[Int] = {
+      admin.describeTopics(Collections.singletonList(topic)).allTopicNames().get().get(topic).partitions().asScala.
+        find(_.partition() == partition).
+        flatMap { p =>
+          if (p.leader().id() == Node.noNode().id()) {
+            None
+          } else {
+            Some(p.leader().id())
+          }
+        }
+    }
+    doWaitUntilLeaderIsElectedOrChanged(getPartitionLeader, topic, partition, timeoutMs, oldLeaderOpt, newLeaderOpt)
+  }
+
+  private def doWaitUntilLeaderIsElectedOrChanged(
+    getPartitionLeader: (String, Int) => Option[Int],
+    topic: String,
+    partition: Int,
+    timeoutMs: Long,
+    oldLeaderOpt: Option[Int],
+    newLeaderOpt: Option[Int]
+  ): Int = {
     require(!(oldLeaderOpt.isDefined && newLeaderOpt.isDefined), "Can't define both the old and the new leader")
     val startTime = System.currentTimeMillis()
     val topicPartition = new TopicPartition(topic, partition)
@@ -884,7 +934,7 @@ object TestUtils extends Logging {
     var electedOrChangedLeader: Option[Int] = None
     while (electedOrChangedLeader.isEmpty && System.currentTimeMillis() < startTime + timeoutMs) {
       // check if leader is elected
-      leader = zkClient.getLeaderForPartition(topicPartition)
+      leader = getPartitionLeader(topic, partition)
       leader match {
         case Some(l) => (newLeaderOpt, oldLeaderOpt) match {
           case (Some(newLeader), _) if newLeader == l =>
