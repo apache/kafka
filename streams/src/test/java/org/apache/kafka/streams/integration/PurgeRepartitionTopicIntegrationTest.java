@@ -33,7 +33,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.test.IntegrationTest;
+import org.junit.jupiter.api.Tag;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -43,7 +43,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.experimental.categories.Category;
 import org.junit.rules.Timeout;
 
 import java.io.IOException;
@@ -55,7 +54,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
-@Category({IntegrationTest.class})
+@Tag("integration")
 public class PurgeRepartitionTopicIntegrationTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);

@@ -35,7 +35,7 @@ import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNa
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.IntegrationTest;
+import org.junit.jupiter.api.Tag;
 import org.apache.kafka.test.TestUtils;
 import org.hamcrest.CoreMatchers;
 import org.junit.After;
@@ -44,7 +44,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.time.Duration;
@@ -69,7 +68,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-@Category({IntegrationTest.class})
+@Tag("integration")
 public class PauseResumeIntegrationTest {
     private static final Duration STARTUP_TIMEOUT = Duration.ofSeconds(45);
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);

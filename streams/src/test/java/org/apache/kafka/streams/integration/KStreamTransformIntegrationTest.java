@@ -35,13 +35,12 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.test.IntegrationTest;
+import org.junit.jupiter.api.Tag;
 import org.apache.kafka.test.StreamsTestUtils;
 
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.experimental.categories.Category;
 import org.junit.rules.Timeout;
 
 import java.util.ArrayList;
@@ -55,7 +54,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 
 @SuppressWarnings("unchecked")
-@Category({IntegrationTest.class})
+@Tag("integration")
 public class KStreamTransformIntegrationTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);
