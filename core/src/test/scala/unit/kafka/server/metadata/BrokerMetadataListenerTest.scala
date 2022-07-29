@@ -77,6 +77,8 @@ class BrokerMetadataListenerTest {
       assertEquals(100L, listener.highestMetadataOffset)
       assertEquals(0L, metrics.lastAppliedRecordOffset.get)
       assertEquals(0L, metrics.lastAppliedRecordTimestamp.get)
+      assertEquals(0L, metrics.publisherErrorCount.get)
+      assertEquals(0L, metrics.listenerBatchLoadErrorCount.get)
 
       val fencedTimestamp = 500L
       val fencedLastOffset = 200L
@@ -110,6 +112,8 @@ class BrokerMetadataListenerTest {
 
       assertEquals(fencedLastOffset, metrics.lastAppliedRecordOffset.get)
       assertEquals(fencedTimestamp, metrics.lastAppliedRecordTimestamp.get)
+      assertEquals(0L, metrics.publisherErrorCount.get)
+      assertEquals(0L, metrics.listenerBatchLoadErrorCount.get)
     } finally {
       listener.close()
     }

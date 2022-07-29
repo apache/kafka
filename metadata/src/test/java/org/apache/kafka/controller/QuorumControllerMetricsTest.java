@@ -128,6 +128,25 @@ public class QuorumControllerMetricsTest {
         }
     }
 
+    @Test
+    public void testForceRenounceCount() {
+        MetricsRegistry registry = new MetricsRegistry();
+        MockTime time = new MockTime();
+        try {
+            try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry, time)) {
+                @SuppressWarnings("unchecked")
+                Gauge<Integer> forceRenounceCount = (Gauge<Integer>) registry
+                        .allMetrics()
+                        .get(metricName("KafkaController", "ForceRenounceCount"));
+                assertEquals(0, forceRenounceCount.value());
+                quorumControllerMetrics.incrementForceRenounceCount();
+                assertEquals(1, forceRenounceCount.value());
+            }
+        } finally {
+            registry.shutdown();
+        }
+    }
+
     private static void assertMetricsCreatedAndRemovedUponClose(String expectedType, Set<String> expectedMetricNames) {
         MetricsRegistry registry = new MetricsRegistry();
         MockTime time = new MockTime();

@@ -87,4 +87,36 @@ final class BrokerServerMetricsTest {
       assertEquals(time.milliseconds - timestamp, lagMetric.metricValue.asInstanceOf[Long])
     }
   }
+
+  @Test
+  def testPublisherErrorCount(): Unit = {
+    val time = new MockTime()
+    val metrics = new Metrics(time)
+    TestUtils.resource(BrokerServerMetrics(metrics)) { brokerMetrics =>
+      val publisherErrorCountMetric = metrics.metrics().get(brokerMetrics.publisherErrorCount)
+
+      assertEquals(0L, publisherErrorCountMetric.metricValue.asInstanceOf[Long])
+
+      // Update metric value and check
+      val errorCount = 100
+      brokerMetrics.publisherErrorCount.set(errorCount)
+      assertEquals(errorCount, publisherErrorCountMetric.metricValue.asInstanceOf[Long])
+    }
+  }
+
+  @Test
+  def testListenerBatchLoadCountError(): Unit = {
+    val time = new MockTime()
+    val metrics = new Metrics(time)
+    TestUtils.resource(BrokerServerMetrics(metrics)) { brokerMetrics =>
+      val listenerBatchLoadCountError = metrics.metrics().get(brokerMetrics.listenerBatchLoadErrorCount)
+
+      assertEquals(0L, listenerBatchLoadCountError.metricValue.asInstanceOf[Long])
+
+      // Update metric value and check
+      val errorCount = 100
+      brokerMetrics.publisherErrorCount.set(errorCount)
+      assertEquals(errorCount, listenerBatchLoadCountError.metricValue.asInstanceOf[Long])
+    }
+  }
 }
