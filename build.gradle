@@ -321,7 +321,7 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["runtime"].contains(it.project.name))
+  def shouldUseJUnit5 = !(["runtime", "streams"].contains(it.project.name))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
@@ -464,17 +464,12 @@ subprojects {
     exclude testsToExclude
 
     if (shouldUseJUnit5) {
-      if (project.name == 'streams') {
-        useJUnitPlatform {
-          includeTags "integration"
-          // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
-          // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
-          includeEngines "junit-vintage", "junit-jupiter"
-        }
-      } else {
-        useJUnitPlatform {
-          includeTags "integration"
-        }
+      useJUnitPlatform {
+        includeTags "integration"
+        // KAFKA-14109
+        // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
+        // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
+        includeEngines "junit-vintage", "junit-jupiter"
       }
     } else {
       useJUnit {
@@ -510,17 +505,12 @@ subprojects {
     exclude testsToExclude
 
     if (shouldUseJUnit5) {
-      if (project.name == 'streams') {
-        useJUnitPlatform {
-          excludeTags "integration"
-          // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
-          // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
-          includeEngines "junit-vintage", "junit-jupiter"
-        }
-      } else {
-        useJUnitPlatform {
-          excludeTags "integration"
-        }
+      useJUnitPlatform {
+        excludeTags "integration"
+        // KAFKA-14109
+        // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
+        // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
+        includeEngines "junit-vintage", "junit-jupiter"
       }
     } else {
       useJUnit {
@@ -1850,13 +1840,17 @@ project(':streams') {
 
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
+    // KAFKA-14109
+    // The below compileOnly dependency is needed for JUnit 4 tests.
+    // It can be safely removed once all of streams has moved to JUnit 5.
+    testCompileOnly libs.junit4
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation libs.log4j
     testImplementation libs.junitJupiter
-    testImplementation libs.junitVintageEngine
+    testImplementation libs.junitJupiterParams // needed for parameterized tests
     testImplementation libs.easymock
     testImplementation libs.powermockJunit4
     testImplementation libs.powermockEasymock
@@ -1866,6 +1860,10 @@ project(':streams') {
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntimeOnly libs.slf4jlog4j
+    // KAFKA-14109
+    // The below runtimeOnly dependency is needed to run JUnit 4 tests.
+    // It can be safely removed once all of streams has moved to JUnit 5.
+    testRuntimeOnly libs.junitVintageEngine
 
     generator project(':generator')
   }

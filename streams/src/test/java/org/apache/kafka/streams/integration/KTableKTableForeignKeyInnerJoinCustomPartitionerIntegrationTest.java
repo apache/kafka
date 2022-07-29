@@ -51,10 +51,11 @@ import org.apache.kafka.streams.kstream.TableJoined;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
-import org.junit.jupiter.api.Tag;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 
 import kafka.utils.MockTime;
+import org.junit.experimental.categories.Category;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -63,7 +64,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 @Timeout(600)
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
     private final static int NUM_BROKERS = 1;
 

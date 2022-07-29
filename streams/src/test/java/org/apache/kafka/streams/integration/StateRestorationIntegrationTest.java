@@ -30,7 +30,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.Stores;
-import org.junit.jupiter.api.Tag;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
@@ -38,6 +38,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.rules.Timeout;
 
 import java.io.IOException;
@@ -46,7 +47,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
-@Tag("integration")
+@Category({IntegrationTest.class})
 public class StateRestorationIntegrationTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);

@@ -36,9 +36,10 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
-import org.junit.jupiter.api.Tag;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
+import org.junit.experimental.categories.Category;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -69,7 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * an exception would be thrown as the GlobalStreamThread closes all global stores on closing.
  */
 @Timeout(600)
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class GlobalThreadShutDownOrderTest {
     private static final int NUM_BROKERS = 1;
     private static final Properties BROKER_CONFIG;

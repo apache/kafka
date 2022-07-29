@@ -21,12 +21,13 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.test.TestRecord;
-import org.junit.jupiter.api.Tag;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -41,7 +42,7 @@ import static java.time.Duration.ofSeconds;
 /**
  * Tests all available joins of Kafka Streams DSL.
  */
-@Tag("integration")
+@Category({IntegrationTest.class})
 @RunWith(value = Parameterized.class)
 public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest {
     @Rule

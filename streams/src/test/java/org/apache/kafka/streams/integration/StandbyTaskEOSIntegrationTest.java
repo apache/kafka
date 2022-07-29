@@ -38,7 +38,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.junit.jupiter.api.Tag;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -46,6 +46,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
@@ -72,7 +73,7 @@ import static org.junit.Assert.assertTrue;
  * task towards a standby task is safe across restarts of the application.
  */
 @RunWith(Parameterized.class)
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class StandbyTaskEOSIntegrationTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);

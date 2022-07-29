@@ -19,13 +19,14 @@ package org.apache.kafka.streams.integration;
 import kafka.server.KafkaConfig$;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
-import org.junit.jupiter.api.Tag;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.util.Map;
@@ -34,7 +35,7 @@ import java.util.Properties;
 /**
  * Tests command line SSL setup for reset tool.
  */
-@Tag("integration")
+@Category({IntegrationTest.class})
 public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER;
