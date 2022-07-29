@@ -323,7 +323,7 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["runtime", "streams"].contains(it.project.name))
+  def shouldUseJUnit5 = !(["runtime"].contains(it.project.name))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
@@ -466,8 +466,18 @@ subprojects {
     exclude testsToExclude
 
     if (shouldUseJUnit5) {
-      useJUnitPlatform {
-        includeTags "integration"
+      if (project.name == 'streams') {
+        useJUnitPlatform {
+          includeTags "integration"
+          includeTags "org.apache.kafka.test.IntegrationTest"
+	  // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
+          // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
+          includeEngines "junit-vintage", "junit-jupiter"
+        }
+      } else {
+        useJUnitPlatform {
+          includeTags "integration"
+        }
       }
     } else {
       useJUnit {
@@ -503,8 +513,18 @@ subprojects {
     exclude testsToExclude
 
     if (shouldUseJUnit5) {
-      useJUnitPlatform {
-        excludeTags "integration"
+      if (project.name == 'streams') {
+        useJUnitPlatform {
+          excludeTags "integration"
+          excludeTags "org.apache.kafka.test.IntegrationTest"
+	  // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
+          // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
+          includeEngines "junit-vintage", "junit-jupiter"
+        }
+      } else {
+        useJUnitPlatform {
+          excludeTags "integration"
+        }
       }
     } else {
       useJUnit {
@@ -1834,11 +1854,12 @@ project(':streams') {
 
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
+
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation libs.log4j
-    testImplementation libs.junitJupiterApi
+    testImplementation libs.junitJupiter
     testImplementation libs.junitVintageEngine
     testImplementation libs.easymock
     testImplementation libs.powermockJunit4
