@@ -316,10 +316,10 @@ public class MirrorCheckpointTask extends SourceTask {
                     } else {
                         log.error("Unable to sync offsets for consumer group {}.", consumerGroupId, throwable);
                     }
+                } else {
+                    log.trace("Sync-ed {} offsets for consumer group {}.", offsetToSync.size(), consumerGroupId);
                 }
             });
-            log.trace("sync-ed the offset for consumer group: {} with {} number of offset entries",
-                      consumerGroupId, offsetToSync.size());
         }
     }
 
