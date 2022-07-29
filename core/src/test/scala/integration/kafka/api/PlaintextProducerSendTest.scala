@@ -21,7 +21,6 @@ import java.util.Properties
 import java.util.concurrent.{ExecutionException, Future, TimeUnit}
 import kafka.log.LogConfig
 import kafka.server.Defaults
-import kafka.utils.TestUtils.{createAdminClient, resource}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.producer.{BufferExhaustedException, KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.errors.{InvalidTimestampException, RecordTooLargeException, SerializationException, TimeoutException}
@@ -83,14 +82,12 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   def testAutoCreateTopic(quorum: String): Unit = {
     val producer = createProducer()
     try {
-      resource(createAdminClient(brokers, listenerName)) { admin =>
-        // Send a message to auto-create the topic
-        val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
-        assertEquals(0L, producer.send(record).get.offset, "Should have offset 0")
+      // Send a message to auto-create the topic
+      val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
+      assertEquals(0L, producer.send(record).get.offset, "Should have offset 0")
 
-        // double check that the topic is created with leader elected
-        TestUtils.waitUntilLeaderIsElectedOrChangedWithAdmin(admin, topic, 0)
-      }
+      // double check that the topic is created with leader elected
+      TestUtils.waitUntilLeaderIsElectedOrChangedWithAdmin(admin, topic, 0)
     } finally {
       producer.close()
     }
@@ -101,7 +98,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   def testSendWithInvalidCreateTime(quorum: String): Unit = {
     val topicProps = new Properties()
     topicProps.setProperty(LogConfig.MessageTimestampDifferenceMaxMsProp, "1000")
-    createTopic(topic, 1, 2, topicProps)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2, topicConfig = topicProps)
 
     val producer = createProducer()
     try {
