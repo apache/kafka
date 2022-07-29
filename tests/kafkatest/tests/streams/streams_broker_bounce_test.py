@@ -280,7 +280,7 @@ class StreamsBrokerBounceTest(Test):
 
         return self.collect_results(120)
 
-    @cluster(num_nodes=8)
+    @cluster(num_nodes=7)
     @matrix(failure_mode=["clean_bounce", "hard_bounce"],
             num_failures=[3],
             metadata_quorum=quorum.all_non_upgrade)
