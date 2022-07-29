@@ -130,9 +130,14 @@ class BrokerMetadataListener(
   }
 
   private def shouldSnapshot(): Option[String] = {
-    if (_bytesSinceLastSnapshot >= maxBytesBetweenSnapshots) {
+    val metadataVersionHasChanged: Boolean = metadataVersionChanged()
+    val maxBytesHaveExceeded: Boolean = (_bytesSinceLastSnapshot >= maxBytesBetweenSnapshots)
+
+    if (maxBytesHaveExceeded && metadataVersionHasChanged) {
+      return Some("max bytes exceeded and metadata version changed")
+    } else if (maxBytesHaveExceeded) {
       return Some("max bytes exceeded")
-    } else if (metadataVersionChanged()) {
+    } else if (metadataVersionHasChanged) {
       return Some("metadata version changed")
     } else {
       return None
