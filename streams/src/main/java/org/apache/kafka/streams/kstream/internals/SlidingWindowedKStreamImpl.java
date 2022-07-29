@@ -233,7 +233,7 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                             Duration.ofMillis(retentionPeriod),
                             Duration.ofMillis(windows.timeDifferenceMs()),
                             false,
-                            false
+                            true
                         ) :
                         Stores.persistentTimestampedWindowStore(
                             materialized.storeName(),
