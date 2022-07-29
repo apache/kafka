@@ -641,63 +641,9 @@ public class TaskManager {
                 }
             }
         } else {
-            final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
-            final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
+            addTaskstoStateUpdater();
 
-            for (final Task task : tasks.drainPendingTaskToInit()) {
-                task.initializeIfNeeded();
-                stateUpdater.add(task);
-            }
-
-            for (final Task task : stateUpdater.drainRemovedTasks()) {
-                final TaskId taskId = task.id();
-                Set<TopicPartition> inputPartitions;
-                if ((inputPartitions = tasks.removePendingTaskToRecycle(task.id())) != null) {
-                    try {
-                        Task newTask = task.isActive() ?
-                            convertActiveToStandby((StreamTask) task, inputPartitions) :
-                            convertStandbyToActive((StandbyTask) task, inputPartitions);
-                        newTask.initializeIfNeeded();
-                        stateUpdater.add(task);
-                    } catch (final RuntimeException e) {
-                        final String uncleanMessage = String.format("Failed to recycle task %s cleanly. " +
-                            "Attempting to close remaining tasks before re-throwing:", taskId);
-                        log.error(uncleanMessage, e);
-
-                        if (task.state() != State.CLOSED) {
-                            tasksToCloseDirty.add(task);
-                        }
-
-                        taskExceptions.putIfAbsent(taskId, e);
-                    }
-                } else if (tasks.removePendingTaskToClose(task.id())) {
-                    try {
-                        closeTaskClean(task);
-                    } catch (final RuntimeException e) {
-                        final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
-                            "Attempting to close remaining tasks before re-throwing:", task.id());
-                        log.error(uncleanMessage, e);
-
-                        if (task.state() != State.CLOSED) {
-                            tasksToCloseDirty.add(task);
-                        }
-
-                        taskExceptions.putIfAbsent(task.id(), e);
-                    }
-                } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
-                    task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
-                    stateUpdater.add(task);
-                } else {
-                    throw new IllegalStateException("Got a removed task " + task.id() + " from the state updater " +
-                        " that is not for recycle, closing, or updating input partitions; this should not happen");
-                }
-            }
-
-            for (final Task task : tasksToCloseDirty) {
-                closeTaskDirty(task);
-            }
-
-            throwTaskExceptions(taskExceptions);
+            handleRemovedTasksFromStateUpdater();
 
             // TODO: should add logic for checking and resuming when all active tasks have been restored
         }
@@ -708,6 +654,68 @@ public class TaskManager {
         }
 
         return allRunning;
+    }
+
+    private void addTaskstoStateUpdater() {
+        for (final Task task : tasks.drainPendingTaskToInit()) {
+            task.initializeIfNeeded();
+            stateUpdater.add(task);
+        }
+    }
+
+    private void handleRemovedTasksFromStateUpdater() {
+        final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
+        final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
+
+        for (final Task task : stateUpdater.drainRemovedTasks()) {
+            final TaskId taskId = task.id();
+            Set<TopicPartition> inputPartitions;
+            if ((inputPartitions = tasks.removePendingTaskToRecycle(task.id())) != null) {
+                try {
+                    Task newTask = task.isActive() ?
+                        convertActiveToStandby((StreamTask) task, inputPartitions) :
+                        convertStandbyToActive((StandbyTask) task, inputPartitions);
+                    newTask.initializeIfNeeded();
+                    stateUpdater.add(task);
+                } catch (final RuntimeException e) {
+                    final String uncleanMessage = String.format("Failed to recycle task %s cleanly. " +
+                        "Attempting to close remaining tasks before re-throwing:", taskId);
+                    log.error(uncleanMessage, e);
+
+                    if (task.state() != State.CLOSED) {
+                        tasksToCloseDirty.add(task);
+                    }
+
+                    taskExceptions.putIfAbsent(taskId, e);
+                }
+            } else if (tasks.removePendingTaskToClose(task.id())) {
+                try {
+                    closeTaskClean(task);
+                } catch (final RuntimeException e) {
+                    final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
+                        "Attempting to close remaining tasks before re-throwing:", task.id());
+                    log.error(uncleanMessage, e);
+
+                    if (task.state() != State.CLOSED) {
+                        tasksToCloseDirty.add(task);
+                    }
+
+                    taskExceptions.putIfAbsent(task.id(), e);
+                }
+            } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
+                task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
+                stateUpdater.add(task);
+            } else {
+                throw new IllegalStateException("Got a removed task " + task.id() + " from the state updater " +
+                    " that is not for recycle, closing, or updating input partitions; this should not happen");
+            }
+        }
+
+        for (final Task task : tasksToCloseDirty) {
+            closeTaskDirty(task);
+        }
+
+        throwTaskExceptions(taskExceptions);
     }
 
     /**
