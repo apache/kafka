@@ -47,8 +47,8 @@ object PasswordEncoder {
     new EncryptingPasswordEncoder(secret, keyFactoryAlgorithm, cipherAlgorithm, keyLength, iterations)
   }
 
-  def passthrough(): PassthroughPasswordEncoder = {
-    new PassthroughPasswordEncoder()
+  def noop(): NoOpPasswordEncoder = {
+    new NoOpPasswordEncoder()
   }
 }
 
@@ -62,7 +62,7 @@ trait PasswordEncoder {
 /**
  * A password encoder that does not modify the given password. This is used in KRaft mode only.
  */
-class PassthroughPasswordEncoder extends PasswordEncoder {
+class NoOpPasswordEncoder extends PasswordEncoder {
   override def encode(password: Password): String = password.value()
   override def decode(encodedPassword: String): Password = new Password(encodedPassword)
 }

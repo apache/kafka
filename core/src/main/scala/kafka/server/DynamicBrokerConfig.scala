@@ -214,7 +214,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private val dynamicConfigPasswordEncoder = if (kafkaConfig.processRoles.isEmpty) {
     maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderSecret)
   } else {
-    Some(PasswordEncoder.passthrough())
+    Some(PasswordEncoder.noop())
   }
 
   private[server] def initialize(zkClientOpt: Option[KafkaZkClient]): Unit = {

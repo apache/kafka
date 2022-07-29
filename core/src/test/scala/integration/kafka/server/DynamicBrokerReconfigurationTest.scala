@@ -114,13 +114,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     (0 until numServers).foreach { brokerId =>
 
       val props = if (isKRaftTest()) {
-        val properties = TestUtils.createBrokerConfig(brokerId, "")
-        properties.put(KafkaConfig.NodeIdProp, brokerId.toString)
-        properties.put(KafkaConfig.ProcessRolesProp, "broker")
-        val voterId = brokerId + 1
-        properties.put(KafkaConfig.QuorumVotersProp, s"$voterId@localhost:9093")
-        properties.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-        properties
+        TestUtils.createBrokerConfig(brokerId, null)
       } else {
         val properties = TestUtils.createBrokerConfig(brokerId, zkConnect)
         properties.put(KafkaConfig.ZkEnableSecureAclsProp, "true")
@@ -129,6 +123,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       props ++= securityProps(sslProperties1, TRUSTSTORE_PROPS)
       // Ensure that we can support multiple listeners per security protocol and multiple security protocols
       props.put(KafkaConfig.ListenersProp, s"$SecureInternal://localhost:0, $SecureExternal://localhost:0")
+      props.put(KafkaConfig.AdvertisedListenersProp, s"$SecureInternal://localhost:0, $SecureExternal://localhost:0")
       props.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"$SecureInternal:SSL, $SecureExternal:SASL_SSL, CONTROLLER:$controllerListenerSecurityProtocol")
       props.put(KafkaConfig.InterBrokerListenerNameProp, SecureInternal)
       props.put(KafkaConfig.SslClientAuthProp, "requested")
@@ -151,9 +146,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       props ++= securityProps(sslProperties1, KEYSTORE_PROPS, listenerPrefix(SecureExternal))
 
       val kafkaConfig = KafkaConfig.fromProps(props)
-      if (isKRaftTest()) {
-
-      } else {
+      if (!isKRaftTest()) {
         configureDynamicKeystoreInZooKeeper(kafkaConfig, sslProperties1)
       }
 
@@ -358,7 +351,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
   }
 
-  @Test
+  @Test // TODO KAFKA-14126 add KRaft support
   def testKeyStoreAlter(): Unit = {
     val topic2 = "testtopic2"
     TestUtils.createTopicWithAdmin(adminClients.head, topic2, servers, numPartitions, replicationFactor = numServers)
@@ -425,7 +418,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     stopAndVerifyProduceConsume(producerThread, consumerThread)
   }
 
-  @Test
+  @Test // TODO KAFKA-14126 add KRaft support
   def testTrustStoreAlter(): Unit = {
     val producerBuilder = ProducerBuilder().listenerName(SecureInternal).securityProtocol(SecurityProtocol.SSL)
 
@@ -457,7 +450,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
 
     def verifyBrokerToControllerCall(controller: KafkaServer): Unit = {
-      val nonControllerBroker = servers.find(_.config.brokerId != controller.config.brokerId).get.asInstanceOf[KafkaServer]
+      val nonControllerBroker = servers.find(_.config.brokerId != controller.config.brokerId).get
       val brokerToControllerManager = nonControllerBroker.clientToControllerChannelManager
       val completionHandler = new TestControllerRequestCompletionHandler()
       brokerToControllerManager.sendRequest(new MetadataRequest.Builder(new MetadataRequestData()), completionHandler)
