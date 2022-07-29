@@ -68,6 +68,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
@@ -100,7 +101,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings({"unchecked", "deprecation"})
 @Timeout(600)
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class KStreamAggregationIntegrationTest {
     private static final int NUM_BROKERS = 1;
 

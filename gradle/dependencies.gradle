@@ -159,10 +159,6 @@ libs += [
   jmhGeneratorAnnProcess: "org.openjdk.jmh:jmh-generator-annprocess:$versions.jmh",
   joptSimple: "net.sf.jopt-simple:jopt-simple:$versions.jopt",
   jose4j: "org.bitbucket.b_c:jose4j:$versions.jose4j",
-  // KAFKA-14109
-  // The below dependency is needed for compiling JUnit 4 tests.
-  // It can be safely removed once all of streams has moved to JUnit 5.
-  junit4: "junit:junit:$versions.junit4",
   junitJupiter: "org.junit.jupiter:junit-jupiter:$versions.junit",
   junitJupiterApi: "org.junit.jupiter:junit-jupiter-api:$versions.junit",
   junitVintageEngine: "org.junit.vintage:junit-vintage-engine:$versions.junit",
