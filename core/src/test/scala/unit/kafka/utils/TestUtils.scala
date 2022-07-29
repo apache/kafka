@@ -1218,6 +1218,35 @@ object TestUtils extends Logging {
   }
 
 
+  /**
+   * Waits until logdirs for topicName are present, signaling the completion of topic creation. This approach is
+   * slightly more complex than that for deleted logDirs in verifyTopicDeletion() since only a small fraction
+   * of the possible server/logDir/topicPartition combos will ever exist on disk.
+   *
+   * @param topicName The name of the topic to check
+   * @param numPartitions The number of partitions in the topic
+   * @param servers The list of brokers hosting the topic
+   */
+  def verifyTopicLogDirsCreation(topicName: String, numPartitions: Int, servers: Seq[KafkaServer]): Unit = {
+    val topicPartitions = (0 until numPartitions).map(new TopicPartition(topicName, _))
+    waitUntilTrue(() => {
+      var numExistingLogDirs = 0
+      servers.foreach(server =>
+        server.config.logDirs.foreach { logDir =>
+          topicPartitions.foreach { tp =>
+            val thisComboExists = new File(logDir, tp.topic + "-" + tp.partition).exists()
+            trace(s"logDir ${logDir}/${tp.topic}-${tp.partition} on server ${server} exists? ${thisComboExists}")
+            if (thisComboExists) numExistingLogDirs += 1
+          }
+        }
+      )
+      debug(s"this iteration: ${numExistingLogDirs} of ${numPartitions} expected logDirs exist")
+      numExistingLogDirs == numPartitions  // TODO? need to tweak method slightly to support RF > 1
+    }, msg = s"Failed to create one or more logdirs for topic ${topicName} with ${numPartitions} partitions",
+      pause = 50, waitTimeMs = 15000)  // could optionally pass in waitTimeMs value
+  }
+
+
   def verifyTopicDeletion(zkClient: KafkaZkClient, topic: String, numPartitions: Int, servers: Seq[KafkaServer]): Unit = {
     val topicPartitions = (0 until numPartitions).map(new TopicPartition(topic, _))
     // wait until admin path for delete topic is deleted, signaling completion of topic deletion
@@ -1232,7 +1261,8 @@ object TestUtils extends Logging {
 
     waitUntilTrue(() => servers.forall(server => topicPartitions.forall(tp => server.getLogManager.getLog(tp).isEmpty)),
       "Replica logs not deleted after delete topic is complete")
-    // ensure that topic is removed from all cleaner offsets
+    // ensure that topic is removed from all cleaner offsets. (Exhaustive check of permutations works here because
+    // most combinations never existed on disk and therefore still don't.)
     waitUntilTrue(() => servers.forall(server => topicPartitions.forall { tp =>
       val checkpoints = server.getLogManager.liveLogDirs.map { logDir =>
         new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint")).read()

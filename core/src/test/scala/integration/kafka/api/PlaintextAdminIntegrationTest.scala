@@ -205,18 +205,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testDescribeLogDirs(): Unit = {
     client = Admin.create(createConfig)
     val topic = "topic"
-    val leaderByPartition = createTopic(topic, numPartitions = 10)
+    val numPartitions = 10
+    val leaderByPartition = createTopic(topic, numPartitions)
+    TestUtils.verifyTopicLogDirsCreation(topic, numPartitions, servers)
+
     val partitionsByBroker = leaderByPartition.groupBy { case (_, leaderId) => leaderId }.map { case (k, v) =>
       k -> v.keys.toSeq
     }
     val brokers = (0 until brokerCount).map(Integer.valueOf)
     val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).allDescriptions.get
-    debug(s"done describing log dirs for all ${brokerCount} brokers")
-
-    // BUG: there's a race condition here; this test case assumes createTopic() is fully synchronous and
-    // completes before describeLogDirs(), but that's clearly false in many runs, based on the logging:
-    // some logDirs for "topic" partitions are still being created AFTER the admin client gets its response,
-    // leading to failure of the first assertion below
 
     (0 until brokerCount).foreach { brokerId =>
       val server = servers.find(_.config.brokerId == brokerId).get
@@ -226,10 +223,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         logDirInfo.replicaInfos.asScala
       }.filter { case (k, _) => k.topic == topic }
 
-      debug(s"about to test first assertion (broker ${brokerId + 1} of ${brokerCount})")
       assertEquals(expectedPartitions.toSet, replicaInfos.keys.map(_.partition).toSet,
         s"partitions from logdir replicas do not match those for broker id=${brokerId} (${brokerId + 1} of ${brokerCount})")
-        
       logDirInfos.forEach { (logDir, logDirInfo) =>
         logDirInfo.replicaInfos.asScala.keys.foreach(tp =>
           assertEquals(server.logManager.getLog(tp).get.dir.getParent, logDir)

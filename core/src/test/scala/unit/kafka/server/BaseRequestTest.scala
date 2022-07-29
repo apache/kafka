@@ -44,6 +44,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   protected def brokerPropertyOverrides(properties: Properties): Unit = {}
 
   override def modifyConfigs(props: Seq[Properties]): Unit = {
+    super.modifyConfigs(props)
     props.foreach { p =>
       p.put(KafkaConfig.ControlledShutdownEnableProp, "false")
       brokerPropertyOverrides(p)
