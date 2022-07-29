@@ -371,8 +371,6 @@ public class ThreadMetricsTest {
             assertThat(sensor, is(expectedSensor));
         }
     }
-
-    @Test
     public void shouldGetCreateTaskSensor() {
         final String operation = "task-created";
         final String totalDescription = "The total number of newly created tasks";
