@@ -198,7 +198,6 @@
 
     <subpackage name="utils">
       <allow pkg="org.apache.kafka.common" />
-      <allow pkg="org.apache.log4j" />
     </subpackage>
 
     <subpackage name="quotas">
@@ -574,6 +573,7 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.http"/>
         <allow pkg="io.swagger.v3.oas.annotations"/>
+        <allow pkg="kafka.utils" />
         <subpackage name="resources">
           <allow pkg="org.apache.log4j" />
         </subpackage>

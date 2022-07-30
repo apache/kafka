@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.rest;
 
+import kafka.utils.LogCaptureAppender;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.HttpHost;
@@ -30,7 +31,6 @@ import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -53,7 +53,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.connect.runtime.WorkerConfig.ADMIN_LISTENERS_CONFIG;
@@ -356,17 +355,18 @@ public class RestServerTest {
         server.initializeServer();
         server.initializeResources(herder);
 
-        try (LogCaptureAppender restServerAppender = LogCaptureAppender.createAndRegister(RestServer.class)) {
-            HttpRequest request = new HttpGet("/");
-            HttpResponse response = executeRequest(server.advertisedUrl(), request);
+        LogCaptureAppender restServerAppender = LogCaptureAppender.createAndRegister();
+        HttpRequest request = new HttpGet("/");
+        HttpResponse response = executeRequest(server.advertisedUrl(), request);
 
-            // Stop the server to flush all logs
-            server.stop();
+        // Stop the server to flush all logs
+        server.stop();
 
-            List<String> logMessages = restServerAppender.getMessages();
-            String expectedlogContent = "\"GET / HTTP/1.1\" " + String.valueOf(response.getStatusLine().getStatusCode());
-            assertTrue(logMessages.stream().anyMatch(logMessage -> logMessage.contains(expectedlogContent)));
-        }
+        Collection<String> logMessages = restServerAppender.getRenderedMessages();
+        LogCaptureAppender.unregister(restServerAppender);
+        restServerAppender.close();
+        String expectedlogContent = "\"GET / HTTP/1.1\" " + String.valueOf(response.getStatusLine().getStatusCode());
+        assertTrue(logMessages.stream().anyMatch(logMessage -> logMessage.contains(expectedlogContent)));
     }
 
     @Test
