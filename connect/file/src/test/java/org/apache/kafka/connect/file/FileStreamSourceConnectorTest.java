@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.ConnectorContext;
@@ -34,17 +35,15 @@ import java.util.Map;
 public class FileStreamSourceConnectorTest {
 
     private static final String SINGLE_TOPIC = "test";
-    private static final String MULTIPLE_TOPICS = "test1,test2";
     private static final String FILENAME = "/somefilename";
 
     private FileStreamSourceConnector connector;
-    private ConnectorContext ctx;
     private Map<String, String> sourceProperties;
 
     @BeforeEach
     public void setup() {
         connector = new FileStreamSourceConnector();
-        ctx = mock(ConnectorContext.class);
+        ConnectorContext ctx = mock(ConnectorContext.class);
         connector.initialize(ctx);
 
         sourceProperties = new HashMap<>();
@@ -89,34 +88,9 @@ public class FileStreamSourceConnectorTest {
     }
 
     @Test
-    public void testMultipleSourcesInvalid() {
-        sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, MULTIPLE_TOPICS);
-        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
-    }
-
-    @Test
     public void testTaskClass() {
         connector.start(sourceProperties);
         assertEquals(FileStreamSourceTask.class, connector.taskClass());
-    }
-
-    @Test
-    public void testMissingTopic() {
-        sourceProperties.remove(FileStreamSourceConnector.TOPIC_CONFIG);
-        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
-    }
-
-    @Test
-    public void testBlankTopic() {
-        // Because of trimming this tests is same as testing for empty string.
-        sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, "     ");
-        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
-    }
-
-    @Test
-    public void testInvalidBatchSize() {
-        sourceProperties.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "abcd");
-        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
     }
 
     @Test
@@ -126,5 +100,30 @@ public class FileStreamSourceConnectorTest {
         List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
         assertEquals(1, taskConfigs.size());
         assertEquals("insert", taskConfigs.get(0).get("transforms"));
+    }
+
+    @Test
+    public void testValidConfigsAndDefaults() {
+        AbstractConfig config = new AbstractConfig(FileStreamSourceConnector.CONFIG_DEF, sourceProperties);
+        assertEquals(SINGLE_TOPIC, config.getString(FileStreamSourceConnector.TOPIC_CONFIG));
+        assertEquals(FileStreamSourceConnector.DEFAULT_TASK_BATCH_SIZE, config.getInt(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG));
+    }
+
+    @Test
+    public void testMissingTopic() {
+        sourceProperties.remove(FileStreamSourceConnector.TOPIC_CONFIG);
+        assertThrows(ConfigException.class, () -> new AbstractConfig(FileStreamSourceConnector.CONFIG_DEF, sourceProperties));
+    }
+
+    @Test
+    public void testBlankTopic() {
+        sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, "   ");
+        assertThrows(ConfigException.class, () -> new AbstractConfig(FileStreamSourceConnector.CONFIG_DEF, sourceProperties));
+    }
+
+    @Test
+    public void testInvalidBatchSize() {
+        sourceProperties.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "abcd");
+        assertThrows(ConfigException.class, () -> new AbstractConfig(FileStreamSourceConnector.CONFIG_DEF, sourceProperties));
     }
 }

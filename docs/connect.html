@@ -403,12 +403,11 @@ errors.tolerance=all</pre>
 
     <h5><a id="connect_connectorexample" href="#connect_connectorexample">Connector Example</a></h5>
 
-    <p>We'll cover the <code>SourceConnector</code> as a simple example. <code>SinkConnector</code> implementations are very similar. Start by creating the class that inherits from <code>SourceConnector</code> and add a couple of fields that will store parsed configuration information (the filename to read from and the topic to send data to):</p>
+    <p>We'll cover the <code>SourceConnector</code> as a simple example. <code>SinkConnector</code> implementations are very similar. Start by creating the class that inherits from <code>SourceConnector</code> and add a field that will store the configuration information to be propagated to the task(s) (the topic to send data to, and optionally - the filename to read from and the maximum batch size):</p>
 
     <pre class="brush: java;">
 public class FileStreamSourceConnector extends SourceConnector {
-    private String filename;
-    private String topic;</pre>
+    private Map&lt;String, String&gt;;</pre>
 
     <p>The easiest method to fill in is <code>taskClass()</code>, which defines the class that should be instantiated in worker processes to actually read the data:</p>
 
@@ -423,9 +422,7 @@ public Class&lt;? extends Task&gt; taskClass() {
     <pre class="brush: java;">
 @Override
 public void start(Map&lt;String, String&gt; props) {
-    // The complete version includes error handling as well.
-    filename = props.get(FILE_CONFIG);
-    topic = props.get(TOPIC_CONFIG);
+    this.props = props;
 }
 
 @Override
@@ -443,10 +440,7 @@ public List&lt;Map&lt;String, String&gt;&gt; taskConfigs(int maxTasks) {
     ArrayList&lt;Map&lt;String, String&gt;&gt; configs = new ArrayList&lt;&gt;();
     // Only one input stream makes sense.
     Map&lt;String, String&gt; config = new HashMap&lt;&gt;();
-    if (filename != null)
-        config.put(FILE_CONFIG, filename);
-    config.put(TOPIC_CONFIG, topic);
-    configs.add(config);
+    configs.add(props);
     return configs;
 }</pre>
 
@@ -466,15 +460,18 @@ public List&lt;Map&lt;String, String&gt;&gt; taskConfigs(int maxTasks) {
 
     <pre class="brush: java;">
 public class FileStreamSourceTask extends SourceTask {
-    String filename;
-    InputStream stream;
-    String topic;
+    private String filename;
+    private InputStream stream;
+    private String topic;
+    private int batchSize;
 
     @Override
     public void start(Map&lt;String, String&gt; props) {
-        filename = props.get(FileStreamSourceConnector.FILE_CONFIG);
+        AbstractConfig config = new AbstractConfig(FileStreamSourceConnector.CONFIG_DEF, props);
+        filename = config.getString(FileStreamSourceConnector.FILE_CONFIG);
         stream = openOrThrowError(filename);
-        topic = props.get(FileStreamSourceConnector.TOPIC_CONFIG);
+        topic = config.getString(FileStreamSourceConnector.TOPIC_CONFIG);
+        batchSize = config.getInt(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG);
     }
 
     @Override
@@ -482,7 +479,7 @@ public class FileStreamSourceTask extends SourceTask {
         stream.close();
     }</pre>
 
-    <p>These are slightly simplified versions, but show that these methods should be relatively simple and the only work they should perform is allocating or freeing resources. There are two points to note about this implementation. First, the <code>start()</code> method does not yet handle resuming from a previous offset, which will be addressed in a later section. Second, the <code>stop()</code> method is synchronized. This will be necessary because <code>SourceTasks</code> are given a dedicated thread which they can block indefinitely, so they need to be stopped with a call from a different thread in the Worker.</p>
+    <p>These are slightly simplified versions, but show that these methods should be relatively simple and the only work they should perform is allocating or freeing resources. There are two points to note about this implementation. First, the <code>start()</code> method does not yet handle resuming from a previous offset, which will be addressed in a later section. Second, the <code>stop()</code> method is synchronized. This will be necessary because <code>SourceTasks</code> are given a dedicated thread which they can block indefinitely, so they need to be stopped with a call from a different thread in the Worker. The <code>CONFIG_DEF</code> is described in detail in a later section below.</p>
 
     <p>Next, we implement the main functionality of the task, the <code>poll()</code> method which gets events from the input system and returns a <code>List&lt;SourceRecord&gt;</code>:</p>
 
@@ -497,6 +494,9 @@ public List&lt;SourceRecord&gt; poll() throws InterruptedException {
                 Map&lt;String, Object&gt; sourcePartition = Collections.singletonMap("filename", filename);
                 Map&lt;String, Object&gt; sourceOffset = Collections.singletonMap("position", streamOffset);
                 records.add(new SourceRecord(sourcePartition, sourceOffset, topic, Schema.STRING_SCHEMA, line));
+                if (records.size() >= batchSize) {
+                    return records;
+                }
             } else {
                 Thread.sleep(1);
             }
@@ -609,9 +609,11 @@ if (inputsChanged())
     <p>The following code in <code>FileStreamSourceConnector</code> defines the configuration and exposes it to the framework.</p>
 
     <pre class="brush: java;">
-private static final ConfigDef CONFIG_DEF = new ConfigDef()
-    .define(FILE_CONFIG, Type.STRING, Importance.HIGH, "Source filename.")
-    .define(TOPIC_CONFIG, Type.STRING, Importance.HIGH, "The topic to publish data to");
+static final ConfigDef CONFIG_DEF = new ConfigDef()
+    .define(FILE_CONFIG, Type.STRING, null, Importance.HIGH, "Source filename. If not specified, the standard input will be used")
+    .define(TOPIC_CONFIG, Type.STRING, ConfigDef.NO_DEFAULT_VALUE, new ConfigDef.NonEmptyString(), Importance.HIGH, "The topic to publish data to")
+    .define(TASK_BATCH_SIZE_CONFIG, Type.INT, DEFAULT_TASK_BATCH_SIZE, Importance.LOW,
+        "The maximum number of records the Source task can read from file one time");
 
 public ConfigDef config() {
     return CONFIG_DEF;

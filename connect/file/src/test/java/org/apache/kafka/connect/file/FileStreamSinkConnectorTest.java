@@ -36,13 +36,12 @@ public class FileStreamSinkConnectorTest {
     private static final String FILENAME = "/afilename";
 
     private FileStreamSinkConnector connector;
-    private ConnectorContext ctx;
     private Map<String, String> sinkProperties;
 
     @BeforeEach
     public void setup() {
         connector = new FileStreamSinkConnector();
-        ctx = mock(ConnectorContext.class);
+        ConnectorContext ctx = mock(ConnectorContext.class);
         connector.initialize(ctx);
 
         sinkProperties = new HashMap<>();
@@ -74,11 +73,11 @@ public class FileStreamSinkConnectorTest {
 
     @Test
     public void testSinkTasksStdout() {
-        sinkProperties.remove(FileStreamSourceConnector.FILE_CONFIG);
+        sinkProperties.remove(FileStreamSinkConnector.FILE_CONFIG);
         connector.start(sinkProperties);
         List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
         assertEquals(1, taskConfigs.size());
-        assertNull(taskConfigs.get(0).get(FileStreamSourceConnector.FILE_CONFIG));
+        assertNull(taskConfigs.get(0).get(FileStreamSinkConnector.FILE_CONFIG));
     }
 
     @Test

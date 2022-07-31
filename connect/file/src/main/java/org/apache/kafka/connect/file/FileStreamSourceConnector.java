@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.connect.file;
 
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -33,15 +31,16 @@ import java.util.Map;
  * Very simple source connector that works with stdin or a file.
  */
 public class FileStreamSourceConnector extends SourceConnector {
-    public static final String TOPIC_CONFIG = "topic";
-    public static final String FILE_CONFIG = "file";
-    public static final String TASK_BATCH_SIZE_CONFIG = "batch.size";
 
-    public static final int DEFAULT_TASK_BATCH_SIZE = 2000;
+    static final String TOPIC_CONFIG = "topic";
+    static final String FILE_CONFIG = "file";
+    static final String TASK_BATCH_SIZE_CONFIG = "batch.size";
 
-    private static final ConfigDef CONFIG_DEF = new ConfigDef()
+    static final int DEFAULT_TASK_BATCH_SIZE = 2000;
+
+    static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(FILE_CONFIG, Type.STRING, null, Importance.HIGH, "Source filename. If not specified, the standard input will be used")
-        .define(TOPIC_CONFIG, Type.LIST, Importance.HIGH, "The topic to publish data to")
+        .define(TOPIC_CONFIG, Type.STRING, ConfigDef.NO_DEFAULT_VALUE, new ConfigDef.NonEmptyString(), Importance.HIGH, "The topic to publish data to")
         .define(TASK_BATCH_SIZE_CONFIG, Type.INT, DEFAULT_TASK_BATCH_SIZE, Importance.LOW,
                 "The maximum number of records the Source task can read from file one time");
 
@@ -55,11 +54,6 @@ public class FileStreamSourceConnector extends SourceConnector {
     @Override
     public void start(Map<String, String> props) {
         this.props = props;
-        AbstractConfig parsedConfig = new AbstractConfig(CONFIG_DEF, props);
-        List<String> topics = parsedConfig.getList(TOPIC_CONFIG);
-        if (topics.size() != 1) {
-            throw new ConfigException("'topic' in FileStreamSourceConnector configuration requires definition of a single topic");
-        }
     }
 
     @Override
