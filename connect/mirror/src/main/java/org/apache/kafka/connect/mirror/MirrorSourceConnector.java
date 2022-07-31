@@ -296,7 +296,7 @@ public class MirrorSourceConnector extends SourceConnector {
         Map<String, Config> sourceConfigs = describeTopicConfigs(topics,sourceAdminClient).entrySet().stream()
                 .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue())));
         Map<String, Config> targetConfigs = describeTopicConfigs(topics,targetAdminClient).entrySet().stream()
-                .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue())));
+                .collect(Collectors.toMap(x -> (x.getKey()), x -> targetConfig(x.getValue())));
         for (String topic:sourceConfigs.keySet()){
             if(targetConfigs.containsKey(topic)&&!targetConfigs.get(topic).equals(sourceConfigs.get(topic))){
                 configDiff.put(topic,sourceConfigs.get(topic));
@@ -363,7 +363,9 @@ public class MirrorSourceConnector extends SourceConnector {
                             .configs(configs);
                 })
                 .collect(Collectors.toMap(NewTopic::name, Function.identity()));
-        createNewTopics(newTopics);
+        if (!newTopics.isEmpty()){
+            createNewTopics(newTopics);
+        }
     }
 
     // visible for testing
