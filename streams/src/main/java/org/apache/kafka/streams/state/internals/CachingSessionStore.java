@@ -334,6 +334,7 @@ class CachingSessionStore
         context.cache().flush(cacheName);
     }
 
+    @Override
     public void close() {
         final LinkedList<RuntimeException> suppressed = executeAll(
             () -> context.cache().flush(cacheName),

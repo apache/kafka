@@ -19,6 +19,8 @@ package org.apache.kafka.common.serialization;
 import java.nio.ByteBuffer;
 
 public class ByteBufferDeserializer implements Deserializer<ByteBuffer> {
+
+    @Override
     public ByteBuffer deserialize(String topic, byte[] data) {
         if (data == null)
             return null;
