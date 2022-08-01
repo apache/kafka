@@ -1248,6 +1248,16 @@ public class RecordAccumulatorTest {
         }
     }
 
+    @Test
+    public void testFirstRecordCreatesProducerBatchIfNoneExists() throws InterruptedException {
+        RecordAccumulator accum = createTestRecordAccumulator(DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
+            10L * DefaultRecordBatch.RECORD_BATCH_OVERHEAD, CompressionType.NONE, 10);
+        // accum.append should create a new ProducerBatch if none exists even when abortOnNewBatch is true
+        accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, true, time.milliseconds(), cluster);
+        Deque<ProducerBatch> partitionBatches = accum.getDeque(tp1);
+        assertEquals(1, partitionBatches.size());
+    }
+
     private int prepareSplitBatches(RecordAccumulator accum, long seed, int recordSize, int numRecords)
         throws InterruptedException {
         Random random = new Random();

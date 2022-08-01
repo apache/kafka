@@ -273,6 +273,7 @@ public class RecordAccumulator {
 
                 // check if we have an in-progress batch
                 Deque<ProducerBatch> dq = topicInfo.batches.computeIfAbsent(effectivePartition, k -> new ArrayDeque<>());
+                RecordAppendResult appendResult;
                 synchronized (dq) {
                     // After taking the lock, validate that the partition hasn't changed and retry.
                     if (topicInfo.builtInPartitioner.isPartitionChanged(partitionInfo)) {
@@ -280,19 +281,21 @@ public class RecordAccumulator {
                                 partitionInfo.partition(), topic);
                         continue;
                     }
-                    RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
-                    if (appendResult != null) {
+                    appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
+                    if (appendResult != null && !appendResult.newBatchCreated) {
                         topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster);
                         return appendResult;
                     }
                 }
 
-                // we don't have an in-progress record batch try to allocate a new batch
-                if (abortOnNewBatch) {
-                    // Return a result that will cause another call to append.
+                // either 1. current topicPartition producerBatch is full - return and prepare for another batch/partition.
+                // 2. no producerBatch existed for this topicPartition, create a new producerBatch.
+                if (appendResult == null && abortOnNewBatch) {
+                    // existing batch is full, return a result that will cause another call to append.
                     return new RecordAppendResult(null, false, false, true, 0);
                 }
 
+                // create a fresh new producerBatch
                 if (buffer == null) {
                     byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
                     int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression, key, value, headers));
@@ -312,7 +315,7 @@ public class RecordAccumulator {
                                 partitionInfo.partition(), topic);
                         continue;
                     }
-                    RecordAppendResult appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks, buffer, nowMs);
+                    appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks, buffer, nowMs);
                     // Set buffer to null, so that deallocate doesn't return it back to free pool, since it's used in the batch.
                     if (appendResult.newBatchCreated)
                         buffer = null;
@@ -353,7 +356,7 @@ public class RecordAccumulator {
         assert partition != RecordMetadata.UNKNOWN_PARTITION;
 
         RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
-        if (appendResult != null) {
+        if (appendResult != null && !appendResult.newBatchCreated) {
             // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
             return appendResult;
         }
@@ -394,13 +397,15 @@ public class RecordAccumulator {
             int initialBytes = last.estimatedSizeInBytes();
             FutureRecordMetadata future = last.tryAppend(timestamp, key, value, headers, callback, nowMs);
             if (future == null) {
+                // producerBatch doesn't have anymore room, return then try to create a new batch.
                 last.closeForRecordAppends();
+                return null;
             } else {
                 int appendedBytes = last.estimatedSizeInBytes() - initialBytes;
                 return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false, false, appendedBytes);
             }
         }
-        return null;
+        return new RecordAppendResult(null, false, true, false, 0);
     }
 
     private boolean isMuted(TopicPartition tp) {

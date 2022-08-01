@@ -672,6 +672,23 @@ public class KafkaProducerTest {
         };
     }
 
+    private KafkaProducer<String, String> producerWithOverrideNewPartitioner(Map<String, Object> configs, ProducerMetadata metadata, RoundRobinPartitioner roundRobinPartitioner) {
+        return new KafkaProducer<String, String>(
+            new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, new StringSerializer(), new StringSerializer())),
+            new StringSerializer(), new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, Time.SYSTEM) {
+            @Override
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
+              // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
+                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
+            }
+
+            @Override
+            Partitioner newPartitioner(ProducerConfig config) {
+                return roundRobinPartitioner;
+            }
+        };
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testMetadataFetch(boolean isIdempotenceEnabled) throws InterruptedException {
@@ -2022,6 +2039,27 @@ public class KafkaProducerTest {
             verify(ctx.transactionManager, never()).maybeAddPartition(topicPartition0);
             verify(ctx.transactionManager).maybeAddPartition(topicPartition1);
         }
+    }
+
+    @Test
+    public void testRoundRobinPartitionerDoesNotSkipPartition() throws InterruptedException {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        RoundRobinPartitioner roundRobinPartitioner = new RoundRobinPartitioner();
+        ProducerMetadata metadata = mock(ProducerMetadata.class);
+        configs.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, RoundRobinPartitioner.class.getName());
+        when(metadata.fetch()).thenReturn(threePartitionCluster);
+        KafkaProducer<String, String> producer = producerWithOverrideNewPartitioner(configs, metadata, roundRobinPartitioner);
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
+        producer.send(record);
+
+        // calling partition() again should result 1. This shows producer.send() invoked partitioner.partition() only once.
+        int newPartitionCount = roundRobinPartitioner.partition(topic, null,
+            null, null, null, threePartitionCluster);
+        assertEquals(1, newPartitionCount);
+        producer.close(Duration.ofMillis(0));
     }
 
     private <T> FutureRecordMetadata expectAppend(
