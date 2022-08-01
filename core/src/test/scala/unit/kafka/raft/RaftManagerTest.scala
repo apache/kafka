@@ -25,6 +25,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft.KafkaRaftClient
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.test.TestUtils
@@ -36,7 +37,7 @@ import java.io.File
 
 class RaftManagerTest {
 
-  private def instantiateRaftManagerWithConfigs(topicPartition: TopicPartition, processRoles: String, nodeId: String) = {
+  private def instantiateRaftManagerWithConfigs(topicPartition: TopicPartition, logDir: File, processRoles: String, nodeId: String) = {
     def configWithProcessRolesAndNodeId(processRoles: String, nodeId: String, logDir: File): KafkaConfig = {
       val props = new Properties
       props.setProperty(KafkaConfig.MetadataLogDirProp, logDir.getPath)
@@ -60,7 +61,6 @@ class RaftManagerTest {
       new KafkaConfig(props)
     }
 
-    val logDir = TestUtils.tempDirectory()
     val config = configWithProcessRolesAndNodeId(processRoles, nodeId, logDir)
     val topicId = new Uuid(0L, 2L)
     val metaProperties = MetaProperties(
@@ -83,23 +83,29 @@ class RaftManagerTest {
 
   @Test
   def testSentinelNodeIdIfBrokerRoleOnly(): Unit = {
-    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "broker", "1")
+    val tempDir = TestUtils.tempDirectory()
+    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), tempDir, "broker", "1")
     assertFalse(raftManager.client.nodeId.isPresent)
     raftManager.shutdown()
+    Utils.delete(tempDir)
   }
 
   @Test
   def testNodeIdPresentIfControllerRoleOnly(): Unit = {
-    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "controller", "1")
+    val tempDir = TestUtils.tempDirectory()
+    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), tempDir, "controller", "1")
     assertTrue(raftManager.client.nodeId.getAsInt == 1)
     raftManager.shutdown()
+    Utils.delete(tempDir)
   }
 
   @Test
   def testNodeIdPresentIfColocated(): Unit = {
-    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "controller,broker", "1")
+    val tempDir = TestUtils.tempDirectory()
+    val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), tempDir, "controller,broker", "1")
     assertTrue(raftManager.client.nodeId.getAsInt == 1)
     raftManager.shutdown()
+    Utils.delete(tempDir)
   }
 
   @Test
