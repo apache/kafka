@@ -515,7 +515,8 @@ public class RaftEventSimulationTest {
             log = new MockLog(
                 METADATA_PARTITION,
                 Uuid.METADATA_TOPIC_ID,
-                new LogContext(String.format("[Node %s] ", nodeId))
+                new LogContext(String.format("[Node %s] ", nodeId)),
+                RaftClientTestContext.DEFAULT_MOCK_REPLICATED_LOG_CONFIG
             );
         }
     }

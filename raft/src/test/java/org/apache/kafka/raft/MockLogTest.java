@@ -58,7 +58,7 @@ public class MockLogTest {
 
     @BeforeEach
     public void setup() {
-        log = new MockLog(topicPartition, topicId, new LogContext());
+        log = new MockLog(topicPartition, topicId, new LogContext(), RaftClientTestContext.DEFAULT_MOCK_REPLICATED_LOG_CONFIG);
     }
 
     @AfterEach

@@ -92,6 +92,18 @@ public final class RaftClientTestContext {
     final int fetchTimeoutMs = Builder.FETCH_TIMEOUT_MS;
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
 
+    static final MockReplicatedLogConfig DEFAULT_MOCK_REPLICATED_LOG_CONFIG = new MockReplicatedLogConfig(
+            100 * 1024,
+            100 * 1024,
+            10 * 1000,
+            100 * 1024,
+            60 * 1000,
+            KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+            KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+            60000,
+            1
+    );
+
     private int electionTimeoutMs;
     private int requestTimeoutMs;
     private int appendLingerMs;
@@ -128,7 +140,7 @@ public final class RaftClientTestContext {
         private final QuorumStateStore quorumStateStore = new MockQuorumStateStore();
         private final MockableRandom random = new MockableRandom(1L);
         private final LogContext logContext = new LogContext();
-        private final MockLog log = new MockLog(METADATA_PARTITION,  Uuid.METADATA_TOPIC_ID, logContext);
+        private final MockLog log = new MockLog(METADATA_PARTITION,  Uuid.METADATA_TOPIC_ID, logContext, DEFAULT_MOCK_REPLICATED_LOG_CONFIG);
         private final Set<Integer> voters;
         private final OptionalInt localId;
 

@@ -19,7 +19,9 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
@@ -27,6 +29,8 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.snapshot.MockRawSnapshotReader;
@@ -38,6 +42,7 @@ import org.slf4j.Logger;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -62,6 +67,7 @@ public class MockLog implements ReplicatedLog {
     private final TopicPartition topicPartition;
     private final Uuid topicId;
     private final Logger logger;
+    private final MockReplicatedLogConfig config;
 
     private long nextId = ID_GENERATOR.getAndIncrement();
     private LogOffsetMetadata highWatermark = new LogOffsetMetadata(0, Optional.empty());
@@ -70,11 +76,13 @@ public class MockLog implements ReplicatedLog {
     public MockLog(
         TopicPartition topicPartition,
         Uuid topicId,
-        LogContext logContext
+        LogContext logContext,
+        MockReplicatedLogConfig config
     ) {
         this.topicPartition = topicPartition;
         this.topicId = topicId;
         this.logger = logContext.logger(MockLog.class);
+        this.config = config;
     }
 
     @Override
@@ -318,7 +326,8 @@ public class MockLog implements ReplicatedLog {
                 new LogBatch(
                     epoch.orElseGet(batch::partitionLeaderEpoch),
                     batch.isControlBatch(),
-                    entries
+                    entries,
+                    batch.sizeInBytes()
                 )
             );
             lastOffset = entries.get(entries.size() - 1).offset;
@@ -334,7 +343,79 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public boolean maybeClean() {
-        return false;
+        synchronized (snapshots) {
+            boolean didClean = false;
+            didClean = cleanSnapshotsRetentionSize() || didClean;
+            didClean = cleanSnapshotsRetentionMs() || didClean;
+            return didClean;
+        }
+    }
+
+    private int logSize() {
+        return batches.stream().mapToInt(LogBatch::sizeInBytes).sum();
+    }
+
+    private boolean cleanSnapshotsRetentionSize() {
+        if (config.getRetentionMaxBytes() < 0) {
+            return false;
+        }
+
+        Map<OffsetAndEpoch, Long> snapshotSizes = loadSnapshotSizes();
+        final Long[] snapshotTotalSizeArray = {snapshotSizes.values().stream().mapToLong(Long::longValue).sum()};
+        return cleanSnapshots(snapshotId -> {
+            Long snapshotSize = snapshotSizes.get(snapshotId);
+            if (snapshotSize != null && logSize() + snapshotTotalSizeArray[0] > config.getRetentionMaxBytes()) {
+                snapshotTotalSizeArray[0] -= snapshotSize;
+                return true;
+            }
+            return false;
+        });
+    }
+
+    /**
+     * Return the max timestamp of the first batch in a snapshot, if the snapshot exists and has records
+     */
+    private Optional<Long> readSnapshotTimestamp(OffsetAndEpoch snapshotId) {
+        return readSnapshot(snapshotId).flatMap(reader -> {
+            Iterator<RecordBatch> batchIterator = Utils.covariantCast(reader.records().batchIterator());
+            RecordBatch firstBatch = batchIterator.next();
+            CloseableIterator<Record> records = firstBatch.streamingIterator(new BufferSupplier.GrowableBufferSupplier());
+            if (firstBatch.isControlBatch()) {
+                SnapshotHeaderRecord header = ControlRecordUtils.deserializedSnapshotHeaderRecord(records.next());
+                return Optional.of(header.lastContainedLogTimestamp());
+            } else {
+                logger.warn("Did not find control record at beginning of snapshot");
+                return Optional.empty();
+            }
+        });
+    }
+
+    private Boolean cleanSnapshotsRetentionMs() {
+        if (config.getRetentionMillis() < 0) {
+            return false;
+        }
+
+        return cleanSnapshots(snapshotId -> {
+            long now = System.currentTimeMillis();
+            Optional<Long> optionalTimestamp = readSnapshotTimestamp(snapshotId);
+            return optionalTimestamp.isPresent() && (now - optionalTimestamp.get() > config.getRetentionMillis());
+        });
+    }
+
+    /**
+     * Iterate through the snapshots a test the given predicate to see if we should attempt to delete it. Since
+     * we have some additional invariants regarding snapshots and log segments we cannot simply delete a snapshot in
+     * all cases.
+     *
+     * For the given predicate, we are testing if the snapshot identified by the first argument should be deleted.
+     */
+    private Boolean cleanSnapshots(Predicate<OffsetAndEpoch> predicate) {
+        if (snapshots.size() < 2) {
+            return false;
+        }
+        OffsetAndEpoch snapshot = snapshots.firstEntry().getKey();
+        OffsetAndEpoch nextSnapshot = snapshots.higherKey(snapshot);
+        return predicate.test(snapshot) && deleteBeforeSnapshot(nextSnapshot);
     }
 
     @Override
@@ -482,6 +563,13 @@ public class MockLog implements ReplicatedLog {
                 })
             );
         }
+    }
+
+    /**
+     * Force all known snapshots to have an open reader so we can know their sizes. This method is not thread-safe
+     */
+    private Map<OffsetAndEpoch, Long> loadSnapshotSizes() {
+        return snapshots.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().sizeInBytes()));
     }
 
     @Override
@@ -632,17 +720,23 @@ public class MockLog implements ReplicatedLog {
         final List<LogEntry> entries;
         final int epoch;
         final boolean isControlBatch;
+        final int size;
 
-        LogBatch(int epoch, boolean isControlBatch, List<LogEntry> entries) {
+        LogBatch(int epoch, boolean isControlBatch, List<LogEntry> entries, int size) {
             if (entries.isEmpty())
                 throw new IllegalArgumentException("Empty batches are not supported");
             this.entries = entries;
             this.epoch = epoch;
             this.isControlBatch = isControlBatch;
+            this.size = size;
         }
 
         long firstOffset() {
             return first().offset;
+        }
+
+        int sizeInBytes() {
+            return size;
         }
 
         LogEntry first() {
