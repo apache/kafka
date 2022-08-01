@@ -215,7 +215,7 @@ public class ExampleConnectIntegrationTest {
         // wait for the connector tasks to commit enough records
         connectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
 
-        // consume all records from the source topic or fail, to ensure that they were correctly produced
+        // consume all expected records from the source topic or fail, to ensure that they were correctly produced
         int recordNum = connect.kafka().consumeAtLeast(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic").count();
         assertTrue("Not enough records produced by source connector. Expected at least: " + NUM_RECORDS_PRODUCED + " + but got " + recordNum,
                 recordNum >= NUM_RECORDS_PRODUCED);

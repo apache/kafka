@@ -128,7 +128,7 @@ public class ErrorHandlingIntegrationTest {
         props.put(DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
         props.put(DLQ_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
 
-        // tolerate all erros
+        // tolerate all errors
         props.put(ERRORS_TOLERANCE_CONFIG, "all");
 
         // retry for up to one second
@@ -180,7 +180,6 @@ public class ErrorHandlingIntegrationTest {
         connect.deleteConnector(CONNECTOR_NAME);
         connect.assertions().assertConnectorAndTasksAreStopped(CONNECTOR_NAME,
                 "Connector tasks did not stop in time.");
-
     }
 
     @Test
@@ -205,7 +204,7 @@ public class ErrorHandlingIntegrationTest {
         props.put(DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
         props.put(DLQ_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
 
-        // tolerate all erros
+        // tolerate all errors
         props.put(ERRORS_TOLERANCE_CONFIG, "all");
 
         // retry for up to one second

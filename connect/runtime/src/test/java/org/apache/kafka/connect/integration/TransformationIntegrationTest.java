@@ -315,7 +315,7 @@ public class TransformationIntegrationTest {
         // wait for the connector tasks to commit enough records
         connectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
 
-        // consume all records from the source topic or fail, to ensure that they were correctly produced
+        // consume a record from the source topic or fail, to ensure that the task could successfully produce
         for (ConsumerRecord<byte[], byte[]> record : connect.kafka().consumeAtLeast(1, RECORD_TRANSFER_DURATION_MS, "test-topic")) {
             assertNotNull("Expected header to exist",
                     record.headers().lastHeader("header-8"));
