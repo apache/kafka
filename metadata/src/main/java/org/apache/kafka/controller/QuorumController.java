@@ -763,9 +763,9 @@ public final class QuorumController implements Controller {
                     i++;
                 }
 
-                // If the operation returned a batch of records, those records need to be
-                // written before we can return our result to the user.  Here, we hand off
-                // the batch of records to the raft client.  They will be written out
+                // If the operation returned a batch of records, and those records could be applied,
+                // they need to be written before we can return our result to the user.  Here, we
+                // hand off the batch of records to the raft client.  They will be written out
                 // asynchronously.
                 final long offset;
                 if (result.isAtomic()) {
@@ -905,7 +905,7 @@ public final class QuorumController implements Controller {
                     if (isActiveController()) {
                         fatalFaultHandler.handleFault(String.format("Asked to load snapshot " +
                             "(%s) when it is the active controller (%d)", reader.snapshotId(),
-                            curClaimEpoch), null);
+                            curClaimEpoch));
                     }
                     log.info("Starting to replay snapshot ({}), from last commit offset ({}) and epoch ({})",
                         reader.snapshotId(), lastCommittedOffset, lastCommittedEpoch);

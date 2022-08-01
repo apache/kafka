@@ -19,7 +19,7 @@ package org.apache.kafka.metadata.fault;
 
 
 /**
- * A metadata fault.
+ * A fault that we encountered while we replayed cluster metadata.
  */
 public class MetadataFaultException extends RuntimeException {
     public MetadataFaultException(String message, Throwable cause) {
