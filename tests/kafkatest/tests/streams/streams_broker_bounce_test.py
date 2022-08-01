@@ -67,7 +67,8 @@ def hard_bounce(test, topic, broker_type):
         # Since this is a hard kill, we need to make sure the process is down and that
         # zookeeper has registered the loss by expiring the broker's session timeout.
 
-        wait_until(lambda: len(test.kafka.pids(prev_broker_node)) == 0 and not test.kafka.is_registered(prev_broker_node),
+        wait_until(lambda: len(test.kafka.pids(prev_broker_node)) == 0 and
+                           not (quorum.for_test(test.test_context) == quorum.zk and test.kafka.is_registered(prev_broker_node)),
                    timeout_sec=test.kafka.zk_session_timeout + 5,
                    err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(prev_broker_node.account))
 
