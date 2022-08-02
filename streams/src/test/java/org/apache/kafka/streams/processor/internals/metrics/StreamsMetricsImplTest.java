@@ -30,18 +30,12 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ImmutableMetricValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.test.StreamsTestUtils;
-//import org.easymock.Capture;
-//import org.easymock.CaptureType;
-//import org.easymock.EasyMock;
-//import org.easymock.IArgumentMatcher;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
-//import org.powermock.core.classloader.annotations.PrepareForTest;
-//import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -67,17 +61,6 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxLatencyToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
-//import static org.easymock.EasyMock.anyObject;
-//import static org.easymock.EasyMock.anyString;
-//import static org.easymock.EasyMock.capture;
-//import static org.easymock.EasyMock.expect;
-//import static org.easymock.EasyMock.mock;
-//import static org.easymock.EasyMock.newCapture;
-//import static org.easymock.EasyMock.niceMock;
-//import static org.easymock.EasyMock.replay;
-//import static org.easymock.EasyMock.resetToDefault;
-//import static org.easymock.EasyMock.verify;
-//import static org.easymock.EasyMock.eq;
 import static org.hamcrest.CoreMatchers.equalToObject;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
@@ -94,7 +77,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
-//import static org.powermock.api.easymock.PowerMock.createMock;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class StreamsMetricsImplTest {
