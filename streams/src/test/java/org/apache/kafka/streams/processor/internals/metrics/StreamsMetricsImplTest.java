@@ -497,7 +497,6 @@ public class StreamsMetricsImplTest {
         verify(metrics).addMetricIfAbsent(eq(metricName), eqMetricConfig(metricConfig), eq(VALUE_PROVIDER));
     }
 
-/*
     @Test
     public void shouldCreateNewStoreLevelMutableMetric() {
         final MetricName metricName =
@@ -509,6 +508,7 @@ public class StreamsMetricsImplTest {
         assertNotNull(metrics.metric(metricName));
     }
 
+/*
     @Test
     public void shouldNotAddStoreLevelMutableMetricIfAlreadyExists() {
         final Metrics metrics = mock(Metrics.class);
