@@ -37,6 +37,7 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatcher;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 //import org.powermock.core.classloader.annotations.PrepareForTest;
@@ -151,8 +152,8 @@ public class StreamsMetricsImplTest {
     private final MockTime time = new MockTime(0);
     private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
-/*    private static MetricConfig eqMetricConfig(final MetricConfig metricConfig) {
-        EasyMock.reportMatcher(new IArgumentMatcher() {
+    private static MetricConfig eqMetricConfig(final MetricConfig metricConfig) {
+        Mockito.argThat(new ArgumentMatcher<Object>() {
             private final StringBuffer message = new StringBuffer();
 
             @Override
@@ -197,12 +198,12 @@ public class StreamsMetricsImplTest {
             }
 
             @Override
-            public void appendTo(final StringBuffer buffer) {
-                buffer.append(message);
+            public String toString() {
+                return "<eqMetricConfig>";
             }
         });
         return null;
-    }*/
+    }
 
 /*    private Capture<String> addSensorsOnAllLevels(final Metrics metrics, final StreamsMetricsImpl streamsMetrics) {
         final Capture<String> sensorKeys = newCapture(CaptureType.ALL);
@@ -472,18 +473,14 @@ public class StreamsMetricsImplTest {
         return sensorKeyArgumentCaptor;
     }
 
-/*
     @Test
     public void shouldAddNewStoreLevelMutableMetric() {
         final Metrics metrics = mock(Metrics.class);
         final MetricName metricName =
             new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
         final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
-        expect(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
-            .andReturn(metricName);
-        expect(metrics.metric(metricName)).andReturn(null);
-        expect(metrics.addMetricIfAbsent(eq(metricName), eqMetricConfig(metricConfig), eq(VALUE_PROVIDER))).andReturn(null);
-        replay(metrics);
+        when(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
+            .thenReturn(metricName);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         streamsMetrics.addStoreLevelMutableMetric(
@@ -496,9 +493,11 @@ public class StreamsMetricsImplTest {
             VALUE_PROVIDER
         );
 
-        verify(metrics);
+        verify(metrics).metric(metricName);
+        verify(metrics).addMetricIfAbsent(eq(metricName), eqMetricConfig(metricConfig), eq(VALUE_PROVIDER));
     }
 
+/*
     @Test
     public void shouldCreateNewStoreLevelMutableMetric() {
         final MetricName metricName =
