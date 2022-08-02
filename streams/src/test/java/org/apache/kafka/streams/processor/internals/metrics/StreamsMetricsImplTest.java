@@ -605,7 +605,6 @@ public class StreamsMetricsImplTest {
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
-/*
     @Test
     public void shouldGetExistingNodeLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
@@ -621,11 +620,10 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        verify(metrics);
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
-    @Test
+/*    @Test
     public void shouldGetNewCacheLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
