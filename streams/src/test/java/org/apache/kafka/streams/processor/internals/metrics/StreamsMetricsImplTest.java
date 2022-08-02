@@ -753,11 +753,11 @@ public class StreamsMetricsImplTest {
        verify(metrics).removeSensor(fullSensorNamePrefix + SENSOR_NAME_2);
     }
 
-/*     @Test
+    @Test
     public void testNullMetrics() {
         assertThrows(NullPointerException.class, () -> new StreamsMetricsImpl(null, "", VERSION, time));
     }
-
+/*
     @Test
     public void testRemoveNullSensor() {
         assertThrows(NullPointerException.class, () -> streamsMetrics.removeSensor(null));
