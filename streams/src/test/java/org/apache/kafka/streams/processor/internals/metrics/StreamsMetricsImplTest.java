@@ -757,12 +757,12 @@ public class StreamsMetricsImplTest {
     public void testNullMetrics() {
         assertThrows(NullPointerException.class, () -> new StreamsMetricsImpl(null, "", VERSION, time));
     }
-/*
+
     @Test
     public void testRemoveNullSensor() {
         assertThrows(NullPointerException.class, () -> streamsMetrics.removeSensor(null));
     }
-
+/*
     @Test
     public void testRemoveSensor() {
         final String sensorName = "sensor1";
