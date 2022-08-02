@@ -377,7 +377,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Produce/consume should work with new truststore with new producer/consumer
     val producer = ProducerBuilder().trustStoreProps(sslProperties2).maxRetries(0).build()
-    val consumer = ConsumerBuilder("group1").trustStoreProps(sslProperties2).topic(topic2).build()
+    // Start the new consumer in a separate group than the continous consumer started at the beginning of the test so
+    // that it is not disrupted by rebalance.
+    val consumer = ConsumerBuilder("group2").trustStoreProps(sslProperties2).topic(topic2).build()
     verifyProduceConsume(producer, consumer, 10, topic2)
 
     // Broker keystore update for internal listener with incompatible keystore should fail without update
