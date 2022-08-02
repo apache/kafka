@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
@@ -42,7 +43,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -228,13 +228,11 @@ public class ConfigurationControlManager {
                     newValue = String.join(",", oldValueList);
                     break;
             }
-            if (!Objects.equals(currentValue, newValue)) {
-                newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
-                    setResourceType(configResource.type().id()).
-                    setResourceName(configResource.name()).
-                    setName(key).
-                    setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
-            }
+            newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(configResource.type().id()).
+                setResourceName(configResource.name()).
+                setName(key).
+                setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
         }
         ApiError error = validateAlterConfig(configResource, newRecords, newlyCreatedResource);
         if (error.isFailure()) {
@@ -316,14 +314,11 @@ public class ConfigurationControlManager {
         for (Entry<String, String> entry : newConfigs.entrySet()) {
             String key = entry.getKey();
             String newValue = entry.getValue();
-            String currentValue = currentConfigs.get(key);
-            if (!Objects.equals(newValue, currentValue)) {
-                newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
-                    setResourceType(configResource.type().id()).
-                    setResourceName(configResource.name()).
-                    setName(key).
-                    setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
-            }
+            newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(configResource.type().id()).
+                setResourceName(configResource.name()).
+                setName(key).
+                setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
         }
         for (String key : currentConfigs.keySet()) {
             if (!newConfigs.containsKey(key)) {
@@ -381,7 +376,11 @@ public class ConfigurationControlManager {
         if (configs.isEmpty()) {
             configData.remove(configResource);
         }
-        log.info("{}: set configuration {} to {}", configResource, record.name(), record.value());
+        if (configSchema.isSensitive(record)) {
+            log.info("{}: set configuration {} to {}", configResource, record.name(), Password.HIDDEN);
+        } else {
+            log.info("{}: set configuration {} to {}", configResource, record.name(), record.value());
+        }
     }
 
     // VisibleForTesting
