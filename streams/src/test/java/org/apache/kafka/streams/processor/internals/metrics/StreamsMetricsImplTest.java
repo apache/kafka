@@ -27,8 +27,6 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ImmutableMetricValue;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -50,6 +48,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.AVG_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_LEVEL_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ImmutableMetricValue;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.MAX_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP;
@@ -59,6 +58,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxLatencyToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
 import static org.hamcrest.CoreMatchers.equalToObject;
@@ -70,13 +70,20 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyDouble;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class StreamsMetricsImplTest {
@@ -144,8 +151,8 @@ public class StreamsMetricsImplTest {
                     final MetricConfig otherMetricConfig = (MetricConfig) argument;
                     final boolean equalsComparisons =
                         (otherMetricConfig.quota() == metricConfig.quota() ||
-                        otherMetricConfig.quota().equals(metricConfig.quota())) &&
-                        otherMetricConfig.tags().equals(metricConfig.tags());
+                            otherMetricConfig.quota().equals(metricConfig.quota())) &&
+                            otherMetricConfig.tags().equals(metricConfig.tags());
                     if (otherMetricConfig.eventWindow() == metricConfig.eventWindow() &&
                         otherMetricConfig.recordLevel() == metricConfig.recordLevel() &&
                         equalsComparisons &&
@@ -239,7 +246,7 @@ public class StreamsMetricsImplTest {
     }
 
     private ArgumentCaptor<String> setupGetNewSensorTest(final Metrics metrics,
-                                                  final RecordingLevel recordingLevel) {
+                                                         final RecordingLevel recordingLevel) {
         final ArgumentCaptor<String> sensorKey = ArgumentCaptor.forClass(String.class);
         when(metrics.getSensor(sensorKey.capture())).thenReturn(null);
         final Sensor[] parents = {};
@@ -260,7 +267,7 @@ public class StreamsMetricsImplTest {
 
         final Sensor actualSensor = streamsMetrics.threadLevelSensor(THREAD_ID1, SENSOR_NAME_1, recordingLevel);
 
-        verify(metrics).sensor(sensorNameArgumentCaptor.getValue(), recordingLevel, new Sensor[]{});
+        verify(metrics).sensor(sensorNameArgumentCaptor.getValue(), recordingLevel, new Sensor[] {});
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
@@ -291,7 +298,7 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        verify(metrics).sensor(sensorNameArgumentCaptor.getValue(), recordingLevel, new Sensor[]{});
+        verify(metrics).sensor(sensorNameArgumentCaptor.getValue(), recordingLevel, new Sensor[] {});
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
@@ -482,7 +489,7 @@ public class StreamsMetricsImplTest {
     @Test
     public void shouldCreateNewStoreLevelMutableMetric() {
         final MetricName metricName =
-                new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
+            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
         final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
         final Metrics metrics = new Metrics(metricConfig);
         assertNull(metrics.metric(metricName));
@@ -515,7 +522,7 @@ public class StreamsMetricsImplTest {
     @Test
     public void shouldReturnSameMetricIfAlreadyCreated() {
         final MetricName metricName =
-                new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
+            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
         final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
         final Metrics metrics = new Metrics(metricConfig);
         assertNull(metrics.metric(metricName));
@@ -526,7 +533,7 @@ public class StreamsMetricsImplTest {
     @Test
     public void shouldCreateMetricOnceDuringConcurrentMetricCreationRequest() throws InterruptedException {
         final MetricName metricName =
-                new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
+            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
         final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
         final Metrics metrics = new Metrics(metricConfig);
         assertNull(metrics.metric(metricName));
@@ -722,7 +729,7 @@ public class StreamsMetricsImplTest {
         verify(metrics).removeSensor(sensorKeys.getAllValues().get(1));
     }
 
-   @Test
+    @Test
     public void shouldRemoveThreadLevelSensors() {
         final Metrics metrics = mock(Metrics.class);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
@@ -730,9 +737,9 @@ public class StreamsMetricsImplTest {
 
         streamsMetrics.removeAllThreadLevelSensors(THREAD_ID1);
 
-       final String fullSensorNamePrefix = INTERNAL_PREFIX + SENSOR_PREFIX_DELIMITER + THREAD_ID1 + SENSOR_NAME_DELIMITER;
-       verify(metrics).removeSensor(fullSensorNamePrefix + SENSOR_NAME_1);
-       verify(metrics).removeSensor(fullSensorNamePrefix + SENSOR_NAME_2);
+        final String fullSensorNamePrefix = INTERNAL_PREFIX + SENSOR_PREFIX_DELIMITER + THREAD_ID1 + SENSOR_NAME_DELIMITER;
+        verify(metrics).removeSensor(fullSensorNamePrefix + SENSOR_NAME_1);
+        verify(metrics).removeSensor(fullSensorNamePrefix + SENSOR_NAME_2);
     }
 
     @Test
