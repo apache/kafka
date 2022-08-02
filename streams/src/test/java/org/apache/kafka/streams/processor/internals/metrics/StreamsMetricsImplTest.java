@@ -1281,19 +1281,20 @@ public class StreamsMetricsImplTest {
         StreamsMetricsImpl.maybeMeasureLatency(() -> { }, time, sensor);
 
     }
-    /*
+
     @Test
     public void shouldNotMeasureLatencyDueToRecordingLevel() {
-        final Sensor sensor = createMock(Sensor.class);
-        expect(sensor.shouldRecord()).andReturn(false);
+        final Sensor sensor = mock(Sensor.class);
+        when(sensor.shouldRecord()).thenReturn(false);
         final Time time = mock(Time.class);
-        replay(sensor);
 
         StreamsMetricsImpl.maybeMeasureLatency(() -> { }, time, sensor);
 
-        verify(sensor);
+        verify(sensor, never()).record(anyDouble());
+        verifyNoInteractions(time);
     }
 
+/*
     @Test
     public void shouldNotMeasureLatencyBecauseSensorHasNoMetrics() {
         final Sensor sensor = createMock(Sensor.class);
