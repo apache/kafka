@@ -684,24 +684,24 @@ public class StreamsMetricsImplTest {
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
-/*    @Test
+    @Test
     public void shouldAddClientLevelImmutableMetric() {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
         final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
         final String value = "immutable-value";
         final ImmutableMetricValue immutableValue = new ImmutableMetricValue<>(value);
-        expect(metrics.metricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags))
-            .andReturn(metricName1);
-        metrics.addMetric(eq(metricName1), eqMetricConfig(metricConfig), eq(immutableValue));
-        replay(metrics);
+        when(metrics.metricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags))
+            .thenReturn(metricName1);
+
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         streamsMetrics.addClientLevelImmutableMetric(METRIC_NAME1, DESCRIPTION1, recordingLevel, value);
 
-        verify(metrics);
+        verify(metrics).addMetric(eq(metricName1), eqMetricConfig(metricConfig), eq(immutableValue));
     }
 
+    /*
     @Test
     public void shouldAddClientLevelMutableMetric() {
         final Metrics metrics = mock(Metrics.class);
