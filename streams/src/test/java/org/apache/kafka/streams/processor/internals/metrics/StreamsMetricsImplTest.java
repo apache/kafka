@@ -852,7 +852,6 @@ public class StreamsMetricsImplTest {
         assertThat(registry.metrics().size(), equalTo(0));
     }
 
-/*
     @Test
     public void testLatencyMetrics() {
         final int defaultMetrics = streamsMetrics.metrics().size();
@@ -872,6 +871,7 @@ public class StreamsMetricsImplTest {
         assertEquals(defaultMetrics, streamsMetrics.metrics().size());
     }
 
+    /*
     @Test
     public void testThroughputMetrics() {
         final int defaultMetrics = streamsMetrics.metrics().size();
