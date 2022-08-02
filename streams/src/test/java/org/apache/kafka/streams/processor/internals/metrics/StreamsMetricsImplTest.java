@@ -1294,18 +1294,17 @@ public class StreamsMetricsImplTest {
         verifyNoInteractions(time);
     }
 
-/*
     @Test
     public void shouldNotMeasureLatencyBecauseSensorHasNoMetrics() {
-        final Sensor sensor = createMock(Sensor.class);
-        expect(sensor.shouldRecord()).andReturn(true);
-        expect(sensor.hasMetrics()).andReturn(false);
+        final Sensor sensor = mock(Sensor.class);
+        when(sensor.shouldRecord()).thenReturn(true);
+        when(sensor.hasMetrics()).thenReturn(false);
         final Time time = mock(Time.class);
-        replay(sensor);
 
         StreamsMetricsImpl.maybeMeasureLatency(() -> { }, time, sensor);
 
-        verify(sensor);
+        verify(sensor, never()).record(anyDouble());
+        verifyNoInteractions(time);
     }
 
     @Test
@@ -1396,5 +1395,4 @@ public class StreamsMetricsImplTest {
         assertThat(metrics.metric(name), nullValue());
     }
 
-     */
 }
