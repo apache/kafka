@@ -1255,13 +1255,13 @@ public class StreamsMetricsImplTest {
         final Sensor sensor = mock(Sensor.class);
         when(sensor.shouldRecord()).thenReturn(true);
         when(sensor.hasMetrics()).thenReturn(true);
-        sensor.record(endTime - startTime);
         final Time time = mock(Time.class);
         when(time.nanoseconds()).thenReturn(startTime);
         when(time.nanoseconds()).thenReturn(endTime);
 
         StreamsMetricsImpl.maybeMeasureLatency(() -> { }, time, sensor);
 
+        verify(sensor).record(endTime - startTime);
     }
 
     @Test
