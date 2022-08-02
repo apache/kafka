@@ -723,16 +723,6 @@ public class StreamsMetricsImplTest {
         assertThat(ROLLUP_VALUE, is("all"));
     }
 
-/*  private void setupRemoveSensorsTest(final Metrics metrics,
-                                        final String level) {
-        final String fullSensorNamePrefix = INTERNAL_PREFIX + SENSOR_PREFIX_DELIMITER + level + SENSOR_NAME_DELIMITER;
-        resetToDefault(metrics);
-        metrics.removeSensor(fullSensorNamePrefix + SENSOR_NAME_1);
-        metrics.removeSensor(fullSensorNamePrefix + SENSOR_NAME_2);
-        replay(metrics);
-    }
-*/
-
     @Test
     public void shouldRemoveClientLevelMetricsAndSensors() {
         final Metrics metrics = mock(Metrics.class);
@@ -750,19 +740,20 @@ public class StreamsMetricsImplTest {
         verify(metrics).removeSensor(sensorKeys.getAllValues().get(1));
     }
 
-/*  @Test
+   @Test
     public void shouldRemoveThreadLevelSensors() {
-        final Metrics metrics = niceMock(Metrics.class);
+        final Metrics metrics = mock(Metrics.class);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
         addSensorsOnAllLevels(metrics, streamsMetrics);
-        setupRemoveSensorsTest(metrics, THREAD_ID1);
 
         streamsMetrics.removeAllThreadLevelSensors(THREAD_ID1);
 
-        verify(metrics);
+       final String fullSensorNamePrefix = INTERNAL_PREFIX + SENSOR_PREFIX_DELIMITER + THREAD_ID1 + SENSOR_NAME_DELIMITER;
+       verify(metrics).removeSensor(fullSensorNamePrefix + SENSOR_NAME_1);
+       verify(metrics).removeSensor(fullSensorNamePrefix + SENSOR_NAME_2);
     }
 
-    @Test
+/*     @Test
     public void testNullMetrics() {
         assertThrows(NullPointerException.class, () -> new StreamsMetricsImpl(null, "", VERSION, time));
     }
