@@ -240,11 +240,11 @@ public class StreamsMetricsImplTest {
 
     private ArgumentCaptor<String> setupGetNewSensorTest(final Metrics metrics,
                                                   final RecordingLevel recordingLevel) {
-        final ArgumentCaptor<String> sensorKeyArgumentCaptor = ArgumentCaptor.forClass(String.class);
-        when(metrics.getSensor(sensorKeyArgumentCaptor.capture())).thenReturn(null);
+        final ArgumentCaptor<String> sensorKey = ArgumentCaptor.forClass(String.class);
+        when(metrics.getSensor(sensorKey.capture())).thenReturn(null);
         final Sensor[] parents = {};
-        when(metrics.sensor(sensorKeyArgumentCaptor.capture(), Mockito.eq(recordingLevel), parents)).thenReturn(sensor);
-        return sensorKeyArgumentCaptor;
+        when(metrics.sensor(sensorKey.capture(), Mockito.eq(recordingLevel), parents)).thenReturn(sensor);
+        return sensorKey;
     }
 
     private void setupGetExistingSensorTest(final Metrics metrics) {
@@ -450,9 +450,9 @@ public class StreamsMetricsImplTest {
     }
 
     private ArgumentCaptor<String> setUpSensorKeyTests(final Metrics metrics) {
-        final ArgumentCaptor<String> sensorKeyArgumentCaptor = ArgumentCaptor.forClass(String.class);
-        when(metrics.getSensor(sensorKeyArgumentCaptor.capture())).thenReturn(sensor);
-        return sensorKeyArgumentCaptor;
+        final ArgumentCaptor<String> sensorKeys = ArgumentCaptor.forClass(String.class);
+        when(metrics.getSensor(sensorKeys.capture())).thenReturn(sensor);
+        return sensorKeys;
     }
 
     @Test
