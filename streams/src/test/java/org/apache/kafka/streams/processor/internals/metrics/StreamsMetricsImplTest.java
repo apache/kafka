@@ -587,7 +587,7 @@ public class StreamsMetricsImplTest {
         verify(metrics).removeMetric(metricName2);
     }
 
-/*   @Test
+    @Test
     public void shouldGetNewNodeLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
@@ -602,10 +602,10 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        verify(metrics);
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
+/*
     @Test
     public void shouldGetExistingNodeLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
