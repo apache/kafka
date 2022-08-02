@@ -717,13 +717,13 @@ public class StreamsMetricsImplTest {
         verify(metrics).addMetric(eq(metricName1), eqMetricConfig(metricConfig), eq(valueProvider));
     }
 
-/*  @Test
+    @Test
     public void shouldProvideCorrectStrings() {
         assertThat(LATENCY_SUFFIX, is("-latency"));
         assertThat(ROLLUP_VALUE, is("all"));
     }
 
-    private void setupRemoveSensorsTest(final Metrics metrics,
+/*  private void setupRemoveSensorsTest(final Metrics metrics,
                                         final String level) {
         final String fullSensorNamePrefix = INTERNAL_PREFIX + SENSOR_PREFIX_DELIMITER + level + SENSOR_NAME_DELIMITER;
         resetToDefault(metrics);
