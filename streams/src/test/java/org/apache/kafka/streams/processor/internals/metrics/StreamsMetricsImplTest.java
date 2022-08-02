@@ -731,25 +731,26 @@ public class StreamsMetricsImplTest {
         metrics.removeSensor(fullSensorNamePrefix + SENSOR_NAME_2);
         replay(metrics);
     }
+*/
 
     @Test
     public void shouldRemoveClientLevelMetricsAndSensors() {
-        final Metrics metrics = niceMock(Metrics.class);
+        final Metrics metrics = mock(Metrics.class);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
-        final Capture<String> sensorKeys = addSensorsOnAllLevels(metrics, streamsMetrics);
-        resetToDefault(metrics);
+        final ArgumentCaptor<String> sensorKeys = addSensorsOnAllLevels(metrics, streamsMetrics);
+        reset(metrics);
 
-        metrics.removeSensor(sensorKeys.getValues().get(0));
-        metrics.removeSensor(sensorKeys.getValues().get(1));
-        expect(metrics.removeMetric(metricName1)).andStubReturn(null);
-        expect(metrics.removeMetric(metricName2)).andStubReturn(null);
-        replay(metrics);
+
+        when(metrics.removeMetric(metricName1)).thenReturn(null);
+        when(metrics.removeMetric(metricName2)).thenReturn(null);
+
         streamsMetrics.removeAllClientLevelSensorsAndMetrics();
 
-        verify(metrics);
+        verify(metrics).removeSensor(sensorKeys.getAllValues().get(0));
+        verify(metrics).removeSensor(sensorKeys.getAllValues().get(1));
     }
 
-    @Test
+/*  @Test
     public void shouldRemoveThreadLevelSensors() {
         final Metrics metrics = niceMock(Metrics.class);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
