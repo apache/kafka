@@ -530,7 +530,6 @@ public class StreamsMetricsImplTest {
 
     }
 
-/*
     @Test
     public void shouldReturnSameMetricIfAlreadyCreated() {
         final MetricName metricName =
@@ -542,7 +541,7 @@ public class StreamsMetricsImplTest {
         assertEquals(kafkaMetric, metrics.addMetricIfAbsent(metricName, metricConfig, VALUE_PROVIDER));
     }
 
-    @Test
+/*    @Test
     public void shouldCreateMetricOnceDuringConcurrentMetricCreationRequest() throws InterruptedException {
         final MetricName metricName =
                 new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
