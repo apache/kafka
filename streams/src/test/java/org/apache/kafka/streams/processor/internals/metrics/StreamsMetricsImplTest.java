@@ -889,7 +889,6 @@ public class StreamsMetricsImplTest {
         assertEquals(defaultMetrics, streamsMetrics.metrics().size());
     }
 
-    /*
     @Test
     public void testTotalMetricDoesntDecrease() {
         final MockTime time = new MockTime(1);
@@ -1124,16 +1123,14 @@ public class StreamsMetricsImplTest {
 
     @Test
     public void shouldAddInvocationRateToSensor() {
-        final Sensor sensor = createMock(Sensor.class);
+        final Sensor sensor = mock(Sensor.class);
         final MetricName expectedMetricName = new MetricName(METRIC_NAME1 + "-rate", group, DESCRIPTION1, tags);
-        expect(sensor.add(eq(expectedMetricName), anyObject(Rate.class))).andReturn(true);
-        replay(sensor);
 
         StreamsMetricsImpl.addInvocationRateToSensor(sensor, group, tags, METRIC_NAME1, DESCRIPTION1);
 
-        verify(sensor);
+        verify(sensor).add(eq(expectedMetricName), any(Rate.class));
     }
-
+    /*
     @Test
     public void shouldAddAmountRateAndSum() {
         StreamsMetricsImpl
