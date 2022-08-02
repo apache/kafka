@@ -660,7 +660,7 @@ public class StreamsMetricsImplTest {
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
-/*    @Test
+    @Test
     public void shouldGetNewClientLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
@@ -669,11 +669,10 @@ public class StreamsMetricsImplTest {
 
         final Sensor actualSensor = streamsMetrics.clientLevelSensor(SENSOR_NAME_1, recordingLevel);
 
-        verify(metrics);
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
-    @Test
+/*    @Test
     public void shouldGetExistingClientLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
