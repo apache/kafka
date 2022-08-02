@@ -508,16 +508,14 @@ public class StreamsMetricsImplTest {
         assertNotNull(metrics.metric(metricName));
     }
 
-/*
     @Test
     public void shouldNotAddStoreLevelMutableMetricIfAlreadyExists() {
         final Metrics metrics = mock(Metrics.class);
         final MetricName metricName =
             new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
-        expect(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
-            .andReturn(metricName);
-        expect(metrics.metric(metricName)).andReturn(mock(KafkaMetric.class));
-        replay(metrics);
+        when(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
+            .thenReturn(metricName);
+        when(metrics.metric(metricName)).thenReturn(mock(KafkaMetric.class));
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         streamsMetrics.addStoreLevelMutableMetric(
@@ -530,9 +528,9 @@ public class StreamsMetricsImplTest {
             VALUE_PROVIDER
         );
 
-        verify(metrics);
     }
 
+/*
     @Test
     public void shouldReturnSameMetricIfAlreadyCreated() {
         final MetricName metricName =
