@@ -871,7 +871,6 @@ public class StreamsMetricsImplTest {
         assertEquals(defaultMetrics, streamsMetrics.metrics().size());
     }
 
-    /*
     @Test
     public void testThroughputMetrics() {
         final int defaultMetrics = streamsMetrics.metrics().size();
@@ -890,6 +889,7 @@ public class StreamsMetricsImplTest {
         assertEquals(defaultMetrics, streamsMetrics.metrics().size());
     }
 
+    /*
     @Test
     public void testTotalMetricDoesntDecrease() {
         final MockTime time = new MockTime(1);
