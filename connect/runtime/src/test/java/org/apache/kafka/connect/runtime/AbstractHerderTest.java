@@ -85,7 +85,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-@RunWith(MockitoJUnitRunner.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class AbstractHerderTest {
 
     private static final String CONN1 = "sourceA";
@@ -293,8 +293,7 @@ public class AbstractHerderTest {
         when(statusStore.get(connector))
                 .thenReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
 
-        when(statusStore.getAll(connector))
-                .thenReturn(taskStatuses);
+        when(statusStore.getAll(connector)).thenReturn(taskStatuses);
 
         Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlan(restartRequest);
 
@@ -326,8 +325,7 @@ public class AbstractHerderTest {
         when(statusStore.get(connector))
                 .thenReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
 
-        when(statusStore.getAll(connector))
-                .thenReturn(taskStatuses);
+        when(statusStore.getAll(connector)).thenReturn(taskStatuses);
 
         Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlan(restartRequest);
 
@@ -840,8 +838,8 @@ public class AbstractHerderTest {
     @Test
     public void testConnectorPluginConfig() throws Exception {
 
-        AbstractHerder herder = mock(AbstractHerder.class,
-                withSettings().useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
 
         when(plugins.newPlugin(anyString())).then(invocation -> {
@@ -885,9 +883,9 @@ public class AbstractHerderTest {
     @Test(expected = NotFoundException.class)
     public void testGetConnectorConfigDefWithBadName() throws Exception {
         String connName = "AnotherPlugin";
-        AbstractHerder herder = mock(AbstractHerder.class,
-                withSettings().useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
-                        .defaultAnswer(CALLS_REAL_METHODS));
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
         when(worker.getPlugins()).thenReturn(plugins);
         when(plugins.newPlugin(anyString())).thenThrow(new ClassNotFoundException());
         herder.connectorPluginConfig(connName);
@@ -896,9 +894,9 @@ public class AbstractHerderTest {
     @Test(expected = BadRequestException.class)
     public void testGetConnectorConfigDefWithInvalidPluginType() throws Exception {
         String connName = "AnotherPlugin";
-        AbstractHerder herder = mock(AbstractHerder.class,
-                withSettings().useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
-                        .defaultAnswer(CALLS_REAL_METHODS));
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
         when(worker.getPlugins()).thenReturn(plugins);
         when(plugins.newPlugin(anyString())).thenReturn(new DirectoryConfigProvider());
         herder.connectorPluginConfig(connName);
