@@ -1263,8 +1263,9 @@ public class StreamsMetricsImplTest {
         when(sensor.shouldRecord()).thenReturn(true);
         when(sensor.hasMetrics()).thenReturn(true);
         final Time time = mock(Time.class);
-        when(time.nanoseconds()).thenReturn(startTime);
-        when(time.nanoseconds()).thenReturn(endTime);
+        when(time.nanoseconds())
+            .thenReturn(startTime)
+            .thenReturn(endTime);
 
         StreamsMetricsImpl.maybeMeasureLatency(() -> { }, time, sensor);
 
