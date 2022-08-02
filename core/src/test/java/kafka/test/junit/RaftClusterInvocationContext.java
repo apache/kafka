@@ -184,6 +184,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
+        public Collection<ControllerServer> controllerServers() {
+            return controllers().collect(Collectors.toList());
+        }
+
+        @Override
         public ClusterType clusterType() {
             return ClusterType.RAFT;
         }

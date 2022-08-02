@@ -20,6 +20,7 @@ package kafka.test.junit;
 import kafka.api.IntegrationTestHarness;
 import kafka.network.SocketServer;
 import kafka.server.BrokerFeatures;
+import kafka.server.ControllerServer;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.test.ClusterConfig;
@@ -246,6 +247,11 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 brokerServer -> brokerServer.config().nodeId(),
                 KafkaServer::brokerFeatures
             ));
+        }
+
+        @Override
+        public Collection<ControllerServer> controllerServers() {
+            throw new UnsupportedOperationException("Can't get controller server in zk mode");
         }
 
         @Override
