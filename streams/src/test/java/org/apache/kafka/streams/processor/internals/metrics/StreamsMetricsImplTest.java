@@ -785,7 +785,6 @@ public class StreamsMetricsImplTest {
         assertEquals(Collections.emptyMap(), streamsMetrics.parentSensors());
     }
 
-    /*
     @Test
     public void testMultiLevelSensorRemoval() {
         final Metrics registry = new Metrics();
@@ -853,6 +852,7 @@ public class StreamsMetricsImplTest {
         assertThat(registry.metrics().size(), equalTo(0));
     }
 
+/*
     @Test
     public void testLatencyMetrics() {
         final int defaultMetrics = streamsMetrics.metrics().size();
