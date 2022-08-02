@@ -96,7 +96,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 //import static org.powermock.api.easymock.PowerMock.createMock;
 
-@RunWith(MockitoJUnitRunner.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class StreamsMetricsImplTest {
 
     private final static String SENSOR_PREFIX_DELIMITER = ".";
