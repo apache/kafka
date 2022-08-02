@@ -205,16 +205,16 @@ public class StreamsMetricsImplTest {
         return null;
     }
 
-/*    private Capture<String> addSensorsOnAllLevels(final Metrics metrics, final StreamsMetricsImpl streamsMetrics) {
-        final Capture<String> sensorKeys = newCapture(CaptureType.ALL);
+    private ArgumentCaptor<String> addSensorsOnAllLevels(final Metrics metrics, final StreamsMetricsImpl streamsMetrics) {
+        final ArgumentCaptor<String> sensorKeys = ArgumentCaptor.forClass(String.class);
         final Sensor[] parents = {};
-        expect(metrics.sensor(capture(sensorKeys), eq(INFO_RECORDING_LEVEL), parents))
-            .andStubReturn(sensor);
-        expect(metrics.metricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags))
-            .andReturn(metricName1);
-        expect(metrics.metricName(METRIC_NAME2, CLIENT_LEVEL_GROUP, DESCRIPTION2, clientLevelTags))
-            .andReturn(metricName2);
-        replay(metrics);
+        when(metrics.sensor(sensorKeys.capture(), eq(INFO_RECORDING_LEVEL), parents))
+            .thenReturn(sensor);
+        when(metrics.metricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags))
+            .thenReturn(metricName1);
+        when(metrics.metricName(METRIC_NAME2, CLIENT_LEVEL_GROUP, DESCRIPTION2, clientLevelTags))
+            .thenReturn(metricName2);
+
         streamsMetrics.addClientLevelImmutableMetric(METRIC_NAME1, DESCRIPTION1, INFO_RECORDING_LEVEL, "value");
         streamsMetrics.addClientLevelImmutableMetric(METRIC_NAME2, DESCRIPTION2, INFO_RECORDING_LEVEL, "value");
         streamsMetrics.clientLevelSensor(SENSOR_NAME_1, INFO_RECORDING_LEVEL);
@@ -254,7 +254,7 @@ public class StreamsMetricsImplTest {
             VALUE_PROVIDER
         );
         return sensorKeys;
-    }*/
+    }
 
     private ArgumentCaptor<String> setupGetNewSensorTest(final Metrics metrics,
                                                   final RecordingLevel recordingLevel) {
@@ -562,33 +562,32 @@ public class StreamsMetricsImplTest {
         assertEquals(metricCreatedViaThread1.get(), metricCreatedViaThread2.get());
     }
 
-/*
     @Test
     public void shouldRemoveStateStoreLevelSensors() {
-        final Metrics metrics = niceMock(Metrics.class);
+        final Metrics metrics = mock(Metrics.class);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
         final MetricName metricName1 =
             new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
         final MetricName metricName2 =
             new MetricName(METRIC_NAME2, STATE_STORE_LEVEL_GROUP, DESCRIPTION2, STORE_LEVEL_TAG_MAP);
-        expect(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
-            .andReturn(metricName1);
-        expect(metrics.metricName(METRIC_NAME2, STATE_STORE_LEVEL_GROUP, DESCRIPTION2, STORE_LEVEL_TAG_MAP))
-            .andReturn(metricName2);
-        final Capture<String> sensorKeys = addSensorsOnAllLevels(metrics, streamsMetrics);
-        resetToDefault(metrics);
-        metrics.removeSensor(sensorKeys.getValues().get(6));
-        metrics.removeSensor(sensorKeys.getValues().get(7));
-        expect(metrics.removeMetric(metricName1)).andReturn(mock(KafkaMetric.class));
-        expect(metrics.removeMetric(metricName2)).andReturn(mock(KafkaMetric.class));
-        replay(metrics);
+
+        when(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
+            .thenReturn(metricName1);
+        when(metrics.metricName(METRIC_NAME2, STATE_STORE_LEVEL_GROUP, DESCRIPTION2, STORE_LEVEL_TAG_MAP))
+            .thenReturn(metricName2);
+
+        final ArgumentCaptor<String> sensorKeys = addSensorsOnAllLevels(metrics, streamsMetrics);
 
         streamsMetrics.removeAllStoreLevelSensorsAndMetrics(TASK_ID1, STORE_NAME1);
 
-        verify(metrics);
+        verify(metrics).removeSensor(sensorKeys.getAllValues().get(6));
+        verify(metrics).removeSensor(sensorKeys.getAllValues().get(7));
+
+        verify(metrics).removeMetric(metricName1);
+        verify(metrics).removeMetric(metricName2);
     }
 
-    @Test
+/*   @Test
     public void shouldGetNewNodeLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
