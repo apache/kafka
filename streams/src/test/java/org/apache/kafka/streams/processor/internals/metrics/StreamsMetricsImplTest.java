@@ -762,7 +762,7 @@ public class StreamsMetricsImplTest {
     public void testRemoveNullSensor() {
         assertThrows(NullPointerException.class, () -> streamsMetrics.removeSensor(null));
     }
-/*
+
     @Test
     public void testRemoveSensor() {
         final String sensorName = "sensor1";
@@ -785,6 +785,7 @@ public class StreamsMetricsImplTest {
         assertEquals(Collections.emptyMap(), streamsMetrics.parentSensors());
     }
 
+    /*
     @Test
     public void testMultiLevelSensorRemoval() {
         final Metrics registry = new Metrics();
