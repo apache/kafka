@@ -222,7 +222,7 @@ class KafkaRaftManager[T](
       dataDir,
       time,
       scheduler,
-      config = MetadataLogConfig(config, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)
+      config = MetadataLogConfig(config, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, RaftConfig.DEFAULT_QUORUM_REPLICA_FETCH_RESPONSE_MAX_BYTES)
     )
   }
 

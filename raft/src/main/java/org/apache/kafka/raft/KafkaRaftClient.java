@@ -144,7 +144,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int RETRY_BACKOFF_BASE_MS = 100;
     public static final int MAX_FETCH_WAIT_MS = 500;
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;
-    public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
 
     private final AtomicReference<GracefulShutdown> shutdown = new AtomicReference<>();
     private final Logger logger;
@@ -1787,7 +1786,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 .setFetchOffset(log.endOffset().offset);
         });
         return request
-            .setMaxBytes(MAX_FETCH_SIZE_BYTES)
+            .setMaxBytes(raftConfig.replicaFetchResponseMaxBytes())
             .setMaxWaitMs(fetchMaxWaitMs)
             .setClusterId(clusterId)
             .setReplicaId(quorum.localIdOrSentinel());
@@ -1819,7 +1818,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     .setCurrentLeaderEpoch(quorum.epoch())
                     .setSnapshotId(requestSnapshotId)
                     .setPosition(snapshotSize);
-            }
+            },
+            raftConfig.replicaFetchResponseMaxBytes()
         );
 
         return request.setReplicaId(quorum.localIdOrSentinel());

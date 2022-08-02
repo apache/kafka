@@ -91,6 +91,7 @@ public final class RaftClientTestContext {
     final int fetchMaxWaitMs = Builder.FETCH_MAX_WAIT_MS;
     final int fetchTimeoutMs = Builder.FETCH_TIMEOUT_MS;
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
+    final int replicaFetchMaxBytes = Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES;
 
     private int electionTimeoutMs;
     private int requestTimeoutMs;
@@ -112,6 +113,7 @@ public final class RaftClientTestContext {
 
     public static final class Builder {
         static final int DEFAULT_ELECTION_TIMEOUT_MS = 10000;
+        static final int DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES = 8 * 1024 * 1024;
 
         private static final RecordSerde<String> SERDE = new StringSerde();
         private static final TopicPartition METADATA_PARTITION = new TopicPartition("metadata", 0);
@@ -136,6 +138,7 @@ public final class RaftClientTestContext {
         private int requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
         private int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;
         private int appendLingerMs = DEFAULT_APPEND_LINGER_MS;
+        private int replicaFetchResponseMaxBytes = DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES;
         private MemoryPool memoryPool = MemoryPool.NONE;
 
         public Builder(int localId, Set<Integer> voters) {
@@ -226,7 +229,7 @@ public final class RaftClientTestContext {
             Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
                 .collect(Collectors.toMap(id -> id, RaftClientTestContext::mockAddress));
             RaftConfig raftConfig = new RaftConfig(voterAddressMap, requestTimeoutMs, RETRY_BACKOFF_MS, electionTimeoutMs,
-                    ELECTION_BACKOFF_MAX_MS, FETCH_TIMEOUT_MS, appendLingerMs);
+                    ELECTION_BACKOFF_MAX_MS, FETCH_TIMEOUT_MS, appendLingerMs, replicaFetchResponseMaxBytes);
 
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
                 SERDE,
@@ -957,7 +960,7 @@ public final class RaftClientTestContext {
         assertTrue(
             message.data() instanceof FetchRequestData, "Unexpected request type " + message.data());
         FetchRequestData request = (FetchRequestData) message.data();
-        assertEquals(KafkaRaftClient.MAX_FETCH_SIZE_BYTES, request.maxBytes());
+        assertEquals(replicaFetchMaxBytes, request.maxBytes());
         assertEquals(fetchMaxWaitMs, request.maxWaitMs());
 
         assertEquals(1, request.topics().size());

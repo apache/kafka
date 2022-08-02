@@ -52,6 +52,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 final public class KafkaRaftClientSnapshotTest {
+
+
     @Test
     public void testLeaderListenerNotified() throws Exception {
         int localId = 0;
@@ -485,7 +487,7 @@ final public class KafkaRaftClientSnapshotTest {
                 context.metadataPartition,
                 epoch,
                 new OffsetAndEpoch(0, 0),
-                Integer.MAX_VALUE,
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES,
                 0
             )
         );
@@ -510,7 +512,7 @@ final public class KafkaRaftClientSnapshotTest {
                 topicPartition,
                 epoch,
                 new OffsetAndEpoch(0, 0),
-                Integer.MAX_VALUE,
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES,
                 0
             )
         );
@@ -549,7 +551,7 @@ final public class KafkaRaftClientSnapshotTest {
                 context.metadataPartition,
                 epoch,
                 snapshotId,
-                Integer.MAX_VALUE,
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES,
                 0
             )
         );
@@ -632,7 +634,7 @@ final public class KafkaRaftClientSnapshotTest {
                 context.metadataPartition,
                 epoch,
                 snapshotId,
-                Integer.MAX_VALUE,
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES,
                 responseBuffer.position()
             )
         );
@@ -666,7 +668,7 @@ final public class KafkaRaftClientSnapshotTest {
                 context.metadataPartition,
                 epoch,
                 snapshotId,
-                Integer.MAX_VALUE,
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES,
                 0
             )
         );
@@ -706,7 +708,7 @@ final public class KafkaRaftClientSnapshotTest {
                 context.metadataPartition,
                 epoch,
                 snapshotId,
-                Integer.MAX_VALUE,
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES,
                 -1
             )
         );
@@ -724,7 +726,7 @@ final public class KafkaRaftClientSnapshotTest {
                 context.metadataPartition,
                 epoch,
                 snapshotId,
-                Integer.MAX_VALUE,
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES,
                 snapshot.sizeInBytes()
             )
         );
@@ -751,7 +753,7 @@ final public class KafkaRaftClientSnapshotTest {
                 context.metadataPartition,
                 epoch - 1,
                 snapshotId,
-                Integer.MAX_VALUE,
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES,
                 0
             )
         );
@@ -778,7 +780,7 @@ final public class KafkaRaftClientSnapshotTest {
                 context.metadataPartition,
                 epoch + 1,
                 snapshotId,
-                Integer.MAX_VALUE,
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES,
                 0
             )
         );
@@ -880,7 +882,7 @@ final public class KafkaRaftClientSnapshotTest {
                 snapshotRequest,
                 context.metadataPartition,
                 localId,
-                Integer.MAX_VALUE
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset, request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch, request.snapshotId().epoch());
@@ -951,7 +953,7 @@ final public class KafkaRaftClientSnapshotTest {
                 snapshotRequest,
                 context.metadataPartition,
                 localId,
-                Integer.MAX_VALUE
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset, request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch, request.snapshotId().epoch());
@@ -987,7 +989,7 @@ final public class KafkaRaftClientSnapshotTest {
                 snapshotRequest,
                 context.metadataPartition,
                 localId,
-                Integer.MAX_VALUE
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset, request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch, request.snapshotId().epoch());
@@ -1054,7 +1056,7 @@ final public class KafkaRaftClientSnapshotTest {
                 snapshotRequest,
                 context.metadataPartition,
                 localId,
-                Integer.MAX_VALUE
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset, request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch, request.snapshotId().epoch());
@@ -1112,7 +1114,7 @@ final public class KafkaRaftClientSnapshotTest {
                 snapshotRequest,
                 context.metadataPartition,
                 localId,
-                Integer.MAX_VALUE
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset, request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch, request.snapshotId().epoch());
@@ -1169,7 +1171,7 @@ final public class KafkaRaftClientSnapshotTest {
                 snapshotRequest,
                 context.metadataPartition,
                 localId,
-                Integer.MAX_VALUE
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset, request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch, request.snapshotId().epoch());
@@ -1226,7 +1228,7 @@ final public class KafkaRaftClientSnapshotTest {
                 snapshotRequest,
                 context.metadataPartition,
                 localId,
-                Integer.MAX_VALUE
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset, request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch, request.snapshotId().epoch());
@@ -1258,7 +1260,7 @@ final public class KafkaRaftClientSnapshotTest {
                 snapshotRequest,
                 context.metadataPartition,
                 localId,
-                Integer.MAX_VALUE
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset, request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch, request.snapshotId().epoch());
@@ -1293,7 +1295,7 @@ final public class KafkaRaftClientSnapshotTest {
                 snapshotRequest,
                 context.metadataPartition,
                 localId,
-                Integer.MAX_VALUE
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset, request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch, request.snapshotId().epoch());
@@ -1340,7 +1342,7 @@ final public class KafkaRaftClientSnapshotTest {
                 snapshotRequest,
                 context.metadataPartition,
                 localId,
-                Integer.MAX_VALUE
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset, request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch, request.snapshotId().epoch());
@@ -1404,7 +1406,7 @@ final public class KafkaRaftClientSnapshotTest {
                 snapshotRequest,
                 context.metadataPartition,
                 localId,
-                Integer.MAX_VALUE
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES
         ).get();
         assertEquals(snapshotId.offset, request.snapshotId().endOffset());
         assertEquals(snapshotId.epoch, request.snapshotId().epoch());
@@ -1461,7 +1463,7 @@ final public class KafkaRaftClientSnapshotTest {
                 context.metadataPartition,
                 epoch,
                 new OffsetAndEpoch(0, 0),
-                Integer.MAX_VALUE,
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES,
                 0
             )
         );
@@ -1475,7 +1477,7 @@ final public class KafkaRaftClientSnapshotTest {
                 context.metadataPartition,
                 epoch,
                 new OffsetAndEpoch(0, 0),
-                Integer.MAX_VALUE,
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES,
                 0
             )
         );
@@ -1489,7 +1491,7 @@ final public class KafkaRaftClientSnapshotTest {
                 context.metadataPartition,
                 epoch,
                 new OffsetAndEpoch(0, 0),
-                Integer.MAX_VALUE,
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES,
                 0
             )
         );
@@ -1503,7 +1505,7 @@ final public class KafkaRaftClientSnapshotTest {
                 context.metadataPartition,
                 epoch,
                 new OffsetAndEpoch(0, 0),
-                Integer.MAX_VALUE,
+                RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES,
                 0
             )
         );
@@ -1648,7 +1650,8 @@ final public class KafkaRaftClientSnapshotTest {
                     .setCurrentLeaderEpoch(epoch)
                     .setSnapshotId(snapshotId)
                     .setPosition(position);
-            }
+            },
+            RaftClientTestContext.Builder.DEFAULT_REPLICA_FETCH_RESPONSE_MAX_BYTES
         );
 
         return request.setMaxBytes(maxBytes);

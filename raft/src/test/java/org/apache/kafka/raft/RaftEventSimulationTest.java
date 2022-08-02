@@ -104,6 +104,7 @@ public class RaftEventSimulationTest {
     private static final int REQUEST_TIMEOUT_MS = 3000;
     private static final int FETCH_MAX_WAIT_MS = 100;
     private static final int LINGER_MS = 0;
+    private static final int REPLICA_FETCH_MAX_BYTES = 8 * 1024 * 1024;
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canElectInitialLeader(
@@ -720,13 +721,13 @@ public class RaftEventSimulationTest {
             Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
                 .collect(Collectors.toMap(id -> id, Cluster::nodeAddress));
             RaftConfig raftConfig = new RaftConfig(voterAddressMap, REQUEST_TIMEOUT_MS, RETRY_BACKOFF_MS, ELECTION_TIMEOUT_MS,
-                    ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, LINGER_MS);
+                    ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, LINGER_MS, REPLICA_FETCH_MAX_BYTES);
             Metrics metrics = new Metrics(time);
 
             persistentState.log.reopen();
 
             IntSerde serde = new IntSerde();
-            MemoryPool memoryPool = new BatchMemoryPool(2, KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
+            MemoryPool memoryPool = new BatchMemoryPool(2, REPLICA_FETCH_MAX_BYTES);
 
             KafkaRaftClient<Integer> client = new KafkaRaftClient<>(
                 serde,
