@@ -36,7 +36,6 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -68,8 +67,9 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_8;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_9;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.expect;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class RackAwarenessStreamsPartitionAssignorTest {
 
@@ -126,16 +126,17 @@ public class RackAwarenessStreamsPartitionAssignorTest {
     private StreamsConfig streamsConfig = new StreamsConfig(configProps());
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
     private TopologyMetadata topologyMetadata = new TopologyMetadata(builder, streamsConfig);
-    private final StreamsMetadataState streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
+    private final StreamsMetadataState streamsMetadataState = mock(StreamsMetadataState.class);
     private final Map<String, ConsumerPartitionAssignor.Subscription> subscriptions = new HashMap<>();
     private final MockTime time = new MockTime();
 
+    @SuppressWarnings("unchecked")
     private Map<String, Object> configProps() {
         final Map<String, Object> configurationMap = new HashMap<>();
         configurationMap.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
         configurationMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, USER_END_POINT);
         final ReferenceContainer referenceContainer = new ReferenceContainer();
-        referenceContainer.mainConsumer = EasyMock.mock(Consumer.class);
+        referenceContainer.mainConsumer = (Consumer<byte[], byte[]>) mock(Consumer.class);
         referenceContainer.adminClient = adminClient;
         referenceContainer.taskManager = taskManager;
         referenceContainer.streamsMetadataState = streamsMetadataState;
@@ -154,7 +155,6 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         streamsConfig = new StreamsConfig(configMap);
         topologyMetadata = new TopologyMetadata(builder, streamsConfig);
         partitionAssignor.configure(configMap);
-        EasyMock.replay(taskManager, adminClient);
 
         overwriteInternalTopicManagerWithMock();
     }
@@ -165,34 +165,31 @@ public class RackAwarenessStreamsPartitionAssignorTest {
     }
 
     private void createMockTaskManager(final Map<TaskId, Long> taskOffsetSums) {
-        taskManager = EasyMock.createNiceMock(TaskManager.class);
-        expect(taskManager.topologyMetadata()).andStubReturn(topologyMetadata);
-        expect(taskManager.getTaskOffsetSums()).andReturn(taskOffsetSums).anyTimes();
-        expect(taskManager.processId()).andReturn(UUID_1).anyTimes();
+        taskManager = mock(TaskManager.class);
+        when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
+        when(taskManager.getTaskOffsetSums()).thenReturn(taskOffsetSums);
+        when(taskManager.processId()).thenReturn(UUID_1);
         topologyMetadata.buildAndRewriteTopology();
     }
 
     // If you don't care about setting the end offsets for each specific topic partition, the helper method
     // getTopicPartitionOffsetMap is useful for building this input map for all partitions
     private void createMockAdminClient(final Map<TopicPartition, Long> changelogEndOffsets) {
-        adminClient = EasyMock.createMock(AdminClient.class);
+        adminClient = mock(AdminClient.class);
 
-        final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
+        final ListOffsetsResult result = mock(ListOffsetsResult.class);
         final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
         allFuture.complete(changelogEndOffsets.entrySet().stream().collect(Collectors.toMap(
                 Map.Entry::getKey,
                 t -> {
-                    final ListOffsetsResult.ListOffsetsResultInfo info = EasyMock.createNiceMock(ListOffsetsResult.ListOffsetsResultInfo.class);
-                    expect(info.offset()).andStubReturn(t.getValue());
-                    EasyMock.replay(info);
+                    final ListOffsetsResult.ListOffsetsResultInfo info = mock(ListOffsetsResult.ListOffsetsResultInfo.class);
+                    when(info.offset()).thenReturn(t.getValue());
                     return info;
                 }))
         );
 
-        expect(adminClient.listOffsets(anyObject())).andStubReturn(result);
-        expect(result.all()).andStubReturn(allFuture);
-
-        EasyMock.replay(result);
+        when(adminClient.listOffsets(any())).thenReturn(result);
+        when(result.all()).thenReturn(allFuture);
     }
 
     private void overwriteInternalTopicManagerWithMock() {
