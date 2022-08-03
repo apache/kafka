@@ -51,7 +51,7 @@ import scala.jdk.CollectionConverters._
 @Tag("integration")
 class KRaftClusterTest {
   val log = LoggerFactory.getLogger(classOf[KRaftClusterTest])
-  val log2 = LoggerFactory.getLogger(classOf[KRaftClusterTest].getCanonicalName() + "2")
+  val log2 = LoggerFactory.getLogger(classOf[KRaftClusterTest].getCanonicalName + "2")
 
   @Test
   def testCreateClusterAndClose(): Unit = {
@@ -411,7 +411,7 @@ class KRaftClusterTest {
           Optional.of(new NewPartitionReassignment(Arrays.asList(3, 2, 0, 1))))
         admin.alterPartitionReassignments(reassignments).all().get()
         TestUtils.waitUntilTrue(
-          () => admin.listPartitionReassignments().reassignments().get().isEmpty(),
+          () => admin.listPartitionReassignments().reassignments().get().isEmpty,
           "The reassignment never completed.")
         var currentMapping: Seq[Seq[Int]] = Seq()
         val expectedMapping = Seq(Seq(2, 1, 0), Seq(0, 1, 2), Seq(2, 3), Seq(3, 2, 0, 1))
@@ -475,7 +475,7 @@ class KRaftClusterTest {
                                   expectedAbsent: Seq[String]): Unit = {
     val topicsNotFound = new util.HashSet[String]
     var extraTopics: mutable.Set[String] = null
-    expectedPresent.foreach(topicsNotFound.add(_))
+    expectedPresent.foreach(topicsNotFound.add)
     TestUtils.waitUntilTrue(() => {
       admin.listTopics().names().get().forEach(name => topicsNotFound.remove(name))
       extraTopics = admin.listTopics().names().get().asScala.filter(expectedAbsent.contains(_))
@@ -619,29 +619,29 @@ class KRaftClusterTest {
             new ApiError(INVALID_REQUEST, "APPEND operation is not allowed for the BROKER_LOGGER resource")),
           incrementalAlter(admin, Seq(
             (broker2, Seq(
-              new AlterConfigOp(new ConfigEntry(log.getName(), "TRACE"), OpType.SET),
-              new AlterConfigOp(new ConfigEntry(log2.getName(), "TRACE"), OpType.SET))),
+              new AlterConfigOp(new ConfigEntry(log.getName, "TRACE"), OpType.SET),
+              new AlterConfigOp(new ConfigEntry(log2.getName, "TRACE"), OpType.SET))),
             (broker3, Seq(
-              new AlterConfigOp(new ConfigEntry(log.getName(), "TRACE"), OpType.APPEND),
-              new AlterConfigOp(new ConfigEntry(log2.getName(), "TRACE"), OpType.APPEND))))))
+              new AlterConfigOp(new ConfigEntry(log.getName, "TRACE"), OpType.APPEND),
+              new AlterConfigOp(new ConfigEntry(log2.getName, "TRACE"), OpType.APPEND))))))
 
         validateConfigs(admin, Map(broker2 -> Seq(
-          (log.getName(), "TRACE"),
-          (log2.getName(), "TRACE"))))
+          (log.getName, "TRACE"),
+          (log2.getName, "TRACE"))))
 
         assertEquals(Seq(ApiError.NONE,
           new ApiError(INVALID_REQUEST, "SUBTRACT operation is not allowed for the BROKER_LOGGER resource")),
           incrementalAlter(admin, Seq(
             (broker2, Seq(
-              new AlterConfigOp(new ConfigEntry(log.getName(), ""), OpType.DELETE),
-              new AlterConfigOp(new ConfigEntry(log2.getName(), ""), OpType.DELETE))),
+              new AlterConfigOp(new ConfigEntry(log.getName, ""), OpType.DELETE),
+              new AlterConfigOp(new ConfigEntry(log2.getName, ""), OpType.DELETE))),
             (broker3, Seq(
-              new AlterConfigOp(new ConfigEntry(log.getName(), "TRACE"), OpType.SUBTRACT),
-              new AlterConfigOp(new ConfigEntry(log2.getName(), "TRACE"), OpType.SUBTRACT))))))
+              new AlterConfigOp(new ConfigEntry(log.getName, "TRACE"), OpType.SUBTRACT),
+              new AlterConfigOp(new ConfigEntry(log2.getName, "TRACE"), OpType.SUBTRACT))))))
 
         validateConfigs(admin, Map(broker2 -> Seq(
-          (log.getName(), initialLog4j.get(broker2).get.get(log.getName())),
-          (log2.getName(), initialLog4j.get(broker2).get.get(log2.getName())))))
+          (log.getName, initialLog4j(broker2).get(log.getName)),
+          (log2.getName, initialLog4j(broker2).get(log2.getName)))))
       } finally {
         admin.close()
       }

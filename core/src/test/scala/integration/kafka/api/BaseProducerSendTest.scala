@@ -431,9 +431,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         "value".getBytes(StandardCharsets.UTF_8))
       for (_ <- 0 until 50) {
         val responses = (0 until numRecords) map (_ => producer.send(record))
-        assertTrue(responses.forall(!_.isDone()), "No request is complete.")
+        assertTrue(responses.forall(!_.isDone), "No request is complete.")
         producer.flush()
-        assertTrue(responses.forall(_.isDone()), "All requests are complete.")
+        assertTrue(responses.forall(_.isDone), "All requests are complete.")
       }
     } finally {
       producer.close()
@@ -456,7 +456,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     for (_ <- 0 until 50) {
       val producer = createProducer(lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
       val responses = (0 until numRecords) map (_ => producer.send(record0))
-      assertTrue(responses.forall(!_.isDone()), "No request is complete.")
+      assertTrue(responses.forall(!_.isDone), "No request is complete.")
       producer.close(Duration.ZERO)
       responses.foreach { future =>
         val e = assertThrows(classOf[ExecutionException], () => future.get())
@@ -497,10 +497,10 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         // Only send the records in the first callback since we close the producer in the callback and no records
         // can be sent afterwards.
         val responses = (0 until numRecords) map (i => producer.send(record, new CloseCallback(producer, i == 0)))
-        assertTrue(responses.forall(!_.isDone()), "No request is complete.")
+        assertTrue(responses.forall(!_.isDone), "No request is complete.")
         // flush the messages.
         producer.flush()
-        assertTrue(responses.forall(_.isDone()), "All requests are complete.")
+        assertTrue(responses.forall(_.isDone), "All requests are complete.")
         // Check the messages received by broker.
         TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords)
       } finally {
