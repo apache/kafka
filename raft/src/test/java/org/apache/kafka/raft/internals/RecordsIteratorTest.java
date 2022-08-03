@@ -30,7 +30,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
@@ -42,6 +44,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -60,7 +63,7 @@ public final class RecordsIteratorTest {
     @ParameterizedTest
     @MethodSource("emptyRecords")
     void testEmptyRecords(Records records) {
-        testIterator(Collections.emptyList(), records);
+        testIterator(Collections.emptyList(), records, true);
     }
 
     @Property
@@ -71,7 +74,7 @@ public final class RecordsIteratorTest {
         List<TestBatch<String>> batches = createBatches(seed);
 
         MemoryRecords memRecords = buildRecords(compressionType, batches);
-        testIterator(batches, memRecords);
+        testIterator(batches, memRecords, true);
     }
 
     @Property
@@ -85,18 +88,41 @@ public final class RecordsIteratorTest {
         FileRecords fileRecords = FileRecords.open(TestUtils.tempFile());
         fileRecords.append(memRecords);
 
-        testIterator(batches, fileRecords);
+        testIterator(batches, fileRecords, true);
+    }
+
+    @Property
+    public void testCrcValidation(
+            @ForAll CompressionType compressionType,
+            @ForAll long seed
+    ) throws IOException {
+        List<TestBatch<String>> batches = createBatches(seed);
+        MemoryRecords memRecords = buildRecords(compressionType, batches);
+        // Corrupt the record buffer
+        memRecords.buffer().putInt(DefaultRecordBatch.LAST_OFFSET_DELTA_OFFSET, new Random(seed).nextInt());
+
+        assertThrows(CorruptRecordException.class, () -> testIterator(batches, memRecords, true));
+
+        FileRecords fileRecords = FileRecords.open(TestUtils.tempFile());
+        fileRecords.append(memRecords);
+        assertThrows(CorruptRecordException.class, () -> testIterator(batches, fileRecords, true));
+
+        // Verify check does not trigger when doCrcValidation is false
+        assertDoesNotThrow(() -> testIterator(batches, memRecords, false));
+        assertDoesNotThrow(() -> testIterator(batches, fileRecords, false));
     }
 
     private void testIterator(
         List<TestBatch<String>> expectedBatches,
-        Records records
+        Records records,
+        boolean validateCrc
     ) {
         Set<ByteBuffer> allocatedBuffers = Collections.newSetFromMap(new IdentityHashMap<>());
 
         RecordsIterator<String> iterator = createIterator(
             records,
-            mockBufferSupplier(allocatedBuffers)
+            mockBufferSupplier(allocatedBuffers),
+            validateCrc
         );
 
         for (TestBatch<String> batch : expectedBatches) {
@@ -111,8 +137,12 @@ public final class RecordsIteratorTest {
         assertEquals(Collections.emptySet(), allocatedBuffers);
     }
 
-    static RecordsIterator<String> createIterator(Records records, BufferSupplier bufferSupplier) {
-        return new RecordsIterator<>(records, STRING_SERDE, bufferSupplier, Records.HEADER_SIZE_UP_TO_MAGIC);
+    static RecordsIterator<String> createIterator(
+        Records records,
+        BufferSupplier bufferSupplier,
+        boolean validateCrc
+    ) {
+        return new RecordsIterator<>(records, STRING_SERDE, bufferSupplier, Records.HEADER_SIZE_UP_TO_MAGIC, validateCrc);
     }
 
     static BufferSupplier mockBufferSupplier(Set<ByteBuffer> buffers) {

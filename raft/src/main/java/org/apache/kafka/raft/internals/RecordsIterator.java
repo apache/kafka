@@ -25,6 +25,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.protocol.DataInputStreamReadable;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.DefaultRecordBatch;
@@ -49,17 +50,20 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     // Number of bytes from records read up to now
     private int bytesRead = 0;
     private boolean isClosed = false;
+    private boolean doCrcValidation = false;
 
     public RecordsIterator(
         Records records,
         RecordSerde<T> serde,
         BufferSupplier bufferSupplier,
-        int batchSize
+        int batchSize,
+        boolean doCrcValidation
     ) {
         this.records = records;
         this.serde = serde;
         this.bufferSupplier = bufferSupplier;
         this.batchSize = Math.max(batchSize, Records.HEADER_SIZE_UP_TO_MAGIC);
+        this.doCrcValidation = doCrcValidation;
     }
 
     @Override
@@ -163,7 +167,6 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
 
         if (nextBatches.hasNext()) {
             MutableRecordBatch nextBatch = nextBatches.next();
-
             // Update the buffer position to reflect the read batch
             allocatedBuffer.ifPresent(buffer -> buffer.position(buffer.position() + nextBatch.sizeInBytes()));
 
@@ -179,8 +182,13 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
         return Optional.empty();
     }
 
-    private Batch<T> readBatch(DefaultRecordBatch batch) {
+    private Batch<T> readBatch(DefaultRecordBatch batch) throws CorruptRecordException {
         final Batch<T> result;
+        if (doCrcValidation) {
+            // Perform a CRC validity check on this block.
+            batch.ensureValid();
+        }
+
         if (batch.isControlBatch()) {
             result = Batch.control(
                 batch.baseOffset(),
