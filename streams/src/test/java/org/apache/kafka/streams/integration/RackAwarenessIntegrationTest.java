@@ -57,7 +57,6 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
@@ -144,7 +143,7 @@ public class RackAwarenessIntegrationTest {
         createAndStart(clientTags2, clientTagKeys, numberOfStandbyReplicas);
 
         waitUntilAllKafkaStreamsClientsAreRunning();
-        assertTrue(isIdealTaskDistributionReachedForTags(clientTagKeys));
+        waitForCondition(() -> isIdealTaskDistributionReachedForTags(clientTagKeys), "not all tags are evenly distributed");
 
         stopKafkaStreamsInstanceWithIndex(0);
 
@@ -206,7 +205,7 @@ public class RackAwarenessIntegrationTest {
         waitUntilAllKafkaStreamsClientsAreRunning();
 
         waitForCondition(() -> isIdealTaskDistributionReachedForTags(singletonList(TAG_ZONE)), "not all tags are evenly distributed");
-        waitForCondition(() -> isIdealTaskDistributionReachedForTags(singletonList(TAG_CLUSTER)), "not all tags are evenly distributed");
+        waitForCondition(() -> isPartialTaskDistributionReachedForTags(singletonList(TAG_CLUSTER)), "not all tags are evenly distributed");
     }
 
     private void stopKafkaStreamsInstanceWithIndex(final int index) {
