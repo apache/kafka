@@ -43,6 +43,7 @@ import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
@@ -116,9 +117,11 @@ public class MirrorSourceConnector extends SourceConnector {
         replicationFactor = config.replicationFactor();
         sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
         targetAdminClient = AdminClient.create(config.targetAdminConfig());
-        scheduler = new Scheduler(MirrorSourceConnector.class, config.adminTimeout());
-        scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
-        scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
+        // Number of threads is 3, because there are 2 tasks affecting the source cluster, which can block longer, and 1 thread is given for the other tasks
+        scheduler = new Scheduler(MirrorSourceConnector.class, config.adminTimeout(), 3);
+        Duration sourceClusterTaskStartTimeout = config.sourceClusterTaskStartTimeout();
+        scheduler.executeWithTimeout(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic", sourceClusterTaskStartTimeout);
+        scheduler.executeWithTimeout(this::loadTopicPartitions, "loading initial set of topic-partitions", sourceClusterTaskStartTimeout);
         scheduler.execute(this::computeAndCreateTopicPartitions, "creating downstream topic-partitions");
         scheduler.execute(this::refreshKnownTargetTopics, "refreshing known target topics");
         scheduler.scheduleRepeating(this::syncTopicAcls, config.syncTopicAclsInterval(), "syncing topic ACLs");

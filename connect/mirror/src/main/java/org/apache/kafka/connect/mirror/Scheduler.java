@@ -30,17 +30,22 @@ class Scheduler implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(Scheduler.class);
 
     private final String name;
-    private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+    private final ScheduledExecutorService executor;
     private final Duration timeout;
     private boolean closed = false;
 
-    Scheduler(String name, Duration timeout) {
+    Scheduler(String name, Duration timeout, int numberOfThreads) {
         this.name = name;
         this.timeout = timeout;
+        executor = Executors.newScheduledThreadPool(numberOfThreads);
     }
 
-    Scheduler(Class<?> clazz, Duration timeout) {
-        this("Scheduler for " + clazz.getSimpleName(), timeout);
+    Scheduler(Class clazz, Duration timeout, int numberOfThreads) {
+        this("Scheduler for " + clazz.getSimpleName(), timeout, numberOfThreads);
+    }
+
+    Scheduler(Class clazz, Duration timeout) {
+        this("Scheduler for " + clazz.getSimpleName(), timeout, 1);
     }
 
     void scheduleRepeating(Task task, Duration interval, String description) {
@@ -58,7 +63,7 @@ class Scheduler implements AutoCloseable {
             interval.toMillis(), TimeUnit.MILLISECONDS);
     }
 
-    void execute(Task task, String description) {
+    void executeWithTimeout(Task task, String description, Duration timeout) {
         try {
             executor.submit(() -> executeThread(task, description)).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
@@ -68,7 +73,11 @@ class Scheduler implements AutoCloseable {
         } catch (Throwable e) {
             LOG.error("{} caught exception in task: {}", name, description, e);
         }
-    } 
+    }
+
+    void execute(Task task, String description) {
+        executeWithTimeout(task, description, timeout);
+    }
 
     public void close() {
         closed = true;

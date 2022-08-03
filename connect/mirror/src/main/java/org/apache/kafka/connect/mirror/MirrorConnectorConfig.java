@@ -203,6 +203,10 @@ public class MirrorConnectorConfig extends AbstractConfig {
             + " properties to replicate.";
     public static final Class<?> CONFIG_PROPERTY_FILTER_CLASS_DEFAULT = DefaultConfigPropertyFilter.class;
 
+    private static final String SOURCE_CLUSTER_START_TASK_TIMEOUT_MILLISECOND_CONFIG = "source.cluster.start.task.timeout";
+    private static final String SOURCE_CLUSTER_START_TASK_TIMEOUT_MILLISECOND_DOC = "Milliseconds to wait for tasks that affects source cluster at startup";
+    private static final long SOURCE_CLUSTER_START_TASK_TIMEOUT_MILLISECOND_DEFAULT = 15000;
+
     public static final String OFFSET_LAG_MAX = "offset.lag.max";
     private static final String OFFSET_LAG_MAX_DOC = "How out-of-sync a remote partition can be before it is resynced.";
     public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
@@ -244,6 +248,10 @@ public class MirrorConnectorConfig extends AbstractConfig {
 
     Duration adminTimeout() {
         return Duration.ofMillis(getLong(ADMIN_TASK_TIMEOUT_MILLIS));
+    }
+
+    Duration sourceClusterTaskStartTimeout() {
+        return Duration.ofMillis(getLong(SOURCE_CLUSTER_START_TASK_TIMEOUT_MILLISECOND_CONFIG));
     }
 
     Map<String, Object> sourceProducerConfig() {
@@ -720,6 +728,11 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     in(Utils.enumOptions(SecurityProtocol.class)),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .define(SOURCE_CLUSTER_START_TASK_TIMEOUT_MILLISECOND_CONFIG,
+                    ConfigDef.Type.LONG,
+                    SOURCE_CLUSTER_START_TASK_TIMEOUT_MILLISECOND_DEFAULT,
+                    ConfigDef.Importance.MEDIUM,
+                    SOURCE_CLUSTER_START_TASK_TIMEOUT_MILLISECOND_DOC)
             .withClientSslSupport()
             .withClientSaslSupport();
 }
