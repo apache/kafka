@@ -38,6 +38,8 @@ import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -46,7 +48,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -71,6 +72,7 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RackAwarenessStreamsPartitionAssignorTest {
 
     private final List<PartitionInfo> infos = asList(
@@ -160,14 +162,9 @@ public class RackAwarenessStreamsPartitionAssignorTest {
     }
 
     // Useful for tests that don't care about the task offset sums
-    private void createMockTaskManager(final Set<TaskId> activeTasks) {
-        createMockTaskManager(getTaskOffsetSums(activeTasks));
-    }
-
-    private void createMockTaskManager(final Map<TaskId, Long> taskOffsetSums) {
+    private void createMockTaskManager() {
         taskManager = mock(TaskManager.class);
         when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
-        when(taskManager.getTaskOffsetSums()).thenReturn(taskOffsetSums);
         when(taskManager.processId()).thenReturn(UUID_1);
         topologyMetadata.buildAndRewriteTopology();
     }
@@ -211,7 +208,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
     public void shouldDistributeWithMaximumNumberOfClientTags() {
         setupTopology(3, 2);
 
-        createMockTaskManager(EMPTY_TASKS);
+        createMockTaskManager();
         createMockAdminClient(getTopicPartitionOffsetsMap(
             Arrays.asList(APPLICATION_ID + "-store2-changelog", APPLICATION_ID + "-store3-changelog", APPLICATION_ID + "-store4-changelog"),
             Arrays.asList(3, 3, 3)));
@@ -255,7 +252,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
     public void shouldDistributeOnDistinguishingTagSubset() {
         setupTopology(3, 0);
 
-        createMockTaskManager(EMPTY_TASKS);
+        createMockTaskManager();
         createMockAdminClient(getTopicPartitionOffsetsMap(
             Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
             Arrays.asList(3, 3, 3)));
@@ -302,7 +299,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
     public void shouldDistributeWithMultipleStandbys() {
         setupTopology(3, 0);
 
-        createMockTaskManager(EMPTY_TASKS);
+        createMockTaskManager();
         createMockAdminClient(getTopicPartitionOffsetsMap(
             Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
             Arrays.asList(3, 3, 3)));
@@ -367,7 +364,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
     public void shouldDistributePartiallyWhenDoNotHaveEnoughClients() {
         setupTopology(3, 0);
 
-        createMockTaskManager(EMPTY_TASKS);
+        createMockTaskManager();
         createMockAdminClient(getTopicPartitionOffsetsMap(
             Arrays.asList(APPLICATION_ID + "-store0-changelog", APPLICATION_ID + "-store1-changelog", APPLICATION_ID + "-store2-changelog"),
             Arrays.asList(3, 3, 3)));
