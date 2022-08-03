@@ -54,6 +54,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.ArrayList;
@@ -141,12 +142,13 @@ public class AbstractHerderTest {
     private final String connector = "connector";
     private final ConnectorClientConfigOverridePolicy noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
 
-    private final Worker worker = mock(Worker.class);
-    private final WorkerConfigTransformer transformer = mock(WorkerConfigTransformer.class);
-    private final Plugins plugins = mock(Plugins.class);
-    private final ClassLoader classLoader = mock(ClassLoader.class);
-    private final ConfigBackingStore configStore = mock(ConfigBackingStore.class);
-    private final StatusBackingStore statusStore = mock(StatusBackingStore.class);
+    @Mock private Worker worker;
+    @Mock private WorkerConfigTransformer transformer;
+    @Mock private ConfigBackingStore configStore;
+    @Mock private StatusBackingStore statusStore;
+    @Mock private ClassLoader classLoader;
+    @Mock private Plugins plugins;
+
     private ClassLoader loader;
     private Connector insConnector;
 
@@ -171,7 +173,7 @@ public class AbstractHerderTest {
     }
 
     @Test
-    public void connectorStatus() {
+    public void testConnectorStatus() {
         ConnectorTaskId taskId = new ConnectorTaskId(connector, 0);
 
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
@@ -201,15 +203,13 @@ public class AbstractHerderTest {
     }
 
     @Test
-    public void taskStatus() {
+    public void testTaskStatus() {
         ConnectorTaskId taskId = new ConnectorTaskId("connector", 0);
         String workerId = "workerId";
 
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
-
-        when(herder.generation()).thenReturn(5);
 
         final ArgumentCaptor<TaskStatus> taskStatusArgumentCaptor = ArgumentCaptor.forClass(TaskStatus.class);
         doNothing().when(statusStore).putSafe(taskStatusArgumentCaptor.capture());
