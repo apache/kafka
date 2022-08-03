@@ -40,7 +40,6 @@ import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.lang.AssertionError;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -295,7 +294,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         subscriptions.put(consumer6, getSubscription(UUID_6, EMPTY_TASKS, clientTags2));
         hostTags.put(consumer6, clientTags2);
 
-        Map<String, ConsumerPartitionAssignor.Assignment> assignments = partitionAssignor
+        final Map<String, ConsumerPartitionAssignor.Assignment> assignments = partitionAssignor
             .assign(metadata, new ConsumerPartitionAssignor.GroupSubscription(subscriptions))
             .groupAssignment();
 
@@ -360,7 +359,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         subscriptions.put(consumer9, getSubscription(UUID_9, EMPTY_TASKS, clientTags9));
         hostTags.put(consumer9, clientTags9);
 
-        Map<String, ConsumerPartitionAssignor.Assignment> assignments = partitionAssignor
+        final Map<String, ConsumerPartitionAssignor.Assignment> assignments = partitionAssignor
             .assign(metadata, new ConsumerPartitionAssignor.GroupSubscription(subscriptions))
             .groupAssignment();
 
@@ -410,7 +409,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         subscriptions.put(consumer6, getSubscription(UUID_6, EMPTY_TASKS, clientTags6));
         hostTags.put(consumer6, clientTags6);
 
-        Map<String, ConsumerPartitionAssignor.Assignment> assignments = partitionAssignor
+        final Map<String, ConsumerPartitionAssignor.Assignment> assignments = partitionAssignor
             .assign(metadata, new ConsumerPartitionAssignor.GroupSubscription(subscriptions))
             .groupAssignment();
 
