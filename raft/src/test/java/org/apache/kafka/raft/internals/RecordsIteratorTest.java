@@ -98,8 +98,12 @@ public final class RecordsIteratorTest {
     ) throws IOException {
         List<TestBatch<String>> batches = createBatches(seed);
         MemoryRecords memRecords = buildRecords(compressionType, batches);
-        // Corrupt the record buffer
-        memRecords.buffer().putInt(DefaultRecordBatch.LAST_OFFSET_DELTA_OFFSET, new Random(seed).nextInt());
+        // Read the Batch CRC for the first batch from the buffer
+        ByteBuffer readBuf = memRecords.buffer().asReadOnlyBuffer();
+        readBuf.position(DefaultRecordBatch.CRC_OFFSET);
+        Integer actualCrc = readBuf.getInt();
+        // Corrupt the CRC on the first batch
+        memRecords.buffer().putInt(DefaultRecordBatch.CRC_OFFSET, actualCrc + 1);
 
         assertThrows(CorruptRecordException.class, () -> testIterator(batches, memRecords, true));
 
@@ -110,6 +114,15 @@ public final class RecordsIteratorTest {
         // Verify check does not trigger when doCrcValidation is false
         assertDoesNotThrow(() -> testIterator(batches, memRecords, false));
         assertDoesNotThrow(() -> testIterator(batches, fileRecords, false));
+
+        // Fix the corruption
+        memRecords.buffer().putInt(DefaultRecordBatch.CRC_OFFSET, actualCrc);
+
+        // Verify check does not trigger when the corruption is fixed
+        assertDoesNotThrow(() -> testIterator(batches, memRecords, true));
+        FileRecords moreFileRecords = FileRecords.open(TestUtils.tempFile());
+        moreFileRecords.append(memRecords);
+        assertDoesNotThrow(() -> testIterator(batches, moreFileRecords, true));
     }
 
     private void testIterator(

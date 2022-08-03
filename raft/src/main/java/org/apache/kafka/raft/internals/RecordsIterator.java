@@ -42,6 +42,9 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     private final RecordSerde<T> serde;
     private final BufferSupplier bufferSupplier;
     private final int batchSize;
+    // Setting to true will make the RecordsIterator perform a CRC Validation
+    // on the batch header when iterating over them
+    private final boolean doCrcValidation;
 
     private Iterator<MutableRecordBatch> nextBatches = Collections.emptyIterator();
     private Optional<Batch<T>> nextBatch = Optional.empty();
@@ -50,7 +53,6 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     // Number of bytes from records read up to now
     private int bytesRead = 0;
     private boolean isClosed = false;
-    private boolean doCrcValidation = false;
 
     public RecordsIterator(
         Records records,
@@ -183,12 +185,12 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     }
 
     private Batch<T> readBatch(DefaultRecordBatch batch) throws CorruptRecordException {
-        final Batch<T> result;
         if (doCrcValidation) {
-            // Perform a CRC validity check on this block.
+            // Perform a CRC validity check on this batch
             batch.ensureValid();
         }
 
+        final Batch<T> result;
         if (batch.isControlBatch()) {
             result = Batch.control(
                 batch.baseOffset(),
