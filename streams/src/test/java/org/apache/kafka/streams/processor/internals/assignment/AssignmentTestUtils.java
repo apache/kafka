@@ -65,6 +65,9 @@ public final class AssignmentTestUtils {
     public static final UUID UUID_4 = uuidForInt(4);
     public static final UUID UUID_5 = uuidForInt(5);
     public static final UUID UUID_6 = uuidForInt(6);
+    public static final UUID UUID_7 = uuidForInt(7);
+    public static final UUID UUID_8 = uuidForInt(8);
+    public static final UUID UUID_9 = uuidForInt(9);
 
     public static final TopicPartition TP_0_0 = new TopicPartition("topic0", 0);
     public static final TopicPartition TP_0_1 = new TopicPartition("topic0", 1);

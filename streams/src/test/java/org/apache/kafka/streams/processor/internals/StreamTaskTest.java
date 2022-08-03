@@ -2339,7 +2339,7 @@ public class StreamTaskTest {
         // The processor topology is missing the topics
         final ProcessorTopology topology = withSources(emptyList(), mkMap());
 
-        final TopologyException  exception = assertThrows(
+        final TopologyException exception = assertThrows(
             TopologyException.class,
             () -> new StreamTask(
                 taskId,
@@ -2358,7 +2358,7 @@ public class StreamTaskTest {
         );
 
         assertThat(exception.getMessage(), equalTo("Invalid topology: " +
-                "Topic is unknown to the topology. This may happen if different KafkaStreams instances of the same " +
+                "Topic " + topic1 + " is unknown to the topology. This may happen if different KafkaStreams instances of the same " +
                 "application execute different Topologies. Note that Topologies are only identical if all operators " +
                 "are added in the same order."));
     }
