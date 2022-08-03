@@ -39,8 +39,8 @@ import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
-import sun.jvm.hotspot.utilities.AssertionFailure;
 
+import java.lang.AssertionError;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -522,7 +522,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
 
         void addActiveTags(final Map<String, String> activeClientTags) {
             if (!this.activeClientTags.isEmpty()) {
-                throw new AssertionFailure("Found multiple active tasks for " + taskId + ", this should not happen");
+                throw new IllegalStateException("Found multiple active tasks for " + taskId + ", this should not happen");
             }
             this.activeClientTags.putAll(activeClientTags);
         }
