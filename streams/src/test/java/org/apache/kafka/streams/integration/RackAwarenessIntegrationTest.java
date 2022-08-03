@@ -55,8 +55,8 @@ import java.util.stream.Stream;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
@@ -143,13 +143,13 @@ public class RackAwarenessIntegrationTest {
         createAndStart(clientTags2, clientTagKeys, numberOfStandbyReplicas);
 
         waitUntilAllKafkaStreamsClientsAreRunning();
-        assertTrue(isIdealTaskDistributionReachedForTags(clientTagKeys));
+        waitForCondition(() -> isIdealTaskDistributionReachedForTags(clientTagKeys), "not all tags are evenly distributed");
 
         stopKafkaStreamsInstanceWithIndex(0);
 
         waitUntilAllKafkaStreamsClientsAreRunning();
 
-        assertTrue(isIdealTaskDistributionReachedForTags(clientTagKeys));
+        waitForCondition(() -> isIdealTaskDistributionReachedForTags(clientTagKeys), "not all tags are evenly distributed");
     }
 
     @Test
@@ -165,7 +165,7 @@ public class RackAwarenessIntegrationTest {
         createAndStart(buildClientTags(TAG_VALUE_EU_CENTRAL_1B, TAG_VALUE_K8_CLUSTER_1), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
 
         waitUntilAllKafkaStreamsClientsAreRunning();
-        assertTrue(isIdealTaskDistributionReachedForTags(singletonList(TAG_ZONE)));
+        waitForCondition(() -> isIdealTaskDistributionReachedForTags(singletonList(TAG_ZONE)), "not all tags are evenly distributed");
     }
 
     @Test
@@ -186,7 +186,7 @@ public class RackAwarenessIntegrationTest {
         createAndStart(buildClientTags(TAG_VALUE_EU_CENTRAL_1C, TAG_VALUE_K8_CLUSTER_3), asList(TAG_ZONE, TAG_CLUSTER), numberOfStandbyReplicas);
 
         waitUntilAllKafkaStreamsClientsAreRunning();
-        assertTrue(isIdealTaskDistributionReachedForTags(asList(TAG_ZONE, TAG_CLUSTER)));
+        waitForCondition(() -> isIdealTaskDistributionReachedForTags(asList(TAG_ZONE, TAG_CLUSTER)), "not all tags are evenly distributed");
     }
 
     @Test
@@ -204,8 +204,8 @@ public class RackAwarenessIntegrationTest {
 
         waitUntilAllKafkaStreamsClientsAreRunning();
 
-        assertTrue(isIdealTaskDistributionReachedForTags(singletonList(TAG_ZONE)));
-        assertTrue(isPartialTaskDistributionReachedForTags(singletonList(TAG_CLUSTER)));
+        waitForCondition(() -> isIdealTaskDistributionReachedForTags(singletonList(TAG_ZONE)), "not all tags are evenly distributed");
+        waitForCondition(() -> isPartialTaskDistributionReachedForTags(singletonList(TAG_CLUSTER)), "not all tags are evenly distributed");
     }
 
     private void stopKafkaStreamsInstanceWithIndex(final int index) {
