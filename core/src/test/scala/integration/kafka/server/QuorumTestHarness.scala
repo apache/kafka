@@ -76,7 +76,7 @@ class ZooKeeperQuorumImplementation(
 }
 
 class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndVersion],
-                                val controllerServer: ControllerServer,
+                                var controllerServer: ControllerServer,
                                 val metadataDir: File,
                                 val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
                                 val clusterId: String,
@@ -99,6 +99,69 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
   override def shutdown(): Unit = {
     CoreUtils.swallow(raftManager.shutdown(), log)
     CoreUtils.swallow(controllerServer.shutdown(), log)
+  }
+
+  def startController(prevPort: Int): Unit = {
+
+    val props = new Properties()
+    props.putAll(controllerServer.config.originals)
+    // explicitly set the port of any addresses, as we want to re-use the port that
+    // was derived on startup (through the use of port "0") in order to have
+    // existing clients re-connect gracefully
+    props.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:$prevPort")
+    props.setProperty(KafkaConfig.QuorumVotersProp, s"1000@localhost:$prevPort")
+    log.info(s"Setting KRaft-based controller port to $prevPort as part of restart")
+    val config = new KafkaConfig(props)
+
+    val newControllerServer = new ControllerServer(
+      metaProperties = controllerServer.metaProperties,
+      config = config,
+      raftManager = raftManager,
+      time = Time.SYSTEM,
+      metrics = new Metrics(),
+      threadNamePrefix = controllerServer.threadNamePrefix,
+      controllerQuorumVotersFuture = controllerQuorumVotersFuture,
+      configSchema = KafkaRaftServer.configSchema,
+      raftApiVersions = controllerServer.raftApiVersions,
+      bootstrapMetadata = controllerServer.bootstrapMetadata
+    )
+
+    controllerServer = newControllerServer
+    newControllerServer.startup()
+
+  }
+
+  def restartController(): Unit = {
+    val prevPort = controllerQuorumVotersFuture.get().get(1000).
+      asInstanceOf[InetAddressSpec].address.getPort
+    log.info("Restarting the KRaft-based controller")
+    controllerServer.shutdown()
+
+    val props = new Properties()
+    props.putAll(controllerServer.config.originals)
+    // explicitly set the port of any addresses, as we want to re-use the port that
+    // was derived on startup (through the use of port "0") in order to have
+    // existing clients re-connect gracefully
+    props.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:$prevPort")
+    props.setProperty(KafkaConfig.QuorumVotersProp, s"1000@localhost:$prevPort")
+    log.info(s"Setting KRaft-based controller port to $prevPort as part of restart")
+    val config = new KafkaConfig(props)
+
+    val newControllerServer = new ControllerServer(
+      metaProperties = controllerServer.metaProperties,
+      config = config,
+      raftManager = raftManager,
+      time = Time.SYSTEM,
+      metrics = new Metrics(),
+      threadNamePrefix = controllerServer.threadNamePrefix,
+      controllerQuorumVotersFuture = controllerQuorumVotersFuture,
+      configSchema = KafkaRaftServer.configSchema,
+      raftApiVersions = controllerServer.raftApiVersions,
+      bootstrapMetadata = controllerServer.bootstrapMetadata
+    )
+
+    controllerServer = newControllerServer
+    newControllerServer.startup()
   }
 }
 
@@ -170,6 +233,20 @@ abstract class QuorumTestHarness extends Logging {
   def zkConnectOrNull: String = if (isKRaftTest()) null else zkConnect
 
   def controllerServer: ControllerServer = asKRaft().controllerServer
+
+  def controllerServerPort: Int = asKRaft().controllerServer.controllerQuorumVotersFuture.
+    get().get(1000).asInstanceOf[InetAddressSpec].address.getPort
+
+  def restartControllerServer(): Unit = {
+    if (!isKRaftTest()) {
+      throw new UnsupportedOperationException("Non-KRaft tests do not have a controller server")
+    }
+    asKRaft().restartController()
+  }
+
+  def startControllerServer(prevPort: Int): Unit = {
+    asKRaft().startController(prevPort)
+  }
 
   def controllerServers: Seq[ControllerServer] = {
     if (isKRaftTest()) {
