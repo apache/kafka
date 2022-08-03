@@ -24,14 +24,15 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
-import org.apache.kafka.common.metadata.PartitionRecordJsonConverter;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.metadata.PartitionRegistration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,7 +52,7 @@ public class MetadataNodeManagerTest {
     @BeforeEach
     public void setup() throws Exception {
         metadataNodeManager = new MetadataNodeManager();
-        metadataNodeManager.setup();
+        metadataNodeManager.setup("(test)");
     }
 
     @AfterEach
@@ -67,9 +68,9 @@ public class MetadataNodeManagerTest {
             .setBrokerEpoch(2);
         metadataNodeManager.handleMessage(record);
 
-        assertEquals(record.toString(),
+        assertEquals(BrokerRegistration.fromRecord(record),
             metadataNodeManager.getData().root().directory("brokers", "1").file("registration").contents());
-        assertEquals("true",
+        assertEquals(true,
             metadataNodeManager.getData().root().directory("brokers", "1").file("isFenced").contents());
 
         // Unregister broker
@@ -119,9 +120,8 @@ public class MetadataNodeManagerTest {
             .setIsr(Arrays.asList(1, 2, 3));
 
         metadataNodeManager.handleMessage(record);
-        assertEquals(
-            PartitionRecordJsonConverter.write(record, PartitionRecord.HIGHEST_SUPPORTED_VERSION).toPrettyString(),
-            metadataNodeManager.getData().root().directory("topicIds", "GcaQDl2UTsCNs1p9s37XkQ", "0").file("data").contents());
+        assertEquals(new PartitionRegistration(record),
+            metadataNodeManager.getData().root().directory("topicIds", "GcaQDl2UTsCNs1p9s37XkQ", "0").file("registration").contents());
     }
 
     @Test
@@ -223,11 +223,10 @@ public class MetadataNodeManagerTest {
                                            PartitionRecord newPartitionRecord) {
         metadataNodeManager.handleMessage(oldPartitionRecord);
         metadataNodeManager.handleMessage(partitionChangeRecord);
-        assertEquals(
-            PartitionRecordJsonConverter.write(newPartitionRecord, PartitionRecord.HIGHEST_SUPPORTED_VERSION).toPrettyString(),
+        assertEquals(new PartitionRegistration(oldPartitionRecord).merge(partitionChangeRecord),
             metadataNodeManager.getData().root()
                 .directory("topicIds", oldPartitionRecord.topicId().toString(), oldPartitionRecord.partitionId() + "")
-                .file("data").contents()
+                .file("registration").contents()
         );
     }
 
@@ -238,21 +237,21 @@ public class MetadataNodeManagerTest {
             .setBrokerEpoch(2);
         metadataNodeManager.handleMessage(record);
 
-        assertEquals("true",
+        assertEquals(true,
             metadataNodeManager.getData().root().directory("brokers", "1").file("isFenced").contents());
 
         UnfenceBrokerRecord unfenceBrokerRecord = new UnfenceBrokerRecord()
             .setId(1)
             .setEpoch(2);
         metadataNodeManager.handleMessage(unfenceBrokerRecord);
-        assertEquals("false",
+        assertEquals(false,
             metadataNodeManager.getData().root().directory("brokers", "1").file("isFenced").contents());
 
         FenceBrokerRecord fenceBrokerRecord = new FenceBrokerRecord()
             .setId(1)
             .setEpoch(2);
         metadataNodeManager.handleMessage(fenceBrokerRecord);
-        assertEquals("true",
+        assertEquals(true,
             metadataNodeManager.getData().root().directory("brokers", "1").file("isFenced").contents());
     }
 

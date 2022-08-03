@@ -71,6 +71,19 @@
     <allow pkg="org.apache.kafka.clients" />
   </subpackage>
 
+  <subpackage name="shell">
+    <allow pkg="kafka.raft" />
+    <allow pkg="kafka.server" />
+    <allow pkg="kafka.testkit" />
+    <allow pkg="net.sourceforge.argparse4j" />
+    <allow pkg="org.apache.kafka.clients.admin" />
+    <allow pkg="org.apache.kafka.metadata" />
+    <allow pkg="org.apache.kafka.metadata.util" />
+    <allow pkg="org.apache.kafka.raft" />
+    <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.shell" />
+  </subpackage>
+
   <subpackage name="server">
     <subpackage name="builders">
       <allow pkg="kafka" />

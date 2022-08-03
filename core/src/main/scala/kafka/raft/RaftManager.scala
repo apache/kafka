@@ -21,6 +21,8 @@ import java.nio.file.Files
 import java.util
 import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicBoolean
+
 import kafka.log.UnifiedLog
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{KafkaConfig, MetaProperties}
@@ -39,6 +41,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
 import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, LeaderAndEpoch, RaftClient, RaftConfig, RaftRequest, ReplicatedLog}
 import org.apache.kafka.server.common.serialization.RecordSerde
+
 import scala.jdk.CollectionConverters._
 
 object KafkaRaftManager {
@@ -111,6 +114,7 @@ class KafkaRaftManager[T](
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
 ) extends RaftManager[T] with Logging {
 
+  private val closed = new AtomicBoolean(false)
   val apiVersions = new ApiVersions()
   private val raftConfig = new RaftConfig(config)
   private val threadNamePrefix = threadNamePrefixOpt.getOrElse("kafka-raft")
@@ -146,11 +150,13 @@ class KafkaRaftManager[T](
   }
 
   def shutdown(): Unit = {
-    raftIoThread.shutdown()
-    client.close()
-    scheduler.shutdown()
-    netChannel.close()
-    replicatedLog.close()
+    if (!closed.getAndSet(true)) {
+      raftIoThread.shutdown()
+      client.close()
+      scheduler.shutdown()
+      netChannel.close()
+      replicatedLog.close()
+    }
   }
 
   override def register(

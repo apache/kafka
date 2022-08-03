@@ -384,4 +384,4 @@ public final class NodeManager {
     public void waitForShutdown() throws InterruptedException {
         executor.awaitTermination(1, TimeUnit.DAYS);
     }
-};
+}

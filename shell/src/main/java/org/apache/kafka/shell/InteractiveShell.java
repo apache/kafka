@@ -17,6 +17,8 @@
 
 package org.apache.kafka.shell;
 
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metadata.util.ClusterMetadataSource;
 import org.jline.reader.Candidate;
 import org.jline.reader.Completer;
 import org.jline.reader.EndOfFileException;
@@ -83,12 +85,14 @@ public final class InteractiveShell implements AutoCloseable {
     private final History history;
     private final MetadataShellCompleter completer;
     private final LineReader reader;
+    private final ClusterMetadataSource source;
 
-    public InteractiveShell(MetadataNodeManager nodeManager) throws IOException {
-        this.nodeManager = nodeManager;
+    public InteractiveShell(ClusterMetadataSource source) throws Exception {
         TerminalBuilder builder = TerminalBuilder.builder().
             system(true).
             nativeSignals(true);
+        this.nodeManager = new MetadataNodeManager();
+        nodeManager.setup(source);
         this.terminal = builder.build();
         this.parser = new DefaultParser();
         this.history = new DefaultHistory();
@@ -100,9 +104,14 @@ public final class InteractiveShell implements AutoCloseable {
             completer(completer).
             option(LineReader.Option.AUTO_FRESH_LINE, false).
             build();
+        this.source = source;
+        source.start(nodeManager.logListener());
     }
 
-    public void runMainLoop() throws Exception {
+    public void run() throws Exception {
+        System.out.println("Loading...");
+        source.caughtUpFuture().get();
+        System.out.println("Starting...");
         terminal.writer().println("[ Kafka Metadata Shell ]");
         terminal.flush();
         Commands commands = new Commands(true);
@@ -167,6 +176,8 @@ public final class InteractiveShell implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        terminal.close();
+        Utils.closeQuietly(source, "source");
+        Utils.closeQuietly(nodeManager, "nodeManager");
+        Utils.closeQuietly(terminal, "terminal");
     }
 }

@@ -19,14 +19,10 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
-import org.apache.kafka.metadata.util.SnapshotFileReader;
+import org.apache.kafka.metadata.util.KRaftBatchFileReader;
 import org.apache.kafka.metadata.util.SnapshotFileWriter;
-import org.apache.kafka.raft.Batch;
-import org.apache.kafka.raft.BatchReader;
-import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,7 +34,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -89,40 +84,6 @@ public class BootstrapMetadata {
             '}';
     }
 
-    /**
-     * A raft client listener that simply collects all of the commits and snapshots into a mapping of
-     * metadata record type to list of records.
-     */
-    private static class BootstrapListener implements RaftClient.Listener<ApiMessageAndVersion> {
-        private final List<ApiMessageAndVersion> records = new ArrayList<>();
-
-        @Override
-        public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
-            try {
-                while (reader.hasNext()) {
-                    Batch<ApiMessageAndVersion> batch = reader.next();
-                    records.addAll(batch.records());
-                }
-            } finally {
-                reader.close();
-            }
-        }
-
-        @Override
-        public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
-            try {
-                while (reader.hasNext()) {
-                    Batch<ApiMessageAndVersion> batch = reader.next();
-                    for (ApiMessageAndVersion messageAndVersion : batch) {
-                        records.add(messageAndVersion);
-                    }
-                }
-            } finally {
-                reader.close();
-            }
-        }
-    }
-
     public static BootstrapMetadata create(MetadataVersion metadataVersion) {
         return create(metadataVersion, new ArrayList<>());
     }
@@ -165,15 +126,17 @@ public class BootstrapMetadata {
             }
         }
 
-        BootstrapListener listener = new BootstrapListener();
-        try (SnapshotFileReader reader = new SnapshotFileReader(bootstrapPath.toString(), listener)) {
-            reader.startup();
-            reader.caughtUpFuture().get();
-        } catch (ExecutionException e) {
-            throw new Exception("Failed to load snapshot", e.getCause());
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        try (KRaftBatchFileReader reader = new KRaftBatchFileReader.Builder().setPath(bootstrapPath.toString()).build()) {
+            while (reader.hasNext()) {
+                KRaftBatchFileReader.KRaftBatch batch = reader.next();
+                if (!batch.isControl()) {
+                    records.addAll(batch.batch().records());
+                }
+            }
         }
 
-        Optional<FeatureLevelRecord> metadataVersionRecord = listener.records.stream()
+        Optional<FeatureLevelRecord> metadataVersionRecord = records.stream()
             .flatMap(message -> {
                 MetadataRecordType type = MetadataRecordType.fromId(message.message().apiKey());
                 if (!type.equals(MetadataRecordType.FEATURE_LEVEL_RECORD)) {
@@ -189,7 +152,7 @@ public class BootstrapMetadata {
             .findFirst();
 
         if (metadataVersionRecord.isPresent()) {
-            return new BootstrapMetadata(MetadataVersion.fromFeatureLevel(metadataVersionRecord.get().featureLevel()), listener.records);
+            return new BootstrapMetadata(MetadataVersion.fromFeatureLevel(metadataVersionRecord.get().featureLevel()), records);
         } else {
             throw new Exception("Expected a metadata.version to exist in the snapshot " + bootstrapPath + ", but none was found");
         }

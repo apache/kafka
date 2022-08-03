@@ -866,6 +866,7 @@ project(':core') {
     implementation project(':server-common')
     implementation project(':metadata')
     implementation project(':raft')
+    implementation project(':shell')
     implementation project(':storage')
 
     implementation libs.argparse4j
@@ -1801,7 +1802,6 @@ project(':shell') {
     implementation libs.slf4jApi
     implementation project(':server-common')
     implementation project(':clients')
-    implementation project(':core')
     implementation project(':log4j-appender')
     implementation project(':metadata')
     implementation project(':raft')
