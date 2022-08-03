@@ -262,12 +262,11 @@ public class StreamsMetricsImplTest {
     public void shouldGetNewThreadLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
-        final ArgumentCaptor<String> sensorNameArgumentCaptor = setupGetNewSensorTest(metrics, recordingLevel);
+        setupGetNewSensorTest(metrics, recordingLevel);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         final Sensor actualSensor = streamsMetrics.threadLevelSensor(THREAD_ID1, SENSOR_NAME_1, recordingLevel);
 
-        verify(metrics).sensor(sensorNameArgumentCaptor.getValue(), recordingLevel, new Sensor[] {});
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
@@ -288,7 +287,7 @@ public class StreamsMetricsImplTest {
     public void shouldGetNewTaskLevelSensor() {
         final Metrics metrics = mock(Metrics.class);
         final RecordingLevel recordingLevel = RecordingLevel.INFO;
-        final ArgumentCaptor<String> sensorNameArgumentCaptor = setupGetNewSensorTest(metrics, recordingLevel);
+        setupGetNewSensorTest(metrics, recordingLevel);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         final Sensor actualSensor = streamsMetrics.taskLevelSensor(
@@ -298,7 +297,6 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
-        verify(metrics).sensor(sensorNameArgumentCaptor.getValue(), recordingLevel, new Sensor[] {});
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
