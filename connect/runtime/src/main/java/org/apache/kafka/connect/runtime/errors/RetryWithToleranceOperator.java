@@ -166,7 +166,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     protected <V> V execAndRetry(Operation<V> operation) throws Exception {
         int attempt = 0;
         long startTime = time.milliseconds();
-        long deadline = startTime + errorRetryTimeout;
+        long deadline = (errorRetryTimeout >= 0) ? startTime + errorRetryTimeout : Long.MAX_VALUE;
         do {
             try {
                 attempt++;
@@ -255,6 +255,9 @@ public class RetryWithToleranceOperator implements AutoCloseable {
 
     // Visible for testing
     boolean checkRetry(long startTime) {
+        if (errorRetryTimeout < 0) {
+            return true;
+        }
         return (time.milliseconds() - startTime) < errorRetryTimeout;
     }
 

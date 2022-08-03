@@ -199,12 +199,12 @@ public class RetryWithToleranceOperatorTest {
 
     @Test
     public void testExecAndHandleRetriableErrorOnce() throws Exception {
-        execAndHandleRetriableError(1, 300, new RetriableException("Test"));
+        execAndHandleRetriableError(6000, 1, 300, new RetriableException("Test"));
     }
 
     @Test
     public void testExecAndHandleRetriableErrorThrice() throws Exception {
-        execAndHandleRetriableError(3, 2100, new RetriableException("Test"));
+        execAndHandleRetriableError(6000, 3, 2100, new RetriableException("Test"));
     }
 
     @Test
@@ -217,9 +217,14 @@ public class RetryWithToleranceOperatorTest {
         execAndHandleNonRetriableError(3, 0, new Exception("Non Retriable Test"));
     }
 
-    public void execAndHandleRetriableError(int numRetriableExceptionsThrown, long expectedWait, Exception e) throws Exception {
+    @Test
+    public void testExecAndHandleRetriableErrorWithInfiniteRetries() throws Exception {
+        execAndHandleRetriableError(-1, 8, 76500, new RetriableException("Test"));
+    }
+
+    public void execAndHandleRetriableError(long errorRetryTimeout, int numRetriableExceptionsThrown, long expectedWait, Exception e) throws Exception {
         MockTime time = new MockTime(0, 0, 0);
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(6000, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time);
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(errorRetryTimeout, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
 
         EasyMock.expect(mockOperation.call()).andThrow(e).times(numRetriableExceptionsThrown);
@@ -275,6 +280,21 @@ public class RetryWithToleranceOperatorTest {
 
         time.setCurrentTimeMs(600);
         assertFalse(retryWithToleranceOperator.checkRetry(0));
+    }
+
+    @Test
+    public void testCheckInfiniteRetry() {
+        MockTime time = new MockTime(0, 0, 0);
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(-1, 100, NONE, time);
+
+        time.setCurrentTimeMs(100);
+        assertTrue(retryWithToleranceOperator.checkRetry(0));
+
+        time.setCurrentTimeMs(1000);
+        assertTrue(retryWithToleranceOperator.checkRetry(0));
+
+        time.setCurrentTimeMs(10000);
+        assertTrue(retryWithToleranceOperator.checkRetry(0));
     }
 
     @Test
