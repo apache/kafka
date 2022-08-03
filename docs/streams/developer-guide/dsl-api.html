@@ -956,7 +956,7 @@ KGroupedTable&lt;byte[], String&gt; groupedTable = ...;
 KTable&lt;byte[], Long&gt; aggregatedStream = groupedStream.aggregate(
     () -&gt; 0L, /* initializer */
     (aggKey, newValue, aggValue) -&gt; aggValue + newValue.length(), /* adder */
-    Materialized.as(&quot;aggregated-stream-store&quot;) /* state store name */
+    Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as(&quot;aggregated-stream-store&quot;) /* state store name */
         .withValueSerde(Serdes.Long()); /* serde for aggregate value */
 
 // Aggregating a KGroupedTable (note how the value type changes from String to Long)
@@ -964,7 +964,7 @@ KTable&lt;byte[], Long&gt; aggregatedTable = groupedTable.aggregate(
     () -&gt; 0L, /* initializer */
     (aggKey, newValue, aggValue) -&gt; aggValue + newValue.length(), /* adder */
     (aggKey, oldValue, aggValue) -&gt; aggValue - oldValue.length(), /* subtractor */
-    Materialized.as(&quot;aggregated-table-store&quot;) /* state store name */
+    Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as(&quot;aggregated-table-store&quot;) /* state store name */
 	.withValueSerde(Serdes.Long()) /* serde for aggregate value */
 
 
