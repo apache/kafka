@@ -20,8 +20,6 @@ package org.apache.kafka.metadata;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -38,7 +36,6 @@ import static org.apache.kafka.metadata.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 
 @Timeout(value = 40)
@@ -51,8 +48,7 @@ public class KafkaConfigSchemaTest {
             define("baz", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "baz doc").
             define("quux", ConfigDef.Type.INT, ConfigDef.Importance.HIGH, "quux doc").
             define("quuux", ConfigDef.Type.PASSWORD, ConfigDef.Importance.HIGH, "quuux doc").
-            define("quuux2", ConfigDef.Type.PASSWORD, ConfigDef.Importance.HIGH, "quuux2 doc").
-            define("ssl.password", ConfigDef.Type.PASSWORD, ConfigDef.Importance.HIGH, "password doc"));
+            define("quuux2", ConfigDef.Type.PASSWORD, ConfigDef.Importance.HIGH, "quuux2 doc"));
         CONFIGS.put(TOPIC, new ConfigDef().
             define("abc", ConfigDef.Type.LIST, ConfigDef.Importance.HIGH, "abc doc").
             define("def", ConfigDef.Type.LONG, ConfigDef.Importance.HIGH, "def doc").
@@ -165,19 +161,5 @@ public class KafkaConfigSchemaTest {
             dynamicClusterConfigs,
             dynamicNodeConfigs,
             dynamicTopicConfigs));
-    }
-
-    @Test
-    public void testGetLoggableValue() {
-        ConfigRecord record1 = new ConfigRecord().
-                setResourceType(BROKER.id()).setResourceName("0").
-                setName("foo.bar").setValue("bar");
-        assertEquals(SCHEMA.getLoggableValue(record1), record1.value());
-        ConfigRecord record2 = null;
-        assertNull(SCHEMA.getLoggableValue(record2));
-        ConfigRecord record3 = new ConfigRecord().
-                setResourceType(BROKER.id()).setResourceName("0").
-                setName("ssl.password").setValue("bar");
-        assertEquals(SCHEMA.getLoggableValue(record3), Password.HIDDEN);
     }
 }

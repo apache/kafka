@@ -381,7 +381,7 @@ public class ConfigurationControlManager {
         if (configs.isEmpty()) {
             configData.remove(configResource);
         }
-        log.info("{}: set configuration {} to {}", configResource, record.name(), configSchema.getLoggableValue(record));
+        log.info("{}: set configuration {} to {}", configResource, record.name(), record.value());
     }
 
     // VisibleForTesting

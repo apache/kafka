@@ -30,7 +30,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.Locale;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
@@ -142,19 +141,7 @@ public class KafkaConfigSchema {
         if (configDef == null) return true;
         ConfigDef.ConfigKey configKey = configDef.configKeys().get(key);
         if (configKey == null) return true;
-        if (key.toUpperCase(Locale.ROOT).contains(ConfigDef.Type.PASSWORD.toString())) return true;
         return configKey.type.isSensitive();
-    }
-
-    /**
-     * Sensitive configs such as Password must be hidden from logging.
-     * */
-    public String getLoggableValue(ConfigRecord record) {
-        if (record == null) return null;
-        if (isSensitive(record)) {
-            return Password.HIDDEN;
-        }
-        return record.value();
     }
 
     /**
