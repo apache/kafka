@@ -114,7 +114,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     (0 until numServers).foreach { brokerId =>
 
       val props = if (isKRaftTest()) {
-        TestUtils.createBrokerConfig(brokerId, null)
+        val properties = TestUtils.createBrokerConfig(brokerId, null)
+        properties.put(KafkaConfig.AdvertisedListenersProp, s"$SecureInternal://localhost:0, $SecureExternal://localhost:0")
+        properties
       } else {
         val properties = TestUtils.createBrokerConfig(brokerId, zkConnect)
         properties.put(KafkaConfig.ZkEnableSecureAclsProp, "true")
@@ -123,7 +125,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       props ++= securityProps(sslProperties1, TRUSTSTORE_PROPS)
       // Ensure that we can support multiple listeners per security protocol and multiple security protocols
       props.put(KafkaConfig.ListenersProp, s"$SecureInternal://localhost:0, $SecureExternal://localhost:0")
-      props.put(KafkaConfig.AdvertisedListenersProp, s"$SecureInternal://localhost:0, $SecureExternal://localhost:0")
       props.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"$SecureInternal:SSL, $SecureExternal:SASL_SSL, CONTROLLER:$controllerListenerSecurityProtocol")
       props.put(KafkaConfig.InterBrokerListenerNameProp, SecureInternal)
       props.put(KafkaConfig.SslClientAuthProp, "requested")
