@@ -38,6 +38,33 @@ object PasswordEncoder {
   val IterationsProp = "iterations"
   val EncyrptedPasswordProp = "encryptedPassword"
   val PasswordLengthProp = "passwordLength"
+
+  def encrypting(secret: Password,
+                 keyFactoryAlgorithm: Option[String],
+                 cipherAlgorithm: String,
+                 keyLength: Int,
+                 iterations: Int): EncryptingPasswordEncoder = {
+    new EncryptingPasswordEncoder(secret, keyFactoryAlgorithm, cipherAlgorithm, keyLength, iterations)
+  }
+
+  def noop(): NoOpPasswordEncoder = {
+    new NoOpPasswordEncoder()
+  }
+}
+
+trait PasswordEncoder {
+  def encode(password: Password): String
+  def decode(encodedPassword: String): Password
+
+  private[utils] def base64Decode(encoded: String): Array[Byte] = Base64.getDecoder.decode(encoded)
+}
+
+/**
+ * A password encoder that does not modify the given password. This is used in KRaft mode only.
+ */
+class NoOpPasswordEncoder extends PasswordEncoder {
+  override def encode(password: Password): String = password.value()
+  override def decode(encodedPassword: String): Password = new Password(encodedPassword)
 }
 
 /**
@@ -55,16 +82,18 @@ object PasswordEncoder {
   * The values used for encoding are stored along with the encoded password and the stored values are used for decoding.
   *
   */
-class PasswordEncoder(secret: Password,
-                      keyFactoryAlgorithm: Option[String],
-                      cipherAlgorithm: String,
-                      keyLength: Int,
-                      iterations: Int) extends Logging {
+class EncryptingPasswordEncoder(
+  secret: Password,
+  keyFactoryAlgorithm: Option[String],
+  cipherAlgorithm: String,
+  keyLength: Int,
+  iterations: Int
+) extends PasswordEncoder with Logging {
 
   private val secureRandom = new SecureRandom
   private val cipherParamsEncoder = cipherParamsInstance(cipherAlgorithm)
 
-  def encode(password: Password): String = {
+  override def encode(password: Password): String = {
     val salt = new Array[Byte](256)
     secureRandom.nextBytes(salt)
     val cipher = Cipher.getInstance(cipherAlgorithm)
@@ -84,7 +113,7 @@ class PasswordEncoder(secret: Password,
     encryptedMap.map { case (k, v) => s"$k:$v" }.mkString(",")
   }
 
-  def decode(encodedPassword: String): Password = {
+  override def decode(encodedPassword: String): Password = {
     val params = CoreUtils.parseCsvMap(encodedPassword)
     val keyFactoryAlg = params(KeyFactoryAlgorithmProp)
     val cipherAlg = params(CipherAlgorithmProp)
@@ -130,8 +159,6 @@ class PasswordEncoder(secret: Password,
   }
 
   private def base64Encode(bytes: Array[Byte]): String = Base64.getEncoder.encodeToString(bytes)
-
-  private[utils] def base64Decode(encoded: String): Array[Byte] = Base64.getDecoder.decode(encoded)
 
   private def cipherParamsInstance(cipherAlgorithm: String): CipherParamsEncoder = {
     val aesPattern = "AES/(.*)/.*".r
