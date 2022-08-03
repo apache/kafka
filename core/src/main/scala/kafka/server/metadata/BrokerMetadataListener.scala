@@ -24,7 +24,7 @@ import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
-import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
+import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, SnapshotReason}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.SnapshotReader
 
@@ -120,7 +120,7 @@ class BrokerMetadataListener(
 
       _bytesSinceLastSnapshot = _bytesSinceLastSnapshot + results.numBytes
       
-      val shouldTakeSnapshot: Option[String] = shouldSnapshot()
+      val shouldTakeSnapshot: Option[SnapshotReason] = shouldSnapshot()
       if (shouldTakeSnapshot.isDefined) {
         maybeStartSnapshot(shouldTakeSnapshot.get)
       }
@@ -129,16 +129,17 @@ class BrokerMetadataListener(
     }
   }
 
-  private def shouldSnapshot(): Option[String] = {
+  private def shouldSnapshot(): Option[SnapshotReason] = {
     val metadataVersionHasChanged: Boolean = metadataVersionChanged()
     val maxBytesHaveExceeded: Boolean = (_bytesSinceLastSnapshot >= maxBytesBetweenSnapshots)
 
+    //TODO: Figure out how to handle multiple reasons for snapshot
     if (maxBytesHaveExceeded && metadataVersionHasChanged) {
-      return Some("max bytes exceeded and metadata version changed")
+      return Some(SnapshotReason.UnknownReason)
     } else if (maxBytesHaveExceeded) {
-      return Some("max bytes exceeded")
+      return Some(SnapshotReason.MaxBytesExceeded)
     } else if (metadataVersionHasChanged) {
-      return Some("metadata version changed")
+      return Some(SnapshotReason.MetadataVersionChanged)
     } else {
       return None
     }
@@ -152,9 +153,9 @@ class BrokerMetadataListener(
     }
   }
 
-  private def maybeStartSnapshot(snapshotReason: String): Unit = {
+  private def maybeStartSnapshot(reason: SnapshotReason): Unit = {
     snapshotter.foreach { snapshotter =>
-      if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply(), snapshotReason)) {
+      if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply(), reason)) {
         _bytesSinceLastSnapshot = 0L
       }
     }
@@ -266,7 +267,7 @@ class BrokerMetadataListener(
       log.info(s"Starting to publish metadata events at offset $highestMetadataOffset.")
       try {
         if (metadataVersionChanged()) {
-          maybeStartSnapshot("metadata version changed")
+          maybeStartSnapshot(SnapshotReason.MetadataVersionChanged)
         }
         publish(publisher)
         future.complete(null)

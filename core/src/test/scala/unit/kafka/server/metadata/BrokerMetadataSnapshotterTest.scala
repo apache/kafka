@@ -27,7 +27,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest}
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.queue.EventQueue
-import org.apache.kafka.raft.OffsetAndEpoch
+import org.apache.kafka.raft.{OffsetAndEpoch, SnapshotReason}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.{MockRawSnapshotWriter, RecordsSnapshotWriter, SnapshotWriter}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -97,8 +97,8 @@ class BrokerMetadataSnapshotterTest {
     try {
       val blockingEvent = new BlockingEvent()
       snapshotter.eventQueue.append(blockingEvent)
-      assertTrue(snapshotter.maybeStartSnapshot(10000L, MetadataImageTest.IMAGE1, "UnitTestSnapshot"))
-      assertFalse(snapshotter.maybeStartSnapshot(11000L, MetadataImageTest.IMAGE2, "UnitTestSnapshot"))
+      assertTrue(snapshotter.maybeStartSnapshot(10000L, MetadataImageTest.IMAGE1, SnapshotReason.UnknownReason))
+      assertFalse(snapshotter.maybeStartSnapshot(11000L, MetadataImageTest.IMAGE2, SnapshotReason.UnknownReason))
       blockingEvent.latch.countDown()
       assertEquals(MetadataImageTest.IMAGE1, writerBuilder.image.get())
     } finally {
