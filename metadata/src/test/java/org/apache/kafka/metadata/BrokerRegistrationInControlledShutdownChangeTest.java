@@ -24,27 +24,25 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-
 @Timeout(40)
-public class BrokerRegistrationFencingChangeTest {
+public class BrokerRegistrationInControlledShutdownChangeTest {
+
     @Test
     public void testValues() {
-        assertEquals((byte) 1, BrokerRegistrationFencingChange.FENCE.value());
-        assertEquals((byte) 0, BrokerRegistrationFencingChange.NONE.value());
-        assertEquals((byte) -1, BrokerRegistrationFencingChange.UNFENCE.value());
+        assertEquals((byte) 0, BrokerRegistrationInControlledShutdownChange.NONE.value());
+        assertEquals((byte) 1, BrokerRegistrationInControlledShutdownChange.IN_CONTROLLED_SHUTDOWN.value());
     }
 
     @Test
     public void testAsBoolean() {
-        assertEquals(Optional.of(true), BrokerRegistrationFencingChange.FENCE.asBoolean());
-        assertEquals(Optional.empty(), BrokerRegistrationFencingChange.NONE.asBoolean());
-        assertEquals(Optional.of(false), BrokerRegistrationFencingChange.UNFENCE.asBoolean());
+        assertEquals(Optional.empty(), BrokerRegistrationInControlledShutdownChange.NONE.asBoolean());
+        assertEquals(Optional.of(true), BrokerRegistrationInControlledShutdownChange.IN_CONTROLLED_SHUTDOWN.asBoolean());
     }
 
     @Test
     public void testValueRoundTrip() {
-        for (BrokerRegistrationFencingChange change : BrokerRegistrationFencingChange.values()) {
-            assertEquals(Optional.of(change), BrokerRegistrationFencingChange.fromValue(change.value()));
+        for (BrokerRegistrationInControlledShutdownChange change : BrokerRegistrationInControlledShutdownChange.values()) {
+            assertEquals(Optional.of(change), BrokerRegistrationInControlledShutdownChange.fromValue(change.value()));
         }
     }
 }
