@@ -353,6 +353,7 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
+        verify(metrics).getSensor("internal.test-thread-1.task.test-task-1.node.test-node-1.topic.test-topic-1.s.sensor1");
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
@@ -388,6 +389,7 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
+        verify(metrics).getSensor("internal.Test worker.task.test-task-1.store.store1.s.sensor1");
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
@@ -607,6 +609,7 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
+        verify(metrics).getSensor("internal.test-thread-1.task.test-task-1.node.test-node-1.s.sensor1");
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
@@ -644,6 +647,7 @@ public class StreamsMetricsImplTest {
             recordingLevel
         );
 
+        verify(metrics).getSensor("internal.test-thread-1.task.test-task-1.cache.processorNodeName.s.sensor1");
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
@@ -668,6 +672,7 @@ public class StreamsMetricsImplTest {
 
         final Sensor actualSensor = streamsMetrics.clientLevelSensor(SENSOR_NAME_1, recordingLevel);
 
+        verify(metrics).getSensor("stream-metrics.s.sensor1");
         assertThat(actualSensor, is(equalToObject(sensor)));
     }
 
