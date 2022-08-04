@@ -1014,10 +1014,14 @@ public final class QuorumController implements Controller {
                             if (exception != null) {
                                 log.error("Failed to bootstrap metadata.", exception);
                                 appendRaftEvent("bootstrapMetadata[" + curClaimEpoch + "]", () -> {
-                                    log.warn("Renouncing the leadership at oldEpoch {} since we could not bootstrap " +
-                                             "metadata. Reverting to last committed offset {}.",
-                                        curClaimEpoch, lastCommittedOffset);
-                                    renounce();
+                                    if (isActiveController()) {
+                                        log.warn("Renouncing the leadership at oldEpoch {} since we could not bootstrap " +
+                                                        "metadata. Reverting to last committed offset {}.",
+                                                curClaimEpoch, lastCommittedOffset);
+                                        renounce();
+                                    } else {
+                                        log.warn("Unable to bootstrap metadata on standby controller.");
+                                    }
                                 });
                             }
                         });
