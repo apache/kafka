@@ -29,10 +29,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.errors.*;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -381,6 +378,9 @@ public class KafkaBasedLog<K, V> {
                 consumedCallback.onCompletion(null, record);
         } catch (WakeupException e) {
             // Expected on get() or stop(). The calling code should handle this
+            throw e;
+        } catch (InterruptException e) {
+            log.error("Error polling: " + e);
             throw e;
         } catch (KafkaException e) {
             log.error("Error polling: " + e);
