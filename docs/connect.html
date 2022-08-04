@@ -407,7 +407,7 @@ errors.tolerance=all</pre>
 
     <pre class="brush: java;">
 public class FileStreamSourceConnector extends SourceConnector {
-    private Map&lt;String, String&gt;;</pre>
+    private Map&lt;String, String&gt; props;</pre>
 
     <p>The easiest method to fill in is <code>taskClass()</code>, which defines the class that should be instantiated in worker processes to actually read the data:</p>
 
@@ -439,13 +439,9 @@ public void stop() {
 public List&lt;Map&lt;String, String&gt;&gt; taskConfigs(int maxTasks) {
     ArrayList&lt;Map&lt;String, String&gt;&gt; configs = new ArrayList&lt;&gt;();
     // Only one input stream makes sense.
-    Map&lt;String, String&gt; config = new HashMap&lt;&gt;();
     configs.add(props);
     return configs;
 }</pre>
-
-    <p>Although not used in the example, <code>SourceTask</code> also provides two APIs to commit offsets in the source system: <code>commit</code> and <code>commitRecord</code>. The APIs are provided for source systems which have an acknowledgement mechanism for messages. Overriding these methods allows the source connector to acknowledge messages in the source system, either in bulk or individually, once they have been written to Kafka.
-    The <code>commit</code> API stores the offsets in the source system, up to the offsets that have been returned by <code>poll</code>. The implementation of this API should block until the commit is complete. The <code>commitRecord</code> API saves the offset in the source system for each <code>SourceRecord</code> after it is written to Kafka. As Kafka Connect will record offsets automatically, <code>SourceTask</code>s are not required to implement them. In cases where a connector does need to acknowledge messages in the source system, only one of the APIs is typically required.</p>
 
     <p>Even with multiple tasks, this method implementation is usually pretty simple. It just has to determine the number of input tasks, which may require contacting the remote service it is pulling data from, and then divvy them up. Because some patterns for splitting work among tasks are so common, some utilities are provided in <code>ConnectorUtils</code> to simplify these cases.</p>
 
@@ -467,11 +463,10 @@ public class FileStreamSourceTask extends SourceTask {
 
     @Override
     public void start(Map&lt;String, String&gt; props) {
-        AbstractConfig config = new AbstractConfig(FileStreamSourceConnector.CONFIG_DEF, props);
-        filename = config.getString(FileStreamSourceConnector.FILE_CONFIG);
+        filename = props.get(FileStreamSourceConnector.FILE_CONFIG);
         stream = openOrThrowError(filename);
-        topic = config.getString(FileStreamSourceConnector.TOPIC_CONFIG);
-        batchSize = config.getInt(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG);
+        topic = props.get(FileStreamSourceConnector.TOPIC_CONFIG);
+        batchSize = props.get(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG);
     }
 
     @Override
@@ -479,7 +474,7 @@ public class FileStreamSourceTask extends SourceTask {
         stream.close();
     }</pre>
 
-    <p>These are slightly simplified versions, but show that these methods should be relatively simple and the only work they should perform is allocating or freeing resources. There are two points to note about this implementation. First, the <code>start()</code> method does not yet handle resuming from a previous offset, which will be addressed in a later section. Second, the <code>stop()</code> method is synchronized. This will be necessary because <code>SourceTasks</code> are given a dedicated thread which they can block indefinitely, so they need to be stopped with a call from a different thread in the Worker. The <code>CONFIG_DEF</code> is described in detail in a later section below.</p>
+    <p>These are slightly simplified versions, but show that these methods should be relatively simple and the only work they should perform is allocating or freeing resources. There are two points to note about this implementation. First, the <code>start()</code> method does not yet handle resuming from a previous offset, which will be addressed in a later section. Second, the <code>stop()</code> method is synchronized. This will be necessary because <code>SourceTasks</code> are given a dedicated thread which they can block indefinitely, so they need to be stopped with a call from a different thread in the Worker.</p>
 
     <p>Next, we implement the main functionality of the task, the <code>poll()</code> method which gets events from the input system and returns a <code>List&lt;SourceRecord&gt;</code>:</p>
 
@@ -512,6 +507,9 @@ public List&lt;SourceRecord&gt; poll() throws InterruptedException {
     <p>Again, we've omitted some details, but we can see the important steps: the <code>poll()</code> method is going to be called repeatedly, and for each call it will loop trying to read records from the file. For each line it reads, it also tracks the file offset. It uses this information to create an output <code>SourceRecord</code> with four pieces of information: the source partition (there is only one, the single file being read), source offset (byte offset in the file), output topic name, and output value (the line, and we include a schema indicating this value will always be a string). Other variants of the <code>SourceRecord</code> constructor can also include a specific output partition, a key, and headers.</p>
 
     <p>Note that this implementation uses the normal Java <code>InputStream</code> interface and may sleep if data is not available. This is acceptable because Kafka Connect provides each task with a dedicated thread. While task implementations have to conform to the basic <code>poll()</code> interface, they have a lot of flexibility in how they are implemented. In this case, an NIO-based implementation would be more efficient, but this simple approach works, is quick to implement, and is compatible with older versions of Java.</p>
+
+    <p>Although not used in the example, <code>SourceTask</code> also provides two APIs to commit offsets in the source system: <code>commit</code> and <code>commitRecord</code>. The APIs are provided for source systems which have an acknowledgement mechanism for messages. Overriding these methods allows the source connector to acknowledge messages in the source system, either in bulk or individually, once they have been written to Kafka.
+        The <code>commit</code> API stores the offsets in the source system, up to the offsets that have been returned by <code>poll</code>. The implementation of this API should block until the commit is complete. The <code>commitRecord</code> API saves the offset in the source system for each <code>SourceRecord</code> after it is written to Kafka. As Kafka Connect will record offsets automatically, <code>SourceTask</code>s are not required to implement them. In cases where a connector does need to acknowledge messages in the source system, only one of the APIs is typically required.</p>
 
     <h5><a id="connect_sinktasks" href="#connect_sinktasks">Sink Tasks</a></h5>
 
