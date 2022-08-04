@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -228,11 +229,14 @@ public class ConfigurationControlManager {
                     newValue = String.join(",", oldValueList);
                     break;
             }
-            newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
-                setResourceType(configResource.type().id()).
-                setResourceName(configResource.name()).
-                setName(key).
-                setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
+            if (!Objects.equals(currentValue, newValue) || configResource.type().equals(Type.BROKER)) {
+                // We need to generate records even if the value is unchanged to trigger reloads on the brokers
+                newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
+                    setResourceType(configResource.type().id()).
+                    setResourceName(configResource.name()).
+                    setName(key).
+                    setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
+            }
         }
         ApiError error = validateAlterConfig(configResource, newRecords, newlyCreatedResource);
         if (error.isFailure()) {
@@ -314,11 +318,15 @@ public class ConfigurationControlManager {
         for (Entry<String, String> entry : newConfigs.entrySet()) {
             String key = entry.getKey();
             String newValue = entry.getValue();
-            newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
-                setResourceType(configResource.type().id()).
-                setResourceName(configResource.name()).
-                setName(key).
-                setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
+            String currentValue = currentConfigs.get(key);
+            if (!Objects.equals(currentValue, newValue) || configResource.type().equals(Type.BROKER)) {
+                // We need to generate records even if the value is unchanged to trigger reloads on the brokers
+                newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
+                    setResourceType(configResource.type().id()).
+                    setResourceName(configResource.name()).
+                    setName(key).
+                    setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
+            }
         }
         for (String key : currentConfigs.keySet()) {
             if (!newConfigs.containsKey(key)) {
