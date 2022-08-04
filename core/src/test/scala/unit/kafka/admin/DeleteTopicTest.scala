@@ -253,7 +253,11 @@ class DeleteTopicTest extends QuorumTestHarness {
       }, s"Not all replicas for topic $topic are in states of either ReplicaDeletionSuccessful or OfflineReplica")
     }
     // increase the partition count for topic
-    assertDoesNotThrow(() => adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get())
+    try {
+      adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()
+    } catch {
+      case _: ExecutionException =>
+    }
     // trigger a controller switch now
     if (isKRaftTest()) {
       val prevPort = controllerServerPort
@@ -287,12 +291,13 @@ class DeleteTopicTest extends QuorumTestHarness {
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteTopicDuringAddPartition(quorum: String): Unit = {
     val topic = "test"
-    createTestTopicAndCluster(topic)
+    createTestTopicAndCluster(topic, numConfigs = 4)
     val partition = getTopicPartitionInfo(adminClient, topic, 0)
     assertTrue(partition.isPresent, "Partition [test,0] should exist")
     val leaderNode = partition.get().leader()
     assertFalse(leaderNode.isEmpty, "Leader should exist for partition [test,0]")
-    val follower = brokers.filter(s => s.config.brokerId != leaderNode.id()).last
+    val brokersWithReplica = brokers.filter(s => expectedReplicaAssignment(0).contains(s.config.brokerId))
+    val follower = brokersWithReplica.filter(s => s.config.brokerId != leaderNode.id()).last
     val newPartition = new TopicPartition(topic, 1)
     follower.shutdown()
     if (!isKRaftTest()) {
@@ -443,8 +448,10 @@ class DeleteTopicTest extends QuorumTestHarness {
     val topic = topicPartition.topic
     createTestTopicAndCluster(topic, deleteTopicEnabled = false)
     // mark the topic for deletion
-    adminClient.deleteTopics(Collections.singleton("test"))
-    if (!isKRaftTest()) {
+    val result = adminClient.deleteTopics(Collections.singleton("test"))
+    if (isKRaftTest()) {
+      assertThrows(classOf[ExecutionException], () => result.topicNameValues.get(topic).get)
+    } else {
       TestUtils.waitUntilTrue(() => !zkClient.isTopicMarkedForDeletion(topic),
         "Admin path /admin/delete_topics/%s path not deleted even if deleteTopic is disabled".format(topic))
     }
@@ -508,6 +515,11 @@ class DeleteTopicTest extends QuorumTestHarness {
   }
 
   private def createTestTopicAndCluster(topic: String, deleteTopicEnabled: Boolean = true, numConfigs: Int = 3, replicaAssignment: Map[Int, List[Int]] = expectedReplicaAssignment): Unit = {
+    if (isKRaftTest() && !deleteTopicEnabled) {
+      val prevPort = controllerServerPort
+      controllerServer.shutdown()
+      startControllerServer(prevPort, deleteTopicEnabled = false)
+    }
     val brokerConfigs = TestUtils.createBrokerConfigs(numConfigs, zkConnectOrNull, enableControlledShutdown = false)
     brokerConfigs.foreach(_.setProperty("delete.topic.enable", deleteTopicEnabled.toString))
     createTestTopicAndCluster(topic, brokerConfigs, replicaAssignment)

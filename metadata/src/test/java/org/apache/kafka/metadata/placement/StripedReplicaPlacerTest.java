@@ -283,6 +283,15 @@ public class StripedReplicaPlacerTest {
         assertEquals(250, leaderCounts.get(1));
         assertEquals(256, leaderCounts.get(2));
         assertEquals(244, leaderCounts.get(3));
+
+        assertEquals(120, counts.get(Arrays.asList(0, 2)));
+        assertEquals(130, counts.get(Arrays.asList(0, 3)));
+        assertEquals(124, counts.get(Arrays.asList(1, 2)));
+        assertEquals(126, counts.get(Arrays.asList(1, 3)));
+        assertEquals(126, counts.get(Arrays.asList(2, 0)));
+        assertEquals(130, counts.get(Arrays.asList(2, 1)));
+        assertEquals(124, counts.get(Arrays.asList(3, 0)));
+        assertEquals(120, counts.get(Arrays.asList(3, 1)));
     }
 
     @Test
@@ -309,6 +318,11 @@ public class StripedReplicaPlacerTest {
         assertEquals(2, leaderCounts.get(1));
         assertEquals(4, leaderCounts.get(2));
         assertEquals(null, leaderCounts.get(3));
+
+        assertEquals(2, counts.get(Arrays.asList(0, 3)));
+        assertEquals(2, counts.get(Arrays.asList(1, 3)));
+        assertEquals(2, counts.get(Arrays.asList(2, 0)));
+        assertEquals(2, counts.get(Arrays.asList(2, 1)));
     }
 
     @Test
