@@ -38,8 +38,8 @@ final class BrokerServerMetricsTest {
       new MetricName("last-applied-record-offset", expectedGroup, "", Collections.emptyMap()),
       new MetricName("last-applied-record-timestamp", expectedGroup, "", Collections.emptyMap()),
       new MetricName("last-applied-record-lag-ms", expectedGroup, "", Collections.emptyMap()),
-      new MetricName("publisher-error-count", expectedGroup, "", Collections.emptyMap()),
-      new MetricName("listener-batch-load-error-count", expectedGroup, "", Collections.emptyMap())
+      new MetricName("metadata-load-error-count", expectedGroup, "", Collections.emptyMap()),
+      new MetricName("metadata-apply-error-count", expectedGroup, "", Collections.emptyMap())
     )
      
     TestUtils.resource(BrokerServerMetrics(metrics)) { brokerMetrics =>
@@ -89,34 +89,34 @@ final class BrokerServerMetricsTest {
   }
 
   @Test
-  def testPublisherErrorCount(): Unit = {
+  def testMetadataLoadErrorCount(): Unit = {
     val time = new MockTime()
     val metrics = new Metrics(time)
     TestUtils.resource(BrokerServerMetrics(metrics)) { brokerMetrics =>
-      val publisherErrorCountMetric = metrics.metrics().get(brokerMetrics.publisherErrorCount)
+      val metadataLoadErrorCountMetric = metrics.metrics().get(brokerMetrics.metadataLoadErrorCountName)
 
-      assertEquals(0L, publisherErrorCountMetric.metricValue.asInstanceOf[Long])
+      assertEquals(0L, metadataLoadErrorCountMetric.metricValue.asInstanceOf[Long])
 
       // Update metric value and check
       val errorCount = 100
-      brokerMetrics.publisherErrorCount.set(errorCount)
-      assertEquals(errorCount, publisherErrorCountMetric.metricValue.asInstanceOf[Long])
+      brokerMetrics.metadataLoadErrorCount.set(errorCount)
+      assertEquals(errorCount, metadataLoadErrorCountMetric.metricValue.asInstanceOf[Long])
     }
   }
 
   @Test
-  def testListenerBatchLoadCountError(): Unit = {
+  def testMetadataApplyErrorCount(): Unit = {
     val time = new MockTime()
     val metrics = new Metrics(time)
     TestUtils.resource(BrokerServerMetrics(metrics)) { brokerMetrics =>
-      val listenerBatchLoadCountError = metrics.metrics().get(brokerMetrics.listenerBatchLoadErrorCount)
+      val metadataApplyErrorCountMetric = metrics.metrics().get(brokerMetrics.metadataApplyErrorCountName)
 
-      assertEquals(0L, listenerBatchLoadCountError.metricValue.asInstanceOf[Long])
+      assertEquals(0L, metadataApplyErrorCountMetric.metricValue.asInstanceOf[Long])
 
       // Update metric value and check
       val errorCount = 100
-      brokerMetrics.publisherErrorCount.set(errorCount)
-      assertEquals(errorCount, listenerBatchLoadCountError.metricValue.asInstanceOf[Long])
+      brokerMetrics.metadataApplyErrorCount.set(errorCount)
+      assertEquals(errorCount, metadataApplyErrorCountMetric.metricValue.asInstanceOf[Long])
     }
   }
 }

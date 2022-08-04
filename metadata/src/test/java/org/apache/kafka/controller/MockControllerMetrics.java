@@ -27,7 +27,7 @@ public final class MockControllerMetrics implements ControllerMetrics {
     private volatile int partitions = 0;
     private volatile int offlinePartitions = 0;
     private volatile int preferredReplicaImbalances = 0;
-    private volatile AtomicInteger forceRenounces = new AtomicInteger(0);
+    private volatile AtomicInteger metadataErrors = new AtomicInteger(0);
     private volatile long lastAppliedRecordOffset = 0;
     private volatile long lastCommittedRecordOffset = 0;
     private volatile long lastAppliedRecordTimestamp = 0;
@@ -115,13 +115,13 @@ public final class MockControllerMetrics implements ControllerMetrics {
     }
 
     @Override
-    public void incrementForceRenounceCount() {
-        this.forceRenounces.getAndIncrement();
+    public void incrementMetadataErrorCount() {
+        this.metadataErrors.getAndIncrement();
     }
 
     @Override
-    public int forceRenounceCount() {
-        return this.forceRenounces.get();
+    public int metadataErrorCount() {
+        return this.metadataErrors.get();
     }
 
     @Override

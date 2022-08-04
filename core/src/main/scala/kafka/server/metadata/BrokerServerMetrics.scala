@@ -28,8 +28,8 @@ final class BrokerServerMetrics private (metrics: Metrics) extends AutoCloseable
 
   val lastAppliedRecordOffset: AtomicLong = new AtomicLong(0)
   val lastAppliedRecordTimestamp: AtomicLong = new AtomicLong(0)
-  val publisherErrorCount: AtomicLong = new AtomicLong(0)
-  val listenerBatchLoadErrorCount: AtomicLong = new AtomicLong(0)
+  val metadataLoadErrorCount: AtomicLong = new AtomicLong(0)
+  val metadataApplyErrorCount: AtomicLong = new AtomicLong(0)
 
   val lastAppliedRecordOffsetName = metrics.metricName(
     "last-applied-record-offset",
@@ -49,16 +49,16 @@ final class BrokerServerMetrics private (metrics: Metrics) extends AutoCloseable
     "The difference between now and the timestamp of the last record from the cluster metadata partition that was applied by the broker"
   )
 
-  val publisherErrorCountName = metrics.metricName(
-    "publisher-error-count",
+  val metadataLoadErrorCountName = metrics.metricName(
+    "metadata-load-error-count",
     metricGroupName,
-    "The number of errors encountered by the BrokerMetadataPublisher while publishing a new MetadataImage based on the MetadataDelta"
+    "The number of errors encountered by the BrokerMetadataPublisher while publishing a new MetadataImage by loading the latest MetadataDelta"
   )
 
-  val listenerBatchLoadErrorCountName = metrics.metricName(
-    "listener-batch-load-error-count",
+  val metadataApplyErrorCountName = metrics.metricName(
+    "metadata-apply-error-count",
     metricGroupName,
-    "The number of errors encountered by the BrokerMetadataListener while generating a new MetadataDelta based on the log it has received thus far"
+    "The number of errors encountered by the BrokerMetadataListener while generating a new MetadataDelta by applying the log it has received thus far"
   )
 
   addMetric(metrics, lastAppliedRecordOffsetName) { _ =>
@@ -73,12 +73,12 @@ final class BrokerServerMetrics private (metrics: Metrics) extends AutoCloseable
     now - lastAppliedRecordTimestamp.get
   }
 
-  addMetric(metrics, publisherErrorCountName) { _ =>
-    publisherErrorCount.get
+  addMetric(metrics, metadataLoadErrorCountName) { _ =>
+    metadataLoadErrorCount.get
   }
 
-  addMetric(metrics, listenerBatchLoadErrorCountName) { _ =>
-    listenerBatchLoadErrorCount.get
+  addMetric(metrics, metadataApplyErrorCountName) { _ =>
+    metadataApplyErrorCount.get
   }
 
   override def close(): Unit = {
@@ -86,8 +86,8 @@ final class BrokerServerMetrics private (metrics: Metrics) extends AutoCloseable
       lastAppliedRecordOffsetName,
       lastAppliedRecordTimestampName,
       lastAppliedRecordLagMsName,
-      publisherErrorCountName,
-      listenerBatchLoadErrorCountName
+      metadataLoadErrorCountName,
+      metadataApplyErrorCountName
     ).foreach(metrics.removeMetric)
   }
 }

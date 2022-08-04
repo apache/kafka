@@ -42,7 +42,7 @@ public class QuorumControllerMetricsTest {
             "GlobalPartitionCount",
             "OfflinePartitionsCount",
             "PreferredReplicaImbalanceCount",
-            "ForceRenounceCount",
+            "MetadataErrorCount",
             "LastAppliedRecordLagMs",
             "LastAppliedRecordOffset",
             "LastAppliedRecordTimestamp",
@@ -129,18 +129,18 @@ public class QuorumControllerMetricsTest {
     }
 
     @Test
-    public void testForceRenounceCount() {
+    public void testMetadataErrorCount() {
         MetricsRegistry registry = new MetricsRegistry();
         MockTime time = new MockTime();
         try {
             try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry, time)) {
                 @SuppressWarnings("unchecked")
-                Gauge<Integer> forceRenounceCount = (Gauge<Integer>) registry
+                Gauge<Integer> metadataErrorCount = (Gauge<Integer>) registry
                         .allMetrics()
-                        .get(metricName("KafkaController", "ForceRenounceCount"));
-                assertEquals(0, forceRenounceCount.value());
-                quorumControllerMetrics.incrementForceRenounceCount();
-                assertEquals(1, forceRenounceCount.value());
+                        .get(metricName("KafkaController", "MetadataErrorCount"));
+                assertEquals(0, metadataErrorCount.value());
+                quorumControllerMetrics.incrementMetadataErrorCount();
+                assertEquals(1, metadataErrorCount.value());
             }
         } finally {
             registry.shutdown();

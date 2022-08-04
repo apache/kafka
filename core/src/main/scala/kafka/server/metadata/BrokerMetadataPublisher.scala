@@ -260,7 +260,7 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       publishedOffsetAtomic.set(newImage.highestOffsetAndEpoch().offset)
     } catch {
       case t: Throwable => error(s"Error publishing broker metadata at $highestOffsetAndEpoch", t)
-        brokerMetrics.publisherErrorCount.getAndIncrement()
+        brokerMetrics.metadataLoadErrorCount.getAndIncrement()
         throw t
     } finally {
       _firstPublish = false
