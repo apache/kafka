@@ -81,7 +81,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     }
   }
 
-  def insertControllerListenersIfNeeded(props: Seq[Properties]): Unit = {
+  private def insertControllerListenersIfNeeded(props: Seq[Properties]): Unit = {
     if (isKRaftTest()) {
       props.foreach { config =>
         // Add a security protocol for the controller endpoints, if one is not already set.

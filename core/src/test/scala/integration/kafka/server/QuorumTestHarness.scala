@@ -101,10 +101,12 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
     CoreUtils.swallow(controllerServer.shutdown(), log)
   }
 
-  def startController(prevPort: Int): Unit = {
-
+  def startController(prevPort: Int, deleteTopicEnabled: Boolean): Unit = {
     val props = new Properties()
     props.putAll(controllerServer.config.originals)
+    if (!deleteTopicEnabled) {
+      props.setProperty(KafkaConfig.DeleteTopicEnableProp, "false")
+    }
     // explicitly set the port of any addresses, as we want to re-use the port that
     // was derived on startup (through the use of port "0") in order to have
     // existing clients re-connect gracefully
@@ -244,8 +246,8 @@ abstract class QuorumTestHarness extends Logging {
     asKRaft().restartController()
   }
 
-  def startControllerServer(prevPort: Int): Unit = {
-    asKRaft().startController(prevPort)
+  def startControllerServer(prevPort: Int, deleteTopicEnabled: Boolean = true): Unit = {
+    asKRaft().startController(prevPort, deleteTopicEnabled)
   }
 
   def controllerServers: Seq[ControllerServer] = {
