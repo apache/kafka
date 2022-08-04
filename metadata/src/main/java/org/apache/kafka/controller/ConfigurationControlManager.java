@@ -230,7 +230,7 @@ public class ConfigurationControlManager {
                     break;
             }
             if (!Objects.equals(currentValue, newValue) || configResource.type().equals(Type.BROKER)) {
-                // We need to generate records even if the value is unchanged to trigger reloads on the brokers
+                // KAFKA-14136 We need to generate records even if the value is unchanged to trigger reloads on the brokers
                 newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
@@ -320,7 +320,7 @@ public class ConfigurationControlManager {
             String newValue = entry.getValue();
             String currentValue = currentConfigs.get(key);
             if (!Objects.equals(currentValue, newValue) || configResource.type().equals(Type.BROKER)) {
-                // We need to generate records even if the value is unchanged to trigger reloads on the brokers
+                // KAFKA-14136 We need to generate records even if the value is unchanged to trigger reloads on the brokers
                 newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
