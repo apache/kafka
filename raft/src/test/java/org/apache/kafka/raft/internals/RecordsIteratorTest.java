@@ -89,6 +89,7 @@ public final class RecordsIteratorTest {
         fileRecords.append(memRecords);
 
         testIterator(batches, fileRecords, true);
+        fileRecords.close();
     }
 
     @Property
@@ -99,9 +100,9 @@ public final class RecordsIteratorTest {
         List<TestBatch<String>> batches = createBatches(seed);
         MemoryRecords memRecords = buildRecords(compressionType, batches);
         // Read the Batch CRC for the first batch from the buffer
-        ByteBuffer readBuf = memRecords.buffer().asReadOnlyBuffer();
+        ByteBuffer readBuf = memRecords.buffer();
         readBuf.position(DefaultRecordBatch.CRC_OFFSET);
-        Integer actualCrc = readBuf.getInt();
+        int actualCrc = readBuf.getInt();
         // Corrupt the CRC on the first batch
         memRecords.buffer().putInt(DefaultRecordBatch.CRC_OFFSET, actualCrc + 1);
 
@@ -123,6 +124,9 @@ public final class RecordsIteratorTest {
         FileRecords moreFileRecords = FileRecords.open(TestUtils.tempFile());
         moreFileRecords.append(memRecords);
         assertDoesNotThrow(() -> testIterator(batches, moreFileRecords, true));
+
+        fileRecords.close();
+        moreFileRecords.close();
     }
 
     private void testIterator(
