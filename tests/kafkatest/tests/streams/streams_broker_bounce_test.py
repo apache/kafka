@@ -220,9 +220,9 @@ class StreamsBrokerBounceTest(Test):
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             broker_type=["leader", "controller"],
             num_threads=[1, 3],
-            sleep_time_secs=[120])
-    def test_broker_type_bounce(self, failure_mode, broker_type, sleep_time_secs, num_threads,
-                                metadata_quorum=quorum.zk):
+            sleep_time_secs=[120],
+            metadata_quorum=[quorum.zk])
+    def test_broker_type_bounce(self, failure_mode, broker_type, sleep_time_secs, num_threads, metadata_quorum):
         """
         Start a smoke test client, then kill one particular broker and ensure data is still received
         Record if records are delivered.
