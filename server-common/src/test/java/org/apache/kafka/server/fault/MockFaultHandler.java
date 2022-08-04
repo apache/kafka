@@ -39,8 +39,10 @@ public class MockFaultHandler implements FaultHandler {
     @Override
     public synchronized void handleFault(String failureMessage, Throwable cause) {
         FaultHandler.logFailureMessage(log, failureMessage, cause);
-        MockFaultHandlerException e =
-                new MockFaultHandlerException(name + ": " + failureMessage, cause);
+        MockFaultHandlerException e = (cause == null) ?
+                new MockFaultHandlerException(name + ": " + failureMessage) :
+                new MockFaultHandlerException(name + ": " + failureMessage +
+                        ": " + cause.getMessage(), cause);
         if (firstException == null) {
             firstException = e;
         }

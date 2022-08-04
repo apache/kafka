@@ -445,11 +445,18 @@ public final class QuorumController implements Controller {
                 exception.getClass().getSimpleName(), deltaUs);
             return exception;
         }
-        log.warn("{}: failed with unknown server exception {} at epoch {} in {} us.  " +
-                "Renouncing leadership and reverting to the last committed offset {}.",
-            name, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
-            lastCommittedOffset, exception);
-        renounce();
+        if (isActiveController()) {
+            log.warn("{}: failed with unknown server exception {} at epoch {} in {} us.  " +
+                    "Renouncing leadership and reverting to the last committed offset {}.",
+                    name, exception.getClass().getSimpleName(), curClaimEpoch, deltaUs,
+                    lastCommittedOffset, exception);
+            renounce();
+        } else {
+            log.warn("{}: failed with unknown server exception {} in {} us.  " +
+                    "The controller is already in standby mode.",
+                    name, exception.getClass().getSimpleName(), deltaUs,
+                    exception);
+        }
         return new UnknownServerException(exception);
     }
 
@@ -1037,10 +1044,12 @@ public final class QuorumController implements Controller {
                 });
             } else if (isActiveController()) {
                 appendRaftEvent("handleRenounce[" + curClaimEpoch + "]", () -> {
-                    log.warn("Renouncing the leadership at oldEpoch {} due to a metadata " +
-                             "log event. Reverting to last committed offset {}.", curClaimEpoch,
-                        lastCommittedOffset);
-                    renounce();
+                    if (isActiveController()) {
+                        log.warn("Renouncing the leadership at oldEpoch {} due to a metadata " +
+                                "log event. Reverting to last committed offset {}.", curClaimEpoch,
+                                lastCommittedOffset);
+                        renounce();
+                    }
                 });
             }
         }

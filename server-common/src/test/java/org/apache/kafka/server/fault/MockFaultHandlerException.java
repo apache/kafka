@@ -22,11 +22,17 @@ package org.apache.kafka.server.fault;
  * An exception thrown by MockFaultHandler.
  */
 public class MockFaultHandlerException extends RuntimeException {
-    public MockFaultHandlerException(String failureMessage) {
-        super(failureMessage);
-    }
-
     public MockFaultHandlerException(String failureMessage, Throwable cause) {
         super(failureMessage, cause);
+        // If a cause exception was provided, set our the stack trace its stack trace. This is
+        // useful in junit tests where a limited number of stack frames are printed, and usually
+        // the stack frames of cause exceptions get trimmed.
+        if (cause != null) {
+            setStackTrace(cause.getStackTrace());
+        }
+    }
+
+    public MockFaultHandlerException(String failureMessage) {
+        this(failureMessage, null);
     }
 }
