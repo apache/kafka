@@ -55,6 +55,11 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     val adminClient = Admin.create(props)
+
+    TestUtils.waitUntilTrue(
+      () => brokers.head.metadataCache.getAliveBrokers().size == numServers,
+      "Timed out waiting for all brokers to become unfenced")
+
     try {
       // Send a message to auto-create the topic
       val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
@@ -82,7 +87,8 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
       val brokerMetadatas = brokers.head.metadataCache.getAliveBrokers().toList
       val expectedMap = Map(0 -> "0", 1 -> "0", 2 -> "1", 3 -> "1")
       assertEquals(expectedMap, brokerMetadatas.map(b => b.id -> b.rack.get).toMap)
-      checkReplicaDistribution(assignment, expectedMap, numServers, numPartitions, replicationFactor)
+      checkReplicaDistribution(assignment, expectedMap, numServers, numPartitions, replicationFactor,
+        verifyLeaderDistribution = false)
 
     } finally {
       adminClient.close()
