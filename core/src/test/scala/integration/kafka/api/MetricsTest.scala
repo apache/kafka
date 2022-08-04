@@ -115,6 +115,23 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     assertEquals(1, responseBytesHist.count(), "The MetadataAllTopics ResponseBytes metric is not recorded")
   }
 
+  @Test
+  def testRequestsPerSecAcrossVersionsMetric(): Unit = {
+    val topic = "topic"
+    val props = new Properties
+    createTopic(topic, numPartitions = 1, replicationFactor = 1, props)
+    val tp = new TopicPartition(topic, 0)
+
+    // Produce and consume some records
+    val numRecords = 10
+    val recordSize = 100000
+    val producer = createProducer()
+    sendRecords(producer, numRecords, recordSize, tp)
+
+    val requestRateWithoutVersionMeter = yammerMeterWithPrefix("kafka.network:type=RequestMetrics,name=RequestsPerSecAcrossVersions,request=Produce")
+    assertTrue(requestRateWithoutVersionMeter.count() > 0, "The Produce RequestsPerSecAcrossVersions metric is not recorded")
+  }
+
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
       recordSize: Int, tp: TopicPartition) = {
     val bytes = new Array[Byte](recordSize)

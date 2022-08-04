@@ -244,6 +244,7 @@ object RequestChannel extends Logging {
       metricNames.foreach { metricName =>
         val m = metrics(metricName)
         m.requestRate(header.apiVersion).mark()
+        m.requestRateAcrossVersionsInternal.mark()
         m.requestQueueTimeHist.update(Math.round(requestQueueTimeMs))
         m.localTimeHist.update(Math.round(apiLocalTimeMs))
         m.remoteTimeHist.update(Math.round(apiRemoteTimeMs))
@@ -517,6 +518,7 @@ object RequestMetrics {
   val MetadataAllTopics = ApiKeys.METADATA.name + "AllTopics"
 
   val RequestsPerSec = "RequestsPerSec"
+  val RequestsPerSecAcrossVersions = "RequestsPerSecAcrossVersions"
   val RequestQueueTimeMs = "RequestQueueTimeMs"
   val LocalTimeMs = "LocalTimeMs"
   val RemoteTimeMs = "RemoteTimeMs"
@@ -537,6 +539,8 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
 
   val tags = Map("request" -> name)
   val requestRateInternal = new Pool[Short, Meter]()
+  // Compared with the requestRateInterval, the requestRateAcrossVersionsInternal is the request rate across all versions
+  val requestRateAcrossVersionsInternal = newMeter(RequestsPerSecAcrossVersions, "requests", TimeUnit.SECONDS, tags)
   // time a request spent in a request queue
   val requestQueueTimeHist = newHistogram(RequestQueueTimeMs, biased = true, tags)
   // time a request takes to be processed at the local broker
@@ -609,6 +613,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
 
   def removeMetrics(): Unit = {
     for (version <- requestRateInternal.keys) removeMetric(RequestsPerSec, tags + ("version" -> version.toString))
+    removeMetric(RequestsPerSecAcrossVersions, tags)
     removeMetric(RequestQueueTimeMs, tags)
     removeMetric(LocalTimeMs, tags)
     removeMetric(RemoteTimeMs, tags)
