@@ -52,13 +52,13 @@ final class BrokerServerMetrics private (metrics: Metrics) extends AutoCloseable
   val metadataLoadErrorCountName = metrics.metricName(
     "metadata-load-error-count",
     metricGroupName,
-    "The number of errors encountered by the BrokerMetadataPublisher while publishing a new MetadataImage by loading the latest MetadataDelta"
+    "The number of errors encountered by the BrokerMetadataListener while loading the metadata log and generating a new MetadataDelta based on it."
   )
 
   val metadataApplyErrorCountName = metrics.metricName(
     "metadata-apply-error-count",
     metricGroupName,
-    "The number of errors encountered by the BrokerMetadataListener while generating a new MetadataDelta by applying the log it has received thus far"
+    "The number of errors encountered by the BrokerMetadataPublisher while applying a new MetadataImage based on the latest MetadataDelta."
   )
 
   addMetric(metrics, lastAppliedRecordOffsetName) { _ =>

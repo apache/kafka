@@ -116,7 +116,7 @@ class BrokerMetadataListener(
         loadResults
       } catch {
         case e: Throwable =>
-          brokerMetrics.metadataApplyErrorCount.getAndIncrement()
+          brokerMetrics.metadataLoadErrorCount.getAndIncrement()
           throw e
       } finally {
         reader.close()
@@ -175,7 +175,7 @@ class BrokerMetadataListener(
           s"$loadResults")
       } catch {
         case e: Throwable =>
-          brokerMetrics.metadataApplyErrorCount.getAndIncrement()
+          brokerMetrics.metadataLoadErrorCount.getAndIncrement()
           throw e
       } finally {
         reader.close()
