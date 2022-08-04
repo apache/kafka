@@ -102,7 +102,7 @@ versions += [
   mavenArtifact: "3.8.1",
   metrics: "2.2.0",
   mockito: "3.6.0",
-  netty: "4.1.73.Final",
+  netty: "4.1.79.Final",
   owaspDepCheckPlugin: "6.0.3",
   powermock: "2.0.9",
   reflections: "0.9.12",
