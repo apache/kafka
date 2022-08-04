@@ -24,10 +24,25 @@ import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.SnapshotWriter
 
+import java.util.function.Consumer
+
 trait SnapshotWriterBuilder {
   def build(committedOffset: Long,
             committedEpoch: Int,
             lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]]
+}
+
+class RecordListConsumer(
+  val maxBatchSize: Int,
+  val writer: SnapshotWriter[ApiMessageAndVersion]
+) extends Consumer[java.util.List[ApiMessageAndVersion]] {
+  override def accept(messages: java.util.List[ApiMessageAndVersion]): Unit = {
+    var i = 0
+    while (i < messages.size()) {
+      writer.append(messages.subList(i, Math.min(i + maxBatchSize, messages.size())));
+      i += maxBatchSize
+    }
+  }
 }
 
 class BrokerMetadataSnapshotter(
@@ -36,6 +51,13 @@ class BrokerMetadataSnapshotter(
   threadNamePrefix: Option[String],
   writerBuilder: SnapshotWriterBuilder
 ) extends Logging with MetadataSnapshotter {
+  /**
+   * The maximum number of records we will put in each batch. Do not change this unless
+   * you also change the equivalent constant in the Raft layer, and have considered the
+   * compatibility issues.
+   */
+  private val maxBatchSize = 1024
+
   private val logContext = new LogContext(s"[BrokerMetadataSnapshotter id=$brokerId] ")
   logIdent = logContext.logPrefix()
 
@@ -77,9 +99,11 @@ class BrokerMetadataSnapshotter(
   class CreateSnapshotEvent(image: MetadataImage,
                             writer: SnapshotWriter[ApiMessageAndVersion])
         extends EventQueue.Event {
+
     override def run(): Unit = {
       try {
-        image.write(writer.append(_))
+        val consumer = new RecordListConsumer(maxBatchSize, writer)
+        image.write(consumer)
         writer.freeze()
       } finally {
         try {
