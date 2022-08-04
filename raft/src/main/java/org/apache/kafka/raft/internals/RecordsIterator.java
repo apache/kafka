@@ -25,7 +25,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.protocol.DataInputStreamReadable;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.DefaultRecordBatch;
@@ -184,7 +183,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
         return Optional.empty();
     }
 
-    private Batch<T> readBatch(DefaultRecordBatch batch) throws CorruptRecordException {
+    private Batch<T> readBatch(DefaultRecordBatch batch) {
         if (doCrcValidation) {
             // Perform a CRC validity check on this batch
             batch.ensureValid();
