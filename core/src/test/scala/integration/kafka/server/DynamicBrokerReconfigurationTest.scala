@@ -1077,7 +1077,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       }
     }
 
-    verifyListener(SecurityProtocol.SSL, None)
+    verifyListener(SecurityProtocol.SSL, None, "add-ssl-listener-group2")
     createAdminClient(SecurityProtocol.SSL, SecureInternal)
     verifyRemoveListener("SSL", SecurityProtocol.SSL, Seq.empty)
   }
@@ -1174,10 +1174,10 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       "Processors not started for new listener")
     if (saslMechanisms.nonEmpty)
       saslMechanisms.foreach { mechanism =>
-        verifyListener(securityProtocol, Some(mechanism))
+        verifyListener(securityProtocol, Some(mechanism), s"add-listener-group-$securityProtocol-$mechanism")
       }
     else
-      verifyListener(securityProtocol, None)
+      verifyListener(securityProtocol, None, s"add-listener-group-$securityProtocol")
   }
 
   private def verifyRemoveListener(listenerName: String, securityProtocol: SecurityProtocol,
@@ -1244,7 +1244,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     verifyTimeout(consumerFuture)
   }
 
-  private def verifyListener(securityProtocol: SecurityProtocol, saslMechanism: Option[String]): Unit = {
+  private def verifyListener(securityProtocol: SecurityProtocol, saslMechanism: Option[String], groupId: String): Unit = {
     val mechanism = saslMechanism.getOrElse("")
     val retries = 1000 // since it may take time for metadata to be updated on all brokers
     val producer = ProducerBuilder().listenerName(securityProtocol.name)
@@ -1252,7 +1252,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       .saslMechanism(mechanism)
       .maxRetries(retries)
       .build()
-    val consumer = ConsumerBuilder(s"add-listener-group-$securityProtocol-$mechanism")
+    val consumer = ConsumerBuilder(groupId)
       .listenerName(securityProtocol.name)
       .securityProtocol(securityProtocol)
       .saslMechanism(mechanism)
