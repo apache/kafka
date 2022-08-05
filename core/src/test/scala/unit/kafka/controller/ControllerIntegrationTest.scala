@@ -26,8 +26,7 @@ import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.{LogCaptureAppender, TestUtils}
 import kafka.zk.{FeatureZNodeStatus, _}
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
-import org.apache.kafka.common.message.AlterPartitionRequestData
-import org.apache.kafka.common.message.AlterPartitionResponseData
+import org.apache.kafka.common.message.{AlterPartitionRequestData, AlterPartitionResponseData}
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
@@ -1043,6 +1042,73 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       ).asJava)
 
     assertEquals(expectedAlterPartitionResponse, future.get(10, TimeUnit.SECONDS))
+  }
+
+  @Test
+  def testShutdownBrokerNotAddedToIsr(): Unit = {
+    servers = makeServers(2)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val otherBroker = servers.find(_.config.brokerId != controllerId).get
+    val brokerId = otherBroker.config.brokerId
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(controllerId, brokerId))
+    val fullIsr = List(controllerId, brokerId)
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+
+    // Shut down follower.
+    servers(brokerId).shutdown()
+    servers(brokerId).awaitShutdown()
+
+    val controller = getController().kafkaController
+    val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
+    val newLeaderAndIsr = leaderIsrAndControllerEpochMap(tp).leaderAndIsr
+    val topicId = controller.controllerContext.topicIds(tp.topic)
+    val controllerEpoch = controller.controllerContext.liveBrokerIdAndEpochs(controllerId)
+
+    // We expect only the controller (online broker) to be in ISR
+    assertEquals(List(controllerId), newLeaderAndIsr.isr)
+
+    // Try to update ISR to contain the offline broker.
+    val alterPartitionRequest = new AlterPartitionRequestData()
+      .setBrokerId(controllerId)
+      .setBrokerEpoch(controllerEpoch)
+      .setTopics(Seq(new AlterPartitionRequestData.TopicData()
+        .setTopicId(topicId)
+        .setPartitions(Seq(new AlterPartitionRequestData.PartitionData()
+          .setPartitionIndex(tp.partition)
+          .setLeaderEpoch(newLeaderAndIsr.leaderEpoch)
+          .setPartitionEpoch(newLeaderAndIsr.partitionEpoch)
+          .setNewIsr(fullIsr.map(Int.box).asJava)
+          .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
+        ).asJava)
+      ).asJava)
+
+    val future = new CompletableFuture[AlterPartitionResponseData]()
+    controller.eventManager.put(AlterPartitionReceived(
+      alterPartitionRequest,
+      AlterPartitionRequestData.HIGHEST_SUPPORTED_VERSION,
+      future.complete
+    ))
+
+    // We expect an ineligble replica error response for the partition.
+    val expectedAlterPartitionResponse = new AlterPartitionResponseData()
+      .setTopics(Seq(new AlterPartitionResponseData.TopicData()
+        .setTopicId(topicId)
+        .setPartitions(Seq(new AlterPartitionResponseData.PartitionData()
+          .setPartitionIndex(tp.partition)
+          .setErrorCode(Errors.INELIGIBLE_REPLICA.code())
+          .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
+        ).asJava)
+      ).asJava)
+
+    assertEquals(expectedAlterPartitionResponse, future.get(10, TimeUnit.SECONDS))
+    assertEquals(List(controllerId), newLeaderAndIsr.isr)
+
+    // Bring replica back online.
+    servers(brokerId).startup()
+
+    // Wait for broker to rejoin ISR.
+    TestUtils.waitUntilTrue(() => fullIsr == zkClient.getTopicPartitionState(tp).get.leaderAndIsr.isr, "Replica did not rejoin ISR.")
   }
 
   @Test

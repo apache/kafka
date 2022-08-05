@@ -2363,7 +2363,23 @@ class KafkaController(val config: KafkaConfig,
             )
             None
           } else {
-            Some(tp -> newLeaderAndIsr)
+            // Pull out replicas being added to ISR and verify they are all online
+            // If a replica is not online, reject the update as specified in KIP-841.
+            val ineligibleReplicas = newLeaderAndIsr.isr.filter(!controllerContext.liveBrokerIds.contains(_))
+            if (ineligibleReplicas.size > 0) {
+              info(s"Rejecting AlterPartition request from node $brokerId for $tp because " +
+                s"it specified ineligible replicas $ineligibleReplicas in the new ISR ${newLeaderAndIsr.isr}."
+              )
+
+              if (alterPartitionRequestVersion > 1) {
+                partitionResponses(tp) = Left(Errors.INELIGIBLE_REPLICA)
+              } else {
+                partitionResponses(tp) = Left(Errors.OPERATION_NOT_ATTEMPTED)
+              }
+              None
+            } else {
+              Some(tp -> newLeaderAndIsr)
+            }
           }
 
         case None =>
