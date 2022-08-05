@@ -32,15 +32,22 @@ trait SnapshotWriterBuilder {
             lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]]
 }
 
+/**
+ * The RecordListConsumer takes as input a potentially long list of records, and feeds the
+ * SnapshotWriter a series of smaller lists of records.
+ *
+ * Note: from the perspective of Kafka, the snapshot file is really just a list of records,
+ * and we don't care about batches. Batching is irrelevant to the meaning of the snapshot.
+ */
 class RecordListConsumer(
-  val maxBatchSize: Int,
+  val maxRecordsInBatch: Int,
   val writer: SnapshotWriter[ApiMessageAndVersion]
 ) extends Consumer[java.util.List[ApiMessageAndVersion]] {
   override def accept(messages: java.util.List[ApiMessageAndVersion]): Unit = {
     var i = 0
     while (i < messages.size()) {
-      writer.append(messages.subList(i, Math.min(i + maxBatchSize, messages.size())));
-      i += maxBatchSize
+      writer.append(messages.subList(i, Math.min(i + maxRecordsInBatch, messages.size())));
+      i += maxRecordsInBatch
     }
   }
 }
@@ -52,11 +59,14 @@ class BrokerMetadataSnapshotter(
   writerBuilder: SnapshotWriterBuilder
 ) extends Logging with MetadataSnapshotter {
   /**
-   * The maximum number of records we will put in each batch. Do not change this unless
-   * you also change the equivalent constant in the Raft layer, and have considered the
-   * compatibility issues.
+   * The maximum number of records we will put in each batch.
+   *
+   * From the perspective of the Raft layer, the limit on batch size is specified in terms of
+   * bytes, not number of records. @See {@link KafkaRaftClient#MAX_BATCH_SIZE_BYTES} for details.
+   * However, it's more convenient to limit the batch size here in terms of number of records.
+   * So we chose a low number that will not cause problems.
    */
-  private val maxBatchSize = 1024
+  private val maxRecordsInBatch = 1024
 
   private val logContext = new LogContext(s"[BrokerMetadataSnapshotter id=$brokerId] ")
   logIdent = logContext.logPrefix()
@@ -102,7 +112,7 @@ class BrokerMetadataSnapshotter(
 
     override def run(): Unit = {
       try {
-        val consumer = new RecordListConsumer(maxBatchSize, writer)
+        val consumer = new RecordListConsumer(maxRecordsInBatch, writer)
         image.write(consumer)
         writer.freeze()
       } finally {
