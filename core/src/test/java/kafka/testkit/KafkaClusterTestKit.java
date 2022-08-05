@@ -40,6 +40,7 @@ import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.raft.RaftConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -115,6 +116,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
     public static class Builder {
         private TestKitNodes nodes;
         private Map<String, String> configProps = new HashMap<>();
+        private MockFaultHandler metadataFaultHandler = new MockFaultHandler("metadataFaultHandler");
+        private MockFaultHandler fatalFaultHandler = new MockFaultHandler("fatalFaultHandler");
 
         public Builder(TestKitNodes nodes) {
             this.nodes = nodes;
@@ -190,7 +193,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         connectFutureManager.future,
                         KafkaRaftServer.configSchema(),
                         raftManager.apiVersions(),
-                        bootstrapMetadata
+                        bootstrapMetadata,
+                        metadataFaultHandler,
+                        fatalFaultHandler
                     );
                     controllers.put(node.id(), controller);
                     controller.socketServerFirstBoundPortFuture().whenComplete((port, e) -> {
@@ -273,7 +278,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 throw e;
             }
             return new KafkaClusterTestKit(executorService, nodes, controllers,
-                brokers, raftManagers, connectFutureManager, baseDirectory);
+                brokers, raftManagers, connectFutureManager, baseDirectory,
+                metadataFaultHandler, fatalFaultHandler);
         }
 
         private String listeners(int node) {
@@ -314,14 +320,20 @@ public class KafkaClusterTestKit implements AutoCloseable {
     private final Map<Integer, KafkaRaftManager<ApiMessageAndVersion>> raftManagers;
     private final ControllerQuorumVotersFutureManager controllerQuorumVotersFutureManager;
     private final File baseDirectory;
+    private final MockFaultHandler metadataFaultHandler;
+    private final MockFaultHandler fatalFaultHandler;
 
-    private KafkaClusterTestKit(ExecutorService executorService,
-                                TestKitNodes nodes,
-                                Map<Integer, ControllerServer> controllers,
-                                Map<Integer, BrokerServer> brokers,
-                                Map<Integer, KafkaRaftManager<ApiMessageAndVersion>> raftManagers,
-                                ControllerQuorumVotersFutureManager controllerQuorumVotersFutureManager,
-                                File baseDirectory) {
+    private KafkaClusterTestKit(
+        ExecutorService executorService,
+        TestKitNodes nodes,
+        Map<Integer, ControllerServer> controllers,
+        Map<Integer, BrokerServer> brokers,
+        Map<Integer, KafkaRaftManager<ApiMessageAndVersion>> raftManagers,
+        ControllerQuorumVotersFutureManager controllerQuorumVotersFutureManager,
+        File baseDirectory,
+        MockFaultHandler metadataFaultHandler,
+        MockFaultHandler fatalFaultHandler
+    ) {
         this.executorService = executorService;
         this.nodes = nodes;
         this.controllers = controllers;
@@ -329,6 +341,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
         this.raftManagers = raftManagers;
         this.controllerQuorumVotersFutureManager = controllerQuorumVotersFutureManager;
         this.baseDirectory = baseDirectory;
+        this.metadataFaultHandler = metadataFaultHandler;
+        this.fatalFaultHandler = fatalFaultHandler;
     }
 
     public void format() throws Exception {
@@ -520,6 +534,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
             executorService.shutdownNow();
             executorService.awaitTermination(5, TimeUnit.MINUTES);
         }
+        metadataFaultHandler.maybeRethrowFirstException();
+        fatalFaultHandler.maybeRethrowFirstException();
     }
 
     private void waitForAllFutures(List<Entry<String, Future<?>>> futureEntries)
