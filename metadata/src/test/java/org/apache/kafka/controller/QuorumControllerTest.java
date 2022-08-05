@@ -45,6 +45,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.RequestHeaderData;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.ConfigResource;
@@ -1177,6 +1178,30 @@ public class QuorumControllerTest {
                 TestUtils.waitForCondition(() -> {
                     return authorizers.stream().allMatch(a -> a.initialLoadFuture().isDone());
                 }, "Failed to complete initial authorizer load for all controllers.");
+            }
+        }
+    }
+
+    @Test
+    public void testFatalMetadataReplayErrorOnActive() throws Throwable {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+            })) {
+                QuorumController active = controlEnv.activeController();
+                CompletableFuture<Void> future = active.appendWriteEvent("errorEvent",
+                        OptionalLong.empty(), () -> {
+                            return ControllerResult.of(Collections.singletonList(new ApiMessageAndVersion(
+                                    new ConfigRecord().
+                                            setName(null).
+                                            setResourceName(null).
+                                            setResourceType((byte) 255).
+                                            setValue(null), (short) 0)), null);
+                        });
+                assertThrows(ExecutionException.class, () -> future.get());
+                assertEquals(NullPointerException.class,
+                        controlEnv.fatalFaultHandler().firstException().getCause().getClass());
+                controlEnv.fatalFaultHandler().setIgnore(true);
+                controlEnv.metadataFaultHandler().setIgnore(true);
             }
         }
     }
