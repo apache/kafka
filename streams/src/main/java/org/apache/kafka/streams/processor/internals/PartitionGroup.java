@@ -216,8 +216,9 @@ public class PartitionGroup {
     }
 
     // creates queues for new partitions, removes old queues, saves cached records for previously assigned partitions
-    void updatePartitions(final Set<TopicPartition> newInputPartitions, final Function<TopicPartition, RecordQueue> recordQueueCreator) {
+    void updatePartitions(final Set<TopicPartition> inputPartitions, final Function<TopicPartition, RecordQueue> recordQueueCreator) {
         final Set<TopicPartition> removedPartitions = new HashSet<>();
+        final Set<TopicPartition> newInputPartitions = new HashSet<>(inputPartitions);
         final Iterator<Map.Entry<TopicPartition, RecordQueue>> queuesIterator = partitionQueues.entrySet().iterator();
         while (queuesIterator.hasNext()) {
             final Map.Entry<TopicPartition, RecordQueue> queueEntry = queuesIterator.next();

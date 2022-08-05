@@ -40,16 +40,14 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.NoRetryException;
 import org.apache.kafka.test.TestUtils;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -73,43 +71,38 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
-@Category(IntegrationTest.class)
+@Timeout(600)
+@Tag("integration")
 public class HighAvailabilityTaskAssignorIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
-
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
-
-    @Rule
-    public TestName testName = new TestName();
-
     @Test
-    public void shouldScaleOutWithWarmupTasksAndInMemoryStores() throws InterruptedException {
+    public void shouldScaleOutWithWarmupTasksAndInMemoryStores(final TestInfo testInfo) throws InterruptedException {
         // NB: this test takes at least a minute to run, because it needs a probing rebalance, and the minimum
         // value is one minute
-        shouldScaleOutWithWarmupTasks(storeName -> Materialized.as(Stores.inMemoryKeyValueStore(storeName)));
+        shouldScaleOutWithWarmupTasks(storeName -> Materialized.as(Stores.inMemoryKeyValueStore(storeName)), testInfo);
     }
 
     @Test
-    public void shouldScaleOutWithWarmupTasksAndPersistentStores() throws InterruptedException {
+    public void shouldScaleOutWithWarmupTasksAndPersistentStores(final TestInfo testInfo) throws InterruptedException {
         // NB: this test takes at least a minute to run, because it needs a probing rebalance, and the minimum
         // value is one minute
-        shouldScaleOutWithWarmupTasks(storeName -> Materialized.as(Stores.persistentKeyValueStore(storeName)));
+        shouldScaleOutWithWarmupTasks(storeName -> Materialized.as(Stores.persistentKeyValueStore(storeName)), testInfo);
     }
 
-    private void shouldScaleOutWithWarmupTasks(final Function<String, Materialized<Object, Object, KeyValueStore<Bytes, byte[]>>> materializedFunction) throws InterruptedException {
-        final String testId = safeUniqueTestName(getClass(), testName);
+    private void shouldScaleOutWithWarmupTasks(final Function<String, Materialized<Object, Object, KeyValueStore<Bytes, byte[]>>> materializedFunction,
+                                               final TestInfo testInfo) throws InterruptedException {
+        final String testId = safeUniqueTestName(getClass(), testInfo);
         final String appId = "appId_" + System.currentTimeMillis() + "_" + testId;
         final String inputTopic = "input" + testId;
         final Set<TopicPartition> inputTopicPartitions = mkSet(

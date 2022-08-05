@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
+import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaException;
@@ -583,24 +584,29 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
-        // ignoring the groupId and assume one test would only work on one group only
+    synchronized public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, ListConsumerGroupOffsetsOptions options) {
+        // ignoring the groups and assume one test would only work on one group only
+        if (groupSpecs.size() != 1)
+            throw new UnsupportedOperationException("Not implemented yet");
+
+        String group = groupSpecs.keySet().iterator().next();
+        Collection<TopicPartition> topicPartitions = groupSpecs.get(group).topicPartitions();
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
 
         if (listConsumerGroupOffsetsException != null) {
             future.completeExceptionally(listConsumerGroupOffsetsException);
         } else {
-            if (options.topicPartitions().isEmpty()) {
+            if (topicPartitions.isEmpty()) {
                 future.complete(committedOffsets.entrySet().stream()
                         .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
             } else {
                 future.complete(committedOffsets.entrySet().stream()
-                        .filter(entry -> options.topicPartitions().contains(entry.getKey()))
+                        .filter(entry -> topicPartitions.contains(entry.getKey()))
                         .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
             }
         }
 
-        return new ListConsumerGroupOffsetsResult(future);
+        return new ListConsumerGroupOffsetsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future));
     }
 
     @Override

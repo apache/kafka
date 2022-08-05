@@ -38,7 +38,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.{BeforeEach, Disabled, Test, TestInfo, Timeout}
+import org.junit.jupiter.api.{BeforeEach, Disabled, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
@@ -251,9 +251,11 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   }
 
   // Verify that if controller is in the midst of processing a request, shutdown completes
-  // without waiting for request timeout.
-  @Test
-  def testControllerShutdownDuringSend(): Unit = {
+  // without waiting for request timeout. Since this involves LeaderAndIsr request, it is
+  // ZK-only for now.
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testControllerShutdownDuringSend(quorum: String): Unit = {
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
 

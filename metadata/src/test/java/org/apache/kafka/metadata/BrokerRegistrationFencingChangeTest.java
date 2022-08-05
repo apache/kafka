@@ -29,16 +29,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class BrokerRegistrationFencingChangeTest {
     @Test
     public void testValues() {
-        assertEquals((byte) -1, BrokerRegistrationFencingChange.FENCE.value());
+        assertEquals((byte) 1, BrokerRegistrationFencingChange.FENCE.value());
         assertEquals((byte) 0, BrokerRegistrationFencingChange.NONE.value());
-        assertEquals((byte) 1, BrokerRegistrationFencingChange.UNFENCE.value());
+        assertEquals((byte) -1, BrokerRegistrationFencingChange.UNFENCE.value());
     }
 
     @Test
     public void testAsBoolean() {
-        assertEquals(Optional.of(false), BrokerRegistrationFencingChange.FENCE.asBoolean());
+        assertEquals(Optional.of(true), BrokerRegistrationFencingChange.FENCE.asBoolean());
         assertEquals(Optional.empty(), BrokerRegistrationFencingChange.NONE.asBoolean());
-        assertEquals(Optional.of(true), BrokerRegistrationFencingChange.UNFENCE.asBoolean());
+        assertEquals(Optional.of(false), BrokerRegistrationFencingChange.UNFENCE.asBoolean());
     }
 
     @Test

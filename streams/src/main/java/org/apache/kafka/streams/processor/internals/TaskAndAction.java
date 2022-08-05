@@ -24,7 +24,9 @@ public class TaskAndAction {
 
     enum Action {
         ADD,
-        REMOVE
+        REMOVE,
+        PAUSE,
+        RESUME
     }
 
     private final Task task;
@@ -47,6 +49,16 @@ public class TaskAndAction {
         return new TaskAndAction(null, taskId, Action.REMOVE);
     }
 
+    public static TaskAndAction createPauseTask(final TaskId taskId) {
+        Objects.requireNonNull(taskId, "Task ID of task to pause is null!");
+        return new TaskAndAction(null, taskId, Action.PAUSE);
+    }
+
+    public static TaskAndAction createResumeTask(final TaskId taskId) {
+        Objects.requireNonNull(taskId, "Task ID of task to resume is null!");
+        return new TaskAndAction(null, taskId, Action.RESUME);
+    }
+
     public Task getTask() {
         if (action != Action.ADD) {
             throw new IllegalStateException("Action type " + action + " cannot have a task!");
@@ -55,7 +67,7 @@ public class TaskAndAction {
     }
 
     public TaskId getTaskId() {
-        if (action != Action.REMOVE) {
+        if (action != Action.REMOVE && action != Action.PAUSE && action != Action.RESUME) {
             throw new IllegalStateException("Action type " + action + " cannot have a task ID!");
         }
         return taskId;

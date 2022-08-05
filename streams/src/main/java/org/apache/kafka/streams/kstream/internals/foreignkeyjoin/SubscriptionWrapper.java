@@ -23,7 +23,10 @@ import java.util.Objects;
 
 
 public class SubscriptionWrapper<K> {
-    static final byte CURRENT_VERSION = 1;
+    static final byte VERSION_0 = 0;
+    static final byte VERSION_1 = 1;
+
+    static final byte CURRENT_VERSION = VERSION_1;
 
     // v0 fields:
     private final long[] hash;

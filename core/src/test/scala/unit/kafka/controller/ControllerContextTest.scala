@@ -203,4 +203,25 @@ class ControllerContextTest {
     context.removeTopic(tp3.topic)
     assertEquals(0, context.preferredReplicaImbalanceCount)
   }
+
+  @Test
+  def testPreferredReplicaImbalanceMetricOnConcurrentTopicDeletion(): Unit = {
+    val topicA = "A"
+    val topicB = "B"
+    val tpA = new TopicPartition(topicA, 0)
+    val tpB = new TopicPartition(topicB, 0)
+    context.updatePartitionFullReplicaAssignment(tpA, ReplicaAssignment(Seq(1, 2, 3)))
+    context.updatePartitionFullReplicaAssignment(tpB, ReplicaAssignment(Seq(1, 2, 3)))
+    assertEquals(0, context.preferredReplicaImbalanceCount)
+
+    context.queueTopicDeletion(Set(topicA))
+    // All partitions in topic will be marked as Offline during deletion procedure
+    context.putPartitionLeadershipInfo(tpA, LeaderIsrAndControllerEpoch(LeaderAndIsr(LeaderAndIsr.NoLeader, List(1, 2, 3)), 0))
+    assertEquals(0, context.preferredReplicaImbalanceCount)
+
+    // Initiate topicB's topic deletion before topicA's deletion completes.
+    // Since topicA's delete-topic ZK node still exists, context.queueTopicDeletion will be called with Set(topicA, topicB)
+    context.queueTopicDeletion(Set(topicA, topicB))
+    assertEquals(0, context.preferredReplicaImbalanceCount)
+  }
 }

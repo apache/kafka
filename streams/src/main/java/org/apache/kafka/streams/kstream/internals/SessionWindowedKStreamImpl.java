@@ -289,7 +289,10 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         // do not enable cache if the emit final strategy is used
         if (materialized.cachingEnabled() && emitStrategy.type() != EmitStrategy.StrategyType.ON_WINDOW_CLOSE) {
             builder.withCachingEnabled();
+        } else {
+            builder.withCachingDisabled();
         }
+
         return builder;
     }
 

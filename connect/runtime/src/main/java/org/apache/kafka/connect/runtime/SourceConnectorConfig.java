@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUESTED;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUIRED;
@@ -47,6 +49,8 @@ import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.POL
 import static org.apache.kafka.common.utils.Utils.enumOptions;
 
 public class SourceConnectorConfig extends ConnectorConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(SourceConnectorConfig.class);
 
     protected static final String TOPIC_CREATION_GROUP = "Topic Creation";
 
@@ -221,6 +225,13 @@ public class SourceConnectorConfig extends ConnectorConfig {
         Object aliases = ConfigDef.parseType(TOPIC_CREATION_GROUPS_CONFIG, props.get(TOPIC_CREATION_GROUPS_CONFIG), ConfigDef.Type.LIST);
         if (aliases instanceof List) {
             topicCreationGroups.addAll((List<?>) aliases);
+        }
+
+        //Remove "topic.creation.groups" config if its present and the value is "default"
+        if (topicCreationGroups.contains(DEFAULT_TOPIC_CREATION_GROUP)) {
+            log.warn("'{}' topic creation group always exists and does not need to be listed explicitly",
+                DEFAULT_TOPIC_CREATION_GROUP);
+            topicCreationGroups.removeAll(Collections.singleton(DEFAULT_TOPIC_CREATION_GROUP));
         }
 
         ConfigDef newDef = new ConfigDef(baseConfigDef);

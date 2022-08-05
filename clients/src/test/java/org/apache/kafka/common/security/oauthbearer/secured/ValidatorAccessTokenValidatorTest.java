@@ -59,6 +59,25 @@ public class ValidatorAccessTokenValidatorTest extends AccessTokenValidatorTest 
             "fake is an unknown, unsupported or unavailable alg algorithm");
     }
 
+    @Test
+    public void testMissingSubShouldBeValid() throws Exception {
+        String subClaimName = "client_id";
+        String subject = "otherSub";
+        PublicJsonWebKey jwk = createRsaJwk();
+        AccessTokenBuilder tokenBuilder = new AccessTokenBuilder()
+            .jwk(jwk)
+            .alg(AlgorithmIdentifiers.RSA_USING_SHA256)
+            .addCustomClaim(subClaimName, subject)
+            .subjectClaimName(subClaimName)
+            .subject(null);
+        AccessTokenValidator validator = createAccessTokenValidator(tokenBuilder);
+
+        // Validation should succeed (e.g. signature verification) even if sub claim is missing
+        OAuthBearerToken token = validator.validate(tokenBuilder.build());
+
+        assertEquals(subject, token.principalName());
+    }
+
     private void testEncryptionAlgorithm(PublicJsonWebKey jwk, String alg) throws Exception {
         AccessTokenBuilder builder = new AccessTokenBuilder().jwk(jwk).alg(alg);
         AccessTokenValidator validator = createAccessTokenValidator(builder);

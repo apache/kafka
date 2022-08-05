@@ -62,13 +62,8 @@ class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
     extends SnapshotWriterBuilder {
   override def build(committedOffset: Long,
                      committedEpoch: Int,
-                     lastContainedLogTime: Long): SnapshotWriter[ApiMessageAndVersion] = {
-    raftClient.createSnapshot(committedOffset, committedEpoch, lastContainedLogTime).
-        asScala.getOrElse(
-      throw new RuntimeException("A snapshot already exists with " +
-        s"committedOffset=$committedOffset, committedEpoch=$committedEpoch, " +
-        s"lastContainedLogTime=$lastContainedLogTime")
-    )
+                     lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]] = {
+    raftClient.createSnapshot(committedOffset, committedEpoch, lastContainedLogTime).asScala
   }
 }
 
@@ -86,7 +81,8 @@ class BrokerServer(
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
 ) extends KafkaBroker {
 
-  override def brokerState: BrokerState = lifecycleManager.state
+  override def brokerState: BrokerState = Option(lifecycleManager).
+    flatMap(m => Some(m.state)).getOrElse(BrokerState.NOT_RUNNING)
 
   import kafka.server.Server._
 
@@ -94,7 +90,7 @@ class BrokerServer(
 
   this.logIdent = logContext.logPrefix
 
-  @volatile private var lifecycleManager: BrokerLifecycleManager = null
+  @volatile var lifecycleManager: BrokerLifecycleManager = null
 
   private val isShuttingDown = new AtomicBoolean(false)
 

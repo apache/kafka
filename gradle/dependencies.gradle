@@ -62,7 +62,7 @@ versions += [
   checkstyle: "8.36.2",
   commonsCli: "1.4",
   dropwizardMetrics: "4.1.12.1",
-  gradle: "7.4.2",
+  gradle: "7.5",
   grgit: "4.1.1",
   httpclient: "4.5.13",
   easymock: "4.3",
@@ -119,7 +119,7 @@ versions += [
   spotbugs: "4.2.2",
   swaggerAnnotations: "2.2.0",
   swaggerJaxrs2: "2.2.0",
-  zinc: "1.3.5",
+  zinc: "1.6.1",
   zookeeper: "3.6.3",
   zstd: "1.5.2-1"
 ]

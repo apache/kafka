@@ -239,6 +239,47 @@ class PartitionTest extends AbstractPartitionTest {
   }
 
   @Test
+  def testReplicaFetchToFollower(): Unit = {
+    val controllerEpoch = 3
+    val followerId = brokerId + 1
+    val leaderId = brokerId + 2
+    val replicas = List[Integer](brokerId, followerId, leaderId).asJava
+    val isr = List[Integer](brokerId, followerId, leaderId).asJava
+    val leaderEpoch = 8
+    val partitionEpoch = 1
+
+    assertTrue(partition.makeFollower(new LeaderAndIsrPartitionState()
+      .setControllerEpoch(controllerEpoch)
+      .setLeader(leaderId)
+      .setLeaderEpoch(leaderEpoch)
+      .setIsr(isr)
+      .setPartitionEpoch(partitionEpoch)
+      .setReplicas(replicas)
+      .setIsNew(true),
+      offsetCheckpoints, None
+    ))
+
+    def assertFetchFromReplicaFails[T <: ApiException](
+      expectedExceptionClass: Class[T],
+      leaderEpoch: Option[Int]
+    ): Unit = {
+      assertThrows(expectedExceptionClass, () => {
+        fetchFollower(
+          partition,
+          replicaId = followerId,
+          fetchOffset = 0L,
+          leaderEpoch = leaderEpoch
+        )
+      })
+    }
+
+    assertFetchFromReplicaFails(classOf[NotLeaderOrFollowerException], None)
+    assertFetchFromReplicaFails(classOf[NotLeaderOrFollowerException], Some(leaderEpoch))
+    assertFetchFromReplicaFails(classOf[UnknownLeaderEpochException], Some(leaderEpoch + 1))
+    assertFetchFromReplicaFails(classOf[FencedLeaderEpochException], Some(leaderEpoch - 1))
+  }
+
+  @Test
   def testFetchFromUnrecognizedFollower(): Unit = {
     val controllerEpoch = 3
     val leader = brokerId

@@ -38,6 +38,7 @@ import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyLong}
 import org.mockito.Mockito.{mock, reset, times, verify, when}
 
+import java.util.concurrent.ConcurrentMap
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Iterable, Map, mutable}
@@ -117,7 +118,7 @@ class LogLoaderTest {
 
         override def loadLog(logDir: File, hadCleanShutdown: Boolean, recoveryPoints: Map[TopicPartition, Long],
                              logStartOffsets: Map[TopicPartition, Long], defaultConfig: LogConfig,
-                             topicConfigs: Map[String, LogConfig]): UnifiedLog = {
+                             topicConfigs: Map[String, LogConfig], numRemainingSegments: ConcurrentMap[String, Int]): UnifiedLog = {
           if (simulateError.hasError) {
             simulateError.errorType match {
               case ErrorTypes.KafkaStorageExceptionWithIOExceptionCause =>
