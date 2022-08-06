@@ -87,7 +87,7 @@ import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
-import org.apache.kafka.raft.SnapshotReason;
+import org.apache.kafka.metadata.util.SnapshotReason;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -1326,7 +1326,7 @@ public final class QuorumController implements Controller {
                 snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
             }
 
-            log.info("Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot because {}.",
+            log.info("Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot because, {}.",
                 lastCommittedEpoch, lastCommittedOffset, newBytesSinceLastSnapshot, SnapshotReason.MaxBytesExceeded);
 
             snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset, lastCommittedEpoch, lastCommittedTimestamp);

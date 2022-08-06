@@ -14,21 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package org.apache.kafka.metadata.util;
 
 public enum SnapshotReason {
-	UnknownReason("unknown reason"),
-	MaxBytesExceeded("max bytes were exceeded"),
+    UnknownReason("unknown reason"),
+    MaxBytesExceeded("max bytes were exceeded"),
     MetadataVersionChanged("metadata version was changed");
 
-	private final String snapshotReason;
+    private final String snapshotReason;
 
-	SnapshotReason(String snapshotReason) {
-		this.snapshotReason = snapshotReason;
-	}
+    SnapshotReason(String snapshotReason) {
+        this.snapshotReason = snapshotReason;
+    }
 
-	@Override
-	public String toString() {
-		return snapshotReason;
-	}
+    @Override
+    public String toString() {
+        return snapshotReason;
+    }
 }

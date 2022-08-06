@@ -17,7 +17,7 @@
 package kafka.server.metadata
 
 import org.apache.kafka.image.MetadataImage
-import org.apache.kafka.raft.SnapshotReason
+import org.apache.kafka.metadata.util.SnapshotReason
 
 
 /**
@@ -32,5 +32,5 @@ trait MetadataSnapshotter {
    *
    * @return                      True if we will write out a new snapshot; false otherwise.
    */
-  def maybeStartSnapshot(lastContainedLogTime: Long, image: MetadataImage, reason: SnapshotReason): Boolean
+  def maybeStartSnapshot(lastContainedLogTime: Long, image: MetadataImage, reason: Set[SnapshotReason]): Boolean
 }
