@@ -335,6 +335,7 @@ abstract class QuotaTestClients(topic: String,
   def verifyConsumerClientThrottleTimeMetric(expectThrottle: Boolean, maxThrottleTime: Option[Double] = None): Unit = {
     val tags = new HashMap[String, String]
     tags.put("client-id", consumerClientId)
+    tags.put("group-id", "QuotasTest")
     val avgMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-avg", "consumer-fetch-manager-metrics", "", tags))
     val maxMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-max", "consumer-fetch-manager-metrics", "", tags))
 

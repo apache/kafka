@@ -1426,11 +1426,13 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // Verify the metric exist.
     val tags1 = new util.HashMap[String, String]()
     tags1.put("client-id", "testPerPartitionLeadMetricsCleanUpWithSubscribe")
+    tags1.put("group-id", consumerConfig.getProperty(ConsumerConfig.GROUP_ID_CONFIG))
     tags1.put("topic", tp.topic())
     tags1.put("partition", String.valueOf(tp.partition()))
 
     val tags2 = new util.HashMap[String, String]()
     tags2.put("client-id", "testPerPartitionLeadMetricsCleanUpWithSubscribe")
+    tags2.put("group-id", consumerConfig.getProperty(ConsumerConfig.GROUP_ID_CONFIG))
     tags2.put("topic", tp2.topic())
     tags2.put("partition", String.valueOf(tp2.partition()))
     val fetchLead0 = consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags1))
@@ -1465,11 +1467,13 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // Verify the metric exist.
     val tags1 = new util.HashMap[String, String]()
     tags1.put("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe")
+    tags1.put("group-id", consumerConfig.getProperty(ConsumerConfig.GROUP_ID_CONFIG))
     tags1.put("topic", tp.topic())
     tags1.put("partition", String.valueOf(tp.partition()))
 
     val tags2 = new util.HashMap[String, String]()
     tags2.put("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe")
+    tags2.put("group-id", consumerConfig.getProperty(ConsumerConfig.GROUP_ID_CONFIG))
     tags2.put("topic", tp2.topic())
     tags2.put("partition", String.valueOf(tp2.partition()))
     val fetchLag0 = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags1))
@@ -1502,6 +1506,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // Verify the metric exist.
     val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLeadMetricsCleanUpWithAssign")
+    tags.put("group-id", consumerConfig.getProperty(ConsumerConfig.GROUP_ID_CONFIG))
     tags.put("topic", tp.topic())
     tags.put("partition", String.valueOf(tp.partition()))
     val fetchLead = consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags))
@@ -1531,6 +1536,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // Verify the metric exist.
     val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
+    tags.put("group-id", consumerConfig.getProperty(ConsumerConfig.GROUP_ID_CONFIG))
     tags.put("topic", tp.topic())
     tags.put("partition", String.valueOf(tp.partition()))
     val fetchLag = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags))
@@ -1562,6 +1568,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // Verify the metric exist.
     val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
+    tags.put("group-id", consumerConfig.getProperty(ConsumerConfig.GROUP_ID_CONFIG))
     tags.put("topic", tp.topic())
     tags.put("partition", String.valueOf(tp.partition()))
     val fetchLag = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags))
@@ -1584,6 +1591,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLeadWithMaxPollRecords")
+    tags.put("group-id", consumerConfig.getProperty(ConsumerConfig.GROUP_ID_CONFIG))
     tags.put("topic", tp.topic())
     tags.put("partition", String.valueOf(tp.partition()))
     val lead = consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags))
@@ -1606,6 +1614,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLagWithMaxPollRecords")
+    tags.put("group-id", consumerConfig.getProperty(ConsumerConfig.GROUP_ID_CONFIG))
     tags.put("topic", tp.topic())
     tags.put("partition", String.valueOf(tp.partition()))
     val lag = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags))
