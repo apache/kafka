@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -88,7 +89,7 @@ public class MaskFieldTest {
         VALUES_WITH_SCHEMA.put("long", 42L);
         VALUES_WITH_SCHEMA.put("float", 42f);
         VALUES_WITH_SCHEMA.put("double", 42d);
-        VALUES_WITH_SCHEMA.put("string", "hmm");
+        VALUES_WITH_SCHEMA.put("string", "121.164.31.62");
         VALUES_WITH_SCHEMA.put("date", new Date());
         VALUES_WITH_SCHEMA.put("time", new Date());
         VALUES_WITH_SCHEMA.put("timestamp", new Date());
@@ -98,10 +99,15 @@ public class MaskFieldTest {
     }
 
     private static MaskField<SinkRecord> transform(List<String> fields, String replacement) {
+        return transform(fields, replacement, "^[\\w\\W]*");
+    }
+
+    private static MaskField<SinkRecord> transform(List<String> fields, String replacement, String regex) {
         final MaskField<SinkRecord> xform = new MaskField.Value<>();
         Map<String, Object> props = new HashMap<>();
         props.put("fields", fields);
         props.put("replacement", replacement);
+        props.put("regex", regex);
         xform.configure(props);
         return xform;
     }
@@ -194,6 +200,38 @@ public class MaskFieldTest {
         checkReplacementSchemaless("bigdec", BigDecimal.valueOf(123.0));
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testSchemalessWithReplacementRegex() {
+        final String replacement = "0";
+        final String regex = "\\d*\\.\\d*\\.\\d*\\.\\d*";
+        final String stringField = "string";
+        final String integerField = "int";
+
+        SinkRecord record = record(null, VALUES);
+        Map<String, Object> updatedValue = (Map) transform(Arrays.asList(stringField, integerField), replacement, regex)
+                .apply(record)
+                .value();
+
+        assertEquals(replacement, updatedValue.get(stringField));
+        assertEquals(Integer.valueOf(replacement), updatedValue.get(integerField));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testSchemalessWithReplacementRegexPartial() {
+        final String replacement = "$1.$2.***.***";
+        final String regex = "(\\d*)\\.(\\d*)\\.\\d*\\.\\d*";
+        final String stringField = "string";
+
+        SinkRecord record = record(null, singletonMap(stringField, "121.164.31.62"));
+        Map<String, Object> updatedValue = (Map) transform(singletonList(stringField), replacement, regex)
+                .apply(record)
+                .value();
+
+        assertEquals("121.164.***.***", updatedValue.get(stringField));
+    }
+
     @Test
     public void testSchemalessUnsupportedReplacementType() {
         String exMessage = "Cannot mask value of type";
@@ -207,6 +245,19 @@ public class MaskFieldTest {
     }
 
     @Test
+    public void testSchemalessUnsupportedReplacementRegexType() {
+        String exMessage = "Unable to convert";
+        Class<DataException> exClass = DataException.class;
+
+        assertThrows(exMessage, exClass, () -> {
+            String regex = "\\d*\\.\\d*\\.\\d*\\.\\d*";
+            String replacement = "{1}.{2}.***.***";
+            SinkRecord record = record(null, VALUES);
+            transform(Arrays.asList("int", "string"), replacement, regex).apply(record);
+        });
+    }
+
+    @Test
     public void testWithSchemaAndReplacement() {
         checkReplacementWithSchema("short", (short) 123);
         checkReplacementWithSchema("byte", (byte) 123);
@@ -216,6 +267,22 @@ public class MaskFieldTest {
         checkReplacementWithSchema("double", 123.0);
         checkReplacementWithSchema("string", "123");
         checkReplacementWithSchema("decimal", BigDecimal.valueOf(123.0));
+    }
+
+    @Test
+    public void testWithSchemaAndReplacementRegex() {
+        final String replacement = "0";
+        final String regex = "\\d*\\.\\d*\\.\\d*\\.\\d*";
+        final String stringField = "string";
+        final String integerField = "int";
+
+        SinkRecord record = record(SCHEMA, VALUES_WITH_SCHEMA);
+        Struct updatedValue = (Struct) transform(Arrays.asList(stringField, integerField), replacement, regex)
+                .apply(record)
+                .value();
+
+        assertEquals(replacement, updatedValue.get(stringField));
+        assertEquals(Integer.valueOf(replacement), updatedValue.get(integerField));
     }
 
     @Test
@@ -249,5 +316,11 @@ public class MaskFieldTest {
     @Test
     public void testEmptyStringReplacementValue() {
         assertThrows(ConfigException.class, () -> checkReplacementSchemaless("short", ""), "String must be non-empty");
+    }
+
+    @Test
+    public void testInvalidRegexValue() {
+        assertThrows("Invalid regex", ConfigException.class, () ->
+                transform(singletonList("short"), "any", null).apply(record(null, VALUES)));
     }
 }
