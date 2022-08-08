@@ -22,7 +22,6 @@ import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
-
 import kafka.cluster.Broker.ServerInfo
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
@@ -50,6 +49,7 @@ import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.raft.{RaftClient, RaftConfig}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.snapshot.SnapshotWriter
 
@@ -78,7 +78,10 @@ class BrokerServer(
   val metrics: Metrics,
   val threadNamePrefix: Option[String],
   val initialOfflineDirs: Seq[String],
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
+  val brokerMetrics: BrokerServerMetrics,
+  val metadataLoadingFaultHandler: FaultHandler,
+  val metadataPublishingFaultHandler: FaultHandler
 ) extends KafkaBroker {
 
   override def brokerState: BrokerState = Option(lifecycleManager).
@@ -309,16 +312,14 @@ class BrokerServer(
         ))
       }
 
-      // The metrics object for accessing broker related metrics
-      val brokerMetrics = BrokerServerMetrics(metrics)
-
       metadataListener = new BrokerMetadataListener(
         config.nodeId,
         time,
         threadNamePrefix,
         config.metadataSnapshotMaxNewRecordBytes,
         metadataSnapshotter,
-        brokerMetrics
+        brokerMetrics,
+        metadataLoadingFaultHandler
       )
 
       val networkListeners = new ListenerCollection()
@@ -436,7 +437,8 @@ class BrokerServer(
         clientQuotaMetadataManager,
         dynamicConfigHandlers.toMap,
         authorizer,
-        brokerMetrics)
+        metadataPublishingFaultHandler
+      )
 
       // Tell the metadata listener to start publishing its output, and wait for the first
       // publish operation to complete. This first operation will initialize logManager,

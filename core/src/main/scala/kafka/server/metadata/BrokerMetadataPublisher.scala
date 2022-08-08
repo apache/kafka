@@ -31,6 +31,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.fault.FaultHandler
 
 import scala.collection.mutable
 
@@ -103,7 +104,8 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
                               clientQuotaMetadataManager: ClientQuotaMetadataManager,
                               dynamicConfigHandlers: Map[String, ConfigHandler],
                               private val _authorizer: Option[Authorizer],
-                              brokerMetrics: BrokerServerMetrics) extends MetadataPublisher with Logging {
+                              val metadataPublishingFaultHandler: FaultHandler
+                             ) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${conf.nodeId}] "
 
   import BrokerMetadataPublisher._
@@ -259,9 +261,8 @@ class BrokerMetadataPublisher(conf: KafkaConfig,
       }
       publishedOffsetAtomic.set(newImage.highestOffsetAndEpoch().offset)
     } catch {
-      case t: Throwable => error(s"Error publishing broker metadata at $highestOffsetAndEpoch", t)
-        brokerMetrics.metadataApplyErrorCount.getAndIncrement()
-        throw t
+      case t: Throwable =>
+        metadataPublishingFaultHandler.handleFault("Error publishing broker metadata at " + highestOffsetAndEpoch, t)
     } finally {
       _firstPublish = false
     }

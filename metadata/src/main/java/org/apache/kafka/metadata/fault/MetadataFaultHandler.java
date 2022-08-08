@@ -27,10 +27,26 @@ import org.slf4j.LoggerFactory;
  */
 public class MetadataFaultHandler implements FaultHandler {
     private static final Logger log = LoggerFactory.getLogger(MetadataFaultHandler.class);
+    private final String prefix;
+    private final Runnable action;
+
+    public MetadataFaultHandler(
+        String prefix,
+        Runnable action
+    ) {
+        this.prefix = prefix;
+        this.action = action;
+    }
 
     @Override
     public void handleFault(String failureMessage, Throwable cause) {
+        failureMessage = prefix + ": " + failureMessage;
         FaultHandler.logFailureMessage(log, failureMessage, cause);
+        try {
+            action.run();
+        } catch (Throwable e) {
+            log.error("Failed to run MetadataFaultHandler action.", e);
+        }
         throw new MetadataFaultException("Encountered metadata fault: " + failureMessage, cause);
     }
 }

@@ -37,7 +37,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.controller.{BootstrapMetadata, Controller, QuorumController, QuorumControllerMetrics, QuorumFeatures}
+import org.apache.kafka.controller.{BootstrapMetadata, Controller, ControllerMetrics, QuorumController, QuorumControllerMetrics, QuorumFeatures}
 import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
@@ -66,8 +66,9 @@ class ControllerServer(
   val configSchema: KafkaConfigSchema,
   val raftApiVersions: ApiVersions,
   val bootstrapMetadata: BootstrapMetadata,
+  val controllerMetrics: ControllerMetrics,
   val metadataFaultHandler: FaultHandler,
-  val fatalFaultHandler: FaultHandler,
+  val fatalFaultHandler: FaultHandler
 ) extends Logging with KafkaMetricsGroup {
   import kafka.server.Server._
 
@@ -201,7 +202,7 @@ class ControllerServer(
           setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
           setMaxIdleIntervalNs(maxIdleIntervalNs).
-          setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)).
+          setMetrics(controllerMetrics).
           setCreateTopicPolicy(createTopicPolicy.asJava).
           setAlterConfigPolicy(alterConfigPolicy.asJava).
           setConfigurationValidator(new ControllerConfigurationValidator()).

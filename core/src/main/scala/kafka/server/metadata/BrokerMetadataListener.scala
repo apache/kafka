@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.snapshot.SnapshotReader
 
 
@@ -40,7 +41,8 @@ class BrokerMetadataListener(
   threadNamePrefix: Option[String],
   val maxBytesBetweenSnapshots: Long,
   val snapshotter: Option[MetadataSnapshotter],
-  brokerMetrics: BrokerServerMetrics
+  brokerMetrics: BrokerServerMetrics,
+  val metadataLoadingFaultHandler: FaultHandler
 ) extends RaftClient.Listener[ApiMessageAndVersion] with KafkaMetricsGroup {
   private val logContext = new LogContext(s"[BrokerMetadataListener id=$brokerId] ")
   private val log = logContext.logger(classOf[BrokerMetadataListener])
@@ -108,21 +110,19 @@ class BrokerMetadataListener(
   class HandleCommitsEvent(reader: BatchReader[ApiMessageAndVersion])
       extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
-      val results = try {
+      try {
         val loadResults = loadBatches(_delta, reader, None, None, None)
         if (isDebugEnabled) {
           debug(s"Loaded new commits: $loadResults")
         }
-        loadResults
+        _bytesSinceLastSnapshot = _bytesSinceLastSnapshot + loadResults.numBytes
       } catch {
         case e: Throwable =>
-          brokerMetrics.metadataLoadErrorCount.getAndIncrement()
-          throw e
+          metadataLoadingFaultHandler.handleFault("Error Loading broker metadata at " + _highestOffset, e)
       } finally {
         reader.close()
       }
 
-      _bytesSinceLastSnapshot = _bytesSinceLastSnapshot + results.numBytes
       if (shouldSnapshot()) {
         maybeStartSnapshot()
       }
@@ -175,8 +175,7 @@ class BrokerMetadataListener(
           s"$loadResults")
       } catch {
         case e: Throwable =>
-          brokerMetrics.metadataLoadErrorCount.getAndIncrement()
-          throw e
+          metadataLoadingFaultHandler.handleFault("Error Loading broker metadata at " + _highestOffset, e)
       } finally {
         reader.close()
       }

@@ -24,6 +24,7 @@ import java.util.{Collections, Properties}
 import java.util.concurrent.CompletableFuture
 import javax.security.auth.login.Configuration
 import kafka.raft.KafkaRaftManager
+import kafka.server.metadata.BrokerServerMetrics
 import kafka.tools.StorageTool
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
@@ -32,11 +33,13 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
-import org.apache.kafka.controller.BootstrapMetadata
+import org.apache.kafka.controller.{BootstrapMetadata, QuorumController, QuorumControllerMetrics}
 import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.metadata.fault.MetadataFaultHandler
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.apache.kafka.server.fault.MockFaultHandler
+import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 import org.junit.jupiter.api.Assertions._
@@ -53,6 +56,7 @@ trait QuorumImplementation {
     time: Time = Time.SYSTEM,
     startup: Boolean = true,
     threadNamePrefix: Option[String] = None,
+    faultHandler: FaultHandler
   ): KafkaBroker
 
   def shutdown(): Unit
@@ -70,6 +74,7 @@ class ZooKeeperQuorumImplementation(
     time: Time,
     startup: Boolean,
     threadNamePrefix: Option[String],
+    faultHandler: FaultHandler
   ): KafkaBroker = {
     val server = new KafkaServer(config, time, threadNamePrefix, false)
     if (startup) server.startup()
@@ -93,7 +98,10 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
     time: Time,
     startup: Boolean,
     threadNamePrefix: Option[String],
+    faultHandler: FaultHandler
   ): KafkaBroker = {
+    val metrics = new Metrics()
+    val brokerMetrics = BrokerServerMetrics(metrics)
     val broker = new BrokerServer(config = config,
       metaProps = new MetaProperties(clusterId, config.nodeId),
       raftManager = raftManager,
@@ -101,7 +109,11 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
       metrics = new Metrics(),
       threadNamePrefix = Some("Broker%02d_".format(config.nodeId)),
       initialOfflineDirs = Seq(),
-      controllerQuorumVotersFuture = controllerQuorumVotersFuture)
+      controllerQuorumVotersFuture = controllerQuorumVotersFuture,
+      brokerMetrics,
+      faultHandler,
+      faultHandler
+    )
     if (startup) broker.startup()
     broker
   }
@@ -189,7 +201,9 @@ abstract class QuorumTestHarness extends Logging {
     }
   }
 
-  val faultHandler = new MockFaultHandler("quorumTestHarnessFaultHandler")
+  val controllerFaultHandler = new MockFaultHandler("quorumTestHarnessControllerFaultHandler")
+
+  val brokerFaultHandler = new MockFaultHandler("quorumTestHarnessBrokerFaultHandler")
 
   // Note: according to the junit documentation: "JUnit Jupiter does not guarantee the execution
   // order of multiple @BeforeEach methods that are declared within a single test class or test
@@ -237,7 +251,7 @@ abstract class QuorumTestHarness extends Logging {
     startup: Boolean = true,
     threadNamePrefix: Option[String] = None
   ): KafkaBroker = {
-    implementation.createBroker(config, time, startup, threadNamePrefix)
+    implementation.createBroker(config, time, startup, threadNamePrefix, brokerFaultHandler)
   }
 
   def shutdownZooKeeper(): Unit = asZk().shutdown()
@@ -278,7 +292,8 @@ abstract class QuorumTestHarness extends Logging {
     val metadataDir = TestUtils.tempDir()
     val metaProperties = new MetaProperties(Uuid.randomUuid().toString, nodeId)
     formatDirectories(immutable.Seq(metadataDir.getAbsolutePath()), metaProperties)
-    val controllerMetrics = new Metrics()
+    val metrics = new Metrics()
+    val controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), Time.SYSTEM)
     props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath())
     val proto = controllerListenerSecurityProtocol.toString()
     props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:${proto}")
@@ -295,7 +310,7 @@ abstract class QuorumTestHarness extends Logging {
       topicPartition = new TopicPartition(KafkaRaftServer.MetadataTopic, 0),
       topicId = KafkaRaftServer.MetadataTopicId,
       time = Time.SYSTEM,
-      metrics = controllerMetrics,
+      metrics = metrics,
       threadNamePrefixOpt = Option(threadNamePrefix),
       controllerQuorumVotersFuture = controllerQuorumVotersFuture)
     var controllerServer: ControllerServer = null
@@ -305,14 +320,15 @@ abstract class QuorumTestHarness extends Logging {
         config = config,
         raftManager = raftManager,
         time = Time.SYSTEM,
-        metrics = controllerMetrics,
+        metrics = metrics,
         threadNamePrefix = Option(threadNamePrefix),
         controllerQuorumVotersFuture = controllerQuorumVotersFuture,
         configSchema = KafkaRaftServer.configSchema,
         raftApiVersions = raftManager.apiVersions,
         bootstrapMetadata = BootstrapMetadata.create(metadataVersion, bootstrapRecords.asJava),
-        metadataFaultHandler = faultHandler,
-        fatalFaultHandler = faultHandler,
+        controllerMetrics,
+        metadataFaultHandler = controllerFaultHandler,
+        fatalFaultHandler = controllerFaultHandler
       )
       controllerServer.socketServerFirstBoundPortFuture.whenComplete((port, e) => {
         if (e != null) {
@@ -379,7 +395,8 @@ abstract class QuorumTestHarness extends Logging {
     }
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)
-    faultHandler.maybeRethrowFirstException()
+    controllerFaultHandler.maybeRethrowFirstException()
+    brokerFaultHandler.maybeRethrowFirstException()
   }
 
   // Trigger session expiry by reusing the session id in another client

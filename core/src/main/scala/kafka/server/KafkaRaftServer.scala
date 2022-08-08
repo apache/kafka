@@ -23,12 +23,13 @@ import kafka.log.{LogConfig, UnifiedLog}
 import kafka.metrics.KafkaMetricsReporter
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
+import kafka.server.metadata.BrokerServerMetrics
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{KafkaException, Uuid}
-import org.apache.kafka.controller.BootstrapMetadata
+import org.apache.kafka.controller.{BootstrapMetadata, ControllerMetrics, QuorumControllerMetrics}
 import org.apache.kafka.metadata.fault.MetadataFaultHandler
 import org.apache.kafka.metadata.{KafkaConfigSchema, MetadataRecordSerde}
 import org.apache.kafka.raft.RaftConfig
@@ -83,6 +84,7 @@ class KafkaRaftServer(
   )
 
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
+    val brokerMetrics = BrokerServerMetrics(metrics)
     Some(new BrokerServer(
       config,
       metaProps,
@@ -91,13 +93,19 @@ class KafkaRaftServer(
       metrics,
       threadNamePrefix,
       offlineDirs,
-      controllerQuorumVotersFuture
+      controllerQuorumVotersFuture,
+      brokerMetrics,
+      new MetadataFaultHandler("Unable to load metadata",
+        () => brokerMetrics.metadataLoadErrorCount.getAndIncrement()),
+      new MetadataFaultHandler("Unable to publish metadata",
+        () => brokerMetrics.metadataApplyErrorCount.getAndIncrement())
     ))
   } else {
     None
   }
 
   private val controller: Option[ControllerServer] = if (config.processRoles.contains(ControllerRole)) {
+    val controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)
     Some(new ControllerServer(
       metaProps,
       config,
@@ -109,8 +117,10 @@ class KafkaRaftServer(
       KafkaRaftServer.configSchema,
       raftManager.apiVersions,
       bootstrapMetadata,
-      new MetadataFaultHandler(),
-      new ProcessExitingFaultHandler(),
+      controllerMetrics,
+      new MetadataFaultHandler("Unable to process Metadata",
+        () => controllerMetrics.incrementMetadataErrorCount()),
+      new ProcessExitingFaultHandler()
     ))
   } else {
     None

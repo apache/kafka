@@ -27,6 +27,7 @@ import org.apache.kafka.common.{Endpoint, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{BrokerRegistration, RecordTestUtils, VersionRange}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.fault.MockFaultHandler
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -44,7 +45,8 @@ class BrokerMetadataListenerTest {
       threadNamePrefix = None,
       maxBytesBetweenSnapshots = maxBytesBetweenSnapshots,
       snapshotter = snapshotter,
-      brokerMetrics = metrics
+      brokerMetrics = metrics,
+      new MockFaultHandler("BrokerFaultHandler")
     )
   }
 
