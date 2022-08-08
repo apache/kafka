@@ -739,7 +739,8 @@ public class QuorumControllerTest {
             reader,
             new MetadataRecordSerde(),
             BufferSupplier.create(),
-            Integer.MAX_VALUE
+            Integer.MAX_VALUE,
+            true
         );
     }
 
