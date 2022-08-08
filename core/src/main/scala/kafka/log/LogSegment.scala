@@ -26,7 +26,7 @@ import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{FetchDataInfo, LogOffsetMetadata}
 import kafka.utils._
 import org.apache.kafka.common.InvalidRecordException
-import org.apache.kafka.common.errors.CorruptRecordException
+import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException}
 import org.apache.kafka.common.record.FileRecords.{LogOffsetPosition, TimestampAndOffset}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
@@ -133,6 +133,7 @@ class LogSegment private[log] (val log: FileRecords,
    *
    * It is assumed this method is being called from within a lock.
    *
+   * @param smallestOffset The smallest possible offset in the message set.
    * @param largestOffset The last offset in the message set
    * @param largestTimestamp The largest timestamp in the message set.
    * @param shallowOffsetOfMaxTimestamp The offset of the message that has the largest timestamp in the messages to append.
@@ -141,7 +142,8 @@ class LogSegment private[log] (val log: FileRecords,
    * @throws LogSegmentOffsetOverflowException if the largest offset causes index offset overflow
    */
   @nonthreadsafe
-  def append(largestOffset: Long,
+  def append(smallestOffset: Long,
+             largestOffset: Long,
              largestTimestamp: Long,
              shallowOffsetOfMaxTimestamp: Long,
              records: MemoryRecords): Unit = {
@@ -153,6 +155,7 @@ class LogSegment private[log] (val log: FileRecords,
         rollingBasedTimestamp = Some(largestTimestamp)
 
       ensureOffsetInRange(largestOffset)
+      ensureOffsetsInRangeForRecords(records, smallestOffset, largestOffset)
 
       // append the messages
       val appendedBytes = log.append(records)
@@ -176,10 +179,28 @@ class LogSegment private[log] (val log: FileRecords,
       throw new LogSegmentOffsetOverflowException(this, offset)
   }
 
+  /**
+   * Validate that offsets of records are monotonically increasing and are in [offsetLowerBound, offsetUpperBound] range.
+   *
+   * @param records The log records to validate
+   * @param offsetLowerBound The lower bound of offsets of all records (inclusive)
+   * @param offsetUpperBound The upper bound of offsets of all records (inclusive)
+   */
+  private def ensureOffsetsInRangeForRecords(records: Records, offsetLowerBound: Long, offsetUpperBound: Long): Unit = {
+    var offsetLowerBoundForBatch = offsetLowerBound
+    records.batches.forEach { batch =>
+      if (batch.baseOffset < offsetLowerBoundForBatch || batch.lastOffset > offsetUpperBound || batch.baseOffset > batch.lastOffset) {
+        throw new KafkaStorageException(s"Detected invalid assigned offsets in $batch for segment $this. Records: $records, offsetLowerBound: $offsetLowerBound, offsetUpperBound: $offsetUpperBound")
+      }
+      offsetLowerBoundForBatch = batch.lastOffset + 1
+    }
+  }
+
   private def appendChunkFromFile(records: FileRecords, position: Int, bufferSupplier: BufferSupplier): Int = {
     var bytesToAppend = 0
     var maxTimestamp = Long.MinValue
     var offsetOfMaxTimestamp = Long.MinValue
+    var minOffset = Long.MinValue
     var maxOffset = Long.MinValue
     var readBuffer = bufferSupplier.get(1024 * 1024)
 
@@ -195,6 +216,9 @@ class LogSegment private[log] (val log: FileRecords,
         maxTimestamp = batch.maxTimestamp
         offsetOfMaxTimestamp = batch.lastOffset
       }
+      if (minOffset == Long.MinValue) {
+        minOffset = batch.baseOffset
+      }
       maxOffset = batch.lastOffset
       bytesToAppend += batch.sizeInBytes
     }
@@ -207,7 +231,7 @@ class LogSegment private[log] (val log: FileRecords,
       readBuffer.limit(bytesToAppend)
       records.readInto(readBuffer, position)
 
-      append(maxOffset, maxTimestamp, offsetOfMaxTimestamp, MemoryRecords.readableRecords(readBuffer))
+      append(minOffset, maxOffset, maxTimestamp, offsetOfMaxTimestamp, MemoryRecords.readableRecords(readBuffer))
     }
 
     bufferSupplier.release(readBuffer)
