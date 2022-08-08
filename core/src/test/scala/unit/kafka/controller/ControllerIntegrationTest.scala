@@ -39,8 +39,7 @@ import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.Arguments
-import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.mockito.Mockito.{doAnswer, spy, verify}
 import org.mockito.invocation.InvocationOnMock
 
@@ -56,6 +55,12 @@ object ControllerIntegrationTest {
       }
     }
   }
+
+  def testAlterPartitionVersionSource(): JStream[Arguments] = {
+      ApiKeys.ALTER_PARTITION.allVersions.stream.map { alterPartitionVersion =>
+        Arguments.of(alterPartitionVersion)
+      }
+    }
 }
 
 class ControllerIntegrationTest extends QuorumTestHarness {
@@ -1044,8 +1049,9 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     assertEquals(expectedAlterPartitionResponse, future.get(10, TimeUnit.SECONDS))
   }
 
-  @Test
-  def testShutdownBrokerNotAddedToIsr(): Unit = {
+  @ParameterizedTest
+  @MethodSource(Array("testAlterPartitionVersionSource"))
+  def testShutdownBrokerNotAddedToIsr(alterPartitionVersion: Short): Unit = {
     servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val otherBroker = servers.find(_.config.brokerId != controllerId).get
@@ -1060,47 +1066,51 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     servers(brokerId).awaitShutdown()
 
     val controller = getController().kafkaController
-    val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
-    val newLeaderAndIsr = leaderIsrAndControllerEpochMap(tp).leaderAndIsr
+    val leaderIsrAndControllerEpochMap = controller.controllerContext.partitionsLeadershipInfo
+    val leaderAndIsr = leaderIsrAndControllerEpochMap(tp).leaderAndIsr
     val topicId = controller.controllerContext.topicIds(tp.topic)
     val controllerEpoch = controller.controllerContext.liveBrokerIdAndEpochs(controllerId)
 
     // We expect only the controller (online broker) to be in ISR
-    assertEquals(List(controllerId), newLeaderAndIsr.isr)
+    assertEquals(List(controllerId), leaderAndIsr.isr)
+
+    val requestTopic = new AlterPartitionRequestData.TopicData()
+      .setPartitions(Seq(new AlterPartitionRequestData.PartitionData()
+        .setPartitionIndex(tp.partition)
+        .setLeaderEpoch(leaderAndIsr.leaderEpoch)
+        .setPartitionEpoch(leaderAndIsr.partitionEpoch)
+        .setNewIsr(fullIsr.map(Int.box).asJava)
+        .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)).asJava)
+    if (alterPartitionVersion > 1) requestTopic.setTopicId(topicId) else requestTopic.setTopicName(tp.topic)
 
     // Try to update ISR to contain the offline broker.
     val alterPartitionRequest = new AlterPartitionRequestData()
       .setBrokerId(controllerId)
       .setBrokerEpoch(controllerEpoch)
-      .setTopics(Seq(new AlterPartitionRequestData.TopicData()
-        .setTopicId(topicId)
-        .setPartitions(Seq(new AlterPartitionRequestData.PartitionData()
-          .setPartitionIndex(tp.partition)
-          .setLeaderEpoch(newLeaderAndIsr.leaderEpoch)
-          .setPartitionEpoch(newLeaderAndIsr.partitionEpoch)
-          .setNewIsr(fullIsr.map(Int.box).asJava)
-          .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
-        ).asJava)
-      ).asJava)
+      .setTopics(Seq(requestTopic).asJava)
 
     val future = new CompletableFuture[AlterPartitionResponseData]()
     controller.eventManager.put(AlterPartitionReceived(
       alterPartitionRequest,
-      AlterPartitionRequestData.HIGHEST_SUPPORTED_VERSION,
+      alterPartitionVersion,
       future.complete
     ))
 
+    val error = if (alterPartitionVersion > 1) Errors.INELIGIBLE_REPLICA else Errors.OPERATION_NOT_ATTEMPTED
+    val responseTopic = new AlterPartitionResponseData.TopicData()
+      .setPartitions(Seq(new AlterPartitionResponseData.PartitionData()
+        .setPartitionIndex(tp.partition)
+        .setErrorCode(error.code())
+        .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
+      ).asJava)
+    if (alterPartitionVersion > 1) responseTopic.setTopicId(topicId) else responseTopic.setTopicName(tp.topic)
+
     // We expect an ineligble replica error response for the partition.
     val expectedAlterPartitionResponse = new AlterPartitionResponseData()
-      .setTopics(Seq(new AlterPartitionResponseData.TopicData()
-        .setTopicId(topicId)
-        .setPartitions(Seq(new AlterPartitionResponseData.PartitionData()
-          .setPartitionIndex(tp.partition)
-          .setErrorCode(Errors.INELIGIBLE_REPLICA.code())
-          .setLeaderRecoveryState(newLeaderAndIsr.leaderRecoveryState.value)
-        ).asJava)
-      ).asJava)
+      .setTopics(Seq(responseTopic).asJava)
 
+    val newLeaderIsrAndControllerEpochMap = controller.controllerContext.partitionsLeadershipInfo
+    val newLeaderAndIsr = newLeaderIsrAndControllerEpochMap(tp).leaderAndIsr
     assertEquals(expectedAlterPartitionResponse, future.get(10, TimeUnit.SECONDS))
     assertEquals(List(controllerId), newLeaderAndIsr.isr)
 
