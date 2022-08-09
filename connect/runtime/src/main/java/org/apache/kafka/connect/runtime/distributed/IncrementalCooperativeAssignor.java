@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
-import java.util.Arrays;
+import java.util.*;
 import java.util.Map.Entry;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -28,18 +28,6 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -64,7 +52,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     private final int maxDelay;
     private ConnectorsAndTasks previousAssignment;
     private final ConnectorsAndTasks previousRevocation;
-    private boolean canRevoke;
+//    private boolean canRevoke;
     // visible for testing
     protected final Set<String> candidateWorkersForReassignment;
     protected long scheduledRebalance;
@@ -78,7 +66,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         this.maxDelay = maxDelay;
         this.previousAssignment = ConnectorsAndTasks.EMPTY;
         this.previousRevocation = new ConnectorsAndTasks.Builder().build();
-        this.canRevoke = true;
+//        this.canRevoke = true;
         this.scheduledRebalance = 0;
         this.candidateWorkersForReassignment = new LinkedHashSet<>();
         this.delay = 0;
@@ -226,7 +214,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             if (previousRevocation.connectors().stream().anyMatch(c -> activeAssignments.connectors().contains(c))
                     || previousRevocation.tasks().stream().anyMatch(t -> activeAssignments.tasks().contains(t))) {
                 previousAssignment = activeAssignments;
-                canRevoke = true;
+//                canRevoke = true;
             }
             previousRevocation.connectors().clear();
             previousRevocation.tasks().clear();
@@ -287,12 +275,13 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         // Do not revoke resources for re-assignment while a delayed rebalance is active
         // Also we do not revoke in two consecutive rebalances by the same leader
-        canRevoke = delay == 0 && canRevoke;
+//        canRevoke = delay == 0 && canRevoke;
 
         // Compute the connectors-and-tasks to be revoked for load balancing without taking into
         // account the deleted ones.
-        log.debug("Can leader revoke tasks in this assignment? {} (delay: {})", canRevoke, delay);
-        if (canRevoke) {
+//        log.debug("Can leader revoke tasks in this assignment? {} (delay: {})", canRevoke, delay);
+        log.debug("Can leader revoke tasks in this assignment? (delay: {})", delay);
+        if (delay == 0) {
             Map<String, ConnectorsAndTasks> toExplicitlyRevoke =
                     performTaskRevocation(activeAssignments, currentWorkerAssignment);
 
@@ -307,9 +296,10 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     existing.tasks().addAll(assignment.tasks());
                 }
             );
-            canRevoke = toExplicitlyRevoke.size() == 0;
+//            canRevoke = toExplicitlyRevoke.size() == 0;
         } else {
-            canRevoke = delay == 0;
+//            canRevoke = delay == 0;
+            log.debug("Connector and task to revoke assignments: {}", toRevoke);
         }
 
         assignConnectors(completeWorkerAssignment, newSubmissions.connectors());
@@ -325,6 +315,9 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 diff(connectorAssignments, currentConnectorAssignments);
         Map<String, Collection<ConnectorTaskId>> incrementalTaskAssignments =
                 diff(taskAssignments, currentTaskAssignments);
+
+        // Balance the assignments one final time based on round-robin assignment of connectors and tasks.
+        balanceAssignmentsFinally(completeWorkerAssignment, toRevoke);
 
         previousAssignment = computePreviousAssignment(toRevoke, connectorAssignments, taskAssignments, lostAssignments);
         previousGenerationId = currentGenerationId;
@@ -344,6 +337,144 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 diff(connectorAssignments, revokedConnectors),
                 diff(taskAssignments, revokedTasks)
         );
+    }
+
+    private void balanceAssignmentsFinally(final List<WorkerLoad> newCompleteAssignments,
+                                           final Map<String, ConnectorsAndTasks> toRevoke) {
+
+        if (delay == 0) {
+
+            // First remove all connectors and tasks that we have already decided to remove
+            final List<WorkerLoad> newCompleteAssignmentsPostRevocations = new ArrayList<>();
+            int totalWorkUnits = 0;
+
+            for (final WorkerLoad workerLoad: newCompleteAssignments) {
+                // if there's nothing to be revoked for this worker, then just add it
+                if (!toRevoke.containsKey(workerLoad.worker())) {
+                    newCompleteAssignmentsPostRevocations.add(workerLoad);
+                } else {
+                    final ConnectorsAndTasks toRevokeForThisWorker = toRevoke.get(workerLoad.worker());
+                    final WorkerLoad newWorkerLoad = new WorkerLoad.Builder(workerLoad.worker()).build();
+                    // assign connectors first
+                    for (final String connector: workerLoad.connectors()) {
+                        if (!toRevokeForThisWorker.connectors().contains(connector)) {
+                            newWorkerLoad.assign(connector);
+                        }
+                    }
+                    // now assign tasks
+                    for (final ConnectorTaskId tasks: workerLoad.tasks()) {
+                        if (!toRevokeForThisWorker.tasks().contains(tasks)) {
+                            newWorkerLoad.assign(tasks);
+                        }
+                    }
+                    newCompleteAssignmentsPostRevocations.add(newWorkerLoad);
+                    totalWorkUnits += newWorkerLoad.connectorsSize() + newWorkerLoad.tasksSize();
+                }
+            }
+
+            // Sort the revised assignments list in increasing order of number of assignments per worker.
+            newCompleteAssignmentsPostRevocations.sort(Comparator.comparingInt(w -> w.connectorsSize() + w.tasksSize()));
+
+            // Round-robin assignment can provide the most balanced assignments.
+            // Every index corresponds to the number of connector a worker should have in increasing
+            // order of number of assignments.
+            final int[] workUnitCountPerWorkerByRoundRobinAssignment = new int[newCompleteAssignmentsPostRevocations.size()];
+            // These many work units should be assigned to every worker at a mininum
+            final int minAssignments = totalWorkUnits/newCompleteAssignmentsPostRevocations.size();
+
+            Arrays.fill(workUnitCountPerWorkerByRoundRobinAssignment, minAssignments);
+
+            int extraAssignments = totalWorkUnits % newCompleteAssignmentsPostRevocations.size();
+            int workerIndex = workUnitCountPerWorkerByRoundRobinAssignment.length - 1;
+
+            while (extraAssignments > 0) {
+                workUnitCountPerWorkerByRoundRobinAssignment[workerIndex]++;
+                workerIndex--;
+                extraAssignments--;
+            }
+
+            /*
+                [5, 6, 12, 12]
+                [8, 9, 9, 9]
+
+                i = 3;
+                [6, 7, 13, 9]
+
+                [6, 7, 9, 13]
+
+                [7, 8, 9, 11]
+                [8, 9, 9, 9]
+
+             */
+
+            while (!isAssignmentBalanced(newCompleteAssignmentsPostRevocations,
+                    workUnitCountPerWorkerByRoundRobinAssignment)) {
+                final int lastWorkerIndex = newCompleteAssignmentsPostRevocations.size() - 1;
+                final WorkerLoad workerWithMaxLoad = newCompleteAssignmentsPostRevocations.get(lastWorkerIndex);
+                final LinkedList<String> connectors = new LinkedList<>(workerWithMaxLoad.connectors());
+                final LinkedList<ConnectorTaskId> tasks = new LinkedList<>(workerWithMaxLoad.tasks());
+                // We start with revoking connector if available and would keep toggling this switch.
+                boolean revokeConnector = !connectors.isEmpty();
+
+                // connectors and tasks reflect the running status of assignments for this worker.
+                // We will keep revoking until we don't hit the calculated balanced number of assignments
+                // for this worker
+                while (connectors.size() + tasks.size() >  workUnitCountPerWorkerByRoundRobinAssignment[lastWorkerIndex]) {
+                    int index = 0;
+                    while (index < lastWorkerIndex) {
+                        // Worker at this index already has the requisite assignment.
+                        // No revocations needed.
+                        if (newCompleteAssignmentsPostRevocations.get(index).connectorsSize() +
+                                newCompleteAssignmentsPostRevocations.get(index).tasksSize() ==
+                                workUnitCountPerWorkerByRoundRobinAssignment[index]) {
+                            index++;
+                        } else {
+                            // Revoke either a connector or task based on round-robin fashion
+                            // based on availability.
+                            if (revokeConnector) {
+                                final String connectorToRevoke = connectors.pollLast();
+                                final ConnectorsAndTasks revokingForWorker = toRevoke.getOrDefault(workerWithMaxLoad.worker(), ConnectorsAndTasks.EMPTY);
+                                revokingForWorker.connectors().add(connectorToRevoke);
+                                toRevoke.put(workerWithMaxLoad.worker(), revokingForWorker);
+                                newCompleteAssignmentsPostRevocations.get(index).assign(connectorToRevoke);
+                                // Toggle only if there are task assignments left for revocation
+                                revokeConnector = !tasks.isEmpty();
+                            } else {
+                                final ConnectorTaskId taskToRevoke = tasks.pollLast();
+                                final ConnectorsAndTasks revokingForWorker = toRevoke.getOrDefault(workerWithMaxLoad.worker(), ConnectorsAndTasks.EMPTY);
+                                revokingForWorker.tasks().add(taskToRevoke);
+                                toRevoke.put(workerWithMaxLoad.worker(), revokingForWorker);
+                                newCompleteAssignmentsPostRevocations.get(index).assign(taskToRevoke);
+                                // Toggle only if there are connector assignments left for revocation
+                                revokeConnector = !connectors.isEmpty();
+                            }
+                            index++;
+                        }
+                    }
+                }
+                // Update the assignments of the given worker based on whatever is left after
+                // further revocations to balance the load.
+                newCompleteAssignmentsPostRevocations.set(lastWorkerIndex,
+                        new WorkerLoad.Builder(workerWithMaxLoad.worker()).with(connectors, tasks).build());
+                // Sort by number of assignments again
+                newCompleteAssignmentsPostRevocations.sort(Comparator.comparingInt(w -> w.connectorsSize() + w.tasksSize()));
+            }
+
+        } else {
+            log.debug("Since this final balancing act may involve another round of revocations," +
+                    "we will not do this during an active delayed rebalance");
+        }
+
+    }
+
+    private boolean isAssignmentBalanced(final List<WorkerLoad> currentAssignment, final int[] balancedAssignmentCount) {
+        for (int i = 0; i < balancedAssignmentCount.length; i++) {
+            if (currentAssignment.get(i).connectorsSize() +
+                    currentAssignment.get(i).tasksSize() != balancedAssignmentCount[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private Map<String, ConnectorsAndTasks> computeDeleted(ConnectorsAndTasks deleted,
