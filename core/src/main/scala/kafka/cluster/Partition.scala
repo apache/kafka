@@ -886,7 +886,7 @@ class Partition(val topicPartition: TopicPartition,
         !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
           !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId)
 
-      // In ZK mode, we just ensure the broker is alive. Although we do not check for shutting down brokers here,'
+      // In ZK mode, we just ensure the broker is alive. Although we do not check for shutting down brokers here,
       // the controller will block them from being added to ISR.
       case zkMetadataCache: ZkMetadataCache =>
         zkMetadataCache.hasAliveBroker(followerReplicaId)
