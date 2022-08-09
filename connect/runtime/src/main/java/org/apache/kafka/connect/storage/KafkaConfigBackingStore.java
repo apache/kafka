@@ -854,8 +854,6 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 connectorTaskCounts.remove(connectorName);
                 taskConfigs.keySet().removeIf(taskId -> taskId.connector().equals(connectorName));
                 deferredTaskUpdates.remove(connectorName);
-                connectorTaskCountRecords.remove(connectorName);
-                connectorTaskConfigGenerations.remove(connectorName);
                 removed = true;
             } else {
                 // Connector configs can be applied and callbacks invoked immediately
