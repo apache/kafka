@@ -1054,7 +1054,6 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     // epoch), expect it to succeed while the partition epoch remains the same
     sendAndVerifyAlterPartitionResponse(oldLeaderAndIsr.partitionEpoch)
     sendAndVerifyAlterPartitionResponse(newPartitionEpoch)
-    sendAndVerifyAlterPartitionResponse(newPartitionEpoch + 1)
   }
 
   @Test
@@ -1131,6 +1130,11 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       partitionError = Errors.INVALID_UPDATE_VERSION,
       isr = Set(leaderId),
       partitionEpoch = partitionEpoch - 1
+    )
+
+    assertAlterPartition(
+      partitionError = Errors.INVALID_UPDATE_VERSION,
+      partitionEpoch = partitionEpoch + 1
     )
 
     assertAlterPartition(
