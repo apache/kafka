@@ -366,7 +366,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     Set<TopicPartition> changelogPartitions() {
-        return changelogOffsets().keySet();
+        return Collections.unmodifiableSet(changelogOffsets().keySet());
     }
 
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
