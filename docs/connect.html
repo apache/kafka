@@ -422,7 +422,8 @@ public Class&lt;? extends Task&gt; taskClass() {
     <pre class="brush: java;">
 @Override
 public void start(Map&lt;String, String&gt; props) {
-    // All initialization logic and setting up of resources goes in this method. The FileStreamSourceConnector, however, doesn't need such logic here.
+    // Initialization logic and setting up of resources can take place in this method.
+    // This connector doesn't need to do any of that, but we do log a helpful message to the user.
 
     this.props = props;
     AbstractConfig config = new AbstractConfig(CONFIG_DEF, props);
@@ -443,10 +444,7 @@ public void stop() {
     <pre class="brush: java;">
 @Override
 public List&lt;Map&lt;String, String&gt;&gt; taskConfigs(int maxTasks) {
-    // This method is where connectors provide the task configs for the tasks that are to be created for this connector.
-    // The length of the list determines the number of tasks that need to be created. The FileStreamSourceConnector, however, is
-    // only capable of spinning up a single task (since there isn't work that can be distributed among multiple tasks).
-    // Note that the task configs could contain configs additional to or different from the connector configs if needed (for instance,
+    // Note that the task configs could contain configs additional to or different from the connector configs if needed. For instance,
     // if different tasks have different responsibilities, or if different tasks are meant to process different subsets of the source data stream).
     ArrayList&lt;Map&lt;String, String&gt;&gt; configs = new ArrayList&lt;&gt;();
     // Only one input stream makes sense.
@@ -622,7 +620,7 @@ static final ConfigDef CONFIG_DEF = new ConfigDef()
     .define(FILE_CONFIG, Type.STRING, null, Importance.HIGH, "Source filename. If not specified, the standard input will be used")
     .define(TOPIC_CONFIG, Type.STRING, ConfigDef.NO_DEFAULT_VALUE, new ConfigDef.NonEmptyString(), Importance.HIGH, "The topic to publish data to")
     .define(TASK_BATCH_SIZE_CONFIG, Type.INT, DEFAULT_TASK_BATCH_SIZE, Importance.LOW,
-        "The maximum number of records the Source task can read from file one time");
+        "The maximum number of records the source task can read from the file each time it is polled");
 
 public ConfigDef config() {
     return CONFIG_DEF;
