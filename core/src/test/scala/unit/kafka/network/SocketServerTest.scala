@@ -1890,7 +1890,7 @@ class SocketServerTest {
     testableServer.enableRequestProcessing(Map.empty)
     val testableSelector = testableServer.testableSelector
     val proxyServer = new ProxyServer(testableServer)
-    val selectTimeoutMs = 5000
+    val selectTimeoutMs = 1000
     // set pollTimeoutOverride to "selectTimeoutMs" to ensure poll() timeout is distinct and can be identified
     testableSelector.pollTimeoutOverride = Some(selectTimeoutMs)
 
