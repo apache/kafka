@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +35,7 @@ import java.util.Map;
  */
 public class FileStreamSinkConnector extends SinkConnector {
 
+    private static final Logger log = LoggerFactory.getLogger(FileStreamSinkConnector.class);
     public static final String FILE_CONFIG = "file";
     static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(FILE_CONFIG, Type.STRING, null, Importance.HIGH, "Destination filename. If not specified, the standard output will be used");
@@ -46,6 +50,10 @@ public class FileStreamSinkConnector extends SinkConnector {
     @Override
     public void start(Map<String, String> props) {
         this.props = props;
+        AbstractConfig config = new AbstractConfig(CONFIG_DEF, props);
+        String filename = config.getString(FILE_CONFIG);
+        filename = (filename == null || filename.isEmpty()) ? "standard output" : filename;
+        log.info("Starting file sink connector writing to {}", filename);
     }
 
     @Override

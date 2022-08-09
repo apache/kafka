@@ -61,7 +61,7 @@ public class FileStreamSinkTask extends SinkTask {
     public void start(Map<String, String> props) {
         AbstractConfig config = new AbstractConfig(FileStreamSinkConnector.CONFIG_DEF, props);
         filename = config.getString(FileStreamSinkConnector.FILE_CONFIG);
-        if (filename == null) {
+        if (filename == null || filename.isEmpty()) {
             outputStream = System.out;
         } else {
             try {
