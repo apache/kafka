@@ -32,7 +32,7 @@ import java.util.Map;
  */
 public class FileStreamSinkConnector extends SinkConnector {
 
-    static final String FILE_CONFIG = "file";
+    public static final String FILE_CONFIG = "file";
     static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(FILE_CONFIG, Type.STRING, null, Importance.HIGH, "Destination filename. If not specified, the standard output will be used");
 

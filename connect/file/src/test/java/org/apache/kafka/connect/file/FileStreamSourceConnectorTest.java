@@ -95,6 +95,8 @@ public class FileStreamSourceConnectorTest {
 
     @Test
     public void testConnectorConfigsPropagateToTaskConfigs() {
+        // This is required so that updates in transforms/converters/clients configs get reflected
+        // in tasks without manual restarts of the tasks (see https://issues.apache.org/jira/browse/KAFKA-13809)
         sourceProperties.put("transforms", "insert");
         connector.start(sourceProperties);
         List<Map<String, String>> taskConfigs = connector.taskConfigs(1);

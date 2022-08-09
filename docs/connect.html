@@ -422,7 +422,13 @@ public Class&lt;? extends Task&gt; taskClass() {
     <pre class="brush: java;">
 @Override
 public void start(Map&lt;String, String&gt; props) {
+    // All initialization logic and setting up of resources goes in this method. The FileStreamSourceConnector, however, doesn't need such logic here.
+
     this.props = props;
+    AbstractConfig config = new AbstractConfig(CONFIG_DEF, props);
+    String filename = config.getString(FILE_CONFIG);
+    filename = (filename == null || filename.isEmpty()) ? "standard input" : config.getString(FILE_CONFIG);
+    log.info("Starting file source connector reading from {}", filename);
 }
 
 @Override
@@ -437,6 +443,11 @@ public void stop() {
     <pre class="brush: java;">
 @Override
 public List&lt;Map&lt;String, String&gt;&gt; taskConfigs(int maxTasks) {
+    // This method is where connectors provide the task configs for the tasks that are to be created for this connector.
+    // The length of the list determines the number of tasks that need to be created. The FileStreamSourceConnector, however, is
+    // only capable of spinning up a single task (since there isn't work that can be distributed among multiple tasks).
+    // Note that the task configs could contain configs additional to or different from the connector configs if needed (for instance,
+    // if different tasks have different responsibilities, or if different tasks are meant to process different subsets of the source data stream).
     ArrayList&lt;Map&lt;String, String&gt;&gt; configs = new ArrayList&lt;&gt;();
     // Only one input stream makes sense.
     configs.add(props);

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
@@ -26,17 +27,20 @@ import org.apache.kafka.connect.source.SourceConnector;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Very simple source connector that works with stdin or a file.
  */
 public class FileStreamSourceConnector extends SourceConnector {
 
-    static final String TOPIC_CONFIG = "topic";
-    static final String FILE_CONFIG = "file";
-    static final String TASK_BATCH_SIZE_CONFIG = "batch.size";
+    private static final Logger log = LoggerFactory.getLogger(FileStreamSourceConnector.class);
+    public static final String TOPIC_CONFIG = "topic";
+    public static final String FILE_CONFIG = "file";
+    public static final String TASK_BATCH_SIZE_CONFIG = "batch.size";
 
-    static final int DEFAULT_TASK_BATCH_SIZE = 2000;
+    public static final int DEFAULT_TASK_BATCH_SIZE = 2000;
 
     static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(FILE_CONFIG, Type.STRING, null, Importance.HIGH, "Source filename. If not specified, the standard input will be used")
@@ -54,6 +58,10 @@ public class FileStreamSourceConnector extends SourceConnector {
     @Override
     public void start(Map<String, String> props) {
         this.props = props;
+        AbstractConfig config = new AbstractConfig(CONFIG_DEF, props);
+        String filename = config.getString(FILE_CONFIG);
+        filename = (filename == null || filename.isEmpty()) ? "standard input" : filename;
+        log.info("Starting file source connector reading from {}", filename);
     }
 
     @Override

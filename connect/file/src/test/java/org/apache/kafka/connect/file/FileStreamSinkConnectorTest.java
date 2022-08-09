@@ -88,6 +88,8 @@ public class FileStreamSinkConnectorTest {
 
     @Test
     public void testConnectorConfigsPropagateToTaskConfigs() {
+        // This is required so that updates in transforms/converters/clients configs get reflected
+        // in tasks without manual restarts of the tasks (see https://issues.apache.org/jira/browse/KAFKA-13809)
         sinkProperties.put("transforms", "insert");
         connector.start(sinkProperties);
         List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
