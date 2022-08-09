@@ -1886,62 +1886,29 @@ class SocketServerTest {
   def testLatencyWithBufferedDataAndNoSocketData(): Unit = {
     shutdownServerAndMetrics(server)
 
-    val testableServer = new TestableSocketServer(KafkaConfig.fromProps(sslServerProps))
+    props ++= sslServerProps
+    val testableServer = new TestableSocketServer(KafkaConfig.fromProps(props))
     testableServer.enableRequestProcessing(Map.empty)
     val testableSelector = testableServer.testableSelector
     val proxyServer = new ProxyServer(testableServer)
-    val selectTimeoutMs = 500
+    val selectTimeoutMs = 5000
     // set pollTimeoutOverride to "selectTimeoutMs" to ensure poll() timeout is distinct and can be identified
     testableSelector.pollTimeoutOverride = Some(selectTimeoutMs)
 
     try {
-      // trigger SSL handshake by sending the first request and receiving its response without buffering
-      val requestBytes = producerRequestBytes()
-      val sslSocket = sslClientSocket(proxyServer.localPort)
+      val (sslSocket, req1) = makeSocketWithBufferedRequests(testableServer, testableSelector, proxyServer)
 
-      sendRequest(sslSocket, requestBytes)
-      val request1 = receiveRequest(testableServer.dataPlaneRequestChannel)
-      processRequest(testableServer.dataPlaneRequestChannel, request1)
-      receiveResponse(sslSocket)
-
-      // then put 2 requests in SslTransportLayer.netReadBuffer via the ProxyServer
-      val connectionId = request1.context.connectionId
-      val listener = testableServer.config.dataPlaneListeners.head.listenerName.value
-      val channel = testableServer.dataPlaneAcceptor(listener).get.processors(0).channel(connectionId).getOrElse(throw new IllegalStateException("Channel not found"))
-      val transportLayer: SslTransportLayer = JTestUtils.fieldValue(channel, classOf[KafkaChannel], "transportLayer")
-      val netReadBuffer: ByteBuffer = JTestUtils.fieldValue(transportLayer, classOf[SslTransportLayer], "netReadBuffer")
-
-      proxyServer.enableBuffering(netReadBuffer)
-      sendRequest(sslSocket, requestBytes)
-      sendRequest(sslSocket, requestBytes)
-
-      val keysWithBufferedRead: util.Set[SelectionKey] = JTestUtils.fieldValue(testableSelector, classOf[Selector], "keysWithBufferedRead")
-      keysWithBufferedRead.add(channel.selectionKey)
-      JTestUtils.setFieldValue(transportLayer, "hasBytesBuffered", true)
-
-      // process the first request in the server side
-      // this would move bytes from netReadBuffer to appReadBuffer, then process only the first request
-      val req1 = receiveRequest(testableServer.dataPlaneRequestChannel, 60000)
+      // process the request to trigger SSL handshake
       processRequest(testableServer.dataPlaneRequestChannel, req1)
 
-      // receive response in the client side
-      receiveResponse(sslSocket)
-
-      // process the second request in the appReadBuffer
-      // NOTE 1: this should not block because the data is already in the buffer
-      // NOTE 2: we do not call wakeup() here so Selector.poll() would block if the fix is not in place
-      val processTimeStartNanos = System.nanoTime()
-      receiveRequest(testableServer.dataPlaneRequestChannel, 60000)
-      val processTimeEndNanos = System.nanoTime()
-
-      // check the duration of processing the second request
-      val processTimeDuration = TimeUnit.NANOSECONDS.toMillis(processTimeEndNanos - processTimeStartNanos)
-      assertTrue(processTimeDuration < selectTimeoutMs,
-        "Time to process the second request (" + processTimeDuration + " ms) should be under " + selectTimeoutMs + " ms")
+      // process the request that is added directly to the netReadBuffer, this should not block
+      val req2 = receiveRequest(testableServer.dataPlaneRequestChannel)
+      processRequest(testableServer.dataPlaneRequestChannel, req2)
 
       sslSocket.close()
     } finally {
       shutdownServerAndMetrics(testableServer)
+      proxyServer.close()
     }
   }
 
