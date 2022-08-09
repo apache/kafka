@@ -19,7 +19,6 @@ package org.apache.kafka.server.common;
 
 import org.apache.kafka.common.record.RecordVersion;
 
-import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -72,20 +71,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MetadataVersionTest {
-
     @Test
     public void testFeatureLevel() {
-        MetadataVersion[] metadataVersions = MetadataVersion.VERSIONS;
-        int firstFeatureLevelIndex = Arrays.asList(metadataVersions).indexOf(MetadataVersion.MINIMUM_KRAFT_VERSION);
-        for (int i = 0; i < firstFeatureLevelIndex; i++) {
-            assertTrue(metadataVersions[i].featureLevel() < 0);
+        int i = 0;
+        while (i < MetadataVersion.VERSIONS.length &&
+                MetadataVersion.VERSIONS[i].featureLevel() < 0) {
+            i++;
         }
-        short expectedFeatureLevel = 1;
-        for (int i = firstFeatureLevelIndex; i < metadataVersions.length; i++) {
-            MetadataVersion metadataVersion = metadataVersions[i];
-            assertEquals(expectedFeatureLevel, metadataVersion.featureLevel(),
-                    String.format("Metadata version %s should have feature level %s", metadataVersion.featureLevel(), expectedFeatureLevel));
-            expectedFeatureLevel += 1;
+        int j = 1;
+        while (i < MetadataVersion.VERSIONS.length) {
+            assertEquals(j, MetadataVersion.VERSIONS[i].featureLevel());
+            i++;
+            j++;
         }
     }
 

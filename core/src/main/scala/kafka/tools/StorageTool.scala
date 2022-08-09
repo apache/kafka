@@ -26,7 +26,7 @@ import net.sourceforge.argparse4j.impl.Arguments.{store, storeTrue}
 import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.controller.BootstrapMetadata
+import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.server.common.MetadataVersion
 
 import scala.collection.mutable
@@ -253,8 +253,9 @@ object StorageTool extends Logging {
       val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
       checkpoint.write(metaProperties.toProperties)
 
-      val bootstrapMetadata = BootstrapMetadata.create(metadataVersion)
-      BootstrapMetadata.write(bootstrapMetadata, Paths.get(directory))
+      val bootstrapMetadata = BootstrapMetadata.fromVersion(metadataVersion, "format command")
+      val bootstrapDirectory = new BootstrapDirectory(directory.toString, "")
+      bootstrapDirectory.writeBinaryFile(bootstrapMetadata)
 
       stream.println(s"Formatting ${directory} with metadata.version ${metadataVersion}.")
     })

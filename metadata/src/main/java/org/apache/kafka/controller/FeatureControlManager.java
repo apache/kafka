@@ -52,7 +52,7 @@ public class FeatureControlManager {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
-        private MetadataVersion metadataVersion = MetadataVersion.MINIMUM_KRAFT_VERSION;
+        private MetadataVersion metadataVersion = MetadataVersion.latest();
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -105,11 +105,6 @@ public class FeatureControlManager {
      */
     private final TimelineObject<MetadataVersion> metadataVersion;
 
-    /**
-     * A boolean to see if we have encountered a metadata.version or not.
-     */
-    private final TimelineObject<Boolean> sawMetadataVersion;
-
     private FeatureControlManager(
         LogContext logContext,
         QuorumFeatures quorumFeatures,
@@ -120,7 +115,6 @@ public class FeatureControlManager {
         this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, metadataVersion);
-        this.sawMetadataVersion = new TimelineObject<>(snapshotRegistry, false);
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
@@ -159,11 +153,11 @@ public class FeatureControlManager {
                 "The controller does not support the given upgrade type.");
         }
 
-        final Short currentVersion;
+        final short currentVersion;
         if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
             currentVersion = metadataVersion.get().featureLevel();
         } else {
-            currentVersion = finalizedVersions.get(featureName);
+            currentVersion = finalizedVersions.getOrDefault(featureName, (short) 0);
         }
 
         if (newVersion < 0) {
@@ -188,11 +182,15 @@ public class FeatureControlManager {
             }
         }
 
-        if (currentVersion != null && newVersion < currentVersion) {
+        if (newVersion < currentVersion) {
             if (upgradeType.equals(FeatureUpdate.UpgradeType.UPGRADE)) {
                 return invalidUpdateVersion(featureName, newVersion,
                     "Can't downgrade the version of this feature without setting the " +
                     "upgrade type to either safe or unsafe downgrade.");
+            }
+        } else if (newVersion > currentVersion) {
+            if (!upgradeType.equals(FeatureUpdate.UpgradeType.UPGRADE)) {
+                return invalidUpdateVersion(featureName, newVersion, "Can't downgrade to a newer version.");
             }
         }
 
@@ -269,13 +267,6 @@ public class FeatureControlManager {
         return new FinalizedControllerFeatures(features, epoch);
     }
 
-    /**
-     * @return true if a FeatureLevelRecord for "metadata.version" has been replayed. False otherwise
-     */
-    boolean sawMetadataVersion() {
-        return this.sawMetadataVersion.get();
-    }
-
     public void replay(FeatureLevelRecord record) {
         VersionRange range = quorumFeatures.localSupportedFeature(record.name());
         if (!range.contains(record.featureLevel())) {
@@ -285,7 +276,6 @@ public class FeatureControlManager {
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
             log.info("Setting metadata.version to {}", record.featureLevel());
             metadataVersion.set(MetadataVersion.fromFeatureLevel(record.featureLevel()));
-            sawMetadataVersion.set(true);
         } else {
             if (record.featureLevel() == 0) {
                 log.info("Removing feature {}", record.name());

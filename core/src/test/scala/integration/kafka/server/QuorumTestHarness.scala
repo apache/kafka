@@ -33,8 +33,9 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
-import org.apache.kafka.controller.{BootstrapMetadata, QuorumControllerMetrics}
+import org.apache.kafka.controller.QuorumControllerMetrics
 import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
@@ -44,10 +45,8 @@ import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, TestInfo}
 
-import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
 import scala.compat.java8.OptionConverters._
-import scala.jdk.CollectionConverters._
 
 trait QuorumImplementation {
   def createBroker(
@@ -141,8 +140,6 @@ abstract class QuorumTestHarness extends Logging {
   }
 
   protected def metadataVersion: MetadataVersion = MetadataVersion.latest()
-
-  val bootstrapRecords: ListBuffer[ApiMessageAndVersion] = ListBuffer()
 
   private var testInfo: TestInfo = null
   private var implementation: QuorumImplementation = null
@@ -321,7 +318,7 @@ abstract class QuorumTestHarness extends Logging {
         controllerQuorumVotersFuture = controllerQuorumVotersFuture,
         configSchema = KafkaRaftServer.configSchema,
         raftApiVersions = raftManager.apiVersions,
-        bootstrapMetadata = BootstrapMetadata.create(metadataVersion, bootstrapRecords.asJava),
+        bootstrapMetadata = BootstrapMetadata.fromVersion(metadataVersion, "test harness"),
         metadataFaultHandler = faultHandler,
         fatalFaultHandler = faultHandler,
       )

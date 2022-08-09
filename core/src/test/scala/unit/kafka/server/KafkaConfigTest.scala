@@ -1587,7 +1587,7 @@ class KafkaConfigTest {
     val props = new Properties()
     props.putAll(kraftProps())
     props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
-    assertEquals("A non-KRaft version 2.8 given for inter.broker.protocol.version. The minimum version is 3.0-IV1",
+    assertEquals("A non-KRaft version 2.8 given for inter.broker.protocol.version. The minimum version is 3.3-IV0",
       assertThrows(classOf[ConfigException], () => new KafkaConfig(props)).getMessage)
   }
 

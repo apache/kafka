@@ -31,6 +31,7 @@ import java.util.stream.IntStream;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.controller.QuorumController.Builder;
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -52,7 +53,8 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         LocalLogManagerTestEnv logEnv,
         Consumer<QuorumController.Builder> builderConsumer
     ) throws Exception {
-        this(logEnv, builderConsumer, OptionalLong.empty(), OptionalLong.empty(), BootstrapMetadata.create(MetadataVersion.latest()));
+        this(logEnv, builderConsumer, OptionalLong.empty(), OptionalLong.empty(),
+                BootstrapMetadata.fromVersion(MetadataVersion.latest(), "test-provided version"));
     }
 
     public QuorumControllerTestEnv(
@@ -62,7 +64,8 @@ public class QuorumControllerTestEnv implements AutoCloseable {
             OptionalLong leaderImbalanceCheckIntervalNs,
             MetadataVersion metadataVersion
     ) throws Exception {
-        this(logEnv, builderConsumer, sessionTimeoutMillis, leaderImbalanceCheckIntervalNs, BootstrapMetadata.create(metadataVersion));
+        this(logEnv, builderConsumer, sessionTimeoutMillis, leaderImbalanceCheckIntervalNs,
+                BootstrapMetadata.fromVersion(metadataVersion, "test-provided version"));
     }
 
     public QuorumControllerTestEnv(
