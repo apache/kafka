@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.{AlterPartitionRequestData, AlterPartitio
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
@@ -55,12 +56,6 @@ object ControllerIntegrationTest {
       }
     }
   }
-
-  def testAlterPartitionVersionSource(): JStream[Arguments] = {
-      ApiKeys.ALTER_PARTITION.allVersions.stream.map { alterPartitionVersion =>
-        Arguments.of(alterPartitionVersion)
-      }
-    }
 }
 
 class ControllerIntegrationTest extends QuorumTestHarness {
@@ -908,12 +903,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
         ).asJava)
       ).asJava)
 
-    val future = new CompletableFuture[AlterPartitionResponseData]()
-    controller.eventManager.put(AlterPartitionReceived(
-      alterPartitionRequest,
-      alterPartitionVersion,
-      future.complete
-    ))
+    val future = alterPartitionFuture(alterPartitionRequest, alterPartitionVersion)
 
     val expectedAlterPartitionResponse = new AlterPartitionResponseData()
       .setTopics(Seq(new AlterPartitionResponseData.TopicData()
@@ -972,12 +962,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
         ).asJava)
       ).asJava)
 
-    val future = new CompletableFuture[AlterPartitionResponseData]()
-    controller.eventManager.put(AlterPartitionReceived(
-      alterPartitionRequest,
-      ApiKeys.ALTER_PARTITION.latestVersion,
-      future.complete
-    ))
+    val future = alterPartitionFuture(alterPartitionRequest, ApiKeys.ALTER_PARTITION.latestVersion)
 
     val expectedAlterPartitionResponse = new AlterPartitionResponseData()
       .setTopics(Seq(new AlterPartitionResponseData.TopicData()
@@ -1026,12 +1011,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
         ).asJava)
       ).asJava)
 
-    val future = new CompletableFuture[AlterPartitionResponseData]()
-    controller.eventManager.put(AlterPartitionReceived(
-      alterPartitionRequest,
-      AlterPartitionRequestData.HIGHEST_SUPPORTED_VERSION,
-      future.complete
-    ))
+    val future = alterPartitionFuture(alterPartitionRequest, AlterPartitionRequestData.HIGHEST_SUPPORTED_VERSION)
 
     val expectedAlterPartitionResponse = new AlterPartitionResponseData()
       .setTopics(Seq(new AlterPartitionResponseData.TopicData()
@@ -1050,7 +1030,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   }
 
   @ParameterizedTest
-  @MethodSource(Array("testAlterPartitionVersionSource"))
+  @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
   def testShutdownBrokerNotAddedToIsr(alterPartitionVersion: Short): Unit = {
     servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
@@ -1089,25 +1069,20 @@ class ControllerIntegrationTest extends QuorumTestHarness {
       .setBrokerEpoch(controllerEpoch)
       .setTopics(Seq(requestTopic).asJava)
 
-    val future = new CompletableFuture[AlterPartitionResponseData]()
-    controller.eventManager.put(AlterPartitionReceived(
-      alterPartitionRequest,
-      alterPartitionVersion,
-      future.complete
-    ))
+    val future = alterPartitionFuture(alterPartitionRequest, alterPartitionVersion)
 
-    val error = if (alterPartitionVersion > 1) Errors.INELIGIBLE_REPLICA else Errors.OPERATION_NOT_ATTEMPTED
-    val responseTopic = new AlterPartitionResponseData.TopicData()
+    val expectedError = if (alterPartitionVersion > 1) Errors.INELIGIBLE_REPLICA else Errors.OPERATION_NOT_ATTEMPTED
+    val expectedResponseTopic = new AlterPartitionResponseData.TopicData()
       .setPartitions(Seq(new AlterPartitionResponseData.PartitionData()
         .setPartitionIndex(tp.partition)
-        .setErrorCode(error.code())
+        .setErrorCode(expectedError.code())
         .setLeaderRecoveryState(leaderAndIsr.leaderRecoveryState.value)
       ).asJava)
-    if (alterPartitionVersion > 1) responseTopic.setTopicId(topicId) else responseTopic.setTopicName(tp.topic)
+    if (alterPartitionVersion > 1) expectedResponseTopic.setTopicId(topicId) else expectedResponseTopic.setTopicName(tp.topic)
 
     // We expect an ineligble replica error response for the partition.
     val expectedAlterPartitionResponse = new AlterPartitionResponseData()
-      .setTopics(Seq(responseTopic).asJava)
+      .setTopics(Seq(expectedResponseTopic).asJava)
 
     val newLeaderIsrAndControllerEpochMap = controller.controllerContext.partitionsLeadershipInfo
     val newLeaderAndIsr = newLeaderIsrAndControllerEpochMap(tp).leaderAndIsr
@@ -1398,12 +1373,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
           .setNewIsr(isr.toList.map(Int.box).asJava)
           .setLeaderRecoveryState(leaderRecoveryState)).asJava)).asJava)
 
-    val future = new CompletableFuture[AlterPartitionResponseData]()
-    getController().kafkaController.eventManager.put(AlterPartitionReceived(
-      alterPartitionRequest,
-      if (topicIdOpt.isDefined) AlterPartitionRequestData.HIGHEST_SUPPORTED_VERSION else 1,
-      future.complete
-    ))
+    val future = alterPartitionFuture(alterPartitionRequest, if (topicIdOpt.isDefined) AlterPartitionRequestData.HIGHEST_SUPPORTED_VERSION else 1)
 
     val expectedAlterPartitionResponse = if (topLevelError != Errors.NONE) {
       new AlterPartitionResponseData().setErrorCode(topLevelError.code)
@@ -1876,6 +1846,17 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   private def getController(): KafkaServer = {
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     servers.filter(s => s.config.brokerId == controllerId).head
+  }
+
+  private def alterPartitionFuture(alterPartitionRequest: AlterPartitionRequestData,
+                                   alterPartitionVersion: Short): CompletableFuture[AlterPartitionResponseData] = {
+    val future = new CompletableFuture[AlterPartitionResponseData]()
+    getController().kafkaController.eventManager.put(AlterPartitionReceived(
+      alterPartitionRequest,
+      alterPartitionVersion,
+      future.complete
+    ))
+    future
   }
 
 }

@@ -2363,7 +2363,7 @@ class KafkaController(val config: KafkaConfig,
             )
             None
           } else {
-            // Pull out replicas being added to ISR and verify they are all online
+            // Pull out replicas being added to ISR and verify they are all online.
             // If a replica is not online, reject the update as specified in KIP-841.
             val ineligibleReplicas = newLeaderAndIsr.isr.toSet -- controllerContext.liveBrokerIds
             if (ineligibleReplicas.nonEmpty) {

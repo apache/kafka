@@ -881,11 +881,13 @@ class Partition(val topicPartition: TopicPartition,
   private def isReplicaIsrEligible(followerReplicaId: Int): Boolean = {
     metadataCache match {
       // In KRaft mode, only replicas which are not fenced nor in controlled shutdown are
-      // allowed to join the ISR. In ZK mode, we just ensure the broker is alive and not shutting down.
+      // allowed to join the ISR.
       case kRaftMetadataCache: KRaftMetadataCache =>
         !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
           !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId)
 
+      // In ZK mode, we just ensure the broker is alive. Although we do not check for shutting down brokers here,'
+      // the controller will block them from being added to ISR.
       case zkMetadataCache: ZkMetadataCache =>
         zkMetadataCache.hasAliveBroker(followerReplicaId)
 

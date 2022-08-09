@@ -1379,7 +1379,7 @@ class PartitionTest extends AbstractPartitionTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testIsrNotExpandedIfReplicaIsFenced(quorum: String): Unit = {
+  def testIsrNotExpandedIfReplicaIsFencedOrShutdown(quorum: String): Unit = {
     val kraft = quorum == "kraft"
 
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
