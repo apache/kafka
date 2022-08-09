@@ -1890,7 +1890,7 @@ class SocketServerTest {
     testableServer.enableRequestProcessing(Map.empty)
     val testableSelector = testableServer.testableSelector
     val proxyServer = new ProxyServer(testableServer)
-    val selectTimeoutMs = 1000
+    val selectTimeoutMs = 500
     // set pollTimeoutOverride to "selectTimeoutMs" to ensure poll() timeout is distinct and can be identified
     testableSelector.pollTimeoutOverride = Some(selectTimeoutMs)
 
@@ -1921,9 +1921,7 @@ class SocketServerTest {
 
       // process the first request in the server side
       // this would move bytes from netReadBuffer to appReadBuffer, then process only the first request
-      // we call wakeup() so Selector.poll() does not block in this step (because we artificially add data into netReadBuffer)
-      testableSelector.wakeup()
-      val req1 = receiveRequest(testableServer.dataPlaneRequestChannel, selectTimeoutMs + 1000)
+      val req1 = receiveRequest(testableServer.dataPlaneRequestChannel, 60000)
       processRequest(testableServer.dataPlaneRequestChannel, req1)
 
       // receive response in the client side
@@ -1933,7 +1931,7 @@ class SocketServerTest {
       // NOTE 1: this should not block because the data is already in the buffer
       // NOTE 2: we do not call wakeup() here so Selector.poll() would block if the fix is not in place
       val processTimeStartNanos = System.nanoTime()
-      receiveRequest(testableServer.dataPlaneRequestChannel, selectTimeoutMs + 1000)
+      receiveRequest(testableServer.dataPlaneRequestChannel, 60000)
       val processTimeEndNanos = System.nanoTime()
 
       // check the duration of processing the second request
