@@ -2339,14 +2339,15 @@ class KafkaController(val config: KafkaConfig,
           if (newLeaderAndIsr.leaderEpoch != currentLeaderAndIsr.leaderEpoch) {
             partitionResponses(tp) = Left(Errors.FENCED_LEADER_EPOCH)
             None
-          } else if (newLeaderAndIsr.partitionEpoch < currentLeaderAndIsr.partitionEpoch) {
-            partitionResponses(tp) = Left(Errors.INVALID_UPDATE_VERSION)
-            None
-          } else if (newLeaderAndIsr.equalsIgnorePartitionEpoch(currentLeaderAndIsr)) {
+          } else if (newLeaderAndIsr.equalsAllowStalePartitionEpoch(currentLeaderAndIsr)) {
             // If a partition is already in the desired state, just return it
+            // this check must be done before fencing based on partition epoch to maintain idempotency
             partitionResponses(tp) = Right(currentLeaderAndIsr)
             None
-          } else if (newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING && newLeaderAndIsr.isr.length > 1) {
+          } else if (newLeaderAndIsr.partitionEpoch != currentLeaderAndIsr.partitionEpoch) {
+            partitionResponses(tp) = Left(Errors.INVALID_UPDATE_VERSION)
+            None
+          }  else if (newLeaderAndIsr.leaderRecoveryState == LeaderRecoveryState.RECOVERING && newLeaderAndIsr.isr.length > 1) {
             partitionResponses(tp) = Left(Errors.INVALID_REQUEST)
             info(
               s"Rejecting AlterPartition from node $brokerId for $tp because leader is recovering and ISR is greater than 1: " +
