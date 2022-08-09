@@ -104,11 +104,12 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
         RawSnapshotReader snapshot,
         RecordSerde<T> serde,
         BufferSupplier bufferSupplier,
-        int maxBatchSize
+        int maxBatchSize,
+        boolean doCrcValidation
     ) {
         return new RecordsSnapshotReader<>(
             snapshot.snapshotId(),
-            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize)
+            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize, doCrcValidation)
         );
     }
 
