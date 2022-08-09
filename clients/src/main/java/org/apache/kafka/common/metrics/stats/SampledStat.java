@@ -17,6 +17,7 @@
 package org.apache.kafka.common.metrics.stats;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import org.apache.kafka.common.metrics.MeasurableStat;
@@ -34,8 +35,14 @@ import org.apache.kafka.common.metrics.MetricConfig;
  */
 public abstract class SampledStat implements MeasurableStat {
 
-    private double initialValue;
+    private final double initialValue;
+    /**
+     * Index of the latest stored sample.
+     */
     private int current = 0;
+    /**
+     * Stores the recorded samples. Older samples are overwritten using {@link Sample#reset(long)}
+     */
     protected List<Sample> samples;
 
     public SampledStat(double initialValue) {
@@ -43,26 +50,41 @@ public abstract class SampledStat implements MeasurableStat {
         this.samples = new ArrayList<>(2);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * On every record, do the following:
+     * 1. Check if the current window has expired
+     * 2. If yes, then advance the current pointer to new window. The start time of the new window is set to nearest
+     *    possible starting point for the new window. The nearest starting point occurs at config.timeWindowMs intervals
+     *    from the end time of last known window.
+     * 3. Update the recorded value for the current window
+     * 4. Increase the number of event count
+     */
     @Override
-    public void record(MetricConfig config, double value, long timeMs) {
-        Sample sample = current(timeMs);
-        if (sample.isComplete(timeMs, config))
-            sample = advance(config, timeMs);
-        update(sample, config, value, timeMs);
-        sample.eventCount += 1;
+    public void record(MetricConfig config, double value, long recordingTimeMs) {
+        Sample sample = current(recordingTimeMs);
+        if (sample.isComplete(recordingTimeMs, config)) {
+            final long previousWindowStartTime = sample.lastWindowMs;
+            final long previousWindowEndTime = previousWindowStartTime + config.timeWindowMs();
+            final long startTimeOfNewWindow = recordingTimeMs - ((recordingTimeMs - previousWindowEndTime) % config.timeWindowMs());
+            sample = advance(config, startTimeOfNewWindow);
+        }
+        update(sample, config, value, recordingTimeMs);
+        sample.eventCount++;
     }
 
     private Sample advance(MetricConfig config, long timeMs) {
         this.current = (this.current + 1) % config.samples();
+        Sample sample;
         if (this.current >= samples.size()) {
-            Sample sample = newSample(timeMs);
+            sample = newSample(timeMs);
             this.samples.add(sample);
-            return sample;
         } else {
-            Sample sample = current(timeMs);
+            sample = current(timeMs);
             sample.reset(timeMs);
-            return sample;
         }
+        return sample;
     }
 
     protected Sample newSample(long timeMs) {
@@ -84,13 +106,7 @@ public abstract class SampledStat implements MeasurableStat {
     public Sample oldest(long now) {
         if (samples.size() == 0)
             this.samples.add(newSample(now));
-        Sample oldest = this.samples.get(0);
-        for (int i = 1; i < this.samples.size(); i++) {
-            Sample curr = this.samples.get(i);
-            if (curr.lastWindowMs < oldest.lastWindowMs)
-                oldest = curr;
-        }
-        return oldest;
+        return samples.stream().min(Comparator.comparingLong(s -> s.lastWindowMs)).orElse(samples.get(0));
     }
 
     @Override

@@ -1376,7 +1376,11 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   private val interBrokerListenerName = config.interBrokerListenerName
   private val counts = mutable.Map[InetAddress, Int]()
 
-  // Listener counts and configs are synchronized on `counts`
+  /**
+   * Number of accepted connections per listener.
+   *
+   * Note: Listener counts and configs are synchronized on `counts`
+   */
   private val listenerCounts = mutable.Map[ListenerName, Int]()
   private[network] val maxConnectionsPerListener = mutable.Map[ListenerName, ListenerConnectionQuota]()
   @volatile private var totalCount = 0
@@ -1394,6 +1398,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
       recordIpConnectionMaybeThrottle(listenerName, address)
       val count = counts.getOrElseUpdate(address, 0)
       counts.put(address, count + 1)
+
       totalCount += 1
       if (listenerCounts.contains(listenerName)) {
         listenerCounts.put(listenerName, listenerCounts(listenerName) + 1)
@@ -1538,17 +1543,17 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   private def waitForConnectionSlot(listenerName: ListenerName,
                                     acceptorBlockedPercentMeter: com.yammer.metrics.core.Meter): Unit = {
     counts.synchronized {
-      val startThrottleTimeMs = time.milliseconds
-      val throttleTimeMs = math.max(recordConnectionAndGetThrottleTimeMs(listenerName, startThrottleTimeMs), 0)
+      val startThrottleTimestampMs = time.milliseconds
+      val throttleTimeDurationMs = math.max(recordConnectionAndGetThrottleTimeMs(listenerName, startThrottleTimestampMs), 0)
 
-      if (throttleTimeMs > 0 || !connectionSlotAvailable(listenerName)) {
+      if (throttleTimeDurationMs > 0 || !connectionSlotAvailable(listenerName)) {
         val startNs = time.nanoseconds
-        val endThrottleTimeMs = startThrottleTimeMs + throttleTimeMs
-        var remainingThrottleTimeMs = throttleTimeMs
+        val endThrottleTimestampMs = startThrottleTimestampMs + throttleTimeDurationMs
+        var remainingThrottleTimeDurationMs = math.max(throttleTimeDurationMs - (time.milliseconds - startThrottleTimestampMs), 0)
         do {
-          counts.wait(remainingThrottleTimeMs)
-          remainingThrottleTimeMs = math.max(endThrottleTimeMs - time.milliseconds, 0)
-        } while (remainingThrottleTimeMs > 0 || !connectionSlotAvailable(listenerName))
+          counts.wait(remainingThrottleTimeDurationMs)
+          remainingThrottleTimeDurationMs = math.max(endThrottleTimestampMs - time.milliseconds, 0)
+        } while (remainingThrottleTimeDurationMs > 0 || !connectionSlotAvailable(listenerName))
         acceptorBlockedPercentMeter.mark(time.nanoseconds - startNs)
       }
     }
@@ -1577,7 +1582,10 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
 
   /**
    * Calculates the delay needed to bring the observed connection creation rate to listener-level limit or to broker-wide
-   * limit, whichever the longest. The delay is capped to the quota window size defined by QuotaWindowSizeSecondsProp
+   * limit, whichever the longest. The delay is capped to the quota window size defined by QuotaWindowSizeSecondsProp.
+   *
+   * Calls to this function must be performed with the counts lock to ensure that reading the listener/broker
+   * connection rate quota and creating the sensor's metric config is atomic.
    *
    * @param listenerName listener for which calculate the delay
    * @param timeMs current time in milliseconds

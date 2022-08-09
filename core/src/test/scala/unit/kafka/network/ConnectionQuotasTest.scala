@@ -377,6 +377,10 @@ class ConnectionQuotasTest {
 
     // create connections with the rate < listener quota on every listener, and verify there is no throttling
     val connectionsPerListener = 200 // should take 5 seconds to create 200 connections with rate = 40/sec
+
+    // assert that connection creation rate on listener (per sec) is indeed less than listener quota
+    assertTrue((1000 / connCreateIntervalMs) < listenerRateLimit)
+
     val futures = listeners.values.map { listener =>
       executor.submit((() => acceptConnections(connectionQuotas, listener, connectionsPerListener, connCreateIntervalMs)): Runnable)
     }
@@ -390,9 +394,10 @@ class ConnectionQuotasTest {
 
   @Test
   def testListenerConnectionRateLimitWhenActualRateAboveLimit(): Unit = {
-    val brokerRateLimit = 125
     val listenerRateLimit = 30
+    val brokerRateLimit = 125 // should be > listenerRateLimit * num_listeners
     val connCreateIntervalMs = 25 // connection creation rate = 40/sec per listener (3 * 40 = 120/sec total)
+    val connCreateRatePerSec = 1000 / connCreateIntervalMs
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
@@ -402,12 +407,38 @@ class ConnectionQuotasTest {
     addListenersAndVerify(config, listenerConfig, connectionQuotas)
 
     // create connections with the rate > listener quota on every listener
-    // run a bit longer (20 seconds) to also verify the throttle rate
-    val connectionsPerListener = 600 // should take 20 seconds to create 600 connections with rate = 30/sec
+    // run a bit longer to also verify the throttle rate
+    val connectionsPerListener = 600 // should take 20 seconds to create 600 connections with throttled rate = 30/sec
+
+    // assert that connection creation rate on listener (per sec) is indeed greater than or equal to listener quota
+    assertTrue(connCreateRatePerSec >= listenerRateLimit)
+
+    /*
+     * We are sending 600 requests at a rate of connCreateRatePerSec=40/s. If the throttling is working correctly,
+     * the system should enforce a rate of listenerRateLimit=30/s, thus taking an overall time of 20s to run.
+     *
+     * Rate limiting contract in Kafka is enforced over a calculation window which is calculated as
+     * quota.window.num * quota.window.size.seconds = 2 * 1 = 2s in this test. Rate limiting contract ensures that over
+     * a period of 20s, rate calculated at end of each calculation window (every 2s) should be equal to listenerRateLimit.
+     *
+     * However, due to sleeps and thread blocking, we cannot guarantee exact rate of 30/s, thus, we add an epsilon i.e.
+     * an acceptable error margin. The calculation of epsilon is based on worst case scenario.
+     * Worst case scenario occurs when the max throttling interval of 1s is not sufficient to bring the rate down to
+     * acceptable levels.
+     *
+     * 1. at end of 15 sec when all 600 requests have been submitted and are waiting to be accepted
+     * 2. during the 16th sec time window, at max 60 requests are picked up but the max wait is 1 sec which means, we
+     *    would still end up picking requests in 17th sec time window leading to > 30/s rate for those 2 time windows.
+     * 3. hence, in worst case all the input requests will be finished somewhere in the 18th or 19th sec window.
+     * Thus, in worst case, this would lead to a calculated rate of ~600/18 < 33.3
+     *
+     */
+
     val futures = listeners.values.map { listener =>
       executor.submit((() =>
         // epsilon is set to account for the worst-case where the measurement is taken just before or after the quota window
-        acceptConnectionsAndVerifyRate(connectionQuotas, listener, connectionsPerListener, connCreateIntervalMs, listenerRateLimit, 7)): Runnable)
+        acceptConnectionsAndVerifyRate(connectionQuotas, listener, connectionsPerListener, connCreateIntervalMs,
+          listenerRateLimit, 3.5)): Runnable)
     }
     futures.foreach(_.get(30, TimeUnit.SECONDS))
 
@@ -503,9 +534,9 @@ class ConnectionQuotasTest {
     val numConnections = 35
     val futures = List(
       executor.submit((() => acceptConnections(connectionQuotas, listener, knownHost, numConnections,
-        0, true)): Callable[Boolean]),
+        0, expectIpThrottle = true)): Callable[Boolean]),
       executor.submit((() => acceptConnections(connectionQuotas, listener, unknownHost, numConnections,
-        0, true)): Callable[Boolean])
+        0, expectIpThrottle = true)): Callable[Boolean])
     )
 
     val ipsThrottledResults = futures.map(_.get(3, TimeUnit.SECONDS))
@@ -885,13 +916,17 @@ class ConnectionQuotasTest {
       timeIntervalMs, expectIpThrottle)
   }
 
-  // this method must be called on a separate thread, because connectionQuotas.inc() may block
+  /**
+   * Also see documentation for [[acceptConnections()]]
+   *
+   * This method must be called on a separate thread, because connectionQuotas.inc() may block
+   */
   private def acceptConnectionsAndVerifyRate(connectionQuotas: ConnectionQuotas,
                                              listenerDesc: ListenerDesc,
                                              numConnections: Long,
                                              timeIntervalMs: Long,
                                              expectedRate: Int,
-                                             epsilon: Int,
+                                             epsilon: Double,
                                              expectIpThrottle: Boolean = false) : Unit = {
     val startTimeMs = time.milliseconds
     val startNumConnections = connectionQuotas.get(listenerDesc.defaultIp)
@@ -900,8 +935,12 @@ class ConnectionQuotasTest {
     val elapsedSeconds = MetricsUtils.convert(time.milliseconds - startTimeMs, TimeUnit.SECONDS)
     val createdConnections = connectionQuotas.get(listenerDesc.defaultIp) - startNumConnections
     val actualRate = createdConnections.toDouble / elapsedSeconds
+    assertFalse(actualRate > (1000.0 / timeIntervalMs.toDouble),
+      s"Measured rate $actualRate cannot be larger than the rate at which test created the connections i.e. " +
+        s"${1000.0 / timeIntervalMs.toDouble}");
+
     assertEquals(expectedRate.toDouble, actualRate, epsilon,
-      s"Expected rate ($expectedRate +- $epsilon), but got $actualRate ($createdConnections connections / $elapsedSeconds sec)")
+      s"Expected rate (${expectedRate.toDouble} +- $epsilon), but got $actualRate ($createdConnections connections / $elapsedSeconds sec)")
   }
 
   /**
@@ -909,7 +948,8 @@ class ConnectionQuotasTest {
    * as long as the rate is below the connection rate limit. Otherwise, connections will be essentially created as
    * fast as possible, which would result in the maximum connection creation rate.
    *
-   * This method must be called on a separate thread, because connectionQuotas.inc() may block
+   * This method must be called on a separate thread, because connectionQuotas.inc() may block.
+   * Note that the first connection is created instantly with an initialDelay of 0.
    */
   private def acceptConnections(connectionQuotas: ConnectionQuotas,
                                 listenerName: ListenerName,
@@ -943,7 +983,7 @@ class ConnectionQuotasTest {
                                             listenerDesc: ListenerDesc,
                                             numConnections: Long) : Unit = {
     val listenerName = listenerDesc.listenerName
-    for (i <- 0L until numConnections) {
+    for (_ <- 0L until numConnections) {
       // this method may block if broker-wide or listener limit is reached
       assertThrows(classOf[TooManyConnectionsException],
         () => connectionQuotas.inc(listenerName, listenerDesc.defaultIp, blockedPercentMeters(listenerName.value))
