@@ -46,7 +46,7 @@ import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CountDownLatch, Semaphore}
 import kafka.server.epoch.LeaderEpochFileCache
-import kafka.server.metadata.KRaftMetadataCache
+import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.replica.ClientMetadata
@@ -55,6 +55,8 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -1375,8 +1377,11 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(alterPartitionListener.failures.get, 1)
   }
 
-  @Test
-  def testIsrNotExpandedIfReplicaIsFenced(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testIsrNotExpandedIfReplicaIsFencedOrShutdown(quorum: String): Unit = {
+    val kraft = quorum == "kraft"
+
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
@@ -1386,7 +1391,19 @@ class PartitionTest extends AbstractPartitionTest {
     val replicas = List(brokerId, remoteBrokerId)
     val isr = Set(brokerId)
 
-    val metadataCache = mock(classOf[KRaftMetadataCache])
+    val metadataCache: MetadataCache = if (kraft) mock(classOf[KRaftMetadataCache]) else mock(classOf[ZkMetadataCache])
+
+    // Mark the remote broker as eligible or ineligible in the metadata cache of the leader.
+    // When using kraft, we can make the broker ineligible by fencing it.
+    // In ZK mode, we must mark the broker as alive for it to be eligible.
+    def markRemoteReplicaEligible(eligible: Boolean): Unit = {
+      if (kraft) {
+        when(metadataCache.asInstanceOf[KRaftMetadataCache].isBrokerFenced(remoteBrokerId)).thenReturn(!eligible)
+      } else {
+        when(metadataCache.hasAliveBroker(remoteBrokerId)).thenReturn(eligible)
+      }
+    }
+
     val partition = new Partition(
       topicPartition,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
@@ -1414,6 +1431,8 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(isr, partition.partitionState.isr)
     assertEquals(isr, partition.partitionState.maximalIsr)
 
+    markRemoteReplicaEligible(true)
+
     // Fetch to let the follower catch up to the log end offset and
     // to check if an expansion is possible.
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
@@ -1430,7 +1449,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(replicas.toSet, partition.partitionState.maximalIsr)
     assertEquals(1, alterPartitionManager.isrUpdates.size)
 
-    // Controller rejects the expansion because the broker is fenced.
+    // Controller rejects the expansion because the broker is fenced or offline.
     alterPartitionManager.failIsrUpdate(Errors.INELIGIBLE_REPLICA)
 
     // The leader reverts back to the previous ISR.
@@ -1439,8 +1458,8 @@ class PartitionTest extends AbstractPartitionTest {
     assertFalse(partition.partitionState.isInflight)
     assertEquals(0, alterPartitionManager.isrUpdates.size)
 
-    // The leader eventually learns about the fenced broker.
-    when(metadataCache.isBrokerFenced(remoteBrokerId)).thenReturn(true)
+    // The leader eventually learns about the fenced or offline broker.
+    markRemoteReplicaEligible(false)
 
     // The follower fetches again.
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
@@ -1451,8 +1470,8 @@ class PartitionTest extends AbstractPartitionTest {
     assertFalse(partition.partitionState.isInflight)
     assertEquals(0, alterPartitionManager.isrUpdates.size)
 
-    // The broker is eventually unfenced.
-    when(metadataCache.isBrokerFenced(remoteBrokerId)).thenReturn(false)
+    // The broker is eventually unfenced or brought back online.
+    markRemoteReplicaEligible(true)
 
     // The follower fetches again.
     fetchFollower(partition, replicaId = remoteBrokerId, fetchOffset = log.logEndOffset)
