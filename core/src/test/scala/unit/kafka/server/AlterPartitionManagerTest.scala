@@ -73,11 +73,12 @@ class AlterPartitionManagerTest {
   @MethodSource(Array("provideMetadataVersions"))
   def testBasic(metadataVersion: MetadataVersion): Unit = {
     val scheduler = new MockScheduler(time)
+    val controllerEpoch = 10
     val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => metadataVersion)
     alterPartitionManager.start()
-    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
+    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), controllerEpoch)
     verify(brokerToController).start()
-    verify(brokerToController).sendRequest(any(), any())
+    verify(brokerToController).sendRequest(any(), ArgumentMatchers.eq(controllerEpoch), any())
   }
 
   @ParameterizedTest
@@ -88,12 +89,13 @@ class AlterPartitionManagerTest {
   ): Unit = {
     val requestCapture = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[AlterPartitionRequest]])
 
+    val controllerEpoch = 10
     val scheduler = new MockScheduler(time)
     val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => metadataVersion)
     alterPartitionManager.start()
-    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1), leaderRecoveryState, 10), 0)
+    alterPartitionManager.submit(tp0, new LeaderAndIsr(1, 1, List(1), leaderRecoveryState, 10), controllerEpoch)
     verify(brokerToController).start()
-    verify(brokerToController).sendRequest(requestCapture.capture(), any())
+    verify(brokerToController).sendRequest(requestCapture.capture(), ArgumentMatchers.eq(controllerEpoch), any())
 
     val request = requestCapture.getValue.build()
     val expectedLeaderRecoveryState = if (metadataVersion.isAtLeast(IBP_3_2_IV0)) leaderRecoveryState else LeaderRecoveryState.RECOVERED
@@ -107,15 +109,16 @@ class AlterPartitionManagerTest {
     val capture: ArgumentCaptor[AbstractRequest.Builder[AlterPartitionRequest]] = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[AlterPartitionRequest]])
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
+    val controllerEpoch = 10
     val scheduler = new MockScheduler(time)
     val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => metadataVersion)
     alterPartitionManager.start()
 
     // Only send one ISR update for a given topic+partition
-    val firstSubmitFuture = alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
+    val firstSubmitFuture = alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), controllerEpoch)
     assertFalse(firstSubmitFuture.isDone)
 
-    val failedSubmitFuture = alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1, 2), LeaderRecoveryState.RECOVERED, 10), 0)
+    val failedSubmitFuture = alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1, 2), LeaderRecoveryState.RECOVERED, 10), controllerEpoch)
     assertTrue(failedSubmitFuture.isCompletedExceptionally)
     assertFutureThrows(failedSubmitFuture, classOf[OperationNotAttemptedException])
 
@@ -125,15 +128,23 @@ class AlterPartitionManagerTest {
       response = alterPartitionResp,
       version = if (canUseTopicIds) ApiKeys.ALTER_PARTITION.latestVersion else 1
     )
-    verify(brokerToController).sendRequest(capture.capture(), callbackCapture.capture())
+    verify(brokerToController).sendRequest(
+      request = capture.capture(),
+      minControllerEpoch = ArgumentMatchers.eq(controllerEpoch),
+      callback = callbackCapture.capture()
+    )
     callbackCapture.getValue.onComplete(resp)
 
     // Now we can submit this partition again
-    val newSubmitFuture = alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1), LeaderRecoveryState.RECOVERED, 10), 0)
+    val newSubmitFuture = alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1), LeaderRecoveryState.RECOVERED, 10), controllerEpoch)
     assertFalse(newSubmitFuture.isDone)
 
     verify(brokerToController).start()
-    verify(brokerToController, times(2)).sendRequest(capture.capture(), callbackCapture.capture())
+    verify(brokerToController, times(2)).sendRequest(
+      request = capture.capture(),
+      minControllerEpoch = ArgumentMatchers.eq(controllerEpoch),
+      callback = callbackCapture.capture()
+    )
 
     // Make sure we sent the right request ISR={1}
     val request = capture.getValue.build()
@@ -147,18 +158,19 @@ class AlterPartitionManagerTest {
     val capture: ArgumentCaptor[AbstractRequest.Builder[AlterPartitionRequest]] = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[AlterPartitionRequest]])
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
+    val controllerEpoch = 10
     val scheduler = new MockScheduler(time)
     val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => metadataVersion)
     alterPartitionManager.start()
 
     // First request will send batch of one
     alterPartitionManager.submit(new TopicIdPartition(topicId, 0, topic),
-      LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
+      LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), controllerEpoch)
 
     // Other submissions will queue up until a response
     for (i <- 1 to 9) {
       alterPartitionManager.submit(new TopicIdPartition(topicId, i, topic),
-        LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
+        LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), controllerEpoch)
     }
 
     // Simulate response, omitting partition 0 will allow it to stay in unsent queue
@@ -167,11 +179,19 @@ class AlterPartitionManagerTest {
       false, null, null, alterPartitionResp)
 
     // On the callback, we check for unsent items and send another request
-    verify(brokerToController).sendRequest(capture.capture(), callbackCapture.capture())
+    verify(brokerToController).sendRequest(
+      request = capture.capture(),
+      minControllerEpoch = ArgumentMatchers.eq(controllerEpoch),
+      callback = callbackCapture.capture()
+    )
     callbackCapture.getValue.onComplete(resp)
 
     verify(brokerToController).start()
-    verify(brokerToController, times(2)).sendRequest(capture.capture(), callbackCapture.capture())
+    verify(brokerToController, times(2)).sendRequest(
+      request = capture.capture(),
+      minControllerEpoch = ArgumentMatchers.eq(controllerEpoch),
+      callback = callbackCapture.capture()
+    )
 
     // Verify the last request sent had all 10 items
     val request = capture.getValue.build()
@@ -192,15 +212,16 @@ class AlterPartitionManagerTest {
     val leaderAndIsr = new LeaderAndIsr(leaderId, leaderEpoch, isr, LeaderRecoveryState.RECOVERED, partitionEpoch)
     val callbackCapture = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
+    val controllerEpoch = 20
     val scheduler = new MockScheduler(time)
     val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => IBP_3_2_IV0)
     alterPartitionManager.start()
-    val future = alterPartitionManager.submit(tp0, leaderAndIsr, 0)
+    val future = alterPartitionManager.submit(tp0, leaderAndIsr, controllerEpoch)
     val finalFuture = new CompletableFuture[LeaderAndIsr]()
     future.whenComplete { (_, e) =>
       if (e != null) {
         // Retry when error.
-        alterPartitionManager.submit(tp0, leaderAndIsr, 0).whenComplete { (result, e) =>
+        alterPartitionManager.submit(tp0, leaderAndIsr, controllerEpoch).whenComplete { (result, e) =>
           if (e != null) {
             finalFuture.completeExceptionally(e)
           } else {
@@ -213,7 +234,11 @@ class AlterPartitionManagerTest {
     }
 
     verify(brokerToController).start()
-    verify(brokerToController).sendRequest(any(), callbackCapture.capture())
+    verify(brokerToController).sendRequest(
+      request = any(),
+      minControllerEpoch = ArgumentMatchers.eq(controllerEpoch),
+      callbackCapture.capture()
+    )
     reset(brokerToController)
     callbackCapture.getValue.onComplete(errorResponse)
 
@@ -221,7 +246,11 @@ class AlterPartitionManagerTest {
     val retryAlterPartitionResponse = partitionResponse(tp0, Errors.NONE, partitionEpoch, leaderId, leaderEpoch, isr)
     val retryResponse = makeClientResponse(retryAlterPartitionResponse, ApiKeys.ALTER_PARTITION.latestVersion)
 
-    verify(brokerToController).sendRequest(any(), callbackCapture.capture())
+    verify(brokerToController).sendRequest(
+      request = any(),
+      minControllerEpoch = ArgumentMatchers.eq(controllerEpoch),
+      callbackCapture.capture()
+    )
     callbackCapture.getValue.onComplete(retryResponse)
 
     assertEquals(leaderAndIsr, finalFuture.get(200, TimeUnit.MILLISECONDS))
@@ -266,13 +295,18 @@ class AlterPartitionManagerTest {
     val leaderAndIsr = new LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10)
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
+    val controllerEpoch = 10
     val scheduler = new MockScheduler(time)
     val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => IBP_3_2_IV0)
     alterPartitionManager.start()
-    alterPartitionManager.submit(tp0, leaderAndIsr, 0)
+    alterPartitionManager.submit(tp0, leaderAndIsr, controllerEpoch)
 
     verify(brokerToController).start()
-    verify(brokerToController).sendRequest(any(), callbackCapture.capture())
+    verify(brokerToController).sendRequest(
+      request = any(),
+      minControllerEpoch = ArgumentMatchers.eq(controllerEpoch),
+      callback = callbackCapture.capture()
+    )
     callbackCapture.getValue.onComplete(response)
 
     // Any top-level error, we want to retry, so we don't clear items from the pending map
@@ -288,7 +322,11 @@ class AlterPartitionManagerTest {
     val retryAlterPartitionResponse = partitionResponse()
     val retryResponse = makeClientResponse(retryAlterPartitionResponse, ApiKeys.ALTER_PARTITION.latestVersion)
 
-    verify(brokerToController).sendRequest(any(), callbackCapture.capture())
+    verify(brokerToController).sendRequest(
+      request = any(),
+      minControllerEpoch = ArgumentMatchers.eq(controllerEpoch),
+      callback = callbackCapture.capture()
+    )
     callbackCapture.getValue.onComplete(retryResponse)
 
     assertFalse(alterPartitionManager.unsentIsrUpdates.containsKey(tp0.topicPartition))
@@ -325,14 +363,19 @@ class AlterPartitionManagerTest {
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
     reset(brokerToController)
 
+    val controllerEpoch = 10
     val scheduler = new MockScheduler(time)
     val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => IBP_3_2_IV0)
     alterPartitionManager.start()
 
-    val future = alterPartitionManager.submit(tp, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
+    val future = alterPartitionManager.submit(tp, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), controllerEpoch)
 
     verify(brokerToController).start()
-    verify(brokerToController).sendRequest(any(), callbackCapture.capture())
+    verify(brokerToController).sendRequest(
+      request = any(),
+      minControllerEpoch = ArgumentMatchers.eq(controllerEpoch),
+      callback = callbackCapture.capture()
+    )
     reset(brokerToController)
 
     val alterPartitionResp = partitionResponse(tp, error)
@@ -348,19 +391,24 @@ class AlterPartitionManagerTest {
   def testOneInFlight(metadataVersion: MetadataVersion): Unit = {
     val callbackCapture: ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
+    val controllerEpoch = 100
     val scheduler = new MockScheduler(time)
     val alterPartitionManager = new DefaultAlterPartitionManager(brokerToController, scheduler, time, brokerId, () => 2, () => metadataVersion)
     alterPartitionManager.start()
 
     // First submit will send the request
-    alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
+    alterPartitionManager.submit(tp0, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), controllerEpoch)
 
     // These will become pending unsent items
-    alterPartitionManager.submit(tp1, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
-    alterPartitionManager.submit(tp2, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), 0)
+    alterPartitionManager.submit(tp1, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), controllerEpoch)
+    alterPartitionManager.submit(tp2, LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10), controllerEpoch)
 
     verify(brokerToController).start()
-    verify(brokerToController).sendRequest(any(), callbackCapture.capture())
+    verify(brokerToController).sendRequest(
+      request = any(),
+      minControllerEpoch = ArgumentMatchers.eq(controllerEpoch),
+      callbackCapture.capture()
+    )
 
     // Once the callback runs, another request will be sent
     reset(brokerToController)
@@ -379,7 +427,7 @@ class AlterPartitionManagerTest {
       1.toShort
     }
     val leaderAndIsr = LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10)
-    val controlledEpoch = 0
+    val controllerEpoch = 0
     val brokerEpoch = 2
     val scheduler = new MockScheduler(time)
     val brokerToController = Mockito.mock(classOf[BrokerToControllerChannelManager])
@@ -394,15 +442,15 @@ class AlterPartitionManagerTest {
     alterPartitionManager.start()
 
     // The first `submit` will send the `AlterIsr` request
-    val future1 = alterPartitionManager.submit(tp0, leaderAndIsr, controlledEpoch)
+    val future1 = alterPartitionManager.submit(tp0, leaderAndIsr, controllerEpoch)
     val callback1 = verifySendRequest(brokerToController, alterPartitionRequestMatcher(
       expectedTopicPartitions = Set(tp0),
       expectedVersion = expectedVersion
-    ))
+    ), minControllerEpoch = controllerEpoch)
 
     // Additional calls while the `AlterIsr` request is inflight will be queued
-    val future2 = alterPartitionManager.submit(tp1, leaderAndIsr, controlledEpoch)
-    val future3 = alterPartitionManager.submit(tp2, leaderAndIsr, controlledEpoch)
+    val future2 = alterPartitionManager.submit(tp1, leaderAndIsr, controllerEpoch)
+    val future3 = alterPartitionManager.submit(tp2, leaderAndIsr, controllerEpoch)
 
     // Respond to the first request, which will also allow the next request to get sent
     callback1.onComplete(makeClientResponse(
@@ -417,7 +465,7 @@ class AlterPartitionManagerTest {
     val callback2 = verifySendRequest(brokerToController, alterPartitionRequestMatcher(
       expectedTopicPartitions = Set(tp1, tp2),
       expectedVersion = expectedVersion
-    ))
+    ), minControllerEpoch = controllerEpoch)
     callback2.onComplete(makeClientResponse(
       response = partitionResponse(tp2, Errors.UNKNOWN_SERVER_ERROR),
       version = expectedVersion
@@ -429,7 +477,7 @@ class AlterPartitionManagerTest {
     val callback3 = verifySendRequest(brokerToController, alterPartitionRequestMatcher(
       expectedTopicPartitions = Set(tp1),
       expectedVersion = expectedVersion
-    ))
+    ), minControllerEpoch = controllerEpoch)
     callback3.onComplete(makeClientResponse(
       response = partitionResponse(tp1, Errors.UNKNOWN_SERVER_ERROR),
       version = expectedVersion
@@ -446,7 +494,7 @@ class AlterPartitionManagerTest {
     val zar = new TopicIdPartition(Uuid.randomUuid(), 0, "zar")
 
     val leaderAndIsr = LeaderAndIsr(1, 1, List(1, 2, 3), LeaderRecoveryState.RECOVERED, 10)
-    val controlledEpoch = 0
+    val controllerEpoch = 0
     val brokerEpoch = 2
     val scheduler = new MockScheduler(time)
     val brokerToController = Mockito.mock(classOf[BrokerToControllerChannelManager])
@@ -461,19 +509,19 @@ class AlterPartitionManagerTest {
     alterPartitionManager.start()
 
     // Submits an alter isr update with zar, which has a topic id.
-    val future1 = alterPartitionManager.submit(zar, leaderAndIsr, controlledEpoch)
+    val future1 = alterPartitionManager.submit(zar, leaderAndIsr, controllerEpoch)
 
     // The latest version is expected if all the submitted partitions
     // have topic ids and IBP >= 2.8; version 1 should be used otherwise.
     val callback1 = verifySendRequest(brokerToController, alterPartitionRequestMatcher(
       expectedTopicPartitions = Set(zar),
       expectedVersion = if (canUseTopicIds) ApiKeys.ALTER_PARTITION.latestVersion else 1
-    ))
+    ), minControllerEpoch = controllerEpoch)
 
     // Submits two additional alter isr changes with foo and bar while the previous one
     // is still inflight. foo has no topic id, bar has one.
-    val future2 = alterPartitionManager.submit(foo, leaderAndIsr, controlledEpoch)
-    val future3 = alterPartitionManager.submit(bar, leaderAndIsr, controlledEpoch)
+    val future2 = alterPartitionManager.submit(foo, leaderAndIsr, controllerEpoch)
+    val future3 = alterPartitionManager.submit(bar, leaderAndIsr, controllerEpoch)
 
     // Completes the first request. That triggers the next one.
     callback1.onComplete(makeClientResponse(
@@ -489,7 +537,7 @@ class AlterPartitionManagerTest {
     val callback2 = verifySendRequest(brokerToController, alterPartitionRequestMatcher(
       expectedTopicPartitions = Set(foo, bar),
       expectedVersion = 1
-    ))
+    ), minControllerEpoch = controllerEpoch)
 
     // Completes the second request.
     callback2.onComplete(makeClientResponse(
@@ -507,12 +555,14 @@ class AlterPartitionManagerTest {
 
   private def verifySendRequest(
     brokerToController: BrokerToControllerChannelManager,
-    expectedRequest: ArgumentMatcher[AbstractRequest.Builder[_ <: AbstractRequest]]
+    expectedRequest: ArgumentMatcher[AbstractRequest.Builder[_ <: AbstractRequest]],
+    minControllerEpoch: Int
   ): ControllerRequestCompletionHandler = {
     val callbackCapture = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
 
     Mockito.verify(brokerToController).sendRequest(
       ArgumentMatchers.argThat(expectedRequest),
+      ArgumentMatchers.eq(minControllerEpoch),
       callbackCapture.capture()
     )
 
