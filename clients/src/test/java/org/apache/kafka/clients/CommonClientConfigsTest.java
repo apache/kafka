@@ -146,5 +146,15 @@ public class CommonClientConfigsTest {
         reporters = CommonClientConfigs.metricsReporters("clientId", config);
         assertEquals(1, reporters.size());
         assertTrue(reporters.get(0) instanceof JmxReporter);
+
+        Map<String, String> props = new HashMap<>();
+        props.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, JmxReporter.class.getName() + "," + MyJmxReporter.class.getName());
+        config = new TestConfig(props);
+        reporters = CommonClientConfigs.metricsReporters("clientId", config);
+        assertEquals(2, reporters.size());
+    }
+
+    public static class MyJmxReporter extends JmxReporter {
+        public MyJmxReporter() {}
     }
 }

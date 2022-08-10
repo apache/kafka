@@ -844,7 +844,8 @@ class DynamicMetricReporterState(brokerId: Int, config: KafkaConfig, metrics: Me
   private[server] def metricsReporterClasses(configs: util.Map[String, _]): mutable.Buffer[String] = {
     val reporters = mutable.Buffer[String]()
     reporters ++= configs.get(KafkaConfig.MetricReporterClassesProp).asInstanceOf[util.List[String]].asScala
-    if (configs.get(KafkaConfig.AutoIncludeJmxReporterProp).asInstanceOf[Boolean] && !reporters.contains(classOf[JmxReporter].getName)) {
+    if (configs.get(KafkaConfig.AutoIncludeJmxReporterProp).asInstanceOf[Boolean] &&
+        !reporters.contains(classOf[JmxReporter].getName)) {
       reporters += classOf[JmxReporter].getName
     }
     reporters

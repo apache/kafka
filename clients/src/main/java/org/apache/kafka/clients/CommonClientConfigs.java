@@ -236,7 +236,8 @@ public class CommonClientConfigs {
     public static List<MetricsReporter> metricsReporters(Map<String, Object> clientIdOverride, AbstractConfig config) {
         List<MetricsReporter> reporters = config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class, clientIdOverride);
-        if (config.getBoolean(CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG) && reporters.stream().noneMatch(r -> r instanceof JmxReporter)) {
+        if (config.getBoolean(CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG) &&
+                reporters.stream().noneMatch(r -> JmxReporter.class.equals(r.getClass()))) {
             JmxReporter jmxReporter = new JmxReporter();
             jmxReporter.configure(config.originals(clientIdOverride));
             reporters.add(jmxReporter);
