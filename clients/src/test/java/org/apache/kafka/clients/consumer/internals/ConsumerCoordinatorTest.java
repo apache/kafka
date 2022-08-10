@@ -1348,7 +1348,6 @@ public abstract class ConsumerCoordinatorTest {
             String memberId = "consumer-42";
 
             Timer pollTimer = time.timer(100L);
-            time.sleep(150);
             boolean res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
             assertFalse(res);
 
