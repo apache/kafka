@@ -186,13 +186,13 @@ class DefaultAlterPartitionManager(
 
   private def sendRequest(inflightAlterPartitionItems: Seq[AlterPartitionItem]): Unit = {
     val brokerEpoch = brokerEpochSupplier()
-    val (request, topicNamesByIds) = buildRequest(inflightAlterPartitionItems, brokerEpoch)
+    val (request, minControllerEpoch, topicNamesByIds) = buildRequest(inflightAlterPartitionItems, brokerEpoch)
     debug(s"Sending AlterPartition to controller $request")
 
     // We will not timeout AlterPartition request, instead letting it retry indefinitely
     // until a response is received, or a new LeaderAndIsr overwrites the existing isrState
     // which causes the response for those partitions to be ignored.
-    controllerChannelManager.sendRequest(request,
+    controllerChannelManager.sendRequest(request, minControllerEpoch,
       new ControllerRequestCompletionHandler {
         override def onComplete(response: ClientResponse): Unit = {
           debug(s"Received AlterPartition response $response")
@@ -252,7 +252,7 @@ class DefaultAlterPartitionManager(
   private def buildRequest(
     inflightAlterPartitionItems: Seq[AlterPartitionItem],
     brokerEpoch: Long
-  ): (AlterPartitionRequest.Builder, mutable.Map[Uuid, String]) = {
+  ): (AlterPartitionRequest.Builder, Int, mutable.Map[Uuid, String]) = {
     val metadataVersion = metadataVersionSupplier()
     // We build this mapping in order to map topic id back to their name when we
     // receive the response. We cannot rely on the metadata cache for this because
@@ -262,6 +262,7 @@ class DefaultAlterPartitionManager(
     // We can use topic ids only if all the pending changed have one defined and
     // we use IBP 2.8 or above.
     var canUseTopicIds = metadataVersion.isTopicIdsSupported
+    var maxRequiredControllerEpoch = 0
 
     val message = new AlterPartitionRequestData()
       .setBrokerId(brokerId)
@@ -290,12 +291,16 @@ class DefaultAlterPartitionManager(
           partitionData.setLeaderRecoveryState(item.leaderAndIsr.leaderRecoveryState.value)
         }
 
+        if (item.controllerEpoch > maxRequiredControllerEpoch) {
+          maxRequiredControllerEpoch = item.controllerEpoch
+        }
+
         topicData.partitions.add(partitionData)
       }
     }
 
     // If we cannot use topic ids, the builder will ensure that no version higher than 1 is used.
-    (new AlterPartitionRequest.Builder(message, canUseTopicIds), topicNamesByIds)
+    (new AlterPartitionRequest.Builder(message, canUseTopicIds), maxRequiredControllerEpoch, topicNamesByIds)
   }
 
   def handleAlterPartitionResponse(

@@ -212,7 +212,7 @@ class BrokerServer(
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
       val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
-      val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
+      val controllerNodeProvider = KRaftControllerNodeProvider(raftManager, config, controllerNodes)
 
       clientToControllerChannelManager = BrokerToControllerChannelManager(
         controllerNodeProvider,

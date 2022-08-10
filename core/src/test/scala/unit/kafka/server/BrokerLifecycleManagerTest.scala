@@ -55,9 +55,9 @@ class BrokerLifecycleManagerTest {
   }
 
   class SimpleControllerNodeProvider extends ControllerNodeProvider {
-    val node = new AtomicReference[Node](null)
+    val node = new AtomicReference[ControllerNodeAndEpoch](null)
 
-    override def get(): Option[Node] = Option(node.get())
+    override def get(): Option[ControllerNodeAndEpoch] = Option(node.get())
 
     override def listenerName: ListenerName = new ListenerName("PLAINTEXT")
 
@@ -121,7 +121,8 @@ class BrokerLifecycleManagerTest {
     val context = new BrokerLifecycleManagerTestContext(configProperties)
     val manager = new BrokerLifecycleManager(context.config, context.time, None)
     val controllerNode = new Node(3000, "localhost", 8021)
-    context.controllerNodeProvider.node.set(controllerNode)
+    val controllerEpoch = 15
+    context.controllerNodeProvider.node.set(ControllerNodeAndEpoch(controllerNode, controllerEpoch))
     context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
       new BrokerRegistrationResponseData().setBrokerEpoch(1000)), controllerNode)
     manager.start(() => context.highestMetadataOffset.get(),
@@ -139,8 +140,9 @@ class BrokerLifecycleManagerTest {
   def testRegistrationTimeout(): Unit = {
     val context = new BrokerLifecycleManagerTestContext(configProperties)
     val controllerNode = new Node(3000, "localhost", 8021)
+    val controllerEpoch = 15
     val manager = new BrokerLifecycleManager(context.config, context.time, None)
-    context.controllerNodeProvider.node.set(controllerNode)
+    context.controllerNodeProvider.node.set(ControllerNodeAndEpoch(controllerNode, controllerEpoch))
     def newDuplicateRegistrationResponse(): Unit = {
       context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
         new BrokerRegistrationResponseData().
@@ -182,7 +184,8 @@ class BrokerLifecycleManagerTest {
     val context = new BrokerLifecycleManagerTestContext(configProperties)
     val manager = new BrokerLifecycleManager(context.config, context.time, None)
     val controllerNode = new Node(3000, "localhost", 8021)
-    context.controllerNodeProvider.node.set(controllerNode)
+    val controllerEpoch = 15
+    context.controllerNodeProvider.node.set(ControllerNodeAndEpoch(controllerNode, controllerEpoch))
     context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
       new BrokerRegistrationResponseData().setBrokerEpoch(1000)), controllerNode)
     context.mockClient.prepareResponseFrom(new BrokerHeartbeatResponse(

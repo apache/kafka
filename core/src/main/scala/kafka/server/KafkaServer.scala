@@ -263,7 +263,7 @@ class KafkaServer(
         logManager.startup(zkClient.getAllTopicsInCluster())
 
         metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion, brokerFeatures)
-        val controllerNodeProvider = MetadataCacheControllerNodeProvider(config, metadataCache)
+        val controllerNodeProvider = ZkMetadataCacheControllerNodeProvider(config, metadataCache)
 
         /* initialize feature change listener */
         _featureChangeListener = new FinalizedFeatureChangeListener(metadataCache, _zkClient)

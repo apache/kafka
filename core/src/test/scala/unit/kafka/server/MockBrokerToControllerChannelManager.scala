@@ -39,11 +39,13 @@ class MockBrokerToControllerChannelManager(
 
   override def sendRequest(
     request: AbstractRequest.Builder[_ <: AbstractRequest],
+    minControllerEpoch: Int,
     callback: ControllerRequestCompletionHandler
   ): Unit = {
     unsentQueue.add(BrokerToControllerQueueItem(
       createdTimeMs = time.milliseconds(),
       request = request,
+      minControllerEpoch = minControllerEpoch,
       callback = callback
     ))
   }
@@ -74,9 +76,9 @@ class MockBrokerToControllerChannelManager(
         unsentIterator.remove()
       } else {
         controllerNodeProvider.get() match {
-          case Some(controller) if client.ready(controller, time.milliseconds()) =>
+          case Some(controllerNodeAndEpoch) if client.ready(controllerNodeAndEpoch.node, time.milliseconds()) =>
             val clientRequest = client.newClientRequest(
-              controller.idString,
+              controllerNodeAndEpoch.node.idString,
               queueItem.request,
               queueItem.createdTimeMs,
               true, // we expect response,

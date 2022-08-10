@@ -21,6 +21,7 @@ import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.atomic.AtomicReference
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.raft.RaftManager
+import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.common.{Node, Reconfigurable}
@@ -37,25 +38,33 @@ import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
+
+case class ControllerNodeAndEpoch(
+  node: Node,
+  epoch: Int
+) {
+  def id: Int = node.id
+}
+
 trait ControllerNodeProvider {
-  def get(): Option[Node]
+  def get(): Option[ControllerNodeAndEpoch]
   def listenerName: ListenerName
   def securityProtocol: SecurityProtocol
   def saslMechanism: String
 }
 
-object MetadataCacheControllerNodeProvider {
+object ZkMetadataCacheControllerNodeProvider {
   def apply(
     config: KafkaConfig,
-    metadataCache: kafka.server.MetadataCache
-  ): MetadataCacheControllerNodeProvider = {
+    metadataCache: ZkMetadataCache,
+  ): ZkMetadataCacheControllerNodeProvider = {
     val listenerName = config.controlPlaneListenerName
       .getOrElse(config.interBrokerListenerName)
 
     val securityProtocol = config.controlPlaneSecurityProtocol
       .getOrElse(config.interBrokerSecurityProtocol)
 
-    new MetadataCacheControllerNodeProvider(
+    new ZkMetadataCacheControllerNodeProvider(
       metadataCache,
       listenerName,
       securityProtocol,
@@ -64,28 +73,32 @@ object MetadataCacheControllerNodeProvider {
   }
 }
 
-class MetadataCacheControllerNodeProvider(
-  val metadataCache: kafka.server.MetadataCache,
+class ZkMetadataCacheControllerNodeProvider(
+  val metadataCache: ZkMetadataCache,
   val listenerName: ListenerName,
   val securityProtocol: SecurityProtocol,
   val saslMechanism: String
 ) extends ControllerNodeProvider {
-  override def get(): Option[Node] = {
-    metadataCache.getControllerId
-      .flatMap(metadataCache.getAliveBrokerNode(_, listenerName))
+  override def get(): Option[ControllerNodeAndEpoch] = {
+    metadataCache.currentController.flatMap { controllerAndEpoch =>
+      val controllerId = controllerAndEpoch.id
+      metadataCache.getAliveBrokerNode(controllerId, listenerName).map { controllerNode =>
+        ControllerNodeAndEpoch(controllerNode, controllerAndEpoch.epoch)
+      }
+    }
   }
 }
 
-object RaftControllerNodeProvider {
+object KRaftControllerNodeProvider {
   def apply(
     raftManager: RaftManager[ApiMessageAndVersion],
     config: KafkaConfig,
     controllerQuorumVoterNodes: Seq[Node]
-  ): RaftControllerNodeProvider = {
+  ): KRaftControllerNodeProvider = {
     val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
     val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
     val controllerSaslMechanism = config.saslMechanismControllerProtocol
-    new RaftControllerNodeProvider(
+    new KRaftControllerNodeProvider(
       raftManager,
       controllerQuorumVoterNodes,
       controllerListenerName,
@@ -99,17 +112,24 @@ object RaftControllerNodeProvider {
  * Finds the controller node by checking the metadata log manager.
  * This provider is used when we are using a Raft-based metadata quorum.
  */
-class RaftControllerNodeProvider(
+class KRaftControllerNodeProvider(
   val raftManager: RaftManager[ApiMessageAndVersion],
   controllerQuorumVoterNodes: Seq[Node],
   val listenerName: ListenerName,
   val securityProtocol: SecurityProtocol,
   val saslMechanism: String
 ) extends ControllerNodeProvider with Logging {
-  val idToNode = controllerQuorumVoterNodes.map(node => node.id() -> node).toMap
+  private val idToNode = controllerQuorumVoterNodes.map(node => node.id() -> node).toMap
 
-  override def get(): Option[Node] = {
-    raftManager.leaderAndEpoch.leaderId.asScala.map(idToNode)
+  override def get(): Option[ControllerNodeAndEpoch] = {
+    val leaderAndEpoch = raftManager.leaderAndEpoch
+    leaderAndEpoch.leaderId.asScala.map { controllerId =>
+      val controllerNode: Node = idToNode.getOrElse(controllerId,
+        throw new IllegalStateException(s"Unable to find controller $controllerId " +
+          s"among configured voters $controllerQuorumVoterNodes")
+      )
+      ControllerNodeAndEpoch(controllerNode, leaderAndEpoch.epoch)
+    }
   }
 }
 
@@ -139,8 +159,40 @@ trait BrokerToControllerChannelManager {
   def start(): Unit
   def shutdown(): Unit
   def controllerApiVersions(): Option[NodeApiVersions]
+
+  /**
+   * Send a request to the controller.
+   *
+   * @param request The request to be sent to the controller
+   * @param callback The callback to be notified when the request has completed (either
+   *                 successfully or unsuccessfully)
+   */
   def sendRequest(
     request: AbstractRequest.Builder[_ <: AbstractRequest],
+    callback: ControllerRequestCompletionHandler
+  ): Unit = {
+    sendRequest(
+      request = request,
+      minControllerEpoch = 0,
+      callback = callback
+    )
+  }
+
+  /**
+   * Send a request to the controller.
+   *
+   * @param request The request to be sent to the controller
+   * @param minControllerEpoch In some cases, we may learn of a new controller and epoch through a separate
+   *                           channel than the `ControllerNodeProvider`. For example, the `LeaderAndIsr`
+   *                           request includes the ID of the controller sending it as well as its epoch.
+   *                           In these cases, it is useful to ensure that the request does not get
+   *                           inadvertently sent to an older controller.
+   * @param callback The callback to be notified when the request has completed (either
+   *                 successfully or unsuccessfully)
+   */
+  def sendRequest(
+    request: AbstractRequest.Builder[_ <: AbstractRequest],
+    minControllerEpoch: Int,
     callback: ControllerRequestCompletionHandler
   ): Unit
 }
@@ -240,22 +292,25 @@ class BrokerToControllerChannelManagerImpl(
    * Send request to the controller.
    *
    * @param request         The request to be sent.
+   * @param minControllerEpoch Minimum controller epoch that this request should be sent to
    * @param callback        Request completion callback.
    */
   def sendRequest(
     request: AbstractRequest.Builder[_ <: AbstractRequest],
+    minControllerEpoch: Int,
     callback: ControllerRequestCompletionHandler
   ): Unit = {
     requestThread.enqueue(BrokerToControllerQueueItem(
       time.milliseconds(),
       request,
+      minControllerEpoch,
       callback
     ))
   }
 
   def controllerApiVersions(): Option[NodeApiVersions] = {
-    requestThread.activeControllerAddress().flatMap { activeController =>
-      Option(apiVersions.get(activeController.idString))
+    requestThread.activeControllerOpt().flatMap { controller =>
+      Option(apiVersions.get(controller.node.idString))
     }
   }
 }
@@ -272,6 +327,7 @@ abstract class ControllerRequestCompletionHandler extends RequestCompletionHandl
 case class BrokerToControllerQueueItem(
   createdTimeMs: Long,
   request: AbstractRequest.Builder[_ <: AbstractRequest],
+  minControllerEpoch: Int,
   callback: ControllerRequestCompletionHandler
 )
 
@@ -286,17 +342,17 @@ class BrokerToControllerRequestThread(
 ) extends InterBrokerSendThread(threadName, networkClient, config.controllerSocketTimeoutMs, time, isInterruptible = false) {
 
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
-  private val activeController = new AtomicReference[Node](null)
+  private val activeController = new AtomicReference[ControllerNodeAndEpoch](null)
 
   // Used for testing
   @volatile
   private[server] var started = false
 
-  def activeControllerAddress(): Option[Node] = {
+  def activeControllerOpt(): Option[ControllerNodeAndEpoch] = {
     Option(activeController.get())
   }
 
-  private def updateControllerAddress(newActiveController: Node): Unit = {
+  private def updateControllerAddress(newActiveController: ControllerNodeAndEpoch): Unit = {
     activeController.set(newActiveController)
   }
 
@@ -305,7 +361,7 @@ class BrokerToControllerRequestThread(
       throw new IllegalStateException("Cannot enqueue a request if the request thread is not running")
     }
     requestQueue.add(request)
-    if (activeControllerAddress().isDefined) {
+    if (activeControllerOpt().isDefined) {
       wakeup()
     }
   }
@@ -317,21 +373,24 @@ class BrokerToControllerRequestThread(
   override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
     val currentTimeMs = time.milliseconds()
     val requestIter = requestQueue.iterator()
+    val controllerOpt = activeControllerOpt()
+
     while (requestIter.hasNext) {
       val request = requestIter.next
       if (currentTimeMs - request.createdTimeMs >= retryTimeoutMs) {
         requestIter.remove()
         request.callback.onTimeout()
       } else {
-        val controllerAddress = activeControllerAddress()
-        if (controllerAddress.isDefined) {
-          requestIter.remove()
-          return Some(RequestAndCompletionHandler(
-            time.milliseconds(),
-            controllerAddress.get,
-            request.request,
-            handleResponse(request)
-          ))
+        controllerOpt.foreach { activeController =>
+          if (activeController.epoch >= request.minControllerEpoch) {
+            requestIter.remove()
+            return Some(RequestAndCompletionHandler(
+              time.milliseconds(),
+              activeController.node,
+              request.request,
+              handleResponse(request)
+            ))
+          }
         }
       }
     }
@@ -352,8 +411,8 @@ class BrokerToControllerRequestThread(
       requestQueue.putFirst(queueItem)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
       // just close the controller connection and wait for metadata cache update in doWork
-      activeControllerAddress().foreach { controllerAddress =>
-        networkClient.disconnect(controllerAddress.idString)
+      activeControllerOpt().foreach { activeController =>
+        networkClient.disconnect(activeController.node.idString)
         updateControllerAddress(null)
       }
 
@@ -364,15 +423,15 @@ class BrokerToControllerRequestThread(
   }
 
   override def doWork(): Unit = {
-    if (activeControllerAddress().isDefined) {
+    if (activeControllerOpt().isDefined) {
       super.pollOnce(Long.MaxValue)
     } else {
       debug("Controller isn't cached, looking for local metadata changes")
       controllerNodeProvider.get() match {
-        case Some(controllerNode) =>
-          info(s"Recorded new controller, from now on will use broker $controllerNode")
-          updateControllerAddress(controllerNode)
-          metadataUpdater.setNodes(Seq(controllerNode).asJava)
+        case Some(controllerNodeAndEpoch) =>
+          info(s"Recorded new controller, from now on will use broker $controllerNodeAndEpoch")
+          updateControllerAddress(controllerNodeAndEpoch)
+          metadataUpdater.setNodes(Seq(controllerNodeAndEpoch.node).asJava)
         case None =>
           // need to backoff to avoid tight loops
           debug("No controller defined in metadata cache, retrying after backoff")

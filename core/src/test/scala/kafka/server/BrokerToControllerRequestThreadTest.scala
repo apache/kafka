@@ -34,7 +34,6 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito._
 
-
 class BrokerToControllerRequestThreadTest {
 
   @Test
@@ -56,6 +55,7 @@ class BrokerToControllerRequestThreadTest {
     val queueItem = BrokerToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
+      minControllerEpoch = 0,
       completionHandler
     )
 
@@ -75,12 +75,16 @@ class BrokerToControllerRequestThreadTest {
     val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
     val controllerId = 2
+    val controllerEpoch = 27
 
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
 
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
-    val activeController = new Node(controllerId, "host", 1234)
+    val activeController = ControllerNodeAndEpoch(
+      node = new Node(controllerId, "host", 1234),
+      epoch = controllerEpoch
+    )
 
     when(controllerNodeProvider.get()).thenReturn(Some(activeController))
 
@@ -92,9 +96,10 @@ class BrokerToControllerRequestThreadTest {
 
     val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
     val queueItem = BrokerToControllerQueueItem(
-      time.milliseconds(),
-      new MetadataRequest.Builder(new MetadataRequestData()),
-      completionHandler
+      createdTimeMs = time.milliseconds(),
+      request = new MetadataRequest.Builder(new MetadataRequestData()),
+      minControllerEpoch = 0,
+      callback = completionHandler
     )
 
     testRequestThread.enqueue(queueItem)
@@ -115,7 +120,9 @@ class BrokerToControllerRequestThreadTest {
     val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
     val oldControllerId = 1
+    val oldControllerEpoch = 15
     val newControllerId = 2
+    val newControllerEpoch = 16
 
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
@@ -124,7 +131,10 @@ class BrokerToControllerRequestThreadTest {
     val oldController = new Node(oldControllerId, "host1", 1234)
     val newController = new Node(newControllerId, "host2", 1234)
 
-    when(controllerNodeProvider.get()).thenReturn(Some(oldController), Some(newController))
+    when(controllerNodeProvider.get()).thenReturn(
+      Some(ControllerNodeAndEpoch(node = oldController, epoch = oldControllerEpoch)),
+      Some(ControllerNodeAndEpoch(node = newController, epoch = newControllerEpoch))
+    )
 
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(),
@@ -133,9 +143,10 @@ class BrokerToControllerRequestThreadTest {
 
     val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
     val queueItem = BrokerToControllerQueueItem(
-      time.milliseconds(),
-      new MetadataRequest.Builder(new MetadataRequestData()),
-      completionHandler,
+      createdTimeMs = time.milliseconds(),
+      request = new MetadataRequest.Builder(new MetadataRequestData()),
+      minControllerEpoch = 0,
+      callback = completionHandler,
     )
 
     testRequestThread.enqueue(queueItem)
@@ -160,18 +171,23 @@ class BrokerToControllerRequestThreadTest {
   def testNotController(): Unit = {
     val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
-    val oldControllerId = 1
-    val newControllerId = 2
-
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
-
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
-    val port = 1234
-    val oldController = new Node(oldControllerId, "host1", port)
-    val newController = new Node(newControllerId, "host2", port)
 
-    when(controllerNodeProvider.get()).thenReturn(Some(oldController), Some(newController))
+    val oldControllerAndEpoch = ControllerNodeAndEpoch(
+      node = new Node(1, "host1", 1234),
+      epoch = 15
+    )
+    val newControllerAndEpoch = ControllerNodeAndEpoch(
+      node = new Node(2, "host2", 4321),
+      epoch = 16
+    )
+
+    when(controllerNodeProvider.get()).thenReturn(
+      Some(oldControllerAndEpoch),
+      Some(newControllerAndEpoch)
+    )
 
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
       Collections.singletonMap("a", Errors.NOT_CONTROLLER),
@@ -183,17 +199,17 @@ class BrokerToControllerRequestThreadTest {
 
     val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
     val queueItem = BrokerToControllerQueueItem(
-      time.milliseconds(),
-      new MetadataRequest.Builder(new MetadataRequestData()
+      createdTimeMs = time.milliseconds(),
+      request = new MetadataRequest.Builder(new MetadataRequestData()
         .setAllowAutoTopicCreation(true)),
-      completionHandler
+      minControllerEpoch = 0,
+      callback = completionHandler
     )
     testRequestThread.enqueue(queueItem)
     // initialize to the controller
     testRequestThread.doWork()
 
-    val oldBrokerNode = new Node(oldControllerId, "host1", port)
-    assertEquals(Some(oldBrokerNode), testRequestThread.activeControllerAddress())
+    assertEquals(Some(oldControllerAndEpoch), testRequestThread.activeControllerOpt())
 
     // send and process the request
     mockClient.prepareResponse((body: AbstractRequest) => {
@@ -201,15 +217,14 @@ class BrokerToControllerRequestThreadTest {
       body.asInstanceOf[MetadataRequest].allowAutoTopicCreation()
     }, responseWithNotControllerError)
     testRequestThread.doWork()
-    assertEquals(None, testRequestThread.activeControllerAddress())
+    assertEquals(None, testRequestThread.activeControllerOpt())
     // reinitialize the controller to a different node
     testRequestThread.doWork()
     // process the request again
     mockClient.prepareResponse(expectedResponse)
     testRequestThread.doWork()
 
-    val newControllerNode = new Node(newControllerId, "host2", port)
-    assertEquals(Some(newControllerNode), testRequestThread.activeControllerAddress())
+    assertEquals(Some(newControllerAndEpoch), testRequestThread.activeControllerOpt())
 
     assertTrue(completionHandler.completed.get())
   }
@@ -218,20 +233,26 @@ class BrokerToControllerRequestThreadTest {
   def testEnvelopeResponseWithNotControllerError(): Unit = {
     val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
-    val oldControllerId = 1
-    val newControllerId = 2
-
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
+    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
+
     // enable envelope API
     mockClient.setNodeApiVersions(NodeApiVersions.create(ApiKeys.ENVELOPE.id, 0.toShort, 0.toShort))
 
-    val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
-    val port = 1234
-    val oldController = new Node(oldControllerId, "host1", port)
-    val newController = new Node(newControllerId, "host2", port)
+    val oldControllerAndEpoch = ControllerNodeAndEpoch(
+      node = new Node(1, "host1", 1234),
+      epoch = 15
+    )
+    val newControllerAndEpoch = ControllerNodeAndEpoch(
+      node = new Node(2, "host2", 4321),
+      epoch = 16
+    )
 
-    when(controllerNodeProvider.get()).thenReturn(Some(oldController), Some(newController))
+    when(controllerNodeProvider.get()).thenReturn(
+      Some(oldControllerAndEpoch),
+      Some(newControllerAndEpoch)
+    )
 
     // create an envelopeResponse with NOT_CONTROLLER error
     val envelopeResponseWithNotControllerError = new EnvelopeResponse(
@@ -253,17 +274,17 @@ class BrokerToControllerRequestThreadTest {
       kafkaPrincipalBuilder.serialize(kafkaPrincipal), "client-address".getBytes)
 
     val queueItem = BrokerToControllerQueueItem(
-      time.milliseconds(),
-      envelopeRequestBuilder,
-      completionHandler
+      createdTimeMs = time.milliseconds(),
+      request = envelopeRequestBuilder,
+      minControllerEpoch = 0,
+      callback = completionHandler
     )
 
     testRequestThread.enqueue(queueItem)
     // initialize to the controller
     testRequestThread.doWork()
 
-    val oldBrokerNode = new Node(oldControllerId, "host1", port)
-    assertEquals(Some(oldBrokerNode), testRequestThread.activeControllerAddress())
+    assertEquals(Some(oldControllerAndEpoch), testRequestThread.activeControllerOpt())
 
     // send and process the envelope request
     mockClient.prepareResponse((body: AbstractRequest) => {
@@ -271,15 +292,14 @@ class BrokerToControllerRequestThreadTest {
     }, envelopeResponseWithNotControllerError)
     testRequestThread.doWork()
     // expect to reset the activeControllerAddress after finding the NOT_CONTROLLER error
-    assertEquals(None, testRequestThread.activeControllerAddress())
+    assertEquals(None, testRequestThread.activeControllerOpt())
     // reinitialize the controller to a different node
     testRequestThread.doWork()
     // process the request again
     mockClient.prepareResponse(expectedResponse)
     testRequestThread.doWork()
 
-    val newControllerNode = new Node(newControllerId, "host2", port)
-    assertEquals(Some(newControllerNode), testRequestThread.activeControllerAddress())
+    assertEquals(Some(newControllerAndEpoch), testRequestThread.activeControllerOpt())
 
     assertTrue(completionHandler.completed.get())
   }
@@ -289,6 +309,7 @@ class BrokerToControllerRequestThreadTest {
     val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
     val controllerId = 1
+    val controllerEpoch = 100
 
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
@@ -296,7 +317,9 @@ class BrokerToControllerRequestThreadTest {
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
     val controller = new Node(controllerId, "host1", 1234)
 
-    when(controllerNodeProvider.get()).thenReturn(Some(controller))
+    when(controllerNodeProvider.get()).thenReturn(
+      Some(ControllerNodeAndEpoch(node = controller, epoch = controllerEpoch))
+    )
 
     val retryTimeoutMs = 30000
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
@@ -308,10 +331,11 @@ class BrokerToControllerRequestThreadTest {
 
     val completionHandler = new TestControllerRequestCompletionHandler()
     val queueItem = BrokerToControllerQueueItem(
-      time.milliseconds(),
-      new MetadataRequest.Builder(new MetadataRequestData()
+      createdTimeMs = time.milliseconds(),
+      request = new MetadataRequest.Builder(new MetadataRequestData()
         .setAllowAutoTopicCreation(true)),
-      completionHandler
+      minControllerEpoch = 0,
+      callback = completionHandler
     )
 
     testRequestThread.enqueue(queueItem)
@@ -337,6 +361,7 @@ class BrokerToControllerRequestThreadTest {
     val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
     val controllerId = 2
+    val controllerEpoch = 100
 
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
@@ -344,7 +369,9 @@ class BrokerToControllerRequestThreadTest {
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
     val activeController = new Node(controllerId, "host", 1234)
 
-    when(controllerNodeProvider.get()).thenReturn(Some(activeController))
+    when(controllerNodeProvider.get()).thenReturn(
+      Some(ControllerNodeAndEpoch(node = activeController, epoch = controllerEpoch))
+    )
 
     val callbackResponse = new AtomicReference[ClientResponse]()
     val completionHandler = new ControllerRequestCompletionHandler {
@@ -353,9 +380,10 @@ class BrokerToControllerRequestThreadTest {
     }
 
     val queueItem = BrokerToControllerQueueItem(
-      time.milliseconds(),
-      new MetadataRequest.Builder(new MetadataRequestData()),
-      completionHandler
+      createdTimeMs = time.milliseconds(),
+      request = new MetadataRequest.Builder(new MetadataRequestData()),
+      minControllerEpoch = 0,
+      callback = completionHandler
     )
 
     mockClient.prepareUnsupportedVersionResponse(request => request.apiKey == ApiKeys.METADATA)
@@ -374,6 +402,7 @@ class BrokerToControllerRequestThreadTest {
     val time = new MockTime()
     val config = new KafkaConfig(TestUtils.createBrokerConfig(1, "localhost:2181"))
     val controllerId = 2
+    val controllerEpoch = 100
 
     val metadata = mock(classOf[Metadata])
     val mockClient = new MockClient(time, metadata)
@@ -381,7 +410,9 @@ class BrokerToControllerRequestThreadTest {
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
     val activeController = new Node(controllerId, "host", 1234)
 
-    when(controllerNodeProvider.get()).thenReturn(Some(activeController))
+    when(controllerNodeProvider.get()).thenReturn(
+      Some(ControllerNodeAndEpoch(node = activeController, epoch = controllerEpoch))
+    )
 
     val callbackResponse = new AtomicReference[ClientResponse]()
     val completionHandler = new ControllerRequestCompletionHandler {
@@ -390,9 +421,10 @@ class BrokerToControllerRequestThreadTest {
     }
 
     val queueItem = BrokerToControllerQueueItem(
-      time.milliseconds(),
-      new MetadataRequest.Builder(new MetadataRequestData()),
-      completionHandler
+      createdTimeMs = time.milliseconds(),
+      request = new MetadataRequest.Builder(new MetadataRequestData()),
+      minControllerEpoch = 0,
+      callback = completionHandler
     )
 
     mockClient.createPendingAuthenticationError(activeController, 50)
@@ -422,9 +454,10 @@ class BrokerToControllerRequestThreadTest {
 
     val completionHandler = new TestControllerRequestCompletionHandler(None)
     val queueItem = BrokerToControllerQueueItem(
-      time.milliseconds(),
-      new MetadataRequest.Builder(new MetadataRequestData()),
-      completionHandler
+      createdTimeMs = time.milliseconds(),
+      request = new MetadataRequest.Builder(new MetadataRequestData()),
+      minControllerEpoch = 0,
+      callback = completionHandler
     )
 
     assertThrows(classOf[IllegalStateException], () => testRequestThread.enqueue(queueItem))
