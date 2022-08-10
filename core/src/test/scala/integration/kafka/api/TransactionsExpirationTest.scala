@@ -105,6 +105,36 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     }
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTransactionAfterProducerIDExpires(quorum: String): Unit = {
+    producer.initTransactions()
+
+    // Start and then abort a transaction to allow the producer ID to expire
+    producer.beginTransaction()
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "2", "2", willBeCommitted = false))
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, 0, "4", "4", willBeCommitted = false))
+    producer.abortTransaction()
+
+    // Wait for the producer ID to expire
+    Thread.sleep(1000)
+
+    // Start a new transaction and attempt to send. This should work since only the producer ID was removed from its mapping in ProducerStateManager.
+    producer.beginTransaction()
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = true))
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 2, "4", "4", willBeCommitted = true))
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "1", "1", willBeCommitted = true))
+    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 3, "3", "3", willBeCommitted = true))
+    producer.commitTransaction()
+
+    consumer.subscribe(List(topic1, topic2).asJava)
+
+    val records = consumeRecords(consumer, 4)
+    records.foreach { record =>
+      TestUtils.assertCommittedAndGetValue(record)
+    }
+  }
+
   private def serverProps(): Properties = {
     val serverProps = new Properties()
     serverProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
@@ -120,6 +150,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     serverProps.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
     serverProps.put(KafkaConfig.TransactionalIdExpirationMsProp, "2000")
+    serverProps.put(KafkaConfig.ProducerIdExpirationMsProp, "100")
     serverProps.put(KafkaConfig.TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp, "500")
     serverProps
   }
