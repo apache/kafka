@@ -82,7 +82,7 @@ class RaftManagerTest {
   }
 
   @Test
-  def testSentinelNodeIdIfBrokerRoleOnly(): Unit = {
+  def testNodeIdPresentIfBrokerRoleOnly(): Unit = {
     val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "broker", "1")
     assertEquals(1, raftManager.client.nodeId.getAsInt)
     raftManager.shutdown()
