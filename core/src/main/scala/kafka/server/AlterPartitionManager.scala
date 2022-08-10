@@ -262,7 +262,7 @@ class DefaultAlterPartitionManager(
     // We can use topic ids only if all the pending changed have one defined and
     // we use IBP 2.8 or above.
     var canUseTopicIds = metadataVersion.isTopicIdsSupported
-    var maxRequiredControllerEpoch = 0
+    var minRequiredControllerEpoch = 0
 
     val message = new AlterPartitionRequestData()
       .setBrokerId(brokerId)
@@ -291,8 +291,8 @@ class DefaultAlterPartitionManager(
           partitionData.setLeaderRecoveryState(item.leaderAndIsr.leaderRecoveryState.value)
         }
 
-        if (item.controllerEpoch > maxRequiredControllerEpoch) {
-          maxRequiredControllerEpoch = item.controllerEpoch
+        if (item.controllerEpoch > minRequiredControllerEpoch) {
+          minRequiredControllerEpoch = item.controllerEpoch
         }
 
         topicData.partitions.add(partitionData)
@@ -300,7 +300,7 @@ class DefaultAlterPartitionManager(
     }
 
     // If we cannot use topic ids, the builder will ensure that no version higher than 1 is used.
-    (new AlterPartitionRequest.Builder(message, canUseTopicIds), maxRequiredControllerEpoch, topicNamesByIds)
+    (new AlterPartitionRequest.Builder(message, canUseTopicIds), minRequiredControllerEpoch, topicNamesByIds)
   }
 
   def handleAlterPartitionResponse(
