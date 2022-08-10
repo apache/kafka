@@ -64,15 +64,7 @@ class BrokerMetadataSnapshotter(
       if (writer.nonEmpty) {
         _currentSnapshotOffset = image.highestOffsetAndEpoch().offset
 
-        var stringReasons: Set[String] = Set()
-
-        snapshotReasons.foreach(r => stringReasons += r.toString)
-
-        if (stringReasons.isEmpty){
-          stringReasons += SnapshotReason.UnknownReason.toString
-        }
-
-        info(s"Creating a new snapshot at offset ${_currentSnapshotOffset} because, ${stringReasons.mkString(" and ")}")
+        info(s"Creating a new snapshot at offset ${_currentSnapshotOffset} because, ${snapshotReasons.mkString(" and ")}")
         eventQueue.append(new CreateSnapshotEvent(image, writer.get))
         true
       } else {
