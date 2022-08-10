@@ -78,7 +78,8 @@ class RaftClusterSnapshotTest {
             raftManager.replicatedLog.latestSnapshot.get(),
             new MetadataRecordSerde(),
             BufferSupplier.create(),
-            1
+            1,
+            true
           )
         ) { snapshot =>
           // Check that the snapshot is non-empty

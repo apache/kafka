@@ -36,10 +36,13 @@ public class QuorumControllerMetricsTest {
         String expectedType = "KafkaController";
         Set<String> expectedMetricNames = Utils.mkSet(
             "ActiveControllerCount",
+            "FencedBrokerCount",
+            "ActiveBrokerCount",
             "GlobalTopicCount",
             "GlobalPartitionCount",
             "OfflinePartitionsCount",
             "PreferredReplicaImbalanceCount",
+            "MetadataErrorCount",
             "LastAppliedRecordLagMs",
             "LastAppliedRecordOffset",
             "LastAppliedRecordTimestamp",
@@ -125,6 +128,25 @@ public class QuorumControllerMetricsTest {
         }
     }
 
+    @Test
+    public void testMetadataErrorCount() {
+        MetricsRegistry registry = new MetricsRegistry();
+        MockTime time = new MockTime();
+        try {
+            try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry, time)) {
+                @SuppressWarnings("unchecked")
+                Gauge<Integer> metadataErrorCount = (Gauge<Integer>) registry
+                        .allMetrics()
+                        .get(metricName("KafkaController", "MetadataErrorCount"));
+                assertEquals(0, metadataErrorCount.value());
+                quorumControllerMetrics.incrementMetadataErrorCount();
+                assertEquals(1, metadataErrorCount.value());
+            }
+        } finally {
+            registry.shutdown();
+        }
+    }
+
     private static void assertMetricsCreatedAndRemovedUponClose(String expectedType, Set<String> expectedMetricNames) {
         MetricsRegistry registry = new MetricsRegistry();
         MockTime time = new MockTime();
@@ -151,9 +173,17 @@ public class QuorumControllerMetricsTest {
     }
 
     private static void assertMetricsCreated(MetricsRegistry registry, Set<String> expectedMetricNames, String expectedType) {
+        assertEquals(registry.allMetrics().keySet().stream()
+                .filter(k -> k.getType() == expectedType).count(),
+                expectedMetricNames.size());
         expectedMetricNames.forEach(expectedName -> {
             MetricName expectMetricName = metricName(expectedType, expectedName);
             assertTrue(registry.allMetrics().containsKey(expectMetricName), "Missing metric: " + expectMetricName);
+        });
+        registry.allMetrics().forEach((actualMetricName, actualMetric) -> {
+            if (actualMetricName.getType() == expectedType) {
+                assertTrue(expectedMetricNames.contains(actualMetricName.getName()), "Unexpected metric: " + actualMetricName);
+            }
         });
     }
 

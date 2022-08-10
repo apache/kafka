@@ -25,16 +25,12 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
-import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
-import org.easymock.EasyMock;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -45,15 +41,13 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mockStatic;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({ConnectUtils.class})
-@PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class WorkerGroupMemberTest {
     @Mock
     private ConfigBackingStore configBackingStore;
-    @Mock
-    private StatusBackingStore statusBackingStore;
 
     @Test
     public void testMetrics() throws Exception {
@@ -72,10 +66,11 @@ public class WorkerGroupMemberTest {
 
         LogContext logContext = new LogContext("[Worker clientId=client-1 + groupId= group-1]");
 
-        expectClusterId();
-
-        member = new WorkerGroupMember(config, "", configBackingStore,
-        null, Time.SYSTEM, "client-1", logContext);
+        try (MockedStatic<ConnectUtils> utilities = mockStatic(ConnectUtils.class)) {
+            utilities.when(() -> ConnectUtils.lookupKafkaClusterId(any())).thenReturn("cluster-1");
+            member = new WorkerGroupMember(config, "", configBackingStore, null, Time.SYSTEM, "client-1", logContext);
+            utilities.verify(() -> ConnectUtils.lookupKafkaClusterId(any()));
+        }     
 
         boolean entered = false;
         for (MetricsReporter reporter : member.metrics().reporters()) {
@@ -94,10 +89,4 @@ public class WorkerGroupMemberTest {
         //verify metric exists with correct prefix
         assertNotNull(server.getObjectInstance(new ObjectName("kafka.connect:type=grp1,client-id=client-1")));
     }
-    private void expectClusterId() {
-        PowerMock.mockStaticPartial(ConnectUtils.class, "lookupKafkaClusterId");
-        EasyMock.expect(ConnectUtils.lookupKafkaClusterId(EasyMock.anyObject())).andReturn("cluster-1").anyTimes();
-        PowerMock.replay(ConnectUtils.class);
-    }
-
 }

@@ -40,14 +40,13 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
-import org.junit.experimental.categories.Category;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
@@ -65,7 +64,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
  * by virtue of having a large commit interval
  */
 @Timeout(600)
-@Category(IntegrationTest.class)
+@Tag("integration")
 @SuppressWarnings("deprecation")
 public class KStreamAggregationDedupIntegrationTest {
     private static final int NUM_BROKERS = 1;
