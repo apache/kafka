@@ -34,11 +34,11 @@ plugins {
   id 'com.github.ben-manes.versions' version '0.42.0'
   id 'idea'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '7.0.3'
-  id 'org.nosphere.apache.rat' version "0.7.0"
+  id 'org.owasp.dependencycheck' version '7.1.1'
+  id 'org.nosphere.apache.rat' version "0.7.1"
 
-  id "com.github.spotbugs" version '5.0.6' apply false
-  id 'org.gradle.test-retry' version '1.3.1' apply false
+  id "com.github.spotbugs" version '5.0.9' apply false
+  id 'org.gradle.test-retry' version '1.4.0' apply false
   id 'org.scoverage' version '7.0.0' apply false
   id 'com.github.johnrengelman.shadow' version '7.1.2' apply false
   id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.0"
@@ -928,6 +928,7 @@ project(':core') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':metadata').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
@@ -1210,6 +1211,7 @@ project(':metadata') {
     testImplementation libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     generator project(':generator')
   }
 
@@ -1648,6 +1650,8 @@ project(':storage') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common')
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.bcpkix

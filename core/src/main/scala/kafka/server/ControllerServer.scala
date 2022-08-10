@@ -21,7 +21,6 @@ import java.util
 import java.util.OptionalLong
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-
 import kafka.cluster.Broker.ServerInfo
 import kafka.metrics.{KafkaMetricsGroup, LinuxIoMetricsCollector}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
@@ -38,7 +37,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.controller.{BootstrapMetadata, Controller, QuorumController, QuorumControllerMetrics, QuorumFeatures}
+import org.apache.kafka.controller.{BootstrapMetadata, Controller, ControllerMetrics, QuorumController, QuorumFeatures}
 import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
@@ -46,6 +45,7 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
+import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 
@@ -61,11 +61,14 @@ class ControllerServer(
   val raftManager: RaftManager[ApiMessageAndVersion],
   val time: Time,
   val metrics: Metrics,
+  val controllerMetrics: ControllerMetrics,
   val threadNamePrefix: Option[String],
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
   val configSchema: KafkaConfigSchema,
   val raftApiVersions: ApiVersions,
-  val bootstrapMetadata: BootstrapMetadata
+  val bootstrapMetadata: BootstrapMetadata,
+  val metadataFaultHandler: FaultHandler,
+  val fatalFaultHandler: FaultHandler,
 ) extends Logging with KafkaMetricsGroup {
   import kafka.server.Server._
 
@@ -199,12 +202,14 @@ class ControllerServer(
           setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
           setMaxIdleIntervalNs(maxIdleIntervalNs).
-          setMetrics(new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)).
+          setMetrics(controllerMetrics).
           setCreateTopicPolicy(createTopicPolicy.asJava).
           setAlterConfigPolicy(alterConfigPolicy.asJava).
           setConfigurationValidator(new ControllerConfigurationValidator()).
           setStaticConfig(config.originals).
-          setBootstrapMetadata(bootstrapMetadata)
+          setBootstrapMetadata(bootstrapMetadata).
+          setMetadataFaultHandler(metadataFaultHandler).
+          setFatalFaultHandler(fatalFaultHandler)
       }
       authorizer match {
         case Some(a: ClusterMetadataAuthorizer) => controllerBuilder.setAuthorizer(a)

@@ -496,7 +496,8 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
                                         snapshot.get(),
                                         new  MetadataRecordSerde(),
                                         BufferSupplier.create(),
-                                        Integer.MAX_VALUE
+                                        Integer.MAX_VALUE,
+                                        true
                                     )
                                 );
                             }

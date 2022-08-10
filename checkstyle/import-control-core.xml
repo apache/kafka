@@ -54,6 +54,7 @@
     <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.metalog" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.fault" />
   </subpackage>
 
   <subpackage name="tools">
