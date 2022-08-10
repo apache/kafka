@@ -34,20 +34,41 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 
+import java.util.Collections
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
-
-case class ControllerNodeAndEpoch(
-  node: Node,
-  epoch: Int
-) {
-  def id: Int = node.id
+trait ControllerNodeAndEpoch {
+  def epoch: Int
+  def nodeOpt: Option[Node]
 }
 
+object ControllerNodeAndEpoch {
+  val DefaultUnknown: ControllerNodeAndEpoch.Unknown =
+    ControllerNodeAndEpoch.Unknown(epoch = 0)
+
+  case class Known(epoch: Int, node: Node) extends ControllerNodeAndEpoch {
+    override def nodeOpt: Option[Node] = Some(node)
+
+    override def toString: String = {
+      s"KnownController(node=$node, epoch=$epoch)"
+    }
+  }
+
+  case class Unknown(epoch: Int) extends ControllerNodeAndEpoch {
+    def nodeOpt: Option[Node] = None
+
+    override def toString: String = {
+      s"UnknownController(epoch=$epoch)"
+    }
+  }
+}
+
+
+
 trait ControllerNodeProvider {
-  def get(): Option[ControllerNodeAndEpoch]
+  def get(): ControllerNodeAndEpoch
   def listenerName: ListenerName
   def securityProtocol: SecurityProtocol
   def saslMechanism: String
@@ -79,14 +100,26 @@ class ZkMetadataCacheControllerNodeProvider(
   val securityProtocol: SecurityProtocol,
   val saslMechanism: String
 ) extends ControllerNodeProvider {
-  override def get(): Option[ControllerNodeAndEpoch] = {
-    metadataCache.currentController.flatMap { controllerAndEpoch =>
-      val controllerId = controllerAndEpoch.id
-      metadataCache.getAliveBrokerNode(controllerId, listenerName).map { controllerNode =>
-        ControllerNodeAndEpoch(controllerNode, controllerAndEpoch.epoch)
-      }
+  override def get(): ControllerNodeAndEpoch = {
+    metadataCache.currentController match {
+      case Some(controllerAndEpoch) =>
+        val controllerId = controllerAndEpoch.id
+        metadataCache.getAliveBrokerNode(controllerId, listenerName).map { controllerNode =>
+          ControllerNodeAndEpoch.Known(
+            epoch = controllerAndEpoch.epoch,
+            node = controllerNode
+          )
+        }.getOrElse {
+          ControllerNodeAndEpoch.Unknown(
+            epoch = controllerAndEpoch.epoch
+          )
+        }
+
+      case None =>
+        ControllerNodeAndEpoch.DefaultUnknown
     }
   }
+
 }
 
 object KRaftControllerNodeProvider {
@@ -121,14 +154,23 @@ class KRaftControllerNodeProvider(
 ) extends ControllerNodeProvider with Logging {
   private val idToNode = controllerQuorumVoterNodes.map(node => node.id() -> node).toMap
 
-  override def get(): Option[ControllerNodeAndEpoch] = {
+  override def get(): ControllerNodeAndEpoch = {
     val leaderAndEpoch = raftManager.leaderAndEpoch
-    leaderAndEpoch.leaderId.asScala.map { controllerId =>
-      val controllerNode: Node = idToNode.getOrElse(controllerId,
-        throw new IllegalStateException(s"Unable to find controller $controllerId " +
-          s"among configured voters $controllerQuorumVoterNodes")
-      )
-      ControllerNodeAndEpoch(controllerNode, leaderAndEpoch.epoch)
+    leaderAndEpoch.leaderId.asScala match {
+      case Some(controllerId) =>
+        val controllerNode: Node = idToNode.getOrElse(controllerId,
+          throw new IllegalStateException(s"Unable to find controller $controllerId " +
+            s"among configured voters $controllerQuorumVoterNodes")
+        )
+        ControllerNodeAndEpoch.Known(
+          epoch = leaderAndEpoch.epoch,
+          node = controllerNode
+        )
+
+      case None =>
+        ControllerNodeAndEpoch.Unknown(
+          epoch = leaderAndEpoch.epoch
+        )
     }
   }
 }
@@ -309,8 +351,8 @@ class BrokerToControllerChannelManagerImpl(
   }
 
   def controllerApiVersions(): Option[NodeApiVersions] = {
-    requestThread.activeControllerOpt().flatMap { controller =>
-      Option(apiVersions.get(controller.node.idString))
+    requestThread.activeControllerNode().flatMap { controllerNode =>
+      Option(apiVersions.get(controllerNode.idString))
     }
   }
 }
@@ -342,18 +384,46 @@ class BrokerToControllerRequestThread(
 ) extends InterBrokerSendThread(threadName, networkClient, config.controllerSocketTimeoutMs, time, isInterruptible = false) {
 
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
-  private val activeController = new AtomicReference[ControllerNodeAndEpoch](null)
+  private val activeControllerRef = new AtomicReference[ControllerNodeAndEpoch](
+    ControllerNodeAndEpoch.Unknown(epoch = 0)
+  )
 
   // Used for testing
   @volatile
   private[server] var started = false
 
-  def activeControllerOpt(): Option[ControllerNodeAndEpoch] = {
-    Option(activeController.get())
+  def activeController(): ControllerNodeAndEpoch = {
+    activeControllerRef.get()
   }
 
-  private def updateControllerAddress(newActiveController: ControllerNodeAndEpoch): Unit = {
-    activeController.set(newActiveController)
+  def activeControllerNode(): Option[Node] = {
+    activeControllerRef.get().nodeOpt
+  }
+
+  def isActiveControllerKnown(): Boolean = {
+    activeControllerRef.get().nodeOpt.isDefined
+  }
+
+  private def maybeUpdateController(
+    newActiveController: ControllerNodeAndEpoch
+  ): Boolean = {
+    val prevController = activeControllerRef.getAndUpdate { currentActiveController =>
+      if (newActiveController.epoch >= currentActiveController.epoch) {
+        newActiveController
+      } else {
+        currentActiveController
+      }
+    }
+    prevController != newActiveController
+  }
+
+  private def resetController(
+    minControllerEpoch: Option[Int]
+  ): Unit = {
+    activeControllerRef.updateAndGet { currentActiveController =>
+      val epoch = math.max(minControllerEpoch.getOrElse(0), currentActiveController.epoch)
+      ControllerNodeAndEpoch.Unknown(epoch = epoch)
+    }
   }
 
   def enqueue(request: BrokerToControllerQueueItem): Unit = {
@@ -361,7 +431,7 @@ class BrokerToControllerRequestThread(
       throw new IllegalStateException("Cannot enqueue a request if the request thread is not running")
     }
     requestQueue.add(request)
-    if (activeControllerOpt().isDefined) {
+    if (isActiveControllerKnown()) {
       wakeup()
     }
   }
@@ -373,7 +443,7 @@ class BrokerToControllerRequestThread(
   override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
     val currentTimeMs = time.milliseconds()
     val requestIter = requestQueue.iterator()
-    val controllerOpt = activeControllerOpt()
+    val controller = activeControllerRef.get()
 
     while (requestIter.hasNext) {
       val request = requestIter.next
@@ -381,20 +451,31 @@ class BrokerToControllerRequestThread(
         requestIter.remove()
         request.callback.onTimeout()
       } else {
-        controllerOpt.foreach { activeController =>
-          if (activeController.epoch >= request.minControllerEpoch) {
+        controller.nodeOpt.foreach { controllerNode =>
+          if (controller.epoch >= request.minControllerEpoch) {
             requestIter.remove()
             return Some(RequestAndCompletionHandler(
-              time.milliseconds(),
-              activeController.node,
-              request.request,
-              handleResponse(request)
+              creationTimeMs = request.createdTimeMs,
+              destination = controllerNode,
+              request = request.request,
+              handler = handleResponse(request)
             ))
+          } else {
+            invalidateCurrentController(Some(request.minControllerEpoch))
+            return None
           }
         }
       }
     }
     None
+  }
+
+  private def invalidateCurrentController(minControllerEpoch: Option[Int]): Unit = {
+    // close the controller connection and wait for metadata cache update in doWork
+    val controller = activeControllerRef.get()
+    controller.nodeOpt.foreach(node => networkClient.disconnect(node.idString))
+    resetController(minControllerEpoch)
+    wakeup()
   }
 
   private[server] def handleResponse(queueItem: BrokerToControllerQueueItem)(response: ClientResponse): Unit = {
@@ -407,15 +488,10 @@ class BrokerToControllerRequestThread(
         response.versionMismatch)
       queueItem.callback.onComplete(response)
     } else if (response.wasDisconnected()) {
-      updateControllerAddress(null)
+      resetController(minControllerEpoch = None)
       requestQueue.putFirst(queueItem)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
-      // just close the controller connection and wait for metadata cache update in doWork
-      activeControllerOpt().foreach { activeController =>
-        networkClient.disconnect(activeController.node.idString)
-        updateControllerAddress(null)
-      }
-
+      invalidateCurrentController(minControllerEpoch = None)
       requestQueue.putFirst(queueItem)
     } else {
       queueItem.callback.onComplete(response)
@@ -423,19 +499,20 @@ class BrokerToControllerRequestThread(
   }
 
   override def doWork(): Unit = {
-    if (activeControllerOpt().isDefined) {
+    if (isActiveControllerKnown()) {
       super.pollOnce(Long.MaxValue)
     } else {
       debug("Controller isn't cached, looking for local metadata changes")
-      controllerNodeProvider.get() match {
-        case Some(controllerNodeAndEpoch) =>
-          info(s"Recorded new controller, from now on will use broker $controllerNodeAndEpoch")
-          updateControllerAddress(controllerNodeAndEpoch)
-          metadataUpdater.setNodes(Seq(controllerNodeAndEpoch.node).asJava)
-        case None =>
-          // need to backoff to avoid tight loops
-          debug("No controller defined in metadata cache, retrying after backoff")
-          super.pollOnce(maxTimeoutMs = 100)
+      val controllerNodeAndEpoch = controllerNodeProvider.get()
+      if (maybeUpdateController(controllerNodeAndEpoch)) {
+        info(s"Recorded new controller and epoch $controllerNodeAndEpoch")
+        controllerNodeAndEpoch.nodeOpt.foreach { controllerNode =>
+          metadataUpdater.setNodes(Collections.singletonList(controllerNode))
+        }
+      } else {
+        debug(s"Not recording updated controller $controllerNodeAndEpoch since " +
+          s"it is not more recent than current controller ${activeController()}")
+        super.pollOnce(maxTimeoutMs = 100)
       }
     }
   }

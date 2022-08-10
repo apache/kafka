@@ -76,9 +76,9 @@ class MockBrokerToControllerChannelManager(
         unsentIterator.remove()
       } else {
         controllerNodeProvider.get() match {
-          case Some(controllerNodeAndEpoch) if client.ready(controllerNodeAndEpoch.node, time.milliseconds()) =>
+          case ControllerNodeAndEpoch.Known(_, node) if client.ready(node, time.milliseconds()) =>
             val clientRequest = client.newClientRequest(
-              controllerNodeAndEpoch.node.idString,
+              node.idString,
               queueItem.request,
               queueItem.createdTimeMs,
               true, // we expect response,

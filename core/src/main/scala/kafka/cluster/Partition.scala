@@ -1590,7 +1590,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def submitAlterPartition(proposedIsrState: PendingPartitionChange): CompletableFuture[LeaderAndIsr] = {
-    debug(s"Submitting ISR state change $proposedIsrState")
+    debug(s"Submitting ISR state change $proposedIsrState with controller epoch $controllerEpoch")
     val future = alterIsrManager.submit(
       new TopicIdPartition(topicId.getOrElse(Uuid.ZERO_UUID), topicPartition),
       proposedIsrState.sentLeaderAndIsr,

@@ -74,7 +74,10 @@ class ForwardingManagerTest {
     val controller = new Node(0, "host", 1234)
     val controllerEpoch = 156
     Mockito.when(controllerNodeProvider.get()).thenReturn(
-      Some(ControllerNodeAndEpoch(node = controller, epoch = controllerEpoch))
+      ControllerNodeAndEpoch.Known(
+        epoch = controllerEpoch,
+        node = controller
+      )
     )
 
     val isEnvelopeRequest: RequestMatcher = request => request.isInstanceOf[EnvelopeRequest]
@@ -103,7 +106,10 @@ class ForwardingManagerTest {
     val controller = new Node(0, "host", 1234)
     val controllerEpoch = 156
     Mockito.when(controllerNodeProvider.get()).thenReturn(
-      Some(ControllerNodeAndEpoch(node = controller, epoch = controllerEpoch))
+      ControllerNodeAndEpoch.Known(
+        epoch = controllerEpoch,
+        node = controller
+      )
     )
 
     val isEnvelopeRequest: RequestMatcher = request => request.isInstanceOf[EnvelopeRequest]
@@ -122,7 +128,7 @@ class ForwardingManagerTest {
     val (requestHeader, requestBuffer) = buildRequest(testAlterConfigRequest, requestCorrelationId)
     val request = buildRequest(requestHeader, requestBuffer, clientPrincipal)
 
-    Mockito.when(controllerNodeProvider.get()).thenReturn(None)
+    Mockito.when(controllerNodeProvider.get()).thenReturn(ControllerNodeAndEpoch.DefaultUnknown)
 
     val response = new AtomicReference[AbstractResponse]()
     forwardingManager.forwardRequest(request, res => res.foreach(response.set))
@@ -149,7 +155,10 @@ class ForwardingManagerTest {
     val controller = new Node(0, "host", 1234)
     val controllerEpoch = 156
     Mockito.when(controllerNodeProvider.get()).thenReturn(
-      Some(ControllerNodeAndEpoch(node = controller, epoch = controllerEpoch))
+      ControllerNodeAndEpoch.Known(
+        epoch = controllerEpoch,
+        node = controller
+      )
     )
 
     val response = new AtomicReference[AbstractResponse]()
@@ -179,7 +188,10 @@ class ForwardingManagerTest {
     val controller = new Node(0, "host", 1234)
     val controllerEpoch = 156
     Mockito.when(controllerNodeProvider.get()).thenReturn(
-      Some(ControllerNodeAndEpoch(node = controller, epoch = controllerEpoch))
+      ControllerNodeAndEpoch.Known(
+        epoch = controllerEpoch,
+        node = controller
+      )
     )
 
     client.prepareUnsupportedVersionResponse(req => req.apiKey == requestHeader.apiKey)
@@ -203,7 +215,10 @@ class ForwardingManagerTest {
     val controller = new Node(0, "host", 1234)
     val controllerEpoch = 156
     Mockito.when(controllerNodeProvider.get()).thenReturn(
-      Some(ControllerNodeAndEpoch(node = controller, epoch = controllerEpoch))
+      ControllerNodeAndEpoch.Known(
+        epoch = controllerEpoch,
+        node = controller
+      )
     )
     client.createPendingAuthenticationError(controller, 50)
 

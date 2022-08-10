@@ -316,7 +316,11 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public void disconnect(String nodeId) {
-        if (connectionStates.isDisconnected(nodeId)) {
+        ConnectionState connectionState = connectionStates.connectionState(nodeId);
+        if (connectionState == null) {
+            log.debug("Client requested disconnect from node {}, which has no current connection state", nodeId);
+            return;
+        } else if (connectionState.isDisconnected()) {
             log.debug("Client requested disconnect from node {}, which is already disconnected", nodeId);
             return;
         }

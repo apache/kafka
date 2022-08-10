@@ -44,7 +44,7 @@ class BrokerToControllerRequestThreadTest {
     val mockClient = new MockClient(time, metadata)
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
 
-    when(controllerNodeProvider.get()).thenReturn(None)
+    when(controllerNodeProvider.get()).thenReturn(ControllerNodeAndEpoch.DefaultUnknown)
 
     val retryTimeoutMs = 30000
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
@@ -81,12 +81,12 @@ class BrokerToControllerRequestThreadTest {
     val mockClient = new MockClient(time, metadata)
 
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
-    val activeController = ControllerNodeAndEpoch(
-      node = new Node(controllerId, "host", 1234),
-      epoch = controllerEpoch
+    val activeController = ControllerNodeAndEpoch.Known(
+      epoch = controllerEpoch,
+      node = new Node(controllerId, "host", 1234)
     )
 
-    when(controllerNodeProvider.get()).thenReturn(Some(activeController))
+    when(controllerNodeProvider.get()).thenReturn(activeController)
 
     val expectedResponse = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
@@ -132,8 +132,8 @@ class BrokerToControllerRequestThreadTest {
     val newController = new Node(newControllerId, "host2", 1234)
 
     when(controllerNodeProvider.get()).thenReturn(
-      Some(ControllerNodeAndEpoch(node = oldController, epoch = oldControllerEpoch)),
-      Some(ControllerNodeAndEpoch(node = newController, epoch = newControllerEpoch))
+      ControllerNodeAndEpoch.Known(epoch = oldControllerEpoch, node = oldController),
+      ControllerNodeAndEpoch.Known(epoch = newControllerEpoch, node = newController)
     )
 
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
@@ -175,18 +175,18 @@ class BrokerToControllerRequestThreadTest {
     val mockClient = new MockClient(time, metadata)
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
 
-    val oldControllerAndEpoch = ControllerNodeAndEpoch(
-      node = new Node(1, "host1", 1234),
-      epoch = 15
+    val oldControllerAndEpoch = ControllerNodeAndEpoch.Known(
+      epoch = 15,
+      node = new Node(1, "host1", 1234)
     )
-    val newControllerAndEpoch = ControllerNodeAndEpoch(
+    val newControllerAndEpoch = ControllerNodeAndEpoch.Known(
+      epoch = 16,
       node = new Node(2, "host2", 4321),
-      epoch = 16
     )
 
     when(controllerNodeProvider.get()).thenReturn(
-      Some(oldControllerAndEpoch),
-      Some(newControllerAndEpoch)
+      oldControllerAndEpoch,
+      newControllerAndEpoch
     )
 
     val responseWithNotControllerError = RequestTestUtils.metadataUpdateWith("cluster1", 2,
@@ -209,7 +209,7 @@ class BrokerToControllerRequestThreadTest {
     // initialize to the controller
     testRequestThread.doWork()
 
-    assertEquals(Some(oldControllerAndEpoch), testRequestThread.activeControllerOpt())
+    assertEquals(oldControllerAndEpoch, testRequestThread.activeController())
 
     // send and process the request
     mockClient.prepareResponse((body: AbstractRequest) => {
@@ -217,14 +217,17 @@ class BrokerToControllerRequestThreadTest {
       body.asInstanceOf[MetadataRequest].allowAutoTopicCreation()
     }, responseWithNotControllerError)
     testRequestThread.doWork()
-    assertEquals(None, testRequestThread.activeControllerOpt())
+    assertEquals(
+      ControllerNodeAndEpoch.Unknown(epoch = oldControllerAndEpoch.epoch),
+      testRequestThread.activeController()
+    )
     // reinitialize the controller to a different node
     testRequestThread.doWork()
     // process the request again
     mockClient.prepareResponse(expectedResponse)
     testRequestThread.doWork()
 
-    assertEquals(Some(newControllerAndEpoch), testRequestThread.activeControllerOpt())
+    assertEquals(newControllerAndEpoch, testRequestThread.activeController())
 
     assertTrue(completionHandler.completed.get())
   }
@@ -240,18 +243,18 @@ class BrokerToControllerRequestThreadTest {
     // enable envelope API
     mockClient.setNodeApiVersions(NodeApiVersions.create(ApiKeys.ENVELOPE.id, 0.toShort, 0.toShort))
 
-    val oldControllerAndEpoch = ControllerNodeAndEpoch(
-      node = new Node(1, "host1", 1234),
-      epoch = 15
+    val oldControllerAndEpoch = ControllerNodeAndEpoch.Known(
+      epoch = 15,
+      node = new Node(1, "host1", 1234)
     )
-    val newControllerAndEpoch = ControllerNodeAndEpoch(
-      node = new Node(2, "host2", 4321),
-      epoch = 16
+    val newControllerAndEpoch = ControllerNodeAndEpoch.Known(
+      epoch = 16,
+      node = new Node(2, "host2", 4321)
     )
 
     when(controllerNodeProvider.get()).thenReturn(
-      Some(oldControllerAndEpoch),
-      Some(newControllerAndEpoch)
+      oldControllerAndEpoch,
+      newControllerAndEpoch
     )
 
     // create an envelopeResponse with NOT_CONTROLLER error
@@ -284,7 +287,7 @@ class BrokerToControllerRequestThreadTest {
     // initialize to the controller
     testRequestThread.doWork()
 
-    assertEquals(Some(oldControllerAndEpoch), testRequestThread.activeControllerOpt())
+    assertEquals(oldControllerAndEpoch, testRequestThread.activeController())
 
     // send and process the envelope request
     mockClient.prepareResponse((body: AbstractRequest) => {
@@ -292,14 +295,17 @@ class BrokerToControllerRequestThreadTest {
     }, envelopeResponseWithNotControllerError)
     testRequestThread.doWork()
     // expect to reset the activeControllerAddress after finding the NOT_CONTROLLER error
-    assertEquals(None, testRequestThread.activeControllerOpt())
+    assertEquals(
+      ControllerNodeAndEpoch.Unknown(epoch = oldControllerAndEpoch.epoch),
+      testRequestThread.activeController()
+    )
     // reinitialize the controller to a different node
     testRequestThread.doWork()
     // process the request again
     mockClient.prepareResponse(expectedResponse)
     testRequestThread.doWork()
 
-    assertEquals(Some(newControllerAndEpoch), testRequestThread.activeControllerOpt())
+    assertEquals(newControllerAndEpoch, testRequestThread.activeController())
 
     assertTrue(completionHandler.completed.get())
   }
@@ -318,7 +324,10 @@ class BrokerToControllerRequestThreadTest {
     val controller = new Node(controllerId, "host1", 1234)
 
     when(controllerNodeProvider.get()).thenReturn(
-      Some(ControllerNodeAndEpoch(node = controller, epoch = controllerEpoch))
+      ControllerNodeAndEpoch.Known(
+        epoch = controllerEpoch,
+        node = controller
+      )
     )
 
     val retryTimeoutMs = 30000
@@ -370,7 +379,10 @@ class BrokerToControllerRequestThreadTest {
     val activeController = new Node(controllerId, "host", 1234)
 
     when(controllerNodeProvider.get()).thenReturn(
-      Some(ControllerNodeAndEpoch(node = activeController, epoch = controllerEpoch))
+      ControllerNodeAndEpoch.Known(
+        epoch = controllerEpoch,
+        node = activeController
+      )
     )
 
     val callbackResponse = new AtomicReference[ClientResponse]()
@@ -411,7 +423,10 @@ class BrokerToControllerRequestThreadTest {
     val activeController = new Node(controllerId, "host", 1234)
 
     when(controllerNodeProvider.get()).thenReturn(
-      Some(ControllerNodeAndEpoch(node = activeController, epoch = controllerEpoch))
+      ControllerNodeAndEpoch.Known(
+        epoch = controllerEpoch,
+        node = activeController
+      )
     )
 
     val callbackResponse = new AtomicReference[ClientResponse]()
