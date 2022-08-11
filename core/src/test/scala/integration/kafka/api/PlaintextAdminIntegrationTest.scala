@@ -2480,6 +2480,27 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAppendConfigToEmptyDefaultValue(ignored: String): Unit = {
+    client = Admin.create(createConfig)
+    val topic = "testAppendConfigToEmptyDefaultValue"
+    createTopic(topic)
+    val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+    val topicAlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, "0:0"), AlterConfigOp.OpType.APPEND),
+    ).asJavaCollection
+
+    val alterResult = client.incrementalAlterConfigs(Map(
+      topicResource -> topicAlterConfigs
+    ).asJava)
+
+    alterResult.all().get()
+
+    val config = client.describeConfigs(List(topicResource).asJava).all().get().get(topicResource).get(LogConfig.LeaderReplicationThrottledReplicasProp)
+    assertEquals("0:0", config.value())
+  }
+
   /**
    * Test that createTopics returns the dynamic configurations of the topics that were created.
    *
