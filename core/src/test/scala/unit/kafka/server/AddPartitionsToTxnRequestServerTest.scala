@@ -17,13 +17,16 @@
 
 package kafka.server
 
-import java.util.Properties
+import kafka.utils.TestInfoUtils
 
+import java.util.Properties
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 
@@ -37,11 +40,12 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    createTopic(topic1, numPartitions, servers.size, new Properties())
+    createTopic(topic1, numPartitions, brokers.size, new Properties())
   }
 
-  @Test
-  def shouldReceiveOperationNotAttemptedWhenOtherPartitionHasError(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def shouldReceiveOperationNotAttemptedWhenOtherPartitionHasError(quorum: String): Unit = {
     // The basic idea is that we have one unknown topic and one created topic. We should get the 'UNKNOWN_TOPIC_OR_PARTITION'
     // error for the unknown topic and the 'OPERATION_NOT_ATTEMPTED' error for the known and authorized topic.
     val nonExistentTopic = new TopicPartition("unknownTopic", 0)
@@ -58,7 +62,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
       List(createdTopicPartition, nonExistentTopic).asJava)
       .build()
 
-    val leaderId = servers.head.config.brokerId
+    val leaderId = brokers.head.config.brokerId
     val response = connectAndReceive[AddPartitionsToTxnResponse](request, brokerSocketServer(leaderId))
 
     assertEquals(2, response.errors.size)

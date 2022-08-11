@@ -82,6 +82,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     val follower = brokers.filter(s => s.config.brokerId != leaderNode.id()).last
     follower.shutdown()
     // start topic deletion
+    faultHandler.setIgnore(true)
     adminClient.deleteTopics(Collections.singleton(topic))
     // check if all replicas but the one that is shut down has deleted the log
     TestUtils.waitUntilTrue(() =>
@@ -114,6 +115,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     val follower = brokers.filter(s => s.config.brokerId != leaderNode.id() && s.config.brokerId != controllerId).last
     follower.shutdown()
     // start topic deletion
+    faultHandler.setIgnore(true)
     adminClient.deleteTopics(Collections.singleton(topic))
     // shut down the controller to trigger controller failover during delete topic
     stopController()
@@ -146,6 +148,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     val follower = brokersWithReplica.filter(s => s.config.brokerId != leaderNode.id()).last
     follower.shutdown()
     // start topic deletion
+    faultHandler.setIgnore(true)
     adminClient.deleteTopics(Collections.singleton(topic))
     // verify that a partition from the topic cannot be reassigned
     waitUntilTopicGone(adminClient, "test")
@@ -263,6 +266,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     val follower = brokersWithReplicas.filter(s => s.config.brokerId != leaderNode.id()).last
     follower.shutdown()
     // start topic deletion
+    faultHandler.setIgnore(true)
     adminClient.deleteTopics(Collections.singleton(topic))
 
     // make sure deletion of all of the topic's replicas have been tried
@@ -304,6 +308,7 @@ class DeleteTopicTest extends QuorumTestHarness {
         s"Follower ${follower.config.brokerId} was not removed from ZK")
     }
     // add partitions to topic
+    faultHandler.setIgnore(true)
     assertDoesNotThrow(() => adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(3)).asJava).all().get())
     // start topic deletion
     adminClient.deleteTopics(Collections.singleton(topic))

@@ -19,13 +19,14 @@ package kafka.server
 
 import java.nio.ByteBuffer
 import java.util.Collections
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+import java.util.concurrent.atomic.AtomicReference
 import kafka.utils.TestUtils
+import kafka.utils.TestUtils.TestControllerRequestCompletionHandler
 import org.apache.kafka.clients.{ClientResponse, ManualMetadataUpdater, Metadata, MockClient, NodeApiVersions}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.message.{EnvelopeResponseData, MetadataRequestData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractRequest, EnvelopeRequest, EnvelopeResponse, MetadataRequest, MetadataResponse, RequestTestUtils}
+import org.apache.kafka.common.requests.{AbstractRequest, EnvelopeRequest, EnvelopeResponse, MetadataRequest, RequestTestUtils}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.MockTime
@@ -51,7 +52,7 @@ class BrokerToControllerRequestThreadTest {
       config, time, "", retryTimeoutMs)
     testRequestThread.started = true
 
-    val completionHandler = new TestRequestCompletionHandler(None)
+    val completionHandler = new TestControllerRequestCompletionHandler(None)
     val queueItem = BrokerToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
@@ -89,7 +90,7 @@ class BrokerToControllerRequestThreadTest {
     testRequestThread.started = true
     mockClient.prepareResponse(expectedResponse)
 
-    val completionHandler = new TestRequestCompletionHandler(Some(expectedResponse))
+    val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
     val queueItem = BrokerToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
@@ -130,7 +131,7 @@ class BrokerToControllerRequestThreadTest {
       controllerNodeProvider, config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
 
-    val completionHandler = new TestRequestCompletionHandler(Some(expectedResponse))
+    val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
     val queueItem = BrokerToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
@@ -180,7 +181,7 @@ class BrokerToControllerRequestThreadTest {
       config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
 
-    val completionHandler = new TestRequestCompletionHandler(Some(expectedResponse))
+    val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
     val queueItem = BrokerToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()
@@ -243,7 +244,7 @@ class BrokerToControllerRequestThreadTest {
       config, time, "", retryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
 
-    val completionHandler = new TestRequestCompletionHandler(Some(expectedResponse))
+    val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
     val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "principal", true)
     val kafkaPrincipalBuilder = new DefaultKafkaPrincipalBuilder(null, null)
 
@@ -305,7 +306,7 @@ class BrokerToControllerRequestThreadTest {
       config, time, "", retryTimeoutMs)
     testRequestThread.started = true
 
-    val completionHandler = new TestRequestCompletionHandler()
+    val completionHandler = new TestControllerRequestCompletionHandler()
     val queueItem = BrokerToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()
@@ -419,7 +420,7 @@ class BrokerToControllerRequestThreadTest {
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
       config, time, "", retryTimeoutMs = Long.MaxValue)
 
-    val completionHandler = new TestRequestCompletionHandler(None)
+    val completionHandler = new TestControllerRequestCompletionHandler(None)
     val queueItem = BrokerToControllerQueueItem(
       time.milliseconds(),
       new MetadataRequest.Builder(new MetadataRequestData()),
@@ -443,24 +444,6 @@ class BrokerToControllerRequestThreadTest {
 
     if (!condition.apply()) {
       fail(s"Condition failed to be met after polling $tries times")
-    }
-  }
-
-  class TestRequestCompletionHandler(
-    expectedResponse: Option[MetadataResponse] = None
-  ) extends ControllerRequestCompletionHandler {
-    val completed: AtomicBoolean = new AtomicBoolean(false)
-    val timedOut: AtomicBoolean = new AtomicBoolean(false)
-
-    override def onComplete(response: ClientResponse): Unit = {
-      expectedResponse.foreach { expected =>
-        assertEquals(expected, response.responseBody())
-      }
-      completed.set(true)
-    }
-
-    override def onTimeout(): Unit = {
-      timedOut.set(true)
     }
   }
 }

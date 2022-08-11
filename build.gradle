@@ -34,11 +34,11 @@ plugins {
   id 'com.github.ben-manes.versions' version '0.42.0'
   id 'idea'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '7.0.3'
-  id 'org.nosphere.apache.rat' version "0.7.0"
+  id 'org.owasp.dependencycheck' version '7.1.1'
+  id 'org.nosphere.apache.rat' version "0.7.1"
 
-  id "com.github.spotbugs" version '5.0.6' apply false
-  id 'org.gradle.test-retry' version '1.3.1' apply false
+  id "com.github.spotbugs" version '5.0.9' apply false
+  id 'org.gradle.test-retry' version '1.4.0' apply false
   id 'org.scoverage' version '7.0.0' apply false
   id 'com.github.johnrengelman.shadow' version '7.1.2' apply false
   id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.0"
@@ -66,8 +66,10 @@ ext {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16))
     defaultJvmArgs.addAll(
       "--add-opens=java.base/java.io=ALL-UNNAMED",
+      "--add-opens=java.base/java.lang=ALL-UNNAMED",
       "--add-opens=java.base/java.nio=ALL-UNNAMED",
       "--add-opens=java.base/java.nio.file=ALL-UNNAMED",
+      "--add-opens=java.base/java.util=ALL-UNNAMED",
       "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
       "--add-opens=java.base/java.util.regex=ALL-UNNAMED",
       "--add-opens=java.base/java.util.stream=ALL-UNNAMED",
@@ -321,7 +323,7 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["runtime", "streams"].contains(it.project.name))
+  def shouldUseJUnit5 = !(["runtime"].contains(it.project.name))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
@@ -402,11 +404,11 @@ subprojects {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
     testsToExclude.addAll([
       // connect tests
-      "**/AbstractHerderTest.*", "**/ConnectClusterStateImplTest.*", "**/ConnectorPluginsResourceTest.*",
+      "**/AbstractHerderTest.*", "**/ConnectorPluginsResourceTest.*",
       "**/ConnectorsResourceTest.*", "**/DistributedHerderTest.*", "**/FileOffsetBakingStoreTest.*",
       "**/ErrorHandlingTaskTest.*", "**/KafkaConfigBackingStoreTest.*", "**/KafkaOffsetBackingStoreTest.*",
       "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
-      "**/SourceTaskOffsetCommitterTest.*", "**/WorkerConfigTransformerTest.*", "**/WorkerGroupMemberTest.*",
+      "**/SourceTaskOffsetCommitterTest.*",
       "**/WorkerTest.*", "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
       "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*", "**/ExactlyOnceWorkerSourceTaskTest.*",
       "**/WorkerTaskTest.*",
@@ -464,8 +466,18 @@ subprojects {
     exclude testsToExclude
 
     if (shouldUseJUnit5) {
-      useJUnitPlatform {
-        includeTags "integration"
+      if (project.name == 'streams') {
+        useJUnitPlatform {
+          includeTags "integration"
+          includeTags "org.apache.kafka.test.IntegrationTest"
+	  // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
+          // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
+          includeEngines "junit-vintage", "junit-jupiter"
+        }
+      } else {
+        useJUnitPlatform {
+          includeTags "integration"
+        }
       }
     } else {
       useJUnit {
@@ -501,8 +513,18 @@ subprojects {
     exclude testsToExclude
 
     if (shouldUseJUnit5) {
-      useJUnitPlatform {
-        excludeTags "integration"
+      if (project.name == 'streams') {
+        useJUnitPlatform {
+          excludeTags "integration"
+          excludeTags "org.apache.kafka.test.IntegrationTest"
+	  // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
+          // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
+          includeEngines "junit-vintage", "junit-jupiter"
+        }
+      } else {
+        useJUnitPlatform {
+          excludeTags "integration"
+        }
       }
     } else {
       useJUnit {
@@ -875,6 +897,7 @@ project(':core') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':metadata').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
@@ -1157,6 +1180,7 @@ project(':metadata') {
     testImplementation libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     generator project(':generator')
   }
 
@@ -1325,7 +1349,7 @@ project(':clients') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/generated-test/java", "src/test/java"]
+        srcDirs = ["src/generated-test/java", "src/test/java"]
       }
     }
   }
@@ -1595,6 +1619,8 @@ project(':storage') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common')
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.bcpkix
@@ -1832,11 +1858,12 @@ project(':streams') {
 
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
+
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation libs.log4j
-    testImplementation libs.junitJupiterApi
+    testImplementation libs.junitJupiter
     testImplementation libs.junitVintageEngine
     testImplementation libs.easymock
     testImplementation libs.powermockJunit4

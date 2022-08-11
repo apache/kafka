@@ -22,6 +22,7 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
@@ -228,7 +229,8 @@ public class ConfigurationControlManager {
                     newValue = String.join(",", oldValueList);
                     break;
             }
-            if (!Objects.equals(currentValue, newValue)) {
+            if (!Objects.equals(currentValue, newValue) || configResource.type().equals(Type.BROKER)) {
+                // KAFKA-14136 We need to generate records even if the value is unchanged to trigger reloads on the brokers
                 newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
@@ -248,24 +250,26 @@ public class ConfigurationControlManager {
     private ApiError validateAlterConfig(ConfigResource configResource,
                                          List<ApiMessageAndVersion> newRecords,
                                          boolean newlyCreatedResource) {
-        Map<String, String> newConfigs = new HashMap<>();
+        Map<String, String> allConfigs = new HashMap<>();
+        Map<String, String> alteredConfigs = new HashMap<>();
         TimelineHashMap<String, String> existingConfigs = configData.get(configResource);
-        if (existingConfigs != null) newConfigs.putAll(existingConfigs);
+        if (existingConfigs != null) allConfigs.putAll(existingConfigs);
         for (ApiMessageAndVersion newRecord : newRecords) {
             ConfigRecord configRecord = (ConfigRecord) newRecord.message();
             if (configRecord.value() == null) {
-                newConfigs.remove(configRecord.name());
+                allConfigs.remove(configRecord.name());
             } else {
-                newConfigs.put(configRecord.name(), configRecord.value());
+                allConfigs.put(configRecord.name(), configRecord.value());
             }
+            alteredConfigs.put(configRecord.name(), configRecord.value());
         }
         try {
-            validator.validate(configResource, newConfigs);
+            validator.validate(configResource, allConfigs);
             if (!newlyCreatedResource) {
                 existenceChecker.accept(configResource);
             }
             if (alterConfigPolicy.isPresent()) {
-                alterConfigPolicy.get().validate(new RequestMetadata(configResource, newConfigs));
+                alterConfigPolicy.get().validate(new RequestMetadata(configResource, alteredConfigs));
             }
         } catch (ConfigException e) {
             return new ApiError(INVALID_CONFIG, e.getMessage());
@@ -315,7 +319,8 @@ public class ConfigurationControlManager {
             String key = entry.getKey();
             String newValue = entry.getValue();
             String currentValue = currentConfigs.get(key);
-            if (!Objects.equals(newValue, currentValue)) {
+            if (!Objects.equals(currentValue, newValue) || configResource.type().equals(Type.BROKER)) {
+                // KAFKA-14136 We need to generate records even if the value is unchanged to trigger reloads on the brokers
                 newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
@@ -379,7 +384,11 @@ public class ConfigurationControlManager {
         if (configs.isEmpty()) {
             configData.remove(configResource);
         }
-        log.info("{}: set configuration {} to {}", configResource, record.name(), record.value());
+        if (configSchema.isSensitive(record)) {
+            log.info("{}: set configuration {} to {}", configResource, record.name(), Password.HIDDEN);
+        } else {
+            log.info("{}: set configuration {} to {}", configResource, record.name(), record.value());
+        }
     }
 
     // VisibleForTesting

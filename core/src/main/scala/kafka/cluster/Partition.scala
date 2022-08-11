@@ -26,7 +26,7 @@ import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.server.metadata.KRaftMetadataCache
+import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zookeeper.ZooKeeperClientException
@@ -881,10 +881,15 @@ class Partition(val topicPartition: TopicPartition,
   private def isReplicaIsrEligible(followerReplicaId: Int): Boolean = {
     metadataCache match {
       // In KRaft mode, only replicas which are not fenced nor in controlled shutdown are
-      // allowed to join the ISR. This does not apply to ZK mode.
+      // allowed to join the ISR.
       case kRaftMetadataCache: KRaftMetadataCache =>
         !kRaftMetadataCache.isBrokerFenced(followerReplicaId) &&
           !kRaftMetadataCache.isBrokerShuttingDown(followerReplicaId)
+
+      // In ZK mode, we just ensure the broker is alive. Although we do not check for shutting down brokers here,
+      // the controller will block them from being added to ISR.
+      case zkMetadataCache: ZkMetadataCache =>
+        zkMetadataCache.hasAliveBroker(followerReplicaId)
 
       case _ => true
     }
@@ -1205,22 +1210,32 @@ class Partition(val topicPartition: TopicPartition,
     minOneMessage: Boolean,
     updateFetchState: Boolean
   ): LogReadInfo = {
-    def readFromLocalLog(): LogReadInfo = {
+    def readFromLocalLog(log: UnifiedLog): LogReadInfo = {
       readRecords(
+        log,
         fetchPartitionData.lastFetchedEpoch,
         fetchPartitionData.fetchOffset,
         fetchPartitionData.currentLeaderEpoch,
         maxBytes,
         fetchParams.isolation,
-        minOneMessage,
-        fetchParams.fetchOnlyLeader
+        minOneMessage
       )
     }
 
     if (fetchParams.isFromFollower) {
       // Check that the request is from a valid replica before doing the read
-      val replica = followerReplicaOrThrow(fetchParams.replicaId, fetchPartitionData)
-      val logReadInfo = readFromLocalLog()
+      val (replica, logReadInfo) = inReadLock(leaderIsrUpdateLock) {
+        val localLog = localLogWithEpochOrThrow(
+          fetchPartitionData.currentLeaderEpoch,
+          fetchParams.fetchOnlyLeader
+        )
+        val replica = followerReplicaOrThrow(
+          fetchParams.replicaId,
+          fetchPartitionData
+        )
+        val logReadInfo = readFromLocalLog(localLog)
+        (replica, logReadInfo)
+      }
 
       if (updateFetchState && logReadInfo.divergingEpoch.isEmpty) {
         updateFollowerFetchState(
@@ -1234,7 +1249,13 @@ class Partition(val topicPartition: TopicPartition,
 
       logReadInfo
     } else {
-      readFromLocalLog()
+      inReadLock(leaderIsrUpdateLock) {
+        val localLog = localLogWithEpochOrThrow(
+          fetchPartitionData.currentLeaderEpoch,
+          fetchParams.fetchOnlyLeader
+        )
+        readFromLocalLog(localLog)
+      }
     }
   }
 
@@ -1270,16 +1291,14 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def readRecords(
+    localLog: UnifiedLog,
     lastFetchedEpoch: Optional[Integer],
     fetchOffset: Long,
     currentLeaderEpoch: Optional[Integer],
     maxBytes: Int,
     fetchIsolation: FetchIsolation,
-    minOneMessage: Boolean,
-    fetchOnlyFromLeader: Boolean
-  ): LogReadInfo = inReadLock(leaderIsrUpdateLock) {
-    val localLog = localLogWithEpochOrThrow(currentLeaderEpoch, fetchOnlyFromLeader)
-
+    minOneMessage: Boolean
+  ): LogReadInfo = {
     // Note we use the log end offset prior to the read. This ensures that any appends following
     // the fetch do not prevent a follower from coming into sync.
     val initialHighWatermark = localLog.highWatermark

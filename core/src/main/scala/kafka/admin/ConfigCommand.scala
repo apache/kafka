@@ -211,7 +211,7 @@ object ConfigCommand extends Logging {
     encoderConfigs.get(KafkaConfig.PasswordEncoderSecretProp)
     val encoderSecret = encoderConfigs.getOrElse(KafkaConfig.PasswordEncoderSecretProp,
       throw new IllegalArgumentException("Password encoder secret not specified"))
-    new PasswordEncoder(new Password(encoderSecret),
+    PasswordEncoder.encrypting(new Password(encoderSecret),
       None,
       encoderConfigs.get(KafkaConfig.PasswordEncoderCipherAlgorithmProp).getOrElse(Defaults.PasswordEncoderCipherAlgorithm),
       encoderConfigs.get(KafkaConfig.PasswordEncoderKeyLengthProp).map(_.toInt).getOrElse(Defaults.PasswordEncoderKeyLength),

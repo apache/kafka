@@ -217,6 +217,9 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         if (failed) {
             log.debug("Skipping final offset commit as task has failed");
             return;
+        } else if (isCancelled()) {
+            log.debug("Skipping final offset commit as task has been cancelled");
+            return;
         }
 
         // It should be safe to commit here even if we were in the middle of retrying on RetriableExceptions in the

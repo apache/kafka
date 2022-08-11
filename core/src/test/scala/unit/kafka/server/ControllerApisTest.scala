@@ -63,6 +63,7 @@ import java.net.InetAddress
 import java.util
 import java.util.Collections.singletonList
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
+import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Properties}
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -900,6 +901,35 @@ class ControllerApisTest {
         throw new ClassCastException(s"Expected response with type ${classTag.runtimeClass}, " +
           s"but found ${response.getClass}")
     }
+  }
+
+  @Test
+  def testCompletableFutureExceptions(): Unit = {
+    // This test simulates an error in a completable future as we return from the controller. We need to ensure
+    // that any exception throw in the completion phase is properly captured and translated to an error response.
+    val request = buildRequest(new FetchRequest(new FetchRequestData(), 12))
+    val response = new FetchResponseData()
+    val responseFuture = new CompletableFuture[ApiMessage]()
+    val errorResponseFuture = new AtomicReference[AbstractResponse]()
+    when(raftManager.handleRequest(any(), any(), any())).thenReturn(responseFuture)
+    when(requestChannel.sendResponse(any(), any(), any())).thenAnswer { _ =>
+      // Simulate an encoding failure in the initial fetch response
+      throw new UnsupportedVersionException("Something went wrong")
+    }.thenAnswer { invocation =>
+      val resp = invocation.getArgument(1, classOf[AbstractResponse])
+      errorResponseFuture.set(resp)
+    }
+
+    // Calling handle does not block since we do not call get() in ControllerApis
+    createControllerApis(None,
+      new MockController.Builder().build()).handle(request, null)
+
+    // When we complete this future, the completion stages will fire (including the error handler in ControllerApis#request)
+    responseFuture.complete(response)
+
+    // Now we should get an error response with UNSUPPORTED_VERSION
+    val errorResponse = errorResponseFuture.get()
+    assertEquals(1, errorResponse.errorCounts().getOrDefault(Errors.UNSUPPORTED_VERSION, 0))
   }
 
   @AfterEach

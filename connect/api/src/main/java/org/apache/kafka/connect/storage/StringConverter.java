@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
@@ -104,6 +105,7 @@ public class StringConverter implements Converter, HeaderConverter {
 
     @Override
     public void close() {
-        // do nothing
+        Utils.closeQuietly(this.serializer, "string converter serializer");
+        Utils.closeQuietly(this.deserializer, "string converter deserializer");
     }
 }

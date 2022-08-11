@@ -94,7 +94,7 @@ public final class ClusterDelta {
     public void replay(FenceBrokerRecord record) {
         BrokerRegistration curRegistration = getBrokerOrThrow(record.id(), record.epoch(), "fence");
         changedBrokers.put(record.id(), Optional.of(curRegistration.cloneWith(
-            BrokerRegistrationFencingChange.UNFENCE.asBoolean(),
+            BrokerRegistrationFencingChange.FENCE.asBoolean(),
             Optional.empty()
         )));
     }
@@ -102,7 +102,7 @@ public final class ClusterDelta {
     public void replay(UnfenceBrokerRecord record) {
         BrokerRegistration curRegistration = getBrokerOrThrow(record.id(), record.epoch(), "unfence");
         changedBrokers.put(record.id(), Optional.of(curRegistration.cloneWith(
-            BrokerRegistrationFencingChange.FENCE.asBoolean(),
+            BrokerRegistrationFencingChange.UNFENCE.asBoolean(),
             Optional.empty()
         )));
     }

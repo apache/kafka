@@ -233,7 +233,7 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                             Duration.ofMillis(retentionPeriod),
                             Duration.ofMillis(windows.timeDifferenceMs()),
                             false,
-                            false
+                            true
                         ) :
                         Stores.persistentTimestampedWindowStore(
                             materialized.storeName(),
@@ -258,7 +258,9 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         } else {
             builder.withLoggingDisabled();
         }
-        if (materialized.cachingEnabled()) {
+
+        // do not enable cache if the emit final strategy is used
+        if (materialized.cachingEnabled() && emitStrategy.type() != StrategyType.ON_WINDOW_CLOSE) {
             builder.withCachingEnabled();
         } else {
             builder.withCachingDisabled();

@@ -111,7 +111,7 @@ public class ClusterControlManagerTest {
             clusterControl.replay(unfenceBrokerRecord);
         } else {
             BrokerRegistrationChangeRecord changeRecord =
-                    new BrokerRegistrationChangeRecord().setBrokerId(1).setBrokerEpoch(100).setFenced((byte) -1);
+                    new BrokerRegistrationChangeRecord().setBrokerId(1).setBrokerEpoch(100).setFenced(BrokerRegistrationFencingChange.UNFENCE.value());
             clusterControl.replay(changeRecord);
         }
         assertFalse(clusterControl.unfenced(0));
@@ -123,7 +123,7 @@ public class ClusterControlManagerTest {
             clusterControl.replay(fenceBrokerRecord);
         } else {
             BrokerRegistrationChangeRecord changeRecord =
-                    new BrokerRegistrationChangeRecord().setBrokerId(1).setBrokerEpoch(100).setFenced((byte) 1);
+                    new BrokerRegistrationChangeRecord().setBrokerId(1).setBrokerEpoch(100).setFenced(BrokerRegistrationFencingChange.FENCE.value());
             clusterControl.replay(changeRecord);
         }
         assertFalse(clusterControl.unfenced(0));
@@ -234,7 +234,7 @@ public class ClusterControlManagerTest {
         registrationChangeRecord = new BrokerRegistrationChangeRecord()
             .setBrokerId(0)
             .setBrokerEpoch(100)
-            .setFenced(BrokerRegistrationFencingChange.FENCE.value());
+            .setFenced(BrokerRegistrationFencingChange.UNFENCE.value());
         clusterControl.replay(registrationChangeRecord);
 
         assertTrue(clusterControl.unfenced(0));
