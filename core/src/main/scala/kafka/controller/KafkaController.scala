@@ -2336,7 +2336,14 @@ class KafkaController(val config: KafkaConfig,
       controllerContext.partitionLeadershipInfo(tp) match {
         case Some(leaderIsrAndControllerEpoch) =>
           val currentLeaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-          if (newLeaderAndIsr.leaderEpoch != currentLeaderAndIsr.leaderEpoch) {
+          if (newLeaderAndIsr.partitionEpoch > currentLeaderAndIsr.partitionEpoch
+            || newLeaderAndIsr.leaderEpoch > currentLeaderAndIsr.leaderEpoch) {
+            // If the partition leader has a higher partition/leader epoch, then it is likely
+            // that this node is no longer the active controller. We return NOT_CONTROLLER in
+            // this case to give the leader an opportunity to find the new controller.
+            partitionResponses(tp) = Left(Errors.NOT_CONTROLLER)
+            None
+          } else if (newLeaderAndIsr.leaderEpoch != currentLeaderAndIsr.leaderEpoch) {
             partitionResponses(tp) = Left(Errors.FENCED_LEADER_EPOCH)
             None
           } else if (newLeaderAndIsr.equalsAllowStalePartitionEpoch(currentLeaderAndIsr)) {
