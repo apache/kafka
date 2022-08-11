@@ -47,6 +47,7 @@ import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 trait QuorumImplementation {
+  var brokers: Seq[KafkaBroker] = Seq()
   def createBroker(config: KafkaConfig,
                    time: Time,
                    startup: Boolean): KafkaBroker
@@ -61,11 +62,13 @@ class ZooKeeperQuorumImplementation(
   val adminZkClient: AdminZkClient,
   val log: Logging
 ) extends QuorumImplementation {
+  var prevController: Option[KafkaBroker] = Option.empty
   override def createBroker(config: KafkaConfig,
                             time: Time,
                             startup: Boolean): KafkaBroker = {
     val server = new KafkaServer(config, time, None, false)
     if (startup) server.startup()
+    brokers = brokers :+ server
     server
   }
 
@@ -93,6 +96,7 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
       initialOfflineDirs = Seq(),
       controllerQuorumVotersFuture = controllerQuorumVotersFuture)
     if (startup) broker.startup()
+    brokers = brokers :+ broker
     broker
   }
 
@@ -133,7 +137,7 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
 
   }
 
-  def restartController(): Unit = {
+  def restartController(deleteTopicEnabled: Boolean): Unit = {
     val prevPort = controllerQuorumVotersFuture.get().get(1000).
       asInstanceOf[InetAddressSpec].address.getPort
     log.info("Restarting the KRaft-based controller")
@@ -147,6 +151,9 @@ class KRaftQuorumImplementation(val raftManager: KafkaRaftManager[ApiMessageAndV
     props.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:$prevPort")
     props.setProperty(KafkaConfig.QuorumVotersProp, s"1000@localhost:$prevPort")
     log.info(s"Setting KRaft-based controller port to $prevPort as part of restart")
+    if (!deleteTopicEnabled) {
+      props.setProperty(KafkaConfig.DeleteTopicEnableProp, "false")
+    }
     val config = new KafkaConfig(props)
 
     val newControllerServer = new ControllerServer(
@@ -239,15 +246,11 @@ abstract class QuorumTestHarness extends Logging {
   def controllerServerPort: Int = asKRaft().controllerServer.controllerQuorumVotersFuture.
     get().get(1000).asInstanceOf[InetAddressSpec].address.getPort
 
-  def restartControllerServer(): Unit = {
+  def restartControllerServer(deleteTopicEnabled: Boolean = true): Unit = {
     if (!isKRaftTest()) {
       throw new UnsupportedOperationException("Non-KRaft tests do not have a controller server")
     }
-    asKRaft().restartController()
-  }
-
-  def startControllerServer(prevPort: Int, deleteTopicEnabled: Boolean = true): Unit = {
-    asKRaft().startController(prevPort, deleteTopicEnabled)
+    asKRaft().restartController(deleteTopicEnabled)
   }
 
   def controllerServers: Seq[ControllerServer] = {
@@ -255,6 +258,26 @@ abstract class QuorumTestHarness extends Logging {
       Seq(asKRaft().controllerServer)
     } else {
       Seq()
+    }
+  }
+
+  def stopController(): Unit = {
+    if (isKRaftTest()) {
+      asKRaft().controllerServer.shutdown()
+    } else {
+      val controllerId = zkClient.getControllerId.getOrElse(throw new RuntimeException("Controller does not exist"))
+      val controller = asZk().brokers.filter(s => s.config.brokerId == controllerId).head
+      controller.shutdown()
+      asZk().prevController = Option(controller)
+    }
+  }
+
+  def restartController(): Unit = {
+    if (isKRaftTest()) {
+      restartControllerServer()
+    } else {
+      asZk().prevController.getOrElse(throw new RuntimeException("No previous controller was stored. " +
+        "Make sure you are using QuorumTestHarness's stopController method first")).startup()
     }
   }
 
