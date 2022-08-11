@@ -297,6 +297,75 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldHandleRemovedTasksFromStateUpdater() {
+        // tasks to recycle
+        final StreamTask task00 = mock(StreamTask.class);
+        final StandbyTask task01 = mock(StandbyTask.class);
+        final StandbyTask task00Converted = mock(StandbyTask.class);
+        final StreamTask task01Converted = mock(StreamTask.class);
+        // task to close
+        final StreamTask task02 = mock(StreamTask.class);
+        // task to update inputs
+        final StreamTask task03 = mock(StreamTask.class);
+        when(task00.id()).thenReturn(taskId00);
+        when(task01.id()).thenReturn(taskId01);
+        when(task02.id()).thenReturn(taskId02);
+        when(task03.id()).thenReturn(taskId03);
+        when(task00.inputPartitions()).thenReturn(taskId00Partitions);
+        when(task01.inputPartitions()).thenReturn(taskId01Partitions);
+        when(task02.inputPartitions()).thenReturn(taskId02Partitions);
+        when(task03.inputPartitions()).thenReturn(taskId03Partitions);
+        when(task00.isActive()).thenReturn(true);
+        when(task01.isActive()).thenReturn(false);
+        when(task02.isActive()).thenReturn(true);
+        when(task03.isActive()).thenReturn(true);
+        when(task00.state()).thenReturn(State.RESTORING);
+        when(task01.state()).thenReturn(State.RUNNING);
+        when(task02.state()).thenReturn(State.RESTORING);
+        when(task03.state()).thenReturn(State.RESTORING);
+        when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(task00, task01, task02, task03));
+
+        expect(activeTaskCreator.createActiveTaskFromStandby(eq(task01), eq(taskId01Partitions), eq(consumer)))
+            .andStubReturn(task01Converted);
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(anyObject());
+        expectLastCall().times(2);
+        expect(standbyTaskCreator.createStandbyTaskFromActive(eq(task00), eq(taskId00Partitions)))
+            .andStubReturn(task00Converted);
+        expect(consumer.assignment()).andReturn(emptySet()).anyTimes();
+        consumer.resume(anyObject());
+        expectLastCall().anyTimes();
+        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer);
+
+        taskManager = new TaskManager(
+            time,
+            changeLogReader,
+            UUID.randomUUID(),
+            "taskManagerTest",
+            activeTaskCreator,
+            standbyTaskCreator,
+            topologyMetadata,
+            adminClient,
+            stateDirectory,
+            stateUpdater
+        );
+        taskManager.setMainConsumer(consumer);
+        taskManager.tasks().addPendingTaskToClose(taskId02);
+        taskManager.tasks().addPendingTaskToRecycle(taskId00, taskId00Partitions);
+        taskManager.tasks().addPendingTaskToRecycle(taskId01, taskId01Partitions);
+        taskManager.tasks().addPendingTaskToUpdateInputPartitions(taskId03, taskId03Partitions);
+
+        taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter -> { });
+
+        Mockito.verify(task00Converted).initializeIfNeeded();
+        Mockito.verify(task01Converted).initializeIfNeeded();
+        Mockito.verify(stateUpdater).add(task00Converted);
+        Mockito.verify(stateUpdater).add(task01Converted);
+        Mockito.verify(task02).closeClean();
+        Mockito.verify(task03).updateInputPartitions(taskId03Partitions, emptyMap());
+        Mockito.verify(stateUpdater).add(task03);
+    }
+
+    @Test
     public void shouldIdempotentlyUpdateSubscriptionFromActiveAssignment() {
         final TopicPartition newTopicPartition = new TopicPartition("topic2", 1);
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(mkEntry(taskId01, mkSet(t1p1, newTopicPartition)));
@@ -1825,9 +1894,7 @@ public class TaskManagerTest {
             RuntimeException.class,
             () -> taskManager.shutdown(true)
         );
-        assertThat(exception.getMessage(), equalTo("Unexpected exception while closing task"));
-        assertThat(exception.getCause().getMessage(), is("migrated; it means all tasks belonging to this thread should be migrated."));
-        assertThat(exception.getCause().getCause().getMessage(), is("cause"));
+        assertThat(exception.getCause().getMessage(), is("oops"));
 
         assertThat(closedDirtyTask01.get(), is(true));
         assertThat(closedDirtyTask02.get(), is(true));
@@ -1887,7 +1954,6 @@ public class TaskManagerTest {
         final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.shutdown(true));
 
         assertThat(task00.state(), is(Task.State.CLOSED));
-        assertThat(exception.getMessage(), is("Unexpected exception while closing task"));
         assertThat(exception.getCause().getMessage(), is("whatever"));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
@@ -1938,8 +2004,7 @@ public class TaskManagerTest {
         final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.shutdown(true));
 
         assertThat(task00.state(), is(Task.State.CLOSED));
-        assertThat(exception.getMessage(), is("Unexpected exception while closing task"));
-        assertThat(exception.getCause().getMessage(), is("whatever"));
+        assertThat(exception.getMessage(), is("whatever"));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)

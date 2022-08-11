@@ -43,19 +43,13 @@ import static org.apache.kafka.common.utils.Utils.union;
 class Tasks {
     private final Logger log;
 
+    // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
     private final Map<TaskId, Task> activeTasksPerId = new TreeMap<>();
     private final Map<TaskId, Task> standbyTasksPerId = new TreeMap<>();
 
     // Tasks may have been assigned for a NamedTopology that is not yet known by this host. When that occurs we stash
     // these unknown tasks until either the corresponding NamedTopology is added and we can create them at last, or
     // we receive a new assignment and they are revoked from the thread.
-
-    // Tasks may have been assigned but not yet created because:
-    // 1. They are for a NamedTopology that is yet known by this host.
-    // 2. They are to be recycled from an existing restoring task yet to be returned from the state updater.
-    //
-    // When that occurs we stash these pending tasks until either they are finally clear to be created,
-    // or they are revoked from a new assignment.
     private final Map<TaskId, Set<TopicPartition>> pendingActiveTasksToCreate = new HashMap<>();
     private final Map<TaskId, Set<TopicPartition>> pendingStandbyTasksToCreate = new HashMap<>();
     private final Map<TaskId, Set<TopicPartition>> pendingTasksToRecycle = new HashMap<>();
@@ -63,15 +57,34 @@ class Tasks {
     private final Set<Task> pendingTasksToInit = new HashSet<>();
     private final Set<TaskId> pendingTasksToClose = new HashSet<>();
 
+    // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
     private final Map<TopicPartition, Task> activeTasksPerPartition = new HashMap<>();
 
     Tasks(final LogContext logContext) {
         this.log = logContext.logger(getClass());
     }
 
-    void purgePendingTasksToCreate(final Set<TaskId> assignedActiveTasks, final Set<TaskId> assignedStandbyTasks) {
-        pendingActiveTasksToCreate.keySet().retainAll(assignedActiveTasks);
-        pendingStandbyTasksToCreate.keySet().retainAll(assignedStandbyTasks);
+    void purgePendingTasksToCreate() {
+        pendingActiveTasksToCreate.clear();
+        pendingStandbyTasksToCreate.clear();
+    }
+
+    Map<TaskId, Set<TopicPartition>> drainPendingActiveTasksForTopologies(final Set<String> currentTopologies) {
+        final Map<TaskId, Set<TopicPartition>> pendingActiveTasksForTopologies =
+            filterMap(pendingActiveTasksToCreate, t -> currentTopologies.contains(t.getKey().topologyName()));
+
+        pendingActiveTasksToCreate.keySet().removeAll(pendingActiveTasksForTopologies.keySet());
+
+        return pendingActiveTasksForTopologies;
+    }
+
+    Map<TaskId, Set<TopicPartition>> pendingStandbyTasksForTopologies(final Set<String> currentTopologies) {
+        final Map<TaskId, Set<TopicPartition>> pendingActiveTasksForTopologies =
+            filterMap(pendingStandbyTasksToCreate, t -> currentTopologies.contains(t.getKey().topologyName()));
+
+        pendingStandbyTasksToCreate.keySet().removeAll(pendingActiveTasksForTopologies.keySet());
+
+        return pendingActiveTasksForTopologies;
     }
 
     void addPendingActiveTasksToCreate(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
@@ -116,14 +129,6 @@ class Tasks {
         pendingTasksToInit.addAll(tasks);
     }
 
-    Map<TaskId, Set<TopicPartition>> pendingActiveTasksForTopologies(final Set<String> currentTopologies) {
-        return filterMap(pendingActiveTasksToCreate, t -> currentTopologies.contains(t.getKey().topologyName()));
-    }
-
-    Map<TaskId, Set<TopicPartition>> pendingStandbyTasksForTopologies(final Set<String> currentTopologies) {
-        return filterMap(pendingStandbyTasksToCreate, t -> currentTopologies.contains(t.getKey().topologyName()));
-    }
-
     void addNewActiveTasks(final Collection<Task> newTasks) {
         if (!newTasks.isEmpty()) {
             for (final Task activeTask : newTasks) {
@@ -138,7 +143,6 @@ class Tasks {
                 }
 
                 activeTasksPerId.put(activeTask.id(), activeTask);
-                pendingActiveTasksToCreate.remove(activeTask.id());
                 for (final TopicPartition topicPartition : activeTask.inputPartitions()) {
                     activeTasksPerPartition.put(topicPartition, activeTask);
                 }
@@ -160,7 +164,6 @@ class Tasks {
                 }
 
                 standbyTasksPerId.put(standbyTask.id(), standbyTask);
-                pendingStandbyTasksToCreate.remove(standbyTask.id());
             }
         }
     }
@@ -177,12 +180,10 @@ class Tasks {
                 throw new IllegalArgumentException("Attempted to remove an active task that is not owned: " + taskId);
             }
             removePartitionsForActiveTask(taskId);
-            pendingActiveTasksToCreate.remove(taskId);
         } else {
             if (standbyTasksPerId.remove(taskId) == null) {
                 throw new IllegalArgumentException("Attempted to remove a standby task that is not owned: " + taskId);
             }
-            pendingStandbyTasksToCreate.remove(taskId);
         }
     }
 

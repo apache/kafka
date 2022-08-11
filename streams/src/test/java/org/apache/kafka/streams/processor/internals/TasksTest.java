@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.HashSet;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -31,7 +32,6 @@ import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
 
 public class TasksTest {
 
@@ -57,7 +57,7 @@ public class TasksTest {
         assertEquals(statelessTask, tasks.task(statelessTask.id()));
         assertEquals(standbyTask, tasks.task(standbyTask.id()));
 
-        assertEquals(mkSet(statefulTask, statelessTask), tasks.activeTasks());
+        assertEquals(mkSet(statefulTask, statelessTask), new HashSet<>(tasks.activeTasks()));
         assertEquals(mkSet(statefulTask, statelessTask, standbyTask), tasks.allTasks());
         assertEquals(mkSet(statefulTask, standbyTask), tasks.tasks(mkSet(statefulTask.id(), standbyTask.id())));
         assertEquals(mkSet(statefulTask.id(), statelessTask.id(), standbyTask.id()), tasks.allTaskIds());

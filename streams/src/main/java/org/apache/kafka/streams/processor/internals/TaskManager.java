@@ -303,8 +303,6 @@ public class TaskManager {
         final Map<Task, Set<TopicPartition>> tasksToRecycle = new HashMap<>();
         final Set<Task> tasksToCloseClean = new TreeSet<>(Comparator.comparing(Task::id));
 
-        tasks.purgePendingTasksToCreate(activeTasks.keySet(), standbyTasks.keySet());
-
         // first rectify all existing tasks:
         // 1. for tasks that are already owned, just update input partitions / resume and skip re-creating them
         // 2. for tasks that have changed active/standby status, just recycle and skip re-creating them
@@ -315,6 +313,7 @@ public class TaskManager {
             classifyTasksWithStateUpdater(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
         }
 
+        tasks.purgePendingTasksToCreate();
         tasks.addPendingActiveTasksToCreate(pendingTasksToCreate(activeTasksToCreate));
         tasks.addPendingStandbyTasksToCreate(pendingTasksToCreate(standbyTasksToCreate));
 
@@ -444,6 +443,7 @@ public class TaskManager {
             if (activeTasksToCreate.containsKey(taskId)) {
                 if (task.isActive()) {
                     if (!task.inputPartitions().equals(topicPartitions)) {
+                        stateUpdater.remove(taskId);
                         tasks.addPendingTaskToUpdateInputPartitions(taskId, topicPartitions);
                     }
                 } else {
@@ -454,6 +454,7 @@ public class TaskManager {
             } else if (standbyTasksToCreate.containsKey(taskId)) {
                 if (!task.isActive()) {
                     if (!task.inputPartitions().equals(topicPartitions)) {
+                        stateUpdater.remove(taskId);
                         tasks.addPendingTaskToUpdateInputPartitions(taskId, topicPartitions);
                     }
                 } else {
@@ -672,11 +673,11 @@ public class TaskManager {
             Set<TopicPartition> inputPartitions;
             if ((inputPartitions = tasks.removePendingTaskToRecycle(task.id())) != null) {
                 try {
-                    Task newTask = task.isActive() ?
+                    final Task newTask = task.isActive() ?
                         convertActiveToStandby((StreamTask) task, inputPartitions) :
                         convertStandbyToActive((StandbyTask) task, inputPartitions);
                     newTask.initializeIfNeeded();
-                    stateUpdater.add(task);
+                    stateUpdater.add(newTask);
                 } catch (final RuntimeException e) {
                     final String uncleanMessage = String.format("Failed to recycle task %s cleanly. " +
                         "Attempting to close remaining tasks before re-throwing:", taskId);
@@ -690,7 +691,10 @@ public class TaskManager {
                 }
             } else if (tasks.removePendingTaskToClose(task.id())) {
                 try {
-                    closeTaskClean(task);
+                    task.closeClean();
+                    if (task.isActive()) {
+                        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+                    }
                 } catch (final RuntimeException e) {
                     final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
                         "Attempting to close remaining tasks before re-throwing:", task.id());
@@ -812,7 +816,8 @@ public class TaskManager {
                         task.postCommit(false);
                     } catch (final RuntimeException e) {
                         log.error("Exception caught while post-committing task " + task.id(), e);
-                        maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);                    }
+                        maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
+                    }
                 }
             }
         }
@@ -1064,7 +1069,7 @@ public class TaskManager {
 
         final RuntimeException fatalException = firstException.get();
         if (fatalException != null) {
-            throw new RuntimeException("Unexpected exception while closing task", fatalException);
+            throw fatalException;
         }
     }
 
@@ -1385,7 +1390,7 @@ public class TaskManager {
     }
 
     void createPendingTasks(final Set<String> currentNamedTopologies) {
-        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = tasks.pendingActiveTasksForTopologies(currentNamedTopologies);
+        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = tasks.drainPendingActiveTasksForTopologies(currentNamedTopologies);
         final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = tasks.pendingStandbyTasksForTopologies(currentNamedTopologies);
 
         createNewTasks(activeTasksToCreate, standbyTasksToCreate);
@@ -1530,5 +1535,9 @@ public class TaskManager {
     // for testing only
     void addTask(final Task task) {
         tasks.addTask(task);
+    }
+
+    Tasks tasks() {
+        return tasks;
     }
 }

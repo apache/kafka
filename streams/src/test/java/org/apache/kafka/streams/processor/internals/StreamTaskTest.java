@@ -2274,10 +2274,10 @@ public class StreamTaskTest {
 
     @Test
     public void shouldPrepareRecycleSuspendedTask() {
-        stateManager.recycle();
-        recordCollector.closeClean();
         EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.emptyMap()).anyTimes();
         stateManager.recycle();
+        EasyMock.expectLastCall().once();
+        recordCollector.closeClean();
         EasyMock.expectLastCall().once();
         EasyMock.replay(stateManager, recordCollector);
 
