@@ -14,13 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.admin
 
 import kafka.tools.TerseFailure
 import kafka.utils.Exit
 import net.sourceforge.argparse4j.ArgumentParsers
-import net.sourceforge.argparse4j.impl.Arguments.fileType
+import net.sourceforge.argparse4j.impl.Arguments.{fileType, storeTrue}
 import net.sourceforge.argparse4j.inf.Subparsers
 import org.apache.kafka.clients._
 import org.apache.kafka.clients.admin.{Admin, QuorumInfo}
@@ -41,19 +40,23 @@ object MetadataQuorumCommand {
   }
 
   def mainNoExit(args: Array[String]): Int = {
-    val parser = ArgumentParsers.newArgumentParser("kafka-metadata-quorum")
+    val parser = ArgumentParsers
+      .newArgumentParser("kafka-metadata-quorum")
       .defaultHelp(true)
       .description("This tool describes kraft metadata quorum status.")
-    parser.addArgument("--bootstrap-server")
+    parser
+      .addArgument("--bootstrap-server")
       .help("A comma-separated list of host:port pairs to use for establishing the connection to the Kafka cluster.")
       .required(true)
 
-    parser.addArgument("--command-config")
+    parser
+      .addArgument("--command-config")
       .`type`(fileType())
       .help("Property file containing configs to be passed to Admin Client.")
     val subparsers = parser.addSubparsers().dest("command")
     addDescribeParser(subparsers)
 
+    var admin: Admin = null
     try {
       val namespace = parser.parseArgsOrFail(args)
       val command = namespace.getString("command")
@@ -68,42 +71,116 @@ object MetadataQuorumCommand {
         new Properties()
       }
       props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, namespace.getString("bootstrap_server"))
-      val admin = Admin.create(props)
+      admin = Admin.create(props)
 
       if (command == "describe") {
-        handleDescribe(admin)
+        if (namespace.getBoolean("status") && namespace.getBoolean("replication")) {
+          throw new TerseFailure(s"Only one of --status or --replication should be specified with describe sub-command")
+        } else if (namespace.getBoolean("replication")) {
+          handleDescribeReplication(admin)
+        } else if (namespace.getBoolean("status")) {
+          handleDescribeStatus(admin)
+        } else {
+          throw new TerseFailure(s"One of --status or --replication must be specified with describe sub-command")
+        }
       } else {
         // currently we only support describe
       }
-      admin.close()
       0
     } catch {
       case e: TerseFailure =>
         Console.err.println(e.getMessage)
         1
+    } finally {
+      if (admin != null) {
+        admin.close()
+      }
     }
   }
 
   def addDescribeParser(subparsers: Subparsers): Unit = {
-    subparsers.addParser("describe")
+    val describeParser = subparsers
+      .addParser("describe")
       .help("Describe the metadata quorum info")
+
+    val statusArgs = describeParser.addArgumentGroup("Status")
+    statusArgs
+      .addArgument("--status")
+      .help(
+        "A short summary of the quorum status and the other provides detailed information about the status of replication.")
+      .action(storeTrue())
+    val replicationArgs = describeParser.addArgumentGroup("Replication")
+    replicationArgs
+      .addArgument("--replication")
+      .help("Detailed information about the status of replication")
+      .action(storeTrue())
   }
 
-  def handleDescribe(admin: Admin): Unit = {
+  private def handleDescribeReplication(admin: Admin): Unit = {
     val quorumInfo = admin.describeMetadataQuorum().quorumInfo().get()
-    val leader = quorumInfo.leaderId()
-    println(s"leaderId: $leader")
-
-    def printQuorumInfo(infos: Seq[QuorumInfo.ReplicaState]): Unit = {
-      infos.foreach { voter =>
-        println(s"replicaId: ${voter.replicaId()} \tlogEndOffset: ${voter.logEndOffset()}\t" +
-          s"lastFetchTimeMs: ${voter.lastFetchTimeMs().orElse(-1)}\tlastCaughtUpTimeMs: ${voter.lastCaughtUpTimeMs().orElse(-1)}")
-      }
+    val leaderId = quorumInfo.leaderId()
+    val leader = quorumInfo.voters().asScala.filter(_.replicaId() == leaderId).head
+    // Find proper columns width
+    var (maxReplicaIdLen, maxLogEndOffsetLen, maxLagLen, maxLastFetchTimeMsLen, maxLastCaughtUpTimeMsLen) =
+      (15, 15, 15, 15, 18)
+    (quorumInfo.voters().asScala ++ quorumInfo.observers().asScala).foreach { voter =>
+      maxReplicaIdLen = Math.max(maxReplicaIdLen, voter.replicaId().toString.length)
+      maxLogEndOffsetLen = Math.max(maxLogEndOffsetLen, voter.logEndOffset().toString.length)
+      maxLagLen = Math.max(maxLagLen, (leader.logEndOffset() - voter.logEndOffset()).toString.length)
+      maxLastFetchTimeMsLen = Math.max(maxLastFetchTimeMsLen, leader.lastFetchTimeMs().orElse(-1).toString.length)
+      maxLastCaughtUpTimeMsLen =
+        Math.max(maxLastCaughtUpTimeMsLen, leader.lastCaughtUpTimeMs().orElse(-1).toString.length)
     }
-    println(s"voters info:")
-    printQuorumInfo(quorumInfo.voters().asScala.toSeq)
-    println()
-    println(s"observers info:")
-    printQuorumInfo(quorumInfo.observers().asScala.toSeq)
+    println(
+      s"%${-maxReplicaIdLen}s %${-maxLogEndOffsetLen}s %${-maxLagLen}s %${-maxLastFetchTimeMsLen}s %${-maxLastCaughtUpTimeMsLen}s %-15s "
+        .format("ReplicaId", "LogEndOffset", "Lag", "LastFetchTimeMs", "LastCaughtUpTimeMs", "Status")
+    )
+
+    def printQuorumInfo(infos: Seq[QuorumInfo.ReplicaState], status: String): Unit =
+      infos.foreach { voter =>
+        println(
+          s"%${-maxReplicaIdLen}s %${-maxLogEndOffsetLen}s %${-maxLagLen}s %${-maxLastFetchTimeMsLen}s %${-maxLastCaughtUpTimeMsLen}s %-15s "
+            .format(
+              voter.replicaId(),
+              voter.logEndOffset(),
+              leader.logEndOffset() - voter.logEndOffset(),
+              voter.lastFetchTimeMs().orElse(-1),
+              voter.lastCaughtUpTimeMs().orElse(-1),
+              status
+            ))
+      }
+    printQuorumInfo(Seq(leader), "Leader")
+    printQuorumInfo(quorumInfo.voters().asScala.filter(_.replicaId() != leaderId).toSeq, "Follower")
+    printQuorumInfo(quorumInfo.observers().asScala.toSeq, "Observer")
+  }
+
+  private def handleDescribeStatus(admin: Admin): Unit = {
+    val clusterId = admin.describeCluster().clusterId().get()
+    val quorumInfo = admin.describeMetadataQuorum().quorumInfo().get()
+    val leaderId = quorumInfo.leaderId()
+    val leader = quorumInfo.voters().asScala.filter(_.replicaId() == leaderId).head
+    val maxLagFollower = quorumInfo
+      .voters()
+      .asScala
+      .filter(_.replicaId() != leaderId)
+      .minBy(_.logEndOffset())
+    val maxFollowerLag = leader.logEndOffset() - maxLagFollower.logEndOffset()
+    val maxFollowerLagTimeMs =
+      if (leader.lastCaughtUpTimeMs().isPresent && maxLagFollower.lastCaughtUpTimeMs().isPresent) {
+        leader.lastCaughtUpTimeMs().getAsLong - maxLagFollower.lastCaughtUpTimeMs().getAsLong
+      } else {
+        -1
+      }
+    println(
+      s"""|ClusterId:              $clusterId
+          |LeaderId:               ${quorumInfo.leaderId()}
+          |LeaderEpoch:            {{TODO}}
+          |HighWatermark:          {{TODO}}
+          |MaxFollowerLag:         $maxFollowerLag
+          |MaxFollowerLagTimeMs:   $maxFollowerLagTimeMs
+          |CurrentVoters:          ${quorumInfo.voters().asScala.map(_.replicaId()).mkString("[", ",", "]")}
+          |CurrentObservers:       ${quorumInfo.observers().asScala.map(_.replicaId()).mkString("[", ",", "]")}
+          |""".stripMargin
+    )
   }
 }
