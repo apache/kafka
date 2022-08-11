@@ -81,6 +81,6 @@ public class MirrorHeartbeatConnector extends SourceConnector {
 
     private void createInternalTopics() {
         MirrorUtils.createSinglePartitionCompactedTopic(config.heartbeatsTopic(),
-            config.heartbeatsTopicReplicationFactor(), config.targetAdminConfig());
+            config.heartbeatsTopicReplicationFactor(), config.forwardingAdmin(config.targetAdminConfig()));
     }
 }

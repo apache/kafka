@@ -17,6 +17,8 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.FakeForwardingAdmin;
+import org.apache.kafka.clients.admin.ForwardingAdmin;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.config.provider.ConfigProvider;
@@ -82,15 +84,17 @@ public class MirrorMakerConfigTest {
             "config.providers", "fake",
             "config.providers.fake.class", FakeConfigProvider.class.getName(),
             "replication.policy.separator", "__",
-            "ssl.truststore.password", "secret1",
             "ssl.key.password", "${fake:secret:password}",  // resolves to "secret2"
-            "security.protocol", "SSL", 
-            "a.security.protocol", "PLAINTEXT", 
+            "security.protocol", "SSL",
+            "a.ssl.truststore.password", "secret1",
+            "a.security.protocol", "PLAINTEXT",
             "a.producer.security.protocol", "SSL",
             "a.bootstrap.servers", "one:9092, two:9092",
+            "b.bootstrap.servers", "three:9092, four:9092",
             "metrics.reporter", FakeMetricsReporter.class.getName(),
             "a.metrics.reporter", FakeMetricsReporter.class.getName(),
             "b->a.metrics.reporter", FakeMetricsReporter.class.getName(),
+            "b.forwarding.admin.class", FakeForwardingAdmin.class.getName(),
             "a.xxx", "yyy",
             "xxx", "zzz"));
         MirrorClientConfig aClientConfig = mirrorConfig.clientConfig("a");
@@ -101,6 +105,8 @@ public class MirrorMakerConfigTest {
             "replication.policy.separator is honored");
         assertEquals("one:9092, two:9092", aClientConfig.adminConfig().get("bootstrap.servers"),
             "client configs include boostrap.servers");
+        assertEquals(ForwardingAdmin.class.getName(), aClientConfig.forwardingAdmin(aClientConfig.adminConfig()).getClass().getName(),
+                "Cluster a uses the default ForwardingAdmin");
         assertEquals("PLAINTEXT", aClientConfig.adminConfig().get("security.protocol"),
             "client configs include security.protocol");
         assertEquals("SSL", aClientConfig.producerConfig().get("security.protocol"),
@@ -121,6 +127,8 @@ public class MirrorMakerConfigTest {
             "client configs should not include metrics reporter");
         assertFalse(bClientConfig.adminConfig().containsKey("metrics.reporter"),
             "client configs should not include metrics reporter");
+        assertEquals(FakeForwardingAdmin.class.getName(), bClientConfig.forwardingAdmin(bClientConfig.adminConfig()).getClass().getName(),
+                "Cluster b should use the FakeForwardingAdmin");
     }
 
     @Test
