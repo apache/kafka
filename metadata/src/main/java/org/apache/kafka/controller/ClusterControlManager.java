@@ -60,6 +60,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -375,8 +376,11 @@ public class ClusterControlManager {
         return ControllerResult.atomicOf(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
-    public Long registerBrokerRecordOffset(int brokerId) {
-        return registerBrokerRecordOffsets.get(brokerId);
+    public OptionalLong registerBrokerRecordOffset(int brokerId) {
+        if (registerBrokerRecordOffsets.containsKey(brokerId)) {
+            return OptionalLong.of(registerBrokerRecordOffsets.get(brokerId));
+        }
+        return OptionalLong.empty();
     }
 
     public void replay(RegisterBrokerRecord record, long offset) {
