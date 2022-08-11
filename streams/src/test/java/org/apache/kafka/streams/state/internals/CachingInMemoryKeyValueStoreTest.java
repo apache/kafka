@@ -36,10 +36,11 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -58,7 +59,13 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     private final static String TOPIC = "topic";
@@ -105,26 +112,20 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @SuppressWarnings("deprecation")
     @Test
     public void shouldDelegateDeprecatedInit() {
-        final KeyValueStore<Bytes, byte[]> inner = EasyMock.mock(InMemoryKeyValueStore.class);
+        final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
         final CachingKeyValueStore outer = new CachingKeyValueStore(inner, false);
-        EasyMock.expect(inner.name()).andStubReturn("store");
-        inner.init((ProcessorContext) context, outer);
-        EasyMock.expectLastCall();
-        EasyMock.replay(inner);
+        when(inner.name()).thenReturn("store");
         outer.init((ProcessorContext) context, outer);
-        EasyMock.verify(inner);
+        verify(inner).init(eq((ProcessorContext) context), eq(outer));
     }
 
     @Test
     public void shouldDelegateInit() {
-        final KeyValueStore<Bytes, byte[]> inner = EasyMock.mock(InMemoryKeyValueStore.class);
+        final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
         final CachingKeyValueStore outer = new CachingKeyValueStore(inner, false);
-        EasyMock.expect(inner.name()).andStubReturn("store");
-        inner.init((StateStoreContext) context, outer);
-        EasyMock.expectLastCall();
-        EasyMock.replay(inner);
+        when(inner.name()).thenReturn("store");
         outer.init((StateStoreContext) context, outer);
-        EasyMock.verify(inner);
+        verify(inner).init(eq((StateStoreContext) context), eq(outer));
     }
 
     @Test
@@ -153,57 +154,48 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldCloseWrappedStoreAndCacheAfterErrorDuringCacheFlush() {
         setUpCloseTests();
-        EasyMock.reset(cache);
-        cache.flush(CACHE_NAMESPACE);
-        EasyMock.expectLastCall().andThrow(new RuntimeException("Simulating an error on flush"));
-        EasyMock.replay(cache);
-        EasyMock.reset(underlyingStore);
-        underlyingStore.close();
-        EasyMock.replay(underlyingStore);
+
+        doThrow(new RuntimeException("Simulating an error on flush")).when(cache).flush(CACHE_NAMESPACE);
 
         assertThrows(RuntimeException.class, store::close);
-        EasyMock.verify(cache, underlyingStore);
+
+        verify(cache).flush(eq(CACHE_NAMESPACE));
+        verify(cache).close(eq(CACHE_NAMESPACE));
+        verify(underlyingStore).close();
     }
 
     @Test
     public void shouldCloseWrappedStoreAfterErrorDuringCacheClose() {
         setUpCloseTests();
-        EasyMock.reset(cache);
-        cache.flush(CACHE_NAMESPACE);
-        cache.close(CACHE_NAMESPACE);
-        EasyMock.expectLastCall().andThrow(new RuntimeException("Simulating an error on close"));
-        EasyMock.replay(cache);
-        EasyMock.reset(underlyingStore);
-        underlyingStore.close();
-        EasyMock.replay(underlyingStore);
+
+        doThrow(new RuntimeException("Simulating an error on close")).when(cache).close(CACHE_NAMESPACE);
 
         assertThrows(RuntimeException.class, store::close);
-        EasyMock.verify(cache, underlyingStore);
+
+        verify(cache).flush(eq(CACHE_NAMESPACE));
+        verify(cache).close(eq(CACHE_NAMESPACE));
+        verify(underlyingStore).close();
     }
 
     @Test
     public void shouldCloseCacheAfterErrorDuringStateStoreClose() {
         setUpCloseTests();
-        EasyMock.reset(cache);
-        cache.flush(CACHE_NAMESPACE);
-        cache.close(CACHE_NAMESPACE);
-        EasyMock.replay(cache);
-        EasyMock.reset(underlyingStore);
-        underlyingStore.close();
-        EasyMock.expectLastCall().andThrow(new RuntimeException("Simulating an error on close"));
-        EasyMock.replay(underlyingStore);
+
+        doThrow(new RuntimeException("Simulating an error on close")).when(underlyingStore).close();
 
         assertThrows(RuntimeException.class, store::close);
-        EasyMock.verify(cache, underlyingStore);
+
+        verify(cache).flush(eq(CACHE_NAMESPACE));
+        verify(cache).close(eq(CACHE_NAMESPACE));
+        verify(underlyingStore).close();
     }
 
+    @SuppressWarnings("unchecked")
     private void setUpCloseTests() {
-        underlyingStore = EasyMock.createNiceMock(KeyValueStore.class);
-        EasyMock.expect(underlyingStore.name()).andStubReturn("store-name");
-        EasyMock.expect(underlyingStore.isOpen()).andStubReturn(true);
-        EasyMock.replay(underlyingStore);
+        underlyingStore = mock(KeyValueStore.class);
+        when(underlyingStore.name()).thenReturn("store-name");
         store = new CachingKeyValueStore(underlyingStore, false);
-        cache = EasyMock.niceMock(ThreadCache.class);
+        cache = mock(ThreadCache.class);
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
         store.init((StateStoreContext) context, store);
