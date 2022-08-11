@@ -23,6 +23,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -56,6 +57,19 @@ public class HoistFieldTest {
         assertEquals(Schema.Type.STRUCT, transformedRecord.keySchema().type());
         assertEquals(record.keySchema(),  transformedRecord.keySchema().field("magic").schema());
         assertEquals(42, ((Struct) transformedRecord.key()).get("magic"));
+    }
+
+    @Test
+    public void testSchemalessMapIsMutable() {
+        xform.configure(Collections.singletonMap("field", "magic"));
+
+        final SinkRecord record = new SinkRecord("test", 0, null, 420, null, null, 0);
+        final SinkRecord transformedRecord = xform.apply(record);
+
+        assertNull(transformedRecord.keySchema());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> key = (Map<String, Object>) transformedRecord.key();
+        key.put("k", "v");
     }
 
 }
