@@ -590,18 +590,11 @@ class SocketServerTest {
     val netReadBuffer: ByteBuffer = JTestUtils.fieldValue(transportLayer, classOf[SslTransportLayer], "netReadBuffer")
 
     proxyServer.enableBuffering(netReadBuffer)
-    proxyServer.setBufferedDataCount(numBufferedRequests)
     (1 to numBufferedRequests).foreach { _ => sendRequest(socket, requestBytes) }
 
     val keysWithBufferedRead: util.Set[SelectionKey] = JTestUtils.fieldValue(serverSelector, classOf[Selector], "keysWithBufferedRead")
     keysWithBufferedRead.add(channel.selectionKey)
     JTestUtils.setFieldValue(transportLayer, "hasBytesBuffered", true)
-
-    // wait until the first request is transferred to netReadBuffer
-    // the second request will be transferred after we call receiveRequest
-    TestUtils.waitUntilTrue(() => proxyServer.getBufferedDataCount == (numBufferedRequests - 1),
-      "The first request is still being transferred from proxy server to netReadBuffer even after 60000 ms",
-      60000)
 
     (socket, request1)
   }
@@ -1906,16 +1899,17 @@ class SocketServerTest {
       // initiate SSL connection by sending 1 request via socket, then send 2 requests directly into the netReadBuffer
       val (sslSocket, req1) = makeSocketWithBufferedRequests(testableServer, testableSelector, proxyServer)
 
+      // force all data to be transferred to the kafka broker by closing the client connection to proxy server
+      sslSocket.close()
+      TestUtils.waitUntilTrue(() => proxyServer.clientConnSocket.isClosed, "proxyServer.clientConnSocket is still not closed after 60000 ms", 60000)
+
       // process the request and send the response
       processRequest(testableServer.dataPlaneRequestChannel, req1)
 
       // process the requests in the netReadBuffer, this should not block
-      kafkaLogger.info("BADAI - testLatencyWithBufferedDataAndNoSocketData - BEFORE receiveRequest")
       val req2 = receiveRequest(testableServer.dataPlaneRequestChannel)
-      kafkaLogger.info("BADAI - testLatencyWithBufferedDataAndNoSocketData - AFTER receiveRequest")
       processRequest(testableServer.dataPlaneRequestChannel, req2)
 
-      sslSocket.close()
     } finally {
       proxyServer.close()
       shutdownServerAndMetrics(testableServer)
@@ -2231,7 +2225,6 @@ class SocketServerTest {
 
     def runOp[T](operation: SelectorOperation, connectionId: Option[String],
                  onFailure: => Unit = {})(code: => T): T = {
-      kafkaLogger.info("BADAI - runOp - operation=" + operation)
       // If a failure is set on `operation`, throw that exception even if `code` fails
       try code
       finally onOperation(operation, connectionId, onFailure)
@@ -2348,7 +2341,6 @@ class SocketServerTest {
     val executor = Executors.newFixedThreadPool(2)
     @volatile var clientConnSocket: Socket = _
     @volatile var buffer: Option[ByteBuffer] = None
-    val bufferedDataCount = new AtomicInteger(0)
 
     executor.submit((() => {
       try {
@@ -2356,19 +2348,14 @@ class SocketServerTest {
         val serverOut = serverConnSocket.getOutputStream
         val clientIn = clientConnSocket.getInputStream
         var b: Int = -1
-        var count: Int = 0
         while ({b = clientIn.read(); b != -1}) {
           buffer match {
             case Some(buf) =>
-              if (clientIn.available() == 0)
-                bufferedDataCount.decrementAndGet()
-              count += 1
               buf.put(b.asInstanceOf[Byte])
             case None =>
               serverOut.write(b)
               serverOut.flush()
           }
-          kafkaLogger.info("BADAI - ProxyServer - buffer=" + buffer + " count=" + count + " bufferedDataCount=" + bufferedDataCount.get())
         }
       } finally {
         clientConnSocket.close()
@@ -2384,10 +2371,6 @@ class SocketServerTest {
     }): Runnable)
 
     def enableBuffering(buffer: ByteBuffer): Unit = this.buffer = Some(buffer)
-
-    def setBufferedDataCount(count: Int): Unit = this.bufferedDataCount.set(count)
-
-    def getBufferedDataCount: Int = this.bufferedDataCount.get()
 
     def close(): Unit = {
       serverSocket.close()
