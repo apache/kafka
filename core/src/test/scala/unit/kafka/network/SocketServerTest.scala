@@ -596,6 +596,10 @@ class SocketServerTest {
     keysWithBufferedRead.add(channel.selectionKey)
     JTestUtils.setFieldValue(transportLayer, "hasBytesBuffered", true)
 
+    TestUtils.waitUntilTrue(() => !proxyServer.bufferDataAvailable,
+      "Data is still being transferred from proxy server to kafka broker even after 10000 ms",
+      10000)
+
     (socket, request1)
   }
 
@@ -1896,19 +1900,20 @@ class SocketServerTest {
     testableSelector.pollTimeoutOverride = Some(selectTimeoutMs)
 
     try {
+      // initiate SSL connection by sending 1 request via socket, then send 2 requests directly into the netReadBuffer
       val (sslSocket, req1) = makeSocketWithBufferedRequests(testableServer, testableSelector, proxyServer)
 
-      // process the request to trigger SSL handshake
+      // process the request and send the response
       processRequest(testableServer.dataPlaneRequestChannel, req1)
 
-      // process the request that is added directly to the netReadBuffer, this should not block
+      // process the requests in the netReadBuffer, this should not block
       val req2 = receiveRequest(testableServer.dataPlaneRequestChannel)
       processRequest(testableServer.dataPlaneRequestChannel, req2)
 
       sslSocket.close()
     } finally {
-      shutdownServerAndMetrics(testableServer)
       proxyServer.close()
+      shutdownServerAndMetrics(testableServer)
     }
   }
 
@@ -2337,6 +2342,8 @@ class SocketServerTest {
     val executor = Executors.newFixedThreadPool(2)
     @volatile var clientConnSocket: Socket = _
     @volatile var buffer: Option[ByteBuffer] = None
+    // this flag is only relevant after buffering is enabled via enableBuffering
+    @volatile var bufferDataAvailable: Boolean = true
 
     executor.submit((() => {
       try {
@@ -2347,6 +2354,8 @@ class SocketServerTest {
         while ({b = clientIn.read(); b != -1}) {
           buffer match {
             case Some(buf) =>
+              if (bufferDataAvailable == false) bufferDataAvailable = true
+              if (clientIn.available() == 0) bufferDataAvailable = false
               buf.put(b.asInstanceOf[Byte])
             case None =>
               serverOut.write(b)
