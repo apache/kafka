@@ -1184,7 +1184,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     )
 
     assertAlterPartition(
-      partitionError = Errors.INVALID_UPDATE_VERSION,
+      partitionError = Errors.NOT_CONTROLLER,
       partitionEpoch = partitionEpoch + 1
     )
 
@@ -1194,7 +1194,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     )
 
     assertAlterPartition(
-      partitionError = Errors.FENCED_LEADER_EPOCH,
+      partitionError = Errors.NOT_CONTROLLER,
       leaderEpoch = leaderEpoch + 1
     )
 
@@ -1219,13 +1219,19 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     )
 
     assertAlterPartition(
+      partitionError = Errors.NOT_CONTROLLER,
+      leaderRecoveryState = LeaderRecoveryState.RECOVERING.value,
+      partitionEpoch = partitionEpoch + 1
+    )
+
+    assertAlterPartition(
       partitionError = Errors.FENCED_LEADER_EPOCH,
       leaderRecoveryState = LeaderRecoveryState.RECOVERING.value,
       leaderEpoch = leaderEpoch - 1
     )
 
     assertAlterPartition(
-      partitionError = Errors.FENCED_LEADER_EPOCH,
+      partitionError = Errors.NOT_CONTROLLER,
       leaderRecoveryState = LeaderRecoveryState.RECOVERING.value,
       leaderEpoch = leaderEpoch + 1
     )
@@ -1325,12 +1331,17 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     )
 
     assertAlterPartition(
+      partitionError = Errors.NOT_CONTROLLER,
+      partitionEpoch = partitionEpoch + 1
+    )
+
+    assertAlterPartition(
       partitionError = Errors.FENCED_LEADER_EPOCH,
       leaderEpoch = leaderEpoch - 1
     )
 
     assertAlterPartition(
-      partitionError = Errors.FENCED_LEADER_EPOCH,
+      partitionError = Errors.NOT_CONTROLLER,
       leaderEpoch = leaderEpoch + 1
     )
 
@@ -1349,13 +1360,19 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     )
 
     assertAlterPartition(
+      partitionError = Errors.NOT_CONTROLLER,
+      partitionEpoch = partitionEpoch + 1,
+      leaderRecoveryState = LeaderRecoveryState.RECOVERING.value
+    )
+
+    assertAlterPartition(
       partitionError = Errors.FENCED_LEADER_EPOCH,
       leaderEpoch = leaderEpoch - 1,
       leaderRecoveryState = LeaderRecoveryState.RECOVERING.value
     )
 
     assertAlterPartition(
-      partitionError = Errors.FENCED_LEADER_EPOCH,
+      partitionError = Errors.NOT_CONTROLLER,
       leaderEpoch = leaderEpoch + 1,
       leaderRecoveryState = LeaderRecoveryState.RECOVERING.value
     )
