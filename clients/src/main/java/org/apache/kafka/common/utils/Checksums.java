@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -35,17 +32,16 @@ import java.util.zip.Checksum;
  * NOTE: This class is intended for INTERNAL usage only within Kafka.
  */
 public final class Checksums {
-
-    private static final Logger log = LoggerFactory.getLogger(Checksums.class);
     private static final MethodHandle BYTE_BUFFER_UPDATE;
 
     static {
         MethodHandle byteBufferUpdate = null;
         if (Java.IS_JAVA9_COMPATIBLE) {
             try {
-                byteBufferUpdate = MethodHandles.publicLookup().findVirtual(Checksum.class, "update", MethodType.methodType(void.class, ByteBuffer.class));
+                byteBufferUpdate = MethodHandles.publicLookup().findVirtual(Checksum.class, "update",
+                    MethodType.methodType(void.class, ByteBuffer.class));
             } catch (Throwable t) {
-                log.warn("Cannot uses java.util.zip.Checksum::update(ByteBuffer): direct ByteBuffers checksum won't use optimized platform support", t);
+                handleUpdateThrowable(t);
             }
         }
         BYTE_BUFFER_UPDATE = byteBufferUpdate;
@@ -69,9 +65,7 @@ public final class Checksums {
     public static void update(Checksum checksum, ByteBuffer buffer, int offset, int length) {
         if (buffer.hasArray()) {
             checksum.update(buffer.array(), buffer.position() + buffer.arrayOffset() + offset, length);
-            return;
-        }
-        if (BYTE_BUFFER_UPDATE != null && buffer.isDirect()) {
+        } else if (BYTE_BUFFER_UPDATE != null && buffer.isDirect()) {
             final int oldPosition = buffer.position();
             final int oldLimit = buffer.limit();
             try {
