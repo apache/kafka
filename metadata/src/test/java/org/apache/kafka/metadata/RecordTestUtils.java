@@ -57,20 +57,25 @@ public class RecordTestUtils {
         for (ApiMessageAndVersion recordAndVersion : recordsAndVersions) {
             ApiMessage record = recordAndVersion.message();
             try {
-                Method method = target.getClass().getMethod("replay", record.getClass());
-                method.invoke(target, record);
-            } catch (NoSuchMethodException e) {
                 try {
-                    Method method = target.getClass().getMethod("replay",
-                        record.getClass(),
-                        Optional.class);
-                    method.invoke(target, record, Optional.empty());
-                } catch (NoSuchMethodException t) {
-                    // ignore
-                } catch (InvocationTargetException t) {
-                    throw new RuntimeException(t);
-                } catch (IllegalAccessException t) {
-                    throw new RuntimeException(t);
+                    Method method = target.getClass().getMethod("replay", record.getClass());
+                    method.invoke(target, record);
+                } catch (NoSuchMethodException e) {
+                    try {
+                        Method method = target.getClass().getMethod("replay",
+                            record.getClass(),
+                            Optional.class);
+                        method.invoke(target, record, Optional.empty());
+                    } catch (NoSuchMethodException t) {
+                        try {
+                            Method method = target.getClass().getMethod("replay",
+                                record.getClass(),
+                                long.class);
+                            method.invoke(target, record, 0L);
+                        } catch (NoSuchMethodException i) {
+                            // ignore
+                        }
+                    }
                 }
             } catch (InvocationTargetException e) {
                 throw new RuntimeException(e);
@@ -119,7 +124,7 @@ public class RecordTestUtils {
      * @param delta the metadata delta on which to replay the records
      * @param highestOffset highest offset from the list of record batches
      * @param highestEpoch highest epoch from the list of record batches
-     * @param recordsAndVersions list of batches of records
+     * @param batches list of batches of records
      */
     public static void replayAllBatches(
         MetadataDelta delta,

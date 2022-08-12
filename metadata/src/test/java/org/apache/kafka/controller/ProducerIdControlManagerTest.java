@@ -76,7 +76,7 @@ public class ProducerIdControlManagerTest {
                     setPort((short) 9092).
                     setName("PLAINTEXT").
                     setHost(String.format("broker-%02d.example.org", i)));
-            clusterControl.replay(brokerRecord);
+            clusterControl.replay(brokerRecord, 100L);
         }
 
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
