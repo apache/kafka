@@ -223,7 +223,8 @@ public class StreamsProducer {
             + getMetricValue(producer.metrics(), "txn-begin-time-ns-total")
             + getMetricValue(producer.metrics(), "txn-send-offsets-time-ns-total")
             + getMetricValue(producer.metrics(), "txn-commit-time-ns-total")
-            + getMetricValue(producer.metrics(), "txn-abort-time-ns-total");
+            + getMetricValue(producer.metrics(), "txn-abort-time-ns-total")
+            + getMetricValue(producer.metrics(), "metadata-wait-time-ns-total");
     }
 
     public double totalBlockedTime() {

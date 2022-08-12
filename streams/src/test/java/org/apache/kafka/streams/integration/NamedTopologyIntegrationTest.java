@@ -56,6 +56,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
@@ -70,7 +71,10 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
+
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Iterator;
@@ -101,7 +105,10 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 
+@Category(IntegrationTest.class)
 public class NamedTopologyIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private static final Duration STARTUP_TIMEOUT = Duration.ofSeconds(45);
     
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
@@ -779,7 +786,11 @@ public class NamedTopologyIntegrationTest {
             CLUSTER.createTopic(NEW_STREAM, 2, 1);
             produceToInputTopics(NEW_STREAM, STANDARD_INPUT_DATA);
 
-            assertThat(waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3), equalTo(COUNT_OUTPUT_DATA));
+            final List<KeyValue<String, Integer>> output =
+                waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_STREAM_1, 3);
+            output.retainAll(COUNT_OUTPUT_DATA);
+
+            assertThat(output, equalTo(COUNT_OUTPUT_DATA));
 
             // Make sure the threads were not actually killed and replaced
             assertThat(streams.metadataForLocalThreads().size(), equalTo(2));

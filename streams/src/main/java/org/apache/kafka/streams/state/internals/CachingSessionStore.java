@@ -105,11 +105,11 @@ class CachingSessionStore
             // we can skip flushing to downstream as well as writing to underlying store
             if (newValueBytes != null || oldValueBytes != null) {
                 // we need to get the old values if needed, and then put to store, and then flush
-                wrapped().put(bytesKey, entry.newValue());
 
                 final ProcessorRecordContext current = context.recordContext();
-                context.setRecordContext(entry.entry().context());
                 try {
+                    context.setRecordContext(entry.entry().context());
+                    wrapped().put(bytesKey, entry.newValue());
                     flushListener.apply(
                         new Record<>(
                             binaryKey.get(),
@@ -121,7 +121,13 @@ class CachingSessionStore
                 }
             }
         } else {
-            wrapped().put(bytesKey, entry.newValue());
+            final ProcessorRecordContext current = context.recordContext();
+            try {
+                context.setRecordContext(entry.entry().context());
+                wrapped().put(bytesKey, entry.newValue());
+            } finally {
+                context.setRecordContext(current);
+            }
         }
     }
 

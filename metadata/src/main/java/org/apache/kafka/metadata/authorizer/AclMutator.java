@@ -19,6 +19,7 @@ package org.apache.kafka.metadata.authorizer;
 
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.controller.ControllerRequestContext;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 
@@ -37,17 +38,26 @@ public interface AclMutator {
      * Create the specified ACLs. If any ACL already exists, nothing will be done for that
      * one, and we will return a success result for it.
      *
+     * @param context       The controller request context.
      * @param aclBindings   The ACLs to create.
+     *
      * @return              The results for each AclBinding, in the order they were passed.
      */
-    CompletableFuture<List<AclCreateResult>> createAcls(List<AclBinding> aclBindings);
+    CompletableFuture<List<AclCreateResult>> createAcls(
+        ControllerRequestContext context,
+        List<AclBinding> aclBindings
+    );
 
     /**
      * Delete some ACLs based on the set of filters that is passed in.
      *
+     * @param context               The controller request context.
      * @param aclBindingFilters     The filters.
+     *
      * @return                      The results for each filter, in the order they were passed.
      */
     CompletableFuture<List<AclDeleteResult>> deleteAcls(
-            List<AclBindingFilter> aclBindingFilters);
+        ControllerRequestContext context,
+        List<AclBindingFilter> aclBindingFilters
+    );
 }

@@ -18,7 +18,6 @@ package kafka.raft
 
 import java.util.concurrent.CompletableFuture
 import java.util.Properties
-
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.tools.TestRaftServer.ByteArraySerde
@@ -83,23 +82,23 @@ class RaftManagerTest {
   }
 
   @Test
-  def testSentinelNodeIdIfBrokerRoleOnly(): Unit = {
+  def testNodeIdPresentIfBrokerRoleOnly(): Unit = {
     val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "broker", "1")
-    assertFalse(raftManager.client.nodeId.isPresent)
+    assertEquals(1, raftManager.client.nodeId.getAsInt)
     raftManager.shutdown()
   }
 
   @Test
   def testNodeIdPresentIfControllerRoleOnly(): Unit = {
     val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "controller", "1")
-    assertTrue(raftManager.client.nodeId.getAsInt == 1)
+    assertEquals(1, raftManager.client.nodeId.getAsInt)
     raftManager.shutdown()
   }
 
   @Test
   def testNodeIdPresentIfColocated(): Unit = {
     val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "controller,broker", "1")
-    assertTrue(raftManager.client.nodeId.getAsInt == 1)
+    assertEquals(1, raftManager.client.nodeId.getAsInt)
     raftManager.shutdown()
   }
 

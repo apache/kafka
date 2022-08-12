@@ -20,7 +20,6 @@ import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage}
 
 import com.typesafe.scalalogging.Logger
-import kafka.api.KAFKA_2_0_IV1
 import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
@@ -37,6 +36,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_0_IV1
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn
@@ -121,6 +121,8 @@ object AclAuthorizer {
   private def validateAclBinding(aclBinding: AclBinding): Unit = {
     if (aclBinding.isUnknown)
       throw new IllegalArgumentException("ACL binding contains unknown elements")
+    if (aclBinding.pattern().name().contains("/"))
+      throw new IllegalArgumentException(s"ACL binding contains invalid resource name: ${aclBinding.pattern().name()}")
   }
 }
 
@@ -182,7 +184,7 @@ class AclAuthorizer extends Authorizer with Logging {
       metricGroup = "kafka.security", metricType = "AclAuthorizer", createChrootIfNecessary = true)
     zkClient.createAclPaths()
 
-    extendedAclSupport = kafkaConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1
+    extendedAclSupport = kafkaConfig.interBrokerProtocolVersion.isAtLeast(IBP_2_0_IV1)
 
     // Start change listeners first and then populate the cache so that there is no timing window
     // between loading cache and processing change notifications.
@@ -192,11 +194,12 @@ class AclAuthorizer extends Authorizer with Logging {
 
   override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
     serverInfo.endpoints.asScala.map { endpoint =>
-      endpoint -> CompletableFuture.completedFuture[Void](null) }.toMap.asJava
+      endpoint -> CompletableFuture.completedFuture[Void](null)
+    }.toMap.asJava
   }
 
   override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
-    actions.asScala.map { action => authorizeAction(requestContext, action) }.asJava
+    actions.asScala.map(action => authorizeAction(requestContext, action)).asJava
   }
 
   override def createAcls(requestContext: AuthorizableRequestContext,
@@ -206,7 +209,7 @@ class AclAuthorizer extends Authorizer with Logging {
       try {
         if (!extendedAclSupport && aclBinding.pattern.patternType == PatternType.PREFIXED) {
           throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
-            s"${KafkaConfig.InterBrokerProtocolVersionProp} of $KAFKA_2_0_IV1 or greater")
+            s"${KafkaConfig.InterBrokerProtocolVersionProp} of $IBP_2_0_IV1 or greater")
         }
         validateAclBinding(aclBinding)
         true
@@ -440,7 +443,6 @@ class AclAuthorizer extends Authorizer with Logging {
     false
   }
 
-
   private def authorizeAction(requestContext: AuthorizableRequestContext, action: Action): AuthorizationResult = {
     val resource = action.resourcePattern
     if (resource.patternType != PatternType.LITERAL) {
@@ -547,7 +549,7 @@ class AclAuthorizer extends Authorizer with Logging {
 
   private def loadCache(): Unit = {
     lock synchronized  {
-      ZkAclStore.stores.foreach(store => {
+      ZkAclStore.stores.foreach { store =>
         val resourceTypes = zkClient.getResourceTypes(store.patternType)
         for (rType <- resourceTypes) {
           val resourceType = Try(SecurityUtils.resourceType(rType))
@@ -562,7 +564,7 @@ class AclAuthorizer extends Authorizer with Logging {
             case Failure(_) => warn(s"Ignoring unknown ResourceType: $rType")
           }
         }
-      })
+      }
     }
   }
 
@@ -691,14 +693,14 @@ class AclAuthorizer extends Authorizer with Logging {
     val acesToAdd = newAces.diff(currentAces)
     val acesToRemove = currentAces.diff(newAces)
 
-    acesToAdd.foreach(ace => {
+    acesToAdd.foreach { ace =>
       val resourceTypeKey = ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
       resourceCache.get(resourceTypeKey) match {
         case Some(resources) => resourceCache += (resourceTypeKey -> (resources + resource.name()))
         case None => resourceCache += (resourceTypeKey -> immutable.HashSet(resource.name()))
       }
-    })
-    acesToRemove.foreach(ace => {
+    }
+    acesToRemove.foreach { ace =>
       val resourceTypeKey = ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
       resourceCache.get(resourceTypeKey) match {
         case Some(resources) =>
@@ -710,7 +712,7 @@ class AclAuthorizer extends Authorizer with Logging {
           }
         case None =>
       }
-    })
+    }
 
     if (versionedAcls.acls.nonEmpty) {
       aclCache = aclCache.updated(resource, versionedAcls)

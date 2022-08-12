@@ -17,13 +17,13 @@
 
 package kafka.server
 
-import kafka.api.ApiVersion
 import kafka.utils.TestUtils
 import org.apache.kafka.common.security.JaasUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
 import org.junit.jupiter.api.Test
-
 import java.util.Properties
+
+import org.apache.kafka.server.common.MetadataVersion
 
 class KafkaServerTest extends QuorumTestHarness {
 
@@ -116,8 +116,8 @@ class KafkaServerTest extends QuorumTestHarness {
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, "2.7-IV1")
 
     val server = TestUtils.createServer(KafkaConfig.fromProps(props))
-    server.replicaManager.alterIsrManager match {
-      case _: ZkIsrManager =>
+    server.replicaManager.alterPartitionManager match {
+      case _: ZkAlterPartitionManager =>
       case _ => fail("Should use ZK for ISR manager in versions before 2.7-IV2")
     }
     server.shutdown()
@@ -126,11 +126,11 @@ class KafkaServerTest extends QuorumTestHarness {
   @Test
   def testAlterIsrManager(): Unit = {
     val props = TestUtils.createBrokerConfigs(1, zkConnect).head
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, ApiVersion.latestVersion.toString)
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp, MetadataVersion.latest.toString)
 
     val server = TestUtils.createServer(KafkaConfig.fromProps(props))
-    server.replicaManager.alterIsrManager match {
-      case _: DefaultAlterIsrManager =>
+    server.replicaManager.alterPartitionManager match {
+      case _: DefaultAlterPartitionManager =>
       case _ => fail("Should use AlterIsr for ISR manager in versions after 2.7-IV2")
     }
     server.shutdown()

@@ -50,18 +50,12 @@ class DefaultStandbyTaskAssignor implements StandbyTaskAssignor {
         standbyTaskClientsByTaskLoad.offerAll(clients.keySet());
 
         for (final TaskId task : statefulTaskIds) {
-            final int numRemainingStandbys = pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks(clients,
-                                                                                                    tasksToRemainingStandbys,
-                                                                                                    standbyTaskClientsByTaskLoad,
-                                                                                                    task);
-
-            if (numRemainingStandbys > 0) {
-                log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
-                         "There is not enough available capacity. You should " +
-                         "increase the number of application instances " +
-                         "to maintain the requested number of standby replicas.",
-                         numRemainingStandbys, numStandbyReplicas, task);
-            }
+            pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks(numStandbyReplicas,
+                                                                   clients,
+                                                                   tasksToRemainingStandbys,
+                                                                   standbyTaskClientsByTaskLoad,
+                                                                   task,
+                                                                   log);
         }
 
         // returning false, because standby task assignment will never require a follow-up probing rebalance.

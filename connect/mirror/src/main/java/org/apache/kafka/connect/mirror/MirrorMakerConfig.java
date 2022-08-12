@@ -17,6 +17,8 @@
 package org.apache.kafka.connect.mirror;
 
 import java.util.Map.Entry;
+
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -37,6 +39,8 @@ import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /** Top-level config describing replication flows between multiple Kafka clusters.
  *
@@ -261,6 +265,7 @@ public class MirrorMakerConfig extends AbstractConfig {
             .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                 Type.STRING,
                 CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                in(Utils.enumOptions(SecurityProtocol.class)),
                 Importance.MEDIUM,
                 CommonClientConfigs.SECURITY_PROTOCOL_DOC)
             .withClientSslSupport()

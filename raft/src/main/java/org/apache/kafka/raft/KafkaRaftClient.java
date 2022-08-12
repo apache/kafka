@@ -310,7 +310,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 if (nextExpectedOffset < log.startOffset() && nextExpectedOffset < highWatermark) {
                     SnapshotReader<T> snapshot = latestSnapshot().orElseThrow(() -> new IllegalStateException(
                         String.format(
-                            "Snapshot expected since next offset of %s is %s, log start offset is %s and high-watermark is %s",
+                            "Snapshot expected since next offset of %s is %d, log start offset is %d and high-watermark is %d",
                             listenerContext.listenerName(),
                             nextExpectedOffset,
                             log.startOffset(),
@@ -333,7 +333,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
     private Optional<SnapshotReader<T>> latestSnapshot() {
         return log.latestSnapshot().map(reader ->
-            RecordsSnapshotReader.of(reader, serde, BufferSupplier.create(), MAX_BATCH_SIZE_BYTES)
+            RecordsSnapshotReader.of(reader,
+                serde,
+                BufferSupplier.create(),
+                MAX_BATCH_SIZE_BYTES,
+                true /* Validate batch CRC*/
+            )
         );
     }
 
@@ -1034,7 +1039,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private static String listenerName(Listener<?> listener) {
-        return String.format("%s@%s", listener.getClass().getTypeName(), System.identityHashCode(listener));
+        return String.format("%s@%d", listener.getClass().getTypeName(), System.identityHashCode(listener));
     }
 
     private boolean handleFetchResponse(
@@ -1261,7 +1266,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (partitionSnapshot.position() > Integer.MAX_VALUE) {
             throw new IllegalStateException(
                 String.format(
-                    "Trying to fetch a snapshot with size (%s) and a position (%s) larger than %s",
+                    "Trying to fetch a snapshot with size (%d) and a position (%d) larger than %d",
                     snapshotSize,
                     partitionSnapshot.position(),
                     Integer.MAX_VALUE
@@ -1334,7 +1339,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             partitionSnapshot.snapshotId().epoch() < 0) {
 
             /* The leader deleted the snapshot before the follower could download it. Start over by
-             * reseting the fetching snapshot state and sending another fetch request.
+             * resetting the fetching snapshot state and sending another fetch request.
              */
             logger.trace(
                 "Leader doesn't know about snapshot id {}, returned error {} and snapshot id {}",
@@ -1373,7 +1378,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         if (snapshot.sizeInBytes() != partitionSnapshot.position()) {
             throw new IllegalStateException(
                 String.format(
-                    "Received fetch snapshot response with an invalid position. Expected %s; Received %s",
+                    "Received fetch snapshot response with an invalid position. Expected %d; Received %d",
                     snapshot.sizeInBytes(),
                     partitionSnapshot.position()
                 )
@@ -1400,7 +1405,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             } else {
                 throw new IllegalStateException(
                     String.format(
-                        "Full log truncation expected but didn't happen. Snapshot of %s, log end offset %s, last fetched %s",
+                        "Full log truncation expected but didn't happen. Snapshot of %s, log end offset %s, last fetched %d",
                         snapshot.snapshotId(),
                         log.endOffset(),
                         log.lastFetchedEpoch()
@@ -2519,7 +2524,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                     serde,
                     BufferSupplier.create(),
                     MAX_BATCH_SIZE_BYTES,
-                    this
+                    this,
+                    true /* Validate batch CRC*/
                 )
             );
         }

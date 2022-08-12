@@ -25,6 +25,7 @@ import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -76,7 +77,7 @@ public class ClusterTestExtensionsTest {
         Assertions.assertEquals(clusterInstance.clusterType(), ClusterInstance.ClusterType.ZK,
             "generate1 provided a Zk cluster, so we should see that here");
         Assertions.assertEquals(clusterInstance.config().name().orElse(""), "Generated Test",
-            "generate 1 named this cluster config, so we should see that here");
+            "generate1 named this cluster config, so we should see that here");
         Assertions.assertEquals(clusterInstance.config().serverProperties().getProperty("before"), "each");
     }
 
@@ -87,6 +88,10 @@ public class ClusterTestExtensionsTest {
             @ClusterConfigProperty(key = "spam", value = "eggs")
         }),
         @ClusterTest(name = "cluster-tests-2", clusterType = Type.KRAFT, serverProperties = {
+            @ClusterConfigProperty(key = "foo", value = "baz"),
+            @ClusterConfigProperty(key = "spam", value = "eggz")
+        }),
+        @ClusterTest(name = "cluster-tests-3", clusterType = Type.CO_KRAFT, serverProperties = {
             @ClusterConfigProperty(key = "foo", value = "baz"),
             @ClusterConfigProperty(key = "spam", value = "eggz")
         })
@@ -108,5 +113,10 @@ public class ClusterTestExtensionsTest {
         Assertions.assertThrows(RuntimeException.class, clusterInstance::anyBrokerSocketServer);
         clusterInstance.start();
         Assertions.assertNotNull(clusterInstance.anyBrokerSocketServer());
+    }
+
+    @ClusterTest
+    public void testDefaults(ClusterConfig config) {
+        Assertions.assertEquals(MetadataVersion.IBP_3_3_IV3, config.metadataVersion());
     }
 }

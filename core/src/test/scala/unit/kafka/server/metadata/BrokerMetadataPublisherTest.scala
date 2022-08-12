@@ -17,19 +17,53 @@
 
 package unit.kafka.server.metadata
 
+import java.util.Collections.{singleton, singletonList, singletonMap}
+import java.util.Properties
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import kafka.log.UnifiedLog
+import kafka.server.{BrokerServer, KafkaConfig}
 import kafka.server.metadata.BrokerMetadataPublisher
+import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
+import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, NewTopic}
+import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.ConfigResource.Type.BROKER
+import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataImageTest, TopicImage, TopicsImage}
+import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.assertEquals
-
+import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
+import org.mockito.Mockito.doThrow
+import org.mockito.invocation.InvocationOnMock
+import org.mockito.stubbing.Answer
 
 import scala.jdk.CollectionConverters._
 
 class BrokerMetadataPublisherTest {
+  val exitException = new AtomicReference[Throwable](null)
+
+  @BeforeEach
+  def setUp(): Unit = {
+    Exit.setExitProcedure((code, _) => exitException.set(new RuntimeException(s"Exit ${code}")))
+    Exit.setHaltProcedure((code, _) => exitException.set(new RuntimeException(s"Halt ${code}")))
+  }
+
+  @AfterEach
+  def tearDown(): Unit = {
+    Exit.resetExitProcedure();
+    Exit.resetHaltProcedure();
+    val exception = exitException.get()
+    if (exception != null) {
+      throw exception
+    }
+  }
+
   @Test
   def testGetTopicDelta(): Unit = {
     assert(BrokerMetadataPublisher.getTopicDelta(
@@ -127,6 +161,7 @@ class BrokerMetadataPublisherTest {
         Array.empty[Int],
         Array.empty[Int],
         replicas.head,
+        LeaderRecoveryState.RECOVERED,
         0,
         0
       )
@@ -142,4 +177,99 @@ class BrokerMetadataPublisherTest {
     new TopicsImage(idsMap.asJava, namesMap.asJava)
   }
 
+  private def newMockPublisher(
+    broker: BrokerServer,
+    errorHandler: FaultHandler = new MockFaultHandler("publisher")
+  ): BrokerMetadataPublisher = {
+    Mockito.spy(new BrokerMetadataPublisher(
+      conf = broker.config,
+      metadataCache = broker.metadataCache,
+      logManager = broker.logManager,
+      replicaManager = broker.replicaManager,
+      groupCoordinator = broker.groupCoordinator,
+      txnCoordinator = broker.transactionCoordinator,
+      clientQuotaMetadataManager = broker.clientQuotaMetadataManager,
+      dynamicConfigHandlers = broker.dynamicConfigHandlers.toMap,
+      _authorizer = Option.empty,
+      errorHandler,
+      errorHandler
+    ))
+  }
+
+  @Test
+  def testReloadUpdatedFilesWithoutConfigChange(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      val broker = cluster.brokers().values().iterator().next()
+      val publisher = newMockPublisher(broker)
+      val numTimesReloadCalled = new AtomicInteger(0)
+      Mockito.when(publisher.reloadUpdatedFilesWithoutConfigChange(any[Properties]())).
+        thenAnswer(new Answer[Unit]() {
+          override def answer(invocation: InvocationOnMock): Unit = numTimesReloadCalled.addAndGet(1)
+        })
+      broker.metadataListener.alterPublisher(publisher).get()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        assertEquals(0, numTimesReloadCalled.get())
+        admin.incrementalAlterConfigs(singletonMap(
+          new ConfigResource(BROKER, ""),
+          singleton(new AlterConfigOp(new ConfigEntry(KafkaConfig.MaxConnectionsProp, "123"), SET)))).all().get()
+        TestUtils.waitUntilTrue(() => numTimesReloadCalled.get() == 0,
+          "numTimesConfigured never reached desired value")
+
+        // Setting the foo.bar.test.configuration to 1 will still trigger reconfiguration because
+        // reloadUpdatedFilesWithoutConfigChange will be called.
+        admin.incrementalAlterConfigs(singletonMap(
+          new ConfigResource(BROKER, broker.config.nodeId.toString),
+          singleton(new AlterConfigOp(new ConfigEntry(KafkaConfig.MaxConnectionsProp, "123"), SET)))).all().get()
+        TestUtils.waitUntilTrue(() => numTimesReloadCalled.get() == 1,
+          "numTimesConfigured never reached desired value")
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testExceptionInUpdateCoordinator(): Unit = {
+    val errorHandler = new MockFaultHandler("publisher")
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).
+      setMetadataFaultHandler(errorHandler).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      val broker = cluster.brokers().values().iterator().next()
+      TestUtils.retry(60000) {
+        assertNotNull(broker.metadataPublisher)
+      }
+      val publisher = Mockito.spy(broker.metadataPublisher)
+      doThrow(new RuntimeException("injected failure")).when(publisher).updateCoordinator(any(), any(), any(), any(), any())
+      broker.metadataListener.alterPublisher(publisher).get()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        admin.createTopics(singletonList(new NewTopic("foo", 1, 1.toShort))).all().get()
+      } finally {
+        admin.close()
+      }
+      TestUtils.retry(60000) {
+        assertTrue(Option(errorHandler.firstException()).
+          flatMap(e => Option(e.getMessage())).getOrElse("(none)").contains("injected failure"))
+      }
+    } finally {
+      errorHandler.setIgnore(true)
+      cluster.close()
+    }
+  }
 }

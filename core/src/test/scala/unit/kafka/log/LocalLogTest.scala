@@ -129,6 +129,16 @@ class LocalLogTest {
   }
 
   @Test
+  def testRollEmptyActiveSegment(): Unit = {
+    val oldActiveSegment = log.segments.activeSegment
+    log.roll()
+    assertEquals(1, log.segments.numberOfSegments)
+    assertNotEquals(oldActiveSegment, log.segments.activeSegment)
+    assertFalse(logDir.listFiles.isEmpty)
+    assertTrue(oldActiveSegment.hasSuffix(LocalLog.DeletedFileSuffix))
+  }
+
+  @Test
   def testLogDeleteDirSuccessWhenEmptyAndFailureWhenNonEmpty(): Unit ={
     val record = new SimpleRecord(mockTime.milliseconds, "a".getBytes)
     appendRecords(List(record))
@@ -385,6 +395,24 @@ class LocalLogTest {
   }
 
   @Test
+  def testCreateAndDeleteSegment(): Unit = {
+    val record = new SimpleRecord(mockTime.milliseconds, "a".getBytes)
+    appendRecords(List(record))
+    val newOffset = log.segments.activeSegment.baseOffset + 1
+    val oldActiveSegment = log.segments.activeSegment
+    val newActiveSegment = log.createAndDeleteSegment(newOffset, log.segments.activeSegment, asyncDelete = true, LogTruncation(log))
+    assertEquals(1, log.segments.numberOfSegments)
+    assertEquals(newActiveSegment, log.segments.activeSegment)
+    assertNotEquals(oldActiveSegment, log.segments.activeSegment)
+    assertTrue(oldActiveSegment.hasSuffix(LocalLog.DeletedFileSuffix))
+    assertEquals(newOffset, log.segments.activeSegment.baseOffset)
+    assertEquals(0L, log.recoveryPoint)
+    assertEquals(newOffset, log.logEndOffset)
+    val fetchDataInfo = readRecords(startOffset = newOffset)
+    assertTrue(fetchDataInfo.records.records.asScala.isEmpty)
+  }
+
+  @Test
   def testTruncateFullyAndStartAt(): Unit = {
     val record = new SimpleRecord(mockTime.milliseconds, "a".getBytes)
     for (offset <- 0 to 7) {
@@ -397,6 +425,7 @@ class LocalLogTest {
       appendRecords(List(record), initialOffset = offset)
     }
     assertEquals(5, log.segments.numberOfSegments)
+    assertNotEquals(10L, log.segments.activeSegment.baseOffset)
     val expected = List[LogSegment]() ++ log.segments.values
     val deleted = log.truncateFullyAndStartAt(10L)
     assertEquals(expected, deleted)

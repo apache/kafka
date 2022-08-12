@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.function.Function;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -29,11 +30,20 @@ import static org.apache.kafka.streams.state.internals.SegmentedCacheFunction.by
  */
 class MergedSortedCacheWindowStoreIterator extends AbstractMergedSortedCacheStoreIterator<Long, Long, byte[], byte[]> implements WindowStoreIterator<byte[]> {
 
+    private final Function<byte[], Long> timestampExtractor;
 
     MergedSortedCacheWindowStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
                                          final KeyValueIterator<Long, byte[]> storeIterator,
                                          final boolean forward) {
+        this(cacheIterator, storeIterator, forward, WindowKeySchema::extractStoreTimestamp);
+    }
+
+    MergedSortedCacheWindowStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
+                                         final KeyValueIterator<Long, byte[]> storeIterator,
+                                         final boolean forward,
+                                         final Function<byte[], Long> tsExtractor) {
         super(cacheIterator, storeIterator, forward);
+        this.timestampExtractor = tsExtractor;
     }
 
     @Override
@@ -44,7 +54,7 @@ class MergedSortedCacheWindowStoreIterator extends AbstractMergedSortedCacheStor
     @Override
     Long deserializeCacheKey(final Bytes cacheKey) {
         final byte[] binaryKey = bytesFromCacheKey(cacheKey);
-        return WindowKeySchema.extractStoreTimestamp(binaryKey);
+        return timestampExtractor.apply(binaryKey);
     }
 
     @Override
@@ -61,7 +71,7 @@ class MergedSortedCacheWindowStoreIterator extends AbstractMergedSortedCacheStor
     public int compare(final Bytes cacheKey, final Long storeKey) {
         final byte[] binaryKey = bytesFromCacheKey(cacheKey);
 
-        final Long cacheTimestamp = WindowKeySchema.extractStoreTimestamp(binaryKey);
+        final Long cacheTimestamp = timestampExtractor.apply(binaryKey);
         return cacheTimestamp.compareTo(storeKey);
     }
 }

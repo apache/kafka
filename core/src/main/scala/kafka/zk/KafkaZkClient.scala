@@ -199,7 +199,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     val setDataRequests = leaderIsrAndControllerEpochs.map { case (partition, leaderIsrAndControllerEpoch) =>
       val path = TopicPartitionStateZNode.path(partition)
       val data = TopicPartitionStateZNode.encode(leaderIsrAndControllerEpoch)
-      SetDataRequest(path, data, leaderIsrAndControllerEpoch.leaderAndIsr.zkVersion, Some(partition))
+      SetDataRequest(path, data, leaderIsrAndControllerEpoch.leaderAndIsr.partitionEpoch, Some(partition))
     }
     retryRequestsUntilConnected(setDataRequests.toSeq, expectedControllerEpochZkVersion)
   }
@@ -271,7 +271,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
       val partition = setDataResponse.ctx.get.asInstanceOf[TopicPartition]
       setDataResponse.resultCode match {
         case Code.OK =>
-          val updatedLeaderAndIsr = leaderAndIsrs(partition).withZkVersion(setDataResponse.stat.getVersion)
+          val updatedLeaderAndIsr = leaderAndIsrs(partition).withPartitionEpoch(setDataResponse.stat.getVersion)
           Some(partition -> Right(updatedLeaderAndIsr))
         case Code.BADVERSION =>
           // Update the buffer for partitions to retry

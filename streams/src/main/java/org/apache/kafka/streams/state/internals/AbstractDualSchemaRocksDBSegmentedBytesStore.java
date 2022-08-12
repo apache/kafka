@@ -50,7 +50,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
     private final String name;
     protected final AbstractSegments<S> segments;
-    private final String metricScope;
     protected final KeySchema baseKeySchema;
     protected final Optional<KeySchema> indexKeySchema;
 
@@ -65,12 +64,10 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     private volatile boolean open;
 
     AbstractDualSchemaRocksDBSegmentedBytesStore(final String name,
-                                                 final String metricScope,
                                                  final KeySchema baseKeySchema,
                                                  final Optional<KeySchema> indexKeySchema,
                                                  final AbstractSegments<S> segments) {
         this.name = name;
-        this.metricScope = metricScope;
         this.baseKeySchema = baseKeySchema;
         this.indexKeySchema = indexKeySchema;
         this.segments = segments;
@@ -179,12 +176,16 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             LOG.warn("Skipping record for expired segment.");
         } else {
             StoreQueryUtils.updatePosition(position, stateStoreContext);
-            segment.put(rawBaseKey, value);
 
+            // Put to index first so that if put to base failed, when we iterate index, we will
+            // find no base value. If put to base first but putting to index fails, when we iterate
+            // index, we can't find the key but if we iterate over base store, we can find the key
+            // which lead to inconsistency.
             if (hasIndex()) {
                 final KeyValue<Bytes, byte[]> indexKeyValue = getIndexKeyValue(rawBaseKey, value);
                 segment.put(indexKeyValue.key, indexKeyValue.value);
             }
+            segment.put(rawBaseKey, value);
         }
     }
 

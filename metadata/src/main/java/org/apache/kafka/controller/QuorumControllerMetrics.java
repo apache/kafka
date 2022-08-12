@@ -21,9 +21,13 @@ import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 public final class QuorumControllerMetrics implements ControllerMetrics {
     private final static MetricName ACTIVE_CONTROLLER_COUNT = getMetricName(
@@ -44,7 +48,17 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         "KafkaController", "OfflinePartitionsCount");
     private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
         "KafkaController", "PreferredReplicaImbalanceCount");
-    
+    private final static MetricName METADATA_ERROR_COUNT = getMetricName(
+            "KafkaController", "MetadataErrorCount");
+    private final static MetricName LAST_APPLIED_RECORD_OFFSET = getMetricName(
+        "KafkaController", "LastAppliedRecordOffset");
+    private final static MetricName LAST_COMMITTED_RECORD_OFFSET = getMetricName(
+        "KafkaController", "LastCommittedRecordOffset");
+    private final static MetricName LAST_APPLIED_RECORD_TIMESTAMP = getMetricName(
+        "KafkaController", "LastAppliedRecordTimestamp");
+    private final static MetricName LAST_APPLIED_RECORD_LAG_MS = getMetricName(
+        "KafkaController", "LastAppliedRecordLagMs");
+
     private final MetricsRegistry registry;
     private volatile boolean active;
     private volatile int fencedBrokerCount;
@@ -53,6 +67,10 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private volatile int globalPartitionCount;
     private volatile int offlinePartitionCount;
     private volatile int preferredReplicaImbalanceCount;
+    private volatile AtomicInteger metadataErrorCount;
+    private final AtomicLong lastAppliedRecordOffset = new AtomicLong(0);
+    private final AtomicLong lastCommittedRecordOffset = new AtomicLong(0);
+    private final AtomicLong lastAppliedRecordTimestamp = new AtomicLong(0);
     private final Gauge<Integer> activeControllerCount;
     private final Gauge<Integer> fencedBrokerCountGauge;
     private final Gauge<Integer> activeBrokerCountGauge;
@@ -60,10 +78,18 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     private final Gauge<Integer> globalTopicCountGauge;
     private final Gauge<Integer> offlinePartitionCountGauge;
     private final Gauge<Integer> preferredReplicaImbalanceCountGauge;
+    private final Gauge<Integer> metadataErrorCountGauge;
+    private final Gauge<Long> lastAppliedRecordOffsetGauge;
+    private final Gauge<Long> lastCommittedRecordOffsetGauge;
+    private final Gauge<Long> lastAppliedRecordTimestampGauge;
+    private final Gauge<Long> lastAppliedRecordLagMsGauge;
     private final Histogram eventQueueTime;
     private final Histogram eventQueueProcessingTime;
 
-    public QuorumControllerMetrics(MetricsRegistry registry) {
+    public QuorumControllerMetrics(
+        MetricsRegistry registry,
+        Time time
+    ) {
         this.registry = Objects.requireNonNull(registry);
         this.active = false;
         this.fencedBrokerCount = 0;
@@ -72,6 +98,7 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
         this.globalPartitionCount = 0;
         this.offlinePartitionCount = 0;
         this.preferredReplicaImbalanceCount = 0;
+        this.metadataErrorCount = new AtomicInteger(0);
         this.activeControllerCount = registry.newGauge(ACTIVE_CONTROLLER_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
@@ -114,6 +141,36 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
             @Override
             public Integer value() {
                 return preferredReplicaImbalanceCount;
+            }
+        });
+        this.metadataErrorCountGauge = registry.newGauge(METADATA_ERROR_COUNT, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return metadataErrorCount.get();
+            }
+        });
+        lastAppliedRecordOffsetGauge = registry.newGauge(LAST_APPLIED_RECORD_OFFSET, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return lastAppliedRecordOffset.get();
+            }
+        });
+        lastCommittedRecordOffsetGauge = registry.newGauge(LAST_COMMITTED_RECORD_OFFSET, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return lastCommittedRecordOffset.get();
+            }
+        });
+        lastAppliedRecordTimestampGauge = registry.newGauge(LAST_APPLIED_RECORD_TIMESTAMP, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return lastAppliedRecordTimestamp.get();
+            }
+        });
+        lastAppliedRecordLagMsGauge = registry.newGauge(LAST_APPLIED_RECORD_LAG_MS, new Gauge<Long>() {
+            @Override
+            public Long value() {
+                return time.milliseconds() - lastAppliedRecordTimestamp.get();
             }
         });
     }
@@ -198,21 +255,65 @@ public final class QuorumControllerMetrics implements ControllerMetrics {
     }
 
     @Override
+    public void incrementMetadataErrorCount() {
+        this.metadataErrorCount.getAndIncrement();
+    }
+
+    @Override
+    public int metadataErrorCount() {
+        return this.metadataErrorCount.get();
+    }
+    @Override
+    public void setLastAppliedRecordOffset(long offset) {
+        lastAppliedRecordOffset.set(offset);
+    }
+
+    @Override
+    public long lastAppliedRecordOffset() {
+        return lastAppliedRecordOffset.get();
+    }
+
+    @Override
+    public void setLastCommittedRecordOffset(long offset) {
+        lastCommittedRecordOffset.set(offset);
+    }
+
+    @Override
+    public long lastCommittedRecordOffset() {
+        return lastCommittedRecordOffset.get();
+    }
+
+    @Override
+    public void setLastAppliedRecordTimestamp(long timestamp) {
+        lastAppliedRecordTimestamp.set(timestamp);
+    }
+
+    @Override
+    public long lastAppliedRecordTimestamp() {
+        return lastAppliedRecordTimestamp.get();
+    }
+
+    @Override
     public void close() {
         Arrays.asList(
             ACTIVE_CONTROLLER_COUNT,
+            FENCED_BROKER_COUNT,
+            ACTIVE_BROKER_COUNT,
             EVENT_QUEUE_TIME_MS,
             EVENT_QUEUE_PROCESSING_TIME_MS,
             GLOBAL_TOPIC_COUNT,
             GLOBAL_PARTITION_COUNT,
             OFFLINE_PARTITION_COUNT,
-            PREFERRED_REPLICA_IMBALANCE_COUNT).forEach(this.registry::removeMetric);
+            PREFERRED_REPLICA_IMBALANCE_COUNT,
+            METADATA_ERROR_COUNT,
+            LAST_APPLIED_RECORD_OFFSET,
+            LAST_COMMITTED_RECORD_OFFSET,
+            LAST_APPLIED_RECORD_TIMESTAMP,
+            LAST_APPLIED_RECORD_LAG_MS
+        ).forEach(registry::removeMetric);
     }
 
     private static MetricName getMetricName(String type, String name) {
-        final String group = "kafka.controller";
-        final StringBuilder mbeanNameBuilder = new StringBuilder();
-        mbeanNameBuilder.append(group).append(":type=").append(type).append(",name=").append(name);
-        return new MetricName(group, type, name, null, mbeanNameBuilder.toString());
+        return KafkaYammerMetrics.getMetricName("kafka.controller", type, name);
     }
 }

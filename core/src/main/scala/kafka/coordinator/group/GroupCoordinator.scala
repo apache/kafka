@@ -1104,7 +1104,7 @@ class GroupCoordinator(val brokerId: Int,
         groupId != null
       case _ =>
         // The remaining APIs are groups using Kafka for group coordination and must have a non-empty groupId
-        groupId != null && !groupId.isEmpty
+        groupId != null && groupId.nonEmpty
     }
   }
 

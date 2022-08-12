@@ -35,6 +35,7 @@ public class MockProducerInterceptor implements ClusterResourceListener, Produce
     public static final AtomicInteger ON_SUCCESS_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_ERROR_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_ERROR_WITH_METADATA_COUNT = new AtomicInteger(0);
+    public static final AtomicInteger ON_ACKNOWLEDGEMENT_COUNT = new AtomicInteger(0);
     public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
     public static final ClusterResource NO_CLUSTER_ID = new ClusterResource("no_cluster_id");
     public static final AtomicReference<ClusterResource> CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT = new AtomicReference<>(NO_CLUSTER_ID);
@@ -69,6 +70,7 @@ public class MockProducerInterceptor implements ClusterResourceListener, Produce
 
     @Override
     public void onAcknowledgement(RecordMetadata metadata, Exception exception) {
+        ON_ACKNOWLEDGEMENT_COUNT.incrementAndGet();
         // This will ensure that we get the cluster metadata when onAcknowledgement is called for the first time
         // as subsequent compareAndSet operations will fail.
         CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT.compareAndSet(NO_CLUSTER_ID, CLUSTER_META.get());

@@ -93,7 +93,7 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
                         self.consumed = int(data["consumed"])
                         self.logger.info("%s: consumed %d, remaining %d" %
                                          (self.transactional_id, self.consumed, self.remaining))
-                        if "shutdown_complete" in data:
+                        if data["stage"] == "ShutdownComplete":
                            if self.remaining == 0:
                                 # We are only finished if the remaining
                                 # messages at the time of shutdown is 0.

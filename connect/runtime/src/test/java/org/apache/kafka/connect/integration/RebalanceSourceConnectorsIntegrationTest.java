@@ -188,6 +188,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
     }
 
     @Test
+    @Ignore // TODO: To be re-enabled once we can make it less flaky (KAFKA-8391)
     public void testDeleteConnector() throws Exception {
         // create test topic
         connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
@@ -269,8 +270,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
     }
 
-    // should enable it after KAFKA-12495 fixed
-    @Ignore
+    @Ignore // TODO: To be re-enabled once we can make it less flaky (KAFKA-12495, KAFKA-12283)
     @Test
     public void testMultipleWorkersRejoining() throws Exception {
         // create test topic

@@ -25,6 +25,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -33,6 +34,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,10 +42,13 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.Future;
@@ -88,8 +93,9 @@ public class KafkaBasedLog<K, V> {
     private final Map<String, Object> consumerConfigs;
     private final Callback<ConsumerRecord<K, V>> consumedCallback;
     private final Supplier<TopicAdmin> topicAdminSupplier;
+    private final boolean requireAdminForOffsets;
     private Consumer<K, V> consumer;
-    private Producer<K, V> producer;
+    private Optional<Producer<K, V>> producer;
     private TopicAdmin admin;
 
     private Thread thread;
@@ -160,6 +166,56 @@ public class KafkaBasedLog<K, V> {
         this.readLogEndOffsetCallbacks = new ArrayDeque<>();
         this.time = time;
         this.initializer = initializer != null ? initializer : admin -> { };
+
+        // If the consumer is configured with isolation.level = read_committed, then its end offsets method cannot be relied on
+        // as it will not take records from currently-open transactions into account. We want to err on the side of caution in that
+        // case: when users request a read to the end of the log, we will read up to the point where the latest offsets visible to the
+        // consumer are at least as high as the (possibly-part-of-a-transaction) end offsets of the topic.
+        this.requireAdminForOffsets = IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)
+                .equals(consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG));
+    }
+
+    /**
+     * Create a new KafkaBasedLog object using pre-existing Kafka clients. This does not start reading the log and writing
+     * is not permitted until {@link #start()} is invoked. Note that the consumer and (if not null) producer given to this log
+     * will be closed when this log is {@link #stop() stopped}.
+     *
+     * @param topic the topic to treat as a log
+     * @param consumer the consumer to use for reading from the log; may not be null
+     * @param producer the producer to use for writing to the log; may be null, which will create a read-only log
+     * @param topicAdmin an admin client, the lifecycle of which is expected to be controlled by the calling component;
+     *                   may not be null
+     * @param consumedCallback   callback to invoke for each {@link ConsumerRecord} consumed when tailing the log
+     * @param time               Time interface
+     * @param initializer        the function that should be run when this log is {@link #start() started}; may be null
+     * @return a {@link KafkaBasedLog} using the given clients
+     */
+    public static <K, V> KafkaBasedLog<K, V> withExistingClients(String topic,
+                                                                 Consumer<K, V> consumer,
+                                                                 Producer<K, V> producer,
+                                                                 TopicAdmin topicAdmin,
+                                                                 Callback<ConsumerRecord<K, V>> consumedCallback,
+                                                                 Time time,
+                                                                 java.util.function.Consumer<TopicAdmin> initializer) {
+        Objects.requireNonNull(topicAdmin);
+        return new KafkaBasedLog<K, V>(topic,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                () -> topicAdmin,
+                consumedCallback,
+                time,
+                initializer) {
+
+            @Override
+            protected Producer<K, V> createProducer() {
+                return producer;
+            }
+
+            @Override
+            protected Consumer<K, V> createConsumer() {
+                return consumer;
+            }
+        };
     }
 
     public void start() {
@@ -167,10 +223,19 @@ public class KafkaBasedLog<K, V> {
 
         // Create the topic admin client and initialize the topic ...
         admin = topicAdminSupplier.get();   // may be null
+        if (admin == null && requireAdminForOffsets) {
+            throw new ConnectException(
+                    "Must provide a TopicAdmin to KafkaBasedLog when consumer is configured with "
+                            + ConsumerConfig.ISOLATION_LEVEL_CONFIG + " set to "
+                            + IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)
+            );
+        }
         initializer.accept(admin);
 
         // Then create the producer and consumer
-        producer = createProducer();
+        producer = Optional.ofNullable(createProducer());
+        if (!producer.isPresent())
+            log.trace("Creating read-only KafkaBasedLog for topic " + topic);
         consumer = createConsumer();
 
         List<TopicPartition> partitions = new ArrayList<>();
@@ -214,26 +279,21 @@ public class KafkaBasedLog<K, V> {
         synchronized (this) {
             stopRequested = true;
         }
-        consumer.wakeup();
-
-        try {
-            thread.join();
-        } catch (InterruptedException e) {
-            throw new ConnectException("Failed to stop KafkaBasedLog. Exiting without cleanly shutting " +
-                    "down it's producer and consumer.", e);
+        if (consumer != null) {
+            consumer.wakeup();
         }
 
-        try {
-            producer.close();
-        } catch (KafkaException e) {
-            log.error("Failed to stop KafkaBasedLog producer", e);
+        if (thread != null) {
+            try {
+                thread.join();
+            } catch (InterruptedException e) {
+                throw new ConnectException("Failed to stop KafkaBasedLog. Exiting without cleanly shutting " +
+                        "down it's producer and consumer.", e);
+            }
         }
 
-        try {
-            consumer.close();
-        } catch (KafkaException e) {
-            log.error("Failed to stop KafkaBasedLog consumer", e);
-        }
+        producer.ifPresent(p -> Utils.closeQuietly(p, "KafkaBasedLog producer for topic " + topic));
+        Utils.closeQuietly(consumer, "KafkaBasedLog consumer for topic " + topic);
 
         // do not close the admin client, since we don't own it
         admin = null;
@@ -243,7 +303,7 @@ public class KafkaBasedLog<K, V> {
 
     /**
      * Flushes any outstanding writes and then reads to the current end of the log and invokes the specified callback.
-     * Note that this checks the current, offsets, reads to them, and invokes the callback regardless of whether
+     * Note that this checks the current offsets, reads to them, and invokes the callback regardless of whether
      * additional records have been written to the log. If the caller needs to ensure they have truly reached the end
      * of the log, they must ensure there are no other writers during this period.
      *
@@ -256,7 +316,7 @@ public class KafkaBasedLog<K, V> {
      */
     public void readToEnd(Callback<Void> callback) {
         log.trace("Starting read to end log for topic {}", topic);
-        producer.flush();
+        flush();
         synchronized (this) {
             readLogEndOffsetCallbacks.add(callback);
         }
@@ -267,7 +327,7 @@ public class KafkaBasedLog<K, V> {
      * Flush the underlying producer to ensure that all pending writes have been sent.
      */
     public void flush() {
-        producer.flush();
+        producer.ifPresent(Producer::flush);
     }
 
     /**
@@ -285,14 +345,16 @@ public class KafkaBasedLog<K, V> {
     }
 
     public void send(K key, V value, org.apache.kafka.clients.producer.Callback callback) {
-        producer.send(new ProducerRecord<>(topic, key, value), callback);
+        producer.orElseThrow(() ->
+                new IllegalStateException("This KafkaBasedLog was created in read-only mode and does not support write operations")
+        ).send(new ProducerRecord<>(topic, key, value), callback);
     }
 
     public int partitionCount() {
         return partitionCount;
     }
 
-    private Producer<K, V> createProducer() {
+    protected Producer<K, V> createProducer() {
         // Always require producer acks to all to ensure durable writes
         producerConfigs.put(ProducerConfig.ACKS_CONFIG, "all");
 
@@ -301,7 +363,7 @@ public class KafkaBasedLog<K, V> {
         return new KafkaProducer<>(producerConfigs);
     }
 
-    private Consumer<K, V> createConsumer() {
+    protected Consumer<K, V> createConsumer() {
         // Always force reset to the beginning of the log since this class wants to consume all available log data
         consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
@@ -356,7 +418,15 @@ public class KafkaBasedLog<K, V> {
     }
 
     // Visible for testing
-    Map<TopicPartition, Long> readEndOffsets(Set<TopicPartition> assignment, boolean shouldRetry) {
+    /**
+     * Read to the end of the given list of topic partitions
+     * @param assignment the topic partitions to read to the end of
+     * @param shouldRetry boolean flag to enable retry for the admin client {@code listOffsets()} call.
+     * @throws UnsupportedVersionException if the log's consumer is using the "read_committed" isolation level (and
+     * therefore a separate admin client is required to read end offsets for the topic), but the broker does not support
+     * reading end offsets using an admin client
+     */
+    Map<TopicPartition, Long> readEndOffsets(Set<TopicPartition> assignment, boolean shouldRetry) throws UnsupportedVersionException {
         log.trace("Reading to end of offset log");
 
         // Note that we'd prefer to not use the consumer to find the end offsets for the assigned topic partitions.
@@ -381,6 +451,10 @@ public class KafkaBasedLog<K, V> {
             } catch (UnsupportedVersionException e) {
                 // This may happen with really old brokers that don't support the auto topic creation
                 // field in metadata requests
+                if (requireAdminForOffsets) {
+                    // Should be handled by the caller during log startup
+                    throw e;
+                }
                 log.debug("Reading to end of log offsets with consumer since admin client is unsupported: {}", e.getMessage());
                 // Forget the reference to the admin so that we won't even try to use the admin the next time this method is called
                 admin = null;

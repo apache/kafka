@@ -530,7 +530,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   Errors.values.foreach(error => errorMeters.put(error, new ErrorMeter(name, error)))
 
   def requestRate(version: Short): Meter = {
-    requestRateInternal.getAndMaybePut(version, newMeter("RequestsPerSec", "requests", TimeUnit.SECONDS, tags + ("version" -> version.toString)))
+    requestRateInternal.getAndMaybePut(version, newMeter(RequestsPerSec, "requests", TimeUnit.SECONDS, tags + ("version" -> version.toString)))
   }
 
   class ErrorMeter(name: String, error: Errors) {
@@ -575,7 +575,6 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
     removeMetric(TotalTimeMs, tags)
     removeMetric(ResponseSendTimeMs, tags)
     removeMetric(RequestBytes, tags)
-    removeMetric(ResponseSendTimeMs, tags)
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name) {
       removeMetric(MessageConversionsTimeMs, tags)
       removeMetric(TemporaryMemoryBytes, tags)

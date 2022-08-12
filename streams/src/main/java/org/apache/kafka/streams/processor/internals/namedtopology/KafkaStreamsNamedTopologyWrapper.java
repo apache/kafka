@@ -254,6 +254,31 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
     }
 
     /**
+     * Pauses a topology by name
+     * @param topologyName Name of the topology to pause
+     */
+    public void pauseNamedTopology(final String topologyName) {
+        topologyMetadata.pauseTopology(topologyName);
+    }
+
+    /**
+     * Checks if a given topology is paused.
+     * @param topologyName If null, assume that we are checking the `UNNAMED_TOPOLOGY`.
+     * @return A boolean indicating if the topology is paused.
+     */
+    public boolean isNamedTopologyPaused(final String topologyName) {
+        return topologyMetadata.isPaused(topologyName);
+    }
+
+    /**
+     * Resumes a topology by name
+     * @param topologyName Name of the topology to resume
+     */
+    public void resumeNamedTopology(final String topologyName) {
+        topologyMetadata.resumeTopology(topologyName);
+    }
+
+    /**
      * @return  true iff the application is still in CREATED and the future was completed
      */
     private boolean maybeCompleteFutureIfStillInCREATED(final KafkaFutureImpl<Void> updateTopologyFuture,

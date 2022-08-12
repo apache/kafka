@@ -24,7 +24,7 @@ import kafka.log.LogConfig
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
 import org.apache.kafka.controller.ConfigurationValidator
-import org.apache.kafka.common.errors.InvalidRequestException
+import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
 
 import scala.collection.mutable
@@ -44,13 +44,56 @@ import scala.collection.mutable
  * as the others. It is not persisted to the metadata log (or to ZK, when we're in that mode).
  */
 class ControllerConfigurationValidator extends ConfigurationValidator {
-  override def validate(resource: ConfigResource, config: util.Map[String, String]): Unit = {
+  private def validateTopicName(
+    name: String
+  ): Unit = {
+    if (name.isEmpty()) {
+      throw new InvalidRequestException("Default topic resources are not allowed.")
+    }
+    Topic.validate(name)
+  }
+
+  private def validateBrokerName(
+    name: String
+  ): Unit = {
+    if (!name.isEmpty()) {
+      val brokerId = try {
+        Integer.valueOf(name)
+      } catch {
+        case _: NumberFormatException =>
+          throw new InvalidRequestException("Unable to parse broker name as a base 10 number.")
+      }
+      if (brokerId < 0) {
+        throw new InvalidRequestException("Invalid negative broker ID.")
+      }
+    }
+  }
+
+  private def throwExceptionForUnknownResourceType(
+    resource: ConfigResource
+  ): Unit = {
+    // Note: we should never handle BROKER_LOGGER resources here, since changes to
+    // those resources are not persisted in the metadata.
+    throw new InvalidRequestException(s"Unknown resource type ${resource.`type`}")
+  }
+
+  override def validate(
+    resource: ConfigResource
+  ): Unit = {
+    resource.`type`() match {
+      case TOPIC => validateTopicName(resource.name())
+      case BROKER => validateBrokerName(resource.name())
+      case _ => throwExceptionForUnknownResourceType(resource)
+    }
+  }
+
+  override def validate(
+    resource: ConfigResource,
+    config: util.Map[String, String]
+  ): Unit = {
     resource.`type`() match {
       case TOPIC =>
-        if (resource.name().isEmpty()) {
-          throw new InvalidRequestException("Default topic resources are not allowed.")
-        }
-        Topic.validate(resource.name())
+        validateTopicName(resource.name())
         val properties = new Properties()
         val nullTopicConfigs = new mutable.ArrayBuffer[String]()
         config.entrySet().forEach(e => {
@@ -61,26 +104,12 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
           }
         })
         if (nullTopicConfigs.nonEmpty) {
-          throw new InvalidRequestException("Null value not supported for topic configs : " +
+          throw new InvalidConfigurationException("Null value not supported for topic configs: " +
             nullTopicConfigs.mkString(","))
         }
         LogConfig.validate(properties)
-      case BROKER =>
-        if (resource.name().nonEmpty) {
-          val brokerId = try {
-            Integer.valueOf(resource.name())
-          } catch {
-            case _: NumberFormatException =>
-              throw new InvalidRequestException("Unable to parse broker name as a base 10 number.")
-          }
-          if (brokerId < 0) {
-            throw new InvalidRequestException("Invalid negative broker ID.")
-          }
-        }
-      case _ =>
-        // Note: we should never handle BROKER_LOGGER resources here, since changes to
-        // those resources are not persisted in the metadata.
-        throw new InvalidRequestException(s"Unknown resource type ${resource.`type`}")
+      case BROKER => validateBrokerName(resource.name())
+      case _ => throwExceptionForUnknownResourceType(resource)
     }
   }
 }

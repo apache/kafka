@@ -32,7 +32,7 @@ public interface ConnectAssignor {
      * method computes an assignment of connectors and tasks among the members of the worker group.
      *
      * @param leaderId the leader of the group
-     * @param protocol the protocol type; for Connect assignors this is normally "connect"
+     * @param protocol the protocol type; for Connect assignors this is "eager", "compatible", or "sessioned"
      * @param allMemberMetadata the metadata of all the active workers of the group
      * @param coordinator the worker coordinator that runs this assignor
      * @return the assignment of connectors and tasks to workers

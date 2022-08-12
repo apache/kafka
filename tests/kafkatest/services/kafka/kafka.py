@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import json
+import math
 import os.path
 import re
 import signal
@@ -158,7 +159,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     METADATA_SNAPSHOT_SEARCH_STR = "%s/__cluster_metadata-0/*.checkpoint" % METADATA_LOG_DIR
     METADATA_FIRST_LOG = "%s/__cluster_metadata-0/00000000000000000000.log" % METADATA_LOG_DIR
     # Kafka Authorizer
-    ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer"
+    ZK_ACL_AUTHORIZER = "kafka.security.authorizer.AclAuthorizer"
+    KRAFT_ACL_AUTHORIZER = "org.apache.kafka.metadata.authorizer.StandardAuthorizer"
     HEAP_DUMP_FILE = os.path.join(PERSISTENT_ROOT, "kafka_heap_dump.bin")
     INTERBROKER_LISTENER_NAME = 'INTERNAL'
     JAAS_CONF_PROPERTY = "java.security.auth.login.config=/mnt/security/jaas.conf"
@@ -181,6 +183,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             "collect_default": False},
         "kafka_data_2": {
             "path": DATA_LOG_DIR_2,
+            "collect_default": False},
+        "kafka_cluster_metadata": {
+            "path": METADATA_LOG_DIR,
             "collect_default": False},
         "kafka_heap_dump_file": {
             "path": HEAP_DUMP_FILE,
@@ -863,12 +868,25 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         leader = self.leader(topic, partition)
         self.signal_node(leader, sig)
 
+    def controllers_required_for_quorum(self):
+        """
+        Assume N = the total number of controller nodes in the cluster, and positive
+        For N=1, we need 1 controller to be running to have a quorum
+        For N=2, we need 2 controllers
+        For N=3, we need 2 controllers
+        For N=4, we need 3 controllers
+        For N=5, we need 3 controllers
+
+        :return: the number of controller nodes that must be started for there to be a quorum
+        """
+        return math.ceil((1 + self.num_nodes_controller_role) / 2)
+
     def stop_node(self, node, clean_shutdown=True, timeout_sec=60):
         pids = self.pids(node)
         cluster_has_colocated_controllers = self.quorum_info.has_brokers and self.quorum_info.has_controllers
         force_sigkill_due_to_too_few_colocated_controllers =\
             clean_shutdown and cluster_has_colocated_controllers\
-            and self.colocated_nodes_started < round(self.num_nodes_controller_role / 2)
+            and self.colocated_nodes_started < self.controllers_required_for_quorum()
         if force_sigkill_due_to_too_few_colocated_controllers:
             self.logger.info("Forcing node to stop via SIGKILL due to too few co-located KRaft controllers: %i/%i" %\
                              (self.colocated_nodes_started, self.num_nodes_controller_role))

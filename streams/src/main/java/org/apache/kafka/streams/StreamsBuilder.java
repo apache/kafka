@@ -38,7 +38,6 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
-import org.apache.kafka.streams.processor.internals.namedtopology.TopologyConfig;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -81,14 +80,19 @@ public class StreamsBuilder {
         internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
     }
 
-    protected StreamsBuilder(final TopologyConfig topologyConfigs) {
+    /**
+     * Create a {@code StreamsBuilder} instance.
+     *
+     * @param topologyConfigs    the streams configs that apply at the topology level. Please refer to {@link TopologyConfig} for more detail
+     */
+    public StreamsBuilder(final TopologyConfig topologyConfigs) {
         topology = getNewTopology(topologyConfigs);
         internalTopologyBuilder = topology.internalTopologyBuilder;
         internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
     }
 
     protected Topology getNewTopology(final TopologyConfig topologyConfigs) {
-        return new Topology();
+        return new Topology(topologyConfigs);
     }
 
     /**

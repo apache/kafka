@@ -287,8 +287,6 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         } else if (PEM_TYPE.equals(type) && path != null) {
             if (password != null)
                 throw new InvalidConfigurationException("SSL key store password cannot be specified with PEM format, only key password may be specified");
-            else if (keyPassword == null)
-                throw new InvalidConfigurationException("SSL PEM key store is specified, but key password is not specified.");
             else
                 return new FileBasedPemStore(path, keyPassword, true);
         } else if (path == null && password != null) {

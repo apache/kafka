@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Frequencies;
@@ -52,10 +53,10 @@ abstract class WorkerTask implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(WorkerTask.class);
     private static final String THREAD_NAME_PREFIX = "task-thread-";
 
-    protected final ConnectorTaskId id;
     private final TaskStatus.Listener statusListener;
+    private final StatusBackingStore statusBackingStore;
+    protected final ConnectorTaskId id;
     protected final ClassLoader loader;
-    protected final StatusBackingStore statusBackingStore;
     protected final Time time;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private final TaskMetricsGroup taskMetricsGroup;
@@ -377,10 +378,8 @@ abstract class WorkerTask implements Runnable {
 
         private void addRatioMetric(final State matchingState, MetricNameTemplate template) {
             MetricName metricName = metricGroup.metricName(template);
-            if (metricGroup.metrics().metric(metricName) == null) {
-                metricGroup.metrics().addMetric(metricName, (config, now) ->
+            metricGroup.metrics().addMetricIfAbsent(metricName, null, (Gauge<Double>) (config, now) ->
                     taskStateTimer.durationRatio(matchingState, now));
-            }
         }
 
         void close() {

@@ -135,6 +135,7 @@ import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData.DescribableLogDirTopic;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
@@ -208,12 +209,16 @@ import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.DescribeUserScramCredentialsRequest;
 import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
+import org.apache.kafka.common.requests.DescribeQuorumRequest;
+import org.apache.kafka.common.requests.DescribeQuorumRequest.Builder;
+import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.ElectLeadersRequest;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
 import org.apache.kafka.common.requests.ExpireDelegationTokenResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -257,6 +262,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
@@ -268,6 +274,8 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.internals.Topic.METADATA_TOPIC_NAME;
+import static org.apache.kafka.common.internals.Topic.METADATA_TOPIC_PARTITION;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignablePartition;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
@@ -306,9 +314,9 @@ public class KafkaAdminClient extends AdminClient {
     private static final long INVALID_SHUTDOWN_TIME = -1;
 
     /**
-     * The base reason for a LeaveGroupRequest
+     * The default reason for a LeaveGroupRequest.
      */
-    static final String LEAVE_GROUP_REASON = "member was removed by an admin";
+    static final String DEFAULT_LEAVE_GROUP_REASON = "member was removed by an admin";
 
     /**
      * Thread name prefix for admin client network thread
@@ -2716,7 +2724,11 @@ public class KafkaAdminClient extends AdminClient {
                             new ReplicaInfo(p.partitionSize(), p.offsetLag(), p.isFutureKey()));
                 }
             }
-            result.put(logDirResult.logDir(), new LogDirDescription(Errors.forCode(logDirResult.errorCode()).exception(), replicaInfoMap));
+            result.put(logDirResult.logDir(), new LogDirDescription(
+                    Errors.forCode(logDirResult.errorCode()).exception(),
+                    replicaInfoMap,
+                    logDirResult.totalBytes(),
+                    logDirResult.usableBytes()));
         }
         return result;
     }
@@ -3055,10 +3067,14 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             CreateDelegationTokenRequest.Builder createRequest(int timeoutMs) {
-                return new CreateDelegationTokenRequest.Builder(
-                        new CreateDelegationTokenRequestData()
-                            .setRenewers(renewers)
-                            .setMaxLifetimeMs(options.maxlifeTimeMs()));
+                CreateDelegationTokenRequestData data = new CreateDelegationTokenRequestData()
+                    .setRenewers(renewers)
+                    .setMaxLifetimeMs(options.maxlifeTimeMs());
+                if (options.owner().isPresent()) {
+                    data.setOwnerPrincipalName(options.owner().get().getName());
+                    data.setOwnerPrincipalType(options.owner().get().getPrincipalType());
+                }
+                return new CreateDelegationTokenRequest.Builder(data);
             }
 
             @Override
@@ -3069,6 +3085,7 @@ public class KafkaAdminClient extends AdminClient {
                 } else {
                     CreateDelegationTokenResponseData data = response.data();
                     TokenInformation tokenInfo =  new TokenInformation(data.tokenId(), new KafkaPrincipal(data.principalType(), data.principalName()),
+                        new KafkaPrincipal(data.tokenRequesterPrincipalType(), data.tokenRequesterPrincipalName()),
                         options.renewers(), data.issueTimestampMs(), data.maxTimestampMs(), data.expiryTimestampMs());
                     DelegationToken token = new DelegationToken(tokenInfo, data.hmac());
                     delegationTokenFuture.complete(token);
@@ -3384,13 +3401,14 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId,
-                                                                   final ListConsumerGroupOffsetsOptions options) {
+    public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(Map<String, ListConsumerGroupOffsetsSpec> groupSpecs,
+                                                                   ListConsumerGroupOffsetsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> future =
-                ListConsumerGroupOffsetsHandler.newFuture(groupId);
-        ListConsumerGroupOffsetsHandler handler = new ListConsumerGroupOffsetsHandler(groupId, options.topicPartitions(), logContext);
+                ListConsumerGroupOffsetsHandler.newFuture(groupSpecs.keySet());
+        ListConsumerGroupOffsetsHandler handler =
+            new ListConsumerGroupOffsetsHandler(groupSpecs, options.requireStable(), logContext);
         invokeDriver(handler, future, options.timeoutMs);
-        return new ListConsumerGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)));
+        return new ListConsumerGroupOffsetsResult(future.all());
     }
 
     @Override
@@ -3713,7 +3731,7 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
-    private List<MemberIdentity> getMembersFromGroup(String groupId) {
+    private List<MemberIdentity> getMembersFromGroup(String groupId, String reason) {
         Collection<MemberDescription> members;
         try {
             members = describeConsumerGroups(Collections.singleton(groupId)).describedGroups().get(groupId).get().members();
@@ -3723,11 +3741,15 @@ public class KafkaAdminClient extends AdminClient {
 
         List<MemberIdentity> membersToRemove = new ArrayList<>();
         for (final MemberDescription member : members) {
+            MemberIdentity memberIdentity = new MemberIdentity().setReason(reason);
+
             if (member.groupInstanceId().isPresent()) {
-                membersToRemove.add(new MemberIdentity().setGroupInstanceId(member.groupInstanceId().get()));
+                memberIdentity.setGroupInstanceId(member.groupInstanceId().get());
             } else {
-                membersToRemove.add(new MemberIdentity().setMemberId(member.consumerId()));
+                memberIdentity.setMemberId(member.consumerId());
             }
+
+            membersToRemove.add(memberIdentity);
         }
         return membersToRemove;
     }
@@ -3735,15 +3757,17 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId,
                                                                                RemoveMembersFromConsumerGroupOptions options) {
+        String reason = options.reason() == null || options.reason().isEmpty() ?
+            DEFAULT_LEAVE_GROUP_REASON : JoinGroupRequest.maybeTruncateReason(options.reason());
+
         List<MemberIdentity> members;
         if (options.removeAll()) {
-            members = getMembersFromGroup(groupId);
+            members = getMembersFromGroup(groupId, reason);
         } else {
-            members = options.members().stream().map(MemberToRemove::toMemberIdentity).collect(Collectors.toList());
+            members = options.members().stream()
+                .map(m -> m.toMemberIdentity().setReason(reason))
+                .collect(Collectors.toList());
         }
-        
-        String reason = options.reason() == null ? LEAVE_GROUP_REASON : LEAVE_GROUP_REASON + ": " + options.reason();
-        members.forEach(member -> member.setReason(reason));
 
         SimpleAdminApiFuture<CoordinatorKey, Map<MemberIdentity, Errors>> future =
                 RemoveMembersFromConsumerGroupHandler.newFuture(groupId);
@@ -4259,12 +4283,13 @@ public class KafkaAdminClient extends AdminClient {
                         new UpdateFeaturesRequestData.FeatureUpdateKey();
                     requestItem.setFeature(feature);
                     requestItem.setMaxVersionLevel(update.maxVersionLevel());
-                    requestItem.setAllowDowngrade(update.allowDowngrade());
+                    requestItem.setUpgradeType(update.upgradeType().code());
                     featureUpdatesRequestData.add(requestItem);
                 }
                 return new UpdateFeaturesRequest.Builder(
                     new UpdateFeaturesRequestData()
                         .setTimeoutMs(timeoutMs)
+                        .setValidateOnly(options.validateOnly())
                         .setFeatureUpdates(featureUpdatesRequestData));
             }
 
@@ -4312,6 +4337,84 @@ public class KafkaAdminClient extends AdminClient {
 
         runnable.call(call, now);
         return new UpdateFeaturesResult(new HashMap<>(updateFutures));
+    }
+
+    @Override
+    public DescribeMetadataQuorumResult describeMetadataQuorum(DescribeMetadataQuorumOptions options) {
+        NodeProvider provider = new LeastLoadedNodeProvider();
+
+        final KafkaFutureImpl<QuorumInfo> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        final Call call = new Call(
+                "describeMetadataQuorum", calcDeadlineMs(now, options.timeoutMs()), provider) {
+
+            private QuorumInfo.ReplicaState translateReplicaState(DescribeQuorumResponseData.ReplicaState replica) {
+                return new QuorumInfo.ReplicaState(
+                        replica.replicaId(),
+                        replica.logEndOffset(),
+                        replica.lastFetchTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(replica.lastFetchTimestamp()),
+                        replica.lastCaughtUpTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(replica.lastCaughtUpTimestamp()));
+            }
+
+            private QuorumInfo createQuorumResult(final DescribeQuorumResponseData.PartitionData partition) {
+                return new QuorumInfo(
+                        partition.leaderId(),
+                        partition.currentVoters().stream().map(v -> translateReplicaState(v)).collect(Collectors.toList()),
+                        partition.observers().stream().map(o -> translateReplicaState(o)).collect(Collectors.toList()));
+            }
+
+            @Override
+            DescribeQuorumRequest.Builder createRequest(int timeoutMs) {
+                return new Builder(DescribeQuorumRequest.singletonRequest(
+                        new TopicPartition(METADATA_TOPIC_NAME, METADATA_TOPIC_PARTITION.partition())));
+            }
+
+            @Override
+            void handleResponse(AbstractResponse response) {
+                final DescribeQuorumResponse quorumResponse = (DescribeQuorumResponse) response;
+                if (quorumResponse.data().errorCode() != Errors.NONE.code()) {
+                    throw Errors.forCode(quorumResponse.data().errorCode()).exception();
+                }
+                if (quorumResponse.data().topics().size() != 1) {
+                    String msg = String.format("DescribeMetadataQuorum received %d topics when 1 was expected",
+                            quorumResponse.data().topics().size());
+                    log.debug(msg);
+                    throw new UnknownServerException(msg);
+                }
+                DescribeQuorumResponseData.TopicData topic = quorumResponse.data().topics().get(0);
+                if (!topic.topicName().equals(METADATA_TOPIC_NAME)) {
+                    String msg = String.format("DescribeMetadataQuorum received a topic with name %s when %s was expected",
+                            topic.topicName(), METADATA_TOPIC_NAME);
+                    log.debug(msg);
+                    throw new UnknownServerException(msg);
+                }
+                if (topic.partitions().size() != 1) {
+                    String msg = String.format("DescribeMetadataQuorum received a topic %s with %d partitions when 1 was expected",
+                            topic.topicName(), topic.partitions().size());
+                    log.debug(msg);
+                    throw new UnknownServerException(msg);
+                }
+                DescribeQuorumResponseData.PartitionData partition = topic.partitions().get(0);
+                if (partition.partitionIndex() != METADATA_TOPIC_PARTITION.partition()) {
+                    String msg = String.format("DescribeMetadataQuorum received a single partition with index %d when %d was expected",
+                            partition.partitionIndex(), METADATA_TOPIC_PARTITION.partition());
+                    log.debug(msg);
+                    throw new UnknownServerException(msg);
+                }
+                if (partition.errorCode() != Errors.NONE.code()) {
+                    throw Errors.forCode(partition.errorCode()).exception();
+                }
+                future.complete(createQuorumResult(partition));
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        };
+
+        runnable.call(call, now);
+        return new DescribeMetadataQuorumResult(future);
     }
 
     @Override

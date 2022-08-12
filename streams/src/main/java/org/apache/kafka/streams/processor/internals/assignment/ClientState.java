@@ -29,17 +29,16 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.stream.Collectors;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.unmodifiableMap;
 import static java.util.Collections.unmodifiableSet;
 import static java.util.Comparator.comparing;
 import static java.util.Comparator.comparingLong;
-
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 
@@ -63,6 +62,10 @@ public class ClientState {
 
     public ClientState() {
         this(0);
+    }
+
+    public ClientState(final Map<String, String> clientTags) {
+        this(0, clientTags);
     }
 
     ClientState(final int capacity) {
@@ -422,6 +425,7 @@ public class ClientState {
                ") prevStandbyTasks: (" + previousStandbyTasks.taskIds() +
                ") changelogOffsetTotalsByTask: (" + taskOffsetSums.entrySet() +
                ") taskLagTotals: (" + taskLagTotals.entrySet() +
+               ") clientTags: (" + clientTags.entrySet() +
                ") capacity: " + capacity +
                " assigned: " + assignedTaskCount() +
                "]";

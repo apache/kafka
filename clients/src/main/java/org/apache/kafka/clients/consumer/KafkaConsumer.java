@@ -563,7 +563,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static final long NO_CURRENT_THREAD = -1L;
     private static final String JMX_PREFIX = "kafka.consumer";
     static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
-    private static final String DEFAULT_REASON = "rebalance enforced by user";
+    static final String DEFAULT_REASON = "rebalance enforced by user";
 
     // Visible for testing
     final Metrics metrics;
@@ -774,8 +774,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             );
 
             // no coordinator will be constructed for the default (null) group id
-            this.coordinator = !groupId.isPresent() ? null :
-                new ConsumerCoordinator(groupRebalanceConfig,
+            if (!groupId.isPresent()) {
+                config.ignore(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
+                config.ignore(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
+                this.coordinator = null;
+            } else {
+                this.coordinator = new ConsumerCoordinator(groupRebalanceConfig,
                         logContext,
                         this.client,
                         assignors,
@@ -788,6 +792,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                         this.interceptors,
                         config.getBoolean(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
+            }
             this.fetcher = new Fetcher<>(
                     logContext,
                     this.client,
@@ -1120,7 +1125,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 if (coordinator != null)
                     this.coordinator.maybeAutoCommitOffsetsAsync(time.milliseconds());
 
-                log.info("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
+                log.info("Assigned to partition(s): {}", Utils.join(partitions, ", "));
                 if (this.subscriptions.assignFromUser(new HashSet<>(partitions)))
                     metadata.requestUpdateForNewTopics();
             }
@@ -2322,7 +2327,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (coordinator == null) {
                 throw new IllegalStateException("Tried to force a rebalance but consumer does not have a group.");
             }
-            coordinator.requestRejoin(reason == null ? DEFAULT_REASON : DEFAULT_REASON + ": " + reason);
+            coordinator.requestRejoin(reason == null || reason.isEmpty() ? DEFAULT_REASON : reason);
         } finally {
             release();
         }

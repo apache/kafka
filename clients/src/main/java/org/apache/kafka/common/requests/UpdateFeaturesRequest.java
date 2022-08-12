@@ -16,14 +16,45 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.stream.Collectors;
 
 public class UpdateFeaturesRequest extends AbstractRequest {
+
+    public static class FeatureUpdateItem {
+        private final String featureName;
+        private final short featureLevel;
+        private final FeatureUpdate.UpgradeType upgradeType;
+
+        public FeatureUpdateItem(String featureName, short featureLevel, FeatureUpdate.UpgradeType upgradeType) {
+            this.featureName = featureName;
+            this.featureLevel = featureLevel;
+            this.upgradeType = upgradeType;
+        }
+
+        public String feature() {
+            return featureName;
+        }
+
+        public short versionLevel() {
+            return featureLevel;
+        }
+
+        public FeatureUpdate.UpgradeType upgradeType() {
+            return upgradeType;
+        }
+
+        public boolean isDeleteRequest() {
+            return featureLevel < 1 && !upgradeType.equals(FeatureUpdate.UpgradeType.UPGRADE);
+        }
+    }
 
     public static class Builder extends AbstractRequest.Builder<UpdateFeaturesRequest> {
 
@@ -52,6 +83,25 @@ public class UpdateFeaturesRequest extends AbstractRequest {
         this.data = data;
     }
 
+    public FeatureUpdateItem getFeature(String name) {
+        UpdateFeaturesRequestData.FeatureUpdateKey update = data.featureUpdates().find(name);
+        if (super.version() == 0) {
+            if (update.allowDowngrade()) {
+                return new FeatureUpdateItem(update.feature(), update.maxVersionLevel(), FeatureUpdate.UpgradeType.SAFE_DOWNGRADE);
+            } else {
+                return new FeatureUpdateItem(update.feature(), update.maxVersionLevel(), FeatureUpdate.UpgradeType.UPGRADE);
+            }
+        } else {
+            return new FeatureUpdateItem(update.feature(), update.maxVersionLevel(), FeatureUpdate.UpgradeType.fromCode(update.upgradeType()));
+        }
+    }
+
+    public Collection<FeatureUpdateItem> featureUpdates() {
+        return data.featureUpdates().stream()
+            .map(update -> getFeature(update.feature()))
+            .collect(Collectors.toList());
+    }
+
     @Override
     public UpdateFeaturesResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return UpdateFeaturesResponse.createWithErrors(
@@ -68,9 +118,5 @@ public class UpdateFeaturesRequest extends AbstractRequest {
 
     public static UpdateFeaturesRequest parse(ByteBuffer buffer, short version) {
         return new UpdateFeaturesRequest(new UpdateFeaturesRequestData(new ByteBufferAccessor(buffer), version), version);
-    }
-
-    public static boolean isDeleteRequest(UpdateFeaturesRequestData.FeatureUpdateKey update) {
-        return update.maxVersionLevel() < 1 && update.allowDowngrade();
     }
 }

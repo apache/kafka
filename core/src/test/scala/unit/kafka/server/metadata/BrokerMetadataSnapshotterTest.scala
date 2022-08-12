@@ -20,8 +20,8 @@ package kafka.server.metadata
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CountDownLatch}
-
 import org.apache.kafka.common.memory.MemoryPool
+import org.apache.kafka.common.metadata.FenceBrokerRecord
 import org.apache.kafka.common.protocol.ByteBufferAccessor
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords}
 import org.apache.kafka.common.utils.Time
@@ -34,6 +34,9 @@ import org.apache.kafka.snapshot.{MockRawSnapshotWriter, RecordsSnapshotWriter, 
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
+import java.util
+import java.util.Arrays.asList
+import scala.compat.java8.OptionConverters._
 
 class BrokerMetadataSnapshotterTest {
   @Test
@@ -48,7 +51,7 @@ class BrokerMetadataSnapshotterTest {
 
     override def build(committedOffset: Long,
                        committedEpoch: Int,
-                       lastContainedLogTime: Long): SnapshotWriter[ApiMessageAndVersion] = {
+                       lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]] = {
       val offsetAndEpoch = new OffsetAndEpoch(committedOffset, committedEpoch)
       RecordsSnapshotWriter.createWithHeader(
         () => {
@@ -62,7 +65,7 @@ class BrokerMetadataSnapshotterTest {
         lastContainedLogTime,
         CompressionType.NONE,
         MetadataRecordSerde.INSTANCE
-      ).get();
+      ).asScala
     }
 
     def consumeSnapshotBuffer(committedOffset: Long, committedEpoch: Int)(buffer: ByteBuffer): Unit = {
@@ -103,5 +106,32 @@ class BrokerMetadataSnapshotterTest {
     } finally {
       snapshotter.close()
     }
+  }
+
+  class MockSnapshotWriter extends SnapshotWriter[ApiMessageAndVersion] {
+    val batches = new util.ArrayList[util.List[ApiMessageAndVersion]]
+    override def snapshotId(): OffsetAndEpoch = new OffsetAndEpoch(0, 0)
+    override def lastContainedLogOffset(): Long = 0
+    override def lastContainedLogEpoch(): Int = 0
+    override def isFrozen: Boolean = false
+    override def append(batch: util.List[ApiMessageAndVersion]): Unit = batches.add(batch)
+    override def freeze(): Unit = {}
+    override def close(): Unit = {}
+  }
+
+  @Test
+  def testRecordListConsumer(): Unit = {
+    val writer = new MockSnapshotWriter()
+    val consumer = new RecordListConsumer(3, writer)
+    val m = new ApiMessageAndVersion(new FenceBrokerRecord().setId(1).setEpoch(1), 0.toShort)
+    consumer.accept(asList(m, m))
+    assertEquals(asList(asList(m, m)), writer.batches)
+    consumer.accept(asList(m))
+    assertEquals(asList(asList(m, m), asList(m)), writer.batches)
+    consumer.accept(asList(m, m, m, m))
+    assertEquals(asList(asList(m, m), asList(m), asList(m, m, m), asList(m)), writer.batches)
+    consumer.accept(asList(m, m, m, m, m, m, m, m))
+    assertEquals(asList(asList(m, m), asList(m), asList(m, m, m), asList(m), asList(m, m, m), asList(m, m, m), asList(m, m)),
+      writer.batches)
   }
 }

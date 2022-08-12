@@ -27,6 +27,8 @@ import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTr
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
+import java.nio.file.Files
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import scala.collection.Iterable
 import scala.jdk.CollectionConverters._
 
@@ -82,7 +84,8 @@ object LogTestUtils {
                 producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
                 lastShutdownClean: Boolean = true,
                 topicId: Option[Uuid] = None,
-                keepPartitionMetadataFile: Boolean = true): UnifiedLog = {
+                keepPartitionMetadataFile: Boolean = true,
+                numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]): UnifiedLog = {
     UnifiedLog(
       dir = dir,
       config = config,
@@ -97,7 +100,8 @@ object LogTestUtils {
       logDirFailureChannel = new LogDirFailureChannel(10),
       lastShutdownClean = lastShutdownClean,
       topicId = topicId,
-      keepPartitionMetadataFile = keepPartitionMetadataFile
+      keepPartitionMetadataFile = keepPartitionMetadataFile,
+      numRemainingSegments = numRemainingSegments
     )
   }
 
@@ -142,8 +146,8 @@ object LogTestUtils {
       segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
         record(baseOffset + Int.MaxValue - 1)))
       // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
-      UnifiedLog.offsetIndexFile(logDir, baseOffset).createNewFile()
-      UnifiedLog.timeIndexFile(logDir, baseOffset).createNewFile()
+      Files.createFile(UnifiedLog.offsetIndexFile(logDir, baseOffset).toPath)
+      Files.createFile(UnifiedLog.timeIndexFile(logDir, baseOffset).toPath)
       baseOffset + Int.MaxValue
     }
 

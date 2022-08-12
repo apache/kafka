@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.OptionalLong;
 import java.util.Optional;
 
+import static org.apache.kafka.raft.KafkaRaftClient.MAX_BATCH_SIZE_BYTES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -94,7 +95,7 @@ public class SnapshotGeneratorTest {
     ) {
         return RecordsSnapshotWriter.createWithHeader(
             () -> createNewSnapshot(new OffsetAndEpoch(committedOffset + 1, 1)),
-            1024,
+            MAX_BATCH_SIZE_BYTES,
             MemoryPool.NONE,
             new MockTime(),
             lastContainedLogTime,

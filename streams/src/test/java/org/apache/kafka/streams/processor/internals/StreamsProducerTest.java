@@ -76,6 +76,7 @@ public class StreamsProducerTest {
     private static final double TXN_SEND_OFFSETS_TIME = 5;
     private static final double TXN_COMMIT_TIME = 6;
     private static final double TXN_ABORT_TIME = 7;
+    private static final double METADATA_WAIT_TIME = 8;
 
     private final LogContext logContext = new LogContext("test ");
     private final String topic = "topic";
@@ -1167,11 +1168,13 @@ public class StreamsProducerTest {
             TXN_BEGIN_TIME,
             TXN_SEND_OFFSETS_TIME,
             TXN_COMMIT_TIME,
-            TXN_ABORT_TIME
+            TXN_ABORT_TIME,
+            METADATA_WAIT_TIME
         );
 
         final double expectedTotalBlocked = BUFFER_POOL_WAIT_TIME + FLUSH_TME + TXN_INIT_TIME +
-            TXN_BEGIN_TIME + TXN_SEND_OFFSETS_TIME +  TXN_COMMIT_TIME + TXN_ABORT_TIME;
+            TXN_BEGIN_TIME + TXN_SEND_OFFSETS_TIME +  TXN_COMMIT_TIME + TXN_ABORT_TIME +
+            METADATA_WAIT_TIME;
         assertThat(nonEosStreamsProducer.totalBlockedTime(), closeTo(expectedTotalBlocked, 0.01));
     }
 
@@ -1185,10 +1188,12 @@ public class StreamsProducerTest {
             TXN_BEGIN_TIME,
             TXN_SEND_OFFSETS_TIME,
             TXN_COMMIT_TIME,
-            TXN_ABORT_TIME
+            TXN_ABORT_TIME,
+            METADATA_WAIT_TIME
         );
         final double expectedTotalBlocked = BUFFER_POOL_WAIT_TIME + FLUSH_TME + TXN_INIT_TIME +
-            TXN_BEGIN_TIME + TXN_SEND_OFFSETS_TIME +  TXN_COMMIT_TIME + TXN_ABORT_TIME;
+            TXN_BEGIN_TIME + TXN_SEND_OFFSETS_TIME +  TXN_COMMIT_TIME + TXN_ABORT_TIME +
+            METADATA_WAIT_TIME;
         assertThat(eosBetaStreamsProducer.totalBlockedTime(), equalTo(expectedTotalBlocked));
         reset(mockTime);
         final long closeStart = 1L;
@@ -1204,7 +1209,8 @@ public class StreamsProducerTest {
             TXN_BEGIN_TIME,
             TXN_SEND_OFFSETS_TIME,
             TXN_COMMIT_TIME,
-            TXN_ABORT_TIME
+            TXN_ABORT_TIME,
+            METADATA_WAIT_TIME
         );
 
         assertThat(
@@ -1243,7 +1249,8 @@ public class StreamsProducerTest {
         final double txnBeginTime,
         final double txnSendOffsetsTime,
         final double txnCommitTime,
-        final double txnAbortTime) {
+        final double txnAbortTime,
+        final double metadataWaitTime) {
         addMetric(producer, "bufferpool-wait-time-ns-total", bufferPoolWaitTime);
         addMetric(producer, "flush-time-ns-total", flushTime);
         addMetric(producer, "txn-init-time-ns-total", txnInitTime);
@@ -1251,5 +1258,6 @@ public class StreamsProducerTest {
         addMetric(producer, "txn-send-offsets-time-ns-total", txnSendOffsetsTime);
         addMetric(producer, "txn-commit-time-ns-total", txnCommitTime);
         addMetric(producer, "txn-abort-time-ns-total", txnAbortTime);
+        addMetric(producer, "metadata-wait-time-ns-total", metadataWaitTime);
     }
 }

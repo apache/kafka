@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.time.Duration;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.clients.GroupRebalanceConfig;
@@ -140,6 +141,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private final RebalanceProtocol protocol;
+    // pending commit offset request in onJoinPrepare
+    private RequestFuture<Void> autoCommitOffsetRequestFuture = null;
+    // a timer for join prepare to know when to stop.
+    // it'll set to rebalance timeout so that the member can join the group successfully
+    // even though offset commit failed.
+    private Timer joinPrepareTimer = null;
 
     /**
      * Initialize the coordination manager.
@@ -401,10 +408,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         assignedPartitions.addAll(assignment.partitions());
 
         if (!subscriptions.checkAssignmentMatchedSubscription(assignedPartitions)) {
-            final String reason = String.format("received assignment %s does not match the current subscription %s; " +
+            final String fullReason = String.format("received assignment %s does not match the current subscription %s; " +
                     "it is likely that the subscription has changed since we joined the group, will re-join with current subscription",
                     assignment.partitions(), subscriptions.prettyString());
-            requestRejoin(reason);
+            requestRejoin("received assignment does not match the current subscription", fullReason);
 
             return;
         }
@@ -437,9 +444,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 firstException.compareAndSet(null, invokePartitionsRevoked(revokedPartitions));
 
                 // If revoked any partitions, need to re-join the group afterwards
-                final String reason = String.format("need to revoke partitions %s as indicated " +
+                final String fullReason = String.format("need to revoke partitions %s as indicated " +
                         "by the current assignment and re-join", revokedPartitions);
-                requestRejoin(reason);
+                requestRejoin("need to revoke partitions and re-join", fullReason);
             }
         }
 
@@ -548,14 +555,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 }
             }
         } else {
-            // For manually assigned partitions, if coordinator is unknown, make sure we lookup one and await metadata.
+            // For manually assigned partitions, we do not try to pro-actively lookup coordinator;
+            // instead we only try to refresh metadata when necessary.
             // If connections to all nodes fail, wakeups triggered while attempting to send fetch
             // requests result in polls returning immediately, causing a tight loop of polls. Without
             // the wakeup, poll() with no channels would block for the timeout, delaying re-connection.
             // awaitMetadataUpdate() in ensureCoordinatorReady initiates new connections with configured backoff and avoids the busy loop.
-            if (coordinatorUnknownAndUnready(timer)) {
-                return false;
+            if (metadata.updateRequested() && !client.hasReadyNodes(timer.currentTimeMs())) {
+                client.awaitMetadataUpdate(timer);
             }
+
+            // if there is pending coordinator requests, ensure they have a chance to be transmitted.
+            client.pollNoWakeup();
         }
 
         maybeAutoCommitOffsetsAsync(timer.currentTimeMs());
@@ -735,24 +746,58 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected boolean onJoinPrepare(int generation, String memberId) {
+    protected boolean onJoinPrepare(Timer timer, int generation, String memberId) {
         log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
-        boolean onJoinPrepareAsyncCommitCompleted = false;
-        // async commit offsets prior to rebalance if auto-commit enabled
-        RequestFuture<Void> future = maybeAutoCommitOffsetsAsync();
-        // return true when
-        // 1. future is null, which means no commit request sent, so it is still considered completed
-        // 2. offset commit completed
-        // 3. offset commit failed with non-retriable exception
-        if (future == null)
-            onJoinPrepareAsyncCommitCompleted = true;
-        else if (future.succeeded())
-            onJoinPrepareAsyncCommitCompleted = true;
-        else if (future.failed() && !future.isRetriable()) {
-            log.error("Asynchronous auto-commit of offsets failed: {}", future.exception().getMessage());
-            onJoinPrepareAsyncCommitCompleted = true;
+        if (joinPrepareTimer == null) {
+            // We should complete onJoinPrepare before rebalanceTimeout,
+            // and continue to join group to avoid member got kicked out from group
+            joinPrepareTimer = time.timer(rebalanceConfig.rebalanceTimeoutMs);
+        } else {
+            joinPrepareTimer.update();
         }
 
+        // async commit offsets prior to rebalance if auto-commit enabled
+        // and there is no in-flight offset commit request
+        if (autoCommitEnabled && autoCommitOffsetRequestFuture == null) {
+            autoCommitOffsetRequestFuture = maybeAutoCommitOffsetsAsync();
+        }
+
+        // wait for commit offset response before timer expired
+        if (autoCommitOffsetRequestFuture != null) {
+            Timer pollTimer = timer.remainingMs() < joinPrepareTimer.remainingMs() ?
+                    timer : joinPrepareTimer;
+            client.poll(autoCommitOffsetRequestFuture, pollTimer);
+            joinPrepareTimer.update();
+
+            // Keep retrying/waiting the offset commit when:
+            // 1. offset commit haven't done (and joinPrepareTimer not expired)
+            // 2. failed with retryable exception (and joinPrepareTimer not expired)
+            // Otherwise, continue to revoke partitions, ex:
+            // 1. if joinPrepareTime has expired
+            // 2. if offset commit failed with no-retryable exception
+            // 3. if offset commit success
+            boolean onJoinPrepareAsyncCommitCompleted = true;
+            if (joinPrepareTimer.isExpired()) {
+                log.error("Asynchronous auto-commit of offsets failed: joinPrepare timeout. Will continue to join group");
+            } else if (!autoCommitOffsetRequestFuture.isDone()) {
+                onJoinPrepareAsyncCommitCompleted = false;
+            } else if (autoCommitOffsetRequestFuture.failed() && autoCommitOffsetRequestFuture.isRetriable()) {
+                log.debug("Asynchronous auto-commit of offsets failed with retryable error: {}. Will retry it.",
+                        autoCommitOffsetRequestFuture.exception().getMessage());
+                onJoinPrepareAsyncCommitCompleted = false;
+            } else if (autoCommitOffsetRequestFuture.failed() && !autoCommitOffsetRequestFuture.isRetriable()) {
+                log.error("Asynchronous auto-commit of offsets failed: {}. Will continue to join group.",
+                        autoCommitOffsetRequestFuture.exception().getMessage());
+            }
+            if (autoCommitOffsetRequestFuture.isDone()) {
+                autoCommitOffsetRequestFuture = null;
+            }
+            if (!onJoinPrepareAsyncCommitCompleted) {
+                pollTimer.sleep(Math.min(pollTimer.remainingMs(), rebalanceConfig.retryBackoffMs));
+                timer.update();
+                return false;
+            }
+        }
 
         // the generation / member-id can possibly be reset by the heartbeat thread
         // upon getting errors or heartbeat timeouts; in this case whatever is previously
@@ -804,11 +849,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         isLeader = false;
         subscriptions.resetGroupSubscription();
+        joinPrepareTimer = null;
+        autoCommitOffsetRequestFuture = null;
+        timer.update();
 
         if (exception != null) {
             throw new KafkaException("User rebalance callback throws an error", exception);
         }
-        return onJoinPrepareAsyncCommitCompleted;
+        return true;
     }
 
     @Override
@@ -851,17 +899,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // we need to rejoin if we performed the assignment and metadata has changed;
         // also for those owned-but-no-longer-existed partitions we should drop them as lost
         if (assignmentSnapshot != null && !assignmentSnapshot.matches(metadataSnapshot)) {
-            final String reason = String.format("cached metadata has changed from %s at the beginning of the rebalance to %s",
+            final String fullReason = String.format("cached metadata has changed from %s at the beginning of the rebalance to %s",
                 assignmentSnapshot, metadataSnapshot);
-            requestRejoinIfNecessary(reason);
+            requestRejoinIfNecessary("cached metadata has changed", fullReason);
             return true;
         }
 
         // we need to join if our subscription has changed since the last join
         if (joinedSubscription != null && !joinedSubscription.equals(subscriptions.subscription())) {
-            final String reason = String.format("subscription has changed from %s at the beginning of the rebalance to %s",
+            final String fullReason = String.format("subscription has changed from %s at the beginning of the rebalance to %s",
                 joinedSubscription, subscriptions.subscription());
-            requestRejoinIfNecessary(reason);
+            requestRejoinIfNecessary("subscription has changed", fullReason);
             return true;
         }
 
@@ -970,7 +1018,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();
         try {
-            maybeAutoCommitOffsetsAsync();
+            maybeAutoCommitOffsetsSync(timer);
             while (pendingAsyncCommits.get() > 0 && timer.notExpired()) {
                 ensureCoordinatorReady(timer);
                 client.poll(timer);
@@ -1004,7 +1052,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (offsets.isEmpty()) {
             // No need to check coordinator if offsets is empty since commit of empty offsets is completed locally.
             future = doCommitOffsetsAsync(offsets, callback);
-        } else if (!coordinatorUnknown()) {
+        } else if (!coordinatorUnknownAndUnready(time.timer(Duration.ZERO))) {
+            // we need to make sure coordinator is ready before committing, since
+            // this is for async committing we do not try to block, but just try once to
+            // clear the previous discover-coordinator future, resend, or get responses;
+            // if the coordinator is not ready yet then we would just proceed and put that into the
+            // pending requests, and future poll calls would still try to complete them.
+            //
+            // the key here though is that we have to try sending the discover-coordinator if
+            // it's not known or ready, since this is the only place we can send such request
+            // under manual assignment (there we would not have heartbeat thread trying to auto-rediscover
+            // the coordinator).
             future = doCommitOffsetsAsync(offsets, callback);
         } else {
             // we don't know the current coordinator, so try to find it and then send the commit
@@ -1108,6 +1166,24 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         } while (timer.notExpired());
 
         return false;
+    }
+
+    private void maybeAutoCommitOffsetsSync(Timer timer) {
+        if (autoCommitEnabled) {
+            Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
+            try {
+                log.debug("Sending synchronous auto-commit of offsets {}", allConsumedOffsets);
+                if (!commitOffsetsSync(allConsumedOffsets, timer))
+                    log.debug("Auto-commit of offsets {} timed out before completion", allConsumedOffsets);
+            } catch (WakeupException | InterruptException e) {
+                log.debug("Auto-commit of offsets {} was interrupted before completion", allConsumedOffsets);
+                // rethrow wakeups since they are triggered by the user
+                throw e;
+            } catch (Exception e) {
+                // consistent with async auto-commit failures, we do not propagate the exception
+                log.warn("Synchronous auto-commit of offsets {} failed: {}", allConsumedOffsets, e.getMessage());
+            }
+        }
     }
 
     public void maybeAutoCommitOffsetsAsync(long now) {

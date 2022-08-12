@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -261,6 +262,7 @@ public class StreamThread extends Thread {
     public final Object stateLock;
     private final Duration pollTime;
     private final long commitTimeMs;
+    private final long purgeTimeMs;
     private final int maxPollTimeMs;
     private final String originalReset;
     private final TaskManager taskManager;
@@ -288,6 +290,7 @@ public class StreamThread extends Thread {
     private long now;
     private long lastPollMs;
     private long lastCommitMs;
+    private long lastPurgeMs;
     private long lastPartitionAssignedMs = -1L;
     private int numIterations;
     private volatile State state = State.CREATED;
@@ -343,6 +346,7 @@ public class StreamThread extends Thread {
         referenceContainer.adminClient = adminClient;
         referenceContainer.streamsMetadataState = streamsMetadataState;
         referenceContainer.time = time;
+        referenceContainer.clientTags = config.getClientTags();
 
         log.info("Creating restore consumer client");
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadId));
@@ -381,17 +385,18 @@ public class StreamThread extends Thread {
             threadId,
             log
         );
+
         final TaskManager taskManager = new TaskManager(
             time,
             changelogReader,
             processId,
             logPrefix,
-            streamsMetrics,
             activeTaskCreator,
             standbyTaskCreator,
             topologyMetadata,
             adminClient,
-            stateDirectory
+            stateDirectory,
+            maybeCreateAndStartStateUpdater(config, changelogReader, time)
         );
         referenceContainer.taskManager = taskManager;
 
@@ -407,7 +412,6 @@ public class StreamThread extends Thread {
         }
 
         final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
-        changelogReader.setMainConsumer(mainConsumer);
         taskManager.setMainConsumer(mainConsumer);
         referenceContainer.mainConsumer = mainConsumer;
 
@@ -433,6 +437,20 @@ public class StreamThread extends Thread {
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
+    }
+
+    private static StateUpdater maybeCreateAndStartStateUpdater(final StreamsConfig streamsConfig,
+                                                                final ChangelogReader changelogReader,
+                                                                final Time time) {
+        final boolean stateUpdaterEnabled =
+            InternalConfig.getBoolean(streamsConfig.originals(), InternalConfig.STATE_UPDATER_ENABLED, false);
+        if (stateUpdaterEnabled) {
+            final StateUpdater stateUpdater = new DefaultStateUpdater(streamsConfig, changelogReader, time);
+            stateUpdater.start();
+            return stateUpdater;
+        } else {
+            return null;
+        }
     }
 
     public StreamThread(final Time time,
@@ -517,6 +535,7 @@ public class StreamThread extends Thread {
         this.maxPollTimeMs = new InternalConsumerConfig(config.getMainConsumerConfigs("dummyGroupId", "dummyClientId", dummyThreadIdx))
             .getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+        this.purgeTimeMs = config.getLong(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG);
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
@@ -585,7 +604,7 @@ public class StreamThread extends Thread {
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("Triggering the followup rebalance scheduled for {} ms.", nextProbingRebalanceMs.get());
-                    mainConsumer.enforceRebalance();
+                    mainConsumer.enforceRebalance("Scheduled probing rebalance");
                     nextProbingRebalanceMs.set(Long.MAX_VALUE);
                 }
             } catch (final TaskCorruptedException e) {
@@ -597,7 +616,7 @@ public class StreamThread extends Thread {
                     final boolean enforceRebalance = taskManager.handleCorruption(e.corruptedTasks());
                     if (enforceRebalance && eosEnabled) {
                         log.info("Active task(s) got corrupted. Triggering a rebalance.");
-                        mainConsumer.enforceRebalance();
+                        mainConsumer.enforceRebalance("Active tasks corrupted");
                     }
                 } catch (final TaskMigratedException taskMigrated) {
                     handleTaskMigrated(taskMigrated);
@@ -639,7 +658,7 @@ public class StreamThread extends Thread {
         if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
             log.warn("Detected that shutdown was requested. " +
                     "All clients in this app will now begin to shutdown");
-            mainConsumer.enforceRebalance();
+            mainConsumer.enforceRebalance("Shutdown requested");
         }
     }
 
@@ -796,10 +815,10 @@ public class StreamThread extends Thread {
 
                 final long beforeCommitMs = now;
                 final int committed = maybeCommit();
-                totalCommittedSinceLastSummary += committed;
                 final long commitLatency = Math.max(now - beforeCommitMs, 0);
                 totalCommitLatency += commitLatency;
                 if (committed > 0) {
+                    totalCommittedSinceLastSummary += committed;
                     commitSensor.record(commitLatency / (double) committed, now);
 
                     if (log.isDebugEnabled()) {
@@ -861,7 +880,7 @@ public class StreamThread extends Thread {
             if (taskManager.tryToCompleteRestoration(now, partitions -> resetOffsets(partitions, null))) {
                 changelogReader.transitToUpdateStandby();
                 log.info("Restoration took {} ms for all tasks {}", time.milliseconds() - lastPartitionAssignedMs,
-                    taskManager.tasks().keySet());
+                    taskManager.allTasks().keySet());
                 setState(State.RUNNING);
             }
 
@@ -875,7 +894,8 @@ public class StreamThread extends Thread {
         }
         // we can always let changelog reader try restoring in order to initialize the changelogs;
         // if there's no active restoring or standby updating it would not try to fetch any data
-        changelogReader.restore(taskManager.tasks());
+        // After KAFKA-13873, we only restore the not paused tasks.
+        changelogReader.restore(taskManager.notPausedTasks());
         log.debug("Idempotent restore call done. Thread state has not changed.");
     }
 
@@ -1060,16 +1080,17 @@ public class StreamThread extends Thread {
             }
 
             committed = taskManager.commit(
-                taskManager.tasks()
+                taskManager.allTasks()
                     .values()
                     .stream()
                     .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
                     .collect(Collectors.toSet())
             );
 
-            if (committed > 0) {
+            if (committed > 0 && (now - lastPurgeMs) > purgeTimeMs) {
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommittedRecords();
+                lastPurgeMs = now;
             }
 
             if (committed == -1) {
@@ -1119,7 +1140,7 @@ public class StreamThread extends Thread {
         // intentionally do not check the returned flag
         setState(State.PENDING_SHUTDOWN);
 
-        log.info("Shutting down");
+        log.info("Shutting down {}", cleanRun ? "clean" : "unclean");
 
         try {
             taskManager.shutdown(cleanRun);
@@ -1227,7 +1248,7 @@ public class StreamThread extends Thread {
     }
 
     public Map<TaskId, Task> allTasks() {
-        return taskManager.tasks();
+        return taskManager.allTasks();
     }
 
     /**

@@ -1201,7 +1201,7 @@ public class Fetcher<K, V> implements Closeable {
                 continue;
             }
 
-            // Use the preferred read replica if set, otherwise the position's leader
+            // Use the preferred read replica if set, otherwise the partition's leader
             Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
             if (client.isUnavailable(node)) {
                 client.maybeThrowAuthFailure(node);
@@ -1866,12 +1866,11 @@ public class Fetcher<K, V> implements Closeable {
                 for (TopicPartition tp : newAssignedPartitions) {
                     if (!this.assignedPartitions.contains(tp)) {
                         MetricName metricName = partitionPreferredReadReplicaMetricName(tp);
-                        if (metrics.metric(metricName) == null) {
-                            metrics.addMetric(
-                                metricName,
-                                (Gauge<Integer>) (config, now) -> subscription.preferredReadReplica(tp, 0L).orElse(-1)
-                            );
-                        }
+                        metrics.addMetricIfAbsent(
+                            metricName,
+                            null,
+                            (Gauge<Integer>) (config, now) -> subscription.preferredReadReplica(tp, 0L).orElse(-1)
+                        );
                     }
                 }
 

@@ -151,7 +151,7 @@ public class MetadataResponse extends AbstractResponse {
             if (metadata.error == Errors.NONE) {
                 if (metadata.isInternal)
                     internalTopics.add(metadata.topic);
-                if (metadata.topicId() != null && metadata.topicId() != Uuid.ZERO_UUID) {
+                if (metadata.topicId() != null && !Uuid.ZERO_UUID.equals(metadata.topicId())) {
                     topicIds.put(metadata.topic, metadata.topicId());
                 }
                 for (PartitionMetadata partitionMetadata : metadata.partitionMetadata) {

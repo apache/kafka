@@ -29,10 +29,12 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, TopicPartition}
 import org.apache.kafka.test.{TestUtils => _, _}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import scala.jdk.CollectionConverters._
 import org.apache.kafka.test.TestUtils.isValidClusterId
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 /** The test cases here verify the following conditions.
   * 1. The ProducerInterceptor receives the cluster id after the onSend() method is called and before onAcknowledgement() method is called.
@@ -99,7 +101,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   this.serverConfig.setProperty(KafkaConfig.MetricReporterClassesProp, classOf[MockBrokerMetricsReporter].getName)
 
   override def generateConfigs = {
-    val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
+    val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnectOrNull, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
     cfgs.foreach(_ ++= serverConfig)
     cfgs.map(KafkaConfig.fromProps)
@@ -113,8 +115,9 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     createTopic(topic, 2, serverCount)
   }
 
-  @Test
-  def testEndToEnd(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testEndToEnd(quorum: String): Unit = {
     val appendStr = "mock"
     MockConsumerInterceptor.resetCounters()
     MockProducerInterceptor.resetCounters()

@@ -18,7 +18,6 @@
 package kafka.tools
 
 import java.io._
-
 import com.fasterxml.jackson.databind.node.{IntNode, JsonNodeFactory, ObjectNode, TextNode}
 import kafka.coordinator.group.GroupMetadataManager
 import kafka.coordinator.transaction.TransactionLog
@@ -26,11 +25,13 @@ import kafka.log._
 import kafka.serializer.Decoder
 import kafka.utils._
 import kafka.utils.Implicits._
+import org.apache.kafka.common.message.{SnapshotFooterRecordJsonConverter, SnapshotHeaderRecordJsonConverter}
 import org.apache.kafka.common.metadata.{MetadataJsonConverters, MetadataRecordType}
 import org.apache.kafka.common.protocol.ByteBufferAccessor
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.snapshot.Snapshots
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -57,9 +58,9 @@ object DumpLogSegments {
       val filename = file.getName
       val suffix = filename.substring(filename.lastIndexOf("."))
       suffix match {
-        case UnifiedLog.LogFileSuffix =>
+        case UnifiedLog.LogFileSuffix | Snapshots.SUFFIX =>
           dumpLog(file, opts.shouldPrintDataLog, nonConsecutivePairsForLogFilesMap, opts.isDeepIteration,
-            opts.messageParser, opts.skipRecordMetadata)
+            opts.messageParser, opts.skipRecordMetadata, opts.maxBytes)
         case UnifiedLog.IndexFileSuffix =>
           dumpIndex(file, opts.indexSanityOnly, opts.verifyOnly, misMatchesForIndexFilesMap, opts.maxMessageSize)
         case UnifiedLog.TimeIndexFileSuffix =>
@@ -246,10 +247,16 @@ object DumpLogSegments {
                       nonConsecutivePairsForLogFilesMap: mutable.Map[String, List[(Long, Long)]],
                       isDeepIteration: Boolean,
                       parser: MessageParser[_, _],
-                      skipRecordMetadata: Boolean): Unit = {
-    val startOffset = file.getName.split("\\.")(0).toLong
-    println("Starting offset: " + startOffset)
-    val fileRecords = FileRecords.open(file, false)
+                      skipRecordMetadata: Boolean,
+                      maxBytes: Int): Unit = {
+    if (file.getName.endsWith(UnifiedLog.LogFileSuffix)) {
+      val startOffset = file.getName.split("\\.")(0).toLong
+      println(s"Log starting offset: $startOffset")
+    } else if (file.getName.endsWith(Snapshots.SUFFIX)) {
+      val path = Snapshots.parse(file.toPath).get()
+      println(s"Snapshot end offset: ${path.snapshotId.offset}, epoch: ${path.snapshotId.epoch}")
+    }
+    val fileRecords = FileRecords.open(file, false).slice(0, maxBytes)
     try {
       var validBytes = 0L
       var lastOffset = -1L
@@ -287,6 +294,12 @@ object DumpLogSegments {
                   case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
                     val endTxnMarker = EndTransactionMarker.deserialize(record)
                     print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
+                  case ControlRecordType.SNAPSHOT_HEADER =>
+                    val header = ControlRecordUtils.deserializedSnapshotHeaderRecord(record)
+                    print(s" SnapshotHeader ${SnapshotHeaderRecordJsonConverter.write(header, header.version())}")
+                  case ControlRecordType.SNAPSHOT_FOOTER =>
+                    val footer = ControlRecordUtils.deserializedSnapshotFooterRecord(record)
+                    print(s" SnapshotFooter ${SnapshotFooterRecordJsonConverter.write(footer, footer.version())}")
                   case controlType =>
                     print(s" controlType: $controlType($controlTypeId)")
                 }
@@ -306,7 +319,7 @@ object DumpLogSegments {
         validBytes += batch.sizeInBytes
       }
       val trailingBytes = fileRecords.sizeInBytes - validBytes
-      if (trailingBytes > 0)
+      if ( (trailingBytes > 0) && (maxBytes == Integer.MAX_VALUE) )
         println(s"Found $trailingBytes invalid bytes at the end of ${file.getName}")
     } finally fileRecords.closeHandlers()
   }
@@ -430,6 +443,11 @@ object DumpLogSegments {
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(5 * 1024 * 1024)
+    val maxBytesOpt = parser.accepts("max-bytes", "Limit the amount of total batches read in bytes avoiding reading the whole .log file(s).")
+       .withRequiredArg
+       .describedAs("size")
+       .ofType(classOf[java.lang.Integer])
+       .defaultsTo(Integer.MAX_VALUE)
     val deepIterationOpt = parser.accepts("deep-iteration", "if set, uses deep instead of shallow iteration. Automatically set if print-data-log is enabled.")
     val valueDecoderOpt = parser.accepts("value-decoder-class", "if set, used to deserialize the messages. This class should implement kafka.serializer.Decoder trait. Custom jar should be available in kafka/libs directory.")
       .withOptionalArg()
@@ -473,6 +491,7 @@ object DumpLogSegments {
     lazy val indexSanityOnly: Boolean = options.has(indexSanityOpt)
     lazy val files = options.valueOf(filesOpt).split(",")
     lazy val maxMessageSize = options.valueOf(maxMessageSizeOpt).intValue()
+    lazy val maxBytes = options.valueOf(maxBytesOpt).intValue()
 
     def checkArgs(): Unit = CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
 

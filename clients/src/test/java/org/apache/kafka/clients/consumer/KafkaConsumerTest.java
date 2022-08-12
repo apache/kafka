@@ -138,6 +138,7 @@ import java.util.stream.Stream;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.clients.consumer.KafkaConsumer.DEFAULT_REASON;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -171,6 +172,7 @@ public class KafkaConsumerTest {
     // Set auto commit interval lower than heartbeat so we don't need to deal with
     // a concurrent heartbeat request
     private final int autoCommitIntervalMs = 500;
+    private final int throttleMs = 10;
 
     private final String groupId = "mock-group";
     private final String memberId = "memberId";
@@ -716,7 +718,6 @@ public class KafkaConsumerTest {
         consumer.seekToEnd(singleton(tp0));
         consumer.seekToBeginning(singleton(tp1));
 
-        client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
         client.prepareResponse(body -> {
             ListOffsetsRequest request = (ListOffsetsRequest) body;
             List<ListOffsetsPartition> partitions = request.topics().stream().flatMap(t -> {
@@ -2434,7 +2435,10 @@ public class KafkaConsumerTest {
             partitionData.put(entry.getKey(), new OffsetFetchResponse.PartitionData(entry.getValue(),
                     Optional.empty(), "", error));
         }
-        return new OffsetFetchResponse(Errors.NONE, partitionData);
+        return new OffsetFetchResponse(
+            throttleMs,
+            Collections.singletonMap(groupId, Errors.NONE),
+            Collections.singletonMap(groupId, partitionData));
     }
 
     private ListOffsetsResponse listOffsetsResponse(Map<TopicPartition, Long> offsets) {
@@ -2817,6 +2821,66 @@ public class KafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         assertEquals(countingRebalanceListener.revokedCount, 1);
+    }
+
+    @Test
+    public void testEnforceRebalanceReason() {
+        Time time = new MockTime(1L);
+
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Utils.mkMap(Utils.mkEntry(topic, 1)));
+        Node node = metadata.fetch().nodes().get(0);
+
+        KafkaConsumer<String, String> consumer = newConsumer(
+            time,
+            client,
+            subscription,
+            metadata,
+            assignor,
+            true,
+            groupInstanceId
+        );
+        consumer.subscribe(Collections.singletonList(topic));
+
+        // Lookup coordinator.
+        client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
+        consumer.poll(Duration.ZERO);
+
+        // Initial join sends an empty reason.
+        prepareJoinGroupAndVerifyReason(client, node, "");
+        consumer.poll(Duration.ZERO);
+
+        // A null reason should be replaced by the default reason.
+        consumer.enforceRebalance(null);
+        prepareJoinGroupAndVerifyReason(client, node, DEFAULT_REASON);
+        consumer.poll(Duration.ZERO);
+
+        // An empty reason should be replaced by the default reason.
+        consumer.enforceRebalance("");
+        prepareJoinGroupAndVerifyReason(client, node, DEFAULT_REASON);
+        consumer.poll(Duration.ZERO);
+
+        // A non-null and non-empty reason is sent as-is.
+        String customReason = "user provided reason";
+        consumer.enforceRebalance(customReason);
+        prepareJoinGroupAndVerifyReason(client, node, customReason);
+        consumer.poll(Duration.ZERO);
+    }
+
+    private void prepareJoinGroupAndVerifyReason(
+        MockClient client,
+        Node node,
+        String expectedReason
+    ) {
+        client.prepareResponseFrom(
+            body -> {
+                JoinGroupRequest joinGroupRequest = (JoinGroupRequest) body;
+                return expectedReason.equals(joinGroupRequest.data().reason());
+            },
+            joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE),
+            node
+        );
     }
 
     @Test

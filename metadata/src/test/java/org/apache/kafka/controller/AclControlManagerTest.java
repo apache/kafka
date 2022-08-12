@@ -149,6 +149,16 @@ public class AclControlManagerTest {
         }
 
         @Override
+        public void completeInitialLoad() {
+            // do nothing
+        }
+
+        @Override
+        public void completeInitialLoad(Exception e) {
+            // do nothing
+        }
+
+        @Override
         public void loadSnapshot(Map<Uuid, StandardAcl> acls) {
             this.acls = new HashMap<>(acls);
         }
@@ -305,5 +315,35 @@ public class AclControlManagerTest {
         assertEquals(TEST_ACLS.get(1).toBinding(), StandardAcl.fromRecord(
             (AccessControlEntryRecord) list.get(0).message()).toBinding());
         assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void testDeleteDedupe() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        AclControlManager manager = new AclControlManager(snapshotRegistry, Optional.empty());
+        MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
+        authorizer.loadSnapshot(manager.idToAcl());
+
+        AclBinding aclBinding = new AclBinding(new ResourcePattern(TOPIC, "topic-1", LITERAL),
+                new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
+
+        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(Arrays.asList(aclBinding));
+        Uuid id = ((AccessControlEntryRecord) createResult.records().get(0).message()).id();
+        assertEquals(1, createResult.records().size());
+
+        ControllerResult<List<AclDeleteResult>> deleteAclResultsAnyFilter = manager.deleteAcls(Arrays.asList(AclBindingFilter.ANY));
+        assertEquals(1, deleteAclResultsAnyFilter.records().size());
+        assertEquals(id, ((RemoveAccessControlEntryRecord) deleteAclResultsAnyFilter.records().get(0).message()).id());
+        assertEquals(1, deleteAclResultsAnyFilter.response().size());
+
+        ControllerResult<List<AclDeleteResult>> deleteAclResultsSpecificFilter = manager.deleteAcls(Arrays.asList(aclBinding.toFilter()));
+        assertEquals(1, deleteAclResultsSpecificFilter.records().size());
+        assertEquals(id, ((RemoveAccessControlEntryRecord) deleteAclResultsSpecificFilter.records().get(0).message()).id());
+        assertEquals(1, deleteAclResultsSpecificFilter.response().size());
+
+        ControllerResult<List<AclDeleteResult>> deleteAclResultsBothFilters = manager.deleteAcls(Arrays.asList(AclBindingFilter.ANY, aclBinding.toFilter()));
+        assertEquals(1, deleteAclResultsBothFilters.records().size());
+        assertEquals(id, ((RemoveAccessControlEntryRecord) deleteAclResultsBothFilters.records().get(0).message()).id());
+        assertEquals(2, deleteAclResultsBothFilters.response().size());
     }
 }

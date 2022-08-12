@@ -89,8 +89,9 @@ public class OffsetStorageWriter {
      * @param partition the partition to store an offset for
      * @param offset the offset
      */
-    public synchronized void offset(Map<String, Object> partition, Map<String, Object> offset) {
-        data.put(partition, offset);
+    @SuppressWarnings("unchecked")
+    public synchronized void offset(Map<String, ?> partition, Map<String, ?> offset) {
+        data.put((Map<String, Object>) partition, (Map<String, Object>) offset);
     }
 
     private boolean flushing() {
@@ -113,10 +114,16 @@ public class OffsetStorageWriter {
         if (data.isEmpty())
             return false;
 
-        assert !flushing();
         toFlush = data;
         data = new HashMap<>();
         return true;
+    }
+
+    /**
+     * @return whether there's anything to flush right now.
+     */
+    public synchronized boolean willFlush() {
+        return !data.isEmpty();
     }
 
     /**

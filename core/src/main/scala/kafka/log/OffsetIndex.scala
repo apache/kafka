@@ -156,7 +156,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
     }
   }
 
-  override def truncate() = truncateToEntries(0)
+  override def truncate(): Unit = truncateToEntries(0)
 
   override def truncateTo(offset: Long): Unit = {
     inLock(lock) {

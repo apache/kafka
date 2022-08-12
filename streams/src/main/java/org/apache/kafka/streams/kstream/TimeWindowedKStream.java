@@ -648,4 +648,7 @@ public interface TimeWindowedKStream<K, V> {
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                   final Named named,
                                   final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized);
+
+    // TODO: add javadoc
+    TimeWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy);
 }

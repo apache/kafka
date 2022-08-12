@@ -19,13 +19,13 @@ package kafka.log
 
 import java.io.File
 import java.util.Properties
-import kafka.api.KAFKA_0_11_0_IV0
-import kafka.api.{KAFKA_0_10_0_IV1, KAFKA_0_9_0}
+
 import kafka.server.KafkaConfig
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
+import org.apache.kafka.server.common.MetadataVersion.{IBP_0_9_0, IBP_0_10_0_IV1, IBP_0_11_0_IV0}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
@@ -151,7 +151,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     val log = cleaner.logs.get(topicPartitions(0))
     val props = logConfigProperties(maxMessageSize = maxMessageSize)
-    props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_9_0.version)
+    props.put(LogConfig.MessageFormatVersionProp, IBP_0_9_0.version)
     log.updateConfig(new LogConfig(props))
 
     val appends = writeDups(numKeys = 100, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
@@ -173,7 +173,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
       val largeMessageOffset = appendInfo.firstOffset.map(_.messageOffset).get
 
       // also add some messages with version 1 and version 2 to check that we handle mixed format versions correctly
-      props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_11_0_IV0.version)
+      props.put(LogConfig.MessageFormatVersionProp, IBP_0_11_0_IV0.version)
       log.updateConfig(new LogConfig(props))
       val dupsV1 = writeDups(startKey = 30, numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
       val dupsV2 = writeDups(startKey = 15, numKeys = 5, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V2)
@@ -194,7 +194,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     val log = cleaner.logs.get(topicPartitions(0))
     val props = logConfigProperties(maxMessageSize = maxMessageSize, segmentSize = 256)
-    props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_9_0.version)
+    props.put(LogConfig.MessageFormatVersionProp, IBP_0_9_0.version)
     log.updateConfig(new LogConfig(props))
 
     // with compression enabled, these messages will be written as a single message containing
@@ -202,7 +202,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     var appendsV0 = writeDupsSingleMessageSet(numKeys = 2, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
     appendsV0 ++= writeDupsSingleMessageSet(numKeys = 2, startKey = 3, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
 
-    props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_10_0_IV1.version)
+    props.put(LogConfig.MessageFormatVersionProp, IBP_0_10_0_IV1.version)
     log.updateConfig(new LogConfig(props))
 
     var appendsV1 = writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)

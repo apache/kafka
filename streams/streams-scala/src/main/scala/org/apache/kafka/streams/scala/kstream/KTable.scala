@@ -249,7 +249,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KTable#mapValues`
    */
   def mapValues[VR](mapper: (K, V) => VR, materialized: Materialized[K, VR, ByteArrayKeyValueStore]): KTable[K, VR] =
-    new KTable(inner.mapValues[VR](mapper.asValueMapperWithKey))
+    new KTable(inner.mapValues[VR](mapper.asValueMapperWithKey, materialized))
 
   /**
    * Create a new [[KTable]] by transforming the value of each record in this [[KTable]] into a new value

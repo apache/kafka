@@ -31,7 +31,7 @@ import org.junit.jupiter.params.provider.ValueSource
 import scala.jdk.CollectionConverters._
 
 class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testValidCreateTopicsRequests(quorum: String): Unit = {
     // Generated assignments
@@ -61,7 +61,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       topicReq("topic14", replicationFactor = -1, numPartitions = 2))))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testErrorCreateTopicsRequests(quorum: String): Unit = {
     val existingTopic = "existing-topic"
@@ -102,7 +102,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     validateTopicExists("partial-none")
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk"))
   def testCreateTopicsWithVeryShortTimeouts(quorum: String): Unit = {
     // When using ZooKeeper, we don't expect a request to ever complete within 1ms.
@@ -132,7 +132,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testInvalidCreateTopicsRequests(quorum: String): Unit = {
     // Partitions/ReplicationFactor and ReplicaAssignment
@@ -147,7 +147,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       Map("bad-args-topic" -> error(Errors.INVALID_REQUEST)), checkErrorMessage = false)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk"))
   def testNotController(quorum: String): Unit = {
     // Note: we don't run this test when in KRaft mode, because KRaft doesn't have this
@@ -157,7 +157,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     assertEquals(1, response.errorCounts().get(Errors.NOT_CONTROLLER))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk"))
   def testCreateTopicsRequestVersions(quorum: String): Unit = {
     // Note: we don't run this test when in KRaft mode, because kraft does not yet support returning topic

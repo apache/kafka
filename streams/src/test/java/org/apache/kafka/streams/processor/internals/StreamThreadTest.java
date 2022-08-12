@@ -83,8 +83,6 @@ import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-
-import java.util.function.BiConsumer;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
@@ -92,6 +90,7 @@ import org.junit.Test;
 import org.slf4j.Logger;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -109,6 +108,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
@@ -148,6 +148,8 @@ public class StreamThreadTest {
     private final static String APPLICATION_ID = "stream-thread-test";
     private final static UUID PROCESS_ID = UUID.fromString("87bf53a8-54f2-485f-a4b6-acdbec0a8b3d");
     private final static String CLIENT_ID = APPLICATION_ID + "-" + PROCESS_ID;
+    public static final String STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG = "stream-thread-test-count-one-changelog";
+    public static final String STREAM_THREAD_TEST_TABLE_TWO_CHANGELOG = "stream-thread-test-table-two-changelog";
 
     private final int threadIdx = 1;
     private final Metrics metrics = new Metrics();
@@ -465,6 +467,36 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldNotPurgeBeforeThePurgeInterval() {
+        final long commitInterval = 1000L;
+        final long purgeInterval = 2000L;
+        final Properties props = configProps(false);
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+        props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
+        props.setProperty(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG, Long.toString(purgeInterval));
+
+        final StreamsConfig config = new StreamsConfig(props);
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
+        expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
+        final TaskManager taskManager = mockTaskManagerPurge(1);
+        taskManager.maybePurgeCommittedRecords();
+        EasyMock.replay(consumer, consumerGroupMetadata);
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        final StreamThread thread = buildStreamThread(consumer, taskManager, config, topologyMetadata);
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+        mockTime.sleep(purgeInterval - 10L);
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+
+        verify(taskManager);
+    }
+
+    @Test
     public void shouldEnforceRebalanceAfterNextScheduledProbingRebalanceTime() throws InterruptedException {
         final StreamsConfig config = new StreamsConfig(configProps(false));
         internalTopologyBuilder.buildTopology();
@@ -484,6 +516,7 @@ public class StreamThreadTest {
         final EasyMockConsumerClientSupplier mockClientSupplier = new EasyMockConsumerClientSupplier(mockConsumer);
 
         mockClientSupplier.setCluster(createCluster());
+        mockConsumer.enforceRebalance("Scheduled probing rebalance");
         EasyMock.replay(mockConsumer);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
@@ -504,8 +537,6 @@ public class StreamThreadTest {
             null,
             null
         );
-
-        mockConsumer.enforceRebalance();
 
         mockClientSupplier.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
 
@@ -723,8 +754,8 @@ public class StreamThreadTest {
             null,
             null,
             null,
-            null,
             topologyMetadata,
+            null,
             null,
             null
         ) {
@@ -759,6 +790,41 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldPurgeAfterPurgeInterval() {
+        final long commitInterval = 100L;
+        final long purgeInterval = 200L;
+
+        final Properties props = configProps(false);
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+        props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
+        props.setProperty(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG, Long.toString(purgeInterval));
+
+        final StreamsConfig config = new StreamsConfig(props);
+        final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
+        expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
+
+        final TaskManager taskManager = mockTaskManagerPurge(2);
+
+        EasyMock.replay(consumer, consumerGroupMetadata);
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        final StreamThread thread = buildStreamThread(consumer, taskManager, config, topologyMetadata);
+
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+
+        mockTime.sleep(purgeInterval + 1);
+
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+
+        verify(taskManager);
+    }
+
+    @Test
     public void shouldRecordCommitLatency() {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
@@ -773,12 +839,9 @@ public class StreamThreadTest {
         final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
         expect(activeTaskCreator.createTasks(anyObject(), anyObject())).andStubReturn(Collections.singleton(task));
         expect(activeTaskCreator.producerClientIds()).andStubReturn(Collections.singleton("producerClientId"));
-        expect(activeTaskCreator.uncreatedTasksForTopologies(anyObject())).andStubReturn(emptyMap());
-        activeTaskCreator.removeRevokedUnknownTasks(singleton(task1));
 
         final StandbyTaskCreator standbyTaskCreator = mock(StandbyTaskCreator.class);
-        expect(standbyTaskCreator.uncreatedTasksForTopologies(anyObject())).andStubReturn(emptyMap());
-        standbyTaskCreator.removeRevokedUnknownTasks(emptySet());
+        expect(standbyTaskCreator.createTasks(anyObject())).andStubReturn(Collections.emptySet());
 
         EasyMock.replay(consumer, consumerGroupMetadata, task, activeTaskCreator, standbyTaskCreator);
 
@@ -792,10 +855,10 @@ public class StreamThreadTest {
             null,
             null,
             null,
-            null,
             activeTaskCreator,
             standbyTaskCreator,
             topologyMetadata,
+            null,
             null,
             null
         ) {
@@ -981,19 +1044,11 @@ public class StreamThreadTest {
 
         final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(true)), true);
 
-        thread.start();
-        TestUtils.waitForCondition(
-            () -> thread.state() == StreamThread.State.STARTING,
-            10 * 1000,
-            "Thread never started.");
-
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList());
         thread.taskManager().handleRebalanceStart(Collections.singleton(topic1));
 
+        // assign single partition
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
-
-        // assign single partition
         assignedPartitions.add(t1p1);
         assignedPartitions.add(t1p2);
         activeTasks.put(task1, Collections.singleton(t1p1));
@@ -1001,11 +1056,18 @@ public class StreamThreadTest {
 
         thread.taskManager().handleAssignment(activeTasks, emptyMap());
 
+        thread.start();
+        TestUtils.waitForCondition(
+                () -> thread.state() == StreamThread.State.STARTING,
+                10 * 1000,
+                "Thread never started.");
+
         thread.shutdown();
 
         // even if thread is no longer running, it should still be polling
         // as long as the rebalance is still ongoing
         assertFalse(thread.isRunning());
+        assertTrue(thread.isAlive());
 
         Thread.sleep(1000);
         assertEquals(Utils.mkSet(task1, task2), thread.taskManager().activeTaskIds());
@@ -1328,9 +1390,10 @@ public class StreamThreadTest {
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         final AtomicBoolean shouldThrow = new AtomicBoolean(false);
         final AtomicBoolean processed = new AtomicBoolean(false);
+        // TODO check if needs to be extended
         internalTopologyBuilder.addProcessor(
             "proc",
-            () -> record -> {
+            (ProcessorSupplier<Object, Object, Object, Object>) () -> record -> {
                 if (shouldThrow.get()) {
                     throw new TaskCorruptedException(singleton(task1));
                 } else {
@@ -1572,9 +1635,9 @@ public class StreamThreadTest {
         final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions(
-            "stream-thread-test-count-one-changelog",
+            STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG,
             Collections.singletonList(
-                new PartitionInfo("stream-thread-test-count-one-changelog",
+                new PartitionInfo(STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG,
                                   0,
                                   null,
                                   new Node[0],
@@ -1583,7 +1646,7 @@ public class StreamThreadTest {
         );
 
         final HashMap<TopicPartition, Long> offsets = new HashMap<>();
-        offsets.put(new TopicPartition("stream-thread-test-count-one-changelog", 1), 0L);
+        offsets.put(new TopicPartition(STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG, 1), 0L);
         restoreConsumer.updateEndOffsets(offsets);
         restoreConsumer.updateBeginningOffsets(offsets);
 
@@ -1616,8 +1679,74 @@ public class StreamThreadTest {
         final String storeName2 = "table-two";
         final String changelogName1 = APPLICATION_ID + "-" + storeName1 + "-changelog";
         final String changelogName2 = APPLICATION_ID + "-" + storeName2 + "-changelog";
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
+        final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
+
+        setupThread(storeName1, storeName2, changelogName1, changelogName2, thread, restoreConsumer, false);
+
+        thread.runOnce();
+
+        final StandbyTask standbyTask1 = standbyTask(thread.taskManager(), t1p1);
+        final StandbyTask standbyTask2 = standbyTask(thread.taskManager(), t2p1);
+        assertEquals(task1, standbyTask1.id());
+        assertEquals(task3, standbyTask2.id());
+
+        final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.getStore(storeName1);
+        final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.getStore(storeName2);
+
+        assertEquals(0L, store1.approximateNumEntries());
+        assertEquals(0L, store2.approximateNumEntries());
+
+        addStandbyRecordsToRestoreConsumer(restoreConsumer);
+
+        thread.runOnce();
+
+        assertEquals(10L, store1.approximateNumEntries());
+        assertEquals(4L, store2.approximateNumEntries());
+
+        thread.taskManager().shutdown(true);
+    }
+
+    private void addActiveRecordsToRestoreConsumer(final MockConsumer<byte[], byte[]> restoreConsumer) {
+        for (long i = 0L; i < 10L; i++) {
+            restoreConsumer.addRecord(new ConsumerRecord<>(
+                STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG,
+                2,
+                i,
+                ("K" + i).getBytes(),
+                ("V" + i).getBytes()));
+        }
+    }
+
+    private void addStandbyRecordsToRestoreConsumer(final MockConsumer<byte[], byte[]> restoreConsumer) {
+        // let the store1 be restored from 0 to 10; store2 be restored from 5 (checkpointed) to 10
+        for (long i = 0L; i < 10L; i++) {
+            restoreConsumer.addRecord(new ConsumerRecord<>(
+                STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG,
+                1,
+                i,
+                ("K" + i).getBytes(),
+                ("V" + i).getBytes()));
+            restoreConsumer.addRecord(new ConsumerRecord<>(
+                STREAM_THREAD_TEST_TABLE_TWO_CHANGELOG,
+                1,
+                i,
+                ("K" + i).getBytes(),
+                ("V" + i).getBytes()));
+        }
+    }
+
+    private void setupThread(final String storeName1,
+                             final String storeName2,
+                             final String changelogName1,
+                             final String changelogName2,
+                             final StreamThread thread,
+                             final MockConsumer<byte[], byte[]> restoreConsumer,
+                             final boolean addActiveTask) throws IOException {
+        final TopicPartition activePartition = new TopicPartition(changelogName1, 2);
         final TopicPartition partition1 = new TopicPartition(changelogName1, 1);
         final TopicPartition partition2 = new TopicPartition(changelogName2, 1);
+
         internalStreamsBuilder
             .stream(Collections.singleton(topic1), consumed)
             .groupByKey()
@@ -1627,11 +1756,14 @@ public class StreamThreadTest {
         internalStreamsBuilder.table(topic2, new ConsumedInternal<>(), materialized);
 
         internalStreamsBuilder.buildAndOptimizeTopology();
-        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
-        final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions(changelogName1,
             Collections.singletonList(new PartitionInfo(changelogName1, 1, null, new Node[0], new Node[0]))
         );
+
+        restoreConsumer.updateEndOffsets(Collections.singletonMap(activePartition, 10L));
+        restoreConsumer.updateBeginningOffsets(Collections.singletonMap(activePartition, 0L));
+        ((MockAdminClient) (thread.adminClient())).updateBeginningOffsets(Collections.singletonMap(activePartition, 0L));
+        ((MockAdminClient) (thread.adminClient())).updateEndOffsets(Collections.singletonMap(activePartition, 10L));
 
         restoreConsumer.updateEndOffsets(Collections.singletonMap(partition1, 10L));
         restoreConsumer.updateBeginningOffsets(Collections.singletonMap(partition1, 0L));
@@ -1644,47 +1776,75 @@ public class StreamThreadTest {
         thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
 
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
+
+        if (addActiveTask) {
+            activeTasks.put(task2, Collections.singleton(t1p2));
+        }
 
         // assign single partition
         standbyTasks.put(task1, Collections.singleton(t1p1));
         standbyTasks.put(task3, Collections.singleton(t2p1));
 
-        thread.taskManager().handleAssignment(emptyMap(), standbyTasks);
+        thread.taskManager().handleAssignment(activeTasks, standbyTasks);
         thread.taskManager().tryToCompleteRestoration(mockTime.milliseconds(), null);
 
         thread.rebalanceListener().onPartitionsAssigned(Collections.emptyList());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldNotUpdateStandbyTaskWhenPaused() throws Exception {
+        final String storeName1 = "count-one";
+        final String storeName2 = "table-two";
+        final String changelogName1 = APPLICATION_ID + "-" + storeName1 + "-changelog";
+        final String changelogName2 = APPLICATION_ID + "-" + storeName2 + "-changelog";
+        final StreamThread thread = createStreamThread(CLIENT_ID, config, false);
+        final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
+
+        setupThread(storeName1, storeName2, changelogName1, changelogName2, thread, restoreConsumer, true);
 
         thread.runOnce();
 
+        final StreamTask activeTask1 = activeTask(thread.taskManager(), t1p2);
         final StandbyTask standbyTask1 = standbyTask(thread.taskManager(), t1p1);
         final StandbyTask standbyTask2 = standbyTask(thread.taskManager(), t2p1);
         assertEquals(task1, standbyTask1.id());
         assertEquals(task3, standbyTask2.id());
 
+        final KeyValueStore<Object, Long> activeStore = (KeyValueStore<Object, Long>) activeTask1.getStore(storeName1);
+
         final KeyValueStore<Object, Long> store1 = (KeyValueStore<Object, Long>) standbyTask1.getStore(storeName1);
         final KeyValueStore<Object, Long> store2 = (KeyValueStore<Object, Long>) standbyTask2.getStore(storeName2);
+
+        assertEquals(0L, activeStore.approximateNumEntries());
         assertEquals(0L, store1.approximateNumEntries());
         assertEquals(0L, store2.approximateNumEntries());
 
+        // Add some records that the active task would handle
+        addActiveRecordsToRestoreConsumer(restoreConsumer);
         // let the store1 be restored from 0 to 10; store2 be restored from 5 (checkpointed) to 10
-        for (long i = 0L; i < 10L; i++) {
-            restoreConsumer.addRecord(new ConsumerRecord<>(
-                changelogName1,
-                1,
-                i,
-                ("K" + i).getBytes(),
-                ("V" + i).getBytes()));
-            restoreConsumer.addRecord(new ConsumerRecord<>(
-                changelogName2,
-                1,
-                i,
-                ("K" + i).getBytes(),
-                ("V" + i).getBytes()));
-        }
+        addStandbyRecordsToRestoreConsumer(restoreConsumer);
 
+        // Simulate pause
+        thread.taskManager().topologyMetadata().pauseTopology(TopologyMetadata.UNNAMED_TOPOLOGY);
         thread.runOnce();
 
+        assertEquals(0L, activeStore.approximateNumEntries());
+        assertEquals(0L, store1.approximateNumEntries());
+        assertEquals(0L, store2.approximateNumEntries());
+
+        // Simulate resume
+        thread.taskManager().topologyMetadata().resumeTopology(TopologyMetadata.UNNAMED_TOPOLOGY);
+        thread.runOnce();
+
+        assertEquals(10L, activeStore.approximateNumEntries());
+        assertEquals(0L, store1.approximateNumEntries());
+        assertEquals(0L, store2.approximateNumEntries());
+
+        thread.runOnce();
+        assertEquals(10L, activeStore.approximateNumEntries());
         assertEquals(10L, store1.approximateNumEntries());
         assertEquals(4L, store2.approximateNumEntries());
 
@@ -1718,6 +1878,7 @@ public class StreamThreadTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldPunctuateActiveTask() {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
@@ -1788,6 +1949,7 @@ public class StreamThreadTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldPunctuateWithTimestampPreservedInProcessorContext() {
         final org.apache.kafka.streams.kstream.TransformerSupplier<Object, Object, KeyValue<Object, Object>> punctuateProcessor =
             () -> new org.apache.kafka.streams.kstream.Transformer<Object, Object, KeyValue<Object, Object>>() {
@@ -2196,9 +2358,9 @@ public class StreamThreadTest {
         expect(consumer.groupMetadata()).andStubReturn(consumerGroupMetadata);
         expect(consumerGroupMetadata.groupInstanceId()).andReturn(Optional.empty());
         consumer.subscribe((Collection<String>) anyObject(), anyObject());
-        EasyMock.expectLastCall().atLeastOnce();
+        EasyMock.expectLastCall().anyTimes();
         consumer.unsubscribe();
-        EasyMock.expectLastCall().atLeastOnce();
+        EasyMock.expectLastCall().anyTimes();
         EasyMock.replay(consumerGroupMetadata);
         final Task task1 = mock(Task.class);
         final Task task2 = mock(Task.class);
@@ -2357,7 +2519,7 @@ public class StreamThreadTest {
         expect(task2.id()).andReturn(taskId2).anyTimes();
         expect(taskManager.handleCorruption(corruptedTasks)).andReturn(true);
 
-        consumer.enforceRebalance();
+        consumer.enforceRebalance("Active tasks corrupted");
         expectLastCall();
 
         EasyMock.replay(task1, task2, taskManager, consumer);
@@ -2491,7 +2653,7 @@ public class StreamThreadTest {
         expect(task3.state()).andReturn(Task.State.CREATED).anyTimes();
         expect(task3.id()).andReturn(taskId3).anyTimes();
 
-        expect(taskManager.tasks()).andReturn(mkMap(
+        expect(taskManager.allTasks()).andReturn(mkMap(
             mkEntry(taskId1, task1),
             mkEntry(taskId2, task2),
             mkEntry(taskId3, task3)
@@ -2749,6 +2911,22 @@ public class StreamThreadTest {
         assertThat(failedThreads.metricValue(), is(shouldFail ? 1.0 : 0.0));
     }
 
+    private TaskManager mockTaskManagerPurge(final int numberOfPurges) {
+        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
+        final Task runningTask = mock(Task.class);
+        final TaskId taskId = new TaskId(0, 0);
+
+        expect(runningTask.state()).andReturn(Task.State.RUNNING).anyTimes();
+        expect(runningTask.id()).andReturn(taskId).anyTimes();
+        expect(taskManager.allTasks())
+                .andReturn(Collections.singletonMap(taskId, runningTask)).anyTimes();
+        expect(taskManager.commit(Collections.singleton(runningTask))).andReturn(1).anyTimes();
+        taskManager.maybePurgeCommittedRecords();
+        EasyMock.expectLastCall().times(numberOfPurges);
+        EasyMock.replay(taskManager, runningTask);
+        return taskManager;
+    }
+
     private TaskManager mockTaskManagerCommit(final Consumer<byte[], byte[]> consumer,
                                               final int numberOfCommits,
                                               final int commits) {
@@ -2758,7 +2936,7 @@ public class StreamThreadTest {
 
         expect(runningTask.state()).andReturn(Task.State.RUNNING).anyTimes();
         expect(runningTask.id()).andReturn(taskId).anyTimes();
-        expect(taskManager.tasks())
+        expect(taskManager.allTasks())
             .andReturn(Collections.singletonMap(taskId, runningTask)).times(numberOfCommits);
         expect(taskManager.commit(Collections.singleton(runningTask))).andReturn(commits).times(numberOfCommits);
         EasyMock.replay(taskManager, runningTask);
@@ -2814,8 +2992,17 @@ public class StreamThreadTest {
             Optional.empty()));
     }
 
+    StreamTask activeTask(final TaskManager taskManager, final TopicPartition partition) {
+        final Stream<Task> standbys = taskManager.allTasks().values().stream().filter(Task::isActive);
+        for (final Task task : (Iterable<Task>) standbys::iterator) {
+            if (task.inputPartitions().contains(partition)) {
+                return (StreamTask) task;
+            }
+        }
+        return null;
+    }
     StandbyTask standbyTask(final TaskManager taskManager, final TopicPartition partition) {
-        final Stream<Task> standbys = taskManager.tasks().values().stream().filter(t -> !t.isActive());
+        final Stream<Task> standbys = taskManager.allTasks().values().stream().filter(t -> !t.isActive());
         for (final Task task : (Iterable<Task>) standbys::iterator) {
             if (task.inputPartitions().contains(partition)) {
                 return (StandbyTask) task;

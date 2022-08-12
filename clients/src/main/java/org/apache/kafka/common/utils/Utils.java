@@ -998,6 +998,14 @@ public final class Utils {
 
     /**
      * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
+     * <b>Be cautious when passing method references as an argument.</b> For example:
+     * <p>
+     * {@code closeQuietly(task::stop, "source task");}
+     * <p>
+     * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
+     * reference from a null object will result in a {@link NullPointerException}. In the example code above,
+     * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
+     * use a method reference from it.
      */
     public static void closeQuietly(AutoCloseable closeable, String name) {
         if (closeable != null) {
@@ -1009,6 +1017,17 @@ public final class Utils {
         }
     }
 
+    /**
+    * Closes {@code closeable} and if an exception is thrown, it is registered to the firstException parameter.
+    * <b>Be cautious when passing method references as an argument.</b> For example:
+    * <p>
+    * {@code closeQuietly(task::stop, "source task");}
+    * <p>
+    * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
+    * reference from a null object will result in a {@link NullPointerException}. In the example code above,
+    * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
+    * use a method reference from it.
+    */
     public static void closeQuietly(AutoCloseable closeable, String name, AtomicReference<Throwable> firstException) {
         if (closeable != null) {
             try {
@@ -1038,7 +1057,7 @@ public final class Utils {
      *
      * Note: changing this method in the future will possibly cause partition selection not to be
      * compatible with the existing messages already placed on a partition since it is used
-     * in producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner}
+     * in producer's partition selection logic {@link org.apache.kafka.clients.producer.KafkaProducer}
      *
      * @param number a given number
      * @return a positive number.

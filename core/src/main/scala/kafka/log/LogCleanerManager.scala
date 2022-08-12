@@ -21,15 +21,15 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
-import kafka.common.{KafkaException, LogCleaningAbortedException}
+import kafka.common.LogCleaningAbortedException
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.LogDirFailureChannel
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils.CoreUtils._
 import kafka.utils.{Logging, Pool}
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Iterable, Seq, mutable}
 
@@ -64,7 +64,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   import LogCleanerManager._
 
 
-  protected override def loggerName = classOf[LogCleaner].getName
+  protected override def loggerName: String = classOf[LogCleaner].getName
 
   // package-private for testing
   private[log] val offsetCheckpointFile = "cleaner-offset-checkpoint"
@@ -400,11 +400,11 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       try {
         checkpoints.get(sourceLogDir).flatMap(_.read().get(topicPartition)) match {
           case Some(offset) =>
-            debug(s"Removing the partition offset data in checkpoint file for '${topicPartition}' " +
+            debug(s"Removing the partition offset data in checkpoint file for '$topicPartition' " +
               s"from ${sourceLogDir.getAbsoluteFile} directory.")
             updateCheckpoints(sourceLogDir, partitionToRemove = Option(topicPartition))
 
-            debug(s"Adding the partition offset data in checkpoint file for '${topicPartition}' " +
+            debug(s"Adding the partition offset data in checkpoint file for '$topicPartition' " +
               s"to ${destLogDir.getAbsoluteFile} directory.")
             updateCheckpoints(destLogDir, partitionToUpdateOrAdd = Option(topicPartition, offset))
           case None =>
@@ -525,15 +525,15 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       // Remove deleted partitions
       uncleanablePartitions.values.foreach {
         partitions =>
-          val partitionsToRemove = partitions.filterNot(logs.contains(_)).toList
-          partitionsToRemove.foreach { partitions.remove(_) }
+          val partitionsToRemove = partitions.filterNot(logs.contains).toList
+          partitionsToRemove.foreach { partitions.remove }
       }
 
       // Remove entries with empty partition set.
       val logDirsToRemove = uncleanablePartitions.filter {
         case (_, partitions) => partitions.isEmpty
-      }.map { _._1}.toList
-      logDirsToRemove.foreach { uncleanablePartitions.remove(_) }
+      }.keys.toList
+      logDirsToRemove.foreach { uncleanablePartitions.remove }
     }
   }
 }

@@ -20,10 +20,8 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.junit.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -31,7 +29,6 @@ import java.util.stream.Collectors;
 
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
-import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -68,7 +65,6 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class HighAvailabilityTaskAssignorTest {
@@ -418,6 +414,37 @@ public class HighAvailabilityTaskAssignorTest {
         // although this isn't an optimal convergence
         assertThat(probingRebalanceNeeded, is(true));
         assertValidAssignment(0, 1, allTasks, emptySet(), clientStates, new StringBuilder());
+        assertBalancedActiveAssignment(clientStates, new StringBuilder());
+        assertBalancedStatefulAssignment(allTasks, clientStates, new StringBuilder());
+        assertBalancedTasks(clientStates);
+    }
+
+    @Test
+    public void shouldAssignToMostCaughtUpIfActiveTasksWasNotOnCaughtUpClient() {
+        final Set<TaskId> allTasks = mkSet(TASK_0_0);
+        final Set<TaskId> statefulTasks = mkSet(TASK_0_0);
+        final ClientState client1 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, Long.MAX_VALUE), EMPTY_CLIENT_TAGS, 1);
+        final ClientState client2 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 1000L), EMPTY_CLIENT_TAGS, 1);
+        final ClientState client3 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 500L), EMPTY_CLIENT_TAGS, 1);
+        final Map<UUID, ClientState> clientStates = mkMap(
+                mkEntry(UUID_1, client1),
+                mkEntry(UUID_2, client2),
+                mkEntry(UUID_3, client3)
+        );
+
+        final boolean probingRebalanceNeeded =
+                new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, configWithStandbys);
+
+        assertThat(clientStates.get(UUID_1).activeTasks(), is(emptySet()));
+        assertThat(clientStates.get(UUID_2).activeTasks(), is(emptySet()));
+        assertThat(clientStates.get(UUID_3).activeTasks(), is(singleton(TASK_0_0)));
+
+        assertThat(clientStates.get(UUID_1).standbyTasks(), is(singleton(TASK_0_0))); // warm up
+        assertThat(clientStates.get(UUID_2).standbyTasks(), is(singleton(TASK_0_0))); // standby
+        assertThat(clientStates.get(UUID_3).standbyTasks(), is(emptySet()));
+
+        assertThat(probingRebalanceNeeded, is(true));
+        assertValidAssignment(1, 1, allTasks, emptySet(), clientStates, new StringBuilder());
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
         assertBalancedStatefulAssignment(allTasks, clientStates, new StringBuilder());
         assertBalancedTasks(clientStates);
@@ -812,27 +839,6 @@ public class HighAvailabilityTaskAssignorTest {
         );
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
         assertThat(probingRebalanceNeeded, is(false));
-    }
-
-    @Test
-    public void shouldReturnClientTagAwareStandbyTaskAssignorWhenRackAwareAssignmentTagsIsSet() {
-        final StandbyTaskAssignor standbyTaskAssignor = HighAvailabilityTaskAssignor.createStandbyTaskAssignor(newAssignmentConfigs(1, singletonList("az")));
-        assertTrue(standbyTaskAssignor instanceof ClientTagAwareStandbyTaskAssignor);
-    }
-
-    @Test
-    public void shouldReturnDefaultStandbyTaskAssignorWhenRackAwareAssignmentTagsIsEmpty() {
-        final StandbyTaskAssignor standbyTaskAssignor = HighAvailabilityTaskAssignor.createStandbyTaskAssignor(newAssignmentConfigs(1, Collections.emptyList()));
-        assertTrue(standbyTaskAssignor instanceof DefaultStandbyTaskAssignor);
-    }
-
-    private static AssignorConfiguration.AssignmentConfigs newAssignmentConfigs(final int numStandbyReplicas,
-                                                                                final List<String> rackAwareAssignmentTags) {
-        return new AssignorConfiguration.AssignmentConfigs(0L,
-                                                           1,
-                                                           numStandbyReplicas,
-                                                           60000L,
-                                                           rackAwareAssignmentTags);
     }
 
     private static void assertHasNoActiveTasks(final ClientState... clients) {

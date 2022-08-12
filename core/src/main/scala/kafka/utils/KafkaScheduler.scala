@@ -135,7 +135,7 @@ class KafkaScheduler(val threads: Int,
    * Package private for testing.
    */
   private[kafka] def taskRunning(task: ScheduledFuture[_]): Boolean = {
-    executor.getQueue().contains(task)
+    executor.getQueue.contains(task)
   }
 
   def resizeThreadPool(newSize: Int): Unit = {

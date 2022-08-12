@@ -21,7 +21,7 @@ import java.util.Properties
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
@@ -68,7 +68,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testBumpTransactionalEpochAfterInvalidProducerIdMapping(quorum: String): Unit = {
     producer.initTransactions()

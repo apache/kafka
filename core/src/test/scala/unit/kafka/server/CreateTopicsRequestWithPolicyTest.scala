@@ -20,6 +20,7 @@ package kafka.server
 import java.util
 import java.util.Properties
 import kafka.log.LogConfig
+import kafka.utils.TestInfoUtils
 import org.apache.kafka.common.errors.PolicyViolationException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
@@ -44,7 +45,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
     Seq(properties)
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testValidCreateTopicsRequests(quorum: String): Unit = {
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic1",
@@ -63,7 +64,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
       assignment = Map(0 -> List(1, 0), 1 -> List(0, 1))))))
   }
 
-  @ParameterizedTest
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testErrorCreateTopicsRequests(quorum: String): Unit = {
     val existingTopic = "existing-topic"

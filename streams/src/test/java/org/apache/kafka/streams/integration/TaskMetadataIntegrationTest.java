@@ -40,6 +40,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -60,6 +61,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category(IntegrationTest.class)
 public class TaskMetadataIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), 0L, 0L);
 

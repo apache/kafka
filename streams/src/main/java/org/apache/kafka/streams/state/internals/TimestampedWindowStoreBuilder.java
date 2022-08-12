@@ -85,10 +85,29 @@ public class TimestampedWindowStoreBuilder<K, V>
         if (!enableCaching) {
             return inner;
         }
+
+        final boolean isTimeOrdered = isTimeOrderedStore(inner);
+        if (isTimeOrdered) {
+            return new TimeOrderedCachingWindowStore(
+                inner,
+                storeSupplier.windowSize(),
+                storeSupplier.segmentIntervalMs());
+        }
+
         return new CachingWindowStore(
             inner,
             storeSupplier.windowSize(),
             storeSupplier.segmentIntervalMs());
+    }
+
+    private boolean isTimeOrderedStore(final StateStore stateStore) {
+        if (stateStore instanceof RocksDBTimeOrderedWindowStore) {
+            return true;
+        }
+        if (stateStore instanceof WrappedStateStore) {
+            return isTimeOrderedStore(((WrappedStateStore) stateStore).wrapped());
+        }
+        return false;
     }
 
     private WindowStore<Bytes, byte[]> maybeWrapLogging(final WindowStore<Bytes, byte[]> inner) {

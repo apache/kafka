@@ -226,10 +226,9 @@ public class CachingKeyValueStore
             if (rawNewValue != null || rawOldValue != null) {
                 // we need to get the old values if needed, and then put to store, and then flush
                 final ProcessorRecordContext current = context.recordContext();
-                context.setRecordContext(entry.entry().context());
-                wrapped().put(entry.key(), entry.newValue());
-
                 try {
+                    context.setRecordContext(entry.entry().context());
+                    wrapped().put(entry.key(), entry.newValue());
                     flushListener.apply(
                         new Record<>(
                             entry.key().get(),
@@ -241,7 +240,13 @@ public class CachingKeyValueStore
                 }
             }
         } else {
-            wrapped().put(entry.key(), entry.newValue());
+            final ProcessorRecordContext current = context.recordContext();
+            try {
+                context.setRecordContext(entry.entry().context());
+                wrapped().put(entry.key(), entry.newValue());
+            } finally {
+                context.setRecordContext(current);
+            }
         }
     }
 

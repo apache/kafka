@@ -82,7 +82,42 @@ public class ClientTagAwareStandbyTaskAssignorTest {
     }
 
     @Test
+    public void shouldNotAssignStatelessTasksToAnyClients() {
+        final Set<TaskId> statefulTasks = mkSet(
+            TASK_1_0,
+            TASK_1_1,
+            TASK_1_2
+        );
+
+        final Map<UUID, ClientState> clientStates = mkMap(
+            mkEntry(UUID_1, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0, TASK_1_0)),
+            mkEntry(UUID_2, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_1)))),
+            mkEntry(UUID_3, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_1)))),
+
+            mkEntry(UUID_4, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_2)), TASK_0_1, TASK_1_1)),
+            mkEntry(UUID_5, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
+            mkEntry(UUID_6, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_2)))),
+
+            mkEntry(UUID_7, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_3)), TASK_0_2, TASK_1_2)),
+            mkEntry(UUID_8, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_2), mkEntry(CLUSTER_TAG, CLUSTER_3)))),
+            mkEntry(UUID_9, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_3), mkEntry(CLUSTER_TAG, CLUSTER_3))))
+        );
+
+        final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
+
+        final AssignmentConfigs assignmentConfigs = newAssignmentConfigs(2, ZONE_TAG, CLUSTER_TAG);
+
+        standbyTaskAssignor.assign(clientStates, allActiveTasks, statefulTasks, assignmentConfigs);
+
+        final Set<TaskId> statelessTasks = allActiveTasks.stream().filter(taskId -> !statefulTasks.contains(taskId)).collect(Collectors.toSet());
+        assertTrue(
+            clientStates.values().stream().allMatch(clientState -> statelessTasks.stream().noneMatch(clientState::hasStandbyTask))
+        );
+    }
+
+    @Test
     public void shouldRemoveClientToRemainingStandbysAndNotPopulatePendingStandbyTasksToClientIdWhenAllStandbyTasksWereAssigned() {
+        final int numStandbyReplicas = 2;
         final Set<String> rackAwareAssignmentTags = mkSet(ZONE_TAG, CLUSTER_TAG);
         final Map<UUID, ClientState> clientStates = mkMap(
             mkEntry(UUID_1, createClientStateWithCapacity(2, mkMap(mkEntry(ZONE_TAG, ZONE_1), mkEntry(CLUSTER_TAG, CLUSTER_1)), TASK_0_0)),
@@ -102,10 +137,11 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         fillClientsTagStatistics(clientStates, tagEntryToClients, tagKeyToValues);
 
         final Map<TaskId, UUID> pendingStandbyTasksToClientId = new HashMap<>();
-        final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(2, allActiveTasks);
+        final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(numStandbyReplicas, allActiveTasks);
 
         for (final TaskId activeTaskId : allActiveTasks) {
             assignStandbyTasksToClientsWithDifferentTags(
+                numStandbyReplicas,
                 constrainedPrioritySet,
                 activeTaskId,
                 taskToClientId.get(activeTaskId),
@@ -132,6 +168,7 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         );
 
         final ConstrainedPrioritySet constrainedPrioritySet = createLeastLoadedPrioritySetConstrainedByAssignedTask(clientStates);
+        final int numStandbyReplicas = 3;
         final Set<TaskId> allActiveTasks = findAllActiveTasks(clientStates);
         final Map<TaskId, UUID> taskToClientId = mkMap(mkEntry(TASK_0_0, UUID_1),
                                                        mkEntry(TASK_0_1, UUID_2),
@@ -143,10 +180,11 @@ public class ClientTagAwareStandbyTaskAssignorTest {
         fillClientsTagStatistics(clientStates, tagEntryToClients, tagKeyToValues);
 
         final Map<TaskId, UUID> pendingStandbyTasksToClientId = new HashMap<>();
-        final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(3, allActiveTasks);
+        final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(numStandbyReplicas, allActiveTasks);
 
         for (final TaskId activeTaskId : allActiveTasks) {
             assignStandbyTasksToClientsWithDifferentTags(
+                numStandbyReplicas,
                 constrainedPrioritySet,
                 activeTaskId,
                 taskToClientId.get(activeTaskId),

@@ -47,8 +47,10 @@ import org.apache.kafka.test.TestUtils;
 import org.hamcrest.Matchers;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -81,6 +83,8 @@ import static org.hamcrest.Matchers.empty;
 
 @Category(IntegrationTest.class)
 public class SuppressionIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
         1,

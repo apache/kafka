@@ -13,11 +13,11 @@
 package kafka.api
 
 import java.util.{Locale, Properties}
+
 import kafka.log.LogConfig
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{JaasTestUtils, TestUtils}
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
-import kafka.metrics.KafkaYammerMetrics
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.{InvalidTopicException, UnknownTopicOrPart
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.TestJaasConfig
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
 

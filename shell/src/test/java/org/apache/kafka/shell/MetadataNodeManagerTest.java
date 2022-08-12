@@ -31,6 +31,7 @@ import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
+import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -209,6 +210,12 @@ public class MetadataNodeManagerTest {
             partitionChangeRecord.duplicate().setLeader(1),
             newPartitionRecord.duplicate().setLeader(1).setLeaderEpoch(1)
         );
+
+        // Change leader recovery state
+        checkPartitionChangeRecord(
+            oldPartitionRecord,
+            partitionChangeRecord.duplicate().setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()),
+            newPartitionRecord.duplicate().setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()));
     }
 
     private void checkPartitionChangeRecord(PartitionRecord oldPartitionRecord,

@@ -71,8 +71,10 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
@@ -117,6 +119,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @Category({IntegrationTest.class})
 @RunWith(value = Parameterized.class)
 public class IQv2StoreIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     private static final Logger LOG = LoggerFactory.getLogger(IQv2StoreIntegrationTest.class);
 
@@ -760,45 +764,50 @@ public class IQv2StoreIntegrationTest {
 
     @Test
     public void verifyStore() {
-        if (storeToTest.global()) {
-            // See KAFKA-13523
-            globalShouldRejectAllQueries();
-        } else {
-            shouldRejectUnknownQuery();
-            shouldCollectExecutionInfo();
-            shouldCollectExecutionInfoUnderFailure();
+        try {
+            if (storeToTest.global()) {
+                // See KAFKA-13523
+                globalShouldRejectAllQueries();
+            } else {
+                shouldRejectUnknownQuery();
+                shouldCollectExecutionInfo();
+                shouldCollectExecutionInfoUnderFailure();
 
-            if (storeToTest.keyValue()) {
-                if (storeToTest.timestamped()) {
-                    final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
-                        ValueAndTimestamp::value;
-                    shouldHandleKeyQuery(2, valueExtractor, 2);
-                    shouldHandleRangeQueries(valueExtractor);
-                } else {
-                    final Function<Integer, Integer> valueExtractor = Function.identity();
-                    shouldHandleKeyQuery(2, valueExtractor, 2);
-                    shouldHandleRangeQueries(valueExtractor);
-                }
-            }
-
-            if (storeToTest.isWindowed()) {
-                if (storeToTest.timestamped()) {
-                    final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
+                if (storeToTest.keyValue()) {
+                    if (storeToTest.timestamped()) {
+                        final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
                             ValueAndTimestamp::value;
-                    shouldHandleWindowKeyQueries(valueExtractor);
-                    shouldHandleWindowRangeQueries(valueExtractor);
-                } else {
-                    final Function<Integer, Integer> valueExtractor = Function.identity();
-                    shouldHandleWindowKeyQueries(valueExtractor);
-                    shouldHandleWindowRangeQueries(valueExtractor);
+                        shouldHandleKeyQuery(2, valueExtractor, 2);
+                        shouldHandleRangeQueries(valueExtractor);
+                    } else {
+                        final Function<Integer, Integer> valueExtractor = Function.identity();
+                        shouldHandleKeyQuery(2, valueExtractor, 2);
+                        shouldHandleRangeQueries(valueExtractor);
+                    }
+                }
+
+                if (storeToTest.isWindowed()) {
+                    if (storeToTest.timestamped()) {
+                        final Function<ValueAndTimestamp<Integer>, Integer> valueExtractor =
+                            ValueAndTimestamp::value;
+                        shouldHandleWindowKeyQueries(valueExtractor);
+                        shouldHandleWindowRangeQueries(valueExtractor);
+                    } else {
+                        final Function<Integer, Integer> valueExtractor = Function.identity();
+                        shouldHandleWindowKeyQueries(valueExtractor);
+                        shouldHandleWindowRangeQueries(valueExtractor);
+                    }
+                }
+
+                if (storeToTest.isSession()) {
+                    // Note there's no "timestamped" differentiation here.
+                    // Idiosyncratically, SessionStores are _never_ timestamped.
+                    shouldHandleSessionKeyQueries();
                 }
             }
-
-            if (storeToTest.isSession()) {
-                // Note there's no "timestamped" differentiation here.
-                // Idiosyncratically, SessionStores are _never_ timestamped.
-                shouldHandleSessionKeyQueries();
-            }
+        } catch (final AssertionError e) {
+            LOG.error("Failed assertion", e);
+            throw e;
         }
     }
 
@@ -1350,7 +1359,7 @@ public class IQv2StoreIntegrationTest {
                                                    final String supplier, final String kind) {
         final String safeTestName =
             IQv2StoreIntegrationTest.class.getName() + "-" + cache + "-" + log + "-" + supplier
-                + "-" + kind;
+                + "-" + kind + "-" + RANDOM.nextInt();
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);

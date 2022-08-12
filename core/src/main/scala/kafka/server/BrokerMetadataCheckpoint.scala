@@ -21,9 +21,10 @@ import java.io._
 import java.nio.file.{Files, NoSuchFileException}
 import java.util.Properties
 
-import kafka.common.{InconsistentBrokerMetadataException, KafkaException}
+import kafka.common.InconsistentBrokerMetadataException
 import kafka.server.RawMetaProperties._
 import kafka.utils._
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable

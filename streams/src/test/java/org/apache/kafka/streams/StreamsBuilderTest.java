@@ -52,7 +52,9 @@ import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.NoopValueTransformer;
 import org.apache.kafka.test.NoopValueTransformerWithKey;
 import org.apache.kafka.test.StreamsTestUtils;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -77,6 +79,8 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class StreamsBuilderTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     private static final String STREAM_TOPIC = "stream-topic";
 
@@ -622,6 +626,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldUseSpecifiedNameForTransform() {
         builder.stream(STREAM_TOPIC).transform(() -> null, Named.as(STREAM_OPERATION_NAME));
         builder.build();
@@ -630,6 +635,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldUseSpecifiedNameForTransformValues() {
         builder.stream(STREAM_TOPIC).transformValues(() -> new NoopValueTransformer<>(), Named.as(STREAM_OPERATION_NAME));
         builder.build();
@@ -638,6 +644,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldUseSpecifiedNameForTransformValuesWithKey() {
         builder.stream(STREAM_TOPIC).transformValues(() -> new NoopValueTransformerWithKey<>(), Named.as(STREAM_OPERATION_NAME));
         builder.build();
@@ -944,6 +951,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldUseSpecifiedNameForFlatTransformValueOperation() {
         builder.stream(STREAM_TOPIC).flatTransformValues(() -> new NoopValueTransformer<>(), Named.as(STREAM_OPERATION_NAME));
         builder.build();
@@ -952,7 +960,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings({"unchecked", "rawtypes", "deprecation"})
     public void shouldUseSpecifiedNameForFlatTransformValueWithKeyOperation() {
         builder.stream(STREAM_TOPIC).flatTransformValues(() -> new NoopValueTransformerWithKey(), Named.as(STREAM_OPERATION_NAME));
         builder.build();

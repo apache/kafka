@@ -97,8 +97,8 @@ public enum ApiKeys {
     BEGIN_QUORUM_EPOCH(ApiMessageType.BEGIN_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false),
     END_QUORUM_EPOCH(ApiMessageType.END_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false),
     DESCRIBE_QUORUM(ApiMessageType.DESCRIBE_QUORUM, true, RecordBatch.MAGIC_VALUE_V0, true),
-    ALTER_ISR(ApiMessageType.ALTER_ISR, true),
-    UPDATE_FEATURES(ApiMessageType.UPDATE_FEATURES),
+    ALTER_PARTITION(ApiMessageType.ALTER_PARTITION, true),
+    UPDATE_FEATURES(ApiMessageType.UPDATE_FEATURES, true, true),
     ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false),
     FETCH_SNAPSHOT(ApiMessageType.FETCH_SNAPSHOT, false, RecordBatch.MAGIC_VALUE_V0, false),
     DESCRIBE_CLUSTER(ApiMessageType.DESCRIBE_CLUSTER),
@@ -241,7 +241,7 @@ public enum ApiKeys {
             b.append("</td>");
             b.append("</tr>\n");
         }
-        b.append("</table>\n");
+        b.append("</tbody></table>\n");
         return b.toString();
     }
 

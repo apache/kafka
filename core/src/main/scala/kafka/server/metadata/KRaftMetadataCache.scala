@@ -18,7 +18,7 @@
 package kafka.server.metadata
 
 import kafka.controller.StateChangeLogger
-import kafka.server.MetadataCache
+import kafka.server.{FinalizedFeaturesAndEpoch, MetadataCache}
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
@@ -28,14 +28,15 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.image.MetadataImage
+
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.ThreadLocalRandom
-
 import kafka.admin.BrokerMetadata
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData}
 import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
+import org.apache.kafka.server.common.MetadataVersion
 
 import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -97,10 +98,10 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
         maybeLeader match {
           case None =>
             val error = if (!image.cluster().brokers.containsKey(partition.leader)) {
-              debug(s"Error while fetching metadata for ${topicName}-${partitionId}: leader not available")
+              debug(s"Error while fetching metadata for $topicName-$partitionId: leader not available")
               Errors.LEADER_NOT_AVAILABLE
             } else {
-              debug(s"Error while fetching metadata for ${topicName}-${partitionId}: listener $listenerName " +
+              debug(s"Error while fetching metadata for $topicName-$partitionId: listener $listenerName " +
                 s"not found on leader ${partition.leader}")
               if (errorUnavailableListeners) Errors.LISTENER_NOT_FOUND else Errors.LEADER_NOT_AVAILABLE
             }
@@ -113,12 +114,12 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
               .setIsrNodes(filteredIsr)
               .setOfflineReplicas(offlineReplicas)
           case Some(leader) =>
-            val error = if (filteredReplicas.size < partition.replicas.size) {
-              debug(s"Error while fetching metadata for ${topicName}-${partitionId}: replica information not available for " +
+            val error = if (filteredReplicas.size < partition.replicas.length) {
+              debug(s"Error while fetching metadata for $topicName-$partitionId: replica information not available for " +
                 s"following brokers ${partition.replicas.filterNot(filteredReplicas.contains).mkString(",")}")
               Errors.REPLICA_NOT_AVAILABLE
-            } else if (filteredIsr.size < partition.isr.size) {
-              debug(s"Error while fetching metadata for ${topicName}-${partitionId}: in sync replica information not available for " +
+            } else if (filteredIsr.size < partition.isr.length) {
+              debug(s"Error while fetching metadata for $topicName-$partitionId: in sync replica information not available for " +
                 s"following brokers ${partition.isr.filterNot(filteredIsr.contains).mkString(",")}")
               Errors.REPLICA_NOT_AVAILABLE
             } else {
@@ -198,7 +199,15 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
   override def getTopicName(topicId: Uuid): Option[String] = _currentImage.topics().topicsById.asScala.get(topicId).map(_.name())
 
   override def hasAliveBroker(brokerId: Int): Boolean = {
-    Option(_currentImage.cluster().broker(brokerId)).count(!_.fenced()) == 1
+    Option(_currentImage.cluster.broker(brokerId)).count(!_.fenced()) == 1
+  }
+
+  def isBrokerFenced(brokerId: Int): Boolean = {
+    Option(_currentImage.cluster.broker(brokerId)).count(_.fenced) == 1
+  }
+
+  def isBrokerShuttingDown(brokerId: Int): Boolean = {
+    Option(_currentImage.cluster.broker(brokerId)).count(_.inControlledShutdown) == 1
   }
 
   override def getAliveBrokers(): Iterable[BrokerMetadata] = getAliveBrokers(_currentImage)
@@ -220,7 +229,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
   override def getPartitionInfo(topicName: String, partitionId: Int): Option[UpdateMetadataPartitionState] = {
     Option(_currentImage.topics().getTopic(topicName)).
-      flatMap(topic => Some(topic.partitions().get(partitionId))).
+      flatMap(topic => Option(topic.partitions().get(partitionId))).
       flatMap(partition => Some(new UpdateMetadataPartitionState().
         setTopicName(topicName).
         setPartitionIndex(partitionId).
@@ -266,8 +275,8 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     val image = _currentImage
     val result = new mutable.HashMap[Int, Node]()
     Option(image.topics().getTopic(tp.topic())).foreach { topic =>
-      topic.partitions().values().forEach { case partition =>
-        partition.replicas.map { case replicaId =>
+      topic.partitions().values().forEach { partition =>
+        partition.replicas.map { replicaId =>
           result.put(replicaId, Option(image.cluster().broker(replicaId)) match {
             case None => Node.noNode()
             case Some(broker) => broker.node(listenerName.value()).asScala.getOrElse(Node.noNode())
@@ -288,7 +297,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
    */
   private def getRandomAliveBroker(image: MetadataImage): Option[Int] = {
     val aliveBrokers = getAliveBrokers(image).toList
-    if (aliveBrokers.size == 0) {
+    if (aliveBrokers.isEmpty) {
       None
     } else {
       Some(aliveBrokers(ThreadLocalRandom.current().nextInt(aliveBrokers.size)).id)
@@ -315,8 +324,8 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
     image.topics().topicsByName().values().forEach { topic =>
       topic.partitions().entrySet().forEach { entry =>
-        val partitionId = entry.getKey()
-        val partition = entry.getValue()
+        val partitionId = entry.getKey
+        val partition = entry.getValue
         partitionInfos.add(new PartitionInfo(topic.name(),
           partitionId,
           node(partition.leader),
@@ -363,5 +372,19 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
   def describeClientQuotas(request: DescribeClientQuotasRequestData): DescribeClientQuotasResponseData = {
     _currentImage.clientQuotas().describe(request)
+  }
+
+  override def metadataVersion(): MetadataVersion = _currentImage.features().metadataVersion()
+
+  override def features(): FinalizedFeaturesAndEpoch = {
+    val image = _currentImage
+    val features = image.features().finalizedVersions().asScala.map {
+      case (name: String, level: java.lang.Short) => name -> Short2short(level)
+    }
+    features.put(MetadataVersion.FEATURE_NAME, image.features().metadataVersion().featureLevel())
+
+    FinalizedFeaturesAndEpoch(
+      features.toMap,
+      image.highestOffsetAndEpoch().offset)
   }
 }

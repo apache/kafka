@@ -18,9 +18,11 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
@@ -51,26 +53,104 @@ import static org.apache.kafka.common.protocol.Errors.INVALID_CONFIG;
 
 
 public class ConfigurationControlManager {
-    final static Consumer<ConfigResource> NO_OP_EXISTENCE_CHECKER = __ -> { };
+    public static final ConfigResource DEFAULT_NODE = new ConfigResource(Type.BROKER, "");
 
     private final Logger log;
     private final SnapshotRegistry snapshotRegistry;
     private final KafkaConfigSchema configSchema;
+    private final Consumer<ConfigResource> existenceChecker;
     private final Optional<AlterConfigPolicy> alterConfigPolicy;
     private final ConfigurationValidator validator;
     private final TimelineHashMap<ConfigResource, TimelineHashMap<String, String>> configData;
+    private final Map<String, Object> staticConfig;
+    private final ConfigResource currentController;
 
-    ConfigurationControlManager(LogContext logContext,
-                                SnapshotRegistry snapshotRegistry,
-                                KafkaConfigSchema configSchema,
-                                Optional<AlterConfigPolicy> alterConfigPolicy,
-                                ConfigurationValidator validator) {
+    static class Builder {
+        private LogContext logContext = null;
+        private SnapshotRegistry snapshotRegistry = null;
+        private KafkaConfigSchema configSchema = KafkaConfigSchema.EMPTY;
+        private Consumer<ConfigResource> existenceChecker = __ -> { };
+        private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
+        private ConfigurationValidator validator = ConfigurationValidator.NO_OP;
+        private Map<String, Object> staticConfig = Collections.emptyMap();
+        private int nodeId = 0;
+
+        Builder setLogContext(LogContext logContext) {
+            this.logContext = logContext;
+            return this;
+        }
+
+        Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
+            this.snapshotRegistry = snapshotRegistry;
+            return this;
+        }
+
+        Builder setKafkaConfigSchema(KafkaConfigSchema configSchema) {
+            this.configSchema = configSchema;
+            return this;
+        }
+
+        Builder setExistenceChecker(Consumer<ConfigResource> existenceChecker) {
+            this.existenceChecker = existenceChecker;
+            return this;
+        }
+
+        Builder setAlterConfigPolicy(Optional<AlterConfigPolicy> alterConfigPolicy) {
+            this.alterConfigPolicy = alterConfigPolicy;
+            return this;
+        }
+
+        Builder setValidator(ConfigurationValidator validator) {
+            this.validator = validator;
+            return this;
+        }
+
+        Builder setStaticConfig(Map<String, Object> staticConfig) {
+            this.staticConfig = staticConfig;
+            return this;
+        }
+
+        Builder setNodeId(int nodeId) {
+            this.nodeId = nodeId;
+            return this;
+        }
+
+        ConfigurationControlManager build() {
+            if (logContext == null) logContext = new LogContext();
+            if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
+            return new ConfigurationControlManager(
+                logContext,
+                snapshotRegistry,
+                configSchema,
+                existenceChecker,
+                alterConfigPolicy,
+                validator,
+                staticConfig,
+                nodeId);
+        }
+    }
+
+    private ConfigurationControlManager(LogContext logContext,
+            SnapshotRegistry snapshotRegistry,
+            KafkaConfigSchema configSchema,
+            Consumer<ConfigResource> existenceChecker,
+            Optional<AlterConfigPolicy> alterConfigPolicy,
+            ConfigurationValidator validator,
+            Map<String, Object> staticConfig,
+            int nodeId) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;
         this.configSchema = configSchema;
+        this.existenceChecker = existenceChecker;
         this.alterConfigPolicy = alterConfigPolicy;
         this.validator = validator;
         this.configData = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.staticConfig = Collections.unmodifiableMap(new HashMap<>(staticConfig));
+        this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
+    }
+
+    SnapshotRegistry snapshotRegistry() {
+        return snapshotRegistry;
     }
 
     /**
@@ -88,14 +168,14 @@ public class ConfigurationControlManager {
      */
     ControllerResult<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
             Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges,
-            Consumer<ConfigResource> existenceChecker) {
+            boolean newlyCreatedResource) {
         List<ApiMessageAndVersion> outputRecords = new ArrayList<>();
         Map<ConfigResource, ApiError> outputResults = new HashMap<>();
         for (Entry<ConfigResource, Map<String, Entry<OpType, String>>> resourceEntry :
                 configChanges.entrySet()) {
             incrementalAlterConfigResource(resourceEntry.getKey(),
                 resourceEntry.getValue(),
-                existenceChecker,
+                newlyCreatedResource,
                 outputRecords,
                 outputResults);
         }
@@ -104,7 +184,7 @@ public class ConfigurationControlManager {
 
     private void incrementalAlterConfigResource(ConfigResource configResource,
                                                 Map<String, Entry<OpType, String>> keysToOps,
-                                                Consumer<ConfigResource> existenceChecker,
+                                                boolean newlyCreatedResource,
                                                 List<ApiMessageAndVersion> outputRecords,
                                                 Map<ConfigResource, ApiError> outputResults) {
         List<ApiMessageAndVersion> newRecords = new ArrayList<>();
@@ -134,18 +214,23 @@ public class ConfigurationControlManager {
                             "key " + key + " because its type is not LIST."));
                         return;
                     }
-                    List<String> newValueParts = getParts(newValue, key, configResource);
+                    List<String> oldValueList = getParts(newValue, key, configResource);
                     if (opType == APPEND) {
-                        if (!newValueParts.contains(opValue)) {
-                            newValueParts.add(opValue);
+                        for (String value : opValue.split(",")) {
+                            if (!oldValueList.contains(value)) {
+                                oldValueList.add(value);
+                            }
                         }
-                        newValue = String.join(",", newValueParts);
-                    } else if (newValueParts.remove(opValue)) {
-                        newValue = String.join(",", newValueParts);
+                    } else {
+                        for (String value : opValue.split(",")) {
+                            oldValueList.remove(value);
+                        }
                     }
+                    newValue = String.join(",", oldValueList);
                     break;
             }
-            if (!Objects.equals(currentValue, newValue)) {
+            if (!Objects.equals(currentValue, newValue) || configResource.type().equals(Type.BROKER)) {
+                // KAFKA-14136 We need to generate records even if the value is unchanged to trigger reloads on the brokers
                 newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
@@ -153,7 +238,7 @@ public class ConfigurationControlManager {
                     setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
             }
         }
-        ApiError error = validateAlterConfig(configResource, newRecords, existenceChecker);
+        ApiError error = validateAlterConfig(configResource, newRecords, newlyCreatedResource);
         if (error.isFailure()) {
             outputResults.put(configResource, error);
             return;
@@ -164,23 +249,27 @@ public class ConfigurationControlManager {
 
     private ApiError validateAlterConfig(ConfigResource configResource,
                                          List<ApiMessageAndVersion> newRecords,
-                                         Consumer<ConfigResource> existenceChecker) {
-        Map<String, String> newConfigs = new HashMap<>();
+                                         boolean newlyCreatedResource) {
+        Map<String, String> allConfigs = new HashMap<>();
+        Map<String, String> alteredConfigs = new HashMap<>();
         TimelineHashMap<String, String> existingConfigs = configData.get(configResource);
-        if (existingConfigs != null) newConfigs.putAll(existingConfigs);
+        if (existingConfigs != null) allConfigs.putAll(existingConfigs);
         for (ApiMessageAndVersion newRecord : newRecords) {
             ConfigRecord configRecord = (ConfigRecord) newRecord.message();
             if (configRecord.value() == null) {
-                newConfigs.remove(configRecord.name());
+                allConfigs.remove(configRecord.name());
             } else {
-                newConfigs.put(configRecord.name(), configRecord.value());
+                allConfigs.put(configRecord.name(), configRecord.value());
             }
+            alteredConfigs.put(configRecord.name(), configRecord.value());
         }
         try {
-            validator.validate(configResource, newConfigs);
-            existenceChecker.accept(configResource);
+            validator.validate(configResource, allConfigs);
+            if (!newlyCreatedResource) {
+                existenceChecker.accept(configResource);
+            }
             if (alterConfigPolicy.isPresent()) {
-                alterConfigPolicy.get().validate(new RequestMetadata(configResource, newConfigs));
+                alterConfigPolicy.get().validate(new RequestMetadata(configResource, alteredConfigs));
             }
         } catch (ConfigException e) {
             return new ApiError(INVALID_CONFIG, e.getMessage());
@@ -201,7 +290,7 @@ public class ConfigurationControlManager {
      */
     ControllerResult<Map<ConfigResource, ApiError>> legacyAlterConfigs(
         Map<ConfigResource, Map<String, String>> newConfigs,
-        Consumer<ConfigResource> existenceChecker
+        boolean newlyCreatedResource
     ) {
         List<ApiMessageAndVersion> outputRecords = new ArrayList<>();
         Map<ConfigResource, ApiError> outputResults = new HashMap<>();
@@ -209,7 +298,7 @@ public class ConfigurationControlManager {
             newConfigs.entrySet()) {
             legacyAlterConfigResource(resourceEntry.getKey(),
                 resourceEntry.getValue(),
-                existenceChecker,
+                newlyCreatedResource,
                 outputRecords,
                 outputResults);
         }
@@ -218,7 +307,7 @@ public class ConfigurationControlManager {
 
     private void legacyAlterConfigResource(ConfigResource configResource,
                                            Map<String, String> newConfigs,
-                                           Consumer<ConfigResource> existenceChecker,
+                                           boolean newlyCreatedResource,
                                            List<ApiMessageAndVersion> outputRecords,
                                            Map<ConfigResource, ApiError> outputResults) {
         List<ApiMessageAndVersion> newRecords = new ArrayList<>();
@@ -230,7 +319,8 @@ public class ConfigurationControlManager {
             String key = entry.getKey();
             String newValue = entry.getValue();
             String currentValue = currentConfigs.get(key);
-            if (!Objects.equals(newValue, currentValue)) {
+            if (!Objects.equals(currentValue, newValue) || configResource.type().equals(Type.BROKER)) {
+                // KAFKA-14136 We need to generate records even if the value is unchanged to trigger reloads on the brokers
                 newRecords.add(new ApiMessageAndVersion(new ConfigRecord().
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
@@ -247,7 +337,7 @@ public class ConfigurationControlManager {
                     setValue(null), CONFIG_RECORD.highestSupportedVersion()));
             }
         }
-        ApiError error = validateAlterConfig(configResource, newRecords, existenceChecker);
+        ApiError error = validateAlterConfig(configResource, newRecords, newlyCreatedResource);
         if (error.isFailure()) {
             outputResults.put(configResource, error);
             return;
@@ -294,7 +384,11 @@ public class ConfigurationControlManager {
         if (configs.isEmpty()) {
             configData.remove(configResource);
         }
-        log.info("{}: set configuration {} to {}", configResource, record.name(), record.value());
+        if (configSchema.isSensitive(record)) {
+            log.info("{}: set configuration {} to {}", configResource, record.name(), Password.HIDDEN);
+        } else {
+            log.info("{}: set configuration {} to {}", configResource, record.name(), record.value());
+        }
     }
 
     // VisibleForTesting
@@ -313,7 +407,7 @@ public class ConfigurationControlManager {
         for (Entry<ConfigResource, Collection<String>> resourceEntry : resources.entrySet()) {
             ConfigResource resource = resourceEntry.getKey();
             try {
-                validator.validate(resource, Collections.emptyMap());
+                validator.validate(resource);
             } catch (Throwable e) {
                 results.put(resource, new ResultOrError<>(ApiError.fromThrowable(e)));
                 continue;
@@ -350,6 +444,21 @@ public class ConfigurationControlManager {
 
     boolean uncleanLeaderElectionEnabledForTopic(String name) {
         return false; // TODO: support configuring unclean leader election.
+    }
+
+    Map<String, ConfigEntry> computeEffectiveTopicConfigs(Map<String, String> creationConfigs) {
+        return configSchema.resolveEffectiveTopicConfigs(staticConfig, clusterConfig(),
+            currentControllerConfig(), creationConfigs);
+    }
+
+    Map<String, String> clusterConfig() {
+        Map<String, String> result = configData.get(DEFAULT_NODE);
+        return (result == null) ? Collections.emptyMap() : result;
+    }
+
+    Map<String, String> currentControllerConfig() {
+        Map<String, String> result = configData.get(currentController);
+        return (result == null) ? Collections.emptyMap() : result;
     }
 
     class ConfigurationControlIterator implements Iterator<List<ApiMessageAndVersion>> {

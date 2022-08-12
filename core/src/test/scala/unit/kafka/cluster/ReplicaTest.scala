@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,117 +16,293 @@
  */
 package kafka.cluster
 
-import java.util.Properties
+import kafka.log.UnifiedLog
+import kafka.server.LogOffsetMetadata
+import kafka.utils.MockTime
+import org.apache.kafka.common.TopicPartition
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.{BeforeEach, Test}
 
-import kafka.log.{ClientRecordDeletion, UnifiedLog, LogConfig, LogManager}
-import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
-import kafka.utils.{MockTime, TestUtils}
-import org.apache.kafka.common.errors.OffsetOutOfRangeException
-import org.apache.kafka.common.utils.Utils
-import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+object ReplicaTest {
+  val BrokerId: Int = 0
+  val Partition: TopicPartition = new TopicPartition("foo", 0)
+  val ReplicaLagTimeMaxMs: Long = 30000
+}
 
 class ReplicaTest {
+  import ReplicaTest._
 
-  val tmpDir = TestUtils.tempDir()
-  val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val time = new MockTime()
-  val brokerTopicStats = new BrokerTopicStats
-  var log: UnifiedLog = _
+  var replica: Replica = _
 
   @BeforeEach
   def setup(): Unit = {
-    val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 512: java.lang.Integer)
-    logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
-    logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
-    val config = LogConfig(logProps)
-    log = UnifiedLog(
-      dir = logDir,
-      config = config,
-      logStartOffset = 0L,
-      recoveryPoint = 0L,
-      scheduler = time.scheduler,
-      brokerTopicStats = brokerTopicStats,
-      time = time,
-      maxTransactionTimeoutMs = 5 * 60 * 1000,
-      maxProducerIdExpirationMs = 60 * 60 * 1000,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None,
-      keepPartitionMetadataFile = true
+    replica = new Replica(BrokerId, Partition)
+  }
+
+  private def assertReplicaState(
+    logStartOffset: Long,
+    logEndOffset: Long,
+    lastCaughtUpTimeMs: Long,
+    lastFetchLeaderLogEndOffset: Long,
+    lastFetchTimeMs: Long
+  ): Unit = {
+    val replicaState = replica.stateSnapshot
+    assertEquals(logStartOffset, replicaState.logStartOffset,
+      "Unexpected Log Start Offset")
+    assertEquals(logEndOffset, replicaState.logEndOffset,
+      "Unexpected Log End Offset")
+    assertEquals(lastCaughtUpTimeMs, replicaState.lastCaughtUpTimeMs,
+      "Unexpected Last Caught Up Time")
+    assertEquals(lastFetchLeaderLogEndOffset, replicaState.lastFetchLeaderLogEndOffset,
+      "Unexpected Last Fetch Leader Log End Offset")
+    assertEquals(lastFetchTimeMs, replicaState.lastFetchTimeMs,
+      "Unexpected Last Fetch Time")
+  }
+
+  def assertReplicaStateDoesNotChange(
+    op: => Unit
+  ): Unit = {
+    val previousState = replica.stateSnapshot
+
+    op
+
+    assertReplicaState(
+      logStartOffset = previousState.logStartOffset,
+      logEndOffset = previousState.logEndOffset,
+      lastCaughtUpTimeMs = previousState.lastCaughtUpTimeMs,
+      lastFetchLeaderLogEndOffset = previousState.lastFetchLeaderLogEndOffset,
+      lastFetchTimeMs = previousState.lastFetchTimeMs
     )
   }
 
-  @AfterEach
-  def tearDown(): Unit = {
-    log.close()
-    brokerTopicStats.close()
-    Utils.delete(tmpDir)
+  private def updateFetchState(
+    followerFetchOffset: Long,
+    followerStartOffset: Long,
+    leaderEndOffset: Long
+  ): Long = {
+    val currentTimeMs = time.milliseconds()
+    replica.updateFetchState(
+      followerFetchOffsetMetadata = LogOffsetMetadata(followerFetchOffset),
+      followerStartOffset = followerStartOffset,
+      followerFetchTimeMs = currentTimeMs,
+      leaderEndOffset = leaderEndOffset
+    )
+    currentTimeMs
+  }
+
+  private def resetReplicaState(
+    leaderEndOffset: Long,
+    isNewLeader: Boolean,
+    isFollowerInSync: Boolean
+  ): Long = {
+    val currentTimeMs = time.milliseconds()
+    replica.resetReplicaState(
+      currentTimeMs = currentTimeMs,
+      leaderEndOffset = leaderEndOffset,
+      isNewLeader = isNewLeader,
+      isFollowerInSync = isFollowerInSync
+    )
+    currentTimeMs
+  }
+
+  private def isCaughtUp(
+    leaderEndOffset: Long
+  ): Boolean = {
+    replica.stateSnapshot.isCaughtUp(
+      leaderEndOffset = leaderEndOffset,
+      currentTimeMs = time.milliseconds(),
+      replicaMaxLagMs = ReplicaLagTimeMaxMs
+    )
   }
 
   @Test
-  def testSegmentDeletionWithHighWatermarkInitialization(): Unit = {
-    val expiredTimestamp = time.milliseconds() - 1000
-    for (i <- 0 until 100) {
-      val records = TestUtils.singletonRecords(value = s"test$i".getBytes, timestamp = expiredTimestamp)
-      log.appendAsLeader(records, leaderEpoch = 0)
-    }
-
-    val initialHighWatermark = log.updateHighWatermark(25L)
-    assertEquals(25L, initialHighWatermark)
-
-    val initialNumSegments = log.numberOfSegments
-    log.deleteOldSegments()
-    assertTrue(log.numberOfSegments < initialNumSegments)
-    assertTrue(log.logStartOffset <= initialHighWatermark)
+  def testInitialState(): Unit = {
+    assertReplicaState(
+      logStartOffset = UnifiedLog.UnknownOffset,
+      logEndOffset = UnifiedLog.UnknownOffset,
+      lastCaughtUpTimeMs = 0L,
+      lastFetchLeaderLogEndOffset = 0L,
+      lastFetchTimeMs = 0L
+    )
   }
 
   @Test
-  def testCannotDeleteSegmentsAtOrAboveHighWatermark(): Unit = {
-    val expiredTimestamp = time.milliseconds() - 1000
-    for (i <- 0 until 100) {
-      val records = TestUtils.singletonRecords(value = s"test$i".getBytes, timestamp = expiredTimestamp)
-      log.appendAsLeader(records, leaderEpoch = 0)
-    }
+  def testUpdateFetchState(): Unit = {
+    val fetchTimeMs1 = updateFetchState(
+      followerFetchOffset = 5L,
+      followerStartOffset = 1L,
+      leaderEndOffset = 10L
+    )
 
-    // ensure we have at least a few segments so the test case is not trivial
-    assertTrue(log.numberOfSegments > 5)
-    assertEquals(0L, log.highWatermark)
-    assertEquals(0L, log.logStartOffset)
-    assertEquals(100L, log.logEndOffset)
+    assertReplicaState(
+      logStartOffset = 1L,
+      logEndOffset = 5L,
+      lastCaughtUpTimeMs = 0L,
+      lastFetchLeaderLogEndOffset = 10L,
+      lastFetchTimeMs = fetchTimeMs1
+    )
 
-    for (hw <- 0 to 100) {
-      log.updateHighWatermark(hw)
-      assertEquals(hw, log.highWatermark)
-      log.deleteOldSegments()
-      assertTrue(log.logStartOffset <= hw)
+    val fetchTimeMs2 = updateFetchState(
+      followerFetchOffset = 10L,
+      followerStartOffset = 2L,
+      leaderEndOffset = 15L
+    )
 
-      // verify that all segments up to the high watermark have been deleted
+    assertReplicaState(
+      logStartOffset = 2L,
+      logEndOffset = 10L,
+      lastCaughtUpTimeMs = fetchTimeMs1,
+      lastFetchLeaderLogEndOffset = 15L,
+      lastFetchTimeMs = fetchTimeMs2
+    )
 
-      log.logSegments.headOption.foreach { segment =>
-        assertTrue(segment.baseOffset <= hw)
-        assertTrue(segment.baseOffset >= log.logStartOffset)
-      }
-      log.logSegments.tail.foreach { segment =>
-        assertTrue(segment.baseOffset > hw)
-        assertTrue(segment.baseOffset >= log.logStartOffset)
-      }
-    }
+    val fetchTimeMs3 = updateFetchState(
+      followerFetchOffset = 15L,
+      followerStartOffset = 3L,
+      leaderEndOffset = 15L
+    )
 
-    assertEquals(100L, log.logStartOffset)
-    assertEquals(1, log.numberOfSegments)
-    assertEquals(0, log.activeSegment.size)
+    assertReplicaState(
+      logStartOffset = 3L,
+      logEndOffset = 15L,
+      lastCaughtUpTimeMs = fetchTimeMs3,
+      lastFetchLeaderLogEndOffset = 15L,
+      lastFetchTimeMs = fetchTimeMs3
+    )
   }
 
   @Test
-  def testCannotIncrementLogStartOffsetPastHighWatermark(): Unit = {
-    for (i <- 0 until 100) {
-      val records = TestUtils.singletonRecords(value = s"test$i".getBytes)
-      log.appendAsLeader(records, leaderEpoch = 0)
-    }
+  def testResetReplicaStateWhenLeaderIsReelectedAndReplicaIsInSync(): Unit = {
+    updateFetchState(
+      followerFetchOffset = 10L,
+      followerStartOffset = 1L,
+      leaderEndOffset = 10L
+    )
 
-    log.updateHighWatermark(25L)
-    assertThrows(classOf[OffsetOutOfRangeException], () => log.maybeIncrementLogStartOffset(26L, ClientRecordDeletion))
+    val resetTimeMs1 = resetReplicaState(
+      leaderEndOffset = 11L,
+      isNewLeader = false,
+      isFollowerInSync = true
+    )
+
+    assertReplicaState(
+      logStartOffset = 1L,
+      logEndOffset = 10L,
+      lastCaughtUpTimeMs = resetTimeMs1,
+      lastFetchLeaderLogEndOffset = 11L,
+      lastFetchTimeMs = resetTimeMs1
+    )
+  }
+
+  @Test
+  def testResetReplicaStateWhenLeaderIsReelectedAndReplicaIsNotInSync(): Unit = {
+    updateFetchState(
+      followerFetchOffset = 10L,
+      followerStartOffset = 1L,
+      leaderEndOffset = 10L
+    )
+
+    resetReplicaState(
+      leaderEndOffset = 11L,
+      isNewLeader = false,
+      isFollowerInSync = false
+    )
+
+    assertReplicaState(
+      logStartOffset = 1L,
+      logEndOffset = 10L,
+      lastCaughtUpTimeMs = 0L,
+      lastFetchLeaderLogEndOffset = 11L,
+      lastFetchTimeMs = 0L
+    )
+  }
+
+  @Test
+  def testResetReplicaStateWhenNewLeaderIsElectedAndReplicaIsInSync(): Unit = {
+    updateFetchState(
+      followerFetchOffset = 10L,
+      followerStartOffset = 1L,
+      leaderEndOffset = 10L
+    )
+
+    val resetTimeMs1 = resetReplicaState(
+      leaderEndOffset = 11L,
+      isNewLeader = true,
+      isFollowerInSync = true
+    )
+
+    assertReplicaState(
+      logStartOffset = UnifiedLog.UnknownOffset,
+      logEndOffset = UnifiedLog.UnknownOffset,
+      lastCaughtUpTimeMs = resetTimeMs1,
+      lastFetchLeaderLogEndOffset = UnifiedLog.UnknownOffset,
+      lastFetchTimeMs = 0L
+    )
+  }
+
+  @Test
+  def testResetReplicaStateWhenNewLeaderIsElectedAndReplicaIsNotInSync(): Unit = {
+    updateFetchState(
+      followerFetchOffset = 10L,
+      followerStartOffset = 1L,
+      leaderEndOffset = 10L
+    )
+
+    resetReplicaState(
+      leaderEndOffset = 11L,
+      isNewLeader = true,
+      isFollowerInSync = false
+    )
+
+    assertReplicaState(
+      logStartOffset = UnifiedLog.UnknownOffset,
+      logEndOffset = UnifiedLog.UnknownOffset,
+      lastCaughtUpTimeMs = 0L,
+      lastFetchLeaderLogEndOffset = UnifiedLog.UnknownOffset,
+      lastFetchTimeMs = 0L
+    )
+  }
+
+  @Test
+  def testIsCaughtUpWhenReplicaIsCaughtUpToLogEnd(): Unit = {
+    assertFalse(isCaughtUp(leaderEndOffset = 10L))
+
+    updateFetchState(
+      followerFetchOffset = 10L,
+      followerStartOffset = 1L,
+      leaderEndOffset = 10L
+    )
+
+    assertTrue(isCaughtUp(leaderEndOffset = 10L))
+
+    time.sleep(ReplicaLagTimeMaxMs + 1)
+
+    assertTrue(isCaughtUp(leaderEndOffset = 10L))
+  }
+
+  @Test
+  def testIsCaughtUpWhenReplicaIsNotCaughtUpToLogEnd(): Unit = {
+    assertFalse(isCaughtUp(leaderEndOffset = 10L))
+
+    updateFetchState(
+      followerFetchOffset = 5L,
+      followerStartOffset = 1L,
+      leaderEndOffset = 10L
+    )
+
+    assertFalse(isCaughtUp(leaderEndOffset = 10L))
+
+    updateFetchState(
+      followerFetchOffset = 10L,
+      followerStartOffset = 1L,
+      leaderEndOffset = 15L
+    )
+
+    assertTrue(isCaughtUp(leaderEndOffset = 16L))
+
+    time.sleep(ReplicaLagTimeMaxMs + 1)
+
+    assertFalse(isCaughtUp(leaderEndOffset = 16L))
   }
 }

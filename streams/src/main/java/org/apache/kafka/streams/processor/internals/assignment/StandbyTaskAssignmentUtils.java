@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.slf4j.Logger;
 
 import java.util.Map;
 import java.util.Set;
@@ -33,10 +34,12 @@ final class StandbyTaskAssignmentUtils {
                                           client -> clients.get(client).assignedTaskLoad());
     }
 
-    static int pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks(final Map<UUID, ClientState> clients,
-                                                                      final Map<TaskId, Integer> tasksToRemainingStandbys,
-                                                                      final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
-                                                                      final TaskId activeTaskId) {
+    static void pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks(final int numStandbyReplicas,
+                                                                       final Map<UUID, ClientState> clients,
+                                                                       final Map<TaskId, Integer> tasksToRemainingStandbys,
+                                                                       final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
+                                                                       final TaskId activeTaskId,
+                                                                       final Logger log) {
         int numRemainingStandbys = tasksToRemainingStandbys.get(activeTaskId);
         while (numRemainingStandbys > 0) {
             final UUID client = standbyTaskClientsByTaskLoad.poll(activeTaskId);
@@ -49,7 +52,13 @@ final class StandbyTaskAssignmentUtils {
             tasksToRemainingStandbys.put(activeTaskId, numRemainingStandbys);
         }
 
-        return numRemainingStandbys;
+        if (numRemainingStandbys > 0) {
+            log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
+                     "There is not enough available capacity. You should " +
+                     "increase the number of application instances " +
+                     "to maintain the requested number of standby replicas.",
+                     numRemainingStandbys, numStandbyReplicas, activeTaskId);
+        }
     }
 
     static Map<TaskId, Integer> computeTasksToRemainingStandbys(final int numStandbyReplicas,

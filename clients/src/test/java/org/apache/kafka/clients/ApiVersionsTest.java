@@ -48,7 +48,7 @@ public class ApiVersionsTest {
         assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, apiVersions.maxUsableProduceMagic());
 
         // something that doesn't support PRODUCE, which is the case with Raft-based controllers
-        apiVersions.update("2", new NodeApiVersions(Collections.singleton(
+        apiVersions.update("2", NodeApiVersions.create(Collections.singleton(
             new ApiVersionsResponseData.ApiVersion()
                 .setApiKey(ApiKeys.FETCH.id)
                 .setMinVersion((short) 0)

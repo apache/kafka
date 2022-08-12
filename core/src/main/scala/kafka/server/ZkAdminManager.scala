@@ -158,7 +158,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
         val nullConfigs = topic.configs.asScala.filter(_.value == null).map(_.name)
         if (nullConfigs.nonEmpty)
-          throw new InvalidRequestException(s"Null value not supported for topic configs : ${nullConfigs.mkString(",")}")
+          throw new InvalidConfigurationException(s"Null value not supported for topic configs: ${nullConfigs.mkString(",")}")
 
         if ((topic.numPartitions != NO_NUM_PARTITIONS || topic.replicationFactor != NO_REPLICATION_FACTOR)
             && !topic.assignments().isEmpty) {
@@ -407,7 +407,7 @@ class ZkAdminManager(val config: KafkaConfig,
         case e @ (_: ConfigException | _: IllegalArgumentException) =>
           val message = s"Invalid config value for resource $resource: ${e.getMessage}"
           info(message)
-          resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
+          resource -> ApiError.fromThrowable(new InvalidConfigurationException(message, e))
         case e: Throwable =>
           val configProps = new Properties
           config.entries.asScala.filter(_.value != null).foreach { configEntry =>
@@ -427,6 +427,10 @@ class ZkAdminManager(val config: KafkaConfig,
   private def alterTopicConfigs(resource: ConfigResource, validateOnly: Boolean,
                                 configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
     val topic = resource.name
+    if (topic.isEmpty()) {
+      throw new InvalidRequestException("Default topic resources are not allowed.")
+    }
+
     if (!metadataCache.contains(topic))
       throw new UnknownTopicOrPartitionException(s"The topic '$topic' does not exist.")
 
@@ -489,6 +493,9 @@ class ZkAdminManager(val config: KafkaConfig,
 
         resource.`type` match {
           case ConfigResource.Type.TOPIC =>
+            if (resource.name.isEmpty()) {
+              throw new InvalidRequestException("Default topic resources are not allowed.")
+            }
             val configProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name)
             prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys)
             alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
@@ -511,7 +518,7 @@ class ZkAdminManager(val config: KafkaConfig,
         case e @ (_: ConfigException | _: IllegalArgumentException) =>
           val message = s"Invalid config value for resource $resource: ${e.getMessage}"
           info(message)
-          resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
+          resource -> ApiError.fromThrowable(new InvalidConfigurationException(message, e))
         case e: Throwable =>
           // Log client errors at a lower level than unexpected exceptions
           val message = s"Error processing alter configs request for resource $resource, config $alterConfigOps"

@@ -41,7 +41,11 @@ public class PrefixedWindowKeySchemas {
         return binaryBytes[0];
     }
 
-    public static class TimeFirstWindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
+    public static boolean isTimeFirstSchemaKey(final byte[] binaryBytes) {
+        return binaryBytes.length > 0 && binaryBytes[0] == TIME_FIRST_PREFIX;
+    }
+
+    public static class TimeFirstWindowKeySchema implements KeySchema {
 
         @Override
         public Bytes upperRange(final Bytes key, final long to) {
@@ -176,6 +180,14 @@ public class PrefixedWindowKeySchemas {
             return toStoreKeyBinary(serializedKey, timeKey.window().start(), seqnum);
         }
 
+        public static <K> Bytes toStoreKeyBinary(final K key,
+                                                 final long timestamp,
+                                                 final int seqnum,
+                                                 final StateSerdes<K, ?> serdes) {
+            final byte[] serializedKey = serdes.rawKey(key);
+            return toStoreKeyBinary(serializedKey, timestamp, seqnum);
+        }
+
         // for store serdes
         public static Bytes toStoreKeyBinary(final Bytes key,
                                              final long timestamp,
@@ -226,8 +238,6 @@ public class PrefixedWindowKeySchemas {
 
     public static class KeyFirstWindowKeySchema implements KeySchema {
 
-
-
         @Override
         public Bytes upperRange(final Bytes key, final long to) {
             final Bytes noPrefixBytes = new WindowKeySchema().upperRange(key, to);
@@ -255,7 +265,7 @@ public class PrefixedWindowKeySchemas {
 
         @Override
         public long segmentTimestamp(final Bytes key) {
-            return KeyFirstWindowKeySchema.extractStoreTimestamp(key.get());
+            return extractStoreTimestamp(key.get());
         }
 
         @Override
@@ -293,6 +303,14 @@ public class PrefixedWindowKeySchemas {
                                                             final long to,
                                                             final boolean forward) {
             return segments.segments(from, to, forward);
+        }
+
+        public static <K> Bytes toStoreKeyBinary(final K key,
+                                                 final long timestamp,
+                                                 final int seqnum,
+                                                 final StateSerdes<K, ?> serdes) {
+            final byte[] serializedKey = serdes.rawKey(key);
+            return toStoreKeyBinary(serializedKey, timestamp, seqnum);
         }
 
         public static Bytes toStoreKeyBinary(final Windowed<Bytes> timeKey,

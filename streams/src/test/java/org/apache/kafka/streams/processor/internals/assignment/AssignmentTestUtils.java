@@ -65,6 +65,9 @@ public final class AssignmentTestUtils {
     public static final UUID UUID_4 = uuidForInt(4);
     public static final UUID UUID_5 = uuidForInt(5);
     public static final UUID UUID_6 = uuidForInt(6);
+    public static final UUID UUID_7 = uuidForInt(7);
+    public static final UUID UUID_8 = uuidForInt(8);
+    public static final UUID UUID_9 = uuidForInt(9);
 
     public static final TopicPartition TP_0_0 = new TopicPartition("topic0", 0);
     public static final TopicPartition TP_0_1 = new TopicPartition("topic0", 1);
@@ -164,6 +167,15 @@ public final class AssignmentTestUtils {
                                            final byte uniqueField) {
         return new SubscriptionInfo(
             LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField, 0, EMPTY_CLIENT_TAGS);
+    }
+
+    public static SubscriptionInfo getInfo(final UUID processId,
+                                           final Set<TaskId> prevTasks,
+                                           final Set<TaskId> standbyTasks,
+                                           final byte uniqueField,
+                                           final Map<String, String> clientTags) {
+        return new SubscriptionInfo(
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField, 0, clientTags);
     }
 
     // Stub offset sums for when we only care about the prev/standby task sets, not the actual offsets

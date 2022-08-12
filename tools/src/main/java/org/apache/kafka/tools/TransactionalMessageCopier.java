@@ -47,6 +47,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
@@ -260,25 +261,21 @@ public class TransactionalMessageCopier {
         return json;
     }
 
-    private static synchronized String statusAsJson(long totalProcessed, long consumedSinceLastRebalanced, long remaining, String transactionalId, String stage) {
-        Map<String, Object> statusData = new HashMap<>();
-        statusData.put("progress", transactionalId);
+    private static synchronized String statusAsJson(
+        String stage,
+        long totalProcessed,
+        long consumedSinceLastRebalanced,
+        long remaining,
+        String transactionalId
+    ) {
+        Map<String, Object> statusData = new LinkedHashMap<>();
+        statusData.put("transactionalId", transactionalId);
+        statusData.put("stage", stage);
+        statusData.put("time", FORMAT.format(new Date()));
         statusData.put("totalProcessed", totalProcessed);
         statusData.put("consumed", consumedSinceLastRebalanced);
         statusData.put("remaining", remaining);
-        statusData.put("time", FORMAT.format(new Date()));
-        statusData.put("stage", stage);
         return toJsonString(statusData);
-    }
-
-    private static synchronized String shutDownString(long totalProcessed, long consumedSinceLastRebalanced, long remaining, String transactionalId) {
-        Map<String, Object> shutdownData = new HashMap<>();
-        shutdownData.put("shutdown_complete", transactionalId);
-        shutdownData.put("totalProcessed", totalProcessed);
-        shutdownData.put("consumed", consumedSinceLastRebalanced);
-        shutdownData.put("remaining", remaining);
-        shutdownData.put("time", FORMAT.format(new Date()));
-        return toJsonString(shutdownData);
     }
 
     private static void abortTransactionAndResetPosition(
@@ -330,8 +327,13 @@ public class TransactionalMessageCopier {
                         .mapToLong(partition -> messagesRemaining(consumer, partition)).sum());
                     numMessagesProcessedSinceLastRebalance.set(0);
                     // We use message cap for remaining here as the remainingMessages are not set yet.
-                    System.out.println(statusAsJson(totalMessageProcessed.get(),
-                        numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId, "RebalanceComplete"));
+                    System.out.println(statusAsJson(
+                        "RebalanceComplete",
+                        totalMessageProcessed.get(),
+                        numMessagesProcessedSinceLastRebalance.get(),
+                        remainingMessages.get(),
+                        transactionalId
+                    ));
                 }
             });
         } else {
@@ -349,16 +351,26 @@ public class TransactionalMessageCopier {
         Exit.addShutdownHook("transactional-message-copier-shutdown-hook", () -> {
             isShuttingDown.set(true);
             consumer.wakeup();
-            System.out.println(shutDownString(totalMessageProcessed.get(),
-                numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId));
+            System.out.println(statusAsJson(
+                "ShutdownComplete",
+                totalMessageProcessed.get(),
+                numMessagesProcessedSinceLastRebalance.get(),
+                remainingMessages.get(),
+                transactionalId
+            ));
         });
 
         final boolean useGroupMetadata = parsedArgs.getBoolean("useGroupMetadata");
         try {
             Random random = new Random();
             while (!isShuttingDown.get() && remainingMessages.get() > 0) {
-                System.out.println(statusAsJson(totalMessageProcessed.get(),
-                    numMessagesProcessedSinceLastRebalance.get(), remainingMessages.get(), transactionalId, "ProcessLoop"));
+                System.out.println(statusAsJson(
+                    "ProcessLoop",
+                    totalMessageProcessed.get(),
+                    numMessagesProcessedSinceLastRebalance.get(),
+                    remainingMessages.get(),
+                    transactionalId
+                ));
 
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
                 if (records.count() > 0) {

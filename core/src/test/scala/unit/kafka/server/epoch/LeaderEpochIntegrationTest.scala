@@ -18,7 +18,7 @@ package kafka.server.epoch
 
 import kafka.cluster.BrokerEndPoint
 import kafka.server.KafkaConfig._
-import kafka.server.{BlockingSend, KafkaServer, ReplicaFetcherBlockingSend}
+import kafka.server.{BlockingSend, KafkaServer, BrokerBlockingSender}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
@@ -231,7 +231,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     val node = from.metadataCache.getAliveBrokerNode(to.config.brokerId,
       from.config.interBrokerListenerName).get
     val endPoint = new BrokerEndPoint(node.id(), node.host(), node.port())
-    new ReplicaFetcherBlockingSend(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher", new LogContext())
+    new BrokerBlockingSender(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher", new LogContext())
   }
 
   private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {

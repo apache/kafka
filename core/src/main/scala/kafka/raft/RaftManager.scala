@@ -24,7 +24,6 @@ import java.util.concurrent.CompletableFuture
 import kafka.log.UnifiedLog
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{KafkaConfig, MetaProperties}
-import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient}
@@ -111,6 +110,7 @@ class KafkaRaftManager[T](
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
 ) extends RaftManager[T] with Logging {
 
+  val apiVersions = new ApiVersions()
   private val raftConfig = new RaftConfig(config)
   private val threadNamePrefix = threadNamePrefixOpt.getOrElse("kafka-raft")
   private val logContext = new LogContext(s"[RaftManager nodeId=${config.nodeId}] ")
@@ -180,12 +180,7 @@ class KafkaRaftManager[T](
     val expirationTimer = new SystemTimer("raft-expiration-executor")
     val expirationService = new TimingWheelExpirationService(expirationTimer)
     val quorumStateStore = new FileBasedStateStore(new File(dataDir, "quorum-state"))
-
-    val nodeId = if (config.processRoles.contains(ControllerRole)) {
-      OptionalInt.of(config.nodeId)
-    } else {
-      OptionalInt.empty()
-    }
+    val nodeId = OptionalInt.of(config.nodeId)
 
     val client = new KafkaRaftClient(
       recordSerde,
@@ -274,7 +269,7 @@ class KafkaRaftManager[T](
       config.connectionSetupTimeoutMaxMs,
       time,
       discoverBrokerVersions,
-      new ApiVersions,
+      apiVersions,
       logContext
     )
   }

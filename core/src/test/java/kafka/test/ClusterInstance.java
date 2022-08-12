@@ -18,13 +18,16 @@
 package kafka.test;
 
 import kafka.network.SocketServer;
+import kafka.server.BrokerFeatures;
 import kafka.test.annotation.ClusterTest;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 
 public interface ClusterInstance {
 
@@ -47,6 +50,18 @@ public interface ClusterInstance {
      * have no effect on the cluster since it is already provisioned.
      */
     ClusterConfig config();
+
+    /**
+     * Return the set of all controller IDs configured for this test. For kraft, this
+     * will return only the nodes which have the "controller" role enabled in `process.roles`.
+     * For zookeeper, this will return all broker IDs since they are all eligible controllers.
+     */
+    Set<Integer> controllerIds();
+
+    /**
+     * Return the set of all broker IDs configured for this test.
+     */
+    Set<Integer> brokerIds();
 
     /**
      * The listener for this cluster as configured by {@link ClusterTest} or by {@link ClusterConfig}. If
@@ -94,6 +109,11 @@ public interface ClusterInstance {
      * Return any one of the controller servers. Throw an error if none are found
      */
     SocketServer anyControllerSocketServer();
+
+    /**
+     * Return a mapping of the underlying broker IDs to their supported features
+     */
+    Map<Integer, BrokerFeatures> brokerFeatures();
 
     /**
      * The underlying object which is responsible for setting up and tearing down the cluster.

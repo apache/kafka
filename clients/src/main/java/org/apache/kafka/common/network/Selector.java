@@ -845,7 +845,7 @@ public class Selector implements Selectable, AutoCloseable {
             boolean hasPending = false;
             if (!sendFailed)
                 hasPending = maybeReadFromClosingChannel(channel);
-            if (!hasPending || sendFailed) {
+            if (!hasPending) {
                 doClose(channel, true);
                 it.remove();
             }

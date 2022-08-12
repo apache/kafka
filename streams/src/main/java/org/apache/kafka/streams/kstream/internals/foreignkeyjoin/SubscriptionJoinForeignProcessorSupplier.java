@@ -70,7 +70,7 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
                 Objects.requireNonNull(valueAndTimestamp, "This processor should never see a null newValue.");
                 final SubscriptionWrapper<K> value = valueAndTimestamp.value();
 
-                if (value.getVersion() != SubscriptionWrapper.CURRENT_VERSION) {
+                if (value.getVersion() > SubscriptionWrapper.CURRENT_VERSION) {
                     //Guard against modifications to SubscriptionWrapper. Need to ensure that there is compatibility
                     //with previous versions to enable rolling upgrades. Must develop a strategy for upgrading
                     //from older SubscriptionWrapper versions to newer versions.
@@ -88,7 +88,11 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
                     case DELETE_KEY_AND_PROPAGATE:
                         context().forward(
                             record.withKey(record.key().getPrimaryKey())
-                                .withValue(new SubscriptionResponseWrapper<VO>(value.getHash(), null))
+                                .withValue(new SubscriptionResponseWrapper<VO>(
+                                    value.getHash(),
+                                    null,
+                                    value.getPrimaryPartition()
+                                ))
                                 .withTimestamp(resultTimestamp)
                         );
                         break;
@@ -100,7 +104,7 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
 
                         context().forward(
                             record.withKey(record.key().getPrimaryKey())
-                                .withValue(new SubscriptionResponseWrapper<>(value.getHash(), valueToSend))
+                                .withValue(new SubscriptionResponseWrapper<>(value.getHash(), valueToSend, value.getPrimaryPartition()))
                                 .withTimestamp(resultTimestamp)
                         );
                         break;
@@ -108,7 +112,11 @@ public class SubscriptionJoinForeignProcessorSupplier<K, KO, VO>
                         if (foreignValueAndTime != null) {
                             context().forward(
                                 record.withKey(record.key().getPrimaryKey())
-                                   .withValue(new SubscriptionResponseWrapper<>(value.getHash(), foreignValueAndTime.value()))
+                                   .withValue(new SubscriptionResponseWrapper<>(
+                                       value.getHash(),
+                                       foreignValueAndTime.value(),
+                                       value.getPrimaryPartition()
+                                   ))
                                    .withTimestamp(resultTimestamp)
                             );
                         }

@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.api.{ApiVersion, KAFKA_0_8_2, KAFKA_3_0_IV1}
 import kafka.cluster.EndPoint
 import kafka.log.LogConfig
 import kafka.message._
@@ -32,11 +31,13 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, UNKNOWN_ADDRESS_SPEC_INSTANCE}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-
 import java.net.InetSocketAddress
 import java.util
 import java.util.{Collections, Properties}
+
 import org.apache.kafka.common.Node
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.junit.jupiter.api.function.Executable
 
@@ -547,23 +548,23 @@ class KafkaConfigTest {
     props.put(KafkaConfig.BrokerIdProp, "1")
     props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(ApiVersion.latestVersion, conf.interBrokerProtocolVersion)
+    assertEquals(MetadataVersion.latest, conf.interBrokerProtocolVersion)
 
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.8.2.0")
     // We need to set the message format version to make the configuration valid.
     props.put(KafkaConfig.LogMessageFormatVersionProp, "0.8.2.0")
     val conf2 = KafkaConfig.fromProps(props)
-    assertEquals(KAFKA_0_8_2, conf2.interBrokerProtocolVersion)
+    assertEquals(IBP_0_8_2, conf2.interBrokerProtocolVersion)
 
     // check that 0.8.2.0 is the same as 0.8.2.1
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.8.2.1")
     // We need to set the message format version to make the configuration valid
     props.put(KafkaConfig.LogMessageFormatVersionProp, "0.8.2.1")
     val conf3 = KafkaConfig.fromProps(props)
-    assertEquals(KAFKA_0_8_2, conf3.interBrokerProtocolVersion)
+    assertEquals(IBP_0_8_2, conf3.interBrokerProtocolVersion)
 
     //check that latest is newer than 0.8.2
-    assertTrue(ApiVersion.latestVersion >= conf3.interBrokerProtocolVersion)
+    assertTrue(MetadataVersion.latest.isAtLeast(conf3.interBrokerProtocolVersion))
   }
 
   private def isValidKafkaConfig(props: Properties): Boolean = {
@@ -657,7 +658,7 @@ class KafkaConfigTest {
   def testInvalidCompressionType(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put(KafkaConfig.CompressionTypeProp, "abc")
-    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
   @Test
@@ -690,20 +691,20 @@ class KafkaConfigTest {
   @nowarn("cat=deprecation")
   @Test
   def testInterBrokerVersionMessageFormatCompatibility(): Unit = {
-    def buildConfig(interBrokerProtocol: ApiVersion, messageFormat: ApiVersion): KafkaConfig = {
+    def buildConfig(interBrokerProtocol: MetadataVersion, messageFormat: MetadataVersion): KafkaConfig = {
       val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
       props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocol.version)
       props.put(KafkaConfig.LogMessageFormatVersionProp, messageFormat.version)
       KafkaConfig.fromProps(props)
     }
 
-    ApiVersion.allVersions.foreach { interBrokerVersion =>
-      ApiVersion.allVersions.foreach { messageFormatVersion =>
-        if (interBrokerVersion.recordVersion.value >= messageFormatVersion.recordVersion.value) {
+    MetadataVersion.VERSIONS.foreach { interBrokerVersion =>
+      MetadataVersion.VERSIONS.foreach { messageFormatVersion =>
+        if (interBrokerVersion.highestSupportedRecordVersion.value >= messageFormatVersion.highestSupportedRecordVersion.value) {
           val config = buildConfig(interBrokerVersion, messageFormatVersion)
           assertEquals(interBrokerVersion, config.interBrokerProtocolVersion)
-          if (interBrokerVersion >= KAFKA_3_0_IV1)
-            assertEquals(KAFKA_3_0_IV1, config.logMessageFormatVersion)
+          if (interBrokerVersion.isAtLeast(IBP_3_0_IV1))
+            assertEquals(IBP_3_0_IV1, config.logMessageFormatVersion)
           else
             assertEquals(messageFormatVersion, config.logMessageFormatVersion)
         } else {
@@ -768,6 +769,7 @@ class KafkaConfigTest {
         case KafkaConfig.MetadataMaxRetentionBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.MetadataMaxRetentionMillisProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ControllerListenerNamesProp => // ignore string
+        case KafkaConfig.MetadataMaxIdleIntervalMsProp  => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
         case KafkaConfig.CreateTopicPolicyClassNameProp => //ignore string
@@ -1485,13 +1487,19 @@ class KafkaConfigTest {
     assertEquals("3", originals.get(KafkaConfig.NodeIdProp))
   }
 
-  @Test
-  def testBrokerIdIsInferredByNodeIdWithKraft(): Unit = {
+  def kraftProps(): Properties = {
     val props = new Properties()
     props.setProperty(KafkaConfig.ProcessRolesProp, "broker")
-    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
+    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
     props.setProperty(KafkaConfig.NodeIdProp, "3")
     props.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9093")
+    props
+  }
+
+  @Test
+  def testBrokerIdIsInferredByNodeIdWithKraft(): Unit = {
+    val props = new Properties(kraftProps())
+    props.putAll(kraftProps())
     val config = KafkaConfig.fromProps(props)
     assertEquals(3, config.brokerId)
     assertEquals(3, config.nodeId)
@@ -1507,5 +1515,87 @@ class KafkaConfigTest {
     val config = KafkaConfig.fromProps(props)
     assertNotNull(config.getLong(KafkaConfig.SaslOAuthBearerJwksEndpointRetryBackoffMsProp))
     assertNotNull(config.getLong(KafkaConfig.SaslOAuthBearerJwksEndpointRetryBackoffMaxMsProp))
+  }
+
+  @Test
+  def testInvalidAuthorizerClassName(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    val configs = new util.HashMap[Object, Object](props)
+    configs.put(KafkaConfig.AuthorizerClassNameProp, null)
+    val ce = assertThrows(classOf[ConfigException], () => KafkaConfig.apply(configs))
+    assertTrue(ce.getMessage.contains(KafkaConfig.AuthorizerClassNameProp))
+  }
+
+  @Test
+  def testInvalidSecurityInterBrokerProtocol(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.InterBrokerSecurityProtocolProp, "abc")
+    val ce = assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+    assertTrue(ce.getMessage.contains(KafkaConfig.InterBrokerSecurityProtocolProp))
+  }
+
+  @Test
+  def testEarlyStartListenersDefault(): Unit = {
+    val props = new Properties()
+    props.setProperty(KafkaConfig.ProcessRolesProp, "controller")
+    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    props.setProperty(KafkaConfig.ListenersProp, "CONTROLLER://:8092")
+    props.setProperty(KafkaConfig.NodeIdProp, "1")
+    props.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9093")
+    val config = new KafkaConfig(props)
+    assertEquals(Set("CONTROLLER"), config.earlyStartListeners.map(_.value()))
+  }
+
+  @Test
+  def testEarlyStartListeners(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+    props.setProperty(KafkaConfig.EarlyStartListenersProp, "INTERNAL,INTERNAL2")
+    props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "INTERNAL")
+    props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp,
+      "INTERNAL:PLAINTEXT,INTERNAL2:PLAINTEXT,CONTROLLER:PLAINTEXT")
+    props.setProperty(KafkaConfig.ListenersProp,
+      "INTERNAL://127.0.0.1:9092,INTERNAL2://127.0.0.1:9093")
+    val config = new KafkaConfig(props)
+    assertEquals(Set(new ListenerName("INTERNAL"), new ListenerName("INTERNAL2")),
+      config.earlyStartListeners)
+  }
+
+  @Test
+  def testEarlyStartListenersMustBeListeners(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+    props.setProperty(KafkaConfig.EarlyStartListenersProp, "INTERNAL")
+    assertEquals("early.start.listeners contains listener INTERNAL, but this is not " +
+      "contained in listeners or controller.listener.names",
+        assertThrows(classOf[ConfigException], () => new KafkaConfig(props)).getMessage)
+  }
+
+  @Test
+  def testIgnoreUserInterBrokerProtocolVersionKRaft(): Unit = {
+    for (ibp <- Seq("3.0", "3.1", "3.2")) {
+      val props = new Properties()
+      props.putAll(kraftProps())
+      props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, ibp)
+      val config = new KafkaConfig(props)
+      assertEquals(config.interBrokerProtocolVersion, MetadataVersion.MINIMUM_KRAFT_VERSION)
+    }
+  }
+
+  @Test
+  def testInvalidInterBrokerProtocolVersionKRaft(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
+    assertEquals("A non-KRaft version 2.8 given for inter.broker.protocol.version. The minimum version is 3.0-IV1",
+      assertThrows(classOf[ConfigException], () => new KafkaConfig(props)).getMessage)
+  }
+
+  @Test
+  def testDefaultInterBrokerProtocolVersionKRaft(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+    val config = new KafkaConfig(props)
+    assertEquals(config.interBrokerProtocolVersion, MetadataVersion.MINIMUM_KRAFT_VERSION)
   }
 }

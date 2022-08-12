@@ -46,8 +46,10 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -64,6 +66,8 @@ import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
 public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private final static int NUM_BROKERS = 1;
 
     public final static EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);

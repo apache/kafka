@@ -60,7 +60,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
         final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(
             numStandbyReplicas,
-            allTaskIds
+            statefulTaskIds
         );
 
         final Map<String, Set<String>> tagKeyToValues = new HashMap<>();
@@ -79,6 +79,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
                 if (clientState.activeTasks().contains(statefulTaskId)) {
                     assignStandbyTasksToClientsWithDifferentTags(
+                        numStandbyReplicas,
                         standbyTaskClientsByTaskLoad,
                         statefulTaskId,
                         clientId,
@@ -94,17 +95,10 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
         }
 
         if (!tasksToRemainingStandbys.isEmpty()) {
-            log.debug("Rack aware standby task assignment was not able to assign all standby tasks. " +
-                      "tasksToRemainingStandbys=[{}], pendingStandbyTasksToClientId=[{}]. " +
-                      "Will distribute the remaining standby tasks to least loaded clients.",
-                      tasksToRemainingStandbys, pendingStandbyTasksToClientId);
-
             assignPendingStandbyTasksToLeastLoadedClients(clients,
                                                           numStandbyReplicas,
-                                                          rackAwareAssignmentTags,
                                                           standbyTaskClientsByTaskLoad,
-                                                          tasksToRemainingStandbys,
-                                                          pendingStandbyTasksToClientId);
+                                                          tasksToRemainingStandbys);
         }
 
         // returning false, because standby task assignment will never require a follow-up probing rebalance.
@@ -113,34 +107,22 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
     private static void assignPendingStandbyTasksToLeastLoadedClients(final Map<UUID, ClientState> clients,
                                                                       final int numStandbyReplicas,
-                                                                      final Set<String> rackAwareAssignmentTags,
                                                                       final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
-                                                                      final Map<TaskId, Integer> pendingStandbyTaskToNumberRemainingStandbys,
-                                                                      final Map<TaskId, UUID> pendingStandbyTaskToClientId) {
+                                                                      final Map<TaskId, Integer> pendingStandbyTaskToNumberRemainingStandbys) {
         // We need to re offer all the clients to find the least loaded ones
         standbyTaskClientsByTaskLoad.offerAll(clients.keySet());
 
         for (final Entry<TaskId, Integer> pendingStandbyTaskAssignmentEntry : pendingStandbyTaskToNumberRemainingStandbys.entrySet()) {
             final TaskId activeTaskId = pendingStandbyTaskAssignmentEntry.getKey();
-            final UUID clientId = pendingStandbyTaskToClientId.get(activeTaskId);
 
-            final int numberOfRemainingStandbys = pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks(
+            pollClientAndMaybeAssignAndUpdateRemainingStandbyTasks(
+                numStandbyReplicas,
                 clients,
                 pendingStandbyTaskToNumberRemainingStandbys,
                 standbyTaskClientsByTaskLoad,
-                activeTaskId
+                activeTaskId,
+                log
             );
-
-            if (numberOfRemainingStandbys > 0) {
-                log.warn("Unable to assign {} of {} standby tasks for task [{}] with client tags [{}]. " +
-                         "There is not enough available capacity. You should " +
-                         "increase the number of application instances " +
-                         "on different client tag dimensions " +
-                         "to maintain the requested number of standby replicas. " +
-                         "Rack awareness is configured with [{}] tags.",
-                         numberOfRemainingStandbys, numStandbyReplicas, activeTaskId,
-                         clients.get(clientId).clientTags(), rackAwareAssignmentTags);
-            }
         }
     }
 
@@ -174,7 +156,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     }
 
     // Visible for testing
-    static void assignStandbyTasksToClientsWithDifferentTags(final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
+    static void assignStandbyTasksToClientsWithDifferentTags(final int numberOfStandbyClients,
+                                                             final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
                                                              final TaskId activeTaskId,
                                                              final UUID activeTaskClient,
                                                              final Set<String> rackAwareAssignmentTags,
@@ -211,17 +194,32 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                 break;
             }
 
-            clientStates.get(clientOnUnusedTagDimensions).assignStandby(activeTaskId);
-
+            final ClientState clientStateOnUsedTagDimensions = clientStates.get(clientOnUnusedTagDimensions);
             countOfUsedClients++;
             numRemainingStandbys--;
 
+            log.debug("Assigning {} out of {} standby tasks for an active task [{}] with client tags {}. " +
+                      "Standby task client tags are {}.",
+                      numberOfStandbyClients - numRemainingStandbys, numberOfStandbyClients, activeTaskId,
+                      clientStates.get(activeTaskClient).clientTags(), clientStateOnUsedTagDimensions.clientTags());
+
+            clientStateOnUsedTagDimensions.assignStandby(activeTaskId);
             lastUsedClient = clientOnUnusedTagDimensions;
         } while (numRemainingStandbys > 0);
 
         if (numRemainingStandbys > 0) {
             pendingStandbyTasksToClientId.put(activeTaskId, activeTaskClient);
             tasksToRemainingStandbys.put(activeTaskId, numRemainingStandbys);
+            log.warn("Rack aware standby task assignment was not able to assign {} of {} standby tasks for the " +
+                     "active task [{}] with the rack aware assignment tags {}. " +
+                     "This may happen when there aren't enough application instances on different tag " +
+                     "dimensions compared to an active and corresponding standby task. " +
+                     "Consider launching application instances on different tag dimensions than [{}]. " +
+                     "Standby task assignment will fall back to assigning standby tasks to the least loaded clients.",
+                     numRemainingStandbys, numberOfStandbyClients,
+                     activeTaskId, rackAwareAssignmentTags,
+                     clientStates.get(activeTaskClient).clientTags());
+
         } else {
             tasksToRemainingStandbys.remove(activeTaskId);
         }

@@ -39,7 +39,7 @@ class ZkConfigRepository(adminZkClient: AdminZkClient) extends ConfigRepository 
     }
     // ZK stores cluster configs under "<default>".
     val effectiveName = if (configResource.`type`.equals(Type.BROKER) &&
-        configResource.name.isEmpty()) {
+        configResource.name.isEmpty) {
       ConfigEntityName.Default
     } else {
       configResource.name

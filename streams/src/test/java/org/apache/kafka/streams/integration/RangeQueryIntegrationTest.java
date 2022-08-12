@@ -47,6 +47,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -68,6 +69,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
 public class RangeQueryIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
     private static final Properties STREAMS_CONFIG = new Properties();
     private static final String APP_ID = "range-query-integration-test";

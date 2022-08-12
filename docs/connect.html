@@ -48,6 +48,7 @@
         <li><code>bootstrap.servers</code> - List of Kafka servers used to bootstrap connections to Kafka</li>
         <li><code>key.converter</code> - Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the keys in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.</li>
         <li><code>value.converter</code> - Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the values in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.</li>
+        <li><code>plugin.path</code> (default <code>empty</code>) - a list of paths that contain Connect plugins (connectors, converters, transformations). Before running quick starts, users must add the absolute path that contains the example FileStreamSourceConnector and FileStreamSinkConnector packaged in <code>connect-file-"version".jar</code>, because these connectors are not included by default to the <code>CLASSPATH</code> or the <code>plugin.path</code> of the Connect worker (see <a href="#connectconfigs_plugin.path">plugin.path</a> property for examples).</li>
     </ul>
 
     <p>The important configuration options specific to standalone mode are:</p>
@@ -325,6 +326,8 @@ listeners=http://localhost:8080,https://localhost:8443</pre>
     <ul>
         <li><code>GET /</code>- return basic information about the Kafka Connect cluster such as the version of the Connect worker that serves the REST request (including git commit ID of the source code) and the Kafka cluster ID that is connected to.
     </ul>
+
+    <p>For the complete specification of the REST API, see the <a href="generated/connect_rest.yaml">OpenAPI documentation</a></p>
 
     <h4><a id="connect_errorreporting" href="#connect_errorreporting">Error Reporting in Connect</a></h4>
 
@@ -710,7 +713,7 @@ Struct struct = new Struct(schema)
     <li><b>RUNNING:</b> The connector/task is running.</li>
     <li><b>PAUSED:</b> The connector/task has been administratively paused.</li>
     <li><b>FAILED:</b> The connector/task has failed (usually by raising an exception, which is reported in the status output).</li>
-    <li><b>DESTROYED:</b> The connector/task has been administratively removed and will stop appearing in the Connect cluster.</li>
+    <li><b>RESTARTING:</b> The connector/task is either actively restarting or is expected to restart soon</li>
     </ul>
 
     <p>

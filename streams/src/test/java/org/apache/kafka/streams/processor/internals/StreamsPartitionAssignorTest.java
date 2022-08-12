@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.time.Duration;
-import java.util.Properties;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -79,6 +77,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -86,6 +85,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.UUID;
@@ -196,6 +196,7 @@ public class StreamsPartitionAssignorTest {
     private StreamsMetadataState streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
     private final Map<String, Subscription> subscriptions = new HashMap<>();
     private final Class<? extends TaskAssignor> taskAssignor;
+    private Map<String, String> clientTags;
 
     private final ReferenceContainer referenceContainer = new ReferenceContainer();
     private final MockTime time = new MockTime();
@@ -210,6 +211,7 @@ public class StreamsPartitionAssignorTest {
         referenceContainer.taskManager = taskManager;
         referenceContainer.streamsMetadataState = streamsMetadataState;
         referenceContainer.time = time;
+        referenceContainer.clientTags = clientTags != null ? clientTags : EMPTY_CLIENT_TAGS;
         configurationMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
         configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
         return configurationMap;
@@ -2188,6 +2190,21 @@ public class StreamsPartitionAssignorTest {
         final Map<String, Assignment> assignments = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
         assertThat(AssignmentInfo.decode(assignments.get("consumer").userData()).errCode(),
                    equalTo(AssignorError.ASSIGNMENT_ERROR.code()));
+    }
+
+    @Test
+    public void testClientTags() {
+        clientTags = mkMap(mkEntry("cluster", "cluster1"), mkEntry("zone", "az1"));
+        createDefaultMockTaskManager();
+        configureDefaultPartitionAssignor();
+        final Set<String> topics = mkSet("input");
+        final Subscription subscription = new Subscription(new ArrayList<>(topics),
+                                                           partitionAssignor.subscriptionUserData(topics));
+        final SubscriptionInfo info = getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, uniqueField, clientTags);
+
+        assertEquals(singletonList("input"), subscription.topics());
+        assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
+        assertEquals(clientTags, partitionAssignor.clientTags());
     }
 
     private static class CorruptedInternalTopologyBuilder extends InternalTopologyBuilder {

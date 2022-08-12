@@ -22,7 +22,6 @@ import java.util.Collections
 import java.util.concurrent.{Callable, Executors, Future}
 
 import kafka.common.RequestAndCompletionHandler
-import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{KafkaConfig, MetadataCache}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
@@ -31,6 +30,7 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{RequestHeader, TransactionResult, WriteTxnMarkersRequest, WriteTxnMarkersResponse}
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.any
