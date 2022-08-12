@@ -24,10 +24,32 @@ import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.SnapshotWriter
 
+import java.util.function.Consumer
+
 trait SnapshotWriterBuilder {
   def build(committedOffset: Long,
             committedEpoch: Int,
             lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]]
+}
+
+/**
+ * The RecordListConsumer takes as input a potentially long list of records, and feeds the
+ * SnapshotWriter a series of smaller lists of records.
+ *
+ * Note: from the perspective of Kafka, the snapshot file is really just a list of records,
+ * and we don't care about batches. Batching is irrelevant to the meaning of the snapshot.
+ */
+class RecordListConsumer(
+  val maxRecordsInBatch: Int,
+  val writer: SnapshotWriter[ApiMessageAndVersion]
+) extends Consumer[java.util.List[ApiMessageAndVersion]] {
+  override def accept(messages: java.util.List[ApiMessageAndVersion]): Unit = {
+    var i = 0
+    while (i < messages.size()) {
+      writer.append(messages.subList(i, Math.min(i + maxRecordsInBatch, messages.size())));
+      i += maxRecordsInBatch
+    }
+  }
 }
 
 class BrokerMetadataSnapshotter(
@@ -36,6 +58,16 @@ class BrokerMetadataSnapshotter(
   threadNamePrefix: Option[String],
   writerBuilder: SnapshotWriterBuilder
 ) extends Logging with MetadataSnapshotter {
+  /**
+   * The maximum number of records we will put in each batch.
+   *
+   * From the perspective of the Raft layer, the limit on batch size is specified in terms of
+   * bytes, not number of records. @See {@link KafkaRaftClient#MAX_BATCH_SIZE_BYTES} for details.
+   * However, it's more convenient to limit the batch size here in terms of number of records.
+   * So we chose a low number that will not cause problems.
+   */
+  private val maxRecordsInBatch = 1024
+
   private val logContext = new LogContext(s"[BrokerMetadataSnapshotter id=$brokerId] ")
   logIdent = logContext.logPrefix()
 
@@ -77,9 +109,11 @@ class BrokerMetadataSnapshotter(
   class CreateSnapshotEvent(image: MetadataImage,
                             writer: SnapshotWriter[ApiMessageAndVersion])
         extends EventQueue.Event {
+
     override def run(): Unit = {
       try {
-        image.write(writer.append(_))
+        val consumer = new RecordListConsumer(maxRecordsInBatch, writer)
+        image.write(consumer)
         writer.freeze()
       } finally {
         try {

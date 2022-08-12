@@ -765,7 +765,7 @@ public final class QuorumController implements Controller {
                             "%d of %d record(s) in the batch following last writeOffset %d.",
                             message.message().getClass().getSimpleName(), i, result.records().size(),
                             writeOffset);
-                        fatalFaultHandler.handleFault(failureMessage, e);
+                        throw fatalFaultHandler.handleFault(failureMessage, e);
                     }
                     i++;
                 }
@@ -889,7 +889,7 @@ public final class QuorumController implements Controller {
                                             "controller, which was %d of %d record(s) in the batch with baseOffset %d.",
                                             message.message().getClass().getSimpleName(), i, messages.size(),
                                             batch.baseOffset());
-                                    metadataFaultHandler.handleFault(failureMessage, e);
+                                    throw metadataFaultHandler.handleFault(failureMessage, e);
                                 }
                                 i++;
                             }
@@ -910,7 +910,7 @@ public final class QuorumController implements Controller {
             appendRaftEvent(String.format("handleSnapshot[snapshotId=%s]", reader.snapshotId()), () -> {
                 try {
                     if (isActiveController()) {
-                        fatalFaultHandler.handleFault(String.format("Asked to load snapshot " +
+                        throw fatalFaultHandler.handleFault(String.format("Asked to load snapshot " +
                             "(%s) when it is the active controller (%d)", reader.snapshotId(),
                             curClaimEpoch));
                     }
@@ -945,7 +945,7 @@ public final class QuorumController implements Controller {
                                         "%d record(s) in the batch with baseOffset %d.",
                                         message.message().getClass().getSimpleName(), reader.snapshotId(),
                                         i, messages.size(), batch.baseOffset());
-                                metadataFaultHandler.handleFault(failureMessage, e);
+                                throw metadataFaultHandler.handleFault(failureMessage, e);
                             }
                             i++;
                         }

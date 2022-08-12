@@ -50,6 +50,7 @@ import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.raft.{RaftClient, RaftConfig}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.snapshot.SnapshotWriter
 
@@ -76,9 +77,13 @@ class BrokerServer(
   val raftManager: RaftManager[ApiMessageAndVersion],
   val time: Time,
   val metrics: Metrics,
+  val brokerMetrics: BrokerServerMetrics,
   val threadNamePrefix: Option[String],
   val initialOfflineDirs: Seq[String],
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]]
+  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
+  val fatalFaultHandler: FaultHandler,
+  val metadataLoadingFaultHandler: FaultHandler,
+  val metadataPublishingFaultHandler: FaultHandler
 ) extends KafkaBroker {
 
   override def brokerState: BrokerState = Option(lifecycleManager).
@@ -315,8 +320,8 @@ class BrokerServer(
         threadNamePrefix,
         config.metadataSnapshotMaxNewRecordBytes,
         metadataSnapshotter,
-        BrokerServerMetrics(metrics)
-      )
+        brokerMetrics,
+        metadataLoadingFaultHandler)
 
       val networkListeners = new ListenerCollection()
       config.effectiveAdvertisedListeners.foreach { ep =>
@@ -432,7 +437,9 @@ class BrokerServer(
         transactionCoordinator,
         clientQuotaMetadataManager,
         dynamicConfigHandlers.toMap,
-        authorizer)
+        authorizer,
+        fatalFaultHandler,
+        metadataPublishingFaultHandler)
 
       // Tell the metadata listener to start publishing its output, and wait for the first
       // publish operation to complete. This first operation will initialize logManager,

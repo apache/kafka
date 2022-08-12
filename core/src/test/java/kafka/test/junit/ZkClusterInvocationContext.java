@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -255,6 +256,18 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         @Override
         public ClusterConfig config() {
             return config;
+        }
+
+        @Override
+        public Set<Integer> controllerIds() {
+            return brokerIds();
+        }
+
+        @Override
+        public Set<Integer> brokerIds() {
+            return servers()
+                .map(brokerServer -> brokerServer.config().nodeId())
+                .collect(Collectors.toSet());
         }
 
         @Override

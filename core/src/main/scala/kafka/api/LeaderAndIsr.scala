@@ -62,7 +62,7 @@ case class LeaderAndIsr(
     if (leader == LeaderAndIsr.NoLeader) None else Some(leader)
   }
 
-  def equalsIgnorePartitionEpoch(other: LeaderAndIsr): Boolean = {
+  def equalsAllowStalePartitionEpoch(other: LeaderAndIsr): Boolean = {
     if (this == other) {
       true
     } else if (other == null) {
@@ -71,7 +71,8 @@ case class LeaderAndIsr(
       leader == other.leader &&
         leaderEpoch == other.leaderEpoch &&
         isr.equals(other.isr) &&
-        leaderRecoveryState == other.leaderRecoveryState
+        leaderRecoveryState == other.leaderRecoveryState &&
+        partitionEpoch <= other.partitionEpoch
     }
   }
 
