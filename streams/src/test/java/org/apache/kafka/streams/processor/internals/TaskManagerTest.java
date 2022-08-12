@@ -118,6 +118,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
 
@@ -707,6 +708,87 @@ public class TaskManagerTest {
         taskManager.handleRebalanceStart(singleton("topic"));
 
         assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
+    }
+
+    @Test
+    public void shouldRemoveStatefulTaskWithRevokedInputPartitionsFromStateUpdaterOnRevocation() {
+        final StreamTask task = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final TaskManager taskManager = setupForRevocation(mkSet(task), mkSet(task));
+
+        taskManager.handleRevocation(taskId00Partitions);
+
+        Mockito.verify(stateUpdater).remove(task.id());
+
+        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
+
+        Mockito.verify(task).closeClean();
+    }
+
+    public void shouldRemoveMultipleStatefulTaskWithRevokedInputPartitionsFromStateUpdaterOnRevocation() {
+        final StreamTask task1 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask task2 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId01Partitions).build();
+        final TaskManager taskManager = setupForRevocation(mkSet(task1, task2), mkSet(task1, task2));
+
+        taskManager.handleRevocation(union(HashSet::new, taskId00Partitions, taskId01Partitions));
+
+        Mockito.verify(stateUpdater).remove(task1.id());
+        Mockito.verify(stateUpdater).remove(task2.id());
+
+        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
+
+        Mockito.verify(task1).closeClean();
+        Mockito.verify(task2).closeClean();
+    }
+
+    @Test
+    public void shouldNotRemoveStatefulTaskWithoutRevokedInputPartitionsFromStateUpdaterOnRevocation() {
+        final StreamTask task = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final TaskManager taskManager = setupForRevocation(mkSet(task), Collections.emptySet());
+
+        taskManager.handleRevocation(taskId01Partitions);
+
+        Mockito.verify(stateUpdater, never()).remove(task.id());
+
+        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
+
+        Mockito.verify(task, never()).closeClean();
+    }
+
+    @Test
+    public void shouldNotRemoveStandbyTaskFromStateUpdaterOnRevocation() {
+        final StandbyTask task = standbyTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final TaskManager taskManager = setupForRevocation(mkSet(task), Collections.emptySet());
+
+        taskManager.handleRevocation(taskId00Partitions);
+
+        Mockito.verify(stateUpdater, never()).remove(task.id());
+
+        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
+
+        Mockito.verify(task, never()).closeClean();
+    }
+
+    private TaskManager setupForRevocation(final Set<Task> tasksInStateUpdater,
+                                           final Set<Task> removedTasks) {
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, true);
+        when(stateUpdater.getTasks()).thenReturn(tasksInStateUpdater);
+        when(stateUpdater.drainRemovedTasks()).thenReturn(removedTasks);
+        expect(consumer.assignment()).andReturn(emptySet()).anyTimes();
+        consumer.resume(anyObject());
+        expectLastCall().anyTimes();
+        replay(consumer);
+
+        return taskManager;
     }
 
     @Test

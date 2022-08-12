@@ -838,6 +838,21 @@ public class TaskManager {
         if (firstException.get() != null) {
             throw firstException.get();
         }
+
+        removeRevokedTasksFromStateUpdater(remainingRevokedPartitions);
+    }
+
+    private void removeRevokedTasksFromStateUpdater(final Set<TopicPartition> remainingRevokedPartitions) {
+        if (stateUpdater != null) {
+            for (final Task restoringTask : stateUpdater.getTasks()) {
+                if (restoringTask.isActive()) {
+                    if (remainingRevokedPartitions.containsAll(restoringTask.inputPartitions())) {
+                        tasks.addPendingTaskToClose(restoringTask.id());
+                        stateUpdater.remove(restoringTask.id());
+                    }
+                }
+            }
+        }
     }
 
     private void prepareCommitAndAddOffsetsToMap(final Set<Task> tasksToPrepare,
