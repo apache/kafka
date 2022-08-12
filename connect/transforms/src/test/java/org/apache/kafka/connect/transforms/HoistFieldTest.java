@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -69,7 +70,7 @@ public class HoistFieldTest {
         assertNull(transformedRecord.keySchema());
         @SuppressWarnings("unchecked")
         Map<String, Object> key = (Map<String, Object>) transformedRecord.key();
-        key.put("k", "v");
+        assertDoesNotThrow(() -> key.put("k", "v"));
     }
 
 }
