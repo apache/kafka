@@ -103,7 +103,7 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
         state.leaderStateOrThrow().updateLocalState(0, new LogOffsetMetadata(5L));
-        state.leaderStateOrThrow().updateReplicaState(1, 0, new LogOffsetMetadata(5L));
+        state.leaderStateOrThrow().updateReplicaState(1, 0, new LogOffsetMetadata(5L), 6L);
         assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
 
         state.transitionToFollower(2, 1);

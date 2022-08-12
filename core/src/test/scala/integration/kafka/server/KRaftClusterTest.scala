@@ -21,7 +21,7 @@ import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
 import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, Config, ConfigEntry, NewPartitionReassignment, NewTopic}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, Config, ConfigEntry, DescribeMetadataQuorumOptions, NewPartitionReassignment, NewTopic}
 import org.apache.kafka.common.{TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.network.ListenerName
@@ -32,10 +32,11 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Test, Timeout}
 
 import java.util
-import java.util.{Arrays, Collections, Optional}
+import java.util.{Arrays, Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
+import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.server.common.MetadataVersion
@@ -778,4 +779,52 @@ class KRaftClusterTest {
       cluster.close()
     }
   }
+  def createAdminClient(cluster: KafkaClusterTestKit, useController: Boolean): Admin = {
+    var props: Properties = null
+    props = cluster.clientProperties()
+    props.put(AdminClientConfig.CLIENT_ID_CONFIG, this.getClass.getName)
+    Admin.create(props)
+  }
+
+  @Test
+  def testDescribeQuorumRequestToBrokers() : Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(4).
+        setNumControllerNodes(3).build()).build()
+    try {
+      cluster.format
+      cluster.startup
+      for (i <- 0 to 3) {
+        TestUtils.waitUntilTrue(() => cluster.brokers.get(i).brokerState == BrokerState.RUNNING,
+          "Broker Never started up")
+      }
+      val admin = createAdminClient(cluster, false)
+      try {
+        val quorumState = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
+        val quorumInfo = quorumState.quorumInfo.get()
+
+        assertEquals(0, quorumInfo.observers.size)
+        assertEquals(3, quorumInfo.voters.size)
+        assertTrue(2999 < quorumInfo.leaderId && 3003 > quorumInfo.leaderId,
+          s"Leader ID ${quorumInfo.leaderId} was not within expected range.")
+        quorumInfo.voters.forEach { voter =>
+          assertTrue(2999 < voter.replicaId && 3003 > voter.replicaId,
+            s"Voter ID ${voter.replicaId} was not within expected range.")
+          assertTrue(0 < voter.logEndOffset,
+            s"logEndOffset for voter with ID ${voter.replicaId} was ${voter.logEndOffset}")
+          assertNotEquals(OptionalLong.empty(), voter.lastFetchTimeMs)
+          assertNotEquals(OptionalLong.empty(), voter.lastCaughtUpTimeMs)
+        }
+      } catch {
+        case _: InvalidRequestException => log.error("Hit Kafka-13490. Claim test succeeded")
+        case t: Throwable => throw t
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
 }

@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -205,10 +206,10 @@ public class LeaderState<T> implements EpochState {
     /**
      * Update the local replica state.
      *
-     * See {@link #updateReplicaState(int, long, LogOffsetMetadata)}
+     * See {@link #updateReplicaState(int, long, LogOffsetMetadata, Long)}
      */
     public boolean updateLocalState(long fetchTimestamp, LogOffsetMetadata logOffsetMetadata) {
-        return updateReplicaState(localId, fetchTimestamp, logOffsetMetadata);
+        return updateReplicaState(localId, fetchTimestamp, logOffsetMetadata, logOffsetMetadata.offset);
     }
 
     /**
@@ -217,11 +218,15 @@ public class LeaderState<T> implements EpochState {
      * @param replicaId replica id
      * @param fetchTimestamp fetch timestamp
      * @param logOffsetMetadata new log offset and metadata
+     * @param leaderLogEndOffset current log end offset of the leader
      * @return true if the high watermark is updated too
      */
-    public boolean updateReplicaState(int replicaId,
-                                      long fetchTimestamp,
-                                      LogOffsetMetadata logOffsetMetadata) {
+    public boolean updateReplicaState(
+            int replicaId,
+            long fetchTimestamp,
+            LogOffsetMetadata logOffsetMetadata,
+            Long leaderLogEndOffset
+    ) {
         // Ignore fetches from negative replica id, as it indicates
         // the fetch is from non-replica. For example, a consumer.
         if (replicaId < 0) {
@@ -229,7 +234,14 @@ public class LeaderState<T> implements EpochState {
         }
 
         ReplicaState state = getReplicaState(replicaId);
-        state.updateFetchTimestamp(fetchTimestamp);
+        // Update the Last CaughtUp Time
+        if (logOffsetMetadata.offset >= leaderLogEndOffset) {
+            state.updateLastCaughtUpTimestamp(fetchTimestamp);
+        } else if (logOffsetMetadata.offset >= state.lastfetchLeaderLogEndOffset.orElse(-1L)) {
+            state.updateLastCaughtUpTimestamp(state.lastFetchTimestamp.orElse(-1L));
+        }
+
+        state.updateFetchTimestamp(fetchTimestamp, leaderLogEndOffset);
         return updateEndOffset(state, logOffsetMetadata);
     }
 
@@ -294,9 +306,27 @@ public class LeaderState<T> implements EpochState {
         return getReplicaEndOffsets(voterStates);
     }
 
-    Map<Integer, Long> getObserverStates(final long currentTimeMs) {
+    Map<Integer, Long> getVoterLastFetchTimes() {
+        return getReplicaLastFetchTimes(voterStates);
+    }
+
+    Map<Integer, Long> getVoterLastCaughUpTimes(final long currentTimeMs) {
+        return getReplicaLastCaughtUpTimes(voterStates, OptionalInt.of(localId), currentTimeMs);
+    }
+
+    Map<Integer, Long> getObserverEndOffsets(final long currentTimeMs) {
         clearInactiveObservers(currentTimeMs);
         return getReplicaEndOffsets(observerStates);
+    }
+
+    Map<Integer, Long> getObserverLastFetchTimes(final long currentTimeMs) {
+        clearInactiveObservers(currentTimeMs);
+        return getReplicaLastFetchTimes(observerStates);
+    }
+
+    Map<Integer, Long> getObserverLastCaughUpTimes(final long currentTimeMs) {
+        clearInactiveObservers(currentTimeMs);
+        return getReplicaLastCaughtUpTimes(observerStates, OptionalInt.empty(), currentTimeMs);
     }
 
     private static <R extends ReplicaState> Map<Integer, Long> getReplicaEndOffsets(
@@ -306,6 +336,25 @@ public class LeaderState<T> implements EpochState {
                        e -> e.getValue().endOffset.map(
                            logOffsetMetadata -> logOffsetMetadata.offset).orElse(-1L))
                    );
+    }
+
+    private static <R extends ReplicaState> Map<Integer, Long> getReplicaLastFetchTimes(
+            Map<Integer, R> replicaStates) {
+        return replicaStates.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey,
+                        e -> e.getValue().lastFetchTimestamp.orElse(-1L))
+                );
+    }
+
+    private static <R extends ReplicaState> Map<Integer, Long> getReplicaLastCaughtUpTimes(
+            Map<Integer, R> replicaStates,
+            OptionalInt leaderId,
+            final long currentTimeMs
+    ) {
+        return replicaStates.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey,
+                        e -> e.getKey() == leaderId.orElse(-1) ? currentTimeMs : e.getValue().lastCaughtUpTimestamp.orElse(-1L))
+                );
     }
 
     private void clearInactiveObservers(final long currentTimeMs) {
@@ -323,19 +372,30 @@ public class LeaderState<T> implements EpochState {
         final int nodeId;
         Optional<LogOffsetMetadata> endOffset;
         OptionalLong lastFetchTimestamp;
+        OptionalLong lastfetchLeaderLogEndOffset;
+        OptionalLong lastCaughtUpTimestamp;
         boolean hasAcknowledgedLeader;
 
         public ReplicaState(int nodeId, boolean hasAcknowledgedLeader) {
             this.nodeId = nodeId;
             this.endOffset = Optional.empty();
             this.lastFetchTimestamp = OptionalLong.empty();
+            this.lastfetchLeaderLogEndOffset = OptionalLong.empty();
+            this.lastCaughtUpTimestamp = OptionalLong.empty();
             this.hasAcknowledgedLeader = hasAcknowledgedLeader;
         }
 
-        void updateFetchTimestamp(long currentFetchTimeMs) {
+        void updateFetchTimestamp(long currentFetchTimeMs, long leaderLogEndOffset) {
             // To be resilient to system time shifts we do not strictly
             // require the timestamp be monotonically increasing.
             lastFetchTimestamp = OptionalLong.of(Math.max(lastFetchTimestamp.orElse(-1L), currentFetchTimeMs));
+            lastfetchLeaderLogEndOffset = OptionalLong.of(leaderLogEndOffset);
+        }
+
+        void updateLastCaughtUpTimestamp(long lastCaughtUpTime) {
+            // This value relies on the fetch timestamp which does not
+            // require monotonicity
+            lastCaughtUpTimestamp = OptionalLong.of(Math.max(lastCaughtUpTimestamp.orElse(-1L), lastCaughtUpTime));
         }
 
         @Override
@@ -353,10 +413,12 @@ public class LeaderState<T> implements EpochState {
         @Override
         public String toString() {
             return String.format(
-                "ReplicaState(nodeId=%d, endOffset=%s, lastFetchTimestamp=%s, hasAcknowledgedLeader=%s)",
+                "ReplicaState(nodeId=%d, endOffset=%s, lastFetchTimestamp=%s, " +
+                        " lastCaughtUpTimestamp=%s, hasAcknowledgedLeader=%s)",
                 nodeId,
                 endOffset,
                 lastFetchTimestamp,
+                lastCaughtUpTimestamp,
                 hasAcknowledgedLeader 
             );
         }
