@@ -58,6 +58,7 @@ import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +67,7 @@ import scala.Option;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -225,9 +227,23 @@ public class IntegrationTestUtils {
     /**
      * Gives a test name that is safe to be used in application ids, topic names, etc.
      * The name is safe even for parameterized methods.
+     * Used by tests not yet migrated from JUnit 4.
      */
     public static String safeUniqueTestName(final Class<?> testClass, final TestName testName) {
-        return (testClass.getSimpleName() + testName.getMethodName())
+        return safeUniqueTestName(testClass, testName.getMethodName());
+    }
+
+    /**
+     * Same as @see IntegrationTestUtils#safeUniqueTestName except it accepts a TestInfo passed in by
+     * JUnit 5 instead of a TestName from JUnit 4.
+     * Used by tests migrated to JUnit 5.
+     */
+    public static String safeUniqueTestName(final Class<?> testClass, final TestInfo testInfo) {
+        return safeUniqueTestName(testClass, testInfo.getTestMethod().map(Method::getName).orElse(""));
+    }
+
+    private static String safeUniqueTestName(final Class<?> testClass, final String methodName) {
+        return (testClass.getSimpleName() + methodName)
                 .replace(':', '_')
                 .replace('.', '_')
                 .replace('[', '_')
@@ -1385,6 +1401,41 @@ public class IntegrationTestUtils {
             }
             Thread.sleep(Math.min(100L, waitTime));
         }
+    }
+
+    public static long getTopicSize(final Properties consumerConfig, final String topicName) {
+        long sum = 0;
+        try (final Consumer<Object, Object> consumer = createConsumer(consumerConfig)) {
+            final Collection<TopicPartition> partitions = consumer.partitionsFor(topicName)
+                .stream()
+                .map(info -> new TopicPartition(topicName, info.partition()))
+                .collect(Collectors.toList());
+            final Map<TopicPartition, Long> beginningOffsets = consumer.beginningOffsets(partitions);
+            final Map<TopicPartition, Long> endOffsets = consumer.endOffsets(partitions);
+
+            for (final TopicPartition partition : beginningOffsets.keySet()) {
+                sum += endOffsets.get(partition) - beginningOffsets.get(partition);
+            }
+        }
+        return sum;
+    }
+
+    private static Double getStreamsPollNumber(final KafkaStreams kafkaStreams) {
+        return (Double) kafkaStreams.metrics()
+            .entrySet()
+            .stream()
+            .filter(entry -> entry.getKey().name().equals("poll-total"))
+            .findFirst().get()
+            .getValue()
+            .metricValue();
+    }
+
+    public static void waitUntilStreamsHasPolled(final KafkaStreams kafkaStreams, final int pollNumber)
+        throws InterruptedException {
+        final Double initialCount = getStreamsPollNumber(kafkaStreams);
+        retryOnExceptionWithTimeout(1000, () -> {
+            assertThat(getStreamsPollNumber(kafkaStreams), is(greaterThanOrEqualTo(initialCount + pollNumber)));
+        });
     }
 
     public static class StableAssignmentListener implements AssignmentListener {

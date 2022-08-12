@@ -60,6 +60,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.core.IsNot.not;
 import static org.junit.Assert.assertThrows;
+import static java.util.Collections.emptySet;
 
 @RunWith(EasyMockRunner.class)
 public class ActiveTaskCreatorTest {
@@ -478,6 +479,7 @@ public class ActiveTaskCreatorTest {
         reset(builder, stateDirectory);
         expect(builder.topologyConfigs()).andStubReturn(new TopologyConfig(new StreamsConfig(properties)));
         expect(builder.buildSubtopology(0)).andReturn(topology).anyTimes();
+        expect(topology.sinkTopics()).andStubReturn(emptySet());
         expect(stateDirectory.getOrCreateDirectoryForTask(task00)).andReturn(mock(File.class));
         expect(stateDirectory.checkpointFileFor(task00)).andReturn(mock(File.class));
         expect(stateDirectory.getOrCreateDirectoryForTask(task01)).andReturn(mock(File.class));

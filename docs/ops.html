@@ -1266,7 +1266,8 @@ $ bin/kafka-acls.sh \
 
   <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.6 Java Version</a></h3>
 
-  Java 8 and Java 11 are supported. Java 11 performs significantly better if TLS is enabled, so it is highly recommended (it also includes a number of other
+  Java 8, Java 11, and Java 17 are supported. Note that Java 8 support has been deprecated since Apache Kafka 3.0 and will be removed in Apache Kafka 4.0.
+  Java 11 and later versions perform significantly better if TLS is enabled, so they are highly recommended (they also include a number of other
   performance improvements: G1GC, CRC32C, Compact Strings, Thread-Local Handshakes and more).
   
   From a security perspective, we recommend the latest released patch version as older freely available versions have disclosed security vulnerabilities.
@@ -1400,18 +1401,18 @@ $ bin/kafka-acls.sh \
       </tr>
       <tr>
         <td>Message in rate</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec</td>
-        <td></td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec,topic=([-.\w]+)</td>
+        <td>Incoming message rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Byte in rate from clients</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=BytesInPerSec</td>
-        <td></td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=BytesInPerSec,topic=([-.\w]+)</td>
+        <td>Byte in (from the clients) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Byte in rate from other brokers</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesInPerSec</td>
-        <td></td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesInPerSec,topic=([-.\w]+)</td>
+        <td>Byte in (from the other brokers) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Controller Request rate from Broker</td>
@@ -1440,7 +1441,27 @@ $ bin/kafka-acls.sh \
         <td>Error rate</td>
         <td>kafka.network:type=RequestMetrics,name=ErrorsPerSec,request=([-.\w]+),error=([-.\w]+)</td>
         <td>Number of errors in responses counted per-request-type, per-error-code. If a response contains
-            multiple errors, all are counted. error=NONE indicates successful responses.</td>
+          multiple errors, all are counted. error=NONE indicates successful responses.</td>
+      </tr>
+      <tr>
+        <td>Produce request rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=TotalProduceRequestsPerSec,topic=([-.\w]+)</td>
+        <td>Produce request rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
+      </tr>
+      <tr>
+        <td>Fetch request rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=TotalFetchRequestsPerSec,topic=([-.\w]+)</td>
+        <td>Fetch request (from clients or followers) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
+      </tr>
+      <tr>
+        <td>Failed produce request rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=FailedProduceRequestsPerSec,topic=([-.\w]+)</td>
+        <td>Failed Produce request rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
+      </tr>
+      <tr>
+        <td>Failed fetch request rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=FailedFetchRequestsPerSec,topic=([-.\w]+)</td>
+        <td>Failed Fetch request (from clients or followers) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Request size in bytes</td>
@@ -1460,7 +1481,7 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Message conversion rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name={Produce|Fetch}MessageConversionsPerSec,topic=([-.\w]+)</td>
-        <td>Number of records which required message format conversion.</td>
+        <td>Message format conversion rate, for Produce or Fetch requests, per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Request Queue Size</td>
@@ -1469,33 +1490,38 @@ $ bin/kafka-acls.sh \
       </tr>
       <tr>
         <td>Byte out rate to clients</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=BytesOutPerSec</td>
-        <td></td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=BytesOutPerSec,topic=([-.\w]+)</td>
+        <td>Byte out (to the clients) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Byte out rate to other brokers</td>
-        <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesOutPerSec</td>
-        <td></td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=ReplicationBytesOutPerSec,topic=([-.\w]+)</td>
+        <td>Byte out (to the other brokers) rate per topic. Omitting 'topic=(...)' will yield the all-topic rate.</td>
+      </tr>
+      <tr>
+        <td>Rejected byte rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=BytesRejectedPerSec,topic=([-.\w]+)</td>
+        <td>Rejected byte rate per topic, due to the record batch size being greater than max.message.bytes configuration. Omitting 'topic=(...)' will yield the all-topic rate.</td>
       </tr>
       <tr>
         <td>Message validation failure rate due to no key specified for compacted topic</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=NoKeyCompactedTopicRecordsPerSec</td>
-        <td></td>
+        <td>0</td>
       </tr>
       <tr>
         <td>Message validation failure rate due to invalid magic number</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=InvalidMagicNumberRecordsPerSec</td>
-        <td></td>
+        <td>0</td>
       </tr>
       <tr>
         <td>Message validation failure rate due to incorrect crc checksum</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=InvalidMessageCrcRecordsPerSec</td>
-        <td></td>
+        <td>0</td>
       </tr>
       <tr>
         <td>Message validation failure rate due to non-continuous offset or sequence number in batch</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=InvalidOffsetOrSequenceRecordsPerSec</td>
-        <td></td>
+        <td>0</td>
       </tr>
       <tr>
         <td>Log flush rate and time</td>
@@ -1739,12 +1765,12 @@ $ bin/kafka-acls.sh \
       <tr>
         <td>Outgoing byte rate of reassignment traffic</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesOutPerSec</td>
-        <td></td>
+        <td>0; non-zero when a partition reassignment is in progress.</td>
       </tr>
       <tr>
         <td>Incoming byte rate of reassignment traffic</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=ReassignmentBytesInPerSec</td>
-        <td></td>
+        <td>0; non-zero when a partition reassignment is in progress.</td>
       </tr>
       <tr>
         <td>Size of a partition on disk (in bytes)</td>
@@ -2308,7 +2334,7 @@ $ bin/kafka-acls.sh \
   <h4 class="anchor-heading"><a id="kafka_streams_monitoring" class="anchor-link"></a><a href="#kafka_streams_monitoring">Streams Monitoring</a></h4>
 
   A Kafka Streams instance contains all the producer and consumer metrics as well as additional metrics specific to Streams.
-  By default Kafka Streams has metrics with three recording levels: <code>info</code>, <code>debug</code>, and <code>trace</code>.
+  The metrics have three recording levels: <code>info</code>, <code>debug</code>, and <code>trace</code>.
 
   <p>
     Note that the metrics have a 4-layer hierarchy. At the top level there are client-level metrics for each started
@@ -2579,6 +2605,16 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
         <th>Mbean name</th>
       </tr>
       <tr>
+        <td>bytes-consumed-total</td>
+        <td>The total number of bytes consumed by a source processor node.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>bytes-produced-total</td>
+        <td>The total number of bytes produced by a sink processor node.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>process-rate</td>
         <td>The average number of records processed by a source processor node per second.</td>
         <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
@@ -2613,11 +2649,21 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
         <td>The minimum end-to-end latency of a record, measured by comparing the record timestamp with the system time when it has been fully processed by the node.</td>
         <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>records-consumed-total</td>
+        <td>The total number of records consumed by a source processor node.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>records-produced-total</td>
+        <td>The total number of records produced by a sink processor node.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+),topic=([-.\w]+)</td>
+      </tr>
       </tbody>
  </table>
 
  <h5 class="anchor-heading"><a id="kafka_streams_store_monitoring" class="anchor-link"></a><a href="#kafka_streams_store_monitoring">State Store Metrics</a></h5>
-All of the following metrics have a recording level of <code>debug</code>, except for the record-e2e-latency-* metrics which have a recording level <code>trace></code>.
+All of the following metrics have a recording level of <code>debug</code>, except for the record-e2e-latency-* metrics which have a recording level <code>trace</code>.
 Note that the <code>store-scope</code> value is specified in <code>StoreSupplier#metricsScope()</code> for user's customized state stores;
 for built-in state stores, currently we have:
   <ul>

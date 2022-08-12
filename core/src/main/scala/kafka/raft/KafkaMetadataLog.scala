@@ -257,7 +257,11 @@ final class KafkaMetadataLog private (
   }
 
   override def storeSnapshot(snapshotId: OffsetAndEpoch): Optional[RawSnapshotWriter] = {
-    if (snapshots.contains(snapshotId)) {
+    val containsSnapshotId = snapshots synchronized {
+      snapshots.contains(snapshotId)
+    }
+
+    if (containsSnapshotId) {
       Optional.empty()
     } else {
       Optional.of(FileRawSnapshotWriter.create(log.dir.toPath, snapshotId, Optional.of(this)))

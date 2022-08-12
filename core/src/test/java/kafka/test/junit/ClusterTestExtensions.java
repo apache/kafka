@@ -25,7 +25,6 @@ import kafka.test.annotation.ClusterTemplate;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
@@ -180,7 +179,8 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 throw new IllegalStateException();
         }
 
-        ClusterConfig.Builder builder = ClusterConfig.clusterBuilder(type, brokers, controllers, autoStart, annot.securityProtocol());
+        ClusterConfig.Builder builder = ClusterConfig.clusterBuilder(type, brokers, controllers, autoStart,
+            annot.securityProtocol(), annot.metadataVersion());
         if (!annot.name().isEmpty()) {
             builder.name(annot.name());
         } else {
@@ -193,10 +193,6 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         Properties properties = new Properties();
         for (ClusterConfigProperty property : annot.serverProperties()) {
             properties.put(property.key(), property.value());
-        }
-
-        if (!annot.metadataVersion().equals(MetadataVersion.UNINITIALIZED)) {
-            builder.metadataVersion(annot.metadataVersion());
         }
 
         ClusterConfig config = builder.build();

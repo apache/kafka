@@ -36,13 +36,18 @@ public class QuorumControllerMetricsTest {
         String expectedType = "KafkaController";
         Set<String> expectedMetricNames = Utils.mkSet(
             "ActiveControllerCount",
+            "FencedBrokerCount",
+            "ActiveBrokerCount",
             "GlobalTopicCount",
             "GlobalPartitionCount",
             "OfflinePartitionsCount",
             "PreferredReplicaImbalanceCount",
+            "MetadataErrorCount",
+            "LastAppliedRecordLagMs",
             "LastAppliedRecordOffset",
             "LastAppliedRecordTimestamp",
-            "LastAppliedRecordLagMs");
+            "LastCommittedRecordOffset"
+        );
         assertMetricsCreatedAndRemovedUponClose(expectedType, expectedMetricNames);
     }
 
@@ -92,6 +97,7 @@ public class QuorumControllerMetricsTest {
             try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry, time)) {
                 quorumControllerMetrics.setLastAppliedRecordOffset(100);
                 quorumControllerMetrics.setLastAppliedRecordTimestamp(500);
+                quorumControllerMetrics.setLastCommittedRecordOffset(50);
 
                 @SuppressWarnings("unchecked")
                 Gauge<Long> lastAppliedRecordOffset = (Gauge<Long>) registry
@@ -110,6 +116,31 @@ public class QuorumControllerMetricsTest {
                     .allMetrics()
                     .get(metricName("KafkaController", "LastAppliedRecordLagMs"));
                 assertEquals(time.milliseconds() - 500, lastAppliedRecordLagMs.value());
+
+                @SuppressWarnings("unchecked")
+                Gauge<Long> lastCommittedRecordOffset = (Gauge<Long>) registry
+                    .allMetrics()
+                    .get(metricName("KafkaController", "LastCommittedRecordOffset"));
+                assertEquals(50, lastCommittedRecordOffset.value());
+            }
+        } finally {
+            registry.shutdown();
+        }
+    }
+
+    @Test
+    public void testMetadataErrorCount() {
+        MetricsRegistry registry = new MetricsRegistry();
+        MockTime time = new MockTime();
+        try {
+            try (QuorumControllerMetrics quorumControllerMetrics = new QuorumControllerMetrics(registry, time)) {
+                @SuppressWarnings("unchecked")
+                Gauge<Integer> metadataErrorCount = (Gauge<Integer>) registry
+                        .allMetrics()
+                        .get(metricName("KafkaController", "MetadataErrorCount"));
+                assertEquals(0, metadataErrorCount.value());
+                quorumControllerMetrics.incrementMetadataErrorCount();
+                assertEquals(1, metadataErrorCount.value());
             }
         } finally {
             registry.shutdown();
@@ -142,9 +173,17 @@ public class QuorumControllerMetricsTest {
     }
 
     private static void assertMetricsCreated(MetricsRegistry registry, Set<String> expectedMetricNames, String expectedType) {
+        assertEquals(registry.allMetrics().keySet().stream()
+                .filter(k -> k.getType() == expectedType).count(),
+                expectedMetricNames.size());
         expectedMetricNames.forEach(expectedName -> {
             MetricName expectMetricName = metricName(expectedType, expectedName);
             assertTrue(registry.allMetrics().containsKey(expectMetricName), "Missing metric: " + expectMetricName);
+        });
+        registry.allMetrics().forEach((actualMetricName, actualMetric) -> {
+            if (actualMetricName.getType() == expectedType) {
+                assertTrue(expectedMetricNames.contains(actualMetricName.getName()), "Unexpected metric: " + actualMetricName);
+            }
         });
     }
 

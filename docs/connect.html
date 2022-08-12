@@ -327,6 +327,8 @@ listeners=http://localhost:8080,https://localhost:8443</pre>
         <li><code>GET /</code>- return basic information about the Kafka Connect cluster such as the version of the Connect worker that serves the REST request (including git commit ID of the source code) and the Kafka cluster ID that is connected to.
     </ul>
 
+    <p>For the complete specification of the REST API, see the <a href="generated/connect_rest.yaml">OpenAPI documentation</a></p>
+
     <h4><a id="connect_errorreporting" href="#connect_errorreporting">Error Reporting in Connect</a></h4>
 
     <p>Kafka Connect provides error reporting to handle errors encountered along various stages of processing. By default, any error encountered during conversion or within transformations will cause the connector to fail. Each connector configuration can also enable tolerating such errors by skipping them, optionally writing each error and the details of the failed operation and problematic record (with various levels of detail) to the Connect application log. These mechanisms also capture errors when a sink connector is processing the messages consumed from its Kafka topics, and all of the errors can be written to a configurable "dead letter queue" (DLQ) Kafka topic.</p>

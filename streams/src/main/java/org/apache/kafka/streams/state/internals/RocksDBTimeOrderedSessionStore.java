@@ -62,6 +62,13 @@ public class RocksDBTimeOrderedSessionStore
     }
 
     @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final long earliestSessionEndTime,
+                                                                  final long latestSessionEndTime) {
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetchSessions(earliestSessionEndTime, latestSessionEndTime);
+        return new WrappedSessionStoreIterator(bytesIterator, TimeFirstSessionKeySchema::from);
+    }
+
+    @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key,
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
@@ -115,12 +122,12 @@ public class RocksDBTimeOrderedSessionStore
 
     @Override
     public byte[] fetchSession(final Bytes key,
-                               final long earliestSessionEndTime,
-                               final long latestSessionStartTime) {
+                               final long sessionStartTime,
+                               final long sessiontEndTime) {
         return wrapped().fetchSession(
             key,
-            earliestSessionEndTime,
-            latestSessionStartTime
+            sessionStartTime,
+            sessiontEndTime
         );
     }
 

@@ -265,6 +265,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       assertEquals(expectedPartitions.toSet, replicaInfos.keys.map(_.partition).toSet)
       logDirInfos.forEach { (logDir, logDirInfo) =>
+        assertTrue(logDirInfo.totalBytes.isPresent)
+        assertTrue(logDirInfo.usableBytes.isPresent)
         logDirInfo.replicaInfos.asScala.keys.foreach(tp =>
           assertEquals(server.logManager.getLog(tp).get.dir.getParent, logDir)
         )

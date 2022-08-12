@@ -30,7 +30,6 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.BrokerState;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.Extension;
@@ -43,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -66,18 +66,20 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
     private final ClusterConfig clusterConfig;
     private final AtomicReference<KafkaClusterTestKit> clusterReference;
+    private final boolean isCoResident;
 
-    public RaftClusterInvocationContext(ClusterConfig clusterConfig) {
+    public RaftClusterInvocationContext(ClusterConfig clusterConfig, boolean isCoResident) {
         this.clusterConfig = clusterConfig;
         this.clusterReference = new AtomicReference<>();
+        this.isCoResident = isCoResident;
     }
 
     @Override
     public String getDisplayName(int invocationIndex) {
         String clusterDesc = clusterConfig.nameTags().entrySet().stream()
-                .map(Object::toString)
-                .collect(Collectors.joining(", "));
-        return String.format("[%d] Type=Raft, %s", invocationIndex, clusterDesc);
+            .map(Object::toString)
+            .collect(Collectors.joining(", "));
+        return String.format("[%d] Type=Raft-%s, %s", invocationIndex, isCoResident ? "CoReside" : "Distributed", clusterDesc);
     }
 
     @Override
@@ -86,7 +88,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         return Arrays.asList(
             (BeforeTestExecutionCallback) context -> {
                 TestKitNodes nodes = new TestKitNodes.Builder().
-                        setBootstrapMetadataVersion(clusterConfig.metadataVersion().orElse(MetadataVersion.latest())).
+                        setBootstrapMetadataVersion(clusterConfig.metadataVersion()).
+                        setCoResident(isCoResident).
                         setNumBrokerNodes(clusterConfig.numBrokers()).
                         setNumControllerNodes(clusterConfig.numControllers()).build();
                 nodes.brokerNodes().forEach((brokerId, brokerNode) -> {
@@ -188,6 +191,20 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         @Override
         public ClusterConfig config() {
             return clusterConfig;
+        }
+
+        @Override
+        public Set<Integer> controllerIds() {
+            return controllers()
+                .map(controllerServer -> controllerServer.config().nodeId())
+                .collect(Collectors.toSet());
+        }
+
+        @Override
+        public Set<Integer> brokerIds() {
+            return brokers()
+                .map(brokerServer -> brokerServer.config().nodeId())
+                .collect(Collectors.toSet());
         }
 
         @Override

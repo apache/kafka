@@ -325,7 +325,8 @@ public class ReplicaFetcherThreadBenchmark {
                                     new LogContext(String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3)), 3),
                             config,
                             replicaManager,
-                            replicaQuota
+                            replicaQuota,
+                            config::interBrokerProtocolVersion
                     ) {
                         @Override
                         public long fetchEarliestOffset(TopicPartition topicPartition, int currentLeaderEpoch) {
@@ -356,7 +357,8 @@ public class ReplicaFetcherThreadBenchmark {
                     new FailedPartitions(),
                     replicaManager,
                     replicaQuota,
-                    String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3)
+                    String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3),
+                    config::interBrokerProtocolVersion
             );
 
             pool = partitions;

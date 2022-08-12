@@ -17,6 +17,8 @@
 
 package org.apache.kafka.controller;
 
+import java.util.Collections;
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
@@ -25,6 +27,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ProducerIdControlManagerTest {
 
     private SnapshotRegistry snapshotRegistry;
+    private FeatureControlManager featureControl;
     private ClusterControlManager clusterControl;
     private ProducerIdControlManager producerIdControlManager;
 
@@ -49,11 +53,19 @@ public class ProducerIdControlManagerTest {
     public void setUp() {
         final MockTime time = new MockTime();
         snapshotRegistry = new SnapshotRegistry(new LogContext());
+        featureControl = new FeatureControlManager.Builder().
+            setSnapshotRegistry(snapshotRegistry).
+            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+                QuorumFeatures.defaultFeatureMap(),
+                Collections.singletonList(0))).
+            setMetadataVersion(MetadataVersion.latest()).
+            build();
         clusterControl = new ClusterControlManager.Builder().
             setTime(time).
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(1000).
             setControllerMetrics(new MockControllerMetrics()).
+            setFeatureControlManager(featureControl).
             build();
 
         clusterControl.activate();
@@ -64,7 +76,7 @@ public class ProducerIdControlManagerTest {
                     setPort((short) 9092).
                     setName("PLAINTEXT").
                     setHost(String.format("broker-%02d.example.org", i)));
-            clusterControl.replay(brokerRecord);
+            clusterControl.replay(brokerRecord, 100L);
         }
 
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);

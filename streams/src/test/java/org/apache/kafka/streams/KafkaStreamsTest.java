@@ -55,8 +55,8 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
-import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.processor.internals.ThreadMetadataImpl;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -91,19 +91,18 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.ExecutionException;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
-
+import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.easymock.EasyMock.anyInt;
 import static org.easymock.EasyMock.anyLong;
@@ -151,8 +150,6 @@ public class KafkaStreamsTest {
     private GlobalStreamThread globalStreamThread;
     @Mock
     private Metrics metrics;
-    @Mock
-    private State state;
 
     private StateListenerStub streamsStateListener;
     private Capture<List<MetricsReporter>> metricsReportersCapture;
@@ -226,7 +223,6 @@ public class KafkaStreamsTest {
         ClientMetrics.addStateMetric(anyObject(StreamsMetricsImpl.class), anyObject());
         ClientMetrics.addNumAliveStreamThreadMetric(anyObject(StreamsMetricsImpl.class), anyObject());
 
-
         // setup stream threads
         PowerMock.mockStatic(StreamThread.class);
         EasyMock.expect(StreamThread.create(
@@ -240,7 +236,6 @@ public class KafkaStreamsTest {
             anyObject(Time.class),
             anyObject(StreamsMetadataState.class),
             anyLong(),
-            anyLong(),
             anyObject(StateDirectory.class),
             anyObject(StateRestoreListener.class),
             anyInt(),
@@ -251,13 +246,8 @@ public class KafkaStreamsTest {
         PowerMock.mockStatic(StreamsConfigUtils.class);
         EasyMock.expect(StreamsConfigUtils.processingMode(anyObject(StreamsConfig.class))).andReturn(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE).anyTimes();
         EasyMock.expect(StreamsConfigUtils.eosEnabled(anyObject(StreamsConfig.class))).andReturn(false).anyTimes();
-        EasyMock.expect(StreamsConfigUtils.getTotalCacheSize(anyObject(StreamsConfig.class))).andReturn(10 * 1024 * 1024L).anyTimes();
         EasyMock.expect(streamThreadOne.getId()).andReturn(1L).anyTimes();
         EasyMock.expect(streamThreadTwo.getId()).andReturn(2L).anyTimes();
-        EasyMock.expect(streamThreadOne.getCacheSize()).andReturn(10485760L).anyTimes();
-        EasyMock.expect(streamThreadOne.getMaxBufferSize()).andReturn(536870912L).anyTimes();
-        EasyMock.expect(streamThreadTwo.getCacheSize()).andReturn(10485760L).anyTimes();
-        EasyMock.expect(streamThreadTwo.getMaxBufferSize()).andReturn(536870912L).anyTimes();
         prepareStreamThread(streamThreadOne, 1, true);
         prepareStreamThread(streamThreadTwo, 2, false);
 
@@ -305,8 +295,6 @@ public class KafkaStreamsTest {
         }).anyTimes();
         EasyMock.expect(globalStreamThread.stillRunning()).andReturn(globalThreadState.get() == GlobalStreamThread.State.RUNNING).anyTimes();
         globalStreamThread.join();
-        EasyMock.expectLastCall().anyTimes();
-        globalStreamThread.resize(EasyMock.anyLong());
         EasyMock.expectLastCall().anyTimes();
 
         PowerMock.replay(
@@ -364,7 +352,7 @@ public class KafkaStreamsTest {
         ).anyTimes();
         EasyMock.expect(thread.waitOnThreadState(EasyMock.isA(StreamThread.State.class), anyLong())).andStubReturn(true);
         EasyMock.expect(thread.isAlive()).andReturn(true).times(0, 1);
-        thread.resizeCacheAndBufferMemory(EasyMock.anyLong(), EasyMock.anyLong());
+        thread.resizeCache(EasyMock.anyLong());
         EasyMock.expectLastCall().anyTimes();
         thread.requestLeaveGroupDuringShutdown();
         EasyMock.expectLastCall().anyTimes();
@@ -604,33 +592,51 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void testPauseResume() {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            streams.pause();
+            Assert.assertTrue(streams.isPaused());
+            streams.resume();
+            Assert.assertFalse(streams.isPaused());
+        }
+    }
+
+    @Test
+    public void testStartingPaused() {
+        // This test shows that a KafkaStreams instance can be started "paused"
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.pause();
+            streams.start();
+            Assert.assertTrue(streams.isPaused());
+            streams.resume();
+            Assert.assertFalse(streams.isPaused());
+        }
+    }
+
+    @Test
+    public void testShowPauseResumeAreIdempotent() {
+        // This test shows that a KafkaStreams instance can be started "paused"
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            streams.pause();
+            Assert.assertTrue(streams.isPaused());
+            streams.pause();
+            Assert.assertTrue(streams.isPaused());
+            streams.resume();
+            Assert.assertFalse(streams.isPaused());
+            streams.resume();
+            Assert.assertFalse(streams.isPaused());
+        }
+    }
+
+    @Test
     public void shouldAddThreadWhenRunning() throws InterruptedException {
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
             final int oldSize = streams.threads.size();
             waitForCondition(() -> streams.state() == KafkaStreams.State.RUNNING, 15L, "wait until running");
-            EasyMock.reset(streamThreadOne, streamThreadTwo);
-            EasyMock.expect(streamThreadOne.isRunning()).andStubReturn(true);
-            EasyMock.expect(streamThreadTwo.isRunning()).andStubReturn(true);
-            EasyMock.expect(streamThreadOne.state()).andStubReturn(StreamThread.State.RUNNING);
-            EasyMock.expect(streamThreadTwo.state()).andStubReturn(StreamThread.State.RUNNING);
-            EasyMock.expect(streamThreadOne.getName()).andStubReturn("processId-StreamThread-1");
-            EasyMock.expect(streamThreadTwo.getName()).andStubReturn("processId-StreamThread-2");
-            EasyMock.expect(streamThreadTwo.getId()).andStubReturn(2L);
-            EasyMock.expect(streamThreadOne.getCacheSize()).andReturn(10485760L).anyTimes();
-            EasyMock.expect(streamThreadOne.getMaxBufferSize()).andReturn(536870912L).anyTimes();
-            EasyMock.expect(streamThreadTwo.getCacheSize()).andReturn(10485760L).anyTimes();
-            EasyMock.expect(streamThreadTwo.getMaxBufferSize()).andReturn(536870912L).anyTimes();
-            streamThreadTwo.setStateListener(EasyMock.anyObject());
-            streamThreadTwo.start();
-
-            streamThreadOne.resizeCacheAndBufferMemory(5 * 1024 * 1024L, 256 * 1024 * 1024L);
-            streamThreadTwo.resizeCacheAndBufferMemory(5 * 1024 * 1024L, 256 * 1024 * 1024L);
-            streamThreadOne.shutdown();
-            streamThreadTwo.shutdown();
-            EasyMock.expect(state.isRunningOrRebalancing()).andStubReturn(true);
-            EasyMock.replay(streamThreadOne, streamThreadTwo, state);
             assertThat(streams.addStreamThread(), equalTo(Optional.of("processId-StreamThread-" + 2)));
             assertThat(streams.threads.size(), equalTo(oldSize + 1));
         }
@@ -788,6 +794,24 @@ public class KafkaStreamsTest {
             } catch (final IllegalStateException expected) {
                 assertEquals("Cannot clean up while running.", expected.getMessage());
             }
+        }
+    }
+
+    @Test
+    public void shouldThrowOnCleanupWhilePaused() throws InterruptedException {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            waitForCondition(
+                () -> streams.state() == KafkaStreams.State.RUNNING,
+                "Streams never started.");
+
+            streams.pause();
+            waitForCondition(
+                streams::isPaused,
+                "Streams did not pause.");
+
+            assertThrows("Cannot clean up while running.", IllegalStateException.class,
+                streams::cleanUp);
         }
     }
 

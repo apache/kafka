@@ -141,6 +141,12 @@ public interface Task {
      */
     void updateInputPartitions(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics);
 
+    /**
+     * @param enforceCheckpoint if true the task would always execute the checkpoint;
+     *                          otherwise it may skip if the state has not advanced much
+     */
+    void maybeCheckpoint(final boolean enforceCheckpoint);
+
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions);
 
     /**
@@ -149,10 +155,9 @@ public interface Task {
     void revive();
 
     /**
-     * Attempt a clean close but do not close the underlying state
+     * Close the task except the state, so that the states can be later recycled
      */
-    void closeCleanAndRecycleState();
-
+    void prepareRecycle();
 
     // runtime methods (using in RUNNING state)
 
@@ -206,7 +211,7 @@ public interface Task {
     /**
      * @return any changelog partitions associated with this task
      */
-    Collection<TopicPartition> changelogPartitions();
+    Set<TopicPartition> changelogPartitions();
 
     State state();
 

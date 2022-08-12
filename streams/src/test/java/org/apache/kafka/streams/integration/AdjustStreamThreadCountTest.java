@@ -32,19 +32,17 @@ import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -69,32 +67,26 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
-@Category(IntegrationTest.class)
+@Timeout(600)
+@Tag("integration")
 public class AdjustStreamThreadCountTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
-
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
-
-
-    @Rule
-    public TestName testName = new TestName();
 
     private final List<KafkaStreams.State> stateTransitionHistory = new ArrayList<>();
     private static String inputTopic;
@@ -103,9 +95,9 @@ public class AdjustStreamThreadCountTest {
     private static String appId = "";
     public static final Duration DEFAULT_DURATION = Duration.ofSeconds(30);
 
-    @Before
-    public void setup() {
-        final String testId = safeUniqueTestName(getClass(), testName);
+    @BeforeEach
+    public void setup(final TestInfo testInfo) {
+        final String testId = safeUniqueTestName(getClass(), testInfo);
         appId = "appId_" + testId;
         inputTopic = "input" + testId;
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
@@ -131,7 +123,7 @@ public class AdjustStreamThreadCountTest {
         waitForRunning();
     }
 
-    @After
+    @AfterEach
     public void teardown() throws IOException {
         purgeLocalStreamsState(properties);
     }
@@ -379,7 +371,7 @@ public class AdjustStreamThreadCountTest {
         final Properties props = new Properties();
         props.putAll(properties);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
-        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, totalCacheBytes);
+        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, totalCacheBytes);
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), props)) {
             addStreamStateChangeListener(kafkaStreams);
@@ -390,32 +382,7 @@ public class AdjustStreamThreadCountTest {
 
                 for (final String log : appender.getMessages()) {
                     // all 10 bytes should be available for remaining thread
-                    if (log.contains("Resizing thread cache/max buffer size due to removal of thread ") && log.contains(", new cache size/max buffer size per thread is 10/536870912")) {
-                        return;
-                    }
-                }
-            }
-        }
-        fail();
-    }
-
-    @Test
-    public void shouldResizeMaxBufferAfterThreadRemovalTimesOut() throws InterruptedException {
-        final long maxBufferBytes = 10L;
-        final Properties props = new Properties();
-        props.putAll(properties);
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
-        props.put(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG, maxBufferBytes);
-
-        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), props)) {
-            addStreamStateChangeListener(kafkaStreams);
-            startStreamsAndWaitForRunning(kafkaStreams);
-
-            try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KafkaStreams.class)) {
-                assertThrows(TimeoutException.class, () -> kafkaStreams.removeStreamThread(Duration.ofSeconds(0)));
-                for (final String log : appender.getMessages()) {
-                    // all 10 bytes should be available for remaining thread
-                    if (log.contains("Resizing thread cache/max buffer size due to removal of thread ") && log.contains(", new cache size/max buffer size per thread is 10485760/10")) {
+                    if (log.endsWith("Resizing thread cache due to thread removal, new cache size per thread is 10")) {
                         return;
                     }
                 }
@@ -426,14 +393,12 @@ public class AdjustStreamThreadCountTest {
 
     @Test
     @SuppressWarnings("deprecation")
-    public void shouldResizeCacheAndInputBufferAfterThreadReplacement() throws InterruptedException {
+    public void shouldResizeCacheAfterThreadReplacement() throws InterruptedException {
         final long totalCacheBytes = 10L;
-        final long maxBufferBytes = 100L;
         final Properties props = new Properties();
         props.putAll(properties);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
-        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, totalCacheBytes);
-        props.put(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG, maxBufferBytes);
+        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, totalCacheBytes);
 
         final AtomicBoolean injectError = new AtomicBoolean(false);
 
@@ -473,9 +438,8 @@ public class AdjustStreamThreadCountTest {
                 waitForTransitionFromRebalancingToRunning();
 
                 for (final String log : appender.getMessages()) {
-                    // after we replace the thread there should be two remaining threads with 5 bytes each for
-                    // the cache and 50 for the input buffer
-                    if (log.endsWith("Adding StreamThread-3, there are now 2 threads with cache size/max buffer size values as 5/50 per thread.")) {
+                    // after we replace the thread there should be two remaining threads with 5 bytes each
+                    if (log.endsWith("Adding StreamThread-3, there will now be 2 live threads and the new cache size per thread is 5")) {
                         return;
                     }
                 }

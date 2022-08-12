@@ -34,13 +34,14 @@ plugins {
   id 'com.github.ben-manes.versions' version '0.42.0'
   id 'idea'
   id 'java-library'
-  id 'org.owasp.dependencycheck' version '7.0.3'
-  id 'org.nosphere.apache.rat' version "0.7.0"
+  id 'org.owasp.dependencycheck' version '7.1.1'
+  id 'org.nosphere.apache.rat' version "0.7.1"
 
-  id "com.github.spotbugs" version '5.0.6' apply false
-  id 'org.gradle.test-retry' version '1.3.1' apply false
+  id "com.github.spotbugs" version '5.0.9' apply false
+  id 'org.gradle.test-retry' version '1.4.0' apply false
   id 'org.scoverage' version '7.0.0' apply false
   id 'com.github.johnrengelman.shadow' version '7.1.2' apply false
+  id "io.swagger.core.v3.swagger-gradle-plugin" version "2.2.0"
 }
 
 spotless {
@@ -65,8 +66,10 @@ ext {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16))
     defaultJvmArgs.addAll(
       "--add-opens=java.base/java.io=ALL-UNNAMED",
+      "--add-opens=java.base/java.lang=ALL-UNNAMED",
       "--add-opens=java.base/java.nio=ALL-UNNAMED",
       "--add-opens=java.base/java.nio.file=ALL-UNNAMED",
+      "--add-opens=java.base/java.util=ALL-UNNAMED",
       "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
       "--add-opens=java.base/java.util.regex=ALL-UNNAMED",
       "--add-opens=java.base/java.util.stream=ALL-UNNAMED",
@@ -320,7 +323,7 @@ subprojects {
   }
 
   // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["runtime", "streams"].contains(it.project.name))
+  def shouldUseJUnit5 = !(["runtime"].contains(it.project.name))
 
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
@@ -401,12 +404,13 @@ subprojects {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
     testsToExclude.addAll([
       // connect tests
-      "**/AbstractHerderTest.*", "**/ConnectClusterStateImplTest.*", "**/ConnectorPluginsResourceTest.*",
+      "**/AbstractHerderTest.*", "**/ConnectorPluginsResourceTest.*",
       "**/ConnectorsResourceTest.*", "**/DistributedHerderTest.*", "**/FileOffsetBakingStoreTest.*",
       "**/ErrorHandlingTaskTest.*", "**/KafkaConfigBackingStoreTest.*", "**/KafkaOffsetBackingStoreTest.*",
       "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
-      "**/SourceTaskOffsetCommitterTest.*", "**/WorkerConfigTransformerTest.*", "**/WorkerGroupMemberTest.*",
-      "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*", "**/WorkerSourceTaskTest.*",
+      "**/SourceTaskOffsetCommitterTest.*",
+      "**/WorkerTest.*", "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
+      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*", "**/ExactlyOnceWorkerSourceTaskTest.*",
       "**/WorkerTaskTest.*",
       // streams tests
       "**/KafkaStreamsTest.*"
@@ -462,8 +466,18 @@ subprojects {
     exclude testsToExclude
 
     if (shouldUseJUnit5) {
-      useJUnitPlatform {
-        includeTags "integration"
+      if (project.name == 'streams') {
+        useJUnitPlatform {
+          includeTags "integration"
+          includeTags "org.apache.kafka.test.IntegrationTest"
+	  // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
+          // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
+          includeEngines "junit-vintage", "junit-jupiter"
+        }
+      } else {
+        useJUnitPlatform {
+          includeTags "integration"
+        }
       }
     } else {
       useJUnit {
@@ -499,8 +513,18 @@ subprojects {
     exclude testsToExclude
 
     if (shouldUseJUnit5) {
-      useJUnitPlatform {
-        excludeTags "integration"
+      if (project.name == 'streams') {
+        useJUnitPlatform {
+          excludeTags "integration"
+          excludeTags "org.apache.kafka.test.IntegrationTest"
+	  // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
+          // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
+          includeEngines "junit-vintage", "junit-jupiter"
+        }
+      } else {
+        useJUnitPlatform {
+          excludeTags "integration"
+        }
       }
     } else {
       useJUnit {
@@ -873,6 +897,7 @@ project(':core') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':metadata').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
@@ -1033,7 +1058,7 @@ project(':core') {
                                ':connect:runtime:genConnectPredicateDocs',
                                ':connect:runtime:genSinkConnectorConfigDocs', ':connect:runtime:genSourceConnectorConfigDocs',
                                ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
-                               ':connect:runtime:genConnectMetricsDocs'], type: Tar) {
+                               ':connect:runtime:genConnectMetricsDocs', ':connect:runtime:genConnectOpenAPIDocs'], type: Tar) {
     archiveClassifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
@@ -1155,6 +1180,7 @@ project(':metadata') {
     testImplementation libs.slf4jlog4j
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
     generator project(':generator')
   }
 
@@ -1244,7 +1270,7 @@ project(':clients') {
 
     testImplementation libs.bcpkix
     testImplementation libs.junitJupiter
-    testImplementation libs.mockitoCore
+    testImplementation libs.mockitoInline
 
     testRuntimeOnly libs.slf4jlog4j
     testRuntimeOnly libs.jacksonDatabind
@@ -1323,7 +1349,7 @@ project(':clients') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/generated-test/java", "src/test/java"]
+        srcDirs = ["src/generated-test/java", "src/test/java"]
       }
     }
   }
@@ -1593,6 +1619,8 @@ project(':storage') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common')
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
     testImplementation libs.bcpkix
@@ -1830,11 +1858,12 @@ project(':streams') {
 
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
+
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation libs.log4j
-    testImplementation libs.junitJupiterApi
+    testImplementation libs.junitJupiter
     testImplementation libs.junitVintageEngine
     testImplementation libs.easymock
     testImplementation libs.powermockJunit4
@@ -1951,6 +1980,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-28:test',
             ':streams:upgrade-system-tests-30:test',
             ':streams:upgrade-system-tests-31:test',
+            ':streams:upgrade-system-tests-32:test',
             ':streams:examples:test'
     ]
   )
@@ -2295,6 +2325,19 @@ project(':streams:upgrade-system-tests-31') {
   }
 }
 
+project(':streams:upgrade-system-tests-32') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-32"
+
+  dependencies {
+    testImplementation libs.kafkaStreams_32
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.github.johnrengelman.shadow'
@@ -2518,6 +2561,8 @@ project(':connect:runtime') {
     implementation libs.jettyClient
     implementation libs.reflections
     implementation libs.mavenArtifact
+    implementation libs.swaggerJaxrs2
+    implementation libs.swaggerAnnotations
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
@@ -2596,6 +2641,26 @@ project(':connect:runtime') {
     mainClass = 'org.apache.kafka.connect.runtime.ConnectMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_metrics.html").newOutputStream()
+  }
+
+  task setVersionInOpenAPISpec(type: Copy) {
+    from "$rootDir/gradle/openapi.template"
+    into "$buildDir/resources/docs"
+    rename ('openapi.template', 'openapi.yaml')
+    expand(kafkaVersion: "$rootProject.version")
+  }
+
+  task genConnectOpenAPIDocs(type: io.swagger.v3.plugins.gradle.tasks.ResolveTask, dependsOn: setVersionInOpenAPISpec) {
+    classpath = sourceSets.main.runtimeClasspath
+    buildClasspath = classpath
+    outputFileName = 'connect_rest'
+    outputFormat = 'YAML'
+    prettyPrint = 'TRUE'
+    sortOutput = 'TRUE'
+    openApiFile = file("$buildDir/resources/docs/openapi.yaml")
+    resourcePackages = ['org.apache.kafka.connect.runtime.rest.resources']
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    outputDir = file(generatedDocsDir)
   }
 
 }

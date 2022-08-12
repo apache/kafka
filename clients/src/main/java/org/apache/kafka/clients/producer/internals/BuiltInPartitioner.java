@@ -279,6 +279,13 @@ public class BuiltInPartitioner {
         }
     }
 
+    /*
+     * Default hashing function to choose a partition from the serialized key bytes
+     */
+    public static int partitionForKey(final byte[] serializedKey, final int numPartitions) {
+        return Utils.toPositive(Utils.murmur2(serializedKey)) % numPartitions;
+    }
+
     /**
      * The partition load stats for each topic that are used for adaptive partition distribution.
      */

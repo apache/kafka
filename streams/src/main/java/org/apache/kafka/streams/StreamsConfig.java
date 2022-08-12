@@ -419,14 +419,8 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code buffered.records.per.partition} */
     @SuppressWarnings("WeakerAccess")
-    @Deprecated
     public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";
     public static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "Maximum number of records to buffer per partition.";
-
-    /** {@code input.buffer.max.bytes} */
-    @SuppressWarnings("WeakerAccess")
-    public static final String INPUT_BUFFER_MAX_BYTES_CONFIG = "input.buffer.max.bytes";
-    public static final String INPUT_BUFFER_MAX_BYTES_DOC = "Maximum bytes of records to buffer across all threads";
 
     /** {@code built.in.metrics.version} */
     public static final String BUILT_IN_METRICS_VERSION_CONFIG = "built.in.metrics.version";
@@ -434,14 +428,8 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code cache.max.bytes.buffering} */
     @SuppressWarnings("WeakerAccess")
-    @Deprecated
     public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
     public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
-
-    /** {@statestore.cache.max.bytes} */
-    @SuppressWarnings("WeakerAccess")
-    public static final String STATESTORE_CACHE_MAX_BYTES_CONFIG = "statestore.cache.max.bytes";
-    public static final String STATESTORE_CACHE_MAX_BYTES_DOC = "Maximum number of memory bytes to be used for statestore cache across all threads";
 
     /** {@code client.id} */
     @SuppressWarnings("WeakerAccess")
@@ -452,7 +440,9 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code commit.interval.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String COMMIT_INTERVAL_MS_CONFIG = "commit.interval.ms";
-    private static final String COMMIT_INTERVAL_MS_DOC = "The frequency in milliseconds with which to save the position of the processor." +
+    private static final String COMMIT_INTERVAL_MS_DOC = "The frequency in milliseconds with which to commit processing progress." +
+        " For at-least-once processing, committing means to save the position (ie, offsets) of the processor." +
+        " For exactly-once processing, it means to commit the transaction which includes to save the position and to make the committed data in the output topic visible to consumers with isolation level read_committed." +
         " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE_V2 + "</code>, <code>" + EXACTLY_ONCE + "</code>,the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
         " otherwise the default value is <code>" + DEFAULT_COMMIT_INTERVAL_MS + "</code>.";
 
@@ -753,12 +743,6 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.MEDIUM,
                     CACHE_MAX_BYTES_BUFFERING_DOC)
-            .define(STATESTORE_CACHE_MAX_BYTES_CONFIG,
-                    Type.LONG,
-                    10 * 1024 * 1024L,
-                    atLeast(0),
-                    Importance.MEDIUM,
-                    STATESTORE_CACHE_MAX_BYTES_DOC)
             .define(CLIENT_ID_CONFIG,
                     Type.STRING,
                     "",
@@ -860,11 +844,6 @@ public class StreamsConfig extends AbstractConfig {
                     in(NO_OPTIMIZATION, OPTIMIZE),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
-            .define(INPUT_BUFFER_MAX_BYTES_CONFIG,
-                    Type.LONG,
-                    512 * 1024 * 1024,
-                    Importance.MEDIUM,
-                    INPUT_BUFFER_MAX_BYTES_DOC)
 
             // LOW
 
@@ -1102,6 +1081,9 @@ public class StreamsConfig extends AbstractConfig {
 
         // Private API used to control the prefix of the auto created topics
         public static final String TOPIC_PREFIX_ALTERNATIVE = "__internal.override.topic.prefix__";
+
+        // Private API to enable the state updater (i.e. state updating on a dedicated thread)
+        public static final String STATE_UPDATER_ENABLED = "__state.updater.enabled__";
 
         public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
             final Object value = configs.getOrDefault(key, defaultValue);

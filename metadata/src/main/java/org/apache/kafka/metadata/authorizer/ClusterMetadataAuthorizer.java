@@ -103,7 +103,7 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
         AclMutator aclMutator = aclMutatorOrException();
         aclBindings.forEach(b -> futures.add(new CompletableFuture<>()));
         ControllerRequestContext context = new ControllerRequestContext(
-            requestContext.principal(), OptionalLong.empty());
+            requestContext, OptionalLong.empty());
         aclMutator.createAcls(context, aclBindings).whenComplete((results, throwable) -> {
             if (throwable == null && results.size() != futures.size()) {
                 throwable = new UnknownServerException("Invalid size " +
@@ -143,7 +143,7 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
         AclMutator aclMutator = aclMutatorOrException();
         filters.forEach(b -> futures.add(new CompletableFuture<>()));
         ControllerRequestContext context = new ControllerRequestContext(
-            requestContext.principal(), OptionalLong.empty());
+            requestContext, OptionalLong.empty());
         aclMutator.deleteAcls(context, filters).whenComplete((results, throwable) -> {
             if (throwable == null && results.size() != futures.size()) {
                 throwable = new UnknownServerException("Invalid size " +

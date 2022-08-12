@@ -20,8 +20,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 
 import java.util.Map;
+import java.util.OptionalLong;
 
 import static java.util.Collections.unmodifiableMap;
+import static org.apache.kafka.common.requests.DescribeLogDirsResponse.UNKNOWN_VOLUME_BYTES;
 
 /**
  * A description of a log directory on a particular broker.
@@ -29,10 +31,18 @@ import static java.util.Collections.unmodifiableMap;
 public class LogDirDescription {
     private final Map<TopicPartition, ReplicaInfo> replicaInfos;
     private final ApiException error;
+    private final OptionalLong totalBytes;
+    private final OptionalLong usableBytes;
 
     public LogDirDescription(ApiException error, Map<TopicPartition, ReplicaInfo> replicaInfos) {
+        this(error, replicaInfos, UNKNOWN_VOLUME_BYTES, UNKNOWN_VOLUME_BYTES);
+    }
+
+    public LogDirDescription(ApiException error, Map<TopicPartition, ReplicaInfo> replicaInfos, long totalBytes, long usableBytes) {
         this.error = error;
         this.replicaInfos = replicaInfos;
+        this.totalBytes = (totalBytes == UNKNOWN_VOLUME_BYTES) ? OptionalLong.empty() : OptionalLong.of(totalBytes);
+        this.usableBytes = (usableBytes == UNKNOWN_VOLUME_BYTES) ? OptionalLong.empty() : OptionalLong.of(usableBytes);
     }
 
     /**
@@ -54,11 +64,29 @@ public class LogDirDescription {
         return unmodifiableMap(replicaInfos);
     }
 
+    /**
+     * The total size of the volume this log directory is on or empty if the broker did not return a value.
+     * For volumes larger than Long.MAX_VALUE, Long.MAX_VALUE is returned.
+     */
+    public OptionalLong totalBytes() {
+        return totalBytes;
+    }
+
+    /**
+     * The usable size on the volume this log directory is on or empty if the broker did not return a value.
+     * For usable sizes larger than Long.MAX_VALUE, Long.MAX_VALUE is returned.
+     */
+    public OptionalLong usableBytes() {
+        return usableBytes;
+    }
+
     @Override
     public String toString() {
         return "LogDirDescription(" +
                 "replicaInfos=" + replicaInfos +
                 ", error=" + error +
+                ", totalBytes=" + totalBytes +
+                ", usableBytes=" + usableBytes +
                 ')';
     }
 }

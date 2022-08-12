@@ -1112,7 +1112,7 @@ public class RaftEventSimulationTest {
                 startOffset.set(snapshotId.offset);
 
                 try (SnapshotReader<Integer> snapshot =
-                        RecordsSnapshotReader.of(log.readSnapshot(snapshotId).get(), node.intSerde, BufferSupplier.create(), Integer.MAX_VALUE)) {
+                        RecordsSnapshotReader.of(log.readSnapshot(snapshotId).get(), node.intSerde, BufferSupplier.create(), Integer.MAX_VALUE, true)) {
                     // Expect only one batch with only one record
                     assertTrue(snapshot.hasNext());
                     Batch<Integer> batch = snapshot.next();

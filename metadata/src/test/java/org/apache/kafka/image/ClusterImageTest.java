@@ -19,14 +19,17 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -62,13 +65,15 @@ public class ClusterImageTest {
             Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
             Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
             Optional.empty(),
-            true));
+            true,
+            false));
         map1.put(1, new BrokerRegistration(1,
             1001,
             Uuid.fromString("U52uRe20RsGI0RvpcTx33Q"),
             Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
             Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
             Optional.empty(),
+            false,
             false));
         map1.put(2, new BrokerRegistration(2,
             123,
@@ -76,6 +81,7 @@ public class ClusterImageTest {
             Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
             Collections.emptyMap(),
             Optional.of("arack"),
+            false,
             false));
         IMAGE1 = new ClusterImage(map1);
 
@@ -84,6 +90,10 @@ public class ClusterImageTest {
             setId(0).setEpoch(1000), UNFENCE_BROKER_RECORD.highestSupportedVersion()));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FenceBrokerRecord().
             setId(1).setEpoch(1001), FENCE_BROKER_RECORD.highestSupportedVersion()));
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
+            setBrokerId(0).setBrokerEpoch(1000).setInControlledShutdown(
+                BrokerRegistrationInControlledShutdownChange.IN_CONTROLLED_SHUTDOWN.value()),
+            FENCE_BROKER_RECORD.highestSupportedVersion()));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
             setBrokerId(2).setBrokerEpoch(123),
             UNREGISTER_BROKER_RECORD.highestSupportedVersion()));
@@ -98,14 +108,16 @@ public class ClusterImageTest {
             Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
             Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
             Optional.empty(),
-            false));
+            false,
+            true));
         map2.put(1, new BrokerRegistration(1,
             1001,
             Uuid.fromString("U52uRe20RsGI0RvpcTx33Q"),
             Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
             Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
             Optional.empty(),
-            true));
+            true,
+            false));
         IMAGE2 = new ClusterImage(map2);
     }
 
@@ -131,7 +143,7 @@ public class ClusterImageTest {
 
     private void testToImageAndBack(ClusterImage image) throws Throwable {
         MockSnapshotConsumer writer = new MockSnapshotConsumer();
-        image.write(writer);
+        image.write(writer, MetadataVersion.latest());
         ClusterDelta delta = new ClusterDelta(ClusterImage.EMPTY);
         RecordTestUtils.replayAllBatches(delta, writer.batches());
         ClusterImage nextImage = delta.apply();

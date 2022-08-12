@@ -20,7 +20,6 @@ package kafka.integration
 import java.io.File
 import java.util
 import java.util.Arrays
-
 import kafka.server.QuorumTestHarness
 import kafka.server._
 import kafka.utils.TestUtils
@@ -30,13 +29,14 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 import java.util.Properties
-
 import kafka.utils.TestUtils.{createAdminClient, resource}
+import org.apache.kafka.common.acl.AccessControlEntry
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.controller.ControllerRequestContext.ANONYMOUS_CONTEXT
+import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 
 /**
  * A test harness that brings up some number of broker nodes
@@ -237,6 +237,14 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     } else {
       adminZkClient.deleteTopic(topic)
     }
+  }
+
+  def addAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
+    TestUtils.addAndVerifyAcls(brokers, acls, resource, controllerServers)
+  }
+
+  def removeAndVerifyAcls(acls: Set[AccessControlEntry], resource: ResourcePattern): Unit = {
+    TestUtils.removeAndVerifyAcls(brokers, acls, resource, controllerServers)
   }
 
   /**

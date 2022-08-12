@@ -23,6 +23,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
+import org.apache.kafka.server.common.MetadataVersion;
 
 
 /**
@@ -120,10 +121,11 @@ public final class MetadataImage {
     }
 
     public void write(Consumer<List<ApiMessageAndVersion>> out) {
+        MetadataVersion metadataVersion = features.metadataVersion();
         // Features should be written out first so we can include the metadata.version at the beginning of the
         // snapshot
         features.write(out);
-        cluster.write(out);
+        cluster.write(out, metadataVersion);
         topics.write(out);
         configs.write(out);
         clientQuotas.write(out);

@@ -52,7 +52,7 @@ public class FeatureControlManager {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
-        private MetadataVersion metadataVersion = MetadataVersion.UNINITIALIZED;
+        private MetadataVersion metadataVersion = MetadataVersion.MINIMUM_KRAFT_VERSION;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -105,6 +105,10 @@ public class FeatureControlManager {
      */
     private final TimelineObject<MetadataVersion> metadataVersion;
 
+    /**
+     * A boolean to see if we have encountered a metadata.version or not.
+     */
+    private final TimelineObject<Boolean> sawMetadataVersion;
 
     private FeatureControlManager(
         LogContext logContext,
@@ -116,6 +120,7 @@ public class FeatureControlManager {
         this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, metadataVersion);
+        this.sawMetadataVersion = new TimelineObject<>(snapshotRegistry, false);
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
@@ -226,7 +231,7 @@ public class FeatureControlManager {
             return invalidMetadataVersion(newVersionLevel, "Unknown metadata.version.");
         }
 
-        if (!currentVersion.equals(MetadataVersion.UNINITIALIZED) && newVersion.isLessThan(currentVersion)) {
+        if (newVersion.isLessThan(currentVersion)) {
             // This is a downgrade
             boolean metadataChanged = MetadataVersion.checkIfMetadataChanged(currentVersion, newVersion);
             if (!metadataChanged) {
@@ -257,13 +262,18 @@ public class FeatureControlManager {
 
     FinalizedControllerFeatures finalizedFeatures(long epoch) {
         Map<String, Short> features = new HashMap<>();
-        if (!metadataVersion.get(epoch).equals(MetadataVersion.UNINITIALIZED)) {
-            features.put(MetadataVersion.FEATURE_NAME, metadataVersion.get(epoch).featureLevel());
-        }
+        features.put(MetadataVersion.FEATURE_NAME, metadataVersion.get(epoch).featureLevel());
         for (Entry<String, Short> entry : finalizedVersions.entrySet(epoch)) {
             features.put(entry.getKey(), entry.getValue());
         }
         return new FinalizedControllerFeatures(features, epoch);
+    }
+
+    /**
+     * @return true if a FeatureLevelRecord for "metadata.version" has been replayed. False otherwise
+     */
+    boolean sawMetadataVersion() {
+        return this.sawMetadataVersion.get();
     }
 
     public void replay(FeatureLevelRecord record) {
@@ -275,6 +285,7 @@ public class FeatureControlManager {
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
             log.info("Setting metadata.version to {}", record.featureLevel());
             metadataVersion.set(MetadataVersion.fromFeatureLevel(record.featureLevel()));
+            sawMetadataVersion.set(true);
         } else {
             if (record.featureLevel() == 0) {
                 log.info("Removing feature {}", record.name());
@@ -294,9 +305,6 @@ public class FeatureControlManager {
         FeatureControlIterator(long epoch) {
             this.iterator = finalizedVersions.entrySet(epoch).iterator();
             this.metadataVersion = FeatureControlManager.this.metadataVersion.get(epoch);
-            if (this.metadataVersion.equals(MetadataVersion.UNINITIALIZED)) {
-                this.wroteVersion = true;
-            }
         }
 
         @Override

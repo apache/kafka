@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import java.util.Objects;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 
 import java.util.Arrays;
@@ -71,5 +72,28 @@ public class SubscriptionResponseWrapper<FV> {
             ", originalValueHash=" + Arrays.toString(originalValueHash) +
             ", primaryPartition=" + primaryPartition +
             '}';
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        final SubscriptionResponseWrapper<?> that = (SubscriptionResponseWrapper<?>) o;
+        return version == that.version &&
+               Arrays.equals(originalValueHash,
+               that.originalValueHash) &&
+               Objects.equals(foreignValue, that.foreignValue) &&
+               Objects.equals(primaryPartition, that.primaryPartition);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(foreignValue, version, primaryPartition);
+        result = 31 * result + Arrays.hashCode(originalValueHash);
+        return result;
     }
 }

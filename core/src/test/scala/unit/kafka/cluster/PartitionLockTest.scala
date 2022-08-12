@@ -20,7 +20,6 @@ package kafka.cluster
 import java.util.{Optional, Properties}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
-
 import kafka.api.LeaderAndIsr
 import kafka.log._
 import kafka.server._
@@ -28,6 +27,7 @@ import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils._
+import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
@@ -276,10 +276,13 @@ class PartitionLockTest extends Logging {
       logManager,
       alterIsrManager) {
 
-      override def prepareIsrShrink(outOfSyncReplicaIds: Set[Int]): PendingShrinkIsr = {
+      override def prepareIsrShrink(
+        currentState: CommittedPartitionState,
+        outOfSyncReplicaIds: Set[Int]
+      ): PendingShrinkIsr = {
         shrinkIsrSemaphore.acquire()
         try {
-          super.prepareIsrShrink(outOfSyncReplicaIds)
+          super.prepareIsrShrink(currentState, outOfSyncReplicaIds)
         } finally {
           shrinkIsrSemaphore.release()
         }
@@ -319,12 +322,14 @@ class PartitionLockTest extends Logging {
         new SlowLog(log, offsets.logStartOffset, localLog, leaderEpochCache, producerStateManager, appendSemaphore)
       }
     }
+
+    val topicIdPartition = new TopicIdPartition(partition.topicId.getOrElse(Uuid.ZERO_UUID), topicPartition)
     when(offsetCheckpoints.fetch(
       ArgumentMatchers.anyString,
       ArgumentMatchers.eq(topicPartition)
     )).thenReturn(None)
     when(alterIsrManager.submit(
-      ArgumentMatchers.eq(topicPartition),
+      ArgumentMatchers.eq(topicIdPartition),
       ArgumentMatchers.any[LeaderAndIsr],
       ArgumentMatchers.anyInt()
     )).thenReturn(new CompletableFuture[LeaderAndIsr]())
