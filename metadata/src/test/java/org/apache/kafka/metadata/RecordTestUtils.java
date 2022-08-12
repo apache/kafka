@@ -57,31 +57,25 @@ public class RecordTestUtils {
         for (ApiMessageAndVersion recordAndVersion : recordsAndVersions) {
             ApiMessage record = recordAndVersion.message();
             try {
-                Method method = target.getClass().getMethod("replay", record.getClass());
-                method.invoke(target, record);
-            } catch (NoSuchMethodException e) {
                 try {
-                    Method method = target.getClass().getMethod("replay",
-                        record.getClass(),
-                        Optional.class);
-                    method.invoke(target, record, Optional.empty());
-                } catch (NoSuchMethodException t) {
+                    Method method = target.getClass().getMethod("replay", record.getClass());
+                    method.invoke(target, record);
+                } catch (NoSuchMethodException e) {
                     try {
                         Method method = target.getClass().getMethod("replay",
                             record.getClass(),
-                            long.class);
-                        method.invoke(target, record, 0L);
-                    } catch (NoSuchMethodException i) {
-                        // ignore
-                    } catch (InvocationTargetException i) {
-                        throw new RuntimeException(i);
-                    } catch (IllegalAccessException i) {
-                        throw new RuntimeException(i);
+                            Optional.class);
+                        method.invoke(target, record, Optional.empty());
+                    } catch (NoSuchMethodException t) {
+                        try {
+                            Method method = target.getClass().getMethod("replay",
+                                record.getClass(),
+                                long.class);
+                            method.invoke(target, record, 0L);
+                        } catch (NoSuchMethodException i) {
+                            // ignore
+                        }
                     }
-                } catch (InvocationTargetException t) {
-                    throw new RuntimeException(t);
-                } catch (IllegalAccessException t) {
-                    throw new RuntimeException(t);
                 }
             } catch (InvocationTargetException e) {
                 throw new RuntimeException(e);

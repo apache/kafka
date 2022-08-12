@@ -61,7 +61,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -176,7 +175,7 @@ public class ClusterControlManagerTest {
 
         assertFalse(clusterControl.unfenced(0));
         assertFalse(clusterControl.inControlledShutdown(0));
-        assertEquals(100L, clusterControl.registerBrokerRecordOffset(brokerRecord.brokerId()));
+        assertEquals(100L, clusterControl.registerBrokerRecordOffset(brokerRecord.brokerId()).getAsLong());
 
         brokerRecord.setFenced(false);
         clusterControl.replay(brokerRecord, 100L);
@@ -349,13 +348,13 @@ public class ClusterControlManagerTest {
                 new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "example.com", 9092)),
                 Collections.emptyMap(), Optional.of("arack"), true, false),
             clusterControl.brokerRegistrations().get(1));
-        assertEquals(100L, clusterControl.registerBrokerRecordOffset(brokerRecord.brokerId()));
+        assertEquals(100L, clusterControl.registerBrokerRecordOffset(brokerRecord.brokerId()).getAsLong());
         UnregisterBrokerRecord unregisterRecord = new UnregisterBrokerRecord().
             setBrokerId(1).
             setBrokerEpoch(100);
         clusterControl.replay(unregisterRecord);
         assertFalse(clusterControl.brokerRegistrations().containsKey(1));
-        assertNull(clusterControl.registerBrokerRecordOffset(brokerRecord.brokerId()));
+        assertFalse(clusterControl.registerBrokerRecordOffset(brokerRecord.brokerId()).isPresent());
     }
 
     @ParameterizedTest
