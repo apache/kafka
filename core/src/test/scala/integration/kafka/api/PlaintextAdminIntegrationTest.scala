@@ -2494,9 +2494,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val alterResult = client.incrementalAlterConfigs(Map(
       topicResource -> topicAlterConfigs
     ).asJava)
-
     alterResult.all().get()
 
+    ensureConsistentKRaftMetadata()
     val config = client.describeConfigs(List(topicResource).asJava).all().get().get(topicResource).get(LogConfig.LeaderReplicationThrottledReplicasProp)
     assertEquals("0:0", config.value())
   }
