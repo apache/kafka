@@ -72,7 +72,10 @@
 
 <h5><a id="upgrade_320_notable" href="#upgrade_320_notable">Notable changes in 3.2.0</a></h5>
     <ul>
-        <li>Idempotence for the producer is enabled by default if no conflicting configurations are set. In 3.0.0 and 3.1.0, a bug prevented this default from being applied,
+        <li>Idempotence for the producer is enabled by default if no conflicting configurations are set. When producing to brokers older than 2.8.0,
+            the <code>IDEMPOTENT_WRITE</code> permission is required. Check the compatibility
+	    section of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-679%3A+Producer+will+enable+the+strongest+delivery+guarantee+by+default#KIP679:Producerwillenablethestrongestdeliveryguaranteebydefault-Compatibility,Deprecation,andMigrationPlan">KIP-679</>
+	    for details. In 3.0.0 and 3.1.0, a bug prevented this default from being applied,
             which meant that idempotence remained disabled unless the user had explicitly set <code>enable.idempotence</code> to true
             (See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a> for more details).
             This issue was fixed and the default is properly applied in 3.0.1, 3.1.1, and 3.2.0.</li>
@@ -138,10 +141,12 @@
 
 <h5><a id="upgrade_311_notable" href="#upgrade_311_notable">Notable changes in 3.1.1</a></h5>
 <ul>
-    <li>Idempotence for the producer is enabled by default if no conflicting configurations are set.
-        A bug prevented the producer idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
-	<code>enable.idempotence</code> to true. See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a> for more details.
-        This issue was fixed and the default is properly applied.</li>
+    <li>Idempotence for the producer is enabled by default if no conflicting configurations are set. When producing to brokers older than 2.8.0,
+        the <code>IDEMPOTENT_WRITE</code> permission is required. Check the compatibility
+        section of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-679%3A+Producer+will+enable+the+strongest+delivery+guarantee+by+default#KIP679:Producerwillenablethestrongestdeliveryguaranteebydefault-Compatibility,Deprecation,andMigrationPlan">KIP-679</>
+        for details. A bug prevented the producer idempotence default from being applied which meant that it remained disabled unless the user had
+        explicitly set <code>enable.idempotence</code> to true. See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a> for
+        more details. This issue was fixed and the default is properly applied.</li>
     <li>A notable exception is Connect that by default disables idempotent behavior for all of its
         producers in order to uniformly support using a wide range of Kafka broker versions.
         Users can change this behavior to enable idempotence for some or all producers
@@ -222,18 +227,21 @@
 
 <h5><a id="upgrade_301_notable" href="#upgrade_301_notable">Notable changes in 3.0.1</a></h5>
 <ul>
-    <li>Idempotence for the producer is enabled by default if no conflicting configurations are set.
-        A bug prevented the producer idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
-	<code>enable.idempotence</code> to true. See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a> for more details.
-        This issue was fixed and the default is properly applied.</li>
+
+    <li>Idempotence for the producer is enabled by default if no conflicting configurations are set. When producing to brokers older than 2.8.0,
+        the <code>IDEMPOTENT_WRITE</code> permission is required. Check the compatibility
+        section of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-679%3A+Producer+will+enable+the+strongest+delivery+guarantee+by+default#KIP679:Producerwillenablethestrongestdeliveryguaranteebydefault-Compatibility,Deprecation,andMigrationPlan">KIP-679</>
+        for details. A bug prevented the producer idempotence default from being applied which meant that it remained disabled unless the user had
+        explicitly set <code>enable.idempotence</code> to true. See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a> for
+        more details. This issue was fixed and the default is properly applied.</li>
 </ul>
 
 <h5><a id="upgrade_300_notable" href="#upgrade_300_notable">Notable changes in 3.0.0</a></h5>
 <ul>
     <li>The producer has stronger delivery guarantees by default: <code>idempotence</code> is enabled and <code>acks</code> is set to <code>all</code> instead of <code>1</code>.
         See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-679%3A+Producer+will+enable+the+strongest+delivery+guarantee+by+default">KIP-679</a> for details.
-	In 3.0.0 and 3.1.0, a bug prevented the idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
-	<code>enable.idempotence</code> to true. Note that the bug did not affect the <code>acks=all</code> change. See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a> for more details.
+        In 3.0.0 and 3.1.0, a bug prevented the idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
+        <code>enable.idempotence</code> to true. Note that the bug did not affect the <code>acks=all</code> change. See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a> for more details.
         This issue was fixed and the default is properly applied in 3.0.1, 3.1.1, and 3.2.0.</li>
     <li>Java 8 and Scala 2.12 support have been deprecated since Apache Kafka 3.0 and will be removed in Apache Kafka 4.0.
         See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223">KIP-750</a>

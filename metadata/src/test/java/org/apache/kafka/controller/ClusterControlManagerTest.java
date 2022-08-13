@@ -96,7 +96,7 @@ public class ClusterControlManagerTest {
             setPort((short) 9092).
             setName("PLAINTEXT").
             setHost("example.com"));
-        clusterControl.replay(brokerRecord);
+        clusterControl.replay(brokerRecord, 100L);
         clusterControl.checkBrokerEpoch(1, 100);
         assertThrows(StaleBrokerEpochException.class,
             () -> clusterControl.checkBrokerEpoch(1, 101));
@@ -165,19 +165,20 @@ public class ClusterControlManagerTest {
             setPort((short) 9092).
             setName("PLAINTEXT").
             setHost("example.com"));
-        clusterControl.replay(brokerRecord);
+        clusterControl.replay(brokerRecord, 100L);
 
         assertFalse(clusterControl.unfenced(0));
         assertTrue(clusterControl.inControlledShutdown(0));
 
         brokerRecord.setInControlledShutdown(false);
-        clusterControl.replay(brokerRecord);
+        clusterControl.replay(brokerRecord, 100L);
 
         assertFalse(clusterControl.unfenced(0));
         assertFalse(clusterControl.inControlledShutdown(0));
+        assertEquals(100L, clusterControl.registerBrokerRecordOffset(brokerRecord.brokerId()).getAsLong());
 
         brokerRecord.setFenced(false);
-        clusterControl.replay(brokerRecord);
+        clusterControl.replay(brokerRecord, 100L);
 
         assertTrue(clusterControl.unfenced(0));
         assertFalse(clusterControl.inControlledShutdown(0));
@@ -217,7 +218,7 @@ public class ClusterControlManagerTest {
             setPort((short) 9092).
             setName("PLAINTEXT").
             setHost("example.com"));
-        clusterControl.replay(brokerRecord);
+        clusterControl.replay(brokerRecord, 100L);
 
         assertTrue(clusterControl.unfenced(0));
         assertFalse(clusterControl.inControlledShutdown(0));
@@ -341,17 +342,19 @@ public class ClusterControlManagerTest {
             setFeatureControlManager(featureControl).
             build();
         clusterControl.activate();
-        clusterControl.replay(brokerRecord);
+        clusterControl.replay(brokerRecord, 100L);
         assertEquals(new BrokerRegistration(1, 100,
                 Uuid.fromString("fPZv1VBsRFmnlRvmGcOW9w"), Collections.singletonMap("PLAINTEXT",
                 new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "example.com", 9092)),
                 Collections.emptyMap(), Optional.of("arack"), true, false),
             clusterControl.brokerRegistrations().get(1));
+        assertEquals(100L, clusterControl.registerBrokerRecordOffset(brokerRecord.brokerId()).getAsLong());
         UnregisterBrokerRecord unregisterRecord = new UnregisterBrokerRecord().
             setBrokerId(1).
             setBrokerEpoch(100);
         clusterControl.replay(unregisterRecord);
         assertFalse(clusterControl.brokerRegistrations().containsKey(1));
+        assertFalse(clusterControl.registerBrokerRecordOffset(brokerRecord.brokerId()).isPresent());
     }
 
     @ParameterizedTest
@@ -382,7 +385,7 @@ public class ClusterControlManagerTest {
                 setPort((short) 9092).
                 setName("PLAINTEXT").
                 setHost("example.com"));
-            clusterControl.replay(brokerRecord);
+            clusterControl.replay(brokerRecord, 100L);
             UnfenceBrokerRecord unfenceRecord =
                 new UnfenceBrokerRecord().setId(i).setEpoch(100);
             clusterControl.replay(unfenceRecord);
@@ -442,7 +445,7 @@ public class ClusterControlManagerTest {
                 setPort((short) 9092 + i).
                 setName("PLAINTEXT").
                 setHost("example.com"));
-            clusterControl.replay(brokerRecord);
+            clusterControl.replay(brokerRecord, 100L);
         }
         for (int i = 0; i < 2; i++) {
             UnfenceBrokerRecord unfenceBrokerRecord =
