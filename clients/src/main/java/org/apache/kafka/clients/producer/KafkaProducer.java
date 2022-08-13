@@ -35,22 +35,9 @@ import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.clients.producer.internals.TransactionManager;
 import org.apache.kafka.clients.producer.internals.TransactionalRequestResult;
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.*;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.AuthorizationException;
-import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
-import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.*;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -1054,19 +1041,27 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             return result.future;
             // handling exceptions and record the errors;
-            // for API exceptions return them in the future,
+            // for API exceptions return them in the future, by using the rule outlined in KIP-691
+            // that non-fata exceptions would be wrapped in KafkaException and fatal ones to be
+            // thrown directly.
             // for other exceptions throw directly
         } catch (ApiException e) {
             log.debug("Exception occurred during message send:", e);
+            RuntimeException finalException;
+            if (isFatalException(e)) {
+                finalException = e;
+            } else {
+                finalException = new KafkaException(e);
+            }
             if (callback != null) {
                 TopicPartition tp = appendCallbacks.topicPartition();
                 RecordMetadata nullMetadata = new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1);
-                callback.onCompletion(nullMetadata, e);
+                callback.onCompletion(nullMetadata, finalException);
             }
             this.errors.record();
-            this.interceptors.onSendError(record, appendCallbacks.topicPartition(), e);
+            this.interceptors.onSendError(record, appendCallbacks.topicPartition(), finalException);
             if (transactionManager != null) {
-                transactionManager.maybeTransitionToErrorState(e);
+                transactionManager.maybeTransitionToErrorState(finalException);
             }
             return new FutureFailure(e);
         } catch (InterruptedException e) {
@@ -1074,14 +1069,36 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.interceptors.onSendError(record, appendCallbacks.topicPartition(), e);
             throw new InterruptException(e);
         } catch (KafkaException e) {
+            // Following one of the guidelines of KIP-691, we would wrap only
+            // non-fatal exceptions in KafkaException. Fatal ones would be thrown
+            // directly.
+            RuntimeException wrappedException = (RuntimeException) e.getCause();
             this.errors.record();
-            this.interceptors.onSendError(record, appendCallbacks.topicPartition(), e);
-            throw e;
+            this.interceptors.onSendError(record, appendCallbacks.topicPartition(),
+                    isFatalException(wrappedException) ? wrappedException : e);
+            if (isFatalException(wrappedException)) {
+                throw wrappedException;
+            } else {
+                throw e;
+            }
         } catch (Exception e) {
             // we notify interceptor about all exceptions, since onSend is called before anything else in this method
             this.interceptors.onSendError(record, appendCallbacks.topicPartition(), e);
             throw e;
         }
+    }
+
+
+    private boolean isFatalException(Exception e) {
+
+        return e instanceof IllegalStateException ||
+                e instanceof AuthorizationException ||
+                e instanceof UnsupportedVersionException ||
+                e instanceof AuthenticationException ||
+                e instanceof InvalidRecordException ||
+                e instanceof InvalidRequiredAcksException ||
+                e instanceof RecordBatchTooLargeException ||
+                e instanceof InvalidTopicException;
     }
 
     private void setReadOnly(Headers headers) {

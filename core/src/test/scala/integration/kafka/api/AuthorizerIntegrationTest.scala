@@ -58,7 +58,7 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{ElectionType, IsolationLevel, KafkaException, Node, TopicPartition, Uuid, requests}
+import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicPartition, Uuid, requests}
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
@@ -2006,9 +2006,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         future.get()
       })
 
+      logger.error("exception cause::{}", exception)
+
       exception match {
-        case e@ (_: KafkaException | _: ExecutionException) =>
-          assertTrue(exception.getCause.isInstanceOf[ClusterAuthorizationException])
+        case e@ (_: AuthorizationException | _: ExecutionException) =>
+          // kraft exception seems to be wrapped in ExecutionException
+          assertTrue(exception.isInstanceOf[ClusterAuthorizationException]
+            || exception.getCause.isInstanceOf[ClusterAuthorizationException])
         case _ =>
           fail(s"Unexpected exception type raised from send: ${exception.getClass}")
       }
