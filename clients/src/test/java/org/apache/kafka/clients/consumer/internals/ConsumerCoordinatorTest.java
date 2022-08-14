@@ -1308,7 +1308,7 @@ public abstract class ConsumerCoordinatorTest {
             int generationId = 42;
             String memberId = "consumer-42";
 
-            Timer pollTimer = time.timer(100L);
+            Timer pollTimer = time.timer(0L);
             client.prepareResponse(offsetCommitResponse(singletonMap(t1p, Errors.UNKNOWN_TOPIC_OR_PARTITION)));
             boolean res = coordinator.onJoinPrepare(pollTimer, generationId, memberId);
             assertFalse(res);
