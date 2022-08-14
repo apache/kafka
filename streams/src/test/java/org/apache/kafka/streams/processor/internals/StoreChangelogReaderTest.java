@@ -42,17 +42,15 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateS
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.easymock.EasyMock;
-import org.easymock.EasyMockRule;
-import org.easymock.EasyMockSupport;
-import org.easymock.Mock;
-import org.easymock.MockType;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -72,12 +70,6 @@ import static org.apache.kafka.streams.processor.internals.Task.TaskType.STANDBY
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
-import static org.easymock.EasyMock.anyLong;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.resetToDefault;
-import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
@@ -86,27 +78,40 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @RunWith(Parameterized.class)
-public class StoreChangelogReaderTest extends EasyMockSupport {
+public class StoreChangelogReaderTest {
 
     @Rule
-    public EasyMockRule rule = new EasyMockRule(this);
+    public final MockitoRule rule = MockitoJUnit.rule();
 
-    @Mock(type = MockType.NICE)
+    @Mock
     private ProcessorStateManager stateManager;
-    @Mock(type = MockType.NICE)
+    @Mock
     private ProcessorStateManager activeStateManager;
-    @Mock(type = MockType.NICE)
+    @Mock
     private ProcessorStateManager standbyStateManager;
-    @Mock(type = MockType.NICE)
+    @Mock
     private StateStoreMetadata storeMetadata;
-    @Mock(type = MockType.NICE)
+    @Mock
     private StateStoreMetadata storeMetadataOne;
-    @Mock(type = MockType.NICE)
+    @Mock
     private StateStoreMetadata storeMetadataTwo;
-    @Mock(type = MockType.NICE)
+    @Mock
     private StateStore store;
+
+    @Mock
+    private Map<TaskId, Task> mockTasks;
+
+    @Mock
+    private Task mockTask;
 
     @Parameterized.Parameters
     public static Object[] data() {
@@ -150,21 +155,22 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Before
     public void setUp() {
-        EasyMock.expect(stateManager.storeMetadata(tp)).andReturn(storeMetadata).anyTimes();
-        EasyMock.expect(stateManager.taskType()).andReturn(type).anyTimes();
-        EasyMock.expect(activeStateManager.storeMetadata(tp)).andReturn(storeMetadata).anyTimes();
-        EasyMock.expect(activeStateManager.taskType()).andReturn(ACTIVE).anyTimes();
-        EasyMock.expect(standbyStateManager.storeMetadata(tp)).andReturn(storeMetadata).anyTimes();
-        EasyMock.expect(standbyStateManager.taskType()).andReturn(STANDBY).anyTimes();
+        when(stateManager.storeMetadata(tp)).thenReturn(storeMetadata);
+        when(stateManager.taskType()).thenReturn(type);
+        when(activeStateManager.storeMetadata(tp)).thenReturn(storeMetadata);
+        when(activeStateManager.taskType()).thenReturn(ACTIVE);
+        when(standbyStateManager.storeMetadata(tp)).thenReturn(storeMetadata);
+        when(standbyStateManager.taskType()).thenReturn(STANDBY);
 
-        EasyMock.expect(storeMetadata.changelogPartition()).andReturn(tp).anyTimes();
-        EasyMock.expect(storeMetadata.store()).andReturn(store).anyTimes();
-        EasyMock.expect(store.name()).andReturn(storeName).anyTimes();
+        when(storeMetadata.changelogPartition()).thenReturn(tp);
+        when(storeMetadata.store()).thenReturn(store);
+        when(store.name()).thenReturn(storeName);
+        when(mockTasks.get(null)).thenReturn(mockTask);
     }
 
     @After
     public void tearDown() {
-        EasyMock.reset(
+        reset(
             stateManager,
             activeStateManager,
             standbyStateManager,
@@ -177,8 +183,6 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Test
     public void shouldNotRegisterSameStoreMultipleTimes() {
-        EasyMock.replay(stateManager, storeMetadata);
-
         changelogReader.register(tp, stateManager);
 
         assertEquals(StoreChangelogReader.ChangelogState.REGISTERED, changelogReader.changelogMetadata(tp).state());
@@ -190,18 +194,13 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Test
     public void shouldNotRegisterStoreWithoutMetadata() {
-        EasyMock.replay(stateManager, storeMetadata);
-
         assertThrows(IllegalStateException.class,
             () -> changelogReader.register(new TopicPartition("ChangelogWithoutStoreMetadata", 0), stateManager));
     }
 
     @Test
     public void shouldInitializeChangelogAndCheckForCompletion() {
-        final Map<TaskId, Task> mockTasks = mock(Map.class);
-        EasyMock.expect(mockTasks.get(null)).andReturn(mock(Task.class)).anyTimes();
-        EasyMock.expect(storeMetadata.offset()).andReturn(9L).anyTimes();
-        EasyMock.replay(mockTasks, stateManager, storeMetadata, store);
+        when(storeMetadata.offset()).thenReturn(9L);
 
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
@@ -238,10 +237,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     public void shouldTriggerRestoreListenerWithOffsetZeroIfPositionThrowsTimeoutException() {
         // restore listener is only triggered for active tasks
         if (type == ACTIVE) {
-            final Map<TaskId, Task> mockTasks = mock(Map.class);
-            EasyMock.expect(mockTasks.get(null)).andReturn(mock(Task.class)).anyTimes();
-            EasyMock.expect(stateManager.changelogOffsets()).andReturn(singletonMap(tp, 5L));
-            EasyMock.replay(mockTasks, stateManager, storeMetadata, store);
+            when(stateManager.changelogOffsets()).thenReturn(singletonMap(tp, 5L));
 
             adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
@@ -267,10 +263,9 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     public void shouldPollWithRightTimeout() {
         final TaskId taskId = new TaskId(0, 0);
 
-        EasyMock.expect(storeMetadata.offset()).andReturn(null).andReturn(9L).anyTimes();
-        EasyMock.expect(stateManager.changelogOffsets()).andReturn(singletonMap(tp, 5L));
-        EasyMock.expect(stateManager.taskId()).andReturn(taskId);
-        EasyMock.replay(stateManager, storeMetadata, store);
+        when(storeMetadata.offset()).thenReturn(null).thenReturn(9L);
+        when(stateManager.changelogOffsets()).thenReturn(singletonMap(tp, 5L));
+        when(stateManager.taskId()).thenReturn(taskId);
 
         consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 11L));
@@ -284,7 +279,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             changelogReader.transitToUpdateStandby();
         }
 
-        changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
 
         if (type == ACTIVE) {
             assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
@@ -297,10 +292,9 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     public void shouldRestoreFromPositionAndCheckForCompletion() {
         final TaskId taskId = new TaskId(0, 0);
 
-        EasyMock.expect(storeMetadata.offset()).andReturn(5L).anyTimes();
-        EasyMock.expect(stateManager.changelogOffsets()).andReturn(singletonMap(tp, 5L));
-        EasyMock.expect(stateManager.taskId()).andReturn(taskId).anyTimes();
-        EasyMock.replay(stateManager, storeMetadata, store);
+        when(storeMetadata.offset()).thenReturn(5L);
+        when(stateManager.changelogOffsets()).thenReturn(singletonMap(tp, 5L));
+        when(stateManager.taskId()).thenReturn(taskId);
 
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
@@ -313,7 +307,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             changelogReader.transitToUpdateStandby();
         }
 
-        changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
 
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
@@ -340,7 +334,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         // beyond end records should be skipped even when there's gap at the end offset
         consumer.addRecord(new ConsumerRecord<>(topicName, 0, 11L, "key".getBytes(), "value".getBytes()));
 
-        changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
 
         assertEquals(12L, consumer.position(tp));
 
@@ -366,10 +360,9 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     public void shouldRestoreFromBeginningAndCheckCompletion() {
         final TaskId taskId = new TaskId(0, 0);
 
-        EasyMock.expect(storeMetadata.offset()).andReturn(null).andReturn(9L).anyTimes();
-        EasyMock.expect(stateManager.changelogOffsets()).andReturn(singletonMap(tp, 5L));
-        EasyMock.expect(stateManager.taskId()).andReturn(taskId).anyTimes();
-        EasyMock.replay(stateManager, storeMetadata, store);
+        when(storeMetadata.offset()).thenReturn(null).thenReturn(9L);
+        when(stateManager.changelogOffsets()).thenReturn(singletonMap(tp, 5L));
+        when(stateManager.taskId()).thenReturn(taskId);
 
         consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 11L));
@@ -383,7 +376,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             changelogReader.transitToUpdateStandby();
         }
 
-        changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
 
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
@@ -407,7 +400,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         consumer.addRecord(new ConsumerRecord<>(topicName, 0, 8L, null, "value".getBytes()));
         consumer.addRecord(new ConsumerRecord<>(topicName, 0, 9L, "key".getBytes(), "value".getBytes()));
 
-        changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
 
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(3L, changelogReader.changelogMetadata(tp).totalRestored());
@@ -417,7 +410,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         // consumer position bypassing the gap in the next poll
         consumer.seek(tp, 11L);
 
-        changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
 
         assertEquals(11L, consumer.position(tp));
         assertEquals(3L, changelogReader.changelogMetadata(tp).totalRestored());
@@ -439,10 +432,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Test
     public void shouldCheckCompletionIfPositionLargerThanEndOffset() {
-        final Map<TaskId, Task> mockTasks = mock(Map.class);
-        EasyMock.expect(mockTasks.get(null)).andReturn(mock(Task.class)).anyTimes();
-        EasyMock.expect(storeMetadata.offset()).andReturn(5L).anyTimes();
-        EasyMock.replay(mockTasks, activeStateManager, storeMetadata, store);
+        when(storeMetadata.offset()).thenReturn(5L);
 
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 0L));
 
@@ -468,14 +458,12 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     public void shouldRequestPositionAndHandleTimeoutException() {
         final TaskId taskId = new TaskId(0, 0);
 
-        final Task mockTask = mock(Task.class);
         mockTask.clearTaskTimeout();
-        mockTask.maybeInitTaskTimeoutOrThrow(anyLong(), anyObject());
-        EasyMock.expectLastCall();
-        EasyMock.expect(storeMetadata.offset()).andReturn(10L).anyTimes();
-        EasyMock.expect(activeStateManager.changelogOffsets()).andReturn(singletonMap(tp, 10L));
-        EasyMock.expect(activeStateManager.taskId()).andReturn(taskId).anyTimes();
-        EasyMock.replay(mockTask, activeStateManager, storeMetadata, store);
+        mockTask.maybeInitTaskTimeoutOrThrow(anyLong(), any());
+        verify(mockTask, atLeastOnce()).maybeInitTaskTimeoutOrThrow(anyLong(), any());
+        when(storeMetadata.offset()).thenReturn(10L);
+        when(activeStateManager.changelogOffsets()).thenReturn(singletonMap(tp, 10L));
+        when(activeStateManager.taskId()).thenReturn(taskId);
 
         final AtomicBoolean clearException = new AtomicBoolean(false);
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
@@ -500,28 +488,24 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertTrue(changelogReader.completedChangelogs().isEmpty());
         assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
-        verify(mockTask);
 
         clearException.set(true);
-        resetToDefault(mockTask);
+        reset(mockTask);
         mockTask.clearTaskTimeout();
-        EasyMock.expectLastCall();
-        EasyMock.replay(mockTask);
+        verify(mockTask, atLeastOnce()).clearTaskTimeout();
         changelogReader.restore(Collections.singletonMap(taskId, mockTask));
 
         assertEquals(StoreChangelogReader.ChangelogState.COMPLETED, changelogReader.changelogMetadata(tp).state());
         assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(Collections.singleton(tp), changelogReader.completedChangelogs());
         assertEquals(10L, consumer.position(tp));
-        verify(mockTask);
     }
 
     @Test
     public void shouldThrowIfPositionFail() {
         final TaskId taskId = new TaskId(0, 0);
-        EasyMock.expect(activeStateManager.taskId()).andReturn(taskId);
-        EasyMock.expect(storeMetadata.offset()).andReturn(10L).anyTimes();
-        EasyMock.replay(activeStateManager, storeMetadata, store);
+        when(activeStateManager.taskId()).thenReturn(taskId);
+        when(storeMetadata.offset()).thenReturn(10L);
 
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
@@ -539,7 +523,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         final StreamsException thrown = assertThrows(
             StreamsException.class,
-            () -> changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)))
+            () -> changelogReader.restore(Collections.singletonMap(taskId, mockTask))
         );
         assertEquals(kaboom, thrown.getCause());
     }
@@ -548,14 +532,12 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     public void shouldRequestEndOffsetsAndHandleTimeoutException() {
         final TaskId taskId = new TaskId(0, 0);
 
-        final Task mockTask = mock(Task.class);
-        mockTask.maybeInitTaskTimeoutOrThrow(anyLong(), anyObject());
-        EasyMock.expectLastCall();
+        mockTask.maybeInitTaskTimeoutOrThrow(anyLong(), any());
+        verify(mockTask, atLeastOnce()).maybeInitTaskTimeoutOrThrow(anyLong(), any());
 
-        EasyMock.expect(storeMetadata.offset()).andReturn(5L).anyTimes();
-        EasyMock.expect(activeStateManager.changelogOffsets()).andReturn(singletonMap(tp, 5L));
-        EasyMock.expect(activeStateManager.taskId()).andReturn(taskId).anyTimes();
-        EasyMock.replay(mockTask, activeStateManager, storeMetadata, store);
+        when(storeMetadata.offset()).thenReturn(5L);
+        when(activeStateManager.changelogOffsets()).thenReturn(singletonMap(tp, 5L));
+        when(activeStateManager.taskId()).thenReturn(taskId);
 
         final AtomicBoolean functionCalled = new AtomicBoolean(false);
 
@@ -589,24 +571,20 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(StoreChangelogReader.ChangelogState.REGISTERED, changelogReader.changelogMetadata(tp).state());
         assertNull(changelogReader.changelogMetadata(tp).endOffset());
         assertTrue(functionCalled.get());
-        verify(mockTask);
 
-        EasyMock.resetToDefault(mockTask);
+        reset(mockTask);
         mockTask.clearTaskTimeout();
-        EasyMock.replay(mockTask);
 
         changelogReader.restore(Collections.singletonMap(taskId, mockTask));
 
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(6L, consumer.position(tp));
-        verify(mockTask);
     }
 
     @Test
     public void shouldThrowIfEndOffsetsFail() {
-        EasyMock.expect(storeMetadata.offset()).andReturn(10L).anyTimes();
-        EasyMock.replay(activeStateManager, storeMetadata, store);
+        when(storeMetadata.offset()).thenReturn(10L);
 
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
@@ -633,18 +611,16 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     public void shouldRequestCommittedOffsetsAndHandleTimeoutException() {
         final TaskId taskId = new TaskId(0, 0);
 
-        final Task mockTask = mock(Task.class);
         if (type == ACTIVE) {
             mockTask.clearTaskTimeout();
         }
-        mockTask.maybeInitTaskTimeoutOrThrow(anyLong(), anyObject());
-        EasyMock.expectLastCall();
+        mockTask.maybeInitTaskTimeoutOrThrow(anyLong(), any());
+        verify(mockTask, atLeastOnce()).maybeInitTaskTimeoutOrThrow(anyLong(), any());
 
-        EasyMock.expect(stateManager.changelogAsSource(tp)).andReturn(true).anyTimes();
-        EasyMock.expect(storeMetadata.offset()).andReturn(5L).anyTimes();
-        EasyMock.expect(stateManager.changelogOffsets()).andReturn(singletonMap(tp, 5L));
-        EasyMock.expect(stateManager.taskId()).andReturn(taskId).anyTimes();
-        EasyMock.replay(mockTask, stateManager, storeMetadata, store);
+        when(stateManager.changelogAsSource(tp)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(5L);
+        when(stateManager.changelogOffsets()).thenReturn(singletonMap(tp, 5L));
+        when(stateManager.taskId()).thenReturn(taskId);
 
         final AtomicBoolean functionCalled = new AtomicBoolean(false);
         final MockAdminClient adminClient = new MockAdminClient() {
@@ -680,32 +656,28 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             assertEquals(0L, (long) changelogReader.changelogMetadata(tp).endOffset());
         }
         assertTrue(functionCalled.get());
-        verify(mockTask);
 
-        resetToDefault(mockTask);
+        reset(mockTask);
         if (type == ACTIVE) {
             mockTask.clearTaskTimeout();
             mockTask.clearTaskTimeout();
-            expectLastCall();
+            verify(mockTask, times(2)).clearTaskTimeout();
         }
-        replay(mockTask);
 
         changelogReader.restore(Collections.singletonMap(taskId, mockTask));
 
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(type == ACTIVE ? 10L : 0L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(6L, consumer.position(tp));
-        verify(mockTask);
     }
 
     @Test
     public void shouldThrowIfCommittedOffsetsFail() {
         final TaskId taskId = new TaskId(0, 0);
 
-        EasyMock.expect(stateManager.taskId()).andReturn(taskId);
-        EasyMock.expect(stateManager.changelogAsSource(tp)).andReturn(true).anyTimes();
-        EasyMock.expect(storeMetadata.offset()).andReturn(10L).anyTimes();
-        EasyMock.replay(stateManager, storeMetadata, store);
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.changelogAsSource(tp)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(10L);
 
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
@@ -722,14 +694,13 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         final StreamsException thrown = assertThrows(
             StreamsException.class,
-            () -> changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)))
+            () -> changelogReader.restore(Collections.singletonMap(taskId, mockTask))
         );
         assertEquals(kaboom, thrown.getCause());
     }
 
     @Test
     public void shouldThrowIfUnsubscribeFail() {
-        EasyMock.replay(stateManager, storeMetadata, store);
 
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
@@ -746,10 +717,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Test
     public void shouldOnlyRestoreStandbyChangelogInUpdateStandbyState() {
-        final Map<TaskId, Task> mockTasks = mock(Map.class);
-        EasyMock.expect(mockTasks.get(null)).andReturn(mock(Task.class)).anyTimes();
-        EasyMock.replay(mockTasks, standbyStateManager, storeMetadata, store);
-
+        when(storeMetadata.offset()).thenReturn(null);
         consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
         changelogReader.register(tp, standbyStateManager);
         changelogReader.restore(mockTasks);
@@ -784,10 +752,8 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Test
     public void shouldNotUpdateLimitForNonSourceStandbyChangelog() {
-        final Map<TaskId, Task> mockTasks = mock(Map.class);
-        EasyMock.expect(mockTasks.get(null)).andReturn(mock(Task.class)).anyTimes();
-        EasyMock.expect(standbyStateManager.changelogAsSource(tp)).andReturn(false).anyTimes();
-        EasyMock.replay(mockTasks, standbyStateManager, storeMetadata, store);
+        when(standbyStateManager.changelogAsSource(tp)).thenReturn(false);
+        when(storeMetadata.offset()).thenReturn(null);
 
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
@@ -837,10 +803,8 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Test
     public void shouldRestoreToLimitInStandbyState() {
-        final Map<TaskId, Task> mockTasks = mock(Map.class);
-        EasyMock.expect(mockTasks.get(null)).andReturn(mock(Task.class)).anyTimes();
-        EasyMock.expect(standbyStateManager.changelogAsSource(tp)).andReturn(true).anyTimes();
-        EasyMock.replay(mockTasks, standbyStateManager, storeMetadata, store);
+        when(standbyStateManager.changelogAsSource(tp)).thenReturn(true);
+        when(storeMetadata.offset()).thenReturn(null);
 
         final long now = time.milliseconds();
         final Properties properties = new Properties();
@@ -949,23 +913,20 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     @Test
     public void shouldRestoreMultipleChangelogs() {
-        final Map<TaskId, Task> mockTasks = mock(Map.class);
-        EasyMock.expect(mockTasks.get(null)).andReturn(mock(Task.class)).anyTimes();
-        EasyMock.expect(storeMetadataOne.changelogPartition()).andReturn(tp1).anyTimes();
-        EasyMock.expect(storeMetadataOne.store()).andReturn(store).anyTimes();
-        EasyMock.expect(storeMetadataTwo.changelogPartition()).andReturn(tp2).anyTimes();
-        EasyMock.expect(storeMetadataTwo.store()).andReturn(store).anyTimes();
-        EasyMock.expect(storeMetadata.offset()).andReturn(0L).anyTimes();
-        EasyMock.expect(storeMetadataOne.offset()).andReturn(0L).anyTimes();
-        EasyMock.expect(storeMetadataTwo.offset()).andReturn(0L).anyTimes();
-        EasyMock.expect(activeStateManager.storeMetadata(tp1)).andReturn(storeMetadataOne).anyTimes();
-        EasyMock.expect(activeStateManager.storeMetadata(tp2)).andReturn(storeMetadataTwo).anyTimes();
-        EasyMock.expect(activeStateManager.changelogOffsets()).andReturn(mkMap(
+        when(storeMetadataOne.changelogPartition()).thenReturn(tp1);
+        when(storeMetadataOne.store()).thenReturn(store);
+        when(storeMetadataTwo.changelogPartition()).thenReturn(tp2);
+        when(storeMetadataTwo.store()).thenReturn(store);
+        when(storeMetadata.offset()).thenReturn(0L);
+        when(storeMetadataOne.offset()).thenReturn(0L);
+        when(storeMetadataTwo.offset()).thenReturn(0L);
+        when(activeStateManager.storeMetadata(tp1)).thenReturn(storeMetadataOne);
+        when(activeStateManager.storeMetadata(tp2)).thenReturn(storeMetadataTwo);
+        when(activeStateManager.changelogOffsets()).thenReturn(mkMap(
             mkEntry(tp, 5L),
             mkEntry(tp1, 5L),
             mkEntry(tp2, 5L)
-        )).anyTimes();
-        EasyMock.replay(mockTasks, activeStateManager, storeMetadata, store, storeMetadataOne, storeMetadataTwo);
+        ));
 
         setupConsumer(10, tp);
         setupConsumer(5, tp1);
@@ -997,18 +958,17 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     @Test
     public void shouldTransitState() {
         final TaskId taskId = new TaskId(0, 0);
-        EasyMock.expect(storeMetadataOne.changelogPartition()).andReturn(tp1).anyTimes();
-        EasyMock.expect(storeMetadataOne.store()).andReturn(store).anyTimes();
-        EasyMock.expect(storeMetadataTwo.changelogPartition()).andReturn(tp2).anyTimes();
-        EasyMock.expect(storeMetadataTwo.store()).andReturn(store).anyTimes();
-        EasyMock.expect(storeMetadata.offset()).andReturn(5L).anyTimes();
-        EasyMock.expect(storeMetadataOne.offset()).andReturn(5L).anyTimes();
-        EasyMock.expect(storeMetadataTwo.offset()).andReturn(5L).anyTimes();
-        EasyMock.expect(standbyStateManager.storeMetadata(tp1)).andReturn(storeMetadataOne).anyTimes();
-        EasyMock.expect(standbyStateManager.storeMetadata(tp2)).andReturn(storeMetadataTwo).anyTimes();
-        EasyMock.expect(activeStateManager.changelogOffsets()).andReturn(singletonMap(tp, 5L));
-        EasyMock.expect(activeStateManager.taskId()).andReturn(taskId).anyTimes();
-        EasyMock.replay(activeStateManager, standbyStateManager, storeMetadata, store, storeMetadataOne, storeMetadataTwo);
+        when(storeMetadataOne.changelogPartition()).thenReturn(tp1);
+        when(storeMetadataOne.store()).thenReturn(store);
+        when(storeMetadataTwo.changelogPartition()).thenReturn(tp2);
+        when(storeMetadataTwo.store()).thenReturn(store);
+        when(storeMetadata.offset()).thenReturn(5L);
+        when(storeMetadataOne.offset()).thenReturn(5L);
+        when(storeMetadataTwo.offset()).thenReturn(5L);
+        when(standbyStateManager.storeMetadata(tp1)).thenReturn(storeMetadataOne);
+        when(standbyStateManager.storeMetadata(tp2)).thenReturn(storeMetadataTwo);
+        when(activeStateManager.changelogOffsets()).thenReturn(singletonMap(tp, 5L));
+        when(activeStateManager.taskId()).thenReturn(taskId);
 
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
         adminClient.updateEndOffsets(Collections.singletonMap(tp1, 10L));
@@ -1025,7 +985,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         assertEquals(Collections.emptySet(), consumer.assignment());
 
-        changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
+        changelogReader.restore(Collections.singletonMap(taskId, mockTask));
 
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp1).state());
@@ -1056,7 +1016,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         // if a new active is registered, we should immediately transit to standby updating
         assertThrows(
             IllegalStateException.class,
-            () -> changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)))
+            () -> changelogReader.restore(Collections.singletonMap(taskId, mockTask))
         );
 
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
@@ -1076,9 +1036,8 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     public void shouldThrowIfRestoreCallbackThrows() {
         final TaskId taskId = new TaskId(0, 0);
 
-        EasyMock.expect(storeMetadata.offset()).andReturn(5L).anyTimes();
-        EasyMock.expect(activeStateManager.taskId()).andReturn(taskId).anyTimes();
-        EasyMock.replay(activeStateManager, storeMetadata, store);
+        when(storeMetadata.offset()).thenReturn(5L);
+        when(activeStateManager.taskId()).thenReturn(taskId);
 
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
@@ -1089,7 +1048,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         StreamsException thrown = assertThrows(
             StreamsException.class,
-            () -> changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)))
+            () -> changelogReader.restore(Collections.singletonMap(taskId, mockTask))
         );
         assertEquals(kaboom, thrown.getCause());
 
@@ -1098,7 +1057,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         thrown = assertThrows(
             StreamsException.class,
-            () -> changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)))
+            () -> changelogReader.restore(Collections.singletonMap(taskId, mockTask))
         );
         assertEquals(kaboom, thrown.getCause());
 
@@ -1106,7 +1065,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         thrown = assertThrows(
             StreamsException.class,
-            () -> changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)))
+            () -> changelogReader.restore(Collections.singletonMap(taskId, mockTask))
         );
         assertEquals(kaboom, thrown.getCause());
     }

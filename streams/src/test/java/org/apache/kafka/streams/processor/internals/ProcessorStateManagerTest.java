@@ -40,16 +40,14 @@ import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
-import org.easymock.MockType;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.hamcrest.Matchers;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -70,12 +68,6 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.reset;
-import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -87,8 +79,12 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@RunWith(EasyMockRunner.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ProcessorStateManagerTest {
 
     private final String applicationId = "test-application";
@@ -124,11 +120,11 @@ public class ProcessorStateManagerTest {
     private OffsetCheckpoint checkpoint;
     private StateDirectory stateDirectory;
 
-    @Mock(type = MockType.NICE)
+    @Mock
     private StateStore store;
-    @Mock(type = MockType.NICE)
+    @Mock
     private StateStoreMetadata storeMetadata;
-    @Mock(type = MockType.NICE)
+    @Mock
     private InternalProcessorContext context;
 
     @Before
@@ -144,11 +140,6 @@ public class ProcessorStateManagerTest {
         }), new MockTime(), true, true);
         checkpointFile = new File(stateDirectory.getOrCreateDirectoryForTask(taskId), CHECKPOINT_FILE_NAME);
         checkpoint = new OffsetCheckpoint(checkpointFile);
-
-        expect(storeMetadata.changelogPartition()).andReturn(persistentStorePartition).anyTimes();
-        expect(storeMetadata.store()).andReturn(store).anyTimes();
-        expect(store.name()).andReturn(persistentStoreName).anyTimes();
-        replay(storeMetadata, store);
     }
 
     @After
@@ -310,29 +301,17 @@ public class ProcessorStateManagerTest {
     @Test
     public void shouldUnregisterChangelogsDuringClose() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
-        reset(storeMetadata);
-        final StateStore store = EasyMock.createMock(StateStore.class);
-        expect(storeMetadata.changelogPartition()).andStubReturn(persistentStorePartition);
-        expect(storeMetadata.store()).andStubReturn(store);
-        expect(store.name()).andStubReturn(persistentStoreName);
-
-        context.uninitialize();
-        store.init((StateStoreContext) context, store);
-        replay(storeMetadata, context, store);
+        final StateStore store = mock(StateStore.class);
+        when(store.name()).thenReturn(persistentStoreName);
 
         stateMgr.registerStateStores(singletonList(store), context);
-        verify(context, store);
+        verify(context).uninitialize();
+        verify(store).init((StateStoreContext) context, store);
 
         stateMgr.registerStore(store, noopStateRestoreCallback, null);
         assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
 
-        reset(store);
-        expect(store.name()).andStubReturn(persistentStoreName);
-        store.close();
-        replay(store);
-
         stateMgr.close();
-        verify(store);
 
         assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
     }
@@ -340,18 +319,12 @@ public class ProcessorStateManagerTest {
     @Test
     public void shouldRecycleStoreAndReregisterChangelog() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
-        reset(storeMetadata);
-        final StateStore store = EasyMock.createMock(StateStore.class);
-        expect(storeMetadata.changelogPartition()).andStubReturn(persistentStorePartition);
-        expect(storeMetadata.store()).andStubReturn(store);
-        expect(store.name()).andStubReturn(persistentStoreName);
-
-        context.uninitialize();
-        store.init((StateStoreContext) context, store);
-        replay(storeMetadata, context, store);
-
+        final StateStore store = mock(StateStore.class);
+        when(store.name()).thenReturn(persistentStoreName);
         stateMgr.registerStateStores(singletonList(store), context);
-        verify(context, store);
+
+        verify(context).uninitialize();
+        verify(store).init((StateStoreContext) context, store);
 
         stateMgr.registerStore(store, noopStateRestoreCallback, null);
         assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
@@ -360,14 +333,8 @@ public class ProcessorStateManagerTest {
         assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
         assertThat(stateMgr.getStore(persistentStoreName), equalTo(store));
 
-        reset(context, store);
-        context.uninitialize();
-        expect(store.name()).andStubReturn(persistentStoreName);
-        replay(context, store);
-
         stateMgr.registerStateStores(singletonList(store), context);
 
-        verify(context, store);
         assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
     }
 
@@ -1092,10 +1059,8 @@ public class ProcessorStateManagerTest {
     public void shouldThrowOnFailureToWritePositionCheckpointFile() throws IOException {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
         final CommitCallback persistentCheckpoint = mock(CommitCallback.class);
-        persistentCheckpoint.onCommit();
         final IOException ioException = new IOException("asdf");
-        expectLastCall().andThrow(ioException);
-        replay(persistentCheckpoint);
+        doThrow(ioException).when(persistentCheckpoint).onCommit();
         stateMgr.registerStore(
             persistentStore,
             persistentStore.stateRestoreCallback,
