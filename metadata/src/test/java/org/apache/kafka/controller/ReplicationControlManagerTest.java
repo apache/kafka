@@ -122,6 +122,7 @@ import static org.apache.kafka.common.protocol.Errors.INVALID_REPLICA_ASSIGNMENT
 import static org.apache.kafka.common.protocol.Errors.INVALID_TOPIC_EXCEPTION;
 import static org.apache.kafka.common.protocol.Errors.NEW_LEADER_ELECTED;
 import static org.apache.kafka.common.protocol.Errors.NONE;
+import static org.apache.kafka.common.protocol.Errors.NOT_CONTROLLER;
 import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRESS;
 import static org.apache.kafka.common.protocol.Errors.OPERATION_NOT_ATTEMPTED;
 import static org.apache.kafka.common.protocol.Errors.POLICY_VIOLATION;
@@ -960,7 +961,16 @@ public class ReplicationControlManagerTest {
         ControllerResult<AlterPartitionResponseData> invalidLeaderEpochResult = sendAlterPartition(
             replicationControl, leaderId, ctx.currentBrokerEpoch(leaderId),
             topicIdPartition.topicId(), invalidLeaderEpochRequest);
-        assertAlterPartitionResponse(invalidLeaderEpochResult, topicIdPartition, FENCED_LEADER_EPOCH);
+        assertAlterPartitionResponse(invalidLeaderEpochResult, topicIdPartition, NOT_CONTROLLER);
+
+        // Invalid partition epoch
+        PartitionData invalidPartitionEpochRequest = newAlterPartition(
+            replicationControl, topicIdPartition, asList(0, 1), LeaderRecoveryState.RECOVERED);
+        invalidPartitionEpochRequest.setPartitionEpoch(500);
+        ControllerResult<AlterPartitionResponseData> invalidPartitionEpochResult = sendAlterPartition(
+            replicationControl, leaderId, ctx.currentBrokerEpoch(leaderId),
+            topicIdPartition.topicId(), invalidPartitionEpochRequest);
+        assertAlterPartitionResponse(invalidPartitionEpochResult, topicIdPartition, NOT_CONTROLLER);
 
         // Invalid ISR (3 is not a valid replica)
         PartitionData invalidIsrRequest1 = newAlterPartition(
