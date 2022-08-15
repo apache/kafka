@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotControllerException;
+import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
@@ -759,7 +760,7 @@ public final class QuorumController implements Controller {
                 int i = 1;
                 for (ApiMessageAndVersion message : result.records()) {
                     try {
-                        replay(message.message(), Optional.empty());
+                        replay(message.message(), Optional.empty(), writeOffset + result.records().size());
                     } catch (Throwable e) {
                         String failureMessage = String.format("Unable to apply %s record, which was " +
                             "%d of %d record(s) in the batch following last writeOffset %d.",
@@ -883,7 +884,7 @@ public final class QuorumController implements Controller {
                             int i = 1;
                             for (ApiMessageAndVersion message : messages) {
                                 try {
-                                    replay(message.message(), Optional.empty());
+                                    replay(message.message(), Optional.empty(), offset);
                                 } catch (Throwable e) {
                                     String failureMessage = String.format("Unable to apply %s record on standby " +
                                             "controller, which was %d of %d record(s) in the batch with baseOffset %d.",
@@ -938,7 +939,7 @@ public final class QuorumController implements Controller {
                         int i = 1;
                         for (ApiMessageAndVersion message : messages) {
                             try {
-                                replay(message.message(), Optional.of(reader.snapshotId()));
+                                replay(message.message(), Optional.of(reader.snapshotId()), reader.lastContainedLogOffset());
                             } catch (Throwable e) {
                                 String failureMessage = String.format("Unable to apply %s record " +
                                         "from snapshot %s on standby controller, which was %d of " +
@@ -1305,12 +1306,19 @@ public final class QuorumController implements Controller {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId) {
+    /**
+     * Apply the metadata record to its corresponding in-memory state(s)
+     *
+     * @param message           The metadata record
+     * @param snapshotId        The snapshotId if this record is from a snapshot
+     * @param batchLastOffset   The offset of the last record in the log batch, or the lastContainedLogOffset
+     *                          if this record is from a snapshot, this is used along with RegisterBrokerRecord
+     */
+    private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId, long batchLastOffset) {
         MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
         switch (type) {
             case REGISTER_BROKER_RECORD:
-                clusterControl.replay((RegisterBrokerRecord) message);
+                clusterControl.replay((RegisterBrokerRecord) message, batchLastOffset);
                 break;
             case UNREGISTER_BROKER_RECORD:
                 clusterControl.replay((UnregisterBrokerRecord) message);
@@ -1874,8 +1882,13 @@ public final class QuorumController implements Controller {
 
                 @Override
                 public ControllerResult<BrokerHeartbeatReply> generateRecordsAndResult() {
+                    OptionalLong offsetForRegisterBrokerRecord = clusterControl.registerBrokerRecordOffset(brokerId);
+                    if (!offsetForRegisterBrokerRecord.isPresent()) {
+                        throw new StaleBrokerEpochException(
+                            String.format("Receive a heartbeat from broker %d before registration", brokerId));
+                    }
                     ControllerResult<BrokerHeartbeatReply> result = replicationControl.
-                        processBrokerHeartbeat(request, lastCommittedOffset);
+                        processBrokerHeartbeat(request, offsetForRegisterBrokerRecord.getAsLong());
                     inControlledShutdown = result.response().inControlledShutdown();
                     rescheduleMaybeFenceStaleBrokers();
                     return result;

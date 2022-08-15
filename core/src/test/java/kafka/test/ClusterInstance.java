@@ -27,6 +27,7 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 
 public interface ClusterInstance {
 
@@ -49,6 +50,18 @@ public interface ClusterInstance {
      * have no effect on the cluster since it is already provisioned.
      */
     ClusterConfig config();
+
+    /**
+     * Return the set of all controller IDs configured for this test. For kraft, this
+     * will return only the nodes which have the "controller" role enabled in `process.roles`.
+     * For zookeeper, this will return all broker IDs since they are all eligible controllers.
+     */
+    Set<Integer> controllerIds();
+
+    /**
+     * Return the set of all broker IDs configured for this test.
+     */
+    Set<Integer> brokerIds();
 
     /**
      * The listener for this cluster as configured by {@link ClusterTest} or by {@link ClusterConfig}. If

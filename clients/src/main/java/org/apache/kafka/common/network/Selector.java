@@ -757,6 +757,7 @@ public class Selector implements Selectable, AutoCloseable {
             explicitlyMutedChannels.remove(channel);
             if (channel.hasBytesBuffered()) {
                 keysWithBufferedRead.add(channel.selectionKey());
+                madeReadProgressLastPoll = true;
             }
         }
     }

@@ -562,7 +562,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
     @Override
     public Set<Task> getTasks() {
-        return executeWithQueuesLocked(() -> getStreamOfTasks().collect(Collectors.toSet()));
+        return executeWithQueuesLocked(() -> getStreamOfTasks().map(ReadOnlyTask::new).collect(Collectors.toSet()));
     }
 
     @Override

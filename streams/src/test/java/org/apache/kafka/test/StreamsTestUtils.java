@@ -325,6 +325,11 @@ public final class StreamsTestUtils {
             return this;
         }
 
+        public TaskBuilder<T> withInputPartitions(final Set<TopicPartition> inputPartitions) {
+            when(task.inputPartitions()).thenReturn(inputPartitions);
+            return this;
+        }
+
         public T build() {
             return task;
         }
