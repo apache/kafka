@@ -64,7 +64,7 @@ class Tasks {
         this.log = logContext.logger(getClass());
     }
 
-    void purgePendingTasksToCreate() {
+    void clearPendingTasksToCreate() {
         pendingActiveTasksToCreate.clear();
         pendingStandbyTasksToCreate.clear();
     }
@@ -78,7 +78,7 @@ class Tasks {
         return pendingActiveTasksForTopologies;
     }
 
-    Map<TaskId, Set<TopicPartition>> pendingStandbyTasksForTopologies(final Set<String> currentTopologies) {
+    Map<TaskId, Set<TopicPartition>> drainPendingStandbyTasksForTopologies(final Set<String> currentTopologies) {
         final Map<TaskId, Set<TopicPartition>> pendingActiveTasksForTopologies =
             filterMap(pendingStandbyTasksToCreate, t -> currentTopologies.contains(t.getKey().topologyName()));
 

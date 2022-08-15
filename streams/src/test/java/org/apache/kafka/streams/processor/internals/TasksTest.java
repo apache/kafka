@@ -37,6 +37,8 @@ public class TasksTest {
 
     private final static TopicPartition TOPIC_PARTITION_A_0 = new TopicPartition("topicA", 0);
     private final static TopicPartition TOPIC_PARTITION_A_1 = new TopicPartition("topicA", 1);
+    private final static TopicPartition TOPIC_PARTITION_B_0 = new TopicPartition("topicB", 0);
+    private final static TopicPartition TOPIC_PARTITION_B_1 = new TopicPartition("topicB", 1);
     private final static TaskId TASK_0_0 = new TaskId(0, 0);
     private final static TaskId TASK_0_1 = new TaskId(0, 1);
     private final static TaskId TASK_1_0 = new TaskId(1, 0);
@@ -71,5 +73,39 @@ public class TasksTest {
         assertTrue(tasks.owned(statefulTask.id()));
         assertTrue(tasks.owned(statelessTask.id()));
         assertTrue(tasks.owned(statefulTask.id()));
+    }
+
+    @Test
+    public void shouldDrainPendingTasksToCreate() {
+        final Tasks tasks = new Tasks(logContext);
+
+        tasks.addPendingActiveTasksToCreate(mkMap(
+            mkEntry(new TaskId(0, 0, "A"), mkSet(TOPIC_PARTITION_A_0)),
+            mkEntry(new TaskId(0, 1, "A"), mkSet(TOPIC_PARTITION_A_1)),
+            mkEntry(new TaskId(0, 0, "B"), mkSet(TOPIC_PARTITION_B_0)),
+            mkEntry(new TaskId(0, 1, "B"), mkSet(TOPIC_PARTITION_B_1))
+        ));
+
+        tasks.addPendingStandbyTasksToCreate(mkMap(
+            mkEntry(new TaskId(0, 0, "A"), mkSet(TOPIC_PARTITION_A_0)),
+            mkEntry(new TaskId(0, 1, "A"), mkSet(TOPIC_PARTITION_A_1)),
+            mkEntry(new TaskId(0, 0, "B"), mkSet(TOPIC_PARTITION_B_0)),
+            mkEntry(new TaskId(0, 1, "B"), mkSet(TOPIC_PARTITION_B_1))
+        ));
+
+        assertEquals(mkMap(
+            mkEntry(new TaskId(0, 0, "A"), mkSet(TOPIC_PARTITION_A_0)),
+            mkEntry(new TaskId(0, 1, "A"), mkSet(TOPIC_PARTITION_A_1))
+        ), tasks.drainPendingActiveTasksForTopologies(mkSet("A")));
+
+        assertEquals(mkMap(
+            mkEntry(new TaskId(0, 0, "A"), mkSet(TOPIC_PARTITION_A_0)),
+            mkEntry(new TaskId(0, 1, "A"), mkSet(TOPIC_PARTITION_A_1))
+        ), tasks.drainPendingStandbyTasksForTopologies(mkSet("A")));
+
+        tasks.clearPendingTasksToCreate();
+
+        assertEquals(Collections.emptyMap(), tasks.drainPendingActiveTasksForTopologies(mkSet("B")));
+        assertEquals(Collections.emptyMap(), tasks.drainPendingStandbyTasksForTopologies(mkSet("B")));
     }
 }

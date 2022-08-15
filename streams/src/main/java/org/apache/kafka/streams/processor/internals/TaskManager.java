@@ -303,6 +303,11 @@ public class TaskManager {
         final Map<Task, Set<TopicPartition>> tasksToRecycle = new HashMap<>();
         final Set<Task> tasksToCloseClean = new TreeSet<>(Comparator.comparing(Task::id));
 
+        // first put aside those unrecognized tasks because of unknown named-topologies
+        tasks.clearPendingTasksToCreate();
+        tasks.addPendingActiveTasksToCreate(pendingTasksToCreate(activeTasksToCreate));
+        tasks.addPendingStandbyTasksToCreate(pendingTasksToCreate(standbyTasksToCreate));
+        
         // first rectify all existing tasks:
         // 1. for tasks that are already owned, just update input partitions / resume and skip re-creating them
         // 2. for tasks that have changed active/standby status, just recycle and skip re-creating them
@@ -312,10 +317,6 @@ public class TaskManager {
         } else {
             classifyTasksWithStateUpdater(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
         }
-
-        tasks.purgePendingTasksToCreate();
-        tasks.addPendingActiveTasksToCreate(pendingTasksToCreate(activeTasksToCreate));
-        tasks.addPendingStandbyTasksToCreate(pendingTasksToCreate(standbyTasksToCreate));
 
         final Map<TaskId, RuntimeException> taskCloseExceptions = closeAndRecycleTasks(tasksToRecycle, tasksToCloseClean);
 
@@ -476,6 +477,8 @@ public class TaskManager {
             final Map.Entry<TaskId, Set<TopicPartition>> entry = iter.next();
             final TaskId taskId = entry.getKey();
             if (taskId.topologyName() != null && !topologyMetadata.namedTopologiesView().contains(taskId.topologyName())) {
+                log.info("Cannot create the assigned task {} since it's topology name cannot be recognized, will put it " +
+                        "aside as pending for now and create later when topology metadata gets refreshed", taskId);
                 pendingTasks.put(taskId, entry.getValue());
                 iter.remove();
             }
@@ -642,7 +645,7 @@ public class TaskManager {
                 }
             }
         } else {
-            addTaskstoStateUpdater();
+            addTasksToStateUpdater();
 
             handleRemovedTasksFromStateUpdater();
 
@@ -657,7 +660,7 @@ public class TaskManager {
         return allRunning;
     }
 
-    private void addTaskstoStateUpdater() {
+    private void addTasksToStateUpdater() {
         for (final Task task : tasks.drainPendingTaskToInit()) {
             task.initializeIfNeeded();
             stateUpdater.add(task);
@@ -680,7 +683,7 @@ public class TaskManager {
                     stateUpdater.add(newTask);
                 } catch (final RuntimeException e) {
                     final String uncleanMessage = String.format("Failed to recycle task %s cleanly. " +
-                        "Attempting to close remaining tasks before re-throwing:", taskId);
+                        "Attempting to handle remaining tasks before re-throwing:", taskId);
                     log.error(uncleanMessage, e);
 
                     if (task.state() != State.CLOSED) {
@@ -691,13 +694,14 @@ public class TaskManager {
                 }
             } else if (tasks.removePendingTaskToClose(task.id())) {
                 try {
+                    task.suspend();
                     task.closeClean();
                     if (task.isActive()) {
                         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
                     }
                 } catch (final RuntimeException e) {
                     final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
-                        "Attempting to close remaining tasks before re-throwing:", task.id());
+                        "Attempting to handle remaining tasks before re-throwing:", task.id());
                     log.error(uncleanMessage, e);
 
                     if (task.state() != State.CLOSED) {
@@ -1391,7 +1395,7 @@ public class TaskManager {
 
     void createPendingTasks(final Set<String> currentNamedTopologies) {
         final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = tasks.drainPendingActiveTasksForTopologies(currentNamedTopologies);
-        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = tasks.pendingStandbyTasksForTopologies(currentNamedTopologies);
+        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = tasks.drainPendingStandbyTasksForTopologies(currentNamedTopologies);
 
         createNewTasks(activeTasksToCreate, standbyTasksToCreate);
     }
