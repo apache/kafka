@@ -2480,6 +2480,38 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAppendConfigToEmptyDefaultValue(ignored: String): Unit = {
+    testAppendConfig(new Properties(), "0:0", "0:0")
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAppendConfigToExistentValue(ignored: String): Unit = {
+    val props = new Properties();
+    props.setProperty(LogConfig.LeaderReplicationThrottledReplicasProp, "1:1")
+    testAppendConfig(props, "0:0", "1:1,0:0")
+  }
+
+  private def testAppendConfig(props: Properties, append: String, expected: String): Unit = {
+    client = Admin.create(createConfig)
+    createTopic(topic, topicConfig = props)
+    val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+    val topicAlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, append), AlterConfigOp.OpType.APPEND),
+    ).asJavaCollection
+
+    val alterResult = client.incrementalAlterConfigs(Map(
+      topicResource -> topicAlterConfigs
+    ).asJava)
+    alterResult.all().get()
+
+    ensureConsistentKRaftMetadata()
+    val config = client.describeConfigs(List(topicResource).asJava).all().get().get(topicResource).get(LogConfig.LeaderReplicationThrottledReplicasProp)
+    assertEquals(expected, config.value())
+  }
+
   /**
    * Test that createTopics returns the dynamic configurations of the topics that were created.
    *
