@@ -174,8 +174,8 @@ object MetadataQuorumCommand {
     println(
       s"""|ClusterId:              $clusterId
           |LeaderId:               ${quorumInfo.leaderId()}
-          |LeaderEpoch:            {{TODO}}
-          |HighWatermark:          {{TODO}}
+          |LeaderEpoch:            ${quorumInfo.leaderEpoch()}
+          |HighWatermark:          ${quorumInfo.highWatermark()}
           |MaxFollowerLag:         $maxFollowerLag
           |MaxFollowerLagTimeMs:   $maxFollowerLagTimeMs
           |CurrentVoters:          ${quorumInfo.voters().asScala.map(_.replicaId()).mkString("[", ",", "]")}

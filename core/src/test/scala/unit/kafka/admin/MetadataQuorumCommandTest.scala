@@ -70,13 +70,17 @@ class MetadataQuorumCommandTest(cluster: ClusterInstance) {
     val outputs = describeOutput.split("\n")
 
     assertTrue("""ClusterId:\s+\S{22}""".r.matches(outputs(0)))
-    assertTrue("""LeaderId:\s+\d+""".r.matches(outputs(1)), "[" + outputs(1) + "]")
+    assertTrue("""LeaderId:\s+\d+""".r.matches(outputs(1)))
     assertTrue("""LeaderEpoch:\s+\d+""".r.matches(outputs(2)))
     assertTrue("""HighWatermark:\s+\d+""".r.matches(outputs(3)))
     assertTrue("""MaxFollowerLag:\s+\d+""".r.matches(outputs(4)))
-    assertTrue("""MaxFollowerLagTimeMs:\s+\d+""".r.matches(outputs(5)))
+    assertTrue("""MaxFollowerLagTimeMs:\s+[-]?\d+""".r.matches(outputs(5)), "[" + outputs(5) + "]")
     assertTrue("""CurrentVoters:\s+\[\d+(,\d+)*\]""".r.matches(outputs(6)))
-    assertTrue("""CurrentObservers:\s+\s+\[\d+(,\d+)*\]""".r.matches(outputs(7)))
+    if (cluster.config().clusterType() == Type.CO_KRAFT) {
+      assertTrue("""CurrentObservers:\s+\[\]""".r.matches(outputs(7)))
+    } else {
+      assertTrue("""CurrentObservers:\s+\[\d+(,\d+)*\]""".r.matches(outputs(7)))
+    }
   }
 
   @ClusterTest(clusterType = Type.ZK, brokers = 3, controllers = 1)

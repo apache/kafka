@@ -25,17 +25,29 @@ import java.util.OptionalLong;
  */
 public class QuorumInfo {
     private final Integer leaderId;
+    private final Integer leaderEpoch;
+    private final Long highWatermark;
     private final List<ReplicaState> voters;
     private final List<ReplicaState> observers;
 
-    QuorumInfo(Integer leaderId, List<ReplicaState> voters, List<ReplicaState> observers) {
+    QuorumInfo(Integer leaderId, Integer leaderEpoch, Long highWatermark, List<ReplicaState> voters, List<ReplicaState> observers) {
         this.leaderId = leaderId;
+        this.leaderEpoch = leaderEpoch;
+        this.highWatermark = highWatermark;
         this.voters = voters;
         this.observers = observers;
     }
 
     public Integer leaderId() {
         return leaderId;
+    }
+
+    public Integer leaderEpoch() {
+        return leaderEpoch;
+    }
+
+    public Long highWatermark() {
+        return highWatermark;
     }
 
     public List<ReplicaState> voters() {
