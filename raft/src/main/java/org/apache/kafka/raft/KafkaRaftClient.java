@@ -1171,7 +1171,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         if (!quorum.isLeader()) {
-            return DescribeQuorumRequest.getTopLevelErrorResponse(Errors.INVALID_REQUEST);
+            return DescribeQuorumResponse.singletonErrorResponse(
+                log.topicPartition(),
+                Errors.NOT_LEADER_OR_FOLLOWER
+            );
         }
 
         LeaderState<T> leaderState = quorum.leaderStateOrThrow();

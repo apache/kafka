@@ -72,6 +72,18 @@ public class DescribeQuorumResponse extends AbstractResponse {
         return DEFAULT_THROTTLE_TIME;
     }
 
+    public static DescribeQuorumResponseData singletonErrorResponse(
+        TopicPartition topicPartition,
+        Errors error
+    ) {
+        return new DescribeQuorumResponseData()
+            .setTopics(Collections.singletonList(new DescribeQuorumResponseData.TopicData()
+                .setTopicName(topicPartition.topic())
+                .setPartitions(Collections.singletonList(new DescribeQuorumResponseData.PartitionData()
+                    .setErrorCode(error.code())))));
+    }
+
+
     public static DescribeQuorumResponseData singletonResponse(TopicPartition topicPartition,
                                                                int leaderId,
                                                                int leaderEpoch,
