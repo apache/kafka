@@ -125,6 +125,8 @@ public interface StateUpdater {
      *
      * The returned active tasks are removed from the state updater.
      *
+     * With a timeout of zero the method tries to drain the restored active tasks at least once.
+     *
      * @param timeout duration how long the calling thread should wait for restored active tasks
      *
      * @return set of active tasks with up-to-date states
@@ -182,6 +184,21 @@ public interface StateUpdater {
      * @return set of all tasks managed by the state updater
      */
     Set<StreamTask> getActiveTasks();
+
+    /**
+     * Returns if the state updater is restoring active tasks.
+     *
+     * An active task is considered in restoration if it was added with the {@link StateUpdater#add(Task)} and
+     * it was not removed from the state updater with one of the following methods:
+     * <ul>
+     *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
+     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
+     *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     * </ul>
+     *
+     * @return {@code true} if the state updater is restoring active tasks, {@code false} otherwise
+     */
+    boolean activeTasksRestoring();
 
     /**
      * Gets standby tasks that are managed by the state updater.

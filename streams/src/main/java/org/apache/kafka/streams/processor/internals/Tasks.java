@@ -56,7 +56,6 @@ class Tasks implements TasksRegistry {
     private final Map<TaskId, Set<TopicPartition>> pendingTasksToUpdateInputPartitions = new HashMap<>();
     private final Set<Task> pendingTasksToInit = new HashSet<>();
     private final Set<TaskId> pendingTasksToCloseClean = new HashSet<>();
-
     private final Set<TaskId> pendingTasksToCloseDirty = new HashSet<>();
 
     // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
@@ -158,21 +157,27 @@ class Tasks implements TasksRegistry {
     public void addNewActiveTasks(final Collection<Task> newTasks) {
         if (!newTasks.isEmpty()) {
             for (final Task activeTask : newTasks) {
-                final TaskId taskId = activeTask.id();
-
-                if (activeTasksPerId.containsKey(taskId)) {
-                    throw new IllegalStateException("Attempted to create an active task that we already own: " + taskId);
-                }
-
-                if (standbyTasksPerId.containsKey(taskId)) {
-                    throw new IllegalStateException("Attempted to create an active task while we already own its standby: " + taskId);
-                }
-
-                activeTasksPerId.put(activeTask.id(), activeTask);
-                for (final TopicPartition topicPartition : activeTask.inputPartitions()) {
-                    activeTasksPerPartition.put(topicPartition, activeTask);
-                }
+                addNewActiveTask(activeTask);
             }
+        }
+    }
+
+    @Override
+    public void addNewActiveTask(final Task task) {
+        final TaskId taskId = task.id();
+
+        if (activeTasksPerId.containsKey(taskId)) {
+            throw new IllegalStateException("Attempted to create an active task that we already own: " + taskId);
+        }
+
+        if (standbyTasksPerId.containsKey(taskId)) {
+            throw new IllegalStateException("Attempted to create an active task while we already own its standby: " + taskId);
+        }
+
+        activeTasksPerId.put(task.id(), task);
+        pendingActiveTasksToCreate.remove(task.id());
+        for (final TopicPartition topicPartition : task.inputPartitions()) {
+            activeTasksPerPartition.put(topicPartition, task);
         }
     }
 
