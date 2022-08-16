@@ -132,6 +132,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 
 /**
@@ -469,7 +471,15 @@ public enum Errors {
      * If there are multiple matches in the class hierarchy, the first match starting from the bottom is used.
      */
     public static Errors forException(Throwable t) {
-        Class<?> clazz = t.getClass();
+        // Get the underlying cause for common exception types from the concurrent library.
+        // This is useful to handle cases where exceptions may be raised from a future or a
+        // completion stage (as might be the case for requests sent to the controller in `ControllerApis`)
+        Throwable throwableToBeEncoded = t;
+        if (t instanceof CompletionException || t instanceof ExecutionException) {
+            throwableToBeEncoded = t.getCause();
+        }
+
+        Class<?> clazz = throwableToBeEncoded.getClass();
         while (clazz != null) {
             Errors error = classToError.get(clazz);
             if (error != null)

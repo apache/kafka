@@ -56,6 +56,10 @@ public class AllocateProducerIdsResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    public Errors error() {
+        return Errors.forCode(data.errorCode());
+    }
+
     public static AllocateProducerIdsResponse parse(ByteBuffer buffer, short version) {
         return new AllocateProducerIdsResponse(new AllocateProducerIdsResponseData(
                 new ByteBufferAccessor(buffer), version));
