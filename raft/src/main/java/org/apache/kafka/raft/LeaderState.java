@@ -247,7 +247,7 @@ public class LeaderState<T> implements EpochState {
         }
 
         state.updateFetchTimestamp(fetchTimestamp, leaderLogEndOffset);
-        return updateEndOffset(state, logOffsetMetadata, false);
+        return updateEndOffset(state, logOffsetMetadata);
 
     }
 
@@ -282,12 +282,8 @@ public class LeaderState<T> implements EpochState {
     }
     private boolean updateEndOffset(
         ReplicaState state,
-        LogOffsetMetadata endOffsetMetadata,
-        boolean verifyUpdate
+        LogOffsetMetadata endOffsetMetadata
     ) {
-        if (verifyUpdate) {
-            verifyEndOffsetUpdate(state, endOffsetMetadata);
-        }
         state.endOffset = Optional.of(endOffsetMetadata);
         state.hasAcknowledgedLeader = true;
         return isVoter(state.nodeId) && updateHighWatermark();
