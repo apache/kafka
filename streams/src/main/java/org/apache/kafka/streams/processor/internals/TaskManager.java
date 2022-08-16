@@ -349,6 +349,7 @@ public class TaskManager {
                     } else {
                         ((StreamsException) exception).setTaskId(taskId);
                         throw exception;
+
                     }
                 } else if (exception instanceof KafkaException) {
                     throw new StreamsException(exception, taskId);
@@ -708,9 +709,11 @@ public class TaskManager {
                     final String uncleanMessage = String.format("Failed to recycle task %s cleanly. " +
                         "Attempting to handle remaining tasks before re-throwing:", taskId);
                     log.error(uncleanMessage, e);
-                    taskExceptions.putIfAbsent(taskId, e);
 
-                    tasksToCloseDirty.add(task);
+                    taskExceptions.putIfAbsent(taskId, e);
+                    if (task.state() != State.CLOSED) {
+                        tasksToCloseDirty.add(task);
+                    }
                 }
             } else if (tasks.removePendingTaskToClose(task.id())) {
                 try {
@@ -723,8 +726,8 @@ public class TaskManager {
                     final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
                         "Attempting to handle remaining tasks before re-throwing:", task.id());
                     log.error(uncleanMessage, e);
-                    taskExceptions.putIfAbsent(task.id(), e);
 
+                    taskExceptions.putIfAbsent(task.id(), e);
                     if (task.state() != State.CLOSED) {
                         tasksToCloseDirty.add(task);
                     }
