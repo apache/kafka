@@ -26,6 +26,7 @@ import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.record.ControlRecordUtils;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -319,57 +320,34 @@ public class LeaderState<T> implements EpochState {
     }
 
     List<DescribeQuorumResponseData.ReplicaState> quorumResponseVoterStates(long currentTimeMs) {
-        return quorumResponseReplicaStates(voterStates, OptionalInt.of(localId), currentTimeMs);
+        return quorumResponseReplicaStates(voterStates.values(), OptionalInt.of(localId), currentTimeMs);
     }
 
     List<DescribeQuorumResponseData.ReplicaState> quorumResponseObserverStates(long currentTimeMs) {
         clearInactiveObservers(currentTimeMs);
-        return quorumResponseReplicaStates(observerStates, OptionalInt.empty(), currentTimeMs);
+        return quorumResponseReplicaStates(observerStates.values(), OptionalInt.empty(), currentTimeMs);
     }
 
     private static <R extends ReplicaState> List<DescribeQuorumResponseData.ReplicaState> quorumResponseReplicaStates(
-            Map<Integer, R> state,
+            Collection<R> state,
             OptionalInt leaderId,
             long currentTimeMs) {
-        Map<Integer, Long> replicaEndOffsets = getReplicaEndOffsets(state);
-        Map<Integer, Long> replicaLastFetchTimes = getReplicaLastFetchTimes(state);
-        Map<Integer, Long> replicaLastCaughtUpTimes = getReplicaLastCaughtUpTimes(state, leaderId, currentTimeMs);
-
-        return replicaEndOffsets.entrySet().stream()
-                .map(entry -> new DescribeQuorumResponseData.ReplicaState()
-                        .setReplicaId(entry.getKey())
-                        .setLogEndOffset(entry.getValue())
-                        .setLastFetchTimestamp(replicaLastFetchTimes.get(entry.getKey()))
-                        .setLastCaughtUpTimestamp(replicaLastCaughtUpTimes.get(entry.getKey())))
-                .collect(Collectors.toList());
-    }
-
-    private static <R extends ReplicaState> Map<Integer, Long> getReplicaEndOffsets(
-        Map<Integer, R> replicaStates) {
-        return replicaStates.entrySet().stream()
-                   .collect(Collectors.toMap(Map.Entry::getKey,
-                       e -> e.getValue().endOffset.map(
-                           logOffsetMetadata -> logOffsetMetadata.offset).orElse(-1L))
-                   );
-    }
-
-    private static <R extends ReplicaState> Map<Integer, Long> getReplicaLastFetchTimes(
-            Map<Integer, R> replicaStates) {
-        return replicaStates.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey,
-                        e -> e.getValue().lastFetchTimestamp.orElse(-1L))
-                );
-    }
-
-    private static <R extends ReplicaState> Map<Integer, Long> getReplicaLastCaughtUpTimes(
-            Map<Integer, R> replicaStates,
-            OptionalInt leaderId,
-            final long currentTimeMs
-    ) {
-        return replicaStates.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey,
-                        e -> e.getKey() == leaderId.orElse(-1) ? currentTimeMs : e.getValue().lastCaughtUpTimestamp.orElse(-1L))
-                );
+        return state.stream().map(s -> {
+            final long lastCaughtUpTimestamp;
+            final long lastFetchTimestamp;
+            if (s.nodeId == leaderId.orElse(-1)) {
+                lastCaughtUpTimestamp = currentTimeMs;
+                lastFetchTimestamp = currentTimeMs;
+            } else {
+                lastCaughtUpTimestamp = s.lastCaughtUpTimestamp.orElse(-1);
+                lastFetchTimestamp = s.lastFetchTimestamp.orElse(-1);
+            }
+            return new DescribeQuorumResponseData.ReplicaState()
+                    .setReplicaId(s.nodeId)
+                    .setLogEndOffset(s.endOffset.map(md -> md.offset).orElse(-1L))
+                    .setLastCaughtUpTimestamp(lastCaughtUpTimestamp)
+                    .setLastFetchTimestamp(lastFetchTimestamp);
+        }).collect(Collectors.toList());
     }
 
     private void clearInactiveObservers(final long currentTimeMs) {
