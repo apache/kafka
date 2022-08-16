@@ -526,8 +526,9 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
     else
       None
 
-  private val errorMeters = mutable.Map[Errors, ErrorMeter]()
-  Errors.values.foreach(error => errorMeters.put(error, new ErrorMeter(name, error)))
+  private val errorMeters = Errors.values.map { error =>
+    error -> new ErrorMeter(name, error)
+  }.toMap
 
   def requestRate(version: Short): Meter = {
     requestRateInternal.getAndMaybePut(version, newMeter(RequestsPerSec, "requests", TimeUnit.SECONDS, tags + ("version" -> version.toString)))
@@ -580,6 +581,5 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
       removeMetric(TemporaryMemoryBytes, tags)
     }
     errorMeters.values.foreach(_.removeMeter())
-    errorMeters.clear()
   }
 }
