@@ -61,14 +61,15 @@ class MetadataQuorumCommandTest(cluster: ClusterInstance) {
     } else {
       assertEquals(cluster.config().numBrokers() + cluster.config().numControllers(), outputs.length)
     }
-    assertTrue(leaderPattern.matches(outputs.head), "[" + outputs.head + "]")
-    assertEquals(1, outputs.count(leaderPattern.matches(_)))
-    assertEquals(cluster.config().numControllers() - 1, outputs.count(followerPattern.matches(_)))
+    // `matches` is not supported in scala 2.12, use `findFirstIn` instead.
+    assertTrue(leaderPattern.findFirstIn(outputs.head).nonEmpty)
+    assertEquals(1, outputs.count(leaderPattern.findFirstIn(_).nonEmpty))
+    assertEquals(cluster.config().numControllers() - 1, outputs.count(followerPattern.findFirstIn(_).nonEmpty))
 
     if (cluster.config().clusterType() == Type.CO_KRAFT) {
-      assertEquals(Math.max(0, cluster.config().numBrokers() - cluster.config().numControllers()), outputs.count(observerPattern.matches(_)))
+      assertEquals(Math.max(0, cluster.config().numBrokers() - cluster.config().numControllers()), outputs.count(observerPattern.findFirstIn(_).nonEmpty))
     } else {
-      assertEquals(cluster.config().numBrokers(), outputs.count(observerPattern.matches(_)))
+      assertEquals(cluster.config().numBrokers(), outputs.count(observerPattern.findFirstIn(_).nonEmpty))
     }
   }
 
@@ -92,20 +93,20 @@ class MetadataQuorumCommandTest(cluster: ClusterInstance) {
     )
     val outputs = describeOutput.split("\n")
 
-    assertTrue("""ClusterId:\s+\S{22}""".r.matches(outputs(0)))
-    assertTrue("""LeaderId:\s+\d+""".r.matches(outputs(1)))
-    assertTrue("""LeaderEpoch:\s+\d+""".r.matches(outputs(2)))
-    assertTrue("""HighWatermark:\s+\d+""".r.matches(outputs(3)))
-    assertTrue("""MaxFollowerLag:\s+\d+""".r.matches(outputs(4)))
-    assertTrue("""MaxFollowerLagTimeMs:\s+[-]?\d+""".r.matches(outputs(5)), "[" + outputs(5) + "]")
-    assertTrue("""CurrentVoters:\s+\[\d+(,\d+)*\]""".r.matches(outputs(6)))
+    assertTrue("""ClusterId:\s+\S{22}""".r.findFirstIn(outputs(0)).nonEmpty)
+    assertTrue("""LeaderId:\s+\d+""".r.findFirstIn(outputs(1)).nonEmpty)
+    assertTrue("""LeaderEpoch:\s+\d+""".r.findFirstIn(outputs(2)).nonEmpty)
+    assertTrue("""HighWatermark:\s+\d+""".r.findFirstIn(outputs(3)).nonEmpty)
+    assertTrue("""MaxFollowerLag:\s+\d+""".r.findFirstIn(outputs(4)).nonEmpty)
+    assertTrue("""MaxFollowerLagTimeMs:\s+[-]?\d+""".r.findFirstIn(outputs(5)).nonEmpty)
+    assertTrue("""CurrentVoters:\s+\[\d+(,\d+)*\]""".r.findFirstIn(outputs(6)).nonEmpty)
 
     // There are no observers if we have fewer brokers than controllers
     if (cluster.config().clusterType() == Type.CO_KRAFT
         && cluster.config().numBrokers() <= cluster.config().numControllers()) {
-      assertTrue("""CurrentObservers:\s+\[\]""".r.matches(outputs(7)))
+      assertTrue("""CurrentObservers:\s+\[\]""".r.findFirstIn(outputs(7)).nonEmpty)
     } else {
-      assertTrue("""CurrentObservers:\s+\[\d+(,\d+)*\]""".r.matches(outputs(7)))
+      assertTrue("""CurrentObservers:\s+\[\d+(,\d+)*\]""".r.findFirstIn(outputs(7)).nonEmpty)
     }
   }
 
