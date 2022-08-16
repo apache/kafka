@@ -25,7 +25,6 @@ import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
@@ -95,7 +94,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
@@ -1179,12 +1177,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             leaderState.localId(),
             leaderState.epoch(),
             leaderState.highWatermark().isPresent() ? leaderState.highWatermark().get().offset : -1,
-            convertToReplicaStates(leaderState.getVoterEndOffsets(),
-                                    leaderState.getVoterLastFetchTimes(),
-                                    leaderState.getVoterLastCaughUpTimes(currentTimeMs)),
-            convertToReplicaStates(leaderState.getObserverEndOffsets(currentTimeMs),
-                                    leaderState.getObserverLastFetchTimes(currentTimeMs),
-                                    leaderState.getObserverLastCaughUpTimes(currentTimeMs))
+            leaderState.quorumResponseVoterStates(currentTimeMs),
+            leaderState.quorumResponseObserverStates(currentTimeMs)
         );
     }
 
@@ -1420,28 +1414,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         state.resetFetchTimeout(currentTimeMs);
         return true;
-    }
-
-    List<ReplicaState> convertToReplicaStates(
-            Map<Integer, Long> replicaEndOffsets,
-            Map<Integer, Long> replicaLastFetchTimes,
-            Map<Integer, Long> replicaLastCaughtUpTimes
-    ) {
-        if (replicaEndOffsets.size() != replicaLastFetchTimes.size()
-                || replicaEndOffsets.size() != replicaLastCaughtUpTimes.size()) {
-            throw new IllegalStateException("The replica states were not coherent." +
-                    "End Offsets: " + replicaEndOffsets.toString() +
-                    "Last Fetch Times: " + replicaLastFetchTimes.toString() +
-                    "Last CaughtUp times: " + replicaLastCaughtUpTimes.toString()
-                    );
-        }
-        return replicaEndOffsets.entrySet().stream()
-                   .map(entry -> new ReplicaState()
-                                     .setReplicaId(entry.getKey())
-                                     .setLogEndOffset(entry.getValue())
-                                     .setLastFetchTimestamp(replicaLastFetchTimes.get(entry.getKey()))
-                                     .setLastCaughtUpTimestamp(replicaLastCaughtUpTimes.get(entry.getKey())))
-                   .collect(Collectors.toList());
     }
 
     private boolean hasConsistentLeader(int epoch, OptionalInt leaderId) {
