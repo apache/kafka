@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -1118,20 +1119,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(activeTask2);
         stateUpdater.add(standbyTask3);
 
-        final Set<Task> tasks = stateUpdater.getTasks();
-
-        assertEquals(5, tasks.size());
-        assertTrue(tasks.containsAll(mkSet(activeTask1, activeTask2, standbyTask1, standbyTask2, standbyTask3)));
-
-        final Set<StreamTask> activeTasks = stateUpdater.getActiveTasks();
-
-        assertEquals(2, activeTasks.size());
-        assertTrue(activeTasks.containsAll(mkSet(activeTask1, activeTask2)));
-
-        final Set<StandbyTask> standbyTasks = stateUpdater.getStandbyTasks();
-
-        assertEquals(3, standbyTasks.size());
-        assertTrue(standbyTasks.containsAll(mkSet(standbyTask1, standbyTask2, standbyTask3)));
+        verifyGetTasks(mkSet(activeTask1, activeTask2), mkSet(standbyTask1, standbyTask2, standbyTask3));
     }
 
     @Test
@@ -1153,18 +1141,7 @@ class DefaultStateUpdaterTest {
 
         final Set<Task> tasks = stateUpdater.getTasks();
 
-        assertEquals(5, tasks.size());
-        assertTrue(tasks.containsAll(mkSet(activeTask1, activeTask2, standbyTask1, standbyTask2, standbyTask3)));
-
-        final Set<StreamTask> activeTasks = stateUpdater.getActiveTasks();
-
-        assertEquals(2, activeTasks.size());
-        assertTrue(activeTasks.containsAll(mkSet(activeTask1, activeTask2)));
-
-        final Set<StandbyTask> standbyTasks = stateUpdater.getStandbyTasks();
-
-        assertEquals(3, standbyTasks.size());
-        assertTrue(standbyTasks.containsAll(mkSet(standbyTask1, standbyTask2, standbyTask3)));
+        verifyGetTasks(mkSet(activeTask1, activeTask2), mkSet(standbyTask1, standbyTask2, standbyTask3));
     }
 
     @Test
@@ -1262,10 +1239,13 @@ class DefaultStateUpdaterTest {
                                 final Set<StandbyTask> expectedStandbyTasks) {
         final Set<Task> tasks = stateUpdater.getTasks();
 
+        assertEquals(expectedActiveTasks.size() + expectedStandbyTasks.size(), tasks.size());
+        tasks.forEach(task -> assertTrue(task instanceof ReadOnlyTask));
+        final Set<TaskId> actualTaskIds = tasks.stream().map(Task::id).collect(Collectors.toSet());
         final Set<Task> expectedTasks = new HashSet<>(expectedActiveTasks);
         expectedTasks.addAll(expectedStandbyTasks);
-        assertEquals(expectedActiveTasks.size() + expectedStandbyTasks.size(), tasks.size());
-        assertTrue(tasks.containsAll(expectedTasks));
+        final Set<TaskId> expectedTaskIds = expectedTasks.stream().map(Task::id).collect(Collectors.toSet());
+        assertTrue(actualTaskIds.containsAll(expectedTaskIds));
 
         final Set<StreamTask> activeTasks = stateUpdater.getActiveTasks();
         assertEquals(expectedActiveTasks.size(), activeTasks.size());

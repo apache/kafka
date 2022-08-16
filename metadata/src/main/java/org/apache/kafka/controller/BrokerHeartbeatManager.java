@@ -511,17 +511,17 @@ public class BrokerHeartbeatManager {
     /**
      * Calculate the next broker state for a broker that just sent a heartbeat request.
      *
-     * @param brokerId              The broker id.
-     * @param request               The incoming heartbeat request.
-     * @param lastCommittedOffset   The last committed offset of the quorum controller.
-     * @param hasLeaderships        A callback which evaluates to true if the broker leads
-     *                              at least one partition.
+     * @param brokerId                     The broker id.
+     * @param request                      The incoming heartbeat request.
+     * @param registerBrokerRecordOffset   The offset of the broker's {@link org.apache.kafka.common.metadata.RegisterBrokerRecord}.
+     * @param hasLeaderships               A callback which evaluates to true if the broker leads
+     *                                     at least one partition.
      *
-     * @return                      The current and next broker states.
+     * @return                             The current and next broker states.
      */
     BrokerControlStates calculateNextBrokerState(int brokerId,
                                                  BrokerHeartbeatRequestData request,
-                                                 long lastCommittedOffset,
+                                                 long registerBrokerRecordOffset,
                                                  Supplier<Boolean> hasLeaderships) {
         BrokerHeartbeatState broker = brokers.getOrDefault(brokerId,
             new BrokerHeartbeatState(brokerId));
@@ -533,17 +533,17 @@ public class BrokerHeartbeatManager {
                         "shutdown.", brokerId);
                     return new BrokerControlStates(currentState, SHUTDOWN_NOW);
                 } else if (!request.wantFence()) {
-                    if (request.currentMetadataOffset() >= lastCommittedOffset) {
+                    if (request.currentMetadataOffset() >= registerBrokerRecordOffset) {
                         log.info("The request from broker {} to unfence has been granted " +
-                                "because it has caught up with the last committed metadata " +
-                                "offset {}.", brokerId, lastCommittedOffset);
+                                "because it has caught up with the offset of it's register " +
+                                "broker record {}.", brokerId, registerBrokerRecordOffset);
                         return new BrokerControlStates(currentState, UNFENCED);
                     } else {
                         if (log.isDebugEnabled()) {
                             log.debug("The request from broker {} to unfence cannot yet " +
-                                "be granted because it has not caught up with the last " +
-                                "committed metadata offset {}. It is still at offset {}.",
-                                brokerId, lastCommittedOffset, request.currentMetadataOffset());
+                                "be granted because it has not caught up with the offset of " +
+                                "it's register broker record {}. It is still at offset {}.",
+                                brokerId, registerBrokerRecordOffset, request.currentMetadataOffset());
                         }
                         return new BrokerControlStates(currentState, FENCED);
                     }

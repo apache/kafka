@@ -23,17 +23,17 @@ import kafka.log.{LogConfig, UnifiedLog}
 import kafka.metrics.KafkaMetricsReporter
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
+import kafka.server.metadata.BrokerServerMetrics
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{KafkaException, Uuid}
-import org.apache.kafka.controller.BootstrapMetadata
-import org.apache.kafka.metadata.fault.MetadataFaultHandler
+import org.apache.kafka.controller.{BootstrapMetadata, QuorumControllerMetrics}
 import org.apache.kafka.metadata.{KafkaConfigSchema, MetadataRecordSerde}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.apache.kafka.server.fault.ProcessExitingFaultHandler
+import org.apache.kafka.server.fault.{LoggingFaultHandler, ProcessExitingFaultHandler}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import java.nio.file.Paths
@@ -83,34 +83,49 @@ class KafkaRaftServer(
   )
 
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
+    val brokerMetrics = BrokerServerMetrics(metrics)
+    val fatalFaultHandler = new ProcessExitingFaultHandler()
+    val metadataLoadingFaultHandler = new LoggingFaultHandler("metadata loading",
+        () => brokerMetrics.metadataLoadErrorCount.getAndIncrement())
+    val metadataApplyingFaultHandler = new LoggingFaultHandler("metadata application",
+      () => brokerMetrics.metadataApplyErrorCount.getAndIncrement())
     Some(new BrokerServer(
       config,
       metaProps,
       raftManager,
       time,
       metrics,
+      brokerMetrics,
       threadNamePrefix,
       offlineDirs,
-      controllerQuorumVotersFuture
+      controllerQuorumVotersFuture,
+      fatalFaultHandler,
+      metadataLoadingFaultHandler,
+      metadataApplyingFaultHandler
     ))
   } else {
     None
   }
 
   private val controller: Option[ControllerServer] = if (config.processRoles.contains(ControllerRole)) {
+    val controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)
+    val metadataFaultHandler = new LoggingFaultHandler("controller metadata",
+      () => controllerMetrics.incrementMetadataErrorCount())
+    val fatalFaultHandler = new ProcessExitingFaultHandler()
     Some(new ControllerServer(
       metaProps,
       config,
       raftManager,
       time,
       metrics,
+      controllerMetrics,
       threadNamePrefix,
       controllerQuorumVotersFuture,
       KafkaRaftServer.configSchema,
       raftManager.apiVersions,
       bootstrapMetadata,
-      new MetadataFaultHandler(),
-      new ProcessExitingFaultHandler(),
+      metadataFaultHandler,
+      fatalFaultHandler
     ))
   } else {
     None

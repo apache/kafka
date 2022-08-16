@@ -22,7 +22,10 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.HashSet;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
@@ -34,6 +37,8 @@ public class TasksTest {
 
     private final static TopicPartition TOPIC_PARTITION_A_0 = new TopicPartition("topicA", 0);
     private final static TopicPartition TOPIC_PARTITION_A_1 = new TopicPartition("topicA", 1);
+    private final static TopicPartition TOPIC_PARTITION_B_0 = new TopicPartition("topicB", 0);
+    private final static TopicPartition TOPIC_PARTITION_B_1 = new TopicPartition("topicB", 1);
     private final static TaskId TASK_0_0 = new TaskId(0, 0);
     private final static TaskId TASK_0_1 = new TaskId(0, 1);
     private final static TaskId TASK_1_0 = new TaskId(1, 0);
@@ -41,7 +46,7 @@ public class TasksTest {
     private final LogContext logContext = new LogContext();
 
     @Test
-    public void shouldCreateTasks() {
+    public void shouldKeepAddedTasks() {
         final Tasks tasks = new Tasks(logContext);
         final StreamTask statefulTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).build();
         final StandbyTask standbyTask = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_A_1)).build();
@@ -51,15 +56,56 @@ public class TasksTest {
         tasks.addNewStandbyTasks(Collections.singletonList(standbyTask));
 
         assertEquals(statefulTask, tasks.task(statefulTask.id()));
-        assertTrue(tasks.activeTasks().contains(statefulTask));
-        assertTrue(tasks.allTasks().contains(statefulTask));
-        assertTrue(tasks.tasks(mkSet(statefulTask.id())).contains(statefulTask));
         assertEquals(statelessTask, tasks.task(statelessTask.id()));
-        assertTrue(tasks.activeTasks().contains(statelessTask));
-        assertTrue(tasks.allTasks().contains(statelessTask));
-        assertTrue(tasks.tasks(mkSet(statelessTask.id())).contains(statelessTask));
         assertEquals(standbyTask, tasks.task(standbyTask.id()));
-        assertTrue(tasks.allTasks().contains(standbyTask));
-        assertTrue(tasks.tasks(mkSet(standbyTask.id())).contains(standbyTask));
+
+        assertEquals(mkSet(statefulTask, statelessTask), new HashSet<>(tasks.activeTasks()));
+        assertEquals(mkSet(statefulTask, statelessTask, standbyTask), tasks.allTasks());
+        assertEquals(mkSet(statefulTask, standbyTask), tasks.tasks(mkSet(statefulTask.id(), standbyTask.id())));
+        assertEquals(mkSet(statefulTask.id(), statelessTask.id(), standbyTask.id()), tasks.allTaskIds());
+        assertEquals(
+            mkMap(
+                mkEntry(statefulTask.id(), statefulTask),
+                mkEntry(statelessTask.id(), statelessTask),
+                mkEntry(standbyTask.id(), standbyTask)
+            ),
+            tasks.allTasksPerId());
+        assertTrue(tasks.owned(statefulTask.id()));
+        assertTrue(tasks.owned(statelessTask.id()));
+        assertTrue(tasks.owned(statefulTask.id()));
+    }
+
+    @Test
+    public void shouldDrainPendingTasksToCreate() {
+        final Tasks tasks = new Tasks(logContext);
+
+        tasks.addPendingActiveTasksToCreate(mkMap(
+            mkEntry(new TaskId(0, 0, "A"), mkSet(TOPIC_PARTITION_A_0)),
+            mkEntry(new TaskId(0, 1, "A"), mkSet(TOPIC_PARTITION_A_1)),
+            mkEntry(new TaskId(0, 0, "B"), mkSet(TOPIC_PARTITION_B_0)),
+            mkEntry(new TaskId(0, 1, "B"), mkSet(TOPIC_PARTITION_B_1))
+        ));
+
+        tasks.addPendingStandbyTasksToCreate(mkMap(
+            mkEntry(new TaskId(0, 0, "A"), mkSet(TOPIC_PARTITION_A_0)),
+            mkEntry(new TaskId(0, 1, "A"), mkSet(TOPIC_PARTITION_A_1)),
+            mkEntry(new TaskId(0, 0, "B"), mkSet(TOPIC_PARTITION_B_0)),
+            mkEntry(new TaskId(0, 1, "B"), mkSet(TOPIC_PARTITION_B_1))
+        ));
+
+        assertEquals(mkMap(
+            mkEntry(new TaskId(0, 0, "A"), mkSet(TOPIC_PARTITION_A_0)),
+            mkEntry(new TaskId(0, 1, "A"), mkSet(TOPIC_PARTITION_A_1))
+        ), tasks.drainPendingActiveTasksForTopologies(mkSet("A")));
+
+        assertEquals(mkMap(
+            mkEntry(new TaskId(0, 0, "A"), mkSet(TOPIC_PARTITION_A_0)),
+            mkEntry(new TaskId(0, 1, "A"), mkSet(TOPIC_PARTITION_A_1))
+        ), tasks.drainPendingStandbyTasksForTopologies(mkSet("A")));
+
+        tasks.clearPendingTasksToCreate();
+
+        assertEquals(Collections.emptyMap(), tasks.drainPendingActiveTasksForTopologies(mkSet("B")));
+        assertEquals(Collections.emptyMap(), tasks.drainPendingStandbyTasksForTopologies(mkSet("B")));
     }
 }

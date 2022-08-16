@@ -568,7 +568,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         closeTaskSensor.record();
         transitionTo(State.CLOSED);
 
-        log.info("Closed and recycled state, and converted type to standby");
+        log.info("Closed and recycled state");
     }
 
     /**

@@ -43,6 +43,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -366,20 +367,21 @@ public class ProcessorStateManager implements StateManager {
     }
 
     Set<TopicPartition> changelogPartitions() {
-        return changelogOffsets().keySet();
+        return Collections.unmodifiableSet(changelogOffsets().keySet());
     }
 
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
+        final Collection<TopicPartition> partitionsToMarkAsCorrupted = new LinkedList<>(partitions);
         for (final StateStoreMetadata storeMetadata : stores.values()) {
-            if (partitions.contains(storeMetadata.changelogPartition)) {
+            if (partitionsToMarkAsCorrupted.contains(storeMetadata.changelogPartition)) {
                 storeMetadata.corrupted = true;
-                partitions.remove(storeMetadata.changelogPartition);
+                partitionsToMarkAsCorrupted.remove(storeMetadata.changelogPartition);
             }
         }
 
-        if (!partitions.isEmpty()) {
-            throw new IllegalStateException("Some partitions " + partitions + " are not contained in the store list of task " +
-                taskId + " marking as corrupted, this is not expected");
+        if (!partitionsToMarkAsCorrupted.isEmpty()) {
+            throw new IllegalStateException("Some partitions " + partitionsToMarkAsCorrupted + " are not contained in " +
+                "the store list of task " + taskId + " marking as corrupted, this is not expected");
         }
     }
 

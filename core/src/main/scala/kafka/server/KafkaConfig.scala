@@ -81,7 +81,7 @@ object Defaults {
   val BrokerHeartbeatIntervalMs = 2000
   val BrokerSessionTimeoutMs = 9000
   val MetadataSnapshotMaxNewRecordBytes = 20 * 1024 * 1024
-  val MetadataMaxIdleIntervalMs = 5000
+  val MetadataMaxIdleIntervalMs = 500
 
   /** KRaft mode configs */
   val EmptyNodeId: Int = -1
