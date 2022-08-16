@@ -49,10 +49,12 @@ import javax.ws.rs.core.Response;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -144,7 +146,8 @@ public class BlockingConnectorTest {
     public void close() {
         // stop all Connect, Kafka and Zk threads.
         connect.stop();
-        Block.resetBlockLatch();
+        // unblock everything so that we don't leak threads after each test run
+        Block.reset();
     }
 
     @Test
@@ -383,14 +386,16 @@ public class BlockingConnectorTest {
     }
 
     private static class Block {
+        // All latches that blocking connectors/tasks are or will be waiting on during a test case
+        private static final Set<CountDownLatch> BLOCK_LATCHES = new HashSet<>();
+        // The latch that can be used to wait for a connector/task to reach the most-recently-registered blocking point
         private static CountDownLatch awaitBlockLatch;
-        private static CountDownLatch performBlockLatch;
 
         private final String block;
 
         public static final String BLOCK_CONFIG = "block";
 
-        private static ConfigDef config() {
+        public static ConfigDef config() {
             return new ConfigDef()
                 .define(
                     BLOCK_CONFIG,
@@ -402,11 +407,18 @@ public class BlockingConnectorTest {
                 );
         }
 
+        /**
+         * {@link CountDownLatch#await() Wait} for the connector/task to reach the point in its lifecycle where
+         * it will block.
+         */
         public static void waitForBlock() throws InterruptedException, TimeoutException {
+            CountDownLatch awaitBlockLatch;
             synchronized (Block.class) {
-                if (awaitBlockLatch == null) {
-                    throw new IllegalArgumentException("No connector has been created yet");
-                }
+                awaitBlockLatch = Block.awaitBlockLatch;
+            }
+
+            if (awaitBlockLatch == null) {
+                throw new IllegalArgumentException("No connector has been created yet");
             }
 
             log.debug("Waiting for connector to block");
@@ -416,21 +428,33 @@ public class BlockingConnectorTest {
             log.debug("Connector should now be blocked");
         }
 
-        // Note that there is only ever at most one global block latch at a time, which makes tests that
+        /**
+         * {@link CountDownLatch#countDown() Release} any latches allocated over the course of a test
+         * to either await a connector/task reaching a blocking point, or cause a connector/task to block.
+         */
+        public static synchronized void reset() {
+            resetAwaitBlockLatch();
+            BLOCK_LATCHES.forEach(CountDownLatch::countDown);
+            BLOCK_LATCHES.clear();
+        }
+
+        // Note that there is only ever at most one global await-block latch at a time, which makes tests that
         // use blocks in multiple places impossible. If necessary, this can be addressed in the future by
-        // adding support for multiple block latches at a time, possibly identifiable by a connector/task
+        // adding support for multiple await-block latches at a time, possibly identifiable by a connector/task
         // ID, the location of the expected block, or both.
-        public static void resetBlockLatch() {
-            synchronized (Block.class) {
-                if (awaitBlockLatch != null) {
-                    awaitBlockLatch.countDown();
-                    awaitBlockLatch = null;
-                }
-                if (performBlockLatch != null) {
-                    performBlockLatch.countDown();
-                    performBlockLatch = null;
-                }
+        private static synchronized void resetAwaitBlockLatch() {
+            if (awaitBlockLatch != null) {
+                awaitBlockLatch.countDown();
+                awaitBlockLatch = null;
             }
+        }
+
+        private static CountDownLatch newBlockLatch() {
+            CountDownLatch result = new CountDownLatch(1);
+            synchronized (Block.class) {
+                BLOCK_LATCHES.add(result);
+            }
+            return result;
         }
 
         public Block(Map<String, String> props) {
@@ -439,21 +463,27 @@ public class BlockingConnectorTest {
 
         public Block(String block) {
             this.block = block;
-            synchronized (Block.class) {
-                resetBlockLatch();
-                awaitBlockLatch = new CountDownLatch(1);
-                performBlockLatch = new CountDownLatch(1);
+            if (block != null) {
+                synchronized (Block.class) {
+                    resetAwaitBlockLatch();
+                    awaitBlockLatch = new CountDownLatch(1);
+                }
             }
         }
 
         public void maybeBlockOn(String block) {
             if (block.equals(this.block)) {
                 log.info("Will block on {}", block);
-                awaitBlockLatch.countDown();
+                CountDownLatch blockLatch;
+                synchronized (Block.class) {
+                    awaitBlockLatch.countDown();
+                    blockLatch = newBlockLatch();
+                }
                 while (true) {
                     try {
-                        performBlockLatch.await();
+                        blockLatch.await();
                         log.debug("Instructed to stop blocking; will resume normal execution");
+                        return;
                     } catch (InterruptedException e) {
                         log.debug("Interrupted while blocking; will continue blocking until instructed to stop");
                     }
