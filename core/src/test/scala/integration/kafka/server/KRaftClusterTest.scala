@@ -804,27 +804,23 @@ class KRaftClusterTest {
         val quorumState = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
         val quorumInfo = quorumState.quorumInfo.get()
 
-        assertEquals(4, quorumInfo.observers.size)
-        assertEquals(3, quorumInfo.voters.size)
+        assertEquals(cluster.controllers.asScala.keySet, quorumInfo.voters.asScala.map(_.replicaId).toSet)
         assertTrue(2999 < quorumInfo.leaderId && 3003 > quorumInfo.leaderId,
           s"Leader ID ${quorumInfo.leaderId} was not within expected range.")
 
-        quorumInfo.observers.forEach { observer =>
-          assertTrue(-1 < observer.replicaId && 4 > observer.replicaId,
-            s"Observer ID ${observer.replicaId} was not within expected range.")
-          assertTrue(0 < observer.logEndOffset,
-            s"logEndOffset for observer with ID ${observer.replicaId} was ${observer.logEndOffset}")
-          assertNotEquals(OptionalLong.empty(), observer.lastFetchTimeMs)
-          assertNotEquals(OptionalLong.empty(), observer.lastCaughtUpTimeMs)
-        }
-
         quorumInfo.voters.forEach { voter =>
-          assertTrue(2999 < voter.replicaId && 3003 > voter.replicaId,
-            s"Voter ID ${voter.replicaId} was not within expected range.")
           assertTrue(0 < voter.logEndOffset,
             s"logEndOffset for voter with ID ${voter.replicaId} was ${voter.logEndOffset}")
           assertNotEquals(OptionalLong.empty(), voter.lastFetchTimeMs)
           assertNotEquals(OptionalLong.empty(), voter.lastCaughtUpTimeMs)
+        }
+
+        assertEquals(cluster.brokers.asScala.keySet, quorumInfo.observers.asScala.map(_.replicaId).toSet)
+        quorumInfo.observers.forEach { observer =>
+          assertTrue(0 < observer.logEndOffset,
+            s"logEndOffset for observer with ID ${observer.replicaId} was ${observer.logEndOffset}")
+          assertNotEquals(OptionalLong.empty(), observer.lastFetchTimeMs)
+          assertNotEquals(OptionalLong.empty(), observer.lastCaughtUpTimeMs)
         }
       } catch {
         case _: InvalidRequestException => log.error("Hit Kafka-13490. Claim test succeeded")

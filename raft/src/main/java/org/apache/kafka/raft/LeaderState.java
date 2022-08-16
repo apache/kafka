@@ -33,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -208,7 +207,7 @@ public class LeaderState<T> implements EpochState {
     /**
      * Update the local replica state.
      *
-     * See {@link #updateReplicaState(int, long, LogOffsetMetadata, Long)}
+     * See {@link #updateReplicaState(int, long, LogOffsetMetadata, long)}
      */
     public boolean updateLocalState(long fetchTimestamp, LogOffsetMetadata logOffsetMetadata) {
         return updateReplicaState(localId, fetchTimestamp, logOffsetMetadata, logOffsetMetadata.offset);
@@ -224,10 +223,10 @@ public class LeaderState<T> implements EpochState {
      * @return true if the high watermark is updated too
      */
     public boolean updateReplicaState(
-            int replicaId,
-            long fetchTimestamp,
-            LogOffsetMetadata logOffsetMetadata,
-            Long leaderLogEndOffset
+        int replicaId,
+        long fetchTimestamp,
+        LogOffsetMetadata logOffsetMetadata,
+        long leaderLogEndOffset
     ) {
         // Ignore fetches from negative replica id, as it indicates
         // the fetch is from non-replica. For example, a consumer.
@@ -266,8 +265,8 @@ public class LeaderState<T> implements EpochState {
     }
 
     private void verifyEndOffsetUpdate(
-            ReplicaState state,
-            LogOffsetMetadata endOffsetMetadata
+        ReplicaState state,
+        LogOffsetMetadata endOffsetMetadata
     ) {
         state.endOffset.ifPresent(currentEndOffset -> {
             if (currentEndOffset.offset > endOffsetMetadata.offset) {
@@ -282,9 +281,9 @@ public class LeaderState<T> implements EpochState {
         });
     }
     private boolean updateEndOffset(
-            ReplicaState state,
-            LogOffsetMetadata endOffsetMetadata,
-            boolean verifyUpdate
+        ReplicaState state,
+        LogOffsetMetadata endOffsetMetadata,
+        boolean verifyUpdate
     ) {
         if (verifyUpdate) {
             verifyEndOffsetUpdate(state, endOffsetMetadata);
@@ -320,22 +319,23 @@ public class LeaderState<T> implements EpochState {
     }
 
     List<DescribeQuorumResponseData.ReplicaState> quorumResponseVoterStates(long currentTimeMs) {
-        return quorumResponseReplicaStates(voterStates.values(), OptionalInt.of(localId), currentTimeMs);
+        return quorumResponseReplicaStates(voterStates.values(), localId, currentTimeMs);
     }
 
     List<DescribeQuorumResponseData.ReplicaState> quorumResponseObserverStates(long currentTimeMs) {
         clearInactiveObservers(currentTimeMs);
-        return quorumResponseReplicaStates(observerStates.values(), OptionalInt.empty(), currentTimeMs);
+        return quorumResponseReplicaStates(observerStates.values(), localId, currentTimeMs);
     }
 
-    private static <R extends ReplicaState> List<DescribeQuorumResponseData.ReplicaState> quorumResponseReplicaStates(
-            Collection<R> state,
-            OptionalInt leaderId,
-            long currentTimeMs) {
+    private static  List<DescribeQuorumResponseData.ReplicaState> quorumResponseReplicaStates(
+        Collection<ReplicaState> state,
+        int leaderId,
+        long currentTimeMs
+    ) {
         return state.stream().map(s -> {
             final long lastCaughtUpTimestamp;
             final long lastFetchTimestamp;
-            if (s.nodeId == leaderId.orElse(-1)) {
+            if (s.nodeId == leaderId) {
                 lastCaughtUpTimestamp = currentTimeMs;
                 lastFetchTimestamp = currentTimeMs;
             } else {
@@ -407,7 +407,7 @@ public class LeaderState<T> implements EpochState {
         public String toString() {
             return String.format(
                 "ReplicaState(nodeId=%d, endOffset=%s, lastFetchTimestamp=%s, " +
-                        " lastCaughtUpTimestamp=%s, hasAcknowledgedLeader=%s)",
+                        "lastCaughtUpTimestamp=%s, hasAcknowledgedLeader=%s)",
                 nodeId,
                 endOffset,
                 lastFetchTimestamp,
