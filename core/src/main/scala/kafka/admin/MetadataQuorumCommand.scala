@@ -24,6 +24,7 @@ import net.sourceforge.argparse4j.inf.Subparsers
 import org.apache.kafka.clients._
 import org.apache.kafka.clients.admin.{Admin, QuorumInfo}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.Utils.prettyPrintTable
 
 import java.io.File
 import java.util.Properties
@@ -117,69 +118,54 @@ object MetadataQuorumCommand {
   }
 
   private def handleDescribeReplication(admin: Admin): Unit = {
-    val quorumInfo = admin.describeMetadataQuorum().quorumInfo().get()
-    val leaderId = quorumInfo.leaderId()
-    val leader = quorumInfo.voters().asScala.filter(_.replicaId() == leaderId).head
-    // Find proper columns width
-    var (maxReplicaIdLen, maxLogEndOffsetLen, maxLagLen, maxLastFetchTimeMsLen, maxLastCaughtUpTimeMsLen) =
-      (15, 15, 15, 15, 18)
-    (quorumInfo.voters().asScala ++ quorumInfo.observers().asScala).foreach { voter =>
-      maxReplicaIdLen = Math.max(maxReplicaIdLen, voter.replicaId().toString.length)
-      maxLogEndOffsetLen = Math.max(maxLogEndOffsetLen, voter.logEndOffset().toString.length)
-      maxLagLen = Math.max(maxLagLen, (leader.logEndOffset() - voter.logEndOffset()).toString.length)
-      maxLastFetchTimeMsLen = Math.max(maxLastFetchTimeMsLen, leader.lastFetchTimeMs().orElse(-1).toString.length)
-      maxLastCaughtUpTimeMsLen =
-        Math.max(maxLastCaughtUpTimeMsLen, leader.lastCaughtUpTimeMs().orElse(-1).toString.length)
-    }
-    println(
-      s"%${-maxReplicaIdLen}s %${-maxLogEndOffsetLen}s %${-maxLagLen}s %${-maxLastFetchTimeMsLen}s %${-maxLastCaughtUpTimeMsLen}s %-15s "
-        .format("ReplicaId", "LogEndOffset", "Lag", "LastFetchTimeMs", "LastCaughtUpTimeMs", "Status")
-    )
+    val quorumInfo = admin.describeMetadataQuorum.quorumInfo.get
+    val leaderId = quorumInfo.leaderId
+    val leader = quorumInfo.voters.asScala.filter(_.replicaId == leaderId).head
 
-    def printQuorumInfo(infos: Seq[QuorumInfo.ReplicaState], status: String): Unit =
-      infos.foreach { voter =>
-        println(
-          s"%${-maxReplicaIdLen}s %${-maxLogEndOffsetLen}s %${-maxLagLen}s %${-maxLastFetchTimeMsLen}s %${-maxLastCaughtUpTimeMsLen}s %-15s "
-            .format(
-              voter.replicaId(),
-              voter.logEndOffset(),
-              leader.logEndOffset() - voter.logEndOffset(),
-              voter.lastFetchTimeMs().orElse(-1),
-              voter.lastCaughtUpTimeMs().orElse(-1),
+    def convertQuorumInfo(infos: Seq[QuorumInfo.ReplicaState], status: String): Seq[Array[String]] =
+      infos.map { voter =>
+        Array(voter.replicaId,
+              voter.logEndOffset,
+              leader.logEndOffset - voter.logEndOffset,
+              voter.lastFetchTimeMs.orElse(-1),
+              voter.lastCaughtUpTimeMs.orElse(-1),
               status
-            ))
+        ).map(_.toString)
       }
-    printQuorumInfo(Seq(leader), "Leader")
-    printQuorumInfo(quorumInfo.voters().asScala.filter(_.replicaId() != leaderId).toSeq, "Follower")
-    printQuorumInfo(quorumInfo.observers().asScala.toSeq, "Observer")
+    prettyPrintTable(
+      Array("ReplicaId", "LogEndOffset", "Lag", "LastFetchTimeMs", "LastCaughtUpTimeMs", "Status"),
+      (convertQuorumInfo(Seq(leader), "Leader")
+        ++ convertQuorumInfo(quorumInfo.voters.asScala.filter(_.replicaId != leaderId).toSeq, "Follower")
+        ++ convertQuorumInfo(quorumInfo.observers.asScala.toSeq, "Observer")).asJava,
+      scala.Console.out
+    )
   }
 
   private def handleDescribeStatus(admin: Admin): Unit = {
-    val clusterId = admin.describeCluster().clusterId().get()
-    val quorumInfo = admin.describeMetadataQuorum().quorumInfo().get()
-    val leaderId = quorumInfo.leaderId()
-    val leader = quorumInfo.voters().asScala.filter(_.replicaId() == leaderId).head
-    val maxLagFollower = quorumInfo
-      .voters()
-      .asScala
-      .filter(_.replicaId() != leaderId)
-      .minBy(_.logEndOffset())
-    val maxFollowerLag = leader.logEndOffset() - maxLagFollower.logEndOffset()
+    val clusterId = admin.describeCluster.clusterId.get
+    val quorumInfo = admin.describeMetadataQuorum.quorumInfo.get
+    val leaderId = quorumInfo.leaderId
+    val leader = quorumInfo.voters.asScala.filter(_.replicaId == leaderId).head
+    val maxLagFollower = quorumInfo.voters.asScala
+      .minBy(_.logEndOffset)
+    val maxFollowerLag = leader.logEndOffset - maxLagFollower.logEndOffset
     val maxFollowerLagTimeMs =
-      if (leader.lastCaughtUpTimeMs().isPresent && maxLagFollower.lastCaughtUpTimeMs().isPresent) {
-        leader.lastCaughtUpTimeMs().getAsLong - maxLagFollower.lastCaughtUpTimeMs().getAsLong
+      if (leader == maxLagFollower) {
+        0
+      } else if (leader.lastCaughtUpTimeMs.isPresent && maxLagFollower.lastCaughtUpTimeMs.isPresent) {
+        leader.lastCaughtUpTimeMs.getAsLong - maxLagFollower.lastCaughtUpTimeMs.getAsLong
       } else {
         -1
       }
     println(
       s"""|ClusterId:              $clusterId
-          |LeaderId:               ${quorumInfo.leaderId()}
-          |LeaderEpoch:            ${quorumInfo.leaderEpoch()}
-          |HighWatermark:          ${quorumInfo.highWatermark()}
+          |LeaderId:               ${quorumInfo.leaderId}
+          |LeaderEpoch:            ${quorumInfo.leaderEpoch}
+          |HighWatermark:          ${quorumInfo.highWatermark}
           |MaxFollowerLag:         $maxFollowerLag
           |MaxFollowerLagTimeMs:   $maxFollowerLagTimeMs
-          |CurrentVoters:          ${quorumInfo.voters().asScala.map(_.replicaId()).mkString("[", ",", "]")}
-          |CurrentObservers:       ${quorumInfo.observers().asScala.map(_.replicaId()).mkString("[", ",", "]")}
+          |CurrentVoters:          ${quorumInfo.voters.asScala.map(_.replicaId).mkString("[", ",", "]")}
+          |CurrentObservers:       ${quorumInfo.observers.asScala.map(_.replicaId).mkString("[", ",", "]")}
           |""".stripMargin
     )
   }

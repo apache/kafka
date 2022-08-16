@@ -32,9 +32,20 @@ import java.util.concurrent.ExecutionException
 @Tag("integration")
 class MetadataQuorumCommandTest(cluster: ClusterInstance) {
 
+  /**
+   * 1. The same number of broker controllers
+   * 2. More brokers than controllers
+   * 3. Fewer brokers than controllers
+   */
   @ClusterTests(
-    Array(new ClusterTest(clusterType = Type.CO_KRAFT, brokers = 3, controllers = 3),
-          new ClusterTest(clusterType = Type.KRAFT, brokers = 3, controllers = 3)))
+    Array(
+      new ClusterTest(clusterType = Type.CO_KRAFT, brokers = 3, controllers = 3),
+      new ClusterTest(clusterType = Type.KRAFT, brokers = 3, controllers = 3),
+      new ClusterTest(clusterType = Type.CO_KRAFT, brokers = 3, controllers = 4),
+      new ClusterTest(clusterType = Type.KRAFT, brokers = 3, controllers = 4),
+      new ClusterTest(clusterType = Type.CO_KRAFT, brokers = 4, controllers = 3),
+      new ClusterTest(clusterType = Type.KRAFT, brokers = 4, controllers = 3)
+    ))
   def testDescribeQuorumReplicationSuccessful(): Unit = {
     val describeOutput = TestUtils.grabConsoleOutput(
       MetadataQuorumCommand.mainNoExit(
@@ -46,23 +57,35 @@ class MetadataQuorumCommandTest(cluster: ClusterInstance) {
     val observerPattern = """\d+\s+\d+\s+\d+\s+[-]?\d+\s+[-]?\d+\s+Observer\s+""".r
     val outputs = describeOutput.split("\n").tail
     if (cluster.config().clusterType() == Type.CO_KRAFT) {
-      assertEquals(cluster.config().numControllers(), outputs.length)
+      assertEquals(Math.max(cluster.config().numControllers(), cluster.config().numBrokers()), outputs.length)
     } else {
       assertEquals(cluster.config().numBrokers() + cluster.config().numControllers(), outputs.length)
     }
-    assertTrue(leaderPattern.matches(outputs.head))
+    assertTrue(leaderPattern.matches(outputs.head), "[" + outputs.head + "]")
     assertEquals(1, outputs.count(leaderPattern.matches(_)))
     assertEquals(cluster.config().numControllers() - 1, outputs.count(followerPattern.matches(_)))
+
     if (cluster.config().clusterType() == Type.CO_KRAFT) {
-      assertEquals(0, outputs.count(observerPattern.matches(_)))
+      assertEquals(Math.max(0, cluster.config().numBrokers() - cluster.config().numControllers()), outputs.count(observerPattern.matches(_)))
     } else {
       assertEquals(cluster.config().numBrokers(), outputs.count(observerPattern.matches(_)))
     }
   }
 
+  /**
+   * 1. The same number of broker controllers
+   * 2. More brokers than controllers
+   * 3. Fewer brokers than controllers
+   */
   @ClusterTests(
-    Array(new ClusterTest(clusterType = Type.CO_KRAFT, brokers = 3, controllers = 3),
-          new ClusterTest(clusterType = Type.KRAFT, brokers = 3, controllers = 3)))
+    Array(
+      new ClusterTest(clusterType = Type.CO_KRAFT, brokers = 3, controllers = 3),
+      new ClusterTest(clusterType = Type.KRAFT, brokers = 3, controllers = 3),
+      new ClusterTest(clusterType = Type.CO_KRAFT, brokers = 3, controllers = 4),
+      new ClusterTest(clusterType = Type.KRAFT, brokers = 3, controllers = 4),
+      new ClusterTest(clusterType = Type.CO_KRAFT, brokers = 4, controllers = 3),
+      new ClusterTest(clusterType = Type.KRAFT, brokers = 4, controllers = 3)
+    ))
   def testDescribeQuorumStatusSuccessful(): Unit = {
     val describeOutput = TestUtils.grabConsoleOutput(
       MetadataQuorumCommand.mainNoExit(Array("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status"))
@@ -76,11 +99,30 @@ class MetadataQuorumCommandTest(cluster: ClusterInstance) {
     assertTrue("""MaxFollowerLag:\s+\d+""".r.matches(outputs(4)))
     assertTrue("""MaxFollowerLagTimeMs:\s+[-]?\d+""".r.matches(outputs(5)), "[" + outputs(5) + "]")
     assertTrue("""CurrentVoters:\s+\[\d+(,\d+)*\]""".r.matches(outputs(6)))
-    if (cluster.config().clusterType() == Type.CO_KRAFT) {
+
+    // There are no observers if we have fewer brokers than controllers
+    if (cluster.config().clusterType() == Type.CO_KRAFT
+        && cluster.config().numBrokers() <= cluster.config().numControllers()) {
       assertTrue("""CurrentObservers:\s+\[\]""".r.matches(outputs(7)))
     } else {
       assertTrue("""CurrentObservers:\s+\[\d+(,\d+)*\]""".r.matches(outputs(7)))
     }
+  }
+
+  @ClusterTests(
+    Array(new ClusterTest(clusterType = Type.CO_KRAFT, brokers = 1, controllers = 1),
+          new ClusterTest(clusterType = Type.KRAFT, brokers = 1, controllers = 1)))
+  def testOnlyOneBrokerAndOneController(): Unit = {
+    val statusOutput = TestUtils.grabConsoleOutput(
+      MetadataQuorumCommand.mainNoExit(Array("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status"))
+    )
+    assertEquals("MaxFollowerLag:         0", statusOutput.split("\n")(4))
+    assertEquals("MaxFollowerLagTimeMs:   0", statusOutput.split("\n")(5))
+
+    val replicationOutput = TestUtils.grabConsoleOutput(
+      MetadataQuorumCommand.mainNoExit(Array("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication"))
+    )
+    assertEquals("0", replicationOutput.split("\n").last.split("\\s+")(2))
   }
 
   @ClusterTest(clusterType = Type.ZK, brokers = 3, controllers = 1)
