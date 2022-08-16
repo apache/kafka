@@ -227,34 +227,35 @@ public class TaskManager {
 
     private void closeDirtyAndRevive(final Collection<Task> taskWithChangelogs, final boolean markAsCorrupted) {
         for (final Task task : taskWithChangelogs) {
-            final Collection<TopicPartition> corruptedPartitions = task.changelogPartitions();
+            if (task.state() != State.CLOSED) {
+                final Collection<TopicPartition> corruptedPartitions = task.changelogPartitions();
 
-            // mark corrupted partitions to not be checkpointed, and then close the task as dirty
-            if (markAsCorrupted) {
-                task.markChangelogAsCorrupted(corruptedPartitions);
-            }
-
-            try {
-                // we do not need to take the returned offsets since we are not going to commit anyways;
-                // this call is only used for active tasks to flush the cache before suspending and
-                // closing the topology
-                task.prepareCommit();
-            } catch (final RuntimeException swallow) {
-                log.error("Error flushing cache for corrupted task {} ", task.id(), swallow);
-            }
-
-            try {
-                task.suspend();
-
-                // we need to enforce a checkpoint that removes the corrupted partitions
+                // mark corrupted partitions to not be checkpointed, and then close the task as dirty
                 if (markAsCorrupted) {
-                    task.postCommit(true);
+                    task.markChangelogAsCorrupted(corruptedPartitions);
                 }
-            } catch (final RuntimeException swallow) {
-                log.error("Error suspending corrupted task {} ", task.id(), swallow);
-            }
-            task.closeDirty();
 
+                try {
+                    // we do not need to take the returned offsets since we are not going to commit anyways;
+                    // this call is only used for active tasks to flush the cache before suspending and
+                    // closing the topology
+                    task.prepareCommit();
+                } catch (final RuntimeException swallow) {
+                    log.error("Error flushing cache for corrupted task {} ", task.id(), swallow);
+                }
+
+                try {
+                    task.suspend();
+
+                    // we need to enforce a checkpoint that removes the corrupted partitions
+                    if (markAsCorrupted) {
+                        task.postCommit(true);
+                    }
+                } catch (final RuntimeException swallow) {
+                    log.error("Error suspending corrupted task {} ", task.id(), swallow);
+                }
+                task.closeDirty();
+            }
             // For active tasks pause their input partitions so we won't poll any more records
             // for this task until it has been re-initialized;
             // Note, closeDirty already clears the partition-group for the task.
@@ -320,40 +321,43 @@ public class TaskManager {
 
         final Map<TaskId, RuntimeException> taskCloseExceptions = closeAndRecycleTasks(tasksToRecycle, tasksToCloseClean);
 
-        throwTaskExceptions(taskCloseExceptions);
+        maybeThrowTaskExceptions(taskCloseExceptions);
 
         createNewTasks(activeTasksToCreate, standbyTasksToCreate);
     }
 
-    private void throwTaskExceptions(final Map<TaskId, RuntimeException> taskExceptions) {
+    // if at least one of the exception is a task-migrated exception, then directly throw since it indicates all tasks are lost
+    // if at least one of the exception is a streams exception, then directly throw since it should be handled by thread's handler
+    // if at least one of the exception is a non-streams exception, then wrap and throw since it should be handled by thread's handler
+    // otherwise, all the exceptions are task-corrupted, then merge their tasks and throw a single one
+    // TODO: move task-corrupted and task-migrated out of the public errors package since they are internal errors and always be
+    //       handled by Streams library itself
+    private void maybeThrowTaskExceptions(final Map<TaskId, RuntimeException> taskExceptions) {
         if (!taskExceptions.isEmpty()) {
             log.error("Get exceptions for the following tasks: {}", taskExceptions);
 
+            final TaskCorruptedException allTaskCorrupts = new TaskCorruptedException(new HashSet<>());
             for (final Map.Entry<TaskId, RuntimeException> entry : taskExceptions.entrySet()) {
-                if (!(entry.getValue() instanceof TaskMigratedException)) {
-                    final TaskId taskId = entry.getKey();
-                    final RuntimeException exception = entry.getValue();
-                    if (exception instanceof StreamsException) {
+                final TaskId taskId = entry.getKey();
+                final RuntimeException exception = entry.getValue();
+
+                if (exception instanceof StreamsException) {
+                    if (exception instanceof TaskMigratedException) {
+                        throw entry.getValue();
+                    } else if (exception instanceof TaskCorruptedException) {
+                        allTaskCorrupts.corruptedTasks().add(taskId);
+                    } else {
                         ((StreamsException) exception).setTaskId(taskId);
                         throw exception;
-                    } else if (exception instanceof KafkaException) {
-                        throw new StreamsException(exception, taskId);
-                    } else {
-                        throw new StreamsException(
-                            "Unexpected failure to close " + taskExceptions.size() +
-                                " task(s) [" + taskExceptions.keySet() + "]. " +
-                                "First unexpected exception (for task " + taskId + ") follows.",
-                            exception,
-                            taskId
-                        );
                     }
+                } else if (exception instanceof KafkaException) {
+                    throw new StreamsException(exception, taskId);
+                } else {
+                    throw new StreamsException("First unexpected error for task " + taskId, exception, taskId);
                 }
             }
 
-            // If all exceptions are task-migrated, we would just throw the first one. No need to wrap with a
-            // StreamsException since TaskMigrated is handled explicitly by the StreamThread
-            final Map.Entry<TaskId, RuntimeException> first = taskExceptions.entrySet().iterator().next();
-            throw first.getValue();
+            throw allTaskCorrupts;
         }
     }
 
@@ -667,6 +671,25 @@ public class TaskManager {
         }
     }
 
+    public void tryHandleExceptionsFromStateUpdater() {
+        if (stateUpdater != null) {
+            final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
+
+            for (final StateUpdater.ExceptionAndTasks exceptionAndTasks : stateUpdater.drainExceptionsAndFailedTasks()) {
+                final RuntimeException exception = exceptionAndTasks.exception();
+                final Set<Task> failedTasks = exceptionAndTasks.getTasks();
+
+                for (final Task failedTask : failedTasks) {
+                    // need to add task back to the bookkeeping to be handled by the stream thread
+                    tasks.addTask(failedTask);
+                    taskExceptions.put(failedTask.id(), exception);
+                }
+            }
+
+            maybeThrowTaskExceptions(taskExceptions);
+        }
+    }
+
     private void handleRemovedTasksFromStateUpdater() {
         final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
         final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
@@ -685,12 +708,9 @@ public class TaskManager {
                     final String uncleanMessage = String.format("Failed to recycle task %s cleanly. " +
                         "Attempting to handle remaining tasks before re-throwing:", taskId);
                     log.error(uncleanMessage, e);
-
-                    if (task.state() != State.CLOSED) {
-                        tasksToCloseDirty.add(task);
-                    }
-
                     taskExceptions.putIfAbsent(taskId, e);
+
+                    tasksToCloseDirty.add(task);
                 }
             } else if (tasks.removePendingTaskToClose(task.id())) {
                 try {
@@ -703,12 +723,11 @@ public class TaskManager {
                     final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
                         "Attempting to handle remaining tasks before re-throwing:", task.id());
                     log.error(uncleanMessage, e);
+                    taskExceptions.putIfAbsent(task.id(), e);
 
                     if (task.state() != State.CLOSED) {
                         tasksToCloseDirty.add(task);
                     }
-
-                    taskExceptions.putIfAbsent(task.id(), e);
                 }
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
@@ -719,11 +738,12 @@ public class TaskManager {
             }
         }
 
+        // for tasks that cannot be cleanly closed or recycled, close them dirty
         for (final Task task : tasksToCloseDirty) {
             closeTaskDirty(task);
         }
 
-        throwTaskExceptions(taskExceptions);
+        maybeThrowTaskExceptions(taskExceptions);
     }
 
     /**

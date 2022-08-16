@@ -299,7 +299,6 @@ class Tasks {
         return getTask(taskId) != null;
     }
 
-    // for testing only
     void addTask(final Task task) {
         if (task.isActive()) {
             activeTasksPerId.put(task.id(), task);

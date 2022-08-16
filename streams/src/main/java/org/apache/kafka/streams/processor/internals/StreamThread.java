@@ -877,6 +877,8 @@ public class StreamThread extends Thread {
             // transit to restore active is idempotent so we can call it multiple times
             changelogReader.enforceRestoreActive();
 
+            taskManager.tryHandleExceptionsFromStateUpdater();
+
             if (taskManager.tryToCompleteRestoration(now, partitions -> resetOffsets(partitions, null))) {
                 changelogReader.transitToUpdateStandby();
                 log.info("Restoration took {} ms for all tasks {}", time.milliseconds() - lastPartitionAssignedMs,
