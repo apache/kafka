@@ -69,6 +69,7 @@ import static org.apache.kafka.streams.processor.internals.Task.State.SUSPENDED;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.isA;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -565,9 +566,10 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldRecycleTask() {
+    public void shouldPrepareRecycleSuspendedTask() {
         EasyMock.expect(stateManager.changelogOffsets()).andStubReturn(Collections.emptyMap());
         stateManager.recycle();
+        EasyMock.expectLastCall().once();
         EasyMock.replay(stateManager);
 
         task = createStandbyTask();
@@ -578,6 +580,7 @@ public class StandbyTaskTest {
 
         task.suspend();
         task.prepareRecycle(); // SUSPENDED
+        assertThat(task.state(), is(Task.State.CLOSED));
 
         // Currently, there are no metrics registered for standby tasks.
         // This is a regression test so that, if we add some, we will be sure to deregister them.

@@ -2178,8 +2178,10 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldUnregisterMetricsInCloseCleanAndRecycleState() {
+    public void shouldUnregisterMetricsAndCloseInPrepareRecycle() {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
+        stateManager.recycle();
+        EasyMock.expectLastCall().once();
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
         EasyMock.replay(stateManager, recordCollector);
 
@@ -2189,6 +2191,7 @@ public class StreamTaskTest {
         assertThat(getTaskMetrics(), not(empty()));
         task.prepareRecycle();
         assertThat(getTaskMetrics(), empty());
+        assertThat(task.state(), is(Task.State.CLOSED));
     }
 
     @Test
@@ -2270,10 +2273,12 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldOnlyRecycleSuspendedTasks() {
-        stateManager.recycle();
-        recordCollector.closeClean();
+    public void shouldPrepareRecycleSuspendedTask() {
         EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.emptyMap()).anyTimes();
+        stateManager.recycle();
+        EasyMock.expectLastCall().once();
+        recordCollector.closeClean();
+        EasyMock.expectLastCall().once();
         EasyMock.replay(stateManager, recordCollector);
 
         task = createStatefulTask(createConfig("100"), true);
@@ -2287,6 +2292,7 @@ public class StreamTaskTest {
 
         task.suspend();
         task.prepareRecycle(); // SUSPENDED
+        assertThat(task.state(), is(Task.State.CLOSED));
 
         EasyMock.verify(stateManager, recordCollector);
     }

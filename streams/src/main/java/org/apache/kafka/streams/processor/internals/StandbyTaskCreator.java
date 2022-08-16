@@ -67,6 +67,7 @@ class StandbyTaskCreator {
         );
     }
 
+    // TODO: convert to StandbyTask when we remove TaskManager#StateMachineTask with mocks
     Collection<Task> createTasks(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
         final List<Task> createdTasks = new ArrayList<>();
 

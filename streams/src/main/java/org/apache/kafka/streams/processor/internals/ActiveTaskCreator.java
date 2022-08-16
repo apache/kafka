@@ -135,6 +135,7 @@ class ActiveTaskCreator {
         return threadProducer;
     }
 
+    // TODO: convert to StreamTask when we remove TaskManager#StateMachineTask with mocks
     public Collection<Task> createTasks(final Consumer<byte[], byte[]> consumer,
                                         final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
         final List<Task> createdTasks = new ArrayList<>();

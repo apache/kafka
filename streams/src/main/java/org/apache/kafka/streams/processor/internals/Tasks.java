@@ -43,83 +43,90 @@ import static org.apache.kafka.common.utils.Utils.union;
 class Tasks {
     private final Logger log;
 
-    // TODO: change type to `StreamTask`
+    // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
     private final Map<TaskId, Task> activeTasksPerId = new TreeMap<>();
-    // TODO: change type to `StandbyTask`
     private final Map<TaskId, Task> standbyTasksPerId = new TreeMap<>();
 
     // Tasks may have been assigned for a NamedTopology that is not yet known by this host. When that occurs we stash
     // these unknown tasks until either the corresponding NamedTopology is added and we can create them at last, or
     // we receive a new assignment and they are revoked from the thread.
-
-    // Tasks may have been assigned but not yet created because:
-    // 1. They are for a NamedTopology that is yet known by this host.
-    // 2. They are to be recycled from an existing restoring task yet to be returned from the state updater.
-    //
-    // When that occurs we stash these pending tasks until either they are finally clear to be created,
-    // or they are revoked from a new assignment.
     private final Map<TaskId, Set<TopicPartition>> pendingActiveTasksToCreate = new HashMap<>();
     private final Map<TaskId, Set<TopicPartition>> pendingStandbyTasksToCreate = new HashMap<>();
-
-    private final Set<Task> pendingTasksToRestore = new HashSet<>();
-
-    private final Set<TaskId> pendingActiveTasksToRecycle = new HashSet<>();
-    private final Set<TaskId> pendingStandbyTasksToRecycle = new HashSet<>();
-    private final Set<TaskId> pendingTasksThatNeedInputPartitionUpdate = new HashSet<>();
+    private final Map<TaskId, Set<TopicPartition>> pendingTasksToRecycle = new HashMap<>();
+    private final Map<TaskId, Set<TopicPartition>> pendingTasksToUpdateInputPartitions = new HashMap<>();
+    private final Set<Task> pendingTasksToInit = new HashSet<>();
     private final Set<TaskId> pendingTasksToClose = new HashSet<>();
 
-    // TODO: change type to `StreamTask`
+    // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
     private final Map<TopicPartition, Task> activeTasksPerPartition = new HashMap<>();
 
     Tasks(final LogContext logContext) {
         this.log = logContext.logger(getClass());
     }
 
-    void purgePendingTasks(final Set<TaskId> assignedActiveTasks, final Set<TaskId> assignedStandbyTasks) {
-        pendingActiveTasksToCreate.keySet().retainAll(assignedActiveTasks);
-        pendingStandbyTasksToCreate.keySet().retainAll(assignedStandbyTasks);
+    void clearPendingTasksToCreate() {
+        pendingActiveTasksToCreate.clear();
+        pendingStandbyTasksToCreate.clear();
     }
 
-    void addPendingActiveTasks(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
+    Map<TaskId, Set<TopicPartition>> drainPendingActiveTasksForTopologies(final Set<String> currentTopologies) {
+        final Map<TaskId, Set<TopicPartition>> pendingActiveTasksForTopologies =
+            filterMap(pendingActiveTasksToCreate, t -> currentTopologies.contains(t.getKey().topologyName()));
+
+        pendingActiveTasksToCreate.keySet().removeAll(pendingActiveTasksForTopologies.keySet());
+
+        return pendingActiveTasksForTopologies;
+    }
+
+    Map<TaskId, Set<TopicPartition>> drainPendingStandbyTasksForTopologies(final Set<String> currentTopologies) {
+        final Map<TaskId, Set<TopicPartition>> pendingActiveTasksForTopologies =
+            filterMap(pendingStandbyTasksToCreate, t -> currentTopologies.contains(t.getKey().topologyName()));
+
+        pendingStandbyTasksToCreate.keySet().removeAll(pendingActiveTasksForTopologies.keySet());
+
+        return pendingActiveTasksForTopologies;
+    }
+
+    void addPendingActiveTasksToCreate(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
         pendingActiveTasksToCreate.putAll(pendingTasks);
     }
 
-    void addPendingStandbyTasks(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
+    void addPendingStandbyTasksToCreate(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
         pendingStandbyTasksToCreate.putAll(pendingTasks);
     }
 
-    void addPendingActiveTaskToRecycle(final TaskId taskId) {
-        pendingActiveTasksToRecycle.add(taskId);
+    Set<TopicPartition> removePendingTaskToRecycle(final TaskId taskId) {
+        return pendingTasksToRecycle.remove(taskId);
     }
 
-    void addPendingStandbyTaskToRecycle(final TaskId taskId) {
-        pendingStandbyTasksToRecycle.add(taskId);
+    void addPendingTaskToRecycle(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
+        pendingTasksToRecycle.put(taskId, inputPartitions);
     }
 
-    void addPendingTaskThatNeedsInputPartitionsUpdate(final TaskId taskId) {
-        pendingTasksThatNeedInputPartitionUpdate.add(taskId);
+    Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId) {
+        return pendingTasksToUpdateInputPartitions.remove(taskId);
+    }
+
+    void addPendingTaskToUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
+        pendingTasksToUpdateInputPartitions.put(taskId, inputPartitions);
+    }
+
+    boolean removePendingTaskToClose(final TaskId taskId) {
+        return pendingTasksToClose.remove(taskId);
     }
 
     void addPendingTaskToClose(final TaskId taskId) {
         pendingTasksToClose.add(taskId);
     }
 
-    void addPendingTaskToRestore(final Collection<Task> tasks) {
-        pendingTasksToRestore.addAll(tasks);
-    }
-
-    Set<Task> drainPendingTaskToRestore() {
-        final Set<Task> result = new HashSet<>(pendingTasksToRestore);
-        pendingTasksToRestore.clear();
+    Set<Task> drainPendingTaskToInit() {
+        final Set<Task> result = new HashSet<>(pendingTasksToInit);
+        pendingTasksToInit.clear();
         return result;
     }
 
-    Map<TaskId, Set<TopicPartition>> pendingActiveTasksForTopologies(final Set<String> currentTopologies) {
-        return filterMap(pendingActiveTasksToCreate, t -> currentTopologies.contains(t.getKey().topologyName()));
-    }
-
-    Map<TaskId, Set<TopicPartition>> pendingStandbyTasksForTopologies(final Set<String> currentTopologies) {
-        return filterMap(pendingStandbyTasksToCreate, t -> currentTopologies.contains(t.getKey().topologyName()));
+    void addPendingTaskToInit(final Collection<Task> tasks) {
+        pendingTasksToInit.addAll(tasks);
     }
 
     void addNewActiveTasks(final Collection<Task> newTasks) {
@@ -136,7 +143,6 @@ class Tasks {
                 }
 
                 activeTasksPerId.put(activeTask.id(), activeTask);
-                pendingActiveTasksToCreate.remove(activeTask.id());
                 for (final TopicPartition topicPartition : activeTask.inputPartitions()) {
                     activeTasksPerPartition.put(topicPartition, activeTask);
                 }
@@ -158,7 +164,6 @@ class Tasks {
                 }
 
                 standbyTasksPerId.put(standbyTask.id(), standbyTask);
-                pendingStandbyTasksToCreate.remove(standbyTask.id());
             }
         }
     }
@@ -175,12 +180,10 @@ class Tasks {
                 throw new IllegalArgumentException("Attempted to remove an active task that is not owned: " + taskId);
             }
             removePartitionsForActiveTask(taskId);
-            pendingActiveTasksToCreate.remove(taskId);
         } else {
             if (standbyTasksPerId.remove(taskId) == null) {
                 throw new IllegalArgumentException("Attempted to remove a standby task that is not owned: " + taskId);
             }
-            pendingStandbyTasksToCreate.remove(taskId);
         }
     }
 
@@ -269,7 +272,6 @@ class Tasks {
         return tasks;
     }
 
-    // TODO: change return type to `StreamTask`
     Collection<Task> activeTasks() {
         return Collections.unmodifiableCollection(activeTasksPerId.values());
     }

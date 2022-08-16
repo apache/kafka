@@ -257,16 +257,14 @@ public class TaskManagerTest {
 
     @Test
     public void shouldAddTasksToStateUpdater() {
-        final StreamTask task00 = mock(StreamTask.class);
-        final StandbyTask task01 = mock(StandbyTask.class);
-        when(task00.id()).thenReturn(taskId00);
-        when(task01.id()).thenReturn(taskId01);
-        when(task00.inputPartitions()).thenReturn(taskId00Partitions);
-        when(task01.inputPartitions()).thenReturn(taskId01Partitions);
-        when(task00.isActive()).thenReturn(true);
-        when(task01.isActive()).thenReturn(false);
-        when(task00.state()).thenReturn(State.RESTORING);
-        when(task01.state()).thenReturn(State.RUNNING);
+        final StreamTask task00 = statefulTask(taskId00, taskId00Partitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RESTORING)
+            .build();
+        final StandbyTask task01 = standbyTask(taskId01, taskId01Partitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING)
+            .build();
         expect(changeLogReader.completedChangelogs()).andReturn(emptySet()).anyTimes();
         expect(consumer.assignment()).andReturn(emptySet()).anyTimes();
         consumer.resume(anyObject());
@@ -274,6 +272,156 @@ public class TaskManagerTest {
         expect(activeTaskCreator.createTasks(anyObject(), eq(taskId00Assignment))).andStubReturn(singletonList(task00));
         expect(standbyTaskCreator.createTasks(eq(taskId01Assignment))).andStubReturn(singletonList(task01));
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
+
+        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, true);
+        taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
+        taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter -> { });
+
+        Mockito.verify(task00).initializeIfNeeded();
+        Mockito.verify(task01).initializeIfNeeded();
+        Mockito.verify(stateUpdater).add(task00);
+        Mockito.verify(stateUpdater).add(task01);
+    }
+
+    @Test
+    public void shouldHandleRemovedTasksToRecycleFromStateUpdater() {
+        final StreamTask task00 = statefulTask(taskId00, taskId00Partitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RESTORING)
+            .build();
+        final StandbyTask task01 = standbyTask(taskId01, taskId01Partitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING)
+            .build();
+        final StandbyTask task00Converted = standbyTask(taskId00, taskId00Partitions)
+            .withInputPartitions(taskId00Partitions)
+            .build();
+        final StreamTask task01Converted = statefulTask(taskId01, taskId01Partitions)
+            .withInputPartitions(taskId01Partitions)
+            .build();
+        when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(task00, task01));
+
+        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, true);
+        expect(activeTaskCreator.createActiveTaskFromStandby(eq(task01), eq(taskId01Partitions), eq(consumer)))
+            .andStubReturn(task01Converted);
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(anyObject());
+        expectLastCall().once();
+        expect(standbyTaskCreator.createStandbyTaskFromActive(eq(task00), eq(taskId00Partitions)))
+            .andStubReturn(task00Converted);
+        expect(consumer.assignment()).andReturn(emptySet()).anyTimes();
+        consumer.resume(anyObject());
+        expectLastCall().anyTimes();
+        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer);
+
+        taskManager.tasks().addPendingTaskToRecycle(taskId00, taskId00Partitions);
+        taskManager.tasks().addPendingTaskToRecycle(taskId01, taskId01Partitions);
+        taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter -> { });
+
+        Mockito.verify(task00Converted).initializeIfNeeded();
+        Mockito.verify(task01Converted).initializeIfNeeded();
+        Mockito.verify(stateUpdater).add(task00Converted);
+        Mockito.verify(stateUpdater).add(task01Converted);
+    }
+
+    @Test
+    public void shouldHandleRemovedTasksToCloseFromStateUpdater() {
+        final StreamTask task00 = statefulTask(taskId00, taskId00Partitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RESTORING)
+            .build();
+        final StandbyTask task01 = standbyTask(taskId01, taskId01Partitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING)
+            .build();
+        when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(task00, task01));
+
+        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, true);
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(anyObject());
+        expectLastCall().once();
+        expect(consumer.assignment()).andReturn(emptySet()).anyTimes();
+        consumer.resume(anyObject());
+        expectLastCall().anyTimes();
+        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer);
+
+        taskManager.tasks().addPendingTaskToClose(taskId00);
+        taskManager.tasks().addPendingTaskToClose(taskId01);
+
+        taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter -> { });
+
+        Mockito.verify(task00).suspend();
+        Mockito.verify(task00).closeClean();
+        Mockito.verify(task01).suspend();
+        Mockito.verify(task01).closeClean();
+    }
+
+    @Test
+    public void shouldHandleRemovedTasksToUpdateInputPartitionsFromStateUpdater() {
+        final StreamTask task00 = statefulTask(taskId00, taskId00Partitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RESTORING)
+            .build();
+        final StandbyTask task01 = standbyTask(taskId01, taskId01Partitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING)
+            .build();
+        when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(task00, task01));
+
+        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, true);
+        expect(consumer.assignment()).andReturn(emptySet()).anyTimes();
+        consumer.resume(anyObject());
+        expectLastCall().anyTimes();
+        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer);
+
+        taskManager.tasks().addPendingTaskToUpdateInputPartitions(taskId00, taskId02Partitions);
+        taskManager.tasks().addPendingTaskToUpdateInputPartitions(taskId01, taskId03Partitions);
+
+        taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter -> { });
+
+        Mockito.verify(task00).updateInputPartitions(taskId02Partitions, emptyMap());
+        Mockito.verify(stateUpdater).add(task00);
+        Mockito.verify(task01).updateInputPartitions(taskId03Partitions, emptyMap());
+        Mockito.verify(stateUpdater).add(task01);
+    }
+
+    @Test
+    public void shouldHandleRemovedTasksFromStateUpdater() {
+        // tasks to recycle
+        final StreamTask task00 = mock(StreamTask.class);
+        final StandbyTask task01 = mock(StandbyTask.class);
+        final StandbyTask task00Converted = mock(StandbyTask.class);
+        final StreamTask task01Converted = mock(StreamTask.class);
+        // task to close
+        final StreamTask task02 = mock(StreamTask.class);
+        // task to update inputs
+        final StreamTask task03 = mock(StreamTask.class);
+        when(task00.id()).thenReturn(taskId00);
+        when(task01.id()).thenReturn(taskId01);
+        when(task02.id()).thenReturn(taskId02);
+        when(task03.id()).thenReturn(taskId03);
+        when(task00.inputPartitions()).thenReturn(taskId00Partitions);
+        when(task01.inputPartitions()).thenReturn(taskId01Partitions);
+        when(task02.inputPartitions()).thenReturn(taskId02Partitions);
+        when(task03.inputPartitions()).thenReturn(taskId03Partitions);
+        when(task00.isActive()).thenReturn(true);
+        when(task01.isActive()).thenReturn(false);
+        when(task02.isActive()).thenReturn(true);
+        when(task03.isActive()).thenReturn(true);
+        when(task00.state()).thenReturn(State.RESTORING);
+        when(task01.state()).thenReturn(State.RUNNING);
+        when(task02.state()).thenReturn(State.RESTORING);
+        when(task03.state()).thenReturn(State.RESTORING);
+        when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(task00, task01, task02, task03));
+
+        expect(activeTaskCreator.createActiveTaskFromStandby(eq(task01), eq(taskId01Partitions), eq(consumer)))
+            .andStubReturn(task01Converted);
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(anyObject());
+        expectLastCall().times(2);
+        expect(standbyTaskCreator.createStandbyTaskFromActive(eq(task00), eq(taskId00Partitions)))
+            .andStubReturn(task00Converted);
+        expect(consumer.assignment()).andReturn(emptySet()).anyTimes();
+        consumer.resume(anyObject());
+        expectLastCall().anyTimes();
+        replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer);
 
         taskManager = new TaskManager(
             time,
@@ -288,12 +436,20 @@ public class TaskManagerTest {
             stateUpdater
         );
         taskManager.setMainConsumer(consumer);
-        taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
+        taskManager.tasks().addPendingTaskToClose(taskId02);
+        taskManager.tasks().addPendingTaskToRecycle(taskId00, taskId00Partitions);
+        taskManager.tasks().addPendingTaskToRecycle(taskId01, taskId01Partitions);
+        taskManager.tasks().addPendingTaskToUpdateInputPartitions(taskId03, taskId03Partitions);
 
         taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter -> { });
 
-        Mockito.verify(stateUpdater).add(task00);
-        Mockito.verify(stateUpdater).add(task01);
+        Mockito.verify(task00Converted).initializeIfNeeded();
+        Mockito.verify(task01Converted).initializeIfNeeded();
+        Mockito.verify(stateUpdater).add(task00Converted);
+        Mockito.verify(stateUpdater).add(task01Converted);
+        Mockito.verify(task02).closeClean();
+        Mockito.verify(task03).updateInputPartitions(taskId03Partitions, emptyMap());
+        Mockito.verify(stateUpdater).add(task03);
     }
 
     @Test
@@ -1825,9 +1981,7 @@ public class TaskManagerTest {
             RuntimeException.class,
             () -> taskManager.shutdown(true)
         );
-        assertThat(exception.getMessage(), equalTo("Unexpected exception while closing task"));
-        assertThat(exception.getCause().getMessage(), is("migrated; it means all tasks belonging to this thread should be migrated."));
-        assertThat(exception.getCause().getCause().getMessage(), is("cause"));
+        assertThat(exception.getCause().getMessage(), is("oops"));
 
         assertThat(closedDirtyTask01.get(), is(true));
         assertThat(closedDirtyTask02.get(), is(true));
@@ -1887,7 +2041,6 @@ public class TaskManagerTest {
         final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.shutdown(true));
 
         assertThat(task00.state(), is(Task.State.CLOSED));
-        assertThat(exception.getMessage(), is("Unexpected exception while closing task"));
         assertThat(exception.getCause().getMessage(), is("whatever"));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
@@ -1938,8 +2091,7 @@ public class TaskManagerTest {
         final RuntimeException exception = assertThrows(RuntimeException.class, () -> taskManager.shutdown(true));
 
         assertThat(task00.state(), is(Task.State.CLOSED));
-        assertThat(exception.getMessage(), is("Unexpected exception while closing task"));
-        assertThat(exception.getCause().getMessage(), is("whatever"));
+        assertThat(exception.getMessage(), is("whatever"));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)

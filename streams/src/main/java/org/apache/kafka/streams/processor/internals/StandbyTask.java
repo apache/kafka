@@ -234,7 +234,7 @@ public class StandbyTask extends AbstractTask implements Task {
         closeTaskSensor.record();
         transitionTo(State.CLOSED);
 
-        log.info("Closed and recycled state, and converted type to active");
+        log.info("Closed and recycled state");
     }
 
     private void close(final boolean clean) {
