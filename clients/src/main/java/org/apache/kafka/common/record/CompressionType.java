@@ -17,6 +17,8 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.compress.KafkaBufferedInputStream;
+import org.apache.kafka.common.compress.KafkaGZIPInputStream;
 import org.apache.kafka.common.compress.KafkaLZ4BlockInputStream;
 import org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream;
 import org.apache.kafka.common.compress.SnappyFactory;
@@ -25,12 +27,10 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 /**
@@ -69,8 +69,13 @@ public enum CompressionType {
                 // Set output buffer (uncompressed) to 16 KB (none by default) and input buffer (compressed) to
                 // 8 KB (0.5 KB by default) to ensure reasonable performance in cases where the caller reads a small
                 // number of bytes (potentially a single byte)
-                return new BufferedInputStream(new GZIPInputStream(new ByteBufferInputStream(buffer), 8 * 1024),
-                        16 * 1024);
+                return new KafkaBufferedInputStream(
+                        new KafkaGZIPInputStream(
+                                new ByteBufferInputStream(buffer), decompressionBufferSupplier, 8 * 1024
+                        ),
+                        decompressionBufferSupplier,
+                        16 * 1024
+                );
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
