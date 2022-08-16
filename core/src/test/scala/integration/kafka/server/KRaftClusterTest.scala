@@ -779,7 +779,7 @@ class KRaftClusterTest {
       cluster.close()
     }
   }
-  def createAdminClient(cluster: KafkaClusterTestKit, useController: Boolean): Admin = {
+  def createAdminClient(cluster: KafkaClusterTestKit): Admin = {
     var props: Properties = null
     props = cluster.clientProperties()
     props.put(AdminClientConfig.CLIENT_ID_CONFIG, this.getClass.getName)
@@ -799,14 +799,14 @@ class KRaftClusterTest {
         TestUtils.waitUntilTrue(() => cluster.brokers.get(i).brokerState == BrokerState.RUNNING,
           "Broker Never started up")
       }
-      val admin = createAdminClient(cluster, false)
+      val admin = createAdminClient(cluster)
       try {
         val quorumState = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
         val quorumInfo = quorumState.quorumInfo.get()
 
         assertEquals(cluster.controllers.asScala.keySet, quorumInfo.voters.asScala.map(_.replicaId).toSet)
-        assertTrue(2999 < quorumInfo.leaderId && 3003 > quorumInfo.leaderId,
-          s"Leader ID ${quorumInfo.leaderId} was not within expected range.")
+        assertTrue(cluster.controllers.asScala.keySet.contains(quorumInfo.leaderId),
+          s"Leader ID ${quorumInfo.leaderId} was not a controller ID.")
 
         quorumInfo.voters.forEach { voter =>
           assertTrue(0 < voter.logEndOffset,
