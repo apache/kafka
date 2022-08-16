@@ -180,7 +180,7 @@ public class DefaultStateUpdater implements StateUpdater {
             task.markChangelogAsCorrupted(task.changelogPartitions());
 
             // we need to enforce a checkpoint that removes the corrupted partitions
-            task.postCommit(true);
+            task.maybeCheckpoint(true);
         }
 
         private void handleStreamsException(final StreamsException streamsException) {
