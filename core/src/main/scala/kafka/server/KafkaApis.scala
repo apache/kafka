@@ -887,8 +887,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (fetchRequest.isFromFollower) {
         // We've already evaluated against the quota and are good to go. Just need to record it now.
         unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
-        val responseSize = KafkaApis.sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader)
-        quotas.leader.record(responseSize)
+        val (responseSize, numOfThrottledPartitions) = KafkaApis.sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader)
+        if (numOfThrottledPartitions > 0) quotas.leader.record(responseSize)
         val responsePartitionsSize = unconvertedFetchResponse.data().responses().stream().mapToInt(_.partitions().size()).sum()
         trace(s"Sending Fetch response with partitions.size=$responsePartitionsSize, " +
           s"metadata=${unconvertedFetchResponse.sessionId}")
@@ -3582,13 +3582,17 @@ object KafkaApis {
   // TODO: remove resolvedResponseData method when sizeOf can take a data object.
   private[server] def sizeOfThrottledPartitions(versionId: Short,
                                                 unconvertedResponse: FetchResponse,
-                                                quota: ReplicationQuotaManager): Int = {
+                                                quota: ReplicationQuotaManager): (Int, Int) = {
     val responseData = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
     unconvertedResponse.data.responses().forEach(topicResponse =>
-      topicResponse.partitions().forEach(partition =>
-        responseData.put(new TopicIdPartition(topicResponse.topicId, new TopicPartition(topicResponse.topic(), partition.partitionIndex)), partition)))
-    FetchResponse.sizeOf(versionId, responseData.entrySet
-      .iterator.asScala.filter(element => element.getKey.topicPartition.topic != null && quota.isThrottled(element.getKey.topicPartition)).asJava)
+      topicResponse.partitions().forEach {
+        partition =>
+          val tp = new TopicPartition(topicResponse.topic(), partition.partitionIndex)
+          if (tp.topic() != null && quota.isThrottled(tp)) {
+            responseData.put(new TopicIdPartition(topicResponse.topicId, new TopicPartition(topicResponse.topic(), partition.partitionIndex)), partition)
+          }
+      })
+    (FetchResponse.sizeOf(versionId, responseData.entrySet.iterator.asScala.asJava), responseData.size())
   }
 
   // visible for testing

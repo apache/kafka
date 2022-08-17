@@ -97,6 +97,51 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
+  def testThrottledThroughput(ignored: String): Unit = {
+    client = Admin.create(createConfig)
+    client.createTopics(List(new NewTopic("ttt", 3, 2.toShort)).asJava).all().get()
+
+    client.createTopics(List(new NewTopic("main", 1, 1.toShort)).asJava).all().get()
+
+    val from = brokers.map(s => s.config.brokerId).head
+    val to = brokers.map(s => s.config.brokerId).last
+
+    client.alterPartitionReassignments(Map(new TopicPartition("main", 0) -> Optional.of(new NewPartitionReassignment(List(Integer.valueOf(from)).asJava))).asJava).all().get()
+
+    ensureConsistentKRaftMetadata()
+
+    // send 200MB
+    val producer = createProducer()
+    val data = new Array[Byte](500)
+    (0 to 200 * 1000).foreach(_ => producer.send(new ProducerRecord[Array[Byte], Array[Byte]]("main", data, data)).get())
+
+    client.incrementalAlterConfigs(Map(new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(from)) -> Seq(
+      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "10000000"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "10000000"), AlterConfigOp.OpType.SET),
+    ).asJavaCollection, new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(to)) -> Seq(
+      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "10000000"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "10000000"), AlterConfigOp.OpType.SET),
+    ).asJavaCollection).asJava).all().get()
+
+    client.incrementalAlterConfigs(Map(new ConfigResource(ConfigResource.Type.TOPIC, "main") -> Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.LeaderReplicationThrottledReplicasProp, f"0:${from}"), AlterConfigOp.OpType.SET),
+    ).asJavaCollection).asJava).all().get()
+
+    client.alterPartitionReassignments(Map(new TopicPartition("main", 0) -> Optional.of(new NewPartitionReassignment(List(Integer.valueOf(to)).asJava))).asJava).all().get()
+
+    ensureConsistentKRaftMetadata()
+
+    val start = System.currentTimeMillis()
+    // sleep until the new replica becomes ISR
+    while (!client.describeTopics(List("main").asJava).allTopicNames().get().get("main").partitions().get(0).isr().asScala.map(n => n.id()).contains(to)) TimeUnit.MILLISECONDS.sleep(500)
+    val elapsed = (System.currentTimeMillis() - start) / 1000
+
+    // data: 200MB, throttled: 10MB
+    assertTrue(elapsed >= 17 && elapsed <= 24, "elapsed: " + elapsed)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
   def testListNodes(quorum: String): Unit = {
     client = Admin.create(createConfig)
     val brokerStrs = bootstrapServers().split(",").toList.sorted

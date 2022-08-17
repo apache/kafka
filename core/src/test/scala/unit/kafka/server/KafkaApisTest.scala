@@ -2972,6 +2972,7 @@ class KafkaApisTest {
       any[util.List[TopicIdPartition]],
       any[util.Map[Uuid, String]])).thenReturn(fetchContext)
 
+    when(replicaQuotaManager.isThrottled(any())).thenReturn(true)
     when(replicaManager.getLogConfig(ArgumentMatchers.eq(tp0))).thenReturn(None)
     when(replicaManager.isAddingReplica(any(), anyInt)).thenReturn(isReassigning)
 
@@ -3536,7 +3537,7 @@ class KafkaApisTest {
     Mockito.when(quota.isThrottled(ArgumentMatchers.any(classOf[TopicPartition])))
       .thenAnswer(invocation => throttledPartition.topicPartition == invocation.getArgument(0).asInstanceOf[TopicPartition])
 
-    assertEquals(expectedSize, KafkaApis.sizeOfThrottledPartitions(FetchResponseData.HIGHEST_SUPPORTED_VERSION, response, quota))
+    assertEquals(expectedSize, KafkaApis.sizeOfThrottledPartitions(FetchResponseData.HIGHEST_SUPPORTED_VERSION, response, quota)._1)
   }
 
   @Test
