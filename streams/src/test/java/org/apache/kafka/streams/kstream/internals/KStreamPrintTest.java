@@ -40,7 +40,7 @@ public class KStreamPrintTest {
     private Processor<Integer, String, Void, Void> printProcessor;
 
     @Mock
-    ProcessorContext<Void, Void> processorContext;
+    private ProcessorContext<Void, Void> processorContext;
 
     @Before
     public void setUp() {

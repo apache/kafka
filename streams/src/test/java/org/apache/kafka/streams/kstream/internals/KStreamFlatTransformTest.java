@@ -27,6 +27,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentMatchers;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
@@ -34,6 +35,7 @@ import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -49,6 +51,7 @@ public class KStreamFlatTransformTest {
     private Transformer<Number, Number, Iterable<KeyValue<Integer, Integer>>> transformer;
     @Mock
     private InternalProcessorContext<Integer, Integer> context;
+    private InOrder inOrder;
 
     private KStreamFlatTransformProcessor<Number, Number, Integer, Integer> processor;
 
@@ -56,6 +59,7 @@ public class KStreamFlatTransformTest {
     public void setUp() {
         inputKey = 1;
         inputValue = 10;
+        inOrder = inOrder(context);
         processor = new KStreamFlatTransformProcessor<>(transformer);
     }
 
@@ -80,7 +84,7 @@ public class KStreamFlatTransformTest {
         processor.process(new Record<>(inputKey, inputValue, 0L));
 
         for (final KeyValue<Integer, Integer> outputRecord : outputRecords) {
-            verify(context).forward(new Record<>(outputRecord.key, outputRecord.value, 0L));
+            inOrder.verify(context).forward(new Record<>(outputRecord.key, outputRecord.value, 0L));
         }
     }
 
@@ -92,7 +96,7 @@ public class KStreamFlatTransformTest {
 
         processor.process(new Record<>(inputKey, inputValue, 0L));
 
-        verify(context, never()).forward(ArgumentMatchers.<Record<Integer, Integer>>any());
+        inOrder.verify(context, never()).forward(ArgumentMatchers.<Record<Integer, Integer>>any());
     }
 
     @Test
@@ -103,7 +107,7 @@ public class KStreamFlatTransformTest {
 
         processor.process(new Record<>(inputKey, inputValue, 0L));
 
-        verify(context, never()).forward(ArgumentMatchers.<Record<Integer, Integer>>any());
+        inOrder.verify(context, never()).forward(ArgumentMatchers.<Record<Integer, Integer>>any());
     }
 
     @Test
@@ -125,7 +129,6 @@ public class KStreamFlatTransformTest {
 
         final Processor<Number, Number, Integer, Integer> processor = processorSupplier.get();
 
-        verify(transformerSupplier).get();
         assertTrue(processor instanceof KStreamFlatTransformProcessor);
     }
 }

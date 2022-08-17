@@ -35,8 +35,6 @@ import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
@@ -57,7 +55,6 @@ public class MaterializedInternalTest {
             new MaterializedInternal<>(Materialized.with(null, null), nameProvider, prefix);
 
         assertThat(materialized.storeName(), equalTo(generatedName));
-        verify(nameProvider).newStoreName(prefix);
     }
 
     @Test
@@ -75,7 +72,6 @@ public class MaterializedInternalTest {
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.as(supplier), nameProvider, prefix);
         assertThat(materialized.storeName(), equalTo(storeName));
-        verify(supplier, times(2)).name();
     }
 
     @Test

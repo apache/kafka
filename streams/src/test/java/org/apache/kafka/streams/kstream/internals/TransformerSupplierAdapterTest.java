@@ -33,7 +33,6 @@ import static org.hamcrest.core.IsEqual.equalTo;
 import static org.hamcrest.core.IsSame.sameInstance;
 import static org.hamcrest.core.IsNot.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -62,8 +61,7 @@ public class TransformerSupplierAdapterTest {
         final Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adaptedTransformer = adapter.get();
         adaptedTransformer.init(context);
 
-        verify(transformerSupplier).get();
-        verify(transformer).init(any(ProcessorContext.class));
+        verify(transformer).init(context);
     }
 
     @Test
@@ -75,7 +73,6 @@ public class TransformerSupplierAdapterTest {
         final Transformer<String, String, Iterable<KeyValue<Integer, Integer>>> adaptedTransformer = adapter.get();
         adaptedTransformer.close();
 
-        verify(transformerSupplier).get();
         verify(transformer).close();
     }
 
@@ -86,8 +83,6 @@ public class TransformerSupplierAdapterTest {
         final TransformerSupplierAdapter<String, String, Integer, Integer> adapter =
             new TransformerSupplierAdapter<>(transformerSupplier);
         adapter.stores();
-
-        verify(transformerSupplier).stores();
     }
 
     @Test
@@ -103,8 +98,6 @@ public class TransformerSupplierAdapterTest {
         assertThat(iterator.hasNext(), equalTo(true));
         iterator.next();
         assertThat(iterator.hasNext(), equalTo(false));
-        verify(transformerSupplier).get();
-        verify(transformer).transform(key, value);
     }
 
     @Test
@@ -118,8 +111,6 @@ public class TransformerSupplierAdapterTest {
         final Iterator<KeyValue<Integer, Integer>> iterator = adaptedTransformer.transform(key, value).iterator();
 
         assertThat(iterator.hasNext(), equalTo(false));
-        verify(transformerSupplier).get();
-        verify(transformer).transform(key, value);
     }
 
     @Test
@@ -144,9 +135,9 @@ public class TransformerSupplierAdapterTest {
         assertThat(adapterTransformer1, not(sameInstance(adapterTransformer2)));
         assertThat(adapterTransformer2, not(sameInstance(adapterTransformer3)));
         assertThat(adapterTransformer3, not(sameInstance(adapterTransformer1)));
-        verify(transformer1).init(any(ProcessorContext.class));
-        verify(transformer2).init(any(ProcessorContext.class));
-        verify(transformer3).init(any(ProcessorContext.class));
+        verify(transformer1).init(context);
+        verify(transformer2).init(context);
+        verify(transformer3).init(context);
     }
 
 }
