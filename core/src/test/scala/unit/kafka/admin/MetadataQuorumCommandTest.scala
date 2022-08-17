@@ -126,7 +126,7 @@ class MetadataQuorumCommandTest(cluster: ClusterInstance) {
     assertEquals("0", replicationOutput.split("\n").last.split("\\s+")(2))
   }
 
-  @ClusterTest(clusterType = Type.ZK, brokers = 3, controllers = 1)
+  @ClusterTest(clusterType = Type.ZK, brokers = 3)
   def testDescribeQuorumInZkMode(): Unit = {
     assertTrue(
       assertThrows(

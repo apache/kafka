@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.io.PrintStream;
 import java.nio.BufferUnderflowException;
 import java.nio.file.StandardOpenOption;
 import java.util.AbstractMap;
@@ -1450,51 +1449,6 @@ public final class Utils {
         return Stream.of(enumClass.getEnumConstants())
                 .map(Object::toString)
                 .toArray(String[]::new);
-    }
-
-    private static void appendColumnValue(
-        StringBuilder rowBuilder,
-        String value,
-        int length
-    ) {
-        int padLength = length - value.length();
-        rowBuilder.append(value);
-        for (int i = 0; i < padLength; i++)
-            rowBuilder.append(' ');
-    }
-
-    private static void printRow(
-        List<Integer> columnLengths,
-        String[] row,
-        PrintStream out
-    ) {
-        StringBuilder rowBuilder = new StringBuilder();
-        for (int i = 0; i < row.length; i++) {
-            Integer columnLength = columnLengths.get(i);
-            String columnValue = row[i];
-            appendColumnValue(rowBuilder, columnValue, columnLength);
-            rowBuilder.append('\t');
-        }
-        out.println(rowBuilder);
-    }
-
-    public static void prettyPrintTable(
-        String[] headers,
-        List<String[]> rows,
-        PrintStream out
-    ) {
-        List<Integer> columnLengths = Arrays.stream(headers)
-            .map(String::length)
-            .collect(Collectors.toList());
-
-        for (String[] row : rows) {
-            for (int i = 0; i < headers.length; i++) {
-                columnLengths.set(i, Math.max(columnLengths.get(i), row[i].length()));
-            }
-        }
-
-        printRow(columnLengths, headers, out);
-        rows.forEach(row -> printRow(columnLengths, row, out));
     }
 
 }

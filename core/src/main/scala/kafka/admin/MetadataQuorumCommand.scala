@@ -24,7 +24,7 @@ import net.sourceforge.argparse4j.inf.Subparsers
 import org.apache.kafka.clients._
 import org.apache.kafka.clients.admin.{Admin, QuorumInfo}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.utils.Utils.prettyPrintTable
+import org.apache.kafka.server.util.ToolsUtils.prettyPrintTable
 
 import java.io.File
 import java.util.Properties
@@ -85,7 +85,7 @@ object MetadataQuorumCommand {
           throw new TerseFailure(s"One of --status or --replication must be specified with describe sub-command")
         }
       } else {
-        // currently we only support describe
+        throw new IllegalStateException(s"Unknown command: $command, only 'describe' is supported")
       }
       0
     } catch {
@@ -123,17 +123,17 @@ object MetadataQuorumCommand {
     val leader = quorumInfo.voters.asScala.filter(_.replicaId == leaderId).head
 
     def convertQuorumInfo(infos: Seq[QuorumInfo.ReplicaState], status: String): Seq[Array[String]] =
-      infos.map { voter =>
-        Array(voter.replicaId,
-              voter.logEndOffset,
-              leader.logEndOffset - voter.logEndOffset,
-              voter.lastFetchTimeMs.orElse(-1),
-              voter.lastCaughtUpTimeMs.orElse(-1),
+      infos.map { info =>
+        Array(info.replicaId,
+              info.logEndOffset,
+              leader.logEndOffset - info.logEndOffset,
+              info.lastFetchTimeMs.orElse(-1),
+              info.lastCaughtUpTimeMs.orElse(-1),
               status
         ).map(_.toString)
       }
     prettyPrintTable(
-      Array("ReplicaId", "LogEndOffset", "Lag", "LastFetchTimeMs", "LastCaughtUpTimeMs", "Status"),
+      Array("NodeId", "LogEndOffset", "Lag", "LastFetchTimeMs", "LastCaughtUpTimeMs", "Status"),
       (convertQuorumInfo(Seq(leader), "Leader")
         ++ convertQuorumInfo(quorumInfo.voters.asScala.filter(_.replicaId != leaderId).toSeq, "Follower")
         ++ convertQuorumInfo(quorumInfo.observers.asScala.toSeq, "Observer")).asJava,
