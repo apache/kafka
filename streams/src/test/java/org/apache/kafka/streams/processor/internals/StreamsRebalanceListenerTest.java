@@ -55,8 +55,7 @@ public class StreamsRebalanceListenerTest {
 
     @Before
     public void setup() {
-         streamsRebalanceListener = new StreamsRebalanceListener(
-                time,
+        streamsRebalanceListener = new StreamsRebalanceListener(time,
                 taskManager,
                 streamThread,
                 LoggerFactory.getLogger(StreamsRebalanceListenerTest.class),
