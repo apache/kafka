@@ -17,6 +17,8 @@
 
 package org.apache.kafka.metadata.placement;
 
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.metadata.MockRandom;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer.BrokerList;
@@ -255,6 +257,72 @@ public class StripedReplicaPlacerTest {
         assertEquals(20, counts.get(Arrays.asList(3, 0)));
         assertEquals(19, counts.get(Arrays.asList(3, 1)));
         assertEquals(11, counts.get(Arrays.asList(3, 2)));
+    }
+
+    @Test
+    public void testEvenLeaderDistributionWithMultipleRacks() {
+        MockRandom random = new MockRandom();
+        StripedReplicaPlacer placer = new StripedReplicaPlacer(random);
+        List<UsableBroker> brokers = Arrays.asList(
+            new UsableBroker(0, Optional.of("0"), false),
+            new UsableBroker(1, Optional.of("0"), false),
+            new UsableBroker(2, Optional.of("1"), false),
+            new UsableBroker(3, Optional.of("1"), false));
+        List<List<Integer>> replicas = place(placer, 0, 1000, (short) 2, brokers);
+        RackList rackList = new RackList(random, brokers.iterator());
+        assertEquals(4, rackList.numTotalBrokers());
+        assertEquals(4, rackList.numUnfencedBrokers());
+        assertEquals(Arrays.asList(Optional.of("0"), Optional.of("1")), rackList.rackNames());
+        Map<List<Integer>, Integer> counts = new HashMap<>();
+        for (List<Integer> partitionReplicas : replicas) {
+            counts.put(partitionReplicas, counts.getOrDefault(partitionReplicas, 0) + 1);
+        }
+        Map<Integer, Integer> leaderCounts = counts.entrySet().stream()
+            .collect(Collectors.groupingBy(e -> e.getKey().get(0), Collectors.summingInt(Entry::getValue)));
+        assertEquals(250, leaderCounts.get(0));
+        assertEquals(250, leaderCounts.get(1));
+        assertEquals(256, leaderCounts.get(2));
+        assertEquals(244, leaderCounts.get(3));
+
+        assertEquals(120, counts.get(Arrays.asList(0, 2)));
+        assertEquals(130, counts.get(Arrays.asList(0, 3)));
+        assertEquals(124, counts.get(Arrays.asList(1, 2)));
+        assertEquals(126, counts.get(Arrays.asList(1, 3)));
+        assertEquals(126, counts.get(Arrays.asList(2, 0)));
+        assertEquals(130, counts.get(Arrays.asList(2, 1)));
+        assertEquals(124, counts.get(Arrays.asList(3, 0)));
+        assertEquals(120, counts.get(Arrays.asList(3, 1)));
+    }
+
+    @Test
+    public void testLeaderDistributionWithMultipleRacksAndEightPartitions() {
+        MockRandom random = new MockRandom();
+        StripedReplicaPlacer placer = new StripedReplicaPlacer(random);
+        List<UsableBroker> brokers = Arrays.asList(
+            new UsableBroker(0, Optional.of("0"), false),
+            new UsableBroker(1, Optional.of("0"), false),
+            new UsableBroker(2, Optional.of("1"), false),
+            new UsableBroker(3, Optional.of("1"), false));
+        List<List<Integer>> replicas = place(placer, 0, 8, (short) 2, brokers);
+        RackList rackList = new RackList(random, brokers.iterator());
+        assertEquals(4, rackList.numTotalBrokers());
+        assertEquals(4, rackList.numUnfencedBrokers());
+        assertEquals(Arrays.asList(Optional.of("0"), Optional.of("1")), rackList.rackNames());
+        Map<List<Integer>, Integer> counts = new HashMap<>();
+        for (List<Integer> partitionReplicas : replicas) {
+            counts.put(partitionReplicas, counts.getOrDefault(partitionReplicas, 0) + 1);
+        }
+        Map<Integer, Integer> leaderCounts = counts.entrySet().stream()
+            .collect(Collectors.groupingBy(e -> e.getKey().get(0), Collectors.summingInt(Entry::getValue)));
+        assertEquals(2, leaderCounts.get(0));
+        assertEquals(2, leaderCounts.get(1));
+        assertEquals(4, leaderCounts.get(2));
+        assertEquals(null, leaderCounts.get(3));
+
+        assertEquals(2, counts.get(Arrays.asList(0, 3)));
+        assertEquals(2, counts.get(Arrays.asList(1, 3)));
+        assertEquals(2, counts.get(Arrays.asList(2, 0)));
+        assertEquals(2, counts.get(Arrays.asList(2, 1)));
     }
 
     @Test
