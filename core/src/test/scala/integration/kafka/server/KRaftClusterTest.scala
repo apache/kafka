@@ -823,7 +823,6 @@ class KRaftClusterTest {
           assertNotEquals(OptionalLong.empty(), observer.lastCaughtUpTimeMs)
         }
       } catch {
-        case _: InvalidRequestException => log.error("Hit Kafka-13490. Claim test succeeded")
         case t: Throwable => throw t
       } finally {
         admin.close()
