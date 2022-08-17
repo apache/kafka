@@ -118,7 +118,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
 
@@ -145,9 +144,7 @@ public class TaskManagerTest {
 
     private final TaskId taskId02 = new TaskId(0, 2);
     private final TopicPartition t1p2 = new TopicPartition(topic1, 2);
-    private final TopicPartition t1p2changelog = new TopicPartition("changelog", 2);
     private final Set<TopicPartition> taskId02Partitions = mkSet(t1p2);
-    private final Set<TopicPartition> taskId02ChangelogPartitions = mkSet(t1p2changelog);
 
     private final TaskId taskId03 = new TaskId(0, 3);
     private final TopicPartition t1p3 = new TopicPartition(topic1, 3);
@@ -346,8 +343,8 @@ public class TaskManagerTest {
         expectLastCall().anyTimes();
         replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer);
 
-        taskManager.tasks().addPendingTaskToCloseClean(taskId00);
-        taskManager.tasks().addPendingTaskToCloseClean(taskId01);
+        taskManager.tasks().addPendingTaskToClose(taskId00);
+        taskManager.tasks().addPendingTaskToClose(taskId01);
 
         taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter -> { });
 
@@ -384,45 +381,6 @@ public class TaskManagerTest {
         Mockito.verify(stateUpdater).add(task00);
         Mockito.verify(task01).updateInputPartitions(taskId03Partitions, emptyMap());
         Mockito.verify(stateUpdater).add(task01);
-    }
-
-    @Test
-    public void shouldRemoveAllActiveTasksFromStateUpdaterOnPartitionLost() {
-        final StreamTask task1 = statefulTask(taskId00, taskId00ChangelogPartitions)
-            .inState(State.RESTORING)
-            .withInputPartitions(taskId00Partitions).build();
-        final StandbyTask task2 = standbyTask(taskId01, taskId01ChangelogPartitions)
-            .inState(State.RESTORING)
-            .withInputPartitions(taskId01Partitions).build();
-        final StreamTask task3 = statefulTask(taskId02, taskId02ChangelogPartitions)
-            .inState(State.RESTORING)
-            .withInputPartitions(taskId02Partitions).build();
-        final TaskManager taskManager = setupForRevocation(mkSet(task1, task2, task3), mkSet(task1, task3));
-
-        taskManager.handleLostAll();
-
-        Mockito.verify(stateUpdater).remove(task1.id());
-        Mockito.verify(stateUpdater).remove(task3.id());
-
-        taskManager.tryToCompleteRestoration(time.milliseconds(), null);
-
-        Mockito.verify(task1).closeDirty();
-        Mockito.verify(task3).closeDirty();
-        Mockito.verify(task2, never()).closeDirty();
-        Mockito.verify(task2, never()).closeClean();
-    }
-
-    private TaskManager setupForRevocation(final Set<Task> tasksInStateUpdater,
-                                           final Set<Task> removedTasks) {
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, true);
-        when(stateUpdater.getTasks()).thenReturn(tasksInStateUpdater);
-        when(stateUpdater.drainRemovedTasks()).thenReturn(removedTasks);
-        expect(consumer.assignment()).andReturn(emptySet()).anyTimes();
-        consumer.resume(anyObject());
-        expectLastCall().anyTimes();
-        replay(consumer);
-
-        return taskManager;
     }
 
     @Test
@@ -478,7 +436,7 @@ public class TaskManagerTest {
             stateUpdater
         );
         taskManager.setMainConsumer(consumer);
-        taskManager.tasks().addPendingTaskToCloseClean(taskId02);
+        taskManager.tasks().addPendingTaskToClose(taskId02);
         taskManager.tasks().addPendingTaskToRecycle(taskId00, taskId00Partitions);
         taskManager.tasks().addPendingTaskToRecycle(taskId01, taskId01Partitions);
         taskManager.tasks().addPendingTaskToUpdateInputPartitions(taskId03, taskId03Partitions);
