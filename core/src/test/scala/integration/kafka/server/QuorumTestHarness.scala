@@ -45,12 +45,13 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, TestInfo}
 
 import scala.collection.mutable.ListBuffer
-import scala.collection.{Seq, immutable}
+import scala.collection.{Seq, immutable, mutable}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 trait QuorumImplementation {
-  var brokers: Seq[KafkaBroker] = Seq()
+  val brokers = new mutable.ArrayBuffer[KafkaBroker]
+
   def createBroker(
     config: KafkaConfig,
     time: Time = Time.SYSTEM,
@@ -76,8 +77,8 @@ class ZooKeeperQuorumImplementation(
     threadNamePrefix: Option[String],
   ): KafkaBroker = {
     val server = new KafkaServer(config, time, threadNamePrefix, false)
+    brokers += server
     if (startup) server.startup()
-    brokers = brokers :+ server
     server
   }
 
@@ -115,8 +116,8 @@ class KRaftQuorumImplementation(
       fatalFaultHandler = faultHandler,
       metadataLoadingFaultHandler = faultHandler,
       metadataPublishingFaultHandler = faultHandler)
+    brokers += broker
     if (startup) broker.startup()
-    brokers = brokers :+ broker
     broker
   }
 
@@ -189,6 +190,11 @@ abstract class QuorumTestHarness extends Logging {
 
   private var testInfo: TestInfo = null
   private var implementation: QuorumImplementation = null
+
+  /**
+   * Get the list of brokers, which could be either BrokerServer objects or KafkaServer objects.
+   */
+  def brokers: mutable.Buffer[KafkaBroker] = implementation.brokers
 
   def isKRaftTest(): Boolean = {
     TestInfoUtils.isKRaft(testInfo)

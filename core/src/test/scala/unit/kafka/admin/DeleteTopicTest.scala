@@ -24,7 +24,7 @@ import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.controller.{OfflineReplica, PartitionAndReplica, ReplicaAssignment, ReplicaDeletionSuccessful}
 import kafka.log.UnifiedLog
 import kafka.server
-import kafka.server.{KafkaBroker, KafkaConfig, KafkaServer, QuorumTestHarness}
+import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.zk.TopicPartitionZNode
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment, NewPartitions}
@@ -43,9 +43,6 @@ import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
 class DeleteTopicTest extends QuorumTestHarness {
-
-  var brokers: Seq[KafkaBroker] = Seq()
-
   var adminClient: Admin = null
 
   val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
@@ -510,7 +507,7 @@ class DeleteTopicTest extends QuorumTestHarness {
   private def createTestTopicAndCluster(topic: String, brokerConfigs: Seq[Properties], replicaAssignment: Map[Int, List[Int]]): Unit = {
     val topicPartition = new TopicPartition(topic, 0)
     // create brokers
-    brokers = brokerConfigs.map(b => createBroker(KafkaConfig.fromProps(b)))
+    brokerConfigs.foreach(b => createBroker(KafkaConfig.fromProps(b)))
     // spin up admin client
     adminClient = setUpAdminClient()
     // create the topic

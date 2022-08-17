@@ -86,9 +86,9 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
     }.toMap
 
     val brokerMetadatas = brokers.head.metadataCache.getAliveBrokers().toList
-    val expectedMap = Map(0 -> "0", 1 -> "1", 2 -> "0", 3 -> "1")
-    assertEquals(expectedMap, brokerMetadatas.map(b => b.id -> b.rack.get).toMap)
-    checkReplicaDistribution(assignment, expectedMap, numServers, numPartitions, replicationFactor,
+    val expectedRacks = Map(0 -> "0", 1 -> "1", 2 -> "0", 3 -> "1")
+    assertEquals(expectedRacks, brokerMetadatas.map(b => b.id -> b.rack.get).toMap)
+    checkReplicaDistribution(assignment, expectedRacks, numServers, numPartitions, replicationFactor,
       verifyLeaderDistribution = false)
   }
 }
