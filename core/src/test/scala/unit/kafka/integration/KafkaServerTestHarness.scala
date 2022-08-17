@@ -151,11 +151,11 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     adminClientConfig: Properties = new Properties
   ): Unit = {
     if (isKRaftTest()) {
-      resource(createAdminClient(brokers, listenerName, adminClientConfig)) { admin =>
-        TestUtils.createOffsetsTopicWithAdmin(admin, brokers)
+      resource(createAdminClient(aliveBrokers, listenerName, adminClientConfig)) { admin =>
+        TestUtils.createOffsetsTopicWithAdmin(admin, aliveBrokers)
       }
     } else {
-      TestUtils.createOffsetsTopic(zkClient, servers)
+      TestUtils.createOffsetsTopic(zkClient, aliveBrokers)
     }
   }
 
@@ -173,11 +173,11 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     adminClientConfig: Properties = new Properties
   ): scala.collection.immutable.Map[Int, Int] = {
     if (isKRaftTest()) {
-      resource(createAdminClient(brokers, listenerName, adminClientConfig)) { admin =>
+      resource(createAdminClient(aliveBrokers, listenerName, adminClientConfig)) { admin =>
         TestUtils.createTopicWithAdmin(
           admin = admin,
           topic = topic,
-          brokers = brokers,
+          brokers = aliveBrokers,
           numPartitions = numPartitions,
           replicationFactor = replicationFactor,
           topicConfig = topicConfig
@@ -189,7 +189,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
         topic = topic,
         numPartitions = numPartitions,
         replicationFactor = replicationFactor,
-        servers = servers,
+        servers = aliveBrokers,
         topicConfig = topicConfig
       )
     }
@@ -206,12 +206,12 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     listenerName: ListenerName = listenerName
   ): scala.collection.immutable.Map[Int, Int] =
     if (isKRaftTest()) {
-      resource(createAdminClient(brokers, listenerName)) { admin =>
+      resource(createAdminClient(aliveBrokers, listenerName)) { admin =>
         TestUtils.createTopicWithAdmin(
           admin = admin,
           topic = topic,
           replicaAssignment = partitionReplicaAssignment,
-          brokers = brokers
+          brokers = aliveBrokers
         )
       }
     } else {
@@ -219,7 +219,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
         zkClient,
         topic,
         partitionReplicaAssignment,
-        servers
+        aliveBrokers
       )
     }
 
@@ -228,11 +228,11 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     listenerName: ListenerName = listenerName
   ): Unit = {
     if (isKRaftTest()) {
-      resource(createAdminClient(brokers, listenerName)) { admin =>
+      resource(createAdminClient(aliveBrokers, listenerName)) { admin =>
         TestUtils.deleteTopicWithAdmin(
           admin = admin,
           topic = topic,
-          brokers = brokers)
+          brokers = aliveBrokers)
       }
     } else {
       adminZkClient.deleteTopic(topic)
