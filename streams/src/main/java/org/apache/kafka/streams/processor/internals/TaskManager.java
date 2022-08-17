@@ -757,6 +757,8 @@ public class TaskManager {
             }
         }
 
+        removeRevokedTasksFromStateUpdater(remainingRevokedPartitions);
+
         if (!remainingRevokedPartitions.isEmpty()) {
             log.debug("The following revoked partitions {} are missing from the current task partitions. It could "
                           + "potentially be due to race condition of consumer detecting the heartbeat failure, or the tasks " +
@@ -839,6 +841,20 @@ public class TaskManager {
 
         if (firstException.get() != null) {
             throw firstException.get();
+        }
+    }
+
+    private void removeRevokedTasksFromStateUpdater(final Set<TopicPartition> remainingRevokedPartitions) {
+        if (stateUpdater != null) {
+            for (final Task restoringTask : stateUpdater.getTasks()) {
+                if (restoringTask.isActive()) {
+                    if (remainingRevokedPartitions.containsAll(restoringTask.inputPartitions())) {
+                        tasks.addPendingTaskToClose(restoringTask.id());
+                        stateUpdater.remove(restoringTask.id());
+                        remainingRevokedPartitions.removeAll(restoringTask.inputPartitions());
+                    }
+                }
+            }
         }
     }
 
