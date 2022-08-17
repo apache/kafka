@@ -248,7 +248,6 @@ public class LeaderState<T> implements EpochState {
 
         state.updateFetchTimestamp(fetchTimestamp, leaderLogEndOffset);
         return updateEndOffset(state, logOffsetMetadata);
-
     }
 
     public List<Integer> nonLeaderVotersByDescendingFetchOffset() {
@@ -272,10 +271,10 @@ public class LeaderState<T> implements EpochState {
             if (currentEndOffset.offset > endOffsetMetadata.offset) {
                 if (state.nodeId == localId) {
                     throw new IllegalStateException("Detected non-monotonic update of local " +
-                            "end offset: " + currentEndOffset.offset + " -> " + endOffsetMetadata.offset);
+                        "end offset: " + currentEndOffset.offset + " -> " + endOffsetMetadata.offset);
                 } else {
                     log.warn("Detected non-monotonic update of fetch offset from nodeId {}: {} -> {}",
-                            state.nodeId, currentEndOffset.offset, endOffsetMetadata.offset);
+                        state.nodeId, currentEndOffset.offset, endOffsetMetadata.offset);
                 }
             }
         });
