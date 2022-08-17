@@ -17,43 +17,35 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.MockRecordCollector;
-import org.easymock.EasyMock;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
-import org.easymock.MockType;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
-import java.util.Optional;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import static java.time.Instant.ofEpochMilli;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@RunWith(EasyMockRunner.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ChangeLoggingWindowBytesStoreTest {
-
-    private final TaskId taskId = new TaskId(0, 0);
-    private final MockRecordCollector collector = new MockRecordCollector();
 
     private final byte[] value = {0};
     private final Bytes bytesKey = Bytes.wrap(value);
 
-    @Mock(type = MockType.NICE)
+    @Mock
     private WindowStore<Bytes, byte[]> inner;
-    @Mock(type = MockType.NICE)
+    @Mock
     private ProcessorContextImpl context;
     private ChangeLoggingWindowBytesStore store;
 
@@ -62,154 +54,92 @@ public class ChangeLoggingWindowBytesStoreTest {
     @Before
     public void setUp() {
         store = new ChangeLoggingWindowBytesStore(inner, false, WindowKeySchema::toStoreKeyBinary);
+        store.init((StateStoreContext) context, store);
     }
 
-    private void init() {
-        EasyMock.expect(context.taskId()).andReturn(taskId).anyTimes();
-        EasyMock.expect(context.recordCollector()).andReturn(collector).anyTimes();
-        EasyMock.expect(context.recordMetadata()).andReturn(Optional.empty()).anyTimes();
-        inner.init((StateStoreContext) context, store);
-        EasyMock.expectLastCall();
-        EasyMock.replay(inner, context);
-
-        store.init((StateStoreContext) context, store);
+    @After
+    public void tearDown() {
+        verify(inner).init((StateStoreContext) context, store);
     }
 
     @SuppressWarnings("deprecation")
     @Test
     public void shouldDelegateDeprecatedInit() {
-        inner.init((ProcessorContext) context, store);
-        EasyMock.expectLastCall();
-        EasyMock.replay(inner);
         store.init((ProcessorContext) context, store);
-        EasyMock.verify(inner);
+
+        verify(inner).init((ProcessorContext) context, store);
     }
 
     @Test
     public void shouldDelegateInit() {
-        inner.init((StateStoreContext) context, store);
-        EasyMock.expectLastCall();
-        EasyMock.replay(inner);
-        store.init((StateStoreContext) context, store);
-        EasyMock.verify(inner);
+        // testing the combination of setUp and tearDown
     }
 
     @Test
     public void shouldLogPuts() {
-        EasyMock.expect(inner.getPosition()).andReturn(Position.emptyPosition()).anyTimes();
-        inner.put(bytesKey, value, 0);
-        EasyMock.expectLastCall();
-
-        init();
-
         final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
+        when(inner.getPosition()).thenReturn(Position.emptyPosition());
 
-        EasyMock.reset(context);
-        EasyMock.expect(context.timestamp()).andStubReturn(0L);
-        EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.empty());
-        context.logChange(store.name(), key, value, 0L, Position.emptyPosition());
-
-        EasyMock.replay(context);
         store.put(bytesKey, value, context.timestamp());
 
-        EasyMock.verify(inner, context);
+        verify(inner).put(bytesKey, value, 0);
+        verify(context).logChange(store.name(), key, value, 0L, Position.emptyPosition());
     }
 
     @Test
     public void shouldLogPutsWithPosition() {
-        EasyMock.expect(inner.getPosition()).andReturn(POSITION).anyTimes();
-        inner.put(bytesKey, value, 0);
-        EasyMock.expectLastCall();
-
-        init();
-
         final Bytes key = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0);
+        when(inner.getPosition()).thenReturn(POSITION);
 
-        EasyMock.reset(context);
-        final RecordMetadata recordContext = new ProcessorRecordContext(0L, 1L, 0, "", new RecordHeaders());
-        EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.of(recordContext));
-        EasyMock.expect(context.timestamp()).andStubReturn(0L);
-        final Position position = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 1L)))));
-        context.logChange(store.name(), key, value, 0L, position);
-
-        EasyMock.replay(context);
         store.put(bytesKey, value, context.timestamp());
 
-        EasyMock.verify(inner, context);
+        verify(inner).put(bytesKey, value, 0);
+        verify(context).logChange(store.name(), key, value, 0L, POSITION);
     }
 
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetching() {
-        EasyMock
-            .expect(inner.fetch(bytesKey, 0, 10))
-            .andReturn(KeyValueIterators.emptyWindowStoreIterator());
-
-        init();
-
         store.fetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10));
-        EasyMock.verify(inner);
+
+        verify(inner).fetch(bytesKey, 0, 10);
     }
 
     @Test
     public void shouldDelegateToUnderlyingStoreWhenBackwardFetching() {
-        EasyMock
-            .expect(inner.backwardFetch(bytesKey, 0, 10))
-            .andReturn(KeyValueIterators.emptyWindowStoreIterator());
-
-        init();
-
         store.backwardFetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10));
-        EasyMock.verify(inner);
+
+        verify(inner).backwardFetch(bytesKey, 0, 10);
     }
 
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetchingRange() {
-        EasyMock
-            .expect(inner.fetch(bytesKey, bytesKey, 0, 1))
-            .andReturn(KeyValueIterators.emptyIterator());
-
-        init();
-
         store.fetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
-        EasyMock.verify(inner);
+
+        verify(inner).fetch(bytesKey, bytesKey, 0, 1);
     }
 
     @Test
     public void shouldDelegateToUnderlyingStoreWhenBackwardFetchingRange() {
-        EasyMock
-            .expect(inner.backwardFetch(bytesKey, bytesKey, 0, 1))
-            .andReturn(KeyValueIterators.emptyIterator());
-
-        init();
-
         store.backwardFetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
-        EasyMock.verify(inner);
+
+        verify(inner).backwardFetch(bytesKey, bytesKey, 0, 1);
     }
 
     @Test
     public void shouldRetainDuplicatesWhenSet() {
         store = new ChangeLoggingWindowBytesStore(inner, true, WindowKeySchema::toStoreKeyBinary);
-        EasyMock.expect(inner.getPosition()).andReturn(Position.emptyPosition()).anyTimes();
-        inner.put(bytesKey, value, 0);
-        EasyMock.expectLastCall().times(2);
-
-        init();
+        store.init((StateStoreContext) context, store);
+        when(inner.getPosition()).thenReturn(Position.emptyPosition());
 
         final Bytes key1 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1);
         final Bytes key2 = WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2);
 
-        EasyMock.reset(context);
-        EasyMock.expect(context.timestamp()).andStubReturn(0L);
-        EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.empty());
-        context.logChange(store.name(), key1, value, 0L, Position.emptyPosition());
-        context.logChange(store.name(), key2, value, 0L, Position.emptyPosition());
-
-        EasyMock.replay(context);
-
         store.put(bytesKey, value, context.timestamp());
         store.put(bytesKey, value, context.timestamp());
 
-        EasyMock.verify(inner, context);
+        verify(inner, times(2)).put(bytesKey, value, 0);
+        verify(context).logChange(store.name(), key1, value, 0L, Position.emptyPosition());
+        verify(context).logChange(store.name(), key2, value, 0L, Position.emptyPosition());
     }
 
 }
