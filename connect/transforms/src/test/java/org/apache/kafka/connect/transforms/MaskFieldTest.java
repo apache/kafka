@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 
 import static java.util.Collections.singletonList;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -249,5 +250,19 @@ public class MaskFieldTest {
     @Test
     public void testEmptyStringReplacementValue() {
         assertThrows(ConfigException.class, () -> checkReplacementSchemaless("short", ""), "String must be non-empty");
+    }
+
+    @Test
+    public void testNullListAndMapReplacementsAreMutable() {
+        final List<String> maskFields = new ArrayList<>(SCHEMA.fields().size());
+        SCHEMA.fields().forEach(f -> maskFields.add(f.name()));
+        final Struct updatedValue = (Struct) transform(maskFields, null).apply(record(SCHEMA, VALUES_WITH_SCHEMA)).value();
+        @SuppressWarnings("unchecked") List<Integer> list = (List<Integer>) updatedValue.get("array");
+        assertEquals(0, list.size());
+        assertDoesNotThrow(() -> list.add(0));
+
+        @SuppressWarnings("unchecked") Map<String, String> map = (Map<String, String>) updatedValue.get("map");
+        assertEquals(0, map.size());
+        assertDoesNotThrow(() -> map.put("k", "v"));
     }
 }
