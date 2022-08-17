@@ -55,9 +55,7 @@ class Tasks {
     private final Map<TaskId, Set<TopicPartition>> pendingTasksToRecycle = new HashMap<>();
     private final Map<TaskId, Set<TopicPartition>> pendingTasksToUpdateInputPartitions = new HashMap<>();
     private final Set<Task> pendingTasksToInit = new HashSet<>();
-    private final Set<TaskId> pendingTasksToCloseClean = new HashSet<>();
-
-    private final Set<TaskId> pendingTasksToCloseDirty = new HashSet<>();
+    private final Set<TaskId> pendingTasksToClose = new HashSet<>();
 
     // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
     private final Map<TopicPartition, Task> activeTasksPerPartition = new HashMap<>();
@@ -113,19 +111,12 @@ class Tasks {
         pendingTasksToUpdateInputPartitions.put(taskId, inputPartitions);
     }
 
-    boolean removePendingTaskToCloseDirty(final TaskId taskId) {
-        return pendingTasksToCloseDirty.remove(taskId);
-    }
-    void addPendingTaskToCloseDirty(final TaskId taskId) {
-        pendingTasksToCloseDirty.add(taskId);
+    boolean removePendingTaskToClose(final TaskId taskId) {
+        return pendingTasksToClose.remove(taskId);
     }
 
-    boolean removePendingTaskToCloseClean(final TaskId taskId) {
-        return pendingTasksToCloseClean.remove(taskId);
-    }
-
-    void addPendingTaskToCloseClean(final TaskId taskId) {
-        pendingTasksToCloseClean.add(taskId);
+    void addPendingTaskToClose(final TaskId taskId) {
+        pendingTasksToClose.add(taskId);
     }
 
     Set<Task> drainPendingTaskToInit() {
