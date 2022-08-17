@@ -106,6 +106,23 @@ object KafkaController extends Logging {
         } else true
     }
   }
+
+  /**
+   * Helper method to generate a simple timing string for log messages. A negative value for either
+   * argument disables the corresponding half of the timing string. Of course, calling this method
+   * with negative values for both arguments is nonsensical; don't do that.
+   *
+   * @param taskStartMs start-time (in milliseconds) of the sub-task within the main method that's being timed
+   * @param methodStartMs start-time (in milliseconds) of the overall method containing the sub-task
+   * @param time optional Time object to support testing with "artificial time"
+   */
+  def timing(taskStartMs: Long, methodStartMs: Long, time: Time = Time.SYSTEM): String = {
+    val nowMs = time.milliseconds()
+    // technically the "init " part should also be supplied by the user to make this maximally generic:
+    if (taskStartMs < 0) s"(elapsed init = ${nowMs - methodStartMs} ms)"
+      else if (methodStartMs < 0) s"(took ${nowMs - taskStartMs} ms)"
+      else s"(took ${nowMs - taskStartMs} ms; elapsed init = ${nowMs - methodStartMs} ms)"
+  }
 }
 
 class KafkaController(val config: KafkaConfig,
@@ -299,22 +316,6 @@ class KafkaController(val config: KafkaConfig,
   private def state: ControllerState = eventManager.state
 
   /**
-   * Helper method to generate a simple timing string for log messages. A negative value for either
-   * argument disables the corresponding half of the timing string. Of course, calling this method
-   * with negative values for both arguments is nonsensical; don't do that.
-   *
-   * @param taskStartMs start-time (in milliseconds) of the sub-task within the main method that's being timed
-   * @param methodStartMs start-time (in milliseconds) of the overall method containing the sub-task
-   */
-  private def timing(taskStartMs: Long, methodStartMs: Long): String = {
-    val nowMs = time.milliseconds()
-    // technically the "init " part should also be supplied by the user to make this maximally generic:
-    if (taskStartMs < 0) s"(elapsed init = ${nowMs - methodStartMs} ms)"
-      else if (methodStartMs < 0) s"(took ${nowMs - taskStartMs} ms)"
-      else s"(took ${nowMs - taskStartMs} ms; elapsed init = ${nowMs - methodStartMs} ms)"
-  }
-
-  /**
    * This callback is invoked by the zookeeper leader elector on electing the current broker as the new controller.
    * It does the following things on the become-controller state change -
    * 1. Initializes the controller's context object that holds cache objects for current topics, live brokers and
@@ -329,7 +330,7 @@ class KafkaController(val config: KafkaConfig,
     val failoverStartMs = time.milliseconds()
     maybeSetupFeatureVersioning()
 
-    info(s"Registering handlers ${timing(-1, failoverStartMs)}")
+    info(s"Registering handlers ${KafkaController.timing(-1, failoverStartMs, time)}")
 
     // before reading source of truth from zookeeper, register the listeners to get broker/topic callbacks
     val childChangeHandlers = Seq(brokerChangeHandler, topicChangeHandler, topicDeletionHandler, logDirEventNotificationHandler,
@@ -339,48 +340,50 @@ class KafkaController(val config: KafkaConfig,
     val nodeChangeHandlers = Seq(preferredReplicaElectionHandler, partitionReassignmentHandler, topicDeletionFlagHandler)
     nodeChangeHandlers.foreach(zkClient.registerZNodeChangeHandlerAndCheckExistence)
 
-    info(s"Deleting log dir event notifications ${timing(-1, failoverStartMs)}")
+    info(s"Deleting log dir event notifications ${KafkaController.timing(-1, failoverStartMs, time)}")
     zkClient.deleteLogDirEventNotifications(controllerContext.epochZkVersion)
-    info(s"Deleting isr change notifications ${timing(-1, failoverStartMs)}")
+    info(s"Deleting isr change notifications ${KafkaController.timing(-1, failoverStartMs, time)}")
     zkClient.deleteIsrChangeNotifications(controllerContext.epochZkVersion)
-    info(s"Initializing controller context ${timing(-1, failoverStartMs)}")
+    info(s"Initializing controller context ${KafkaController.timing(-1, failoverStartMs, time)}")
     initializeControllerContext(failoverStartMs)
-    info(s"Fetching topic deletions in progress ${timing(-1, failoverStartMs)}")
+    info(s"Fetching topic deletions in progress ${KafkaController.timing(-1, failoverStartMs, time)}")
     val (topicsToBeDeleted, topicsIneligibleForDeletion) = fetchTopicDeletionsInProgress()
-    info(s"Initializing topic deletion manager ${timing(-1, failoverStartMs)}")
+    info(s"Initializing topic deletion manager ${KafkaController.timing(-1, failoverStartMs, time)}")
     topicDeletionManager.init(topicsToBeDeleted, topicsIneligibleForDeletion)
 
     // We need to send UpdateMetadataRequest after the controller context is initialized and before the state machines
     // are started. The is because brokers need to receive the list of live brokers from UpdateMetadataRequest before
     // they can process the LeaderAndIsrRequests that are generated by replicaStateMachine.startup() and
     // partitionStateMachine.startup().
-    info(s"Sending update metadata request ${timing(-1, failoverStartMs)}")
+    info(s"Sending update metadata request ${KafkaController.timing(-1, failoverStartMs, time)}")
     sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set.empty)
 
-    replicaStateMachine.startup()
+    info(s"Starting replica state machine ${KafkaController.timing(-1, failoverStartMs, time)}")  // even slower than ZK partition scan?
+    replicaStateMachine.startup(failoverStartMs)
+    info(s"Starting partition state machine ${KafkaController.timing(-1, failoverStartMs, time)}")
     partitionStateMachine.startup()
 
-    info(s"Ready to serve as the new controller with epoch $epoch ${timing(-1, failoverStartMs)}")
+    info(s"Ready to serve as the new controller with epoch $epoch ${KafkaController.timing(-1, failoverStartMs, time)}")
 
     initializePartitionReassignments()
     topicDeletionManager.tryTopicDeletion()
     val pendingPreferredReplicaElections = fetchPendingPreferredReplicaElections()
     onReplicaElection(pendingPreferredReplicaElections, ElectionType.PREFERRED, ZkTriggered)
-    info(s"Starting the controller scheduler ${timing(-1, failoverStartMs)}")
+    info(s"Starting the controller scheduler ${KafkaController.timing(-1, failoverStartMs, time)}")
     kafkaScheduler.startup()
     if (config.autoLeaderRebalanceEnable) {
       scheduleAutoLeaderRebalanceTask(delay = 5, unit = TimeUnit.SECONDS)
     }
 
     if (config.tokenAuthEnabled) {
-      info(s"starting the token expiry check scheduler ${timing(-1, failoverStartMs)}")
+      info(s"starting the token expiry check scheduler ${KafkaController.timing(-1, failoverStartMs, time)}")
       tokenCleanScheduler.startup()
       tokenCleanScheduler.schedule(name = "delete-expired-tokens",
         fun = () => tokenManager.expireTokens(),
         period = config.delegationTokenExpiryCheckIntervalMs,
         unit = TimeUnit.MILLISECONDS)
     }
-    info(s"onControllerFailover() complete ${timing(-1, failoverStartMs)}")
+    info(s"onControllerFailover() complete ${KafkaController.timing(-1, failoverStartMs, time)}")
   }
 
   private def createFeatureZNode(newNode: FeatureZNode): Int = {
@@ -1011,11 +1014,11 @@ class KafkaController(val config: KafkaConfig,
         incompatibleBrokerAndEpochs.map { case (broker, _) => broker.id }.toSeq.sorted.mkString(","))
     }
     controllerContext.setLiveBrokers(compatibleBrokerAndEpochs)
-    info(s"Initialized broker epochs cache: ${controllerContext.liveBrokerIdAndEpochs} ${timing(taskStartMs, failoverStartMs)}")
+    info(s"Initialized broker epochs cache: ${controllerContext.liveBrokerIdAndEpochs} ${KafkaController.timing(taskStartMs, failoverStartMs, time)}")
 
     taskStartMs = time.milliseconds()
     controllerContext.setAllTopics(zkClient.getAllTopicsInCluster(true))
-    info(s"Read ${controllerContext.allTopics.size} topic names from ZK ${timing(taskStartMs, failoverStartMs)}")
+    info(s"Read ${controllerContext.allTopics.size} topic names from ZK ${KafkaController.timing(taskStartMs, failoverStartMs, time)}")
 
     // Load the min.insync.replicas config for each topic. This updates the controllerContext.topicMinIsrConfig map.
     //
@@ -1031,20 +1034,20 @@ class KafkaController(val config: KafkaConfig,
     //    between the moment this broker started and right now when it becomes controller again.
     taskStartMs = time.milliseconds()
     loadMinIsrForTopics(controllerContext.allTopics)  // accounts for roughly 50% of topic-level init time
-    info(s"topic-level init: finished loadMinIsrForTopics() ${timing(taskStartMs, failoverStartMs)}")
+    info(s"topic-level init: finished loadMinIsrForTopics() ${KafkaController.timing(taskStartMs, failoverStartMs, time)}")
 
     taskStartMs = time.milliseconds()
     rearrangePartitionReplicaAssignmentForNewTopics(controllerContext.allTopics.toSet)  // accounts for roughly 25% of topic-level init time
-    info(s"topic-level init: finished rearrangePartitionReplicaAssignmentForNewTopics() ${timing(taskStartMs, failoverStartMs)}")
+    info(s"topic-level init: finished rearrangePartitionReplicaAssignmentForNewTopics() ${KafkaController.timing(taskStartMs, failoverStartMs, time)}")
     taskStartMs = time.milliseconds()
     registerPartitionModificationsHandlers(controllerContext.allTopics.toSeq)
-    info(s"topic-level init: finished registerPartitionModificationsHandlers() ${timing(taskStartMs, failoverStartMs)}")
+    info(s"topic-level init: finished registerPartitionModificationsHandlers() ${KafkaController.timing(taskStartMs, failoverStartMs, time)}")
     taskStartMs = time.milliseconds()
     val replicaAssignmentAndTopicIds: Set[TopicIdReplicaAssignment] = getReplicaAssignmentPolicyCompliant(controllerContext.allTopics.toSet)  // accounts for roughly 25% of topic-level init time
-    info(s"topic-level init: finished getReplicaAssignmentPolicyCompliant() ${timing(taskStartMs, failoverStartMs)}")
+    info(s"topic-level init: finished getReplicaAssignmentPolicyCompliant() ${KafkaController.timing(taskStartMs, failoverStartMs, time)}")
     taskStartMs = time.milliseconds()
     processTopicIds(replicaAssignmentAndTopicIds)
-    info(s"topic-level init: finished processTopicIds() ${timing(taskStartMs, failoverStartMs)}")
+    info(s"topic-level init: finished processTopicIds() ${KafkaController.timing(taskStartMs, failoverStartMs, time)}")
     // In aggregate, the five topic-level init steps above are responsible for the 2nd-longest portition of
     // sequential controller init (20% of overall time for 1500 topics, 15000 partitions in integ test).
     // [In parallel mode, topic-level init accounts for 40% of startup time for the same test case.]
@@ -1058,14 +1061,14 @@ class KafkaController(val config: KafkaConfig,
       }
     }
     controllerContext.clearPartitionLeadershipInfo()
-    info(s"Finished setting up partitionAssignments map ${timing(taskStartMs, failoverStartMs)}")
+    info(s"Finished setting up partitionAssignments map ${KafkaController.timing(taskStartMs, failoverStartMs, time)}")
 
     taskStartMs = time.milliseconds()
     controllerContext.shuttingDownBrokerIds.clear()
     controllerContext.shuttingDownBrokerIds ++= zkClient.getBrokerShutdownEntries
     // register broker modifications handlers
     registerBrokerModificationsHandler(controllerContext.liveOrShuttingDownBrokerIds)
-    info(s"Handled shutting-down brokers and registered update-handlers ${timing(taskStartMs, failoverStartMs)}")
+    info(s"Handled shutting-down brokers and registered update-handlers ${KafkaController.timing(taskStartMs, failoverStartMs, time)}")
 
     // Update the leader and isr cache for all existing partitions from Zookeeper. THIS IS THE SLOWEST PART
     // OF SEQUENTIAL CONTROLLER INIT (70% of overall time for 1500 topics, 15000 partitions in an integ test).
@@ -1082,7 +1085,7 @@ class KafkaController(val config: KafkaConfig,
       // LEGACY SEQUENTIAL-STARTUP MODE
       updateLeaderAndIsrCache(allPartitions.toSeq)
     }
-    info(s"Finished recursing ${allPartitions.size} partitions in ZK and setting up LAI cache ${timing(taskStartMs, failoverStartMs)}")
+    info(s"Finished recursing ${allPartitions.size} partitions in ZK and setting up LAI cache ${KafkaController.timing(taskStartMs, failoverStartMs, time)}")
 
     // start the channel manager
     controllerChannelManager.startup()
@@ -1137,7 +1140,7 @@ class KafkaController(val config: KafkaConfig,
   private def updateLeaderAndIsrCache(partitions: Seq[TopicPartition]): Unit = {
     val zkPartitionRecurseStartMs = time.milliseconds()
     val leaderIsrAndControllerEpochs = zkClient.getTopicPartitionStates(partitions)  // 98.4% of method's time
-    info(s"partition-level init (sequential): finished recursing ${partitions.size} partitions in ZK ${timing(zkPartitionRecurseStartMs, -1)}")
+    info(s"partition-level init (sequential): finished recursing ${partitions.size} partitions in ZK ${KafkaController.timing(zkPartitionRecurseStartMs, -1, time)}")
     leaderIsrAndControllerEpochs.forKeyValue { (partition, leaderIsrAndControllerEpoch) =>
       controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
     }
@@ -1171,7 +1174,7 @@ class KafkaController(val config: KafkaConfig,
         override def call(): Map[TopicPartition, LeaderIsrAndControllerEpoch] = {
           val zkPartitionRecurseStartMs = time.milliseconds()
           val leaderIsrAndControllerEpochsBatch = zkClientN.getTopicPartitionStates(partitionsBatch.toSeq)
-          info(s"partition-level init (parallel): finished recursing ${partitionsBatch.size} partitions in ZK ${timing(zkPartitionRecurseStartMs, -1)}")
+          info(s"partition-level init (parallel): finished recursing ${partitionsBatch.size} partitions in ZK ${KafkaController.timing(zkPartitionRecurseStartMs, -1, time)}")
           leaderIsrAndControllerEpochsBatch
         }
       }

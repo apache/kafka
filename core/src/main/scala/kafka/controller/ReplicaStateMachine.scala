@@ -26,6 +26,7 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicPartitionStateZNode
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
+import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException.Code
 import scala.collection.{Seq, mutable}
 
@@ -33,15 +34,15 @@ abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends
   /**
    * Invoked on successful controller election.
    */
-  def startup(): Unit = {
-    info("Initializing replica state")
+  def startup(controllerStartMs: Long = Time.SYSTEM.milliseconds): Unit = {
+    info(s"Initializing replica state ${KafkaController.timing(-1, controllerStartMs)}")
     initializeReplicaState()
-    info("Triggering online replica state changes")
     val (onlineReplicas, offlineReplicas) = controllerContext.onlineAndOfflineReplicas
+    info(s"Triggering online replica state changes for ${onlineReplicas.size} replicas ${KafkaController.timing(-1, controllerStartMs)}")
     handleStateChanges(onlineReplicas.toSeq, OnlineReplica)
-    info("Triggering offline replica state changes")
+    info(s"Triggering offline replica state changes for ${offlineReplicas.size} replicas ${KafkaController.timing(-1, controllerStartMs)}")
     handleStateChanges(offlineReplicas.toSeq, OfflineReplica)
-    debug(s"Started replica state machine with initial state -> ${controllerContext.replicaStates}")
+    debug(s"Started replica state machine ${KafkaController.timing(-1, controllerStartMs)} with initial state -> ${controllerContext.replicaStates}")
   }
 
   /**
@@ -108,11 +109,29 @@ class ZkReplicaStateMachine(config: KafkaConfig,
   override def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {
     if (replicas.nonEmpty) {
       try {
+        var taskStartMs: Long = Time.SYSTEM.milliseconds
+        val doExtraTiming: Boolean = (targetState == OnlineReplica && replicas.size > 250000)
+        val timingsOpt = if (doExtraTiming) Some(AggregatedTimings()) else None
+
         controllerBrokerRequestBatch.newBatch()
         replicas.groupBy(_.replica).forKeyValue { (replicaId, replicas) =>
-          doHandleStateChanges(replicaId, replicas, targetState)
+          doHandleStateChanges(replicaId, replicas, targetState, timingsOpt)
         }
+
+        var startMs: Long = if (doExtraTiming) Time.SYSTEM.milliseconds else 0L
         controllerBrokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
+        timingsOpt.foreach { timings =>
+          timings.sendRequestsToBrokersSumMs += (Time.SYSTEM.milliseconds - startMs)
+
+          info(s"Done changing state of ${replicas.size} replicas to OnlineReplica ${KafkaController.timing(taskStartMs, -1)}:")
+          info(s" - aggregate variables-init took ${timings.varInitSumMs} ms")
+          info(s" - aggregate NewReplica partitionFullReplicaAssignment() took ${timings.partitionFullReplicaAssignmentSumMs} ms")
+          info(s" - aggregate NewReplica unassigned-replica handling took ${timings.unassignedReplicaHandlingSumMs} ms")
+          // in test env, this item is the bulk of the time:
+          info(s" - aggregate non-NewReplica addLeaderAndIsrRequestForBrokers() took ${timings.addLeaderAndIsrRequestForBrokersSumMs} ms")
+          info(s" - aggregate putReplicaState() took ${timings.putReplicaStateSumMs} ms")
+          info(s" - single sendRequestsToBrokers() took ${timings.sendRequestsToBrokersSumMs} ms")
+        }
       } catch {
         case e: ControllerMovedException =>
           error(s"Controller moved to another broker when moving some replicas to $targetState state", e)
@@ -122,6 +141,14 @@ class ZkReplicaStateMachine(config: KafkaConfig,
       }
     }
   }
+
+  case class AggregatedTimings(
+    var varInitSumMs: Long = 0L,
+    var partitionFullReplicaAssignmentSumMs: Long = 0L,
+    var unassignedReplicaHandlingSumMs: Long = 0L,
+    var addLeaderAndIsrRequestForBrokersSumMs: Long = 0L,
+    var putReplicaStateSumMs: Long = 0L,
+    var sendRequestsToBrokersSumMs: Long = 0L)
 
   /**
    * This API exercises the replica's state machine. It ensures that every state transition happens from a legal
@@ -158,7 +185,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
    * @param replicas The partitions on this replica for which the state transition is invoked
    * @param targetState The end state that the replica should be moved to
    */
-  private def doHandleStateChanges(replicaId: Int, replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {
+  private def doHandleStateChanges(replicaId: Int, replicas: Seq[PartitionAndReplica], targetState: ReplicaState, timingsOpt: Option[AggregatedTimings]): Unit = {
     val stateLogger = stateChangeLogger.withControllerEpoch(controllerContext.epoch)
     val traceEnabled = stateLogger.isTraceEnabled
     replicas.foreach(replica => controllerContext.putReplicaStateIfNotExists(replica, NonExistentReplica))
@@ -193,17 +220,36 @@ class ZkReplicaStateMachine(config: KafkaConfig,
           }
         }
       case OnlineReplica =>
+        var startMs: Long = 0L
+        var endMs: Long = 0L
+
         validReplicas.foreach { replica =>
+          if (timingsOpt.isDefined) startMs = Time.SYSTEM.milliseconds
           val partition = replica.topicPartition
           val currentState = controllerContext.replicaState(replica)
+          timingsOpt.foreach { timings =>
+            endMs = Time.SYSTEM.milliseconds
+            timings.varInitSumMs += (endMs - startMs)
+            startMs = endMs
+          }
 
           currentState match {
             case NewReplica =>
               val assignment = controllerContext.partitionFullReplicaAssignment(partition)
+              timingsOpt.foreach { timings =>
+                endMs = Time.SYSTEM.milliseconds
+                timings.partitionFullReplicaAssignmentSumMs += (endMs - startMs)
+                startMs = endMs
+              }
               if (!assignment.replicas.contains(replicaId)) {
                 error(s"Adding replica ($replicaId) that is not part of the assignment $assignment")
                 val newAssignment = assignment.copy(replicas = assignment.replicas :+ replicaId)
                 controllerContext.updatePartitionFullReplicaAssignment(partition, newAssignment)
+              }
+              timingsOpt.foreach { timings =>
+                endMs = Time.SYSTEM.milliseconds
+                timings.unassignedReplicaHandlingSumMs += (endMs - startMs)
+                startMs = endMs
               }
             case _ =>
               controllerContext.partitionLeadershipInfo(partition) match {
@@ -214,10 +260,20 @@ class ZkReplicaStateMachine(config: KafkaConfig,
                     controllerContext.partitionFullReplicaAssignment(partition), isNew = false)
                 case None =>
               }
+              timingsOpt.foreach { timings =>
+                endMs = Time.SYSTEM.milliseconds
+                timings.addLeaderAndIsrRequestForBrokersSumMs += (endMs - startMs)
+                startMs = endMs
+              }
           }
           if (traceEnabled)
             logSuccessfulTransition(stateLogger, replicaId, partition, currentState, OnlineReplica)
           controllerContext.putReplicaState(replica, OnlineReplica)
+          timingsOpt.foreach { timings =>
+            endMs = Time.SYSTEM.milliseconds
+            timings.putReplicaStateSumMs += (endMs - startMs)
+            startMs = endMs
+          }
         }
       case OfflineReplica =>
         validReplicas.foreach { replica =>
