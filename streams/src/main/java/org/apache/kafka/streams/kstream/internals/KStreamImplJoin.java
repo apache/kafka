@@ -181,6 +181,14 @@ class KStreamImplJoin {
             sharedTimeTracker
         );
 
+        final KStreamKStreamSelfJoin<K, V1, V2, VOut> selfJoin = new KStreamKStreamSelfJoin<>(
+            thisWindowStore.name(),
+            internalWindows,
+            joiner,
+            AbstractStream.reverseJoinerWithKey(joiner),
+            sharedTimeTracker
+        );
+
         final PassThrough<K, VOut> joinMerge = new PassThrough<>();
 
         final StreamStreamJoinNode.StreamStreamJoinNodeBuilder<K, V1, V2, VOut> joinBuilder = StreamStreamJoinNode.streamStreamJoinNodeBuilder();
@@ -188,6 +196,7 @@ class KStreamImplJoin {
         final ProcessorParameters<K, V1, ?, ?> joinThisProcessorParams = new ProcessorParameters<>(joinThis, joinThisName);
         final ProcessorParameters<K, V2, ?, ?> joinOtherProcessorParams = new ProcessorParameters<>(joinOther, joinOtherName);
         final ProcessorParameters<K, VOut, ?, ?> joinMergeProcessorParams = new ProcessorParameters<>(joinMerge, joinMergeName);
+        final ProcessorParameters<K, V1, ?, ?> selfJoinProcessorParams = new ProcessorParameters<>(selfJoin, joinMergeName);
 
         joinBuilder.withJoinMergeProcessorParameters(joinMergeProcessorParams)
                    .withJoinThisProcessorParameters(joinThisProcessorParams)
@@ -198,7 +207,8 @@ class KStreamImplJoin {
                    .withOtherWindowedStreamProcessorParameters(otherWindowStreamProcessorParams)
                    .withOuterJoinWindowStoreBuilder(outerJoinWindowStore)
                    .withValueJoiner(joiner)
-                   .withNodeName(joinMergeName);
+                   .withNodeName(joinMergeName)
+                   .withSelfJoinProcessorParameters(selfJoinProcessorParams);
 
         if (internalWindows.spuriousResultFixEnabled()) {
             joinBuilder.withSpuriousResultFixEnabled();

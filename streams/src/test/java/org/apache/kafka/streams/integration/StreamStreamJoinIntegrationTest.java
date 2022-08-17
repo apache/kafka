@@ -66,6 +66,51 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @Test
+    public void testVicky() {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
+
+        final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
+            null,
+            null,
+            null,
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-b", null, 6L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+            null,
+            null,
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-a", null, 9L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-b", null, 9L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-c", null, 10L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+            null,
+            null,
+            null,
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-d", null, 14L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-d", null, 14L)),
+            Arrays.asList(
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
+        );
+
+        leftStream.join(
+            leftStream,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
+        ).to(OUTPUT_TOPIC);
+
+        runTestWithDriver(expectedResult);
+    }
+
+    @Test
     public void testInner() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
 

@@ -74,6 +74,102 @@ public class KStreamKStreamJoinTest {
     private final String errorMessagePrefix = "Window settings mismatch. WindowBytesStoreSupplier settings";
 
     @Test
+    public void shouldVicky() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
+        final KStream<String, Integer> joined;
+
+        joined = left.join(
+            left,
+            Integer::sum,
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
+            StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
+        );
+        joined.process(supplier);
+
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        final Topology topology =  builder.build(props);
+        System.out.println(topology.describe().toString());
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKStreamJoin.class);
+            final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+
+            final TestInputTopic<String, Integer> inputTopic =
+                driver.createInputTopic("left", new StringSerializer(), new IntegerSerializer());
+            final MockApiProcessor<String, Integer, Void, Void> processor =
+                supplier.theCapturedProcessor();
+
+            inputTopic.pipeInput("A", 1, 1L);
+            inputTopic.pipeInput("B", 1, 2L);
+
+            inputTopic.pipeInput("A", 1, 3L);
+            inputTopic.pipeInput("B", 2, 4L);
+
+            inputTopic.pipeInput("A", 1, 5L);
+            inputTopic.pipeInput("B", 2, 6L);
+
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", 2, 3L),
+                new KeyValueTimestamp<>("B", 3, 4L),
+                new KeyValueTimestamp<>("A", 2, 5L),
+                new KeyValueTimestamp<>("A", 2, 5L),
+                new KeyValueTimestamp<>("B", 3, 6L),
+                new KeyValueTimestamp<>("B", 4, 6L)
+            );
+        }
+    }
+
+    @Test
+    public void shouldVicky2() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
+        final KStream<String, Integer> right = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
+        final KStream<String, Integer> joined;
+
+        joined = left.join(
+            right,
+            Integer::sum,
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
+            StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
+        );
+        joined.process(supplier);
+
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        final Topology topology =  builder.build(props);
+        System.out.println(topology.describe().toString());
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(KStreamKStreamJoin.class);
+            final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final MockApiProcessor<String, Integer, Void, Void> processor =
+                supplier.theCapturedProcessor();
+            
+            final TestInputTopic<String, Integer> inputTopic =
+                driver.createInputTopic("left", new StringSerializer(), new IntegerSerializer());
+            inputTopic.pipeInput("A", 1, 1L);
+            inputTopic.pipeInput("B", 1, 2L);
+
+            inputTopic.pipeInput("A", 1, 3L);
+            inputTopic.pipeInput("B", 2, 4L);
+
+            inputTopic.pipeInput("A", 1, 5L);
+            inputTopic.pipeInput("B", 2, 6L);
+
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>("A", 2, 3L),
+                new KeyValueTimestamp<>("B", 3, 4L),
+                new KeyValueTimestamp<>("A", 2, 5L),
+                new KeyValueTimestamp<>("A", 2, 5L),
+                new KeyValueTimestamp<>("B", 3, 6L),
+                new KeyValueTimestamp<>("B", 4, 6L)
+            );
+        }
+    }
+
+
+    @Test
     public void shouldLogAndMeterOnSkippedRecordsWithNullValueWithBuiltInMetricsVersionLatest() {
         final StreamsBuilder builder = new StreamsBuilder();
 

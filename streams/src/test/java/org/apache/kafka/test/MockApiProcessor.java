@@ -94,9 +94,13 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
     }
 
     public void checkAndClearProcessResult(final KeyValueTimestamp<?, ?>... expected) {
+        for (final Record<KIn, VIn> record : processed) {
+            System.out.println(record.key() + "," + record.value() + "," + record.timestamp());
+        }
         assertThat("the number of outputs:" + processed, processed.size(), is(expected.length));
         for (int i = 0; i < expected.length; i++) {
             final Record<KIn, VIn> record = processed.get(i);
+            System.out.println();
             assertThat(
                 "output[" + i + "]:",
                 new KeyValueTimestamp<>(record.key(), record.value(), record.timestamp()),
