@@ -20,6 +20,7 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchResponseData;
@@ -1944,6 +1945,34 @@ public class KafkaRaftClientTest {
             Utils.mkSet(closeFollower, laggingFollower),
             Optional.of(Arrays.asList(closeFollower, laggingFollower))
         );
+    }
+
+    @Test
+    public void testDescribeQuorumNonLeader() throws Exception {
+        int localId = 0;
+        int voter2 = localId + 1;
+        int voter3 = localId + 2;
+        int epoch = 2;
+        Set<Integer> voters = Utils.mkSet(localId, voter2, voter3);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(epoch)
+            .build();
+
+        context.deliverRequest(DescribeQuorumRequest.singletonRequest(context.metadataPartition));
+        context.pollUntilResponse();
+
+        DescribeQuorumResponseData responseData = context.collectDescribeQuorumResponse();
+        assertEquals(Errors.NONE, Errors.forCode(responseData.errorCode()));
+
+        assertEquals(1, responseData.topics().size());
+        DescribeQuorumResponseData.TopicData topicData = responseData.topics().get(0);
+        assertEquals(context.metadataPartition.topic(), topicData.topicName());
+
+        assertEquals(1, topicData.partitions().size());
+        DescribeQuorumResponseData.PartitionData partitionData = topicData.partitions().get(0);
+        assertEquals(context.metadataPartition.partition(), partitionData.partitionIndex());
+        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(partitionData.errorCode()));
     }
 
     @Test

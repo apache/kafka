@@ -37,7 +37,7 @@ import java.util.Map;
  * - {@link Errors#BROKER_NOT_AVAILABLE}
  *
  * Partition level errors:
- * - {@link Errors#INVALID_REQUEST}
+ * - {@link Errors#NOT_LEADER_OR_FOLLOWER}
  * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
  */
 public class DescribeQuorumResponse extends AbstractResponse {
@@ -72,6 +72,19 @@ public class DescribeQuorumResponse extends AbstractResponse {
         return DEFAULT_THROTTLE_TIME;
     }
 
+    public static DescribeQuorumResponseData singletonErrorResponse(
+        TopicPartition topicPartition,
+        Errors error
+    ) {
+        return new DescribeQuorumResponseData()
+            .setTopics(Collections.singletonList(new DescribeQuorumResponseData.TopicData()
+                .setTopicName(topicPartition.topic())
+                .setPartitions(Collections.singletonList(new DescribeQuorumResponseData.PartitionData()
+                    .setPartitionIndex(topicPartition.partition())
+                    .setErrorCode(error.code())))));
+    }
+
+
     public static DescribeQuorumResponseData singletonResponse(TopicPartition topicPartition,
                                                                int leaderId,
                                                                int leaderEpoch,
@@ -82,6 +95,7 @@ public class DescribeQuorumResponse extends AbstractResponse {
             .setTopics(Collections.singletonList(new DescribeQuorumResponseData.TopicData()
                 .setTopicName(topicPartition.topic())
                 .setPartitions(Collections.singletonList(new DescribeQuorumResponseData.PartitionData()
+                    .setPartitionIndex(topicPartition.partition())
                     .setErrorCode(Errors.NONE.code())
                     .setLeaderId(leaderId)
                     .setLeaderEpoch(leaderEpoch)
