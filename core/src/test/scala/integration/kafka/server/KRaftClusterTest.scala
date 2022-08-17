@@ -36,7 +36,6 @@ import java.util.{Arrays, Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
-import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.server.common.MetadataVersion
@@ -822,8 +821,6 @@ class KRaftClusterTest {
           assertNotEquals(OptionalLong.empty(), observer.lastFetchTimeMs)
           assertNotEquals(OptionalLong.empty(), observer.lastCaughtUpTimeMs)
         }
-      } catch {
-        case t: Throwable => throw t
       } finally {
         admin.close()
       }
