@@ -819,19 +819,6 @@ public class TaskManagerTest {
         Mockito.verify(task, never()).closeClean();
     }
 
-    private TaskManager setupForRevocation(final Set<Task> tasksInStateUpdater,
-                                           final Set<Task> removedTasks) {
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, true);
-        when(stateUpdater.getTasks()).thenReturn(tasksInStateUpdater);
-        when(stateUpdater.drainRemovedTasks()).thenReturn(removedTasks);
-        expect(consumer.assignment()).andReturn(emptySet()).anyTimes();
-        consumer.resume(anyObject());
-        expectLastCall().anyTimes();
-        replay(consumer);
-
-        return taskManager;
-    }
-
     @Test
     public void shouldCloseActiveUnassignedSuspendedTasksWhenClosingRevokedTasks() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
