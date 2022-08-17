@@ -465,7 +465,7 @@ public class TaskManager {
                 standbyTasksToCreate.remove(taskId);
             } else {
                 stateUpdater.remove(taskId);
-                tasks.addPendingTaskToClose(taskId);
+                tasks.addPendingTaskToCloseClean(taskId);
             }
         }
     }
@@ -692,7 +692,7 @@ public class TaskManager {
 
                     taskExceptions.putIfAbsent(taskId, e);
                 }
-            } else if (tasks.removePendingTaskToClose(task.id())) {
+            } else if (tasks.removePendingTaskToCloseClean(task.id())) {
                 try {
                     task.suspend();
                     task.closeClean();
@@ -710,6 +710,8 @@ public class TaskManager {
 
                     taskExceptions.putIfAbsent(task.id(), e);
                 }
+            } else if (tasks.removePendingTaskToCloseDirty(task.id())) {
+                tasksToCloseDirty.add(task);
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
                 stateUpdater.add(task);
@@ -754,6 +756,8 @@ public class TaskManager {
                 commitNeededActiveTasks.add(task);
             }
         }
+
+        removeRevokedTasksFromStateUpdater(remainingRevokedPartitions);
 
         if (!remainingRevokedPartitions.isEmpty()) {
             log.debug("The following revoked partitions {} are missing from the current task partitions. It could "
@@ -840,6 +844,20 @@ public class TaskManager {
         }
     }
 
+    private void removeRevokedTasksFromStateUpdater(final Set<TopicPartition> remainingRevokedPartitions) {
+        if (stateUpdater != null) {
+            for (final Task restoringTask : stateUpdater.getTasks()) {
+                if (restoringTask.isActive()) {
+                    if (remainingRevokedPartitions.containsAll(restoringTask.inputPartitions())) {
+                        tasks.addPendingTaskToCloseClean(restoringTask.id());
+                        stateUpdater.remove(restoringTask.id());
+                        remainingRevokedPartitions.removeAll(restoringTask.inputPartitions());
+                    }
+                }
+            }
+        }
+    }
+
     private void prepareCommitAndAddOffsetsToMap(final Set<Task> tasksToPrepare,
                                                  final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsPerTask) {
         for (final Task task : tasksToPrepare) {
@@ -867,6 +885,15 @@ public class TaskManager {
     void handleLostAll() {
         log.debug("Closing lost active tasks as zombies.");
 
+        closeRunningTasksDirty();
+        removeLostTasksFromStateUpdater();
+
+        if (processingMode == EXACTLY_ONCE_V2) {
+            activeTaskCreator.reInitializeThreadProducer();
+        }
+    }
+
+    private void closeRunningTasksDirty() {
         final Set<Task> allTask = tasks.allTasks();
         for (final Task task : allTask) {
             // Even though we've apparently dropped out of the group, we can continue safely to maintain our
@@ -875,9 +902,16 @@ public class TaskManager {
                 closeTaskDirty(task);
             }
         }
+    }
 
-        if (processingMode == EXACTLY_ONCE_V2) {
-            activeTaskCreator.reInitializeThreadProducer();
+    private void removeLostTasksFromStateUpdater() {
+        if (stateUpdater != null) {
+            for (final Task restoringTask : stateUpdater.getTasks()) {
+                if (restoringTask.isActive()) {
+                    tasks.addPendingTaskToCloseDirty(restoringTask.id());
+                    stateUpdater.remove(restoringTask.id());
+                }
+            }
         }
     }
 
