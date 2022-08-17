@@ -849,7 +849,7 @@ public class TaskManager {
             for (final Task restoringTask : stateUpdater.getTasks()) {
                 if (restoringTask.isActive()) {
                     if (remainingRevokedPartitions.containsAll(restoringTask.inputPartitions())) {
-                        tasks.addPendingTaskToClose(restoringTask.id());
+                        tasks.addPendingTaskToCloseClean(restoringTask.id());
                         stateUpdater.remove(restoringTask.id());
                         remainingRevokedPartitions.removeAll(restoringTask.inputPartitions());
                     }
