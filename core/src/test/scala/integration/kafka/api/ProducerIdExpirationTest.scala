@@ -25,7 +25,7 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.{consumeRecords, createAdminClient}
 import org.apache.kafka.clients.admin.{Admin, ProducerState}
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidPidMappingException, TransactionalIdNotFoundException}
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -36,10 +36,9 @@ import org.junit.jupiter.params.provider.ValueSource
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
-// Test class that uses a very small transaction timeout to trigger InvalidPidMapping errors
-class TransactionsExpirationTest extends KafkaServerTestHarness {
+// Test class that tests producer ID expiration
+class ProducerIdExpirationTest extends KafkaServerTestHarness {
   val topic1 = "topic1"
-  val topic2 = "topic2"
   val numPartitions = 4
   val replicationFactor = 3
   val tp0 = new TopicPartition(topic1, 0)
@@ -55,20 +54,18 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-
-    producer = TestUtils.createTransactionalProducer("transactionalProducer", brokers)
     consumer = TestUtils.createConsumer(bootstrapServers(),
       enableAutoCommit = false,
       readCommitted = true)
     admin = createAdminClient(brokers, listenerName)
 
     createTopic(topic1, numPartitions, 3)
-    createTopic(topic2, numPartitions, 3)
   }
 
   @AfterEach
   override def tearDown(): Unit = {
-    producer.close()
+    if (producer != null)
+      producer.close()
     consumer.close()
     admin.close()
 
@@ -77,24 +74,53 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def testBumpTransactionalEpochAfterInvalidProducerIdMapping(quorum: String): Unit = {
+  def testProducerIdExpirationWithNoTransactions(quorum: String): Unit = {
+    producer = TestUtils.createProducer(bootstrapServers(), enableIdempotence = true)
+
+    // Send records to populate producer state cache.
+    producer.send(new ProducerRecord(topic1, 0, null, "key".getBytes, "value".getBytes))
+    producer.flush()
+
+    // Ensure producer IDs are added.
+    ensureConsistentKRaftMetadata()
+    assertEquals(1, producerState.size)
+
+    // Wait for the producer ID to expire
+    TestUtils.waitUntilTrue(() => producerState.isEmpty, "Producer ID did not expire.")
+
+    // Send more records to send producer ID back to brokers.
+    producer.send(new ProducerRecord(topic1, 0, null, "key".getBytes, "value".getBytes))
+    producer.flush()
+
+    // Producer IDs should repopulate.
+    assertEquals(1, producerState.size)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testTransactionAfterTransactionIdExpiresButProducerIdRemains(quorum: String): Unit = {
+    producer = TestUtils.createTransactionalProducer("transactionalProducer", brokers)
     producer.initTransactions()
 
-    // Start and then abort a transaction to allow the transactional ID to expire
+    // Start and then abort a transaction to allow the producer ID to expire
     producer.beginTransaction()
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "2", "2", willBeCommitted = false))
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, 0, "4", "4", willBeCommitted = false))
+    producer.flush()
+
+    // Ensure producer IDs are added.
+    assertEquals(1, producerState.size)
+
     producer.abortTransaction()
 
-    // Ensure the transaction state exists
-    val describeState = admin.describeTransactions(Collections.singletonList("transactionalProducer")).description("transactionalProducer")
-    TestUtils.waitUntilTrue(() => describeState.isDone, "Transactional state was never added.")
-
+    // Wait for the transactional ID to expire
     Thread.sleep(3000)
 
-    // Wait for the transactional state to expire
-    val describeResult = admin.describeTransactions(Collections.singletonList("transactionalProducer")).description("transactionalProducer")
-    org.apache.kafka.test.TestUtils.assertFutureThrows(describeResult, classOf[TransactionalIdNotFoundException])
+    // Confirm the transactional IDs expired
+    val txnDescribeResult = admin.describeTransactions(Collections.singletonList("transactionalProducer")).description("transactionalProducer")
+    org.apache.kafka.test.TestUtils.assertFutureThrows(txnDescribeResult, classOf[TransactionalIdNotFoundException])
+
+    // Producer IDs should be retained.
+    assertEquals(1, producerState.size)
 
     // Start a new transaction and attempt to send, which will trigger an AddPartitionsToTxnRequest, which will fail due to the expired transactional ID
     producer.beginTransaction()
@@ -105,62 +131,14 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     producer.abortTransaction()
 
     producer.beginTransaction()
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "2", "2", willBeCommitted = true))
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 2, "4", "4", willBeCommitted = true))
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "1", "1", willBeCommitted = true))
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 3, "3", "3", willBeCommitted = true))
     producer.commitTransaction()
 
-    val describeState2 = admin.describeTransactions(Collections.singletonList("transactionalProducer")).description("transactionalProducer")
-    TestUtils.waitUntilTrue(() => describeState2.isDone, "Transactional state was never added.")
+    // Producer IDs should be retained.
+    assertEquals(1, producerState.size)
 
-    consumer.subscribe(List(topic1, topic2).asJava)
-
-    val records = consumeRecords(consumer, 4)
-    records.foreach { record =>
-      TestUtils.assertCommittedAndGetValue(record)
-    }
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testTransactionAfterProducerIdExpires(quorum: String): Unit = {
-    producer.initTransactions()
-
-    // Start and then abort a transaction to allow the producer ID to expire
-    producer.beginTransaction()
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "2", "2", willBeCommitted = false))
-    producer.flush()
-
-    // Ensure producer IDs are added.
-    val pState = producerState
-    assertEquals(1, pState.size)
-    val oldProducerId = pState.get(0).producerId
-
-    producer.abortTransaction()
-
-    // Wait for the producer ID to expire
-    TestUtils.waitUntilTrue(() => producerState.isEmpty, "Producer IDs for topic1 did not expire.")
-
-    // Create a new producer to check that we retain the producer ID in transactional state.
-    producer.close()
-    producer = TestUtils.createTransactionalProducer("transactionalProducer", brokers)
-    producer.initTransactions()
-
-    // Start a new transaction and attempt to send. This should work since only the producer ID was removed from its mapping in ProducerStateManager.
-    producer.beginTransaction()
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
-    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 3, "3", "3", willBeCommitted = true))
-    producer.commitTransaction()
-
-    // Producer IDs should repopulate.
-    val pState2 = producerState
-    assertEquals(1, pState2.size)
-    val newProducerId = pState2.get(0).producerId
-
-    // Producer IDs should be the same
-    assertEquals(oldProducerId, newProducerId)
-
+    // Check we can still consume the transaction
     consumer.subscribe(List(topic1).asJava)
 
     val records = consumeRecords(consumer, 2)
@@ -189,9 +167,9 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     serverProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
     serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     serverProps.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
-    serverProps.put(KafkaConfig.TransactionalIdExpirationMsProp, "1000")
+    serverProps.put(KafkaConfig.TransactionalIdExpirationMsProp, "500")
     serverProps.put(KafkaConfig.TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp, "500")
-    serverProps.put(KafkaConfig.ProducerIdExpirationMsProp, "500")
+    serverProps.put(KafkaConfig.ProducerIdExpirationMsProp, "4000")
     serverProps.put(KafkaConfig.ProducerIdExpirationCheckIntervalMsProp, "500")
     serverProps
   }
