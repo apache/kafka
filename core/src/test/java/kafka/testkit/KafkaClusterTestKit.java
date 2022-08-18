@@ -408,6 +408,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
     public void startup() throws ExecutionException, InterruptedException {
         List<Future<?>> futures = new ArrayList<>();
         try {
+            // Note the startup order here is chosen to be consistent with
+            // `KafkaRaftServer`. See comments in that class for an explanation.
+
             for (KafkaRaftManager<ApiMessageAndVersion> raftManager : raftManagers.values()) {
                 futures.add(controllerQuorumVotersFutureManager.future.thenRunAsync(raftManager::startup));
             }
@@ -513,6 +516,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
         List<Entry<String, Future<?>>> futureEntries = new ArrayList<>();
         try {
             controllerQuorumVotersFutureManager.close();
+
+            // Note the shutdown order here is chosen to be consistent with
+            // `KafkaRaftServer`. See comments in that class for an explanation.
+
             for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
                 int brokerId = entry.getKey();
                 BrokerServer broker = entry.getValue();
