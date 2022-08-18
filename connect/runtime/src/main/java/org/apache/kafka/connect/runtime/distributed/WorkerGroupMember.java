@@ -39,7 +39,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
-import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 
@@ -62,12 +61,9 @@ public class WorkerGroupMember {
     private static final String JMX_PREFIX = "kafka.connect";
 
     private final Logger log;
-    private final Time time;
     private final String clientId;
     private final ConsumerNetworkClient client;
     private final Metrics metrics;
-    private final Metadata metadata;
-    private final long retryBackoffMs;
     private final WorkerCoordinator coordinator;
 
     private boolean stopped = false;
@@ -80,7 +76,6 @@ public class WorkerGroupMember {
                              String clientId,
                              LogContext logContext) {
         try {
-            this.time = time;
             this.clientId = clientId;
             this.log = logContext.logger(WorkerGroupMember.class);
 
@@ -98,23 +93,23 @@ public class WorkerGroupMember {
 
             Map<String, Object> contextLabels = new HashMap<>();
             contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
-            contextLabels.put(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID, ConnectUtils.lookupKafkaClusterId(config));
+            contextLabels.put(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID, config.kafkaClusterId());
             contextLabels.put(WorkerConfig.CONNECT_GROUP_ID, config.getString(DistributedConfig.GROUP_ID_CONFIG));
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX, contextLabels);
 
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
-            this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
-            this.metadata = new Metadata(retryBackoffMs, config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG),
+            long retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
+            Metadata metadata = new Metadata(retryBackoffMs, config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG),
                     logContext, new ClusterResourceListeners());
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG),
                     config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG));
-            this.metadata.bootstrap(addresses);
+            metadata.bootstrap(addresses);
             String metricGrpPrefix = "connect";
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
             NetworkClient netClient = new NetworkClient(
                     new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
-                    this.metadata,
+                    metadata,
                     clientId,
                     100, // a fixed large enough value will suffice
                     config.getLong(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG),
@@ -142,7 +137,7 @@ public class WorkerGroupMember {
                     this.client,
                     metrics,
                     metricGrpPrefix,
-                    this.time,
+                    time,
                     restUrl,
                     configStorage,
                     listener,

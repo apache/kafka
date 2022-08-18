@@ -28,6 +28,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.storage.SimpleHeaderConverter;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -188,7 +189,7 @@ public class WorkerConfig extends AbstractConfig {
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_CONFIG = "connector.client.config.override.policy";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DOC =
         "Class name or alias of implementation of <code>ConnectorClientConfigOverridePolicy</code>. Defines what client configurations can be "
-        + "overriden by the connector. The default implementation is `All`, meaning connector configurations can override all client properties. "
+        + "overridden by the connector. The default implementation is `All`, meaning connector configurations can override all client properties. "
         + "The other possible policies in the framework include `None` to disallow connectors from overriding client properties, "
         + "and `Principal` to allow connectors to override only client principals.";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT = "All";
@@ -306,6 +307,8 @@ public class WorkerConfig extends AbstractConfig {
                 .withClientSslSupport();
     }
 
+    private String kafkaClusterId;
+
     private void logInternalConverterRemovalWarnings(Map<String, String> props) {
         List<String> removedProperties = new ArrayList<>();
         for (String property : Arrays.asList("internal.key.converter", "internal.value.converter")) {
@@ -321,7 +324,7 @@ public class WorkerConfig extends AbstractConfig {
                             + "and specifying them will have no effect. "
                             + "Instead, an instance of the JsonConverter with schemas.enable "
                             + "set to false will be used. For more information, please visit "
-                            + "http://kafka.apache.org/documentation/#upgrade and consult the upgrade notes"
+                            + "https://kafka.apache.org/documentation/#upgrade and consult the upgrade notes"
                             + "for the 3.0 release.",
                     removedProperties);
         }
@@ -409,6 +412,13 @@ public class WorkerConfig extends AbstractConfig {
         return null;
     }
 
+    public String kafkaClusterId() {
+        if (kafkaClusterId == null) {
+            kafkaClusterId = ConnectUtils.lookupKafkaClusterId(this);
+        }
+        return kafkaClusterId;
+    }
+
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
@@ -434,7 +444,7 @@ public class WorkerConfig extends AbstractConfig {
             String[] configTokens = config.trim().split("\\s+", 2);
             if (configTokens.length != 2) {
                 throw new ConfigException(String.format("Invalid format of header config '%s'. "
-                        + "Expected: '[ation] [header name]:[header value]'", config));
+                        + "Expected: '[action] [header name]:[header value]'", config));
             }
 
             // validate action

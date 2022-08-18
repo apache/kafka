@@ -1250,7 +1250,7 @@ public class WorkerTest {
         Map<String, String> props = new HashMap<>(workerProps);
         props.put("admin.client.id", "testid");
         props.put("admin.metadata.max.age.ms", "5000");
-        props.put("producer.bootstrap.servers", "cbeauho.com");
+        props.put("producer.bootstrap.servers", "localhost:1234");
         props.put("consumer.bootstrap.servers", "localhost:4761");
         WorkerConfig configWithOverrides = new StandaloneConfig(props);
 
@@ -1919,7 +1919,6 @@ public class WorkerTest {
 
 
     private void verifyStorage() {
-        verify(offsetBackingStore).configure(any(WorkerConfig.class));
         verify(offsetBackingStore).start();
         verify(herder).statusBackingStore();
         verify(offsetBackingStore).stop();

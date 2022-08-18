@@ -19,7 +19,12 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.connect.util.ConnectUtils;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
+import org.mockito.MockedStatic;
+import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -31,6 +36,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
 
 public class WorkerConfigTest {
     private static final List<String> VALID_HEADER_CONFIGS = Arrays.asList(
@@ -57,6 +65,20 @@ public class WorkerConfigTest {
             "add X-XSS-Protection",
             "set X-Frame-Options:DENY, add  :no-cache, no-store, must-revalidate "
     );
+
+    private static final String CLUSTER_ID = "cluster-id";
+    private MockedStatic<ConnectUtils> connectUtilsMockedStatic;
+
+    @Before
+    public void setup() {
+        connectUtilsMockedStatic = mockStatic(ConnectUtils.class, new CallsRealMethods());
+        connectUtilsMockedStatic.when(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class))).thenReturn(CLUSTER_ID);
+    }
+
+    @After
+    public void teardown() {
+        connectUtilsMockedStatic.close();
+    }
 
     @Test
     public void testListenersConfigAllowedValues() {
@@ -155,6 +177,18 @@ public class WorkerConfigTest {
         props.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "abc");
         ConfigException ce = assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
         assertTrue(ce.getMessage().contains(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG));
+    }
+
+    @Test
+    public void testKafkaClusterId() {
+        Map<String, String> props = baseProps();
+        WorkerConfig config = new WorkerConfig(WorkerConfig.baseConfigDef(), props);
+        assertEquals(CLUSTER_ID, config.kafkaClusterId());
+        connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)), times(1));
+
+        // next calls hit the cache
+        assertEquals(CLUSTER_ID, config.kafkaClusterId());
+        connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)), times(1));
     }
 
     private void assertInvalidHeaderConfig(String config) {
