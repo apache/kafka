@@ -63,7 +63,6 @@ import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.ParameterizedTest;
-import org.apache.kafka.connect.util.ThreadedTest;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.junit.After;
 import org.junit.Before;
@@ -141,7 +140,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @RunWith(Parameterized.class)
-public class WorkerTest extends ThreadedTest {
+public class WorkerTest {
 
     private static final String CONNECTOR_ID = "test-connector";
     private static final ConnectorTaskId TASK_ID = new ConnectorTaskId("job", 0);
@@ -217,8 +216,6 @@ public class WorkerTest extends ThreadedTest {
 
     @Before
     public void setup() {
-        super.setup();
-
         // Use strict mode to detect unused mocks
         mockitoSession = Mockito.mockitoSession()
                                 .initMocks(this)
