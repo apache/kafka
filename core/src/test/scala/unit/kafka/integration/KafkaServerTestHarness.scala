@@ -155,7 +155,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
         TestUtils.createOffsetsTopicWithAdmin(admin, brokers)
       }
     } else {
-      TestUtils.createOffsetsTopic(zkClient, brokers)
+      TestUtils.createOffsetsTopic(zkClient, servers)
     }
   }
 
@@ -189,7 +189,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
         topic = topic,
         numPartitions = numPartitions,
         replicationFactor = replicationFactor,
-        servers = brokers,
+        servers = servers,
         topicConfig = topicConfig
       )
     }
@@ -219,7 +219,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
         zkClient,
         topic,
         partitionReplicaAssignment,
-        brokers
+        servers
       )
     }
 
