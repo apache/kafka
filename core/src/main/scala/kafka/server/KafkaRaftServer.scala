@@ -56,6 +56,7 @@ class KafkaRaftServer(
   threadNamePrefix: Option[String]
 ) extends Server with Logging {
 
+  this.logIdent = s"[KafkaRaftServer nodeId=${config.nodeId}] "
   KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
   KafkaYammerMetrics.INSTANCE.configure(config.originals)
 
