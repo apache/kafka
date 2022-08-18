@@ -242,7 +242,7 @@ public class WorkerCoordinatorTest {
         assertEquals(compatibility.protocol(), defaultMetadata.name());
         ConnectProtocol.WorkerState state = ConnectProtocol.deserializeMetadata(
                 ByteBuffer.wrap(defaultMetadata.metadata()));
-        assertEquals(1, state.offset());
+        assertEquals(configState1.offset(), state.offset());
 
         verify(configStorage).snapshot();
     }
@@ -258,15 +258,15 @@ public class WorkerCoordinatorTest {
 
         // normal join group
         Map<String, Long> memberConfigOffsets = new HashMap<>();
-        memberConfigOffsets.put("leader", 1L);
-        memberConfigOffsets.put("member", 1L);
+        memberConfigOffsets.put("leader", configState1.offset());
+        memberConfigOffsets.put("member", configState1.offset());
         client.prepareResponse(joinGroupLeaderResponse(1, memberId, memberConfigOffsets, Errors.NONE));
         client.prepareResponse(body -> {
             SyncGroupRequest sync = (SyncGroupRequest) body;
             return sync.data().memberId().equals(memberId) &&
                     sync.data().generationId() == 1 &&
                     sync.groupAssignments().containsKey(memberId);
-        }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.singletonList(connectorId1),
+        }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), Collections.singletonList(connectorId1),
                 Collections.emptyList(), Errors.NONE));
         coordinator.ensureActiveGroup();
 
@@ -274,7 +274,7 @@ public class WorkerCoordinatorTest {
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
         assertFalse(rebalanceListener.assignment.failed());
-        assertEquals(1L, rebalanceListener.assignment.offset());
+        assertEquals(configState1.offset(), rebalanceListener.assignment.offset());
         assertEquals("leader", rebalanceListener.assignment.leader());
         assertEquals(Collections.singletonList(connectorId1), rebalanceListener.assignment.connectors());
         assertEquals(Collections.emptyList(), rebalanceListener.assignment.tasks());
@@ -298,7 +298,7 @@ public class WorkerCoordinatorTest {
             return sync.data().memberId().equals(memberId) &&
                     sync.data().generationId() == 1 &&
                     sync.data().assignments().isEmpty();
-        }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.emptyList(),
+        }, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), Collections.emptyList(),
                 Collections.singletonList(taskId1x0), Errors.NONE));
         coordinator.ensureActiveGroup();
 
@@ -306,7 +306,7 @@ public class WorkerCoordinatorTest {
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
         assertFalse(rebalanceListener.assignment.failed());
-        assertEquals(1L, rebalanceListener.assignment.offset());
+        assertEquals(configState1.offset(), rebalanceListener.assignment.offset());
         assertEquals(Collections.emptyList(), rebalanceListener.assignment.connectors());
         assertEquals(Collections.singletonList(taskId1x0), rebalanceListener.assignment.tasks());
 
@@ -332,14 +332,14 @@ public class WorkerCoordinatorTest {
                     sync.data().generationId() == 1 &&
                     sync.data().assignments().isEmpty();
         };
-        client.prepareResponse(matcher, syncGroupResponse(ConnectProtocol.Assignment.CONFIG_MISMATCH, "leader", 10L,
+        client.prepareResponse(matcher, syncGroupResponse(ConnectProtocol.Assignment.CONFIG_MISMATCH, "leader", configState2.offset(),
                 Collections.emptyList(), Collections.emptyList(), Errors.NONE));
 
         // When the first round fails, we'll take an updated config snapshot
         when(configStorage.snapshot()).thenReturn(configState2);
 
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE));
-        client.prepareResponse(matcher, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L,
+        client.prepareResponse(matcher, syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState2.offset(),
                 Collections.emptyList(), Collections.singletonList(taskId1x0), Errors.NONE));
         coordinator.ensureActiveGroup();
 
@@ -355,21 +355,21 @@ public class WorkerCoordinatorTest {
 
         // join the group once
         client.prepareResponse(joinGroupFollowerResponse(1, "member", "leader", Errors.NONE));
-        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.emptyList(),
+        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), Collections.emptyList(),
                 Collections.singletonList(taskId1x0), Errors.NONE));
         coordinator.ensureActiveGroup();
 
         assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(1, rebalanceListener.assignedCount);
         assertFalse(rebalanceListener.assignment.failed());
-        assertEquals(1L, rebalanceListener.assignment.offset());
+        assertEquals(configState1.offset(), rebalanceListener.assignment.offset());
         assertEquals(Collections.emptyList(), rebalanceListener.assignment.connectors());
         assertEquals(Collections.singletonList(taskId1x0), rebalanceListener.assignment.tasks());
 
         // and join the group again
         coordinator.requestRejoin("test");
         client.prepareResponse(joinGroupFollowerResponse(1, "member", "leader", Errors.NONE));
-        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", 1L, Collections.singletonList(connectorId1),
+        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), Collections.singletonList(connectorId1),
                 Collections.emptyList(), Errors.NONE));
         coordinator.ensureActiveGroup();
 
@@ -378,7 +378,7 @@ public class WorkerCoordinatorTest {
         assertEquals(Collections.singletonList(taskId1x0), rebalanceListener.revokedTasks);
         assertEquals(2, rebalanceListener.assignedCount);
         assertFalse(rebalanceListener.assignment.failed());
-        assertEquals(1L, rebalanceListener.assignment.offset());
+        assertEquals(configState1.offset(), rebalanceListener.assignment.offset());
         assertEquals(Collections.singletonList(connectorId1), rebalanceListener.assignment.connectors());
         assertEquals(Collections.emptyList(), rebalanceListener.assignment.tasks());
 
@@ -399,11 +399,11 @@ public class WorkerCoordinatorTest {
         List<JoinGroupResponseData.JoinGroupResponseMember> responseMembers = new ArrayList<>();
         responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
                 .setMemberId("leader")
-                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 1L)).array())
+                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, configState1.offset())).array())
         );
         responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
                 .setMemberId("member")
-                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 1L)).array())
+                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, configState1.offset())).array())
         );
         Map<String, ByteBuffer> result = coordinator.onLeaderElected("leader", EAGER.protocol(), responseMembers, false);
 
@@ -411,14 +411,14 @@ public class WorkerCoordinatorTest {
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
         assertFalse(leaderAssignment.failed());
         assertEquals("leader", leaderAssignment.leader());
-        assertEquals(1, leaderAssignment.offset());
+        assertEquals(configState1.offset(), leaderAssignment.offset());
         assertEquals(Collections.singletonList(connectorId1), leaderAssignment.connectors());
         assertEquals(Collections.emptyList(), leaderAssignment.tasks());
 
         ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
         assertFalse(memberAssignment.failed());
         assertEquals("leader", memberAssignment.leader());
-        assertEquals(1, memberAssignment.offset());
+        assertEquals(configState1.offset(), memberAssignment.offset());
         assertEquals(Collections.emptyList(), memberAssignment.connectors());
         assertEquals(Collections.singletonList(taskId1x0), memberAssignment.tasks());
 
@@ -439,11 +439,11 @@ public class WorkerCoordinatorTest {
         List<JoinGroupResponseData.JoinGroupResponseMember> responseMembers = new ArrayList<>();
         responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
                 .setMemberId("leader")
-                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 2L)).array())
+                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, configState2.offset())).array())
         );
         responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
                 .setMemberId("member")
-                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 2L)).array())
+                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, configState2.offset())).array())
         );
 
         Map<String, ByteBuffer> result = coordinator.onLeaderElected("leader", EAGER.protocol(), responseMembers, false);
@@ -452,14 +452,14 @@ public class WorkerCoordinatorTest {
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
         assertFalse(leaderAssignment.failed());
         assertEquals("leader", leaderAssignment.leader());
-        assertEquals(2, leaderAssignment.offset());
+        assertEquals(configState2.offset(), leaderAssignment.offset());
         assertEquals(Collections.singletonList(connectorId1), leaderAssignment.connectors());
         assertEquals(Arrays.asList(taskId1x0, taskId2x0), leaderAssignment.tasks());
 
         ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
         assertFalse(memberAssignment.failed());
         assertEquals("leader", memberAssignment.leader());
-        assertEquals(2, memberAssignment.offset());
+        assertEquals(configState2.offset(), memberAssignment.offset());
         assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
         assertEquals(Collections.singletonList(taskId1x1), memberAssignment.tasks());
 
@@ -480,11 +480,11 @@ public class WorkerCoordinatorTest {
         List<JoinGroupResponseData.JoinGroupResponseMember> responseMembers = new ArrayList<>();
         responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
                 .setMemberId("leader")
-                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, 2L)).array())
+                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(LEADER_URL, configStateSingleTaskConnectors.offset())).array())
         );
         responseMembers.add(new JoinGroupResponseData.JoinGroupResponseMember()
                 .setMemberId("member")
-                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, 2L)).array())
+                .setMetadata(ConnectProtocol.serializeMetadata(new ConnectProtocol.WorkerState(MEMBER_URL, configStateSingleTaskConnectors.offset())).array())
         );
 
         Map<String, ByteBuffer> result = coordinator.onLeaderElected("leader", EAGER.protocol(), responseMembers, false);
@@ -494,14 +494,14 @@ public class WorkerCoordinatorTest {
         ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(result.get("leader"));
         assertFalse(leaderAssignment.failed());
         assertEquals("leader", leaderAssignment.leader());
-        assertEquals(2, leaderAssignment.offset());
+        assertEquals(configStateSingleTaskConnectors.offset(), leaderAssignment.offset());
         assertEquals(Arrays.asList(connectorId1, connectorId3), leaderAssignment.connectors());
         assertEquals(Collections.singletonList(taskId2x0), leaderAssignment.tasks());
 
         ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(result.get("member"));
         assertFalse(memberAssignment.failed());
         assertEquals("leader", memberAssignment.leader());
-        assertEquals(2, memberAssignment.offset());
+        assertEquals(configStateSingleTaskConnectors.offset(), memberAssignment.offset());
         assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
         assertEquals(Arrays.asList(taskId1x0, taskId3x0), memberAssignment.tasks());
 
