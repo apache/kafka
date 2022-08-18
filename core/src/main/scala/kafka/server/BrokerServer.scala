@@ -95,7 +95,7 @@ class BrokerServer(
 
   this.logIdent = logContext.logPrefix
 
-  @volatile var lifecycleManager: BrokerLifecycleManager = null
+  @volatile var lifecycleManager: BrokerLifecycleManager = _
 
   private val isShuttingDown = new AtomicBoolean(false)
 
@@ -103,54 +103,54 @@ class BrokerServer(
   val awaitShutdownCond = lock.newCondition()
   var status: ProcessStatus = SHUTDOWN
 
-  @volatile var dataPlaneRequestProcessor: KafkaApis = null
-  var controlPlaneRequestProcessor: KafkaApis = null
+  @volatile var dataPlaneRequestProcessor: KafkaApis = _
+  var controlPlaneRequestProcessor: KafkaApis = _
 
   var authorizer: Option[Authorizer] = None
-  @volatile var socketServer: SocketServer = null
-  var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
+  @volatile var socketServer: SocketServer = _
+  var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
 
-  var logDirFailureChannel: LogDirFailureChannel = null
-  var logManager: LogManager = null
+  var logDirFailureChannel: LogDirFailureChannel = _
+  var logManager: LogManager = _
 
-  var tokenManager: DelegationTokenManager = null
+  var tokenManager: DelegationTokenManager = _
 
-  var dynamicConfigHandlers: Map[String, ConfigHandler] = null
+  var dynamicConfigHandlers: Map[String, ConfigHandler] = _
 
-  @volatile private[this] var _replicaManager: ReplicaManager = null
+  @volatile private[this] var _replicaManager: ReplicaManager = _
 
-  var credentialProvider: CredentialProvider = null
-  var tokenCache: DelegationTokenCache = null
+  var credentialProvider: CredentialProvider = _
+  var tokenCache: DelegationTokenCache = _
 
-  @volatile var groupCoordinator: GroupCoordinator = null
+  @volatile var groupCoordinator: GroupCoordinator = _
 
-  var transactionCoordinator: TransactionCoordinator = null
+  var transactionCoordinator: TransactionCoordinator = _
 
-  var clientToControllerChannelManager: BrokerToControllerChannelManager = null
+  var clientToControllerChannelManager: BrokerToControllerChannelManager = _
 
-  var forwardingManager: ForwardingManager = null
+  var forwardingManager: ForwardingManager = _
 
-  var alterPartitionManager: AlterPartitionManager = null
+  var alterPartitionManager: AlterPartitionManager = _
 
-  var autoTopicCreationManager: AutoTopicCreationManager = null
+  var autoTopicCreationManager: AutoTopicCreationManager = _
 
-  var kafkaScheduler: KafkaScheduler = null
+  var kafkaScheduler: KafkaScheduler = _
 
-  @volatile var metadataCache: KRaftMetadataCache = null
+  @volatile var metadataCache: KRaftMetadataCache = _
 
-  var quotaManagers: QuotaFactory.QuotaManagers = null
+  var quotaManagers: QuotaFactory.QuotaManagers = _
 
-  var clientQuotaMetadataManager: ClientQuotaMetadataManager = null
+  var clientQuotaMetadataManager: ClientQuotaMetadataManager = _
 
-  @volatile var brokerTopicStats: BrokerTopicStats = null
+  @volatile var brokerTopicStats: BrokerTopicStats = _
 
   val clusterId: String = metaProps.clusterId
 
   var metadataSnapshotter: Option[BrokerMetadataSnapshotter] = None
 
-  var metadataListener: BrokerMetadataListener = null
+  var metadataListener: BrokerMetadataListener = _
 
-  var metadataPublisher: BrokerMetadataPublisher = null
+  var metadataPublisher: BrokerMetadataPublisher = _
 
   val brokerFeatures: BrokerFeatures = BrokerFeatures.createDefault()
 
