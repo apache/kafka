@@ -110,10 +110,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     ensureConsistentKRaftMetadata()
 
-    // send 200MB
+    // send 100MB
     val producer = createProducer()
     val data = new Array[Byte](500)
-    (0 to 200 * 1000).foreach(_ => producer.send(new ProducerRecord[Array[Byte], Array[Byte]]("main", data, data)).get())
+    (0 to 100 * 1000).foreach(_ => producer.send(new ProducerRecord[Array[Byte], Array[Byte]]("main", data, data)).get())
 
     client.incrementalAlterConfigs(Map(new ConfigResource(ConfigResource.Type.BROKER, String.valueOf(from)) -> Seq(
       new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "10000000"), AlterConfigOp.OpType.SET),
@@ -136,8 +136,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     while (!client.describeTopics(List("main").asJava).allTopicNames().get().get("main").partitions().get(0).isr().asScala.map(n => n.id()).contains(to)) TimeUnit.MILLISECONDS.sleep(500)
     val elapsed = (System.currentTimeMillis() - start) / 1000
 
-    // data: 200MB, throttled: 10MB
-    assertTrue(elapsed >= 17 && elapsed <= 24, "elapsed: " + elapsed)
+    // data: 100MB, throttled: 10MB
+    assertTrue(elapsed >= 8 && elapsed <= 12, "elapsed: " + elapsed)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
