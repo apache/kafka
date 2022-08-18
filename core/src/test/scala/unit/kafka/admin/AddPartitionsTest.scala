@@ -53,7 +53,7 @@ class AddPartitionsTest extends BaseRequestTest {
   val topic4Assignment = Map(0 -> ReplicaAssignment(Seq(0,3), List(), List()))
   val topic5 = "new-topic5"
   val topic5Assignment = Map(1 -> ReplicaAssignment(Seq(0,1), List(), List()))
-  var admin: Admin = null
+  var admin: Admin = _
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {

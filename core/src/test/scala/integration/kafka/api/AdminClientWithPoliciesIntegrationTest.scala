@@ -43,7 +43,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
   import AdminClientWithPoliciesIntegrationTest._
 
-  var client: Admin = null
+  var client: Admin = _
   val brokerCount = 3
 
   @BeforeEach

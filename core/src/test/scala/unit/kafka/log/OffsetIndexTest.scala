@@ -34,7 +34,7 @@ import scala.annotation.nowarn
 
 class OffsetIndexTest {
   
-  var idx: OffsetIndex = null
+  var idx: OffsetIndex = _
   val maxEntries = 30
   val baseOffset = 45L
   

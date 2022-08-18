@@ -36,8 +36,8 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
                               with KafkaCSVMetricsReporterMBean
                               with Logging {
 
-  private var csvDir: File = null
-  private var underlying: CsvReporter = null
+  private var csvDir: File = _
+  private var underlying: CsvReporter = _
   private var running = false
   private var initialized = false
 

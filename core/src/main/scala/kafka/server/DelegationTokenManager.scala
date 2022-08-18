@@ -188,7 +188,7 @@ class DelegationTokenManager(val config: KafkaConfig,
   val defaultTokenRenewTime: Long = config.delegationTokenExpiryTimeMs
   val tokenRemoverScanInterval: Long = config.delegationTokenExpiryCheckIntervalMs
   private val lock = new Object()
-  private var tokenChangeListener: ZkNodeChangeNotificationListener = null
+  private var tokenChangeListener: ZkNodeChangeNotificationListener = _
 
   def startup(): Unit = {
     if (config.tokenAuthEnabled) {

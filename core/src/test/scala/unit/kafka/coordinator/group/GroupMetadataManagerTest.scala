@@ -54,13 +54,13 @@ import scala.collection._
 
 class GroupMetadataManagerTest {
 
-  var time: MockTime = null
-  var replicaManager: ReplicaManager = null
-  var groupMetadataManager: GroupMetadataManager = null
-  var scheduler: KafkaScheduler = null
-  var partition: Partition = null
+  var time: MockTime = _
+  var replicaManager: ReplicaManager = _
+  var groupMetadataManager: GroupMetadataManager = _
+  var scheduler: KafkaScheduler = _
+  var partition: Partition = _
   var defaultOffsetRetentionMs = Long.MaxValue
-  var metrics: kMetrics = null
+  var metrics: kMetrics = _
 
   val groupId = "foo"
   val groupInstanceId = "bar"
