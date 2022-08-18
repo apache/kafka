@@ -153,7 +153,7 @@ public class WorkerCoordinatorTest {
                                                  0);
 
         configState1 = new ClusterConfigState(
-                1L,
+                4L,
                 null,
                 Collections.singletonMap(connectorId1, 1),
                 Collections.singletonMap(connectorId1, new HashMap<>()),
@@ -179,7 +179,7 @@ public class WorkerCoordinatorTest {
         configState2TaskConfigs.put(taskId1x1, new HashMap<>());
         configState2TaskConfigs.put(taskId2x0, new HashMap<>());
         configState2 = new ClusterConfigState(
-                2L,
+                9L,
                 null,
                 configState2ConnectorTaskCounts,
                 configState2ConnectorConfigs,
@@ -208,7 +208,7 @@ public class WorkerCoordinatorTest {
         configStateSingleTaskConnectorsTaskConfigs.put(taskId2x0, new HashMap<>());
         configStateSingleTaskConnectorsTaskConfigs.put(taskId3x0, new HashMap<>());
         configStateSingleTaskConnectors = new ClusterConfigState(
-                2L,
+                12L,
                 null,
                 configStateSingleTaskConnectorsConnectorTaskCounts,
                 configStateSingleTaskConnectorsConnectorConfigs,
