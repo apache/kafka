@@ -119,5 +119,26 @@ public class SubscriptionWrapper<K> {
             ", primaryPartition=" + primaryPartition +
             '}';
     }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        final SubscriptionWrapper<?> that = (SubscriptionWrapper<?>) o;
+        return version == that.version && Arrays.equals(hash, that.hash)
+            && instruction == that.instruction && Objects.equals(primaryKey, that.primaryKey)
+            && Objects.equals(primaryPartition, that.primaryPartition);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(instruction, version, primaryKey, primaryPartition);
+        result = 31 * result + Arrays.hashCode(hash);
+        return result;
+    }
 }
 
