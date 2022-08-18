@@ -5193,6 +5193,29 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testDescribeMetadataQuorumRetriableError() throws Exception {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(ApiKeys.DESCRIBE_QUORUM.id,
+                ApiKeys.DESCRIBE_QUORUM.oldestVersion(),
+                ApiKeys.DESCRIBE_QUORUM.latestVersion()));
+
+            // First request fails with a NOT_LEADER_OR_FOLLOWER error (which is retriable)
+            env.kafkaClient().prepareResponse(
+                body -> body instanceof DescribeQuorumRequest,
+                prepareDescribeQuorumResponse(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER, false, false, false, false, false));
+
+            // The second request succeeds
+            env.kafkaClient().prepareResponse(
+                body -> body instanceof DescribeQuorumRequest,
+                prepareDescribeQuorumResponse(Errors.NONE, Errors.NONE, false, false, false, false, false));
+
+            KafkaFuture<QuorumInfo> future = env.adminClient().describeMetadataQuorum().quorumInfo();
+            QuorumInfo quorumInfo = future.get();
+            assertEquals(defaultQuorumInfo(false), quorumInfo);
+        }
+    }
+
+    @Test
     public void testDescribeMetadataQuorumFailure() {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(ApiKeys.DESCRIBE_QUORUM.id,
