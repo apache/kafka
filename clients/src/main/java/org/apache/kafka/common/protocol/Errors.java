@@ -132,6 +132,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 
 /**
@@ -469,7 +471,8 @@ public enum Errors {
      * If there are multiple matches in the class hierarchy, the first match starting from the bottom is used.
      */
     public static Errors forException(Throwable t) {
-        Class<?> clazz = t.getClass();
+        Throwable cause = maybeUnwrapException(t);
+        Class<?> clazz = cause.getClass();
         while (clazz != null) {
             Errors error = classToError.get(clazz);
             if (error != null)
@@ -477,6 +480,22 @@ public enum Errors {
             clazz = clazz.getSuperclass();
         }
         return UNKNOWN_SERVER_ERROR;
+    }
+
+    /**
+     * Check if a Throwable is a commonly wrapped exception type (e.g. `CompletionException`) and return
+     * the cause if so. This is useful to handle cases where exceptions may be raised from a future or a
+     * completion stage (as might be the case for requests sent to the controller in `ControllerApis`).
+     *
+     * @param t The Throwable to check
+     * @return The throwable itself or its cause if it is an instance of a commonly wrapped exception type
+     */
+    public static Throwable maybeUnwrapException(Throwable t) {
+        if (t instanceof CompletionException || t instanceof ExecutionException) {
+            return t.getCause();
+        } else {
+            return t;
+        }
     }
 
     private static String toHtml() {
