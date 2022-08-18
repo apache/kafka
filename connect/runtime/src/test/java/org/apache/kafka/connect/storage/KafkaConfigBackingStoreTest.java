@@ -842,6 +842,7 @@ public class KafkaConfigBackingStoreTest {
         // Task configs for the deleted connector should also be removed from the snapshot
         assertEquals(Collections.emptyList(), configState.allTaskConfigs(CONNECTOR_IDS.get(0)));
         assertEquals(0, configState.taskCount(CONNECTOR_IDS.get(0)));
+        assertEquals(0, configStorage.deferredTaskUpdates.size());
 
         configStorage.stop();
 

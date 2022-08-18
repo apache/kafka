@@ -272,7 +272,8 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     private volatile SessionKey sessionKey;
 
     // Connector -> Map[ConnectorTaskId -> Configs]
-    private final Map<String, Map<ConnectorTaskId, Map<String, String>>> deferredTaskUpdates = new HashMap<>();
+    // visible for testing
+    final Map<String, Map<ConnectorTaskId, Map<String, String>>> deferredTaskUpdates = new HashMap<>();
 
     final Map<String, TargetState> connectorTargetStates = new HashMap<>();
 
