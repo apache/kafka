@@ -41,12 +41,12 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
 import org.easymock.IExpectationSetters;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -74,7 +74,7 @@ import static org.junit.Assert.fail;
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(WorkerSinkTask.class)
 @PowerMockIgnore("javax.management.*")
-public class WorkerSinkTaskThreadedTest extends ThreadedTest {
+public class WorkerSinkTaskThreadedTest {
 
     // These are fixed to keep this code simpler. In this example we assume byte[] raw values
     // with mix of integer/string in Connect
@@ -129,9 +129,8 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     private long recordsReturned;
 
 
-    @Override
+    @Before
     public void setup() {
-        super.setup();
         time = new MockTime();
         metrics = new MockConnectMetrics();
         Map<String, String> workerProps = new HashMap<>();
