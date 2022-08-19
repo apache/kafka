@@ -19,9 +19,9 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -46,7 +46,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
-public class SourceTaskOffsetCommitterTest extends ThreadedTest {
+public class SourceTaskOffsetCommitterTest {
 
     private final ConcurrentHashMap<ConnectorTaskId, ScheduledFuture<?>> committers = new ConcurrentHashMap<>();
 
@@ -61,9 +61,8 @@ public class SourceTaskOffsetCommitterTest extends ThreadedTest {
 
     private static final long DEFAULT_OFFSET_COMMIT_INTERVAL_MS = 1000;
 
-    @Override
+    @Before
     public void setup() {
-        super.setup();
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
