@@ -1252,9 +1252,12 @@ public class Worker {
                     connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM);
             retryWithToleranceOperator.metrics(errorHandlingMetrics);
 
-            return doBuild(task, id, configState, statusListener, initialState,
+            WorkerTask workerTask = doBuild(task, id, configState, statusListener, initialState,
                     connectorConfig, keyConverter, valueConverter, headerConverter, classLoader,
                     errorHandlingMetrics, connectorClass, retryWithToleranceOperator);
+            // the operator should exit retry loops when the task is finally cancelled after exceeding its graceful shutdown timeout
+            retryWithToleranceOperator.exitCondition(workerTask::isCancelled);
+            return workerTask;
         }
 
         abstract WorkerTask doBuild(Task task,

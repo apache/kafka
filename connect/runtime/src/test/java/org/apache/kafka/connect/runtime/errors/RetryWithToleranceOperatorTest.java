@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+import java.util.function.Supplier;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
@@ -64,6 +65,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_TOLERANCE_
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_TOLERANCE_DEFAULT;
 import static org.apache.kafka.connect.runtime.errors.ToleranceType.ALL;
 import static org.apache.kafka.connect.runtime.errors.ToleranceType.NONE;
+import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -295,6 +297,28 @@ public class RetryWithToleranceOperatorTest {
 
         time.setCurrentTimeMs(10000);
         assertTrue(retryWithToleranceOperator.checkRetry(0));
+    }
+
+    @Test
+    public void testExitCondition() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(-1, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, time);
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
+        RetriableException e = new RetriableException("test");
+        EasyMock.expect(mockOperation.call()).andThrow(e).anyTimes();
+        Supplier<Boolean> exitCondition = mock(Supplier.class);
+        EasyMock.expect(exitCondition.get()).andReturn(false).times(3);
+        EasyMock.expect(exitCondition.get()).andReturn(true);
+        retryWithToleranceOperator.exitCondition(exitCondition);
+        replay(mockOperation, exitCondition);
+        String result = retryWithToleranceOperator.execAndHandleError(mockOperation, Exception.class);
+        assertNull(result);
+
+        // the operator is configured to retry infinitely (errorRetryTimeout = -1) and the operation's call()
+        // method has been stubbed to always throw a RetriableException. However, the operator is also configured
+        // with an exit condition which returns false the first 3 times it is checked but then returns true.
+        // So, there should 4 retries with 4500 ms in total elapsed time (300 + 600 + 1200 + 2400)
+        assertEquals(4500, time.milliseconds());
     }
 
     @Test

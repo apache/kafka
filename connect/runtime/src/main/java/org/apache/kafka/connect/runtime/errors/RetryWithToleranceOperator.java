@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+import java.util.function.Supplier;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Time;
@@ -76,6 +77,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     private long totalFailures = 0;
     private final Time time;
     private ErrorHandlingMetrics errorHandlingMetrics;
+    private Supplier<Boolean> exitCondition;
 
     protected final ProcessingContext context;
 
@@ -176,8 +178,8 @@ public class RetryWithToleranceOperator implements AutoCloseable {
                 errorHandlingMetrics.recordFailure();
                 if (checkRetry(startTime)) {
                     backoff(attempt, deadline);
-                    if (Thread.currentThread().isInterrupted()) {
-                        log.trace("Thread was interrupted. Marking operation as failed.");
+                    if (Thread.currentThread().isInterrupted() || (exitCondition != null && exitCondition.get())) {
+                        log.trace("Thread was interrupted or exit condition was triggered. Marking operation as failed.");
                         context.error(e);
                         return null;
                     }
@@ -277,6 +279,10 @@ public class RetryWithToleranceOperator implements AutoCloseable {
 
     public synchronized void metrics(ErrorHandlingMetrics errorHandlingMetrics) {
         this.errorHandlingMetrics = errorHandlingMetrics;
+    }
+
+    public synchronized void exitCondition(Supplier<Boolean> exitCondition) {
+        this.exitCondition = exitCondition;
     }
 
     @Override
