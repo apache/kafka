@@ -296,8 +296,8 @@ class KRaftClusterTest {
 
   @Test
   def testCreateClusterInvalidMetadataVersion(): Unit = {
-    assertEquals("Unable to load metadata from testkit: bootstrap metadata versions less than " +
-      "3.3-IV0 are not supported.", assertThrows(classOf[RuntimeException], () => {
+    assertEquals("Bootstrap metadata versions before 3.3-IV0 are not supported. Can't load " +
+      "metadata from testkit", assertThrows(classOf[RuntimeException], () => {
         new KafkaClusterTestKit.Builder(
           new TestKitNodes.Builder().
             setBootstrapMetadataVersion(MetadataVersion.IBP_2_7_IV0).

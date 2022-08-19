@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_KRAFT_VERSION;
+
 
 /**
  * The bootstrap metadata. On startup, if the metadata log is empty, we will populate the log with
@@ -77,10 +79,10 @@ public class BootstrapMetadata {
         String source
     ) {
         this.records = Objects.requireNonNull(records);
-        if (metadataVersion.isLessThan(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
-            throw new RuntimeException("Unable to load metadata from " + source + ": bootstrap " +
-                "metadata versions less than " + MetadataVersion.MINIMUM_KRAFT_VERSION + " are " +
-                "not supported.");
+        if (metadataVersion.isLessThan(MINIMUM_KRAFT_VERSION)) {
+            throw new RuntimeException("Bootstrap metadata versions before " +
+                    MINIMUM_KRAFT_VERSION + " are not supported. Can't load metadata from " +
+                    source);
         }
         this.metadataVersion = metadataVersion;
         Objects.requireNonNull(source);
@@ -108,7 +110,7 @@ public class BootstrapMetadata {
         }
         if (versionRecord == null) {
             throw new RuntimeException("No FeatureLevelRecord for " + MetadataVersion.FEATURE_NAME +
-                    " was found in the bootstrap metadata from " + source);
+                    " was found in " + source);
         }
         return new BootstrapMetadata(Collections.singletonList(versionRecord),
                 metadataVersion, source);

@@ -13,6 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Note that a metadata log or image always begins with a FeatureLevelRecord containing the
+// metadata version level. This is used to determine whether we can deserialize the following
+// material, and possibly how we should deserialize it. In order to be readable by all supported
+// broker versions, this initial FeatureLevelRecord should always have a version of 0. So while
+// it's fine to create new versions of this record, be aware that the new record versions can't
+// be used for metadata.version itself.
 {
   "apiKey": 12,
   "type": "metadata",
