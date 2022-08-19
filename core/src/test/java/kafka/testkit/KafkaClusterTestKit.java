@@ -275,14 +275,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     executorService.shutdownNow();
                     executorService.awaitTermination(5, TimeUnit.MINUTES);
                 }
-                for (ControllerServer controller : controllers.values()) {
-                    controller.shutdown();
-                }
                 for (BrokerServer brokerServer : brokers.values()) {
                     brokerServer.shutdown();
                 }
                 for (KafkaRaftManager<ApiMessageAndVersion> raftManager : raftManagers.values()) {
                     raftManager.shutdown();
+                }
+                for (ControllerServer controller : controllers.values()) {
+                    controller.shutdown();
                 }
                 connectFutureManager.close();
                 if (baseDirectory != null) {
@@ -408,11 +408,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
     public void startup() throws ExecutionException, InterruptedException {
         List<Future<?>> futures = new ArrayList<>();
         try {
-            for (ControllerServer controller : controllers.values()) {
-                futures.add(executorService.submit(controller::startup));
-            }
+            // Note the startup order here is chosen to be consistent with
+            // `KafkaRaftServer`. See comments in that class for an explanation.
+
             for (KafkaRaftManager<ApiMessageAndVersion> raftManager : raftManagers.values()) {
                 futures.add(controllerQuorumVotersFutureManager.future.thenRunAsync(raftManager::startup));
+            }
+            for (ControllerServer controller : controllers.values()) {
+                futures.add(executorService.submit(controller::startup));
             }
             for (BrokerServer broker : brokers.values()) {
                 futures.add(executorService.submit(broker::startup));
@@ -513,6 +516,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
         List<Entry<String, Future<?>>> futureEntries = new ArrayList<>();
         try {
             controllerQuorumVotersFutureManager.close();
+
+            // Note the shutdown order here is chosen to be consistent with
+            // `KafkaRaftServer`. See comments in that class for an explanation.
+
             for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
                 int brokerId = entry.getKey();
                 BrokerServer broker = entry.getValue();
@@ -521,19 +528,19 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             waitForAllFutures(futureEntries);
             futureEntries.clear();
-            for (Entry<Integer, ControllerServer> entry : controllers.entrySet()) {
-                int controllerId = entry.getKey();
-                ControllerServer controller = entry.getValue();
-                futureEntries.add(new SimpleImmutableEntry<>("controller" + controllerId,
-                    executorService.submit(controller::shutdown)));
-            }
-            waitForAllFutures(futureEntries);
-            futureEntries.clear();
             for (Entry<Integer, KafkaRaftManager<ApiMessageAndVersion>> entry : raftManagers.entrySet()) {
                 int raftManagerId = entry.getKey();
                 KafkaRaftManager<ApiMessageAndVersion> raftManager = entry.getValue();
                 futureEntries.add(new SimpleImmutableEntry<>("raftManager" + raftManagerId,
                     executorService.submit(raftManager::shutdown)));
+            }
+            waitForAllFutures(futureEntries);
+            futureEntries.clear();
+            for (Entry<Integer, ControllerServer> entry : controllers.entrySet()) {
+                int controllerId = entry.getKey();
+                ControllerServer controller = entry.getValue();
+                futureEntries.add(new SimpleImmutableEntry<>("controller" + controllerId,
+                    executorService.submit(controller::shutdown)));
             }
             waitForAllFutures(futureEntries);
             futureEntries.clear();
