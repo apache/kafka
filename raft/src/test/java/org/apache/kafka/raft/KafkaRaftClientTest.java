@@ -1985,6 +1985,7 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
+        long laggingFollowerFetchTime = context.time.milliseconds();
         context.deliverRequest(context.fetchRequest(1, laggingFollower, 1L, epoch, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(1L, epoch);
@@ -1992,16 +1993,21 @@ public class KafkaRaftClientTest {
         context.client.scheduleAppend(epoch, Arrays.asList("foo", "bar"));
         context.client.poll();
 
+        context.time.sleep(100);
+        long closeFollowerFetchTime = context.time.milliseconds();
         context.deliverRequest(context.fetchRequest(epoch, closeFollower, 3L, epoch, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(3L, epoch);
 
         // Create observer
         int observerId = 3;
+        context.time.sleep(100);
+        long observerFetchTime = context.time.milliseconds();
         context.deliverRequest(context.fetchRequest(epoch, observerId, 0L, 0, 0));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(3L, epoch);
 
+        context.time.sleep(100);
         context.deliverRequest(DescribeQuorumRequest.singletonRequest(context.metadataPartition));
         context.pollUntilResponse();
 
@@ -2011,17 +2017,25 @@ public class KafkaRaftClientTest {
                     .setReplicaId(localId)
                     // As we are appending the records directly to the log,
                     // the leader end offset hasn't been updated yet.
-                    .setLogEndOffset(3L),
+                    .setLogEndOffset(3L)
+                    .setLastFetchTimestamp(context.time.milliseconds())
+                    .setLastCaughtUpTimestamp(context.time.milliseconds()),
                 new ReplicaState()
                     .setReplicaId(laggingFollower)
-                    .setLogEndOffset(1L),
+                    .setLogEndOffset(1L)
+                    .setLastFetchTimestamp(laggingFollowerFetchTime)
+                    .setLastCaughtUpTimestamp(laggingFollowerFetchTime),
                 new ReplicaState()
                     .setReplicaId(closeFollower)
-                    .setLogEndOffset(3)),
+                    .setLogEndOffset(3L)
+                    .setLastFetchTimestamp(closeFollowerFetchTime)
+                    .setLastCaughtUpTimestamp(closeFollowerFetchTime)),
             singletonList(
                 new ReplicaState()
                     .setReplicaId(observerId)
-                    .setLogEndOffset(0L)));
+                    .setLogEndOffset(0L)
+                    .setLastFetchTimestamp(observerFetchTime)
+                    .setLastCaughtUpTimestamp(-1L)));
     }
 
     @Test

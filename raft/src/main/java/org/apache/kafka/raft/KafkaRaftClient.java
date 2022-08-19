@@ -25,7 +25,6 @@ import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
@@ -95,7 +94,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
@@ -1016,7 +1014,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             if (validOffsetAndEpoch.kind() == ValidOffsetAndEpoch.Kind.VALID) {
                 LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
 
-                if (state.updateReplicaState(replicaId, currentTimeMs, info.startOffsetMetadata)) {
+                if (state.updateReplicaState(replicaId, currentTimeMs, info.startOffsetMetadata, log.endOffset().offset)) {
                     onUpdateLeaderHighWatermark(state, currentTimeMs);
                 }
 
@@ -1182,8 +1180,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             leaderState.localId(),
             leaderState.epoch(),
             leaderState.highWatermark().isPresent() ? leaderState.highWatermark().get().offset : -1,
-            convertToReplicaStates(leaderState.getVoterEndOffsets()),
-            convertToReplicaStates(leaderState.getObserverStates(currentTimeMs))
+            leaderState.quorumResponseVoterStates(currentTimeMs),
+            leaderState.quorumResponseObserverStates(currentTimeMs)
         );
     }
 
@@ -1419,14 +1417,6 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         state.resetFetchTimeout(currentTimeMs);
         return true;
-    }
-
-    List<ReplicaState> convertToReplicaStates(Map<Integer, Long> replicaEndOffsets) {
-        return replicaEndOffsets.entrySet().stream()
-                   .map(entry -> new ReplicaState()
-                                     .setReplicaId(entry.getKey())
-                                     .setLogEndOffset(entry.getValue()))
-                   .collect(Collectors.toList());
     }
 
     private boolean hasConsistentLeader(int epoch, OptionalInt leaderId) {
