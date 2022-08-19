@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.slf4j.Logger;
@@ -25,6 +26,7 @@ import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.record.ControlRecordUtils;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -205,10 +207,10 @@ public class LeaderState<T> implements EpochState {
     /**
      * Update the local replica state.
      *
-     * See {@link #updateReplicaState(int, long, LogOffsetMetadata)}
+     * See {@link #updateReplicaState(int, long, LogOffsetMetadata, long)}
      */
     public boolean updateLocalState(long fetchTimestamp, LogOffsetMetadata logOffsetMetadata) {
-        return updateReplicaState(localId, fetchTimestamp, logOffsetMetadata);
+        return updateReplicaState(localId, fetchTimestamp, logOffsetMetadata, logOffsetMetadata.offset);
     }
 
     /**
@@ -217,11 +219,15 @@ public class LeaderState<T> implements EpochState {
      * @param replicaId replica id
      * @param fetchTimestamp fetch timestamp
      * @param logOffsetMetadata new log offset and metadata
+     * @param leaderLogEndOffset current log end offset of the leader
      * @return true if the high watermark is updated too
      */
-    public boolean updateReplicaState(int replicaId,
-                                      long fetchTimestamp,
-                                      LogOffsetMetadata logOffsetMetadata) {
+    public boolean updateReplicaState(
+        int replicaId,
+        long fetchTimestamp,
+        LogOffsetMetadata logOffsetMetadata,
+        long leaderLogEndOffset
+    ) {
         // Ignore fetches from negative replica id, as it indicates
         // the fetch is from non-replica. For example, a consumer.
         if (replicaId < 0) {
@@ -229,7 +235,18 @@ public class LeaderState<T> implements EpochState {
         }
 
         ReplicaState state = getReplicaState(replicaId);
-        state.updateFetchTimestamp(fetchTimestamp);
+
+        // Only proceed with updating the states if the offset update is valid
+        verifyEndOffsetUpdate(state, logOffsetMetadata);
+
+        // Update the Last CaughtUp Time
+        if (logOffsetMetadata.offset >= leaderLogEndOffset) {
+            state.updateLastCaughtUpTimestamp(fetchTimestamp);
+        } else if (logOffsetMetadata.offset >= state.lastFetchLeaderLogEndOffset.orElse(-1L)) {
+            state.updateLastCaughtUpTimestamp(state.lastFetchTimestamp.orElse(-1L));
+        }
+
+        state.updateFetchTimestamp(fetchTimestamp, leaderLogEndOffset);
         return updateEndOffset(state, logOffsetMetadata);
     }
 
@@ -246,8 +263,10 @@ public class LeaderState<T> implements EpochState {
             .collect(Collectors.toList());
     }
 
-    private boolean updateEndOffset(ReplicaState state,
-                                    LogOffsetMetadata endOffsetMetadata) {
+    private void verifyEndOffsetUpdate(
+        ReplicaState state,
+        LogOffsetMetadata endOffsetMetadata
+    ) {
         state.endOffset.ifPresent(currentEndOffset -> {
             if (currentEndOffset.offset > endOffsetMetadata.offset) {
                 if (state.nodeId == localId) {
@@ -259,7 +278,11 @@ public class LeaderState<T> implements EpochState {
                 }
             }
         });
-
+    }
+    private boolean updateEndOffset(
+        ReplicaState state,
+        LogOffsetMetadata endOffsetMetadata
+    ) {
         state.endOffset = Optional.of(endOffsetMetadata);
         state.hasAcknowledgedLeader = true;
         return isVoter(state.nodeId) && updateHighWatermark();
@@ -290,22 +313,36 @@ public class LeaderState<T> implements EpochState {
         return state;
     }
 
-    Map<Integer, Long> getVoterEndOffsets() {
-        return getReplicaEndOffsets(voterStates);
+    List<DescribeQuorumResponseData.ReplicaState> quorumResponseVoterStates(long currentTimeMs) {
+        return quorumResponseReplicaStates(voterStates.values(), localId, currentTimeMs);
     }
 
-    Map<Integer, Long> getObserverStates(final long currentTimeMs) {
+    List<DescribeQuorumResponseData.ReplicaState> quorumResponseObserverStates(long currentTimeMs) {
         clearInactiveObservers(currentTimeMs);
-        return getReplicaEndOffsets(observerStates);
+        return quorumResponseReplicaStates(observerStates.values(), localId, currentTimeMs);
     }
 
-    private static <R extends ReplicaState> Map<Integer, Long> getReplicaEndOffsets(
-        Map<Integer, R> replicaStates) {
-        return replicaStates.entrySet().stream()
-                   .collect(Collectors.toMap(Map.Entry::getKey,
-                       e -> e.getValue().endOffset.map(
-                           logOffsetMetadata -> logOffsetMetadata.offset).orElse(-1L))
-                   );
+    private static  List<DescribeQuorumResponseData.ReplicaState> quorumResponseReplicaStates(
+        Collection<ReplicaState> state,
+        int leaderId,
+        long currentTimeMs
+    ) {
+        return state.stream().map(s -> {
+            final long lastCaughtUpTimestamp;
+            final long lastFetchTimestamp;
+            if (s.nodeId == leaderId) {
+                lastCaughtUpTimestamp = currentTimeMs;
+                lastFetchTimestamp = currentTimeMs;
+            } else {
+                lastCaughtUpTimestamp = s.lastCaughtUpTimestamp.orElse(-1);
+                lastFetchTimestamp = s.lastFetchTimestamp.orElse(-1);
+            }
+            return new DescribeQuorumResponseData.ReplicaState()
+                    .setReplicaId(s.nodeId)
+                    .setLogEndOffset(s.endOffset.map(md -> md.offset).orElse(-1L))
+                    .setLastCaughtUpTimestamp(lastCaughtUpTimestamp)
+                    .setLastFetchTimestamp(lastFetchTimestamp);
+        }).collect(Collectors.toList());
     }
 
     private void clearInactiveObservers(final long currentTimeMs) {
@@ -323,19 +360,30 @@ public class LeaderState<T> implements EpochState {
         final int nodeId;
         Optional<LogOffsetMetadata> endOffset;
         OptionalLong lastFetchTimestamp;
+        OptionalLong lastFetchLeaderLogEndOffset;
+        OptionalLong lastCaughtUpTimestamp;
         boolean hasAcknowledgedLeader;
 
         public ReplicaState(int nodeId, boolean hasAcknowledgedLeader) {
             this.nodeId = nodeId;
             this.endOffset = Optional.empty();
             this.lastFetchTimestamp = OptionalLong.empty();
+            this.lastFetchLeaderLogEndOffset = OptionalLong.empty();
+            this.lastCaughtUpTimestamp = OptionalLong.empty();
             this.hasAcknowledgedLeader = hasAcknowledgedLeader;
         }
 
-        void updateFetchTimestamp(long currentFetchTimeMs) {
+        void updateFetchTimestamp(long currentFetchTimeMs, long leaderLogEndOffset) {
             // To be resilient to system time shifts we do not strictly
             // require the timestamp be monotonically increasing.
             lastFetchTimestamp = OptionalLong.of(Math.max(lastFetchTimestamp.orElse(-1L), currentFetchTimeMs));
+            lastFetchLeaderLogEndOffset = OptionalLong.of(leaderLogEndOffset);
+        }
+
+        void updateLastCaughtUpTimestamp(long lastCaughtUpTime) {
+            // This value relies on the fetch timestamp which does not
+            // require monotonicity
+            lastCaughtUpTimestamp = OptionalLong.of(Math.max(lastCaughtUpTimestamp.orElse(-1L), lastCaughtUpTime));
         }
 
         @Override
@@ -353,10 +401,12 @@ public class LeaderState<T> implements EpochState {
         @Override
         public String toString() {
             return String.format(
-                "ReplicaState(nodeId=%d, endOffset=%s, lastFetchTimestamp=%s, hasAcknowledgedLeader=%s)",
+                "ReplicaState(nodeId=%d, endOffset=%s, lastFetchTimestamp=%s, " +
+                        "lastCaughtUpTimestamp=%s, hasAcknowledgedLeader=%s)",
                 nodeId,
                 endOffset,
                 lastFetchTimestamp,
+                lastCaughtUpTimestamp,
                 hasAcknowledgedLeader 
             );
         }

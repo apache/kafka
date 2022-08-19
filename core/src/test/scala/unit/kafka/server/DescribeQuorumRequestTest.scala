@@ -87,8 +87,13 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
 
       (voterData ++ observerData).foreach { state =>
         assertTrue(0 < state.logEndOffset)
-        assertEquals(-1, state.lastFetchTimestamp)
-        assertEquals(-1, state.lastCaughtUpTimestamp)
+        if (version == 0) {
+          assertEquals(-1, state.lastFetchTimestamp)
+          assertEquals(-1, state.lastCaughtUpTimestamp)
+        } else {
+          assertNotEquals(-1, state.lastFetchTimestamp)
+          assertNotEquals(-1, state.lastCaughtUpTimestamp)
+        }
       }
     }
   }
