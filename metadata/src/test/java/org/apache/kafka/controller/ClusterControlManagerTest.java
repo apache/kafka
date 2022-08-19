@@ -19,9 +19,11 @@ package org.apache.kafka.controller;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.apache.kafka.clients.ApiVersions;
@@ -29,6 +31,7 @@ import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
@@ -46,6 +49,7 @@ import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.placement.ClusterDescriber;
 import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.UsableBroker;
@@ -58,6 +62,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -310,6 +315,11 @@ public class ClusterControlManagerTest {
                 setRack(null).
                 setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")).
                 setFenced(true).
+                setFeatures(new RegisterBrokerRecord.BrokerFeatureCollection(Arrays.asList(
+                    new RegisterBrokerRecord.BrokerFeature().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setMinSupportedVersion((short) 1).
+                        setMaxSupportedVersion((short) 1)).iterator())).
                 setInControlledShutdown(false), expectedVersion)),
             result.records());
     }
@@ -487,5 +497,55 @@ public class ClusterControlManagerTest {
                         setHost("example.com")).iterator())).
                 setFenced(true), expectedVersion))),
                 clusterControl.iterator(Long.MAX_VALUE));
+    }
+
+
+    @Test
+    public void testRegistrationWithUnsupportedMetadataVersion() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+                setSnapshotRegistry(snapshotRegistry).
+                setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+                        Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.of(
+                                MetadataVersion.IBP_3_1_IV0.featureLevel(),
+                                MetadataVersion.IBP_3_3_IV0.featureLevel())),
+                        Collections.singletonList(0))).
+                setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
+                build();
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+                setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+                setTime(new MockTime(0, 0, 0)).
+                setSnapshotRegistry(snapshotRegistry).
+                setControllerMetrics(new MockControllerMetrics()).
+                setFeatureControlManager(featureControl).
+                build();
+        clusterControl.activate();
+
+        assertEquals("Unable to register because the broker has an unsupported version of metadata.version",
+            assertThrows(UnsupportedVersionException.class,
+                () -> clusterControl.registerBroker(
+                    new BrokerRegistrationRequestData().
+                        setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+                        setBrokerId(0).
+                        setRack(null).
+                        setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
+                    123L,
+                    featureControl.finalizedFeatures(Long.MAX_VALUE))).getMessage());
+
+        assertEquals("Unable to register because the broker has an unsupported version of metadata.version",
+            assertThrows(UnsupportedVersionException.class,
+                () -> clusterControl.registerBroker(
+                    new BrokerRegistrationRequestData().
+                        setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+                        setBrokerId(0).
+                        setRack(null).
+                        setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
+                                Collections.singleton(new BrokerRegistrationRequestData.Feature().
+                                    setName(MetadataVersion.FEATURE_NAME).
+                                    setMinSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel()).
+                                    setMaxSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel())).iterator())).
+                        setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
+                    123L,
+                    featureControl.finalizedFeatures(Long.MAX_VALUE))).getMessage());
     }
 }

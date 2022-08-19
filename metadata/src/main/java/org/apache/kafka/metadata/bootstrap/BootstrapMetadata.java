@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_KRAFT_VERSION;
+import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
 
 
 /**
@@ -79,9 +79,9 @@ public class BootstrapMetadata {
         String source
     ) {
         this.records = Objects.requireNonNull(records);
-        if (metadataVersion.isLessThan(MINIMUM_KRAFT_VERSION)) {
+        if (metadataVersion.isLessThan(MINIMUM_BOOTSTRAP_VERSION)) {
             throw new RuntimeException("Bootstrap metadata versions before " +
-                    MINIMUM_KRAFT_VERSION + " are not supported. Can't load metadata from " +
+                    MINIMUM_BOOTSTRAP_VERSION + " are not supported. Can't load metadata from " +
                     source);
         }
         this.metadataVersion = metadataVersion;

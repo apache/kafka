@@ -53,6 +53,7 @@ public class FeatureControlManager {
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
         private MetadataVersion metadataVersion = MetadataVersion.latest();
+        private MetadataVersion minimumBootstrapVersion = MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -74,6 +75,11 @@ public class FeatureControlManager {
             return this;
         }
 
+        Builder setMinimumBootstrapVersion(MetadataVersion minimumBootstrapVersion) {
+            this.minimumBootstrapVersion = minimumBootstrapVersion;
+            return this;
+        }
+
         public FeatureControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
@@ -84,7 +90,8 @@ public class FeatureControlManager {
             return new FeatureControlManager(logContext,
                 quorumFeatures,
                 snapshotRegistry,
-                metadataVersion);
+                metadataVersion,
+                minimumBootstrapVersion);
         }
     }
 
@@ -105,16 +112,23 @@ public class FeatureControlManager {
      */
     private final TimelineObject<MetadataVersion> metadataVersion;
 
+    /**
+     * The minimum bootstrap version that we can't downgrade before.
+     */
+    private final MetadataVersion minimumBootstrapVersion;
+
     private FeatureControlManager(
         LogContext logContext,
         QuorumFeatures quorumFeatures,
         SnapshotRegistry snapshotRegistry,
-        MetadataVersion metadataVersion
+        MetadataVersion metadataVersion,
+        MetadataVersion minimumBootstrapVersion
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, metadataVersion);
+        this.minimumBootstrapVersion = minimumBootstrapVersion;
     }
 
     ControllerResult<Map<String, ApiError>> updateFeatures(
@@ -229,6 +243,12 @@ public class FeatureControlManager {
             return invalidMetadataVersion(newVersionLevel, "Unknown metadata.version.");
         }
 
+        // We cannot set a version earlier than IBP_3_3_IV0, since that was the first version that contained
+        // FeatureLevelRecord itself.
+        if (newVersion.isLessThan(minimumBootstrapVersion)) {
+            return invalidMetadataVersion(newVersionLevel, "Unable to set a metadata.version less than " +
+                    minimumBootstrapVersion);
+        }
         if (newVersion.isLessThan(currentVersion)) {
             // This is a downgrade
             boolean metadataChanged = MetadataVersion.checkIfMetadataChanged(currentVersion, newVersion);
@@ -306,10 +326,12 @@ public class FeatureControlManager {
         public List<ApiMessageAndVersion> next() {
             // Write the metadata.version first
             if (!wroteVersion) {
-                wroteVersion = true;
-                return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord()
-                    .setName(MetadataVersion.FEATURE_NAME)
-                    .setFeatureLevel(metadataVersion.featureLevel()), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
+                if (!metadataVersion.isLessThan(minimumBootstrapVersion)) {
+                    wroteVersion = true;
+                    return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord()
+                            .setName(MetadataVersion.FEATURE_NAME)
+                            .setFeatureLevel(metadataVersion.featureLevel()), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
+                }
             }
             // Then write the rest of the features
             if (!hasNext()) throw new NoSuchElementException();

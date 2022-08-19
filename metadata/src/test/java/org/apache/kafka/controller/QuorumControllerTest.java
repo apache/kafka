@@ -127,7 +127,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(value = 40)
 public class QuorumControllerTest {
     static final BootstrapMetadata SIMPLE_BOOTSTRAP = BootstrapMetadata.
-            fromVersion(MetadataVersion.latest(), "test-provided bootstrap");
+            fromVersion(MetadataVersion.IBP_3_3_IV3, "test-provided bootstrap");
 
     /**
      * Test creating a new QuorumController and closing it.
@@ -565,6 +565,18 @@ public class QuorumControllerTest {
         return features;
     }
 
+    private RegisterBrokerRecord.BrokerFeatureCollection registrationFeatures(
+        MetadataVersion minVersion,
+        MetadataVersion maxVersion
+    ) {
+        RegisterBrokerRecord.BrokerFeatureCollection features = new RegisterBrokerRecord.BrokerFeatureCollection();
+        features.add(new RegisterBrokerRecord.BrokerFeature().
+                setName(MetadataVersion.FEATURE_NAME).
+                setMinSupportedVersion(minVersion.featureLevel()).
+                setMaxSupportedVersion(maxVersion.featureLevel()));
+        return features;
+    }
+
     @Test
     public void testSnapshotSaveAndLoad() throws Throwable {
         final int numBrokers = 4;
@@ -572,9 +584,13 @@ public class QuorumControllerTest {
         RawSnapshotReader reader = null;
         Uuid fooId;
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
-            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
-                b.setConfigSchema(SCHEMA);
-            })) {
+                try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+                    b.setConfigSchema(SCHEMA);
+                },
+                OptionalLong.empty(),
+                OptionalLong.empty(),
+                SIMPLE_BOOTSTRAP)
+            ) {
                 QuorumController active = controlEnv.activeController();
                 for (int i = 0; i < numBrokers; i++) {
                     BrokerRegistrationReply reply = active.registerBroker(ANONYMOUS_CONTEXT,
@@ -637,13 +653,14 @@ public class QuorumControllerTest {
     @Test
     public void testSnapshotConfiguration() throws Throwable {
         final int numBrokers = 4;
-        final int maxNewRecordBytes = 4;
+        final int maxNewRecordBytes = 700;
         Map<Integer, Long> brokerEpochs = new HashMap<>();
         Uuid fooId;
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
             try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
                 b.setConfigSchema(SCHEMA);
                 b.setSnapshotMaxNewRecordBytes(maxNewRecordBytes);
+                b.setBootstrapMetadata(SIMPLE_BOOTSTRAP);
             })) {
                 QuorumController active = controlEnv.activeController();
                 for (int i = 0; i < numBrokers; i++) {
@@ -680,7 +697,7 @@ public class QuorumControllerTest {
                     Collections.singleton("foo")).get();
                 fooId = fooData.topics().find("foo").topicId();
                 active.allocateProducerIds(ANONYMOUS_CONTEXT,
-                    new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
+                        new AllocateProducerIdsRequestData().setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0))).get();
 
                 SnapshotReader<ApiMessageAndVersion> snapshot = createSnapshotReader(logEnv.waitForLatestSnapshot());
                 checkSnapshotSubcontent(
@@ -762,7 +779,7 @@ public class QuorumControllerTest {
         return Arrays.asList(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
-                setFeatureLevel(MetadataVersion.latest().featureLevel()), (short) 0),
+                setFeatureLevel(MetadataVersion.IBP_3_3_IV3.featureLevel()), (short) 0),
             new ApiMessageAndVersion(new TopicRecord().
                 setName("foo").setTopicId(fooId), (short) 0),
             new ApiMessageAndVersion(new PartitionRecord().setPartitionId(0).
@@ -783,6 +800,7 @@ public class QuorumControllerTest {
                         Arrays.asList(
                             new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                             setPort(9092).setSecurityProtocol((short) 0)).iterator())).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_0_IV1)).
                 setRack(null).
                 setFenced(false), (short) 1),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
@@ -793,6 +811,7 @@ public class QuorumControllerTest {
                         Arrays.asList(
                             new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                             setPort(9093).setSecurityProtocol((short) 0)).iterator())).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_0_IV1)).
                 setRack(null).
                 setFenced(false), (short) 1),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
@@ -803,6 +822,7 @@ public class QuorumControllerTest {
                         Arrays.asList(
                             new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                             setPort(9094).setSecurityProtocol((short) 0)).iterator())).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_0_IV1)).
                 setRack(null).
                 setFenced(false), (short) 1),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
@@ -811,6 +831,7 @@ public class QuorumControllerTest {
                 setEndPoints(new BrokerEndpointCollection(Arrays.asList(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9095).setSecurityProtocol((short) 0)).iterator())).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_0_IV1)).
                 setRack(null), (short) 1),
             new ApiMessageAndVersion(new ProducerIdsRecord().
                 setBrokerId(0).
@@ -1291,8 +1312,8 @@ public class QuorumControllerTest {
                 }, OptionalLong.empty(), OptionalLong.empty(), COMPLEX_BOOTSTRAP)) {
                     QuorumController active = controlEnv.activeController();
                     TestUtils.waitForCondition(() ->
-                        active.featureControl().metadataVersion().equals(MetadataVersion.IBP_3_3_IV1),
-                        "Failed to get a metadata version of " + MetadataVersion.IBP_3_3_IV1);
+                        active.featureControl().metadataVersion().equals(MetadataVersion.IBP_3_0_IV1),
+                        "Failed to get a metadata version of " + MetadataVersion.IBP_3_0_IV1);
                     // The ConfigRecord in our bootstrap should not have been applied, since there
                     // were already records present.
                     assertEquals(Collections.emptyMap(), active.configurationControl().

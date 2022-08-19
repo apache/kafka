@@ -84,9 +84,9 @@ public class BootstrapDirectoryTest {
     public void testReadFromEmptyConfiguration() throws Exception {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
             assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.latest(),
-                            "the default bootstrap file which sets the latest metadata.version, since no " +
-                                    "bootstrap file was found, and inter.broker.protocol.version was not configured."),
-                    new BootstrapDirectory(testDirectory.path(), "").read());
+                "a default bootstrap which sets the latest metadata.version, since no bootstrap " +
+                    "file or inter.broker.protocol.version configuration key was found."),
+                        new BootstrapDirectory(testDirectory.path(), "").read());
         }
     }
 
@@ -94,10 +94,9 @@ public class BootstrapDirectoryTest {
     public void testReadFromConfigurationWithAncientVersion() throws Exception {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
             assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_3_IV0,
-                "a default bootstrap file setting the minimum supported KRaft metadata version, " +
-                    "since no bootstrap file was found, and inter.broker.protocol.version was " +
-                        "2.7-IV2, which is not currently supported by KRaft."),
-                    new BootstrapDirectory(testDirectory.path(), "2.7").read());
+                "a default bootstrap which sets the metadata.version to 3.3-IV0, since no bootstrap " +
+                    "file was found and inter.broker.protocol.version was too old."),
+                        new BootstrapDirectory(testDirectory.path(), "2.7").read());
         }
     }
 
@@ -105,7 +104,7 @@ public class BootstrapDirectoryTest {
     public void testReadFromConfiguration() throws Exception {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
             assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_3_IV2,
-                "a default bootstrap file setting the metadata.version to 3.3-IV2, as " +
+                "a default bootstrap setting the metadata.version to 3.3-IV2, as " +
                     "specified by inter.broker.protocol.version."),
                 new BootstrapDirectory(testDirectory.path(), "3.3-IV2").read());
         }

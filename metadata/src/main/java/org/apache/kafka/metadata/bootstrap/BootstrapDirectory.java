@@ -34,7 +34,7 @@ import java.util.Objects;
 
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
-import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_KRAFT_VERSION;
+import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
 
 
 /**
@@ -90,21 +90,20 @@ public class BootstrapDirectory {
     BootstrapMetadata readFromConfiguration() {
         if (ibp.isEmpty()) {
             return BootstrapMetadata.fromVersion(MetadataVersion.latest(),
-                    "the default bootstrap file which sets the latest metadata.version, " +
-                    "since no bootstrap file was found, and " + INTER_BROKER_PROTOCOL_CONFIG_KEY +
-                    " was not configured.");
+                "a default bootstrap which sets the latest metadata.version, since no " +
+                "bootstrap file or " + INTER_BROKER_PROTOCOL_CONFIG_KEY + " configuration " +
+                "key was found.");
         }
         MetadataVersion version = MetadataVersion.fromVersionString(ibp);
-        if (version.isLessThan(MINIMUM_KRAFT_VERSION)) {
-            return BootstrapMetadata.fromVersion(MINIMUM_KRAFT_VERSION,
-                    "a default bootstrap file setting the minimum supported KRaft metadata " +
-                    "version, since no bootstrap file was found, and " +
-                    INTER_BROKER_PROTOCOL_CONFIG_KEY + " was " + version + ", which is not " +
-                    "currently supported by KRaft.");
+        if (version.isLessThan(MINIMUM_BOOTSTRAP_VERSION)) {
+            return BootstrapMetadata.fromVersion(MINIMUM_BOOTSTRAP_VERSION,
+                "a default bootstrap which sets the metadata.version to " + MINIMUM_BOOTSTRAP_VERSION +
+                ", since no bootstrap file was found and " + INTER_BROKER_PROTOCOL_CONFIG_KEY +
+                " was too old.");
         }
         return BootstrapMetadata.fromVersion(version,
-                "a default bootstrap file setting the metadata.version to " + version + ", as " +
-                "specified by " + INTER_BROKER_PROTOCOL_CONFIG_KEY + ".");
+            "a default bootstrap setting the metadata.version to " + version + ", as specified " +
+            "by " + INTER_BROKER_PROTOCOL_CONFIG_KEY + ".");
     }
 
     BootstrapMetadata readFromBinaryFile(String binaryPath) throws Exception {

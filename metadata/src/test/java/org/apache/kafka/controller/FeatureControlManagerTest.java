@@ -341,14 +341,31 @@ public class FeatureControlManagerTest {
     @Test
     public void testCanUseSafeDowngradeIfMetadataDidNotChange() {
         FeatureControlManager manager = new FeatureControlManager.Builder().
+                setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
+                        MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV1.featureLevel())).
+                setMetadataVersion(MetadataVersion.IBP_3_1_IV0).
+                setMinimumBootstrapVersion(MetadataVersion.IBP_3_0_IV0).build();
+        assertEquals(ControllerResult.of(Collections.emptyList(),
+                        singletonMap(MetadataVersion.FEATURE_NAME, ApiError.NONE)),
+                manager.updateFeatures(
+                        singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_0_IV1.featureLevel()),
+                        singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
+                        emptyMap(),
+                        true));
+    }
+
+    @Test
+    public void testCanotDowngradeBefore3_3_IV0() {
+        FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
                     MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV3.featureLevel())).
                     setMetadataVersion(MetadataVersion.IBP_3_3_IV0).build();
         assertEquals(ControllerResult.of(Collections.emptyList(),
-                        singletonMap(MetadataVersion.FEATURE_NAME, ApiError.NONE)),
+                        singletonMap(MetadataVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
+                        "Invalid metadata.version 3. Unable to set a metadata.version less than 3.3-IV0"))),
                 manager.updateFeatures(
                         singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_2_IV0.featureLevel()),
-                        singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
+                        singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE),
                         emptyMap(),
                         true));
     }

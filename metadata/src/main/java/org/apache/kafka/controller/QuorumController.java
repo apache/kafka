@@ -1098,11 +1098,8 @@ public final class QuorumController implements Controller {
                         bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
                 records.addAll(bootstrapMetadata.records());
             } else if (logReplayTracker.versionless()) {
-                log.warn("No metadata.version feature level record was found in the log. " +
-                        "It appears that we are upgrading from an older release. Appending 1 " +
-                        "bootstrap record with metadata.version {} from {}",
-                        bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
-                records.addAll(bootstrapMetadata.copyWithOnlyVersion().records());
+                log.info("No metadata.version feature level record was found in the log. " +
+                        "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
             }
             return ControllerResult.atomicOf(records, null);
         }
@@ -1668,9 +1665,8 @@ public final class QuorumController implements Controller {
             setSnapshotRegistry(snapshotRegistry).
             // Set the default metadata version to the minimum KRaft version. This only really
             // matters if we are upgrading from a version that didn't store metadata.version in
-            // the log, such as one of the pre-production 3.0, 3.1, or 3.2 versions. Those
-            // versions are all forwards-compatible with 3.3, so it will do us no harm to read
-            // them as if they were 3.3. In newer versions the metadata.version will be specified
+            // the log, such as one of the pre-production 3.0, 3.1, or 3.2 versions. Those versions
+            // are all treated as 3.0IV1. In newer versions the metadata.version will be specified
             // by the log.
             setMetadataVersion(MetadataVersion.MINIMUM_KRAFT_VERSION).
             build();

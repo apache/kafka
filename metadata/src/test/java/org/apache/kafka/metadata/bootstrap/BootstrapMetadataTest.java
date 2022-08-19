@@ -85,6 +85,6 @@ public class BootstrapMetadataTest {
     public void testFromRecordsListWithOldMetadataVersion() throws Exception {
         assertEquals("Bootstrap metadata versions before 3.3-IV0 are not supported. Can't load " +
                 "metadata from quux", assertThrows(RuntimeException.class,
-                () -> BootstrapMetadata.fromRecords(RECORDS_WITH_OLD_METADATA_VERSION, "quux")).getMessage());
+                    () -> BootstrapMetadata.fromRecords(RECORDS_WITH_OLD_METADATA_VERSION, "quux")).getMessage());
     }
 }
