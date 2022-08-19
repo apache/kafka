@@ -68,9 +68,12 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
 
   @AfterEach
   override def tearDown(): Unit = {
-    producer.close()
-    consumer.close()
-    admin.close()
+    if (producer != null)
+      producer.close()
+    if (consumer != null)
+      consumer.close()
+    if (admin != null)
+      admin.close()
 
     super.tearDown()
   }
@@ -80,23 +83,17 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
   def testBumpTransactionalEpochAfterInvalidProducerIdMapping(quorum: String): Unit = {
     producer.initTransactions()
 
-    // Start and then abort a transaction to allow the transactional ID to expire
+    // Start and then abort a transaction to allow the transactional ID to expire.
     producer.beginTransaction()
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "2", "2", willBeCommitted = false))
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, 0, "4", "4", willBeCommitted = false))
     producer.abortTransaction()
 
-    // Ensure the transaction state exists
-    val describeState = admin.describeTransactions(Collections.singletonList("transactionalProducer")).description("transactionalProducer")
-    TestUtils.waitUntilTrue(() => describeState.isDone, "Transactional state was never added.")
+    // Check the transactional state exists and then wait for it to expire.
+    waitUntilTransactionalStateExists()
+    waitUntilTransactionalStateExpires()
 
-    Thread.sleep(3000)
-
-    // Wait for the transactional state to expire
-    val describeResult = admin.describeTransactions(Collections.singletonList("transactionalProducer")).description("transactionalProducer")
-    org.apache.kafka.test.TestUtils.assertFutureThrows(describeResult, classOf[TransactionalIdNotFoundException])
-
-    // Start a new transaction and attempt to send, which will trigger an AddPartitionsToTxnRequest, which will fail due to the expired transactional ID
+    // Start a new transaction and attempt to send, which will trigger an AddPartitionsToTxnRequest, which will fail due to the expired transactional ID.
     producer.beginTransaction()
     val failedFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 3, "1", "1", willBeCommitted = false))
     TestUtils.waitUntilTrue(() => failedFuture.isDone, "Producer future never completed.")
@@ -111,8 +108,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 3, "3", "3", willBeCommitted = true))
     producer.commitTransaction()
 
-    val describeState2 = admin.describeTransactions(Collections.singletonList("transactionalProducer")).description("transactionalProducer")
-    TestUtils.waitUntilTrue(() => describeState2.isDone, "Transactional state was never added.")
+    waitUntilTransactionalStateExists()
 
     consumer.subscribe(List(topic1, topic2).asJava)
 
@@ -127,7 +123,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
   def testTransactionAfterProducerIdExpires(quorum: String): Unit = {
     producer.initTransactions()
 
-    // Start and then abort a transaction to allow the producer ID to expire
+    // Start and then abort a transaction to allow the producer ID to expire.
     producer.beginTransaction()
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "2", "2", willBeCommitted = false))
     producer.flush()
@@ -135,11 +131,11 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     // Ensure producer IDs are added.
     val pState = producerState
     assertEquals(1, pState.size)
-    val oldProducerId = pState.get(0).producerId
+    val oldProducerId = pState(0).producerId
 
     producer.abortTransaction()
 
-    // Wait for the producer ID to expire
+    // Wait for the producer ID to expire.
     TestUtils.waitUntilTrue(() => producerState.isEmpty, "Producer IDs for topic1 did not expire.")
 
     // Create a new producer to check that we retain the producer ID in transactional state.
@@ -156,9 +152,9 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     // Producer IDs should repopulate.
     val pState2 = producerState
     assertEquals(1, pState2.size)
-    val newProducerId = pState2.get(0).producerId
+    val newProducerId = pState2(0).producerId
 
-    // Producer IDs should be the same
+    // Producer IDs should be the same.
     assertEquals(oldProducerId, newProducerId)
 
     consumer.subscribe(List(topic1).asJava)
@@ -169,17 +165,37 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
     }
   }
 
-  private def producerState: java.util.List[ProducerState] = {
+  private def producerState: List[ProducerState] = {
     val describeResult = admin.describeProducers(Collections.singletonList(tp0))
-    val activeProducers = describeResult.partitionResult(tp0).get().activeProducers()
-    activeProducers
+    val activeProducers = describeResult.partitionResult(tp0).get().activeProducers
+    activeProducers.asScala.toList
+  }
+
+  private def waitUntilTransactionalStateExpires(): Unit = {
+    TestUtils.waitUntilTrue(() =>  {
+      var removedTransactionState = false
+      val txnDescribeResult = admin.describeTransactions(Collections.singletonList("transactionalProducer")).description("transactionalProducer")
+      try {
+        txnDescribeResult.get()
+      } catch {
+        case e: Exception => {
+          removedTransactionState = e.getCause.isInstanceOf[TransactionalIdNotFoundException]
+        }
+      }
+      removedTransactionState
+    }, "Transaction state never expired.")
+  }
+
+  private def waitUntilTransactionalStateExists(): Unit = {
+    val describeState = admin.describeTransactions(Collections.singletonList("transactionalProducer")).description("transactionalProducer")
+    TestUtils.waitUntilTrue(() => describeState.isDone, "Transactional state was never added.")
   }
 
   private def serverProps(): Properties = {
     val serverProps = new Properties()
     serverProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
     // Set a smaller value for the number of partitions for the __consumer_offsets topic
-    // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
+    // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long.
     serverProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
     serverProps.put(KafkaConfig.TransactionsTopicPartitionsProp, 3.toString)
     serverProps.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 2.toString)
