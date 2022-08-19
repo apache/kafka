@@ -1145,8 +1145,8 @@ public final class QuorumController implements Controller {
                 snapshotRegistry.revertToSnapshot(lastCommittedOffset);
                 authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
             } else {
-                log.warn("Unable to find last committed offset {} in snapshot registry; resetting " +
-                        "to empty state.", lastCommittedOffset);
+                log.info("Unable to find last committed offset {} in snapshot registry; resetting " +
+                         "to empty state.", lastCommittedOffset);
                 resetToEmptyState();
                 authorizer.ifPresent(a -> a.loadSnapshot(Collections.emptyMap()));
                 needToCompleteAuthorizerLoad = authorizer.isPresent();

@@ -72,17 +72,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MetadataVersionTest {
     @Test
-    public void testFeatureLevel() {
-        int i = 0;
-        while (i < MetadataVersion.VERSIONS.length &&
-                MetadataVersion.VERSIONS[i].featureLevel() < 0) {
-            i++;
+    public void testKRaftFeatureLevelsBefore3_0_IV1() {
+        for (int i = 0; i < MetadataVersion.IBP_3_0_IV1.ordinal(); i++) {
+            assertEquals(-1, MetadataVersion.VERSIONS[i].featureLevel());
         }
-        int j = 1;
-        while (i < MetadataVersion.VERSIONS.length) {
-            assertEquals(j, MetadataVersion.VERSIONS[i].featureLevel());
-            i++;
-            j++;
+    }
+
+    @Test
+    public void testKRaftFeatureLevelsAtAndAfter3_0_IV1() {
+        for (int i = MetadataVersion.IBP_3_0_IV1.ordinal(); i < MetadataVersion.VERSIONS.length; i++) {
+            int expectedLevel = i - MetadataVersion.IBP_3_0_IV1.ordinal() + 1;
+            assertEquals(expectedLevel, MetadataVersion.VERSIONS[i].featureLevel());
         }
     }
 

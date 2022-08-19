@@ -22,7 +22,6 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -77,8 +76,7 @@ public class BootstrapMetadata {
         MetadataVersion metadataVersion,
         String source
     ) {
-        Objects.requireNonNull(records);
-        this.records = records;
+        this.records = Objects.requireNonNull(records);
         if (metadataVersion.isLessThan(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
             throw new RuntimeException("Unable to load metadata from " + source + ": bootstrap " +
                 "metadata versions less than " + MetadataVersion.MINIMUM_KRAFT_VERSION + " are " +
@@ -102,18 +100,17 @@ public class BootstrapMetadata {
     }
 
     public BootstrapMetadata copyWithOnlyVersion() {
-        List<ApiMessageAndVersion> newRecords = new ArrayList<>();
+        ApiMessageAndVersion versionRecord = null;
         for (ApiMessageAndVersion record : records) {
             if (recordToMetadataVersion(record.message()).isPresent()) {
-                newRecords.clear();
-                newRecords.add(record);
+                versionRecord = record;
             }
         }
-        if (newRecords.isEmpty()) {
+        if (versionRecord == null) {
             throw new RuntimeException("No FeatureLevelRecord for " + MetadataVersion.FEATURE_NAME +
                     " was found in the bootstrap metadata from " + source);
         }
-        return new BootstrapMetadata(Collections.unmodifiableList(newRecords),
+        return new BootstrapMetadata(Collections.singletonList(versionRecord),
                 metadataVersion, source);
     }
 
@@ -124,7 +121,7 @@ public class BootstrapMetadata {
 
     @Override
     public boolean equals(Object o) {
-        if (o == null || !(o instanceof BootstrapMetadata)) return false;
+        if (o == null || !o.getClass().equals(this.getClass())) return false;
         BootstrapMetadata other = (BootstrapMetadata) o;
         return Objects.equals(records, other.records) &&
             metadataVersion.equals(other.metadataVersion) &&

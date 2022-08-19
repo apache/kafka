@@ -38,7 +38,7 @@ import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_KRAFT_VERSI
 
 
 /**
- * A read-only class that holds the controller bootstrap metadata. A file named "bootstrap.snapshot" is used and the
+ * A read-only class that holds the controller bootstrap metadata. A file named "bootstrap.checkpoint" is used and the
  * format is the same as a KRaft snapshot.
  */
 public class BootstrapDirectory {
@@ -72,7 +72,12 @@ public class BootstrapDirectory {
 
     public BootstrapMetadata read() throws Exception {
         if (!Files.isDirectory(Paths.get(directoryPath))) {
-            throw new RuntimeException("No such directory as " + directoryPath);
+            if (Files.exists(Paths.get(directoryPath))) {
+                throw new RuntimeException("Path " + directoryPath + " exists, but is not " +
+                        "a directory.");
+            } else {
+                throw new RuntimeException("No such directory as " + directoryPath);
+            }
         }
         Path binaryBootstrapPath = Paths.get(directoryPath, BINARY_BOOTSTRAP);
         if (!Files.exists(binaryBootstrapPath)) {

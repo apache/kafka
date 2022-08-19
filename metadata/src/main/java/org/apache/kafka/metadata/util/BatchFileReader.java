@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 
 
 /**
@@ -49,7 +50,7 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
         private String path = null;
 
         public Builder setPath(String path) {
-            this.path = path;
+            this.path = Objects.requireNonNull(path);
             return this;
         }
 
@@ -106,7 +107,7 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
         if (input.isControlBatch()) {
             return nextControlBatch(input);
         } else {
-            return nextMetadataBatch(input);
+            return nextDataBatch(input);
         }
     }
 
@@ -152,15 +153,15 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
             messages), true);
     }
 
-    private BatchAndType nextMetadataBatch(FileChannelRecordBatch input) {
+    private BatchAndType nextDataBatch(FileChannelRecordBatch input) {
         List<ApiMessageAndVersion> messages = new ArrayList<>();
         for (Record record : input) {
-            ByteBufferAccessor accessor = new ByteBufferAccessor(record.value());
             try {
+                ByteBufferAccessor accessor = new ByteBufferAccessor(record.value());
                 ApiMessageAndVersion messageAndVersion = serde.read(accessor, record.valueSize());
                 messages.add(messageAndVersion);
             } catch (Throwable e) {
-                log.error("unable to read metadata record at offset {}", record.offset(), e);
+                throw new RuntimeException("unable to deserialize record at offset " + record.offset(), e);
             }
         }
         return new BatchAndType(Batch.data(
