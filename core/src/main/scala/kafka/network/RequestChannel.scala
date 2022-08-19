@@ -121,10 +121,17 @@ object RequestChannel extends Logging {
 
     def isForwarded: Boolean = envelope.isDefined
 
+    private def shouldReturnNotController(response: AbstractResponse): Boolean = {
+      response match {
+        case describeQuorumResponse: DescribeQuorumResponse => response.errorCounts.containsKey(Errors.NOT_LEADER_OR_FOLLOWER)
+        case _ => response.errorCounts.containsKey(Errors.NOT_CONTROLLER)
+      }
+    }
+
     def buildResponseSend(abstractResponse: AbstractResponse): Send = {
       envelope match {
         case Some(request) =>
-          val envelopeResponse = if (abstractResponse.errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
+          val envelopeResponse = if (shouldReturnNotController(abstractResponse)) {
             // Since it's a NOT_CONTROLLER error response, we need to make envelope response with NOT_CONTROLLER error
             // to notify the requester (i.e. BrokerToControllerRequestThread) to update active controller
             new EnvelopeResponse(new EnvelopeResponseData()
