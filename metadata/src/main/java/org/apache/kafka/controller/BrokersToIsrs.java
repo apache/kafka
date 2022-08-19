@@ -191,7 +191,7 @@ public class BrokersToIsrs {
     void removeTopicEntryForBroker(Uuid topicId, int brokerId) {
         Map<Uuid, int[]> topicMap = isrMembers.get(brokerId);
         if (topicMap != null) {
-            if (brokerId == NO_LEADER) {
+            if (brokerId == NO_LEADER && topicMap.containsKey(topicId)) {
                 offlinePartitionCount.set(offlinePartitionCount.get() - topicMap.get(topicId).length);
             }
             topicMap.remove(topicId);
