@@ -23,9 +23,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -69,8 +69,12 @@ public class HoistFieldTest {
 
         assertNull(transformedRecord.keySchema());
         @SuppressWarnings("unchecked")
-        Map<String, Object> key = (Map<String, Object>) transformedRecord.key();
-        assertDoesNotThrow(() -> key.put("k", "v"));
+        Map<String, Object> actualKey = (Map<String, Object>) transformedRecord.key();
+        actualKey.put("k", "v");
+        Map<String, Object> expectedKey = new HashMap<>();
+        expectedKey.put("k", "v");
+        expectedKey.put("magic", 420);
+        assertEquals(expectedKey, actualKey);
     }
 
 }
