@@ -127,50 +127,36 @@ class GroupMetadataManager(brokerId: Int,
     newGauge(name, gauge)
   }
 
+  private def countGroupInState(groupState: GroupState): Int = {
+    groupMetadataCache.values.count { group =>
+      group.inLock {
+        group.is(groupState)
+      }
+    }
+  }
+
   recreateGauge("NumOffsets",
     () => groupMetadataCache.values.map { group =>
       group.inLock { group.numOffsets }
-    }.sum
-  )
+    }.sum)
 
   recreateGauge("NumGroups",
-    () => groupMetadataCache.size
-  )
+    () => groupMetadataCache.size)
 
   recreateGauge("NumGroupsPreparingRebalance",
-    () => groupMetadataCache.values.count { group =>
-      group synchronized {
-        group.is(PreparingRebalance)
-      }
-    })
+    () => countGroupInState(PreparingRebalance))
 
   recreateGauge("NumGroupsCompletingRebalance",
-    () => groupMetadataCache.values.count { group =>
-      group synchronized {
-        group.is(CompletingRebalance)
-      }
-    })
+    () => countGroupInState(CompletingRebalance))
 
   recreateGauge("NumGroupsStable",
-    () => groupMetadataCache.values.count { group =>
-      group synchronized {
-        group.is(Stable)
-      }
-    })
+    () => countGroupInState(Stable))
 
   recreateGauge("NumGroupsDead",
-    () => groupMetadataCache.values.count { group =>
-      group synchronized {
-        group.is(Dead)
-      }
-    })
+    () => countGroupInState(Dead))
 
   recreateGauge("NumGroupsEmpty",
-    () => groupMetadataCache.values.count { group =>
-      group synchronized {
-        group.is(Empty)
-      }
-    })
+    () => countGroupInState(Empty))
 
   def startup(retrieveGroupMetadataTopicPartitionCount: () => Int, enableMetadataExpiration: Boolean): Unit = {
     groupMetadataTopicPartitionCount = retrieveGroupMetadataTopicPartitionCount()
