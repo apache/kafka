@@ -4359,6 +4359,8 @@ public class KafkaAdminClient extends AdminClient {
             private QuorumInfo createQuorumResult(final DescribeQuorumResponseData.PartitionData partition) {
                 return new QuorumInfo(
                         partition.leaderId(),
+                        partition.leaderEpoch(),
+                        partition.highWatermark(),
                         partition.currentVoters().stream().map(v -> translateReplicaState(v)).collect(Collectors.toList()),
                         partition.observers().stream().map(o -> translateReplicaState(o)).collect(Collectors.toList()));
             }
