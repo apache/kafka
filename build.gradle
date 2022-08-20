@@ -1683,6 +1683,7 @@ project(':tools') {
 
   dependencies {
     implementation project(':clients')
+    implementation project(':server-common')
     implementation project(':log4j-appender')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
