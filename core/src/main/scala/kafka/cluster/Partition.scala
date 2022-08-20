@@ -271,6 +271,17 @@ class Partition(val topicPartition: TopicPartition,
 
   def isAtMinIsr: Boolean = leaderLogIfLocal.exists { isrState.isr.size == _.config.minInSyncReplicas }
 
+  // To avoid false positives, if the isAcksValid check is performed on a follower, we treat it as valid and return true
+  def isAcksValid(requiredAcks: Short): Boolean = leaderLogIfLocal.forall { log =>
+    if (log.config.minInSyncReplicas > 1) {
+      // Inside LI, minInSyncReplicas > 1 means the topic should have durable settings, which means the producer's acks
+      // should be -1. Otherwise, with acks=0 or acks=1, there is no durability guarantees for the produced data.
+      requiredAcks == -1
+    } else {
+      true
+    }
+  }
+
   def isReassigning: Boolean = assignmentState.isInstanceOf[OngoingReassignmentState]
 
   def isAddingLocalReplica: Boolean = assignmentState.isAddingReplica(localBrokerId)

@@ -977,6 +977,13 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         try {
           val partition = getPartitionOrException(topicPartition)
+          if (!partition.isAcksValid(requiredAcks)) {
+            // When this metric is recorded, enable the DEBUG level logging on kafka.request.logger to
+            // get the identify of producers
+            brokerTopicStats.topicStats(topicPartition.topic).produceRequestsWithInvalidAcksRate.mark()
+            brokerTopicStats.allTopicsStats.produceRequestsWithInvalidAcksRate.mark()
+          }
+
           val info = partition.appendRecordsToLeader(records, origin, requiredAcks, requestLocal)
           val numAppendedMessages = info.numMessages
 

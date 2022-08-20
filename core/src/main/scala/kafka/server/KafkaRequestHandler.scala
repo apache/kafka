@@ -223,6 +223,7 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     BrokerTopicStats.BytesOutPerSec -> MeterWrapper(BrokerTopicStats.BytesOutPerSec, "bytes"),
     BrokerTopicStats.BytesRejectedPerSec -> MeterWrapper(BrokerTopicStats.BytesRejectedPerSec, "bytes"),
     BrokerTopicStats.FailedProduceRequestsPerSec -> MeterWrapper(BrokerTopicStats.FailedProduceRequestsPerSec, "requests"),
+    BrokerTopicStats.ProduceRequestsWithInvalidAcksPerSec -> MeterWrapper(BrokerTopicStats.ProduceRequestsWithInvalidAcksPerSec, "requests"),
     BrokerTopicStats.FailedFetchRequestsPerSec -> MeterWrapper(BrokerTopicStats.FailedFetchRequestsPerSec, "requests"),
     BrokerTopicStats.TotalProduceRequestsPerSec -> MeterWrapper(BrokerTopicStats.TotalProduceRequestsPerSec, "requests"),
     BrokerTopicStats.TotalFetchRequestsPerSec -> MeterWrapper(BrokerTopicStats.TotalFetchRequestsPerSec, "requests"),
@@ -286,6 +287,8 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
 
   def failedProduceRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedProduceRequestsPerSec).meter()
 
+  def produceRequestsWithInvalidAcksRate: Meter = metricTypeMap.get(BrokerTopicStats.ProduceRequestsWithInvalidAcksPerSec).meter()
+
   def failedFetchRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedFetchRequestsPerSec).meter()
 
   def totalProduceRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.TotalProduceRequestsPerSec).meter()
@@ -337,6 +340,7 @@ object BrokerTopicStats {
   val ReplicationBytesInPerSec = "ReplicationBytesInPerSec"
   val ReplicationBytesOutPerSec = "ReplicationBytesOutPerSec"
   val FailedProduceRequestsPerSec = "FailedProduceRequestsPerSec"
+  val ProduceRequestsWithInvalidAcksPerSec = "ProduceRequestsWithInvalidAcksPerSec"
   val FailedFetchRequestsPerSec = "FailedFetchRequestsPerSec"
   val TotalProduceRequestsPerSec = "TotalProduceRequestsPerSec"
   val TotalFetchRequestsPerSec = "TotalFetchRequestsPerSec"

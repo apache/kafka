@@ -26,7 +26,7 @@ import java.time.Duration
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Optional, Properties}
-import com.yammer.metrics.core.Meter
+import com.yammer.metrics.core.{Gauge, Histogram, Meter}
 
 import javax.net.ssl.X509TrustManager
 import kafka.api._
@@ -75,7 +75,6 @@ import org.junit.jupiter.api.Assertions._
 import org.mockito.Mockito
 
 import java.net.InetAddress
-
 import scala.annotation.nowarn
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Map, Seq, mutable}
@@ -1952,4 +1951,30 @@ object TestUtils extends Logging {
     )
   }
 
+  def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
+    recordSize: Int, tp: TopicPartition) = {
+    val bytes = new Array[Byte](recordSize)
+    (0 until numRecords).map { i =>
+      producer.send(new ProducerRecord(tp.topic, tp.partition, i.toLong, s"key $i".getBytes, bytes))
+    }
+    producer.flush()
+  }
+
+  def yammerMetricValue(name: String): Any = {
+    val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+    val (_, metric) = allMetrics.find { case (n, _) => n.getMBeanName.endsWith(name) }
+      .getOrElse(fail(s"Unable to find broker metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
+    metric match {
+      case m: Meter => m.count.toDouble
+      case m: Histogram => m.max
+      case m: Gauge[_] => m.value
+      case m => fail(s"Unexpected broker metric of class ${m.getClass}")
+    }
+  }
+
+  def verifyYammerMetricRecorded(name: String, verify: Double => Boolean = d => d > 0): Double = {
+    val metricValue = yammerMetricValue(name).asInstanceOf[Double]
+    assertTrue(verify(metricValue), s"Broker metric not recorded correctly for $name value $metricValue")
+    metricValue
+  }
 }

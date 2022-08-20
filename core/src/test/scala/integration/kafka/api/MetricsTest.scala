@@ -18,6 +18,7 @@ import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{JaasTestUtils, TestUtils}
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
 import kafka.metrics.KafkaYammerMetrics
+import kafka.utils.TestUtils.{sendRecords, verifyYammerMetricRecorded, yammerMetricValue}
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
@@ -130,15 +131,6 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
     val requestRateWithoutVersionMeter = yammerMeterWithPrefix("kafka.network:type=RequestMetrics,name=RequestsPerSecAcrossVersions,request=Produce")
     assertTrue(requestRateWithoutVersionMeter.count() > 0, "The Produce RequestsPerSecAcrossVersions metric is not recorded")
-  }
-
-  private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
-      recordSize: Int, tp: TopicPartition) = {
-    val bytes = new Array[Byte](recordSize)
-    (0 until numRecords).map { i =>
-      producer.send(new ProducerRecord(tp.topic, tp.partition, i.toLong, s"key $i".getBytes, bytes))
-    }
-    producer.flush()
   }
 
   // Create a producer that fails authentication to verify authentication failure metrics
@@ -301,18 +293,6 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     assertTrue(value > 0.0, s"$entity metric not recorded correctly for $name value $value")
   }
 
-  private def yammerMetricValue(name: String): Any = {
-    val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-    val (_, metric) = allMetrics.find { case (n, _) => n.getMBeanName.endsWith(name) }
-      .getOrElse(fail(s"Unable to find broker metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
-    metric match {
-      case m: Meter => m.count.toDouble
-      case m: Histogram => m.max
-      case m: Gauge[_] => m.value
-      case m => fail(s"Unexpected broker metric of class ${m.getClass}")
-    }
-  }
-
   private def yammerHistogram(name: String): Histogram = {
     val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
     val (_, metric) = allMetrics.find { case (n, _) => n.getMBeanName.endsWith(name) }
@@ -331,12 +311,6 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
       case m: Meter => m
       case m => fail(s"Unexpected broker metric of class ${m.getClass}")
     }
-  }
-
-  private def verifyYammerMetricRecorded(name: String, verify: Double => Boolean = d => d > 0): Double = {
-    val metricValue = yammerMetricValue(name).asInstanceOf[Double]
-    assertTrue(verify(metricValue), s"Broker metric not recorded correctly for $name value $metricValue")
-    metricValue
   }
 
   private def verifyNoRequestMetrics(errorMessage: String): Unit = {
