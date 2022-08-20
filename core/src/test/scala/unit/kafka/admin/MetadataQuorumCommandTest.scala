@@ -19,33 +19,18 @@ package kafka.admin
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, ClusterTests, Type}
 import kafka.test.junit.ClusterTestExtensions
-import kafka.test.junit.RaftClusterInvocationContext.RaftClusterInstance
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.UnsupportedVersionException
-import org.apache.kafka.controller.QuorumController
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util.concurrent.ExecutionException
-import scala.jdk.CollectionConverters._
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(clusterType = Type.KRAFT)
 @Tag("integration")
 class MetadataQuorumCommandTest(cluster: ClusterInstance) {
-
-  private def ensureConsistentKRaftMetadata(): Unit = {
-    cluster.waitForReadyBrokers()
-    TestUtils.waitUntilTrue(
-      () => cluster.asInstanceOf[RaftClusterInstance].controllers().filter(_.controller.asInstanceOf[QuorumController].isActive).count() == 1,
-      "Timeout waiting for leader election"
-    )
-    TestUtils.ensureConsistentKRaftMetadata(
-      cluster.asInstanceOf[RaftClusterInstance].brokers().iterator().asScala.toSeq,
-      cluster.asInstanceOf[RaftClusterInstance].controllers().filter(_.controller.asInstanceOf[QuorumController].isActive).findFirst().get()
-    )
-  }
 
   /**
    * 1. The same number of broker controllers
@@ -62,15 +47,15 @@ class MetadataQuorumCommandTest(cluster: ClusterInstance) {
       new ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 3)
     ))
   def testDescribeQuorumReplicationSuccessful(): Unit = {
-    ensureConsistentKRaftMetadata()
+    cluster.waitForReadyBrokers()
     val describeOutput = TestUtils.grabConsoleOutput(
       MetadataQuorumCommand.mainNoExit(
         Array("--bootstrap-server", cluster.bootstrapServers(), "describe", "--replication"))
     )
 
-    val leaderPattern = """\d+\s+\d+\s+\d+\s+[-]?\d+\s+[-]?\d+\s+Leader\s+""".r
-    val followerPattern = """\d+\s+\d+\s+\d+\s+[-]?\d+\s+[-]?\d+\s+Follower\s+""".r
-    val observerPattern = """\d+\s+\d+\s+\d+\s+[-]?\d+\s+[-]?\d+\s+Observer\s+""".r
+    val leaderPattern = """\d+\s+\d+\s+\d+\s+\d+\s+[-]?\d+\s+Leader\s+""".r
+    val followerPattern = """\d+\s+\d+\s+\d+\s+\d+\s+[-]?\d+\s+Follower\s+""".r
+    val observerPattern = """\d+\s+\d+\s+\d+\s+\d+\s+[-]?\d+\s+Observer\s+""".r
     val outputs = describeOutput.split("\n").tail
     if (cluster.config().clusterType() == Type.CO_KRAFT) {
       assertEquals(Math.max(cluster.config().numControllers(), cluster.config().numBrokers()), outputs.length)
@@ -104,7 +89,7 @@ class MetadataQuorumCommandTest(cluster: ClusterInstance) {
       new ClusterTest(clusterType = Type.KRAFT, brokers = 2, controllers = 3)
     ))
   def testDescribeQuorumStatusSuccessful(): Unit = {
-    ensureConsistentKRaftMetadata()
+    cluster.waitForReadyBrokers()
     val describeOutput = TestUtils.grabConsoleOutput(
       MetadataQuorumCommand.mainNoExit(Array("--bootstrap-server", cluster.bootstrapServers(), "describe", "--status"))
     )
@@ -113,6 +98,7 @@ class MetadataQuorumCommandTest(cluster: ClusterInstance) {
     assertTrue("""ClusterId:\s+\S{22}""".r.findFirstIn(outputs(0)).nonEmpty)
     assertTrue("""LeaderId:\s+\d+""".r.findFirstIn(outputs(1)).nonEmpty)
     assertTrue("""LeaderEpoch:\s+\d+""".r.findFirstIn(outputs(2)).nonEmpty)
+    // HighWatermark may be -1
     assertTrue("""HighWatermark:\s+[-]?\d+""".r.findFirstIn(outputs(3)).nonEmpty)
     assertTrue("""MaxFollowerLag:\s+\d+""".r.findFirstIn(outputs(4)).nonEmpty)
     assertTrue("""MaxFollowerLagTimeMs:\s+[-]?\d+""".r.findFirstIn(outputs(5)).nonEmpty)
