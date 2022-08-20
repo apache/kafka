@@ -35,7 +35,7 @@ public interface TaskManager {
 
     /**
      * Unassign the stream task so that it can be assigned to other executors later
-     * or be removed from the task manager. The requested executor must have locked
+     * or be removed from the task manager. The requested executor must have
      * the task already, otherwise an exception would be thrown.
      *
      * @param executor the requesting {@link TaskExecutor}
