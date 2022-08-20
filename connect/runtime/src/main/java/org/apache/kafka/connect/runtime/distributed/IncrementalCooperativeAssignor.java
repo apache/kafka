@@ -280,7 +280,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         // Compute the connectors-and-tasks to be revoked for load balancing without taking into
         // account the deleted ones.
 //        log.debug("Can leader revoke tasks in this assignment? {} (delay: {})", canRevoke, delay);
-        log.debug("Can leader revoke tasks in this assignment? (delay: {})", delay);
+//        log.debug("Can leader revoke tasks in this assignment? (delay: {})", delay);
         if (delay == 0) {
             Map<String, ConnectorsAndTasks> toExplicitlyRevoke =
                     performTaskRevocation(activeAssignments, currentWorkerAssignment);
@@ -317,7 +317,11 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 diff(taskAssignments, currentTaskAssignments);
 
         // Balance the assignments one final time based on round-robin assignment of connectors and tasks.
+        log.debug("Final complete assignments before: {}", completeWorkerAssignment);
+        log.debug("toRevoke before::{}", toRevoke);
         balanceAssignmentsFinally(completeWorkerAssignment, toRevoke);
+        log.debug("toRevoke after::{}", toRevoke);
+        log.debug("Final complete assignments after: {}", completeWorkerAssignment);
 
         previousAssignment = computePreviousAssignment(toRevoke, connectorAssignments, taskAssignments, lostAssignments);
         previousGenerationId = currentGenerationId;
@@ -370,6 +374,11 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     newCompleteAssignmentsPostRevocations.add(newWorkerLoad);
                     totalWorkUnits += newWorkerLoad.connectorsSize() + newWorkerLoad.tasksSize();
                 }
+            }
+
+            if (newCompleteAssignments.equals(newCompleteAssignmentsPostRevocations)) {
+                log.debug("The assignments are already balanced. No need for further revocations");
+                return;
             }
 
             // Sort the revised assignments list in increasing order of number of assignments per worker.
@@ -437,17 +446,26 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                                 revokingForWorker.connectors().add(connectorToRevoke);
                                 toRevoke.put(workerWithMaxLoad.worker(), revokingForWorker);
                                 newCompleteAssignmentsPostRevocations.get(index).assign(connectorToRevoke);
-                                // Toggle only if there are task assignments left for revocation
-                                revokeConnector = !tasks.isEmpty();
                             } else {
                                 final ConnectorTaskId taskToRevoke = tasks.pollLast();
-                                final ConnectorsAndTasks revokingForWorker = toRevoke.getOrDefault(workerWithMaxLoad.worker(), ConnectorsAndTasks.EMPTY);
+                                final ConnectorsAndTasks revokingForWorker =  toRevoke.getOrDefault(workerWithMaxLoad.worker(), ConnectorsAndTasks.EMPTY);
                                 revokingForWorker.tasks().add(taskToRevoke);
                                 toRevoke.put(workerWithMaxLoad.worker(), revokingForWorker);
                                 newCompleteAssignmentsPostRevocations.get(index).assign(taskToRevoke);
-                                // Toggle only if there are connector assignments left for revocation
-                                revokeConnector = !connectors.isEmpty();
                             }
+
+                            if (revokeConnector) {
+                                // toggle only if there are tasks
+                                if (!tasks.isEmpty()) {
+                                    revokeConnector = false;
+                                }
+                            } else {
+                                // toggle only if there are connectors
+                                if (!connectors.isEmpty()) {
+                                    revokeConnector = true;
+                                }
+                            }
+
                             index++;
                         }
                     }
