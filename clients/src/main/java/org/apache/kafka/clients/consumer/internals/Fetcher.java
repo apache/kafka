@@ -82,7 +82,6 @@ import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.helpers.MessageFormatter;
 
@@ -108,6 +107,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.clients.consumer.ConsumerRecord.NULL_SIZE;
 
 /**
  * This class manages the fetching process with the brokers.
@@ -1413,22 +1414,19 @@ public class Fetcher<K, V> implements Closeable {
                                              RecordBatch batch,
                                              Record record) {
         try {
-            long offset = record.offset();
-            long timestamp = record.timestamp();
-            Optional<Integer> leaderEpoch = maybeLeaderEpoch(batch.partitionLeaderEpoch());
-            TimestampType timestampType = batch.timestampType();
-            Headers headers = new RecordHeaders(record.headers());
-            ByteBuffer keyBytes = record.key();
-            byte[] keyByteArray = keyBytes == null ? null : Utils.toArray(keyBytes);
-            K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), headers, keyByteArray);
-            ByteBuffer valueBytes = record.value();
-            byte[] valueByteArray = valueBytes == null ? null : Utils.toArray(valueBytes);
-            V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), headers, valueByteArray);
+            final long offset = record.offset();
+            final long timestamp = record.timestamp();
+            final Optional<Integer> leaderEpoch = maybeLeaderEpoch(batch.partitionLeaderEpoch());
+            final TimestampType timestampType = batch.timestampType();
+            final Headers headers = new RecordHeaders(record.headers());
+            final ByteBuffer keyBytes = record.key();
+            final int keySize = keyBytes == null ? NULL_SIZE : keyBytes.remaining();
+            final K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), headers, keyBytes);
+            final ByteBuffer valueBytes = record.value();
+            final int valueSize = valueBytes == null ? NULL_SIZE : valueBytes.remaining();
+            final V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), headers, valueBytes);
             return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
-                                        timestamp, timestampType,
-                                        keyByteArray == null ? ConsumerRecord.NULL_SIZE : keyByteArray.length,
-                                        valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
-                                        key, value, headers, leaderEpoch);
+                    timestamp, timestampType, keySize, valueSize, key, value, headers, leaderEpoch);
         } catch (RuntimeException e) {
             throw new RecordDeserializationException(partition, record.offset(),
                 "Error deserializing key/value for partition " + partition +

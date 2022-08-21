@@ -355,6 +355,23 @@ public class SerializationTest {
         }
     }
 
+    @Test
+    public void stringDeserializerSupportByteBuffer() {
+        final String data = "Hello, ByteBuffer!";
+        try (Serde<String> serde = Serdes.String()) {
+            final Serializer<String> serializer = serde.serializer();
+            final Deserializer<String> deserializer = serde.deserializer();
+            final byte[] serializedBytes = serializer.serialize(topic, data);
+            final ByteBuffer heapBuff = ByteBuffer.allocate(serializedBytes.length << 1).put(serializedBytes);
+            heapBuff.flip();
+            assertEquals(data, deserializer.deserialize(topic, null, heapBuff));
+
+            final ByteBuffer directBuff = ByteBuffer.allocateDirect(serializedBytes.length << 2).put(serializedBytes);
+            directBuff.flip();
+            assertEquals(data, deserializer.deserialize(topic, null, directBuff));
+        }
+    }
+
     private Serde<String> getStringSerde(String encoder) {
         Map<String, Object> serializerConfigs = new HashMap<String, Object>();
         serializerConfigs.put("key.serializer.encoding", encoder);

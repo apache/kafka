@@ -70,6 +70,7 @@ import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest.PartitionData;
+import org.apache.kafka.common.serialization.ByteBufferDeserializer;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
@@ -4817,6 +4818,34 @@ public class FetcherTest {
     public void testEndOffsetsEmpty() {
         buildFetcher();
         assertEquals(emptyMap(), fetcher.endOffsets(emptyList(), time.timer(5000L)));
+    }
+
+    @Test
+    public void testFetchNormalByteBuffer() {
+        buildFetcher(new ByteBufferDeserializer(), new ByteBufferDeserializer());
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<ByteBuffer, ByteBuffer>>> partitionRecords = fetchedRecords();
+        assertTrue(partitionRecords.containsKey(tp0));
+
+        List<ConsumerRecord<ByteBuffer, ByteBuffer>> records = partitionRecords.get(tp0);
+        assertEquals(3, records.size());
+        assertEquals(4L, subscriptions.position(tp0).offset); // this is the next fetching position
+        long offset = 1;
+        for (ConsumerRecord<ByteBuffer, ByteBuffer> record : records) {
+            assertEquals(offset, record.offset());
+            offset += 1;
+        }
     }
 
     private MockClient.RequestMatcher offsetsForLeaderEpochRequestMatcher(
