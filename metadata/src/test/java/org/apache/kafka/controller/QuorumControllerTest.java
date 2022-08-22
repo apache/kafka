@@ -591,9 +591,9 @@ public class QuorumControllerTest {
         RawSnapshotReader reader = null;
         Uuid fooId;
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
-                try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
-                    b.setConfigSchema(SCHEMA);
-                },
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(
+                logEnv,
+                b -> b.setConfigSchema(SCHEMA),
                 OptionalLong.empty(),
                 OptionalLong.empty(),
                 SIMPLE_BOOTSTRAP)
