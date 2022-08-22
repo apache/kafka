@@ -1915,7 +1915,6 @@ public final class QuorumController implements Controller {
         });
     }
 
-    // TODO: Figure out the reason as to why is a snapshot starting here? Who is calling beginWritingSnapshot()?
     @Override
     public CompletableFuture<Long> beginWritingSnapshot() {
         CompletableFuture<Long> future = new CompletableFuture<>();
