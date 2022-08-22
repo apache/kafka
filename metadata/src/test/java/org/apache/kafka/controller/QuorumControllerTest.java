@@ -122,6 +122,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 
 @Timeout(value = 40)
@@ -888,13 +889,13 @@ public class QuorumControllerTest {
             while (expectedIndex < expected.size() && !expected.get(expectedIndex).equals(current)) {
                 expectedIndex += 1;
             }
+
+            if (expectedIndex >= expected.size()) {
+                fail("Failed to find record " + current + " in the expected record set: " + expected);
+            }
+
             expectedIndex += 1;
         }
-
-        assertTrue(
-            expectedIndex <= expected.size(),
-            String.format("actual is not a subset of expected: expected = %s; actual = %s", expected, actual)
-        );
     }
 
     /**
