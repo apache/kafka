@@ -662,7 +662,7 @@ public class QuorumControllerTest {
     @Test
     public void testSnapshotConfiguration() throws Throwable {
         final int numBrokers = 4;
-        final int maxNewRecordBytes = 700;
+        final int maxNewRecordBytes = 4;
         Map<Integer, Long> brokerEpochs = new HashMap<>();
         Uuid fooId;
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
@@ -811,7 +811,7 @@ public class QuorumControllerTest {
                         Arrays.asList(
                             new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                             setPort(9092).setSecurityProtocol((short) 0)).iterator())).
-                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_0_IV1)).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
                 setRack(null).
                 setFenced(false), (short) 1),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
@@ -822,7 +822,7 @@ public class QuorumControllerTest {
                         Arrays.asList(
                             new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                             setPort(9093).setSecurityProtocol((short) 0)).iterator())).
-                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_0_IV1)).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
                 setRack(null).
                 setFenced(false), (short) 1),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
@@ -833,7 +833,7 @@ public class QuorumControllerTest {
                         Arrays.asList(
                             new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                             setPort(9094).setSecurityProtocol((short) 0)).iterator())).
-                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_0_IV1)).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
                 setRack(null).
                 setFenced(false), (short) 1),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
@@ -842,7 +842,7 @@ public class QuorumControllerTest {
                 setEndPoints(new BrokerEndpointCollection(Arrays.asList(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9095).setSecurityProtocol((short) 0)).iterator())).
-                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_0_IV1)).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
                 setRack(null), (short) 1),
             new ApiMessageAndVersion(new ProducerIdsRecord().
                 setBrokerId(0).
