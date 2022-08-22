@@ -381,8 +381,10 @@ public class ClusterControlManager {
         Optional<Short> finalized = finalizedFeatures.get(feature.name());
         if (finalized.isPresent()) {
             if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized.get())) {
-                throw new UnsupportedVersionException("Unable to register because " +
-                        "the broker has an unsupported version of " + feature.name());
+                throw new UnsupportedVersionException("Unable to register because the broker " +
+                    "does not support version " + finalized.get() + " of " + feature.name() +
+                        ". It wants a version between " + feature.minSupportedVersion() + " and " +
+                        feature.maxSupportedVersion() + ", inclusive.");
             }
         } else {
             log.warn("Broker {} registered with feature {} that is unknown to the controller",

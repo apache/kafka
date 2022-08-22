@@ -521,7 +521,8 @@ public class ClusterControlManagerTest {
                 build();
         clusterControl.activate();
 
-        assertEquals("Unable to register because the broker has an unsupported version of metadata.version",
+        assertEquals("Unable to register because the broker does not support version 4 of " +
+            "metadata.version. It wants a version between 1 and 1, inclusive.",
             assertThrows(UnsupportedVersionException.class,
                 () -> clusterControl.registerBroker(
                     new BrokerRegistrationRequestData().
@@ -532,7 +533,8 @@ public class ClusterControlManagerTest {
                     123L,
                     featureControl.finalizedFeatures(Long.MAX_VALUE))).getMessage());
 
-        assertEquals("Unable to register because the broker has an unsupported version of metadata.version",
+        assertEquals("Unable to register because the broker does not support version 4 of " +
+            "metadata.version. It wants a version between 7 and 7, inclusive.",
             assertThrows(UnsupportedVersionException.class,
                 () -> clusterControl.registerBroker(
                     new BrokerRegistrationRequestData().
