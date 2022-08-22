@@ -158,14 +158,15 @@ object MetadataQuorumCommand {
         -1
       }
     println(
-      s"""|ClusterId:              $clusterId
-          |LeaderId:               ${quorumInfo.leaderId}
-          |LeaderEpoch:            ${quorumInfo.leaderEpoch}
-          |HighWatermark:          ${quorumInfo.highWatermark}
-          |MaxFollowerLag:         $maxFollowerLag
-          |MaxFollowerLagTimeMs:   $maxFollowerLagTimeMs
-          |CurrentVoters:          ${quorumInfo.voters.asScala.map(_.replicaId).mkString("[", ",", "]")}
-          |CurrentObservers:       ${quorumInfo.observers.asScala.map(_.replicaId).mkString("[", ",", "]")}
+      s"""|ClusterId:                  $clusterId
+          |LeaderId:                   ${quorumInfo.leaderId}
+          |LeaderEpoch:                ${quorumInfo.leaderEpoch}
+          |HighWatermark:              ${quorumInfo.highWatermark}
+          |HighWatermarkUpdateTimeMs:  ${quorumInfo.highWatermarkUpdateTimeMs}
+          |MaxFollowerLag:             $maxFollowerLag
+          |MaxFollowerLagTimeMs:       $maxFollowerLagTimeMs
+          |CurrentVoters:              ${quorumInfo.voters.asScala.map(_.replicaId).mkString("[", ",", "]")}
+          |CurrentObservers:           ${quorumInfo.observers.asScala.map(_.replicaId).mkString("[", ",", "]")}
           |""".stripMargin
     )
   }

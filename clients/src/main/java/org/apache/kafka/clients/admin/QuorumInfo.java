@@ -24,30 +24,43 @@ import java.util.OptionalLong;
  * This class is used to describe the state of the quorum received in DescribeQuorumResponse.
  */
 public class QuorumInfo {
-    private final Integer leaderId;
-    private final Integer leaderEpoch;
-    private final Long highWatermark;
+    private final int leaderId;
+    private final long leaderEpoch;
+    private final long highWatermark;
+    private final OptionalLong highWatermarkUpdateTimeMs;
     private final List<ReplicaState> voters;
     private final List<ReplicaState> observers;
 
-    QuorumInfo(Integer leaderId, Integer leaderEpoch, Long highWatermark, List<ReplicaState> voters, List<ReplicaState> observers) {
+    QuorumInfo(
+        int leaderId,
+        long leaderEpoch,
+        long highWatermark,
+        OptionalLong highWatermarkUpdateTimeMs,
+        List<ReplicaState> voters,
+        List<ReplicaState> observers
+    ) {
         this.leaderId = leaderId;
         this.leaderEpoch = leaderEpoch;
         this.highWatermark = highWatermark;
+        this.highWatermarkUpdateTimeMs = highWatermarkUpdateTimeMs;
         this.voters = voters;
         this.observers = observers;
     }
 
-    public Integer leaderId() {
+    public int leaderId() {
         return leaderId;
     }
 
-    public Integer leaderEpoch() {
+    public long leaderEpoch() {
         return leaderEpoch;
     }
 
-    public Long highWatermark() {
+    public long highWatermark() {
         return highWatermark;
+    }
+
+    public OptionalLong highWatermarkUpdateTimeMs() {
+        return highWatermarkUpdateTimeMs;
     }
 
     public List<ReplicaState> voters() {
@@ -63,20 +76,26 @@ public class QuorumInfo {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         QuorumInfo that = (QuorumInfo) o;
-        return leaderId.equals(that.leaderId)
-            && voters.equals(that.voters)
-            && observers.equals(that.observers);
+        return leaderId == that.leaderId
+            && leaderEpoch == that.leaderEpoch
+            && highWatermark == that.highWatermark
+            && Objects.equals(highWatermarkUpdateTimeMs, that.highWatermarkUpdateTimeMs)
+            && Objects.equals(voters, that.voters)
+            && Objects.equals(observers, that.observers);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(leaderId, voters, observers);
+        return Objects.hash(leaderId, leaderEpoch, highWatermark, highWatermarkUpdateTimeMs, voters, observers);
     }
 
     @Override
     public String toString() {
         return "QuorumInfo(" +
             "leaderId=" + leaderId +
+            ", leaderEpoch=" + leaderEpoch +
+            ", highWatermark=" + highWatermark +
+            ", highWatermarkUpdateTimeMs=" + highWatermarkUpdateTimeMs +
             ", voters=" + voters +
             ", observers=" + observers +
             ')';

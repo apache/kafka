@@ -4357,12 +4357,26 @@ public class KafkaAdminClient extends AdminClient {
             }
 
             private QuorumInfo createQuorumResult(final DescribeQuorumResponseData.PartitionData partition) {
+                OptionalLong highWatermarkUpdateTimeMs = partition.highWatermarkUpdateTimeMs() >= 0 ?
+                    OptionalLong.of(partition.highWatermarkUpdateTimeMs()) :
+                    OptionalLong.empty();
+
+                List<QuorumInfo.ReplicaState> voters = partition.currentVoters().stream()
+                    .map(this::translateReplicaState)
+                    .collect(Collectors.toList());
+
+                List<QuorumInfo.ReplicaState> observers = partition.observers().stream()
+                    .map(this::translateReplicaState)
+                    .collect(Collectors.toList());
+
                 return new QuorumInfo(
-                        partition.leaderId(),
-                        partition.leaderEpoch(),
-                        partition.highWatermark(),
-                        partition.currentVoters().stream().map(v -> translateReplicaState(v)).collect(Collectors.toList()),
-                        partition.observers().stream().map(o -> translateReplicaState(o)).collect(Collectors.toList()));
+                    partition.leaderId(),
+                    partition.leaderEpoch(),
+                    partition.highWatermark(),
+                    highWatermarkUpdateTimeMs,
+                    voters,
+                    observers
+                );
             }
 
             @Override

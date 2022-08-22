@@ -2011,7 +2011,7 @@ public class KafkaRaftClientTest {
         context.deliverRequest(DescribeQuorumRequest.singletonRequest(context.metadataPartition));
         context.pollUntilResponse();
 
-        context.assertSentDescribeQuorumResponse(localId, epoch, 3L,
+        context.assertSentDescribeQuorumResponse(localId, epoch, 3L, closeFollowerFetchTime,
             Arrays.asList(
                 new ReplicaState()
                     .setReplicaId(localId)

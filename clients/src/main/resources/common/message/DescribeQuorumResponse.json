@@ -38,7 +38,9 @@
           "about": "The latest known leader epoch"},
         { "name": "HighWatermark", "type": "int64", "versions": "0+"},
         { "name": "CurrentVoters", "type": "[]ReplicaState", "versions": "0+" },
-        { "name": "Observers", "type": "[]ReplicaState", "versions": "0+" }
+        { "name": "Observers", "type": "[]ReplicaState", "versions": "0+" },
+        { "name": "HighWatermarkUpdateTimeMs", "type": "int64", "default": -1, "tag": 0,
+          "taggedVersions": "1+", "ignorable": true, "about": "The wall clock time that the high watermark was last updated on the leader" }
       ]}
     ]}],
   "commonStructs": [
