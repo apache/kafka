@@ -1093,7 +1093,7 @@ public final class QuorumController implements Controller {
                 // If no records have been replayed, we need to write out the bootstrap records.
                 // This will include the new metadata.version, as well as things like SCRAM
                 // initialization, etc.
-                log.warn("The metadata log appears to be empty. Appending {} bootstrap record(s) " +
+                log.info("The metadata log appears to be empty. Appending {} bootstrap record(s) " +
                         "at metadata.version {} from {}.", bootstrapMetadata.records().size(),
                         bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
                 records.addAll(bootstrapMetadata.records());
