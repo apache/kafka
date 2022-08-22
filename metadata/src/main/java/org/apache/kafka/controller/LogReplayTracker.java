@@ -17,12 +17,8 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Optional;
-
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.slf4j.Logger;
 
 
@@ -56,16 +52,6 @@ public class LogReplayTracker {
      */
     private boolean empty;
 
-    /**
-     * True if we haven't replayed any metadata.version records yet.
-     */
-    private boolean versionless;
-
-    /**
-     * The number of bytes of log records we have read since we generated our last snapshot.
-     */
-    private long newBytesSinceLastSnapshot;
-
     private LogReplayTracker(
         LogContext logContext
     ) {
@@ -75,38 +61,13 @@ public class LogReplayTracker {
 
     void resetToEmpty() {
         this.empty = true;
-        this.versionless = true;
-        this.newBytesSinceLastSnapshot = 0L;
     }
 
     boolean empty() {
         return empty;
     }
 
-    boolean versionless() {
-        return versionless;
-    }
-
-    long newBytesSinceLastSnapshot() {
-        return newBytesSinceLastSnapshot;
-    }
-
     void replay(ApiMessage message) {
         empty = false;
-        if (versionless) {
-            Optional<MetadataVersion> version = BootstrapMetadata.recordToMetadataVersion(message);
-            if (version.isPresent()) {
-                log.info("Loaded initial metadata version: {}", version.get());
-                versionless = false;
-            }
-        }
-    }
-
-    void addNewBytesSinceLastSnapshot(long n) {
-        this.newBytesSinceLastSnapshot += n;
-    }
-
-    void resetNewBytesSinceLastSnapshot() {
-        this.newBytesSinceLastSnapshot = 0L;
     }
 }

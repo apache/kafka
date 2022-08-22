@@ -393,7 +393,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     StorageTool.formatCommand(out,
                             JavaConverters.asScalaBuffer(Collections.singletonList(metadataLogDir)).toSeq(),
                             properties,
-                            MetadataVersion.MINIMUM_KRAFT_VERSION,
+                            MetadataVersion.MINIMUM_BOOTSTRAP_VERSION,
                             false);
                 } finally {
                     for (String line : stream.toString().split(String.format("%n"))) {

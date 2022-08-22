@@ -17,13 +17,10 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.NoOpRecord;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -36,38 +33,5 @@ public class LogReplayTrackerTest {
         assertTrue(tracker.empty());
         tracker.replay(new NoOpRecord());
         assertFalse(tracker.empty());
-    }
-
-    @Test
-    public void testVersionless() {
-        LogReplayTracker tracker = new LogReplayTracker.Builder().build();
-        assertTrue(tracker.versionless());
-        tracker.replay(new NoOpRecord());
-        assertTrue(tracker.versionless());
-        tracker.replay(new FeatureLevelRecord().
-                setName("foo.bar").
-                setFeatureLevel((short) 1));
-        assertTrue(tracker.versionless());
-        tracker.replay(new FeatureLevelRecord().
-                setName(MetadataVersion.FEATURE_NAME).
-                setFeatureLevel((short) 2));
-        assertFalse(tracker.versionless());
-    }
-
-    @Test
-    public void testNewBytesSinceLastSnapshot() {
-        LogReplayTracker tracker = new LogReplayTracker.Builder().build();
-        assertEquals(0L, tracker.newBytesSinceLastSnapshot());
-        tracker.addNewBytesSinceLastSnapshot(100);
-        assertEquals(100L, tracker.newBytesSinceLastSnapshot());
-        tracker.resetNewBytesSinceLastSnapshot();
-        assertEquals(0L, tracker.newBytesSinceLastSnapshot());
-        tracker.addNewBytesSinceLastSnapshot(1000);
-        assertEquals(1000L, tracker.newBytesSinceLastSnapshot());
-        tracker.addNewBytesSinceLastSnapshot(1000);
-        assertEquals(2000L, tracker.newBytesSinceLastSnapshot());
-        tracker.resetToEmpty();
-        assertEquals(0L, tracker.newBytesSinceLastSnapshot());
-
     }
 }

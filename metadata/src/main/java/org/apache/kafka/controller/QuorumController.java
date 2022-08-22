@@ -963,7 +963,7 @@ public final class QuorumController implements Controller {
                         reader.lastContainedLogTimestamp()
                     );
                     snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
-                    logReplayTracker.resetNewBytesSinceLastSnapshot();
+                    newBytesSinceLastSnapshot = 0L;
                     authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
                 } finally {
                     reader.close();
@@ -1097,7 +1097,7 @@ public final class QuorumController implements Controller {
                         "at metadata.version {} from {}.", bootstrapMetadata.records().size(),
                         bootstrapMetadata.metadataVersion(), bootstrapMetadata.source());
                 records.addAll(bootstrapMetadata.records());
-            } else if (logReplayTracker.versionless()) {
+            } else if (featureControl.metadataVersion().equals(MetadataVersion.MINIMUM_KRAFT_VERSION)) {
                 log.info("No metadata.version feature level record was found in the log. " +
                         "Treating the log as version {}.", MetadataVersion.MINIMUM_KRAFT_VERSION);
             }
@@ -1151,7 +1151,7 @@ public final class QuorumController implements Controller {
                 metaLogListener = new QuorumMetaLogListener();
                 raftClient.register(metaLogListener);
             }
-            logReplayTracker.resetNewBytesSinceLastSnapshot();
+            newBytesSinceLastSnapshot = 0L;
             updateWriteOffset(-1);
             clusterControl.deactivate();
             cancelMaybeFenceReplicas();
@@ -1374,8 +1374,8 @@ public final class QuorumController implements Controller {
     }
 
     private void maybeGenerateSnapshot(long batchSizeInBytes) {
-        logReplayTracker.addNewBytesSinceLastSnapshot(batchSizeInBytes);
-        if (logReplayTracker.newBytesSinceLastSnapshot() >= snapshotMaxNewRecordBytes &&
+        newBytesSinceLastSnapshot += batchSizeInBytes;
+        if (newBytesSinceLastSnapshot >= snapshotMaxNewRecordBytes &&
             snapshotGeneratorManager.generator == null
         ) {
             if (!isActiveController()) {
@@ -1386,10 +1386,10 @@ public final class QuorumController implements Controller {
             }
 
             log.info("Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot.",
-                lastCommittedEpoch, lastCommittedOffset, logReplayTracker.newBytesSinceLastSnapshot());
+                lastCommittedEpoch, lastCommittedOffset, newBytesSinceLastSnapshot);
 
             snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset, lastCommittedEpoch, lastCommittedTimestamp);
-            logReplayTracker.resetNewBytesSinceLastSnapshot();
+            newBytesSinceLastSnapshot = 0;
         }
     }
 
@@ -1400,7 +1400,7 @@ public final class QuorumController implements Controller {
         snapshotGeneratorManager.cancel();
         snapshotRegistry.reset();
 
-        logReplayTracker.resetToEmpty();
+        newBytesSinceLastSnapshot = 0;
         updateLastCommittedState(-1, -1, -1);
     }
 
@@ -1575,6 +1575,11 @@ public final class QuorumController implements Controller {
      * Maximum number of bytes processed through handling commits before generating a snapshot.
      */
     private final long snapshotMaxNewRecordBytes;
+
+    /**
+     * Number of bytes processed through handling commits since the last snapshot was generated.
+     */
+    private long newBytesSinceLastSnapshot = 0;
 
     /**
      * How long to delay partition leader balancing operations.
