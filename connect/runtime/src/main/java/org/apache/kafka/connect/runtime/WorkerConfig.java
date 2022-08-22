@@ -18,6 +18,8 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -27,8 +29,8 @@ import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.storage.SimpleHeaderConverter;
-import org.apache.kafka.connect.util.ConnectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +41,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 
 import org.eclipse.jetty.util.StringUtil;
@@ -309,6 +312,33 @@ public class WorkerConfig extends AbstractConfig {
 
     private String kafkaClusterId;
 
+    public static String lookupKafkaClusterId(WorkerConfig config) {
+        log.info("Creating Kafka admin client");
+        try (Admin adminClient = Admin.create(config.originals())) {
+            return lookupKafkaClusterId(adminClient);
+        }
+    }
+
+    static String lookupKafkaClusterId(Admin adminClient) {
+        log.debug("Looking up Kafka cluster ID");
+        try {
+            KafkaFuture<String> clusterIdFuture = adminClient.describeCluster().clusterId();
+            if (clusterIdFuture == null) {
+                log.info("Kafka cluster version is too old to return cluster ID");
+                return null;
+            }
+            log.debug("Fetching Kafka cluster ID");
+            String kafkaClusterId = clusterIdFuture.get();
+            log.info("Kafka cluster ID: {}", kafkaClusterId);
+            return kafkaClusterId;
+        } catch (InterruptedException e) {
+            throw new ConnectException("Unexpectedly interrupted when looking up Kafka cluster info", e);
+        } catch (ExecutionException e) {
+            throw new ConnectException("Failed to connect to and describe Kafka cluster. "
+                                       + "Check worker's broker connection and security properties.", e);
+        }
+    }
+
     private void logInternalConverterRemovalWarnings(Map<String, String> props) {
         List<String> removedProperties = new ArrayList<>();
         for (String property : Arrays.asList("internal.key.converter", "internal.value.converter")) {
@@ -414,7 +444,7 @@ public class WorkerConfig extends AbstractConfig {
 
     public String kafkaClusterId() {
         if (kafkaClusterId == null) {
-            kafkaClusterId = ConnectUtils.lookupKafkaClusterId(this);
+            kafkaClusterId = lookupKafkaClusterId(this);
         }
         return kafkaClusterId;
     }

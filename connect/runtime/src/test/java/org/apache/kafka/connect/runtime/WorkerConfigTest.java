@@ -17,9 +17,11 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.apache.kafka.connect.util.ConnectUtils;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -67,17 +69,17 @@ public class WorkerConfigTest {
     );
 
     private static final String CLUSTER_ID = "cluster-id";
-    private MockedStatic<ConnectUtils> connectUtilsMockedStatic;
+    private MockedStatic<WorkerConfig> workerConfigMockedStatic;
 
     @Before
     public void setup() {
-        connectUtilsMockedStatic = mockStatic(ConnectUtils.class, new CallsRealMethods());
-        connectUtilsMockedStatic.when(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class))).thenReturn(CLUSTER_ID);
+        workerConfigMockedStatic = mockStatic(WorkerConfig.class, new CallsRealMethods());
+        workerConfigMockedStatic.when(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class))).thenReturn(CLUSTER_ID);
     }
 
     @After
     public void teardown() {
-        connectUtilsMockedStatic.close();
+        workerConfigMockedStatic.close();
     }
 
     @Test
@@ -180,15 +182,47 @@ public class WorkerConfigTest {
     }
 
     @Test
+    public void testLookupKafkaClusterId() {
+        final Node broker1 = new Node(0, "dummyHost-1", 1234);
+        final Node broker2 = new Node(1, "dummyHost-2", 1234);
+        List<Node> cluster = Arrays.asList(broker1, broker2);
+        MockAdminClient adminClient = new MockAdminClient.Builder().
+                brokers(cluster).build();
+        assertEquals(MockAdminClient.DEFAULT_CLUSTER_ID, WorkerConfig.lookupKafkaClusterId(adminClient));
+    }
+
+    @Test
+    public void testLookupNullKafkaClusterId() {
+        final Node broker1 = new Node(0, "dummyHost-1", 1234);
+        final Node broker2 = new Node(1, "dummyHost-2", 1234);
+        List<Node> cluster = Arrays.asList(broker1, broker2);
+        MockAdminClient adminClient = new MockAdminClient.Builder().
+                brokers(cluster).clusterId(null).build();
+        assertNull(WorkerConfig.lookupKafkaClusterId(adminClient));
+    }
+
+    @Test
+    public void testLookupKafkaClusterIdTimeout() {
+        final Node broker1 = new Node(0, "dummyHost-1", 1234);
+        final Node broker2 = new Node(1, "dummyHost-2", 1234);
+        List<Node> cluster = Arrays.asList(broker1, broker2);
+        MockAdminClient adminClient = new MockAdminClient.Builder().
+                brokers(cluster).build();
+        adminClient.timeoutNextRequest(1);
+
+        assertThrows(ConnectException.class, () -> WorkerConfig.lookupKafkaClusterId(adminClient));
+    }
+
+    @Test
     public void testKafkaClusterId() {
         Map<String, String> props = baseProps();
         WorkerConfig config = new WorkerConfig(WorkerConfig.baseConfigDef(), props);
         assertEquals(CLUSTER_ID, config.kafkaClusterId());
-        connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)), times(1));
+        workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)), times(1));
 
         // next calls hit the cache
         assertEquals(CLUSTER_ID, config.kafkaClusterId());
-        connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)), times(1));
+        workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)), times(1));
     }
 
     private void assertInvalidHeaderConfig(String config) {

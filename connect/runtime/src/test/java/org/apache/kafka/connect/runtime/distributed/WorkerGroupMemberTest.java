@@ -25,7 +25,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
-import org.apache.kafka.connect.util.ConnectUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -65,12 +64,11 @@ public class WorkerGroupMemberTest {
 
 
         LogContext logContext = new LogContext("[Worker clientId=client-1 + groupId= group-1]");
-
-        try (MockedStatic<ConnectUtils> utilities = mockStatic(ConnectUtils.class)) {
-            utilities.when(() -> ConnectUtils.lookupKafkaClusterId(any())).thenReturn("cluster-1");
+        try (MockedStatic<WorkerConfig> utilities = mockStatic(WorkerConfig.class)) {
+            utilities.when(() -> WorkerConfig.lookupKafkaClusterId(any())).thenReturn("cluster-1");
             member = new WorkerGroupMember(config, "", configBackingStore, null, Time.SYSTEM, "client-1", logContext);
-            utilities.verify(() -> ConnectUtils.lookupKafkaClusterId(any()));
-        }     
+            utilities.verify(() -> WorkerConfig.lookupKafkaClusterId(any()));
+        }
 
         boolean entered = false;
         for (MetricsReporter reporter : member.metrics().reporters()) {
