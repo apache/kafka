@@ -44,7 +44,7 @@ import scala.collection.Map
 import scala.collection.mutable.ListBuffer
 
 class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
-  var brokers: ListBuffer[KafkaServer] = ListBuffer()
+  var servers: ListBuffer[KafkaServer] = ListBuffer()
   val topic1 = "foo"
   val topic2 = "bar"
   val t1p0 = new TopicPartition(topic1, 0)
@@ -59,17 +59,17 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   override def tearDown(): Unit = {
     if (producer != null)
       producer.close()
-    TestUtils.shutdownServers(brokers)
+    TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 
   @Test
   def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader(): Unit = {
-    brokers ++= (0 to 1).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
+    servers ++= (0 to 1).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
 
     // Given two topics with replication of a single partition
     for (topic <- List(topic1, topic2)) {
-      createTopic(zkClient, topic, Map(0 -> Seq(0, 1)), servers = brokers)
+      createTopic(zkClient, topic, Map(0 -> Seq(0, 1)), servers = servers)
     }
 
     // When we send four messages
@@ -77,11 +77,11 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
 
     //Then they should be stamped with Leader Epoch 0
     var expectedLeaderEpoch = 0
-    waitUntilTrue(() => messagesHaveLeaderEpoch(brokers(0), expectedLeaderEpoch, 0), "Leader epoch should be 0")
+    waitUntilTrue(() => messagesHaveLeaderEpoch(servers(0), expectedLeaderEpoch, 0), "Leader epoch should be 0")
 
     //Given we then bounce the leader
-    brokers(0).shutdown()
-    brokers(0).startup()
+    servers(0).shutdown()
+    servers(0).startup()
 
     //Then LeaderEpoch should now have changed from 0 -> 1
     expectedLeaderEpoch = 1
@@ -92,23 +92,23 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     sendFourMessagesToEachTopic()
 
     //The new messages should be stamped with LeaderEpoch = 1
-    waitUntilTrue(() => messagesHaveLeaderEpoch(brokers(0), expectedLeaderEpoch, 4), "Leader epoch should be 1")
+    waitUntilTrue(() => messagesHaveLeaderEpoch(servers(0), expectedLeaderEpoch, 4), "Leader epoch should be 1")
   }
 
   @Test
   def shouldSendLeaderEpochRequestAndGetAResponse(): Unit = {
 
     //3 brokers, put partition on 100/101 and then pretend to be 102
-    brokers ++= (100 to 102).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
+    servers ++= (100 to 102).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
 
     val assignment1 = Map(0 -> Seq(100), 1 -> Seq(101))
-    TestUtils.createTopic(zkClient, topic1, assignment1, brokers)
+    TestUtils.createTopic(zkClient, topic1, assignment1, servers)
 
     val assignment2 = Map(0 -> Seq(100))
-    TestUtils.createTopic(zkClient, topic2, assignment2, brokers)
+    TestUtils.createTopic(zkClient, topic2, assignment2, servers)
 
     //Send messages equally to the two partitions, then half as many to a third
-    producer = createProducer(plaintextBootstrapServers(brokers), acks = -1)
+    producer = createProducer(plaintextBootstrapServers(servers), acks = -1)
     (0 until 10).foreach { _ =>
       producer.send(new ProducerRecord(topic1, 0, null, "IHeartLogs".getBytes))
     }
@@ -120,7 +120,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     }
     producer.flush()
 
-    val fetcher0 = new TestFetcherThread(sender(from = brokers(2), to = brokers(0)))
+    val fetcher0 = new TestFetcherThread(sender(from = servers(2), to = servers(0)))
     val epochsRequested = Map(t1p0 -> 0, t1p1 -> 0, t2p0 -> 0, t2p2 -> 0)
 
     //When
@@ -135,7 +135,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     assertEquals(UNDEFINED_EPOCH_OFFSET, offsetsForEpochs(t1p1).endOffset)
 
     //Repointing to broker 1 we should get the correct offset for t1p1
-    val fetcher1 = new TestFetcherThread(sender(from = brokers(2), to = brokers(1)))
+    val fetcher1 = new TestFetcherThread(sender(from = servers(2), to = servers(1)))
     val offsetsForEpochs1 = fetcher1.leaderOffsetsFor(epochsRequested)
     assertEquals(20, offsetsForEpochs1(t1p1).endOffset)
   }
@@ -143,19 +143,19 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   @Test
   def shouldIncreaseLeaderEpochBetweenLeaderRestarts(): Unit = {
     //Setup: we are only interested in the single partition on broker 101
-    brokers += createServer(fromProps(createBrokerConfig(100, zkConnect)))
+    servers += createServer(fromProps(createBrokerConfig(100, zkConnect)))
     assertEquals(100, TestUtils.waitUntilControllerElected(zkClient))
 
-    brokers += createServer(fromProps(createBrokerConfig(101, zkConnect)))
+    servers += createServer(fromProps(createBrokerConfig(101, zkConnect)))
 
-    def leo() = brokers(1).replicaManager.localLog(tp).get.logEndOffset
+    def leo() = servers(1).replicaManager.localLog(tp).get.logEndOffset
 
-    TestUtils.createTopic(zkClient, tp.topic, Map(tp.partition -> Seq(101)), brokers)
-    producer = createProducer(plaintextBootstrapServers(brokers), acks = -1)
+    TestUtils.createTopic(zkClient, tp.topic, Map(tp.partition -> Seq(101)), servers)
+    producer = createProducer(plaintextBootstrapServers(servers), acks = -1)
 
     //1. Given a single message
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
-    var fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
+    var fetcher = new TestFetcherThread(sender(servers(0), servers(1)))
 
     //Then epoch should be 0 and leo: 1
     var epochEndOffset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp)
@@ -164,11 +164,11 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     assertEquals(1, leo())
 
     //2. When broker is bounced
-    brokers(1).shutdown()
-    brokers(1).startup()
+    servers(1).shutdown()
+    servers(1).startup()
 
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
-    fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
+    fetcher = new TestFetcherThread(sender(servers(0), servers(1)))
 
     //Then epoch 0 should still be the start offset of epoch 1
     epochEndOffset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp)
@@ -189,11 +189,11 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     assertEquals(2, leo())
 
     //3. When broker is bounced again
-    brokers(1).shutdown()
-    brokers(1).startup()
+    servers(1).shutdown()
+    servers(1).startup()
 
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
-    fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
+    fetcher = new TestFetcherThread(sender(servers(0), servers(1)))
 
     //Then Epoch 0 should still map to offset 1
     assertEquals(1, fetcher.leaderOffsetsFor(Map(tp -> 0))(tp).endOffset())
@@ -236,7 +236,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
 
   private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
     TestUtils.waitUntilTrue(() => {
-      brokers(0).metadataCache.getPartitionInfo(topic, partition).exists(_.leaderEpoch == epoch)
+      servers(0).metadataCache.getPartitionInfo(topic, partition).exists(_.leaderEpoch == epoch)
     }, "Epoch didn't change")
   }
 
@@ -245,7 +245,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     for (topic <- List(topic1, topic2)) {
       val tp = new TopicPartition(topic, 0)
       val leo = broker.getLogManager.getLog(tp).get.logEndOffset
-      result = result && leo > 0 && brokers.forall { broker =>
+      result = result && leo > 0 && servers.forall { broker =>
         broker.getLogManager.getLog(tp).get.logSegments.iterator.forall { segment =>
           if (segment.read(minOffset, Integer.MAX_VALUE) == null) {
             false
@@ -264,7 +264,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   private def sendFourMessagesToEachTopic() = {
     val testMessageList1 = List("test1", "test2", "test3", "test4")
     val testMessageList2 = List("test5", "test6", "test7", "test8")
-    val producer = TestUtils.createProducer(plaintextBootstrapServers(brokers),
+    val producer = TestUtils.createProducer(plaintextBootstrapServers(servers),
       keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
     val records =
       testMessageList1.map(m => new ProducerRecord(topic1, m, m)) ++

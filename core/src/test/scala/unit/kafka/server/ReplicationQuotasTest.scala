@@ -46,14 +46,14 @@ class ReplicationQuotasTest extends QuorumTestHarness {
   def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100.0)
 
   val msg100KB = new Array[Byte](100000)
-  var brokers: Seq[KafkaServer] = null
+  var servers: Seq[KafkaServer] = null
   val topic = "topic1"
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
 
   @AfterEach
   override def tearDown(): Unit = {
     producer.close()
-    shutdownServers(brokers)
+    shutdownServers(servers)
     super.tearDown()
   }
 
@@ -76,7 +76,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
       * regular replication works as expected.
       */
 
-    brokers = (100 to 105).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
+    servers = (100 to 105).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
 
     //Given six partitions, led on nodes 0,1,2,3,4,5 but with followers on node 6,7 (not started yet)
     //And two extra partitions 6,7, which we don't intend on throttling.
@@ -90,7 +90,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
       6 -> Seq(100, 106), //Not Throttled
       7 -> Seq(101, 107) //Not Throttled
     )
-    TestUtils.createTopic(zkClient, topic, assignment, brokers)
+    TestUtils.createTopic(zkClient, topic, assignment, servers)
 
     val msg = msg100KB
     val msgCount = 100
@@ -114,7 +114,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
       adminZkClient.changeTopicConfig(topic, propsWith(FollowerReplicationThrottledReplicasProp, "0:106,1:106,2:106,3:107,4:107,5:107"))
 
     //Add data equally to each partition
-    producer = createProducer(plaintextBootstrapServers(brokers), acks = 1)
+    producer = createProducer(plaintextBootstrapServers(servers), acks = 1)
     (0 until msgCount).foreach { _ =>
       (0 to 7).foreach { partition =>
         producer.send(new ProducerRecord(topic, partition, null, msg))
@@ -178,8 +178,8 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     //2 brokers with 1MB Segment Size & 1 partition
     val config: Properties = createBrokerConfig(100, zkConnect)
     config.put("log.segment.bytes", (1024 * 1024).toString)
-    brokers = Seq(createServer(fromProps(config)))
-    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
+    servers = Seq(createServer(fromProps(config)))
+    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), servers)
 
     //Write 20MBs and throttle at 5MB/s
     val msg = msg100KB
@@ -196,7 +196,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
 
     //Start the new broker (and hence start replicating)
     debug("Starting new broker")
-    brokers = brokers :+ createServer(fromProps(createBrokerConfig(101, zkConnect)))
+    servers = servers :+ createServer(fromProps(createBrokerConfig(101, zkConnect)))
     val start = System.currentTimeMillis()
 
     waitForOffsetsToMatch(msgCount, 0, 101)
@@ -210,7 +210,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
   }
 
   def addData(msgCount: Int, msg: Array[Byte]): Unit = {
-    producer = createProducer(plaintextBootstrapServers(brokers), acks = 0)
+    producer = createProducer(plaintextBootstrapServers(servers), acks = 0)
     (0 until msgCount).map(_ => producer.send(new ProducerRecord(topic, msg))).foreach(_.get)
     waitForOffsetsToMatch(msgCount, 0, 100)
   }
@@ -222,11 +222,11 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     }, s"Offsets did not match for partition $partitionId on broker $brokerId", 60000)
   }
 
-  private def brokerFor(id: Int): KafkaServer = brokers.filter(_.config.brokerId == id).head
+  private def brokerFor(id: Int): KafkaServer = servers.filter(_.config.brokerId == id).head
 
   def createBrokers(brokerIds: Seq[Int]): Unit = {
     brokerIds.foreach { id =>
-      brokers = brokers :+ createServer(fromProps(createBrokerConfig(id, zkConnect)))
+      servers = servers :+ createServer(fromProps(createBrokerConfig(id, zkConnect)))
     }
   }
 

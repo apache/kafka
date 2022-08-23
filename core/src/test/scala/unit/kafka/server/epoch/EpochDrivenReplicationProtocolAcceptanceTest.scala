@@ -54,7 +54,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   val topic = "topic1"
   val msg = new Array[Byte](1000)
   val msgBigger = new Array[Byte](10000)
-  var brokers: Seq[KafkaServer] = null
+  var servers: Seq[KafkaServer] = null
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
   var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = null
 
@@ -66,7 +66,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   @AfterEach
   override def tearDown(): Unit = {
     producer.close()
-    TestUtils.shutdownServers(brokers)
+    TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 
@@ -74,10 +74,10 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   def shouldFollowLeaderEpochBasicWorkflow(): Unit = {
 
     //Given 2 brokers
-    brokers = (100 to 101).map(createBrokerForId(_))
+    servers = (100 to 101).map(createBrokerForId(_))
 
     //A single partition topic with 2 replicas
-    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
+    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), servers)
     producer = createProducer
     val tp = new TopicPartition(topic, 0)
 
@@ -134,12 +134,12 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   @Test
   def shouldNotAllowDivergentLogs(): Unit = {
     //Given two brokers
-    brokers = (100 to 101).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
-    val broker100 = brokers(0)
-    val broker101 = brokers(1)
+    servers = (100 to 101).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
+    val broker100 = servers(0)
+    val broker101 = servers(1)
 
     //A single partition topic with 2 replicas
-    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
+    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), servers)
     producer = createProducer
 
     //Write 10 messages (ensure they are not batched so we can truncate in the middle below)
@@ -175,7 +175,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     //Wait for replication to resync
     waitForLogsToMatch(broker100, broker101)
 
-    assertEquals(getLogFile(brokers(0), 0).length, getLogFile(brokers(1), 0).length, "Log files should match Broker0 vs Broker 1")
+    assertEquals(getLogFile(servers(0), 0).length, getLogFile(servers(1), 0).length, "Log files should match Broker0 vs Broker 1")
   }
 
   //We can reproduce the pre-KIP-101 failure of this test by setting KafkaConfig.InterBrokerProtocolVersionProp = IBP_0_11_0_IV1
@@ -183,10 +183,10 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   def offsetsShouldNotGoBackwards(): Unit = {
 
     //Given two brokers
-    brokers = (100 to 101).map(createBrokerForId(_))
+    servers = (100 to 101).map(createBrokerForId(_))
 
     //A single partition topic with 2 replicas
-    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
+    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), servers)
     producer = createBufferingProducer
 
     //Write 100 messages
@@ -196,16 +196,16 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     }
 
     //Stop the brokers
-    brokers.foreach { b => b.shutdown() }
+    servers.foreach { b => b.shutdown() }
 
     //Delete the clean shutdown file to simulate crash
-    new File(brokers(0).config.logDirs(0), LogLoader.CleanShutdownFile).delete()
+    new File(servers(0).config.logDirs(0), LogLoader.CleanShutdownFile).delete()
 
     //Delete half the messages from the log file
-    deleteMessagesFromLogFile(getLogFile(brokers(0), 0).length() / 2, brokers(0), 0)
+    deleteMessagesFromLogFile(getLogFile(servers(0), 0).length() / 2, servers(0), 0)
 
     //Start broker 100 again
-    brokers(0).startup()
+    servers(0).startup()
 
     //Bounce the producer (this is required, although I'm unsure as to why?)
     producer.close()
@@ -226,15 +226,15 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
     //Start broker 101. When it comes up it should read a whole batch of messages from the leader.
     //As the chronology is lost we would end up with non-monotonic offsets (pre kip-101)
-    brokers(1).startup()
+    servers(1).startup()
 
     //Wait for replication to resync
-    waitForLogsToMatch(brokers(0), brokers(1))
+    waitForLogsToMatch(servers(0), servers(1))
 
     printSegments()
 
     //Shut down broker 100, so we read from broker 101 which should have corrupted
-    brokers(0).shutdown()
+    servers(0).shutdown()
 
     //Search to see if we have non-monotonic offsets in the log
     startConsumer()
@@ -246,7 +246,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     }
 
     //Are the files identical?
-    assertEquals(getLogFile(brokers(0), 0).length, getLogFile(brokers(1), 0).length, "Log files should match Broker0 vs Broker 1")
+    assertEquals(getLogFile(servers(0), 0).length, getLogFile(servers(1), 0).length, "Log files should match Broker0 vs Broker 1")
   }
 
   /**
@@ -258,10 +258,10 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     val tp = new TopicPartition(topic, 0)
 
     //Given 2 brokers
-    brokers = (100 to 101).map(createBrokerForId(_))
+    servers = (100 to 101).map(createBrokerForId(_))
 
     //A single partition topic with 2 replicas
-    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
+    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), servers)
     producer = createProducer
 
     //Kick off with a single record
@@ -271,8 +271,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     //Now invoke the fast leader change bug
     (0 until 5).foreach { i =>
       val leaderId = zkClient.getLeaderForPartition(new TopicPartition(topic, 0)).get
-      val leader = brokers.filter(_.config.brokerId == leaderId)(0)
-      val follower = brokers.filter(_.config.brokerId != leaderId)(0)
+      val leader = servers.filter(_.config.brokerId == leaderId)(0)
+      val follower = servers.filter(_.config.brokerId != leaderId)(0)
 
       producer.send(new ProducerRecord(topic, 0, null, msg)).get
       messagesWritten += 1
@@ -290,7 +290,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
       awaitISR(tp)
 
       //Ensure no data was lost
-      assertTrue(brokers.forall { broker => getLog(broker, 0).logEndOffset == messagesWritten })
+      assertTrue(servers.forall { broker => getLog(broker, 0).logEndOffset == messagesWritten })
     }
   }
 
@@ -298,13 +298,13 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   def logsShouldNotDivergeOnUncleanLeaderElections(): Unit = {
 
     // Given two brokers, unclean leader election is enabled
-    brokers = (100 to 101).map(createBrokerForId(_, enableUncleanLeaderElection = true))
+    servers = (100 to 101).map(createBrokerForId(_, enableUncleanLeaderElection = true))
 
     // A single partition topic with 2 replicas, min.isr = 1
-    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers,
+    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), servers,
       CoreUtils.propsWith((KafkaConfig.MinInSyncReplicasProp, "1")))
 
-    producer = TestUtils.createProducer(plaintextBootstrapServers(brokers), acks = 1)
+    producer = TestUtils.createProducer(plaintextBootstrapServers(servers), acks = 1)
 
     // Write one message while both brokers are up
     (0 until 1).foreach { i =>
@@ -312,46 +312,46 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
       producer.flush()}
 
     // Since we use producer with acks = 1, make sure that logs match for the first epoch
-    waitForLogsToMatch(brokers(0), brokers(1))
+    waitForLogsToMatch(servers(0), servers(1))
 
     // shutdown broker 100
-    brokers(0).shutdown()
+    servers(0).shutdown()
 
     //Write 1 message
     (0 until 1).foreach { i =>
       producer.send(new ProducerRecord(topic, 0, null, msg))
       producer.flush()}
 
-    brokers(1).shutdown()
-    brokers(0).startup()
+    servers(1).shutdown()
+    servers(0).startup()
 
     //Bounce the producer (this is required, probably because the broker port changes on restart?)
     producer.close()
-    producer = TestUtils.createProducer(plaintextBootstrapServers(brokers), acks = 1)
+    producer = TestUtils.createProducer(plaintextBootstrapServers(servers), acks = 1)
 
     //Write 3 messages
     (0 until 3).foreach { i =>
       producer.send(new ProducerRecord(topic, 0, null, msgBigger))
       producer.flush()}
 
-    brokers(0).shutdown()
-    brokers(1).startup()
+    servers(0).shutdown()
+    servers(1).startup()
 
     //Bounce the producer (this is required, probably because the broker port changes on restart?)
     producer.close()
-    producer = TestUtils.createProducer(plaintextBootstrapServers(brokers), acks = 1)
+    producer = TestUtils.createProducer(plaintextBootstrapServers(servers), acks = 1)
 
     //Write 1 message
     (0 until 1).foreach { i =>
       producer.send(new ProducerRecord(topic, 0, null, msg))
       producer.flush()}
 
-    brokers(1).shutdown()
-    brokers(0).startup()
+    servers(1).shutdown()
+    servers(0).startup()
 
     //Bounce the producer (this is required, probably because the broker port changes on restart?)
     producer.close()
-    producer = TestUtils.createProducer(plaintextBootstrapServers(brokers), acks = 1)
+    producer = TestUtils.createProducer(plaintextBootstrapServers(servers), acks = 1)
 
     //Write 2 messages
     (0 until 2).foreach { i =>
@@ -360,9 +360,9 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
     printSegments()
 
-    brokers(1).startup()
+    servers(1).startup()
 
-    waitForLogsToMatch(brokers(0), brokers(1))
+    waitForLogsToMatch(servers(0), servers(1))
     printSegments()
 
     def crcSeq(broker: KafkaServer, partition: Int = 0): Seq[Long] = {
@@ -370,7 +370,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
         .records.batches().asScala.toSeq
       batches.map(_.checksum)
     }
-    assertTrue(crcSeq(brokers(0)) == crcSeq(brokers(1)),
+    assertTrue(crcSeq(servers(0)) == crcSeq(servers(1)),
                s"Logs on Broker 100 and Broker 101 should match")
   }
 
@@ -386,16 +386,16 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
   private def printSegments(): Unit = {
     info("Broker0:")
-    DumpLogSegments.main(Seq("--files", getLogFile(brokers(0), 0).getCanonicalPath).toArray)
+    DumpLogSegments.main(Seq("--files", getLogFile(servers(0), 0).getCanonicalPath).toArray)
     info("Broker1:")
-    DumpLogSegments.main(Seq("--files", getLogFile(brokers(1), 0).getCanonicalPath).toArray)
+    DumpLogSegments.main(Seq("--files", getLogFile(servers(1), 0).getCanonicalPath).toArray)
   }
 
   private def startConsumer(): KafkaConsumer[Array[Byte], Array[Byte]] = {
     val consumerConfig = new Properties()
-    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, plaintextBootstrapServers(brokers))
-    consumerConfig.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, String.valueOf(getLogFile(brokers(1), 0).length() * 2))
-    consumerConfig.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, String.valueOf(getLogFile(brokers(1), 0).length() * 2))
+    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, plaintextBootstrapServers(servers))
+    consumerConfig.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, String.valueOf(getLogFile(servers(1), 0).length() * 2))
+    consumerConfig.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, String.valueOf(getLogFile(servers(1), 0).length() * 2))
     consumer = new KafkaConsumer(consumerConfig, new ByteArrayDeserializer, new ByteArrayDeserializer)
     consumer.assign(List(new TopicPartition(topic, 0)).asJava)
     consumer.seek(new TopicPartition(topic, 0), 0)
@@ -410,7 +410,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   }
 
   private def createBufferingProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-    TestUtils.createProducer(plaintextBootstrapServers(brokers),
+    TestUtils.createProducer(plaintextBootstrapServers(servers),
       acks = -1,
       lingerMs = 10000,
       batchSize = msg.length * 1000,
@@ -448,19 +448,19 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   }
 
   private def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-    TestUtils.createProducer(plaintextBootstrapServers(brokers), acks = -1)
+    TestUtils.createProducer(plaintextBootstrapServers(servers), acks = -1)
   }
 
   private def leader: KafkaServer = {
-    assertEquals(2, brokers.size)
+    assertEquals(2, servers.size)
     val leaderId = zkClient.getLeaderForPartition(new TopicPartition(topic, 0)).get
-    brokers.filter(_.config.brokerId == leaderId).head
+    servers.filter(_.config.brokerId == leaderId).head
   }
 
   private def follower: KafkaServer = {
-    assertEquals(2, brokers.size)
+    assertEquals(2, servers.size)
     val leader = zkClient.getLeaderForPartition(new TopicPartition(topic, 0)).get
-    brokers.filter(_.config.brokerId != leader).head
+    servers.filter(_.config.brokerId != leader).head
   }
 
   private def createBrokerForId(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaServer = {

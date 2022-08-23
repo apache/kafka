@@ -44,20 +44,13 @@ import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEX
 abstract class KafkaServerTestHarness extends QuorumTestHarness {
   var instanceConfigs: Seq[KafkaConfig] = null
 
-  private val _brokers = new mutable.ArrayBuffer[KafkaBroker]
-
-  /**
-   * Get the list of brokers, which could be either BrokerServer objects or KafkaServer objects.
-   */
-  def brokers: mutable.Buffer[KafkaBroker] = _brokers
-
   /**
    * Get the list of brokers, as instances of KafkaServer.
    * This method should only be used when dealing with brokers that use ZooKeeper.
    */
   def servers: mutable.Buffer[KafkaServer] = {
     checkIsZKTest()
-    _brokers.asInstanceOf[mutable.Buffer[KafkaServer]]
+    brokers.asInstanceOf[mutable.Buffer[KafkaServer]]
   }
 
   var alive: Array[Boolean] = null
@@ -98,7 +91,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   def boundPort(server: KafkaServer): Int = server.boundPort(listenerName)
 
   def bootstrapServers(listenerName: ListenerName = listenerName): String = {
-    TestUtils.bootstrapServers(_brokers, listenerName)
+    TestUtils.bootstrapServers(brokers, listenerName)
   }
 
   protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
@@ -127,7 +120,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
 
   @AfterEach
   override def tearDown(): Unit = {
-    TestUtils.shutdownServers(_brokers)
+    TestUtils.shutdownServers(brokers)
     super.tearDown()
   }
 
@@ -139,8 +132,8 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     if (configs.isEmpty)
       throw new KafkaException("Must supply at least one server config.")
 
-    TestUtils.shutdownServers(_brokers, deleteLogDirs = false)
-    _brokers.clear()
+    TestUtils.shutdownServers(brokers, deleteLogDirs = false)
+    brokers.clear()
     Arrays.fill(alive, false)
 
     createBrokers(startup)
@@ -252,15 +245,15 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
    * Return the id of the broker killed
    */
   def killRandomBroker(): Int = {
-    val index = TestUtils.random.nextInt(_brokers.length)
+    val index = TestUtils.random.nextInt(brokers.length)
     killBroker(index)
     index
   }
 
   def killBroker(index: Int): Unit = {
     if(alive(index)) {
-      _brokers(index).shutdown()
-      _brokers(index).awaitShutdown()
+      brokers(index).shutdown()
+      brokers(index).awaitShutdown()
       alive(index) = false
     }
   }
@@ -274,17 +267,17 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     }
     if (configs.isEmpty)
       throw new KafkaException("Must supply at least one server config.")
-    for(i <- _brokers.indices if !alive(i)) {
+    for(i <- brokers.indices if !alive(i)) {
       if (reconfigure) {
-        _brokers(i) = createBrokerFromConfig(configs(i))
+        brokers(i) = createBroker(configs(i), brokerTime(configs(i).brokerId), startup = false)
       }
-      _brokers(i).startup()
+      brokers(i).startup()
       alive(i) = true
     }
   }
 
   def waitForUserScramCredentialToAppearOnAllBrokers(clientPrincipal: String, mechanismName: String): Unit = {
-    _brokers.foreach { server =>
+    brokers.foreach { server =>
       val cache = server.credentialProvider.credentialCache.cache(mechanismName, classOf[ScramCredential])
       TestUtils.waitUntilTrue(() => cache.get(clientPrincipal) != null, s"SCRAM credentials not created for $clientPrincipal")
     }
@@ -340,30 +333,15 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
     alive = new Array[Boolean](potentiallyRegeneratedConfigs.length)
     Arrays.fill(alive, false)
     for (config <- potentiallyRegeneratedConfigs) {
-      val broker = createBrokerFromConfig(config)
-      _brokers += broker
+      createBroker(config, brokerTime(config.brokerId), startup)
       if (startup) {
-        broker.startup()
-        alive(_brokers.length - 1) = true
+        alive(brokers.length - 1) = true
       }
     }
   }
 
-  private def createBrokerFromConfig(config: KafkaConfig): KafkaBroker = {
-    if (isKRaftTest()) {
-      createBroker(config, brokerTime(config.brokerId), startup = false)
-    } else {
-      TestUtils.createServer(
-        config,
-        time = brokerTime(config.brokerId),
-        threadNamePrefix = None,
-        startup = false
-      )
-    }
-  }
-
   def aliveBrokers: Seq[KafkaBroker] = {
-    _brokers.filter(broker => alive(broker.config.brokerId)).toSeq
+    brokers.filter(broker => alive(broker.config.brokerId)).toSeq
   }
 
   def ensureConsistentKRaftMetadata(): Unit = {

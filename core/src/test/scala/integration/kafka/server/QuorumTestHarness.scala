@@ -37,7 +37,7 @@ import org.apache.kafka.controller.{BootstrapMetadata, QuorumControllerMetrics}
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
+import org.apache.kafka.server.fault.MockFaultHandler
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
@@ -45,11 +45,13 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, TestInfo}
 
 import scala.collection.mutable.ListBuffer
-import scala.collection.{Seq, immutable}
+import scala.collection.{Seq, immutable, mutable}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 trait QuorumImplementation {
+  val brokers = new mutable.ArrayBuffer[KafkaBroker]
+
   def createBroker(
     config: KafkaConfig,
     time: Time = Time.SYSTEM,
@@ -67,6 +69,7 @@ class ZooKeeperQuorumImplementation(
   val adminZkClient: AdminZkClient,
   val log: Logging
 ) extends QuorumImplementation {
+  var prevController: Option[KafkaBroker] = Option.empty
   override def createBroker(
     config: KafkaConfig,
     time: Time,
@@ -74,6 +77,7 @@ class ZooKeeperQuorumImplementation(
     threadNamePrefix: Option[String],
   ): KafkaBroker = {
     val server = new KafkaServer(config, time, threadNamePrefix, false)
+    brokers += server
     if (startup) server.startup()
     server
   }
@@ -86,12 +90,12 @@ class ZooKeeperQuorumImplementation(
 
 class KRaftQuorumImplementation(
   val raftManager: KafkaRaftManager[ApiMessageAndVersion],
-  val controllerServer: ControllerServer,
+  var controllerServer: ControllerServer,
   val metadataDir: File,
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
   val clusterId: String,
   val log: Logging,
-  val faultHandler: FaultHandler
+  val faultHandler: MockFaultHandler
 ) extends QuorumImplementation {
   override def createBroker(
     config: KafkaConfig,
@@ -112,6 +116,7 @@ class KRaftQuorumImplementation(
       fatalFaultHandler = faultHandler,
       metadataLoadingFaultHandler = faultHandler,
       metadataPublishingFaultHandler = faultHandler)
+    brokers += broker
     if (startup) broker.startup()
     broker
   }
@@ -119,6 +124,45 @@ class KRaftQuorumImplementation(
   override def shutdown(): Unit = {
     CoreUtils.swallow(raftManager.shutdown(), log)
     CoreUtils.swallow(controllerServer.shutdown(), log)
+  }
+
+  def restartController(deleteTopicEnabled: Boolean): Unit = {
+    val prevPort = controllerQuorumVotersFuture.get().get(1000).
+      asInstanceOf[InetAddressSpec].address.getPort
+    log.info("Restarting the KRaft-based controller")
+    controllerServer.shutdown()
+
+    val props = new Properties()
+    props.putAll(controllerServer.config.originals)
+    // explicitly set the port of any addresses, as we want to re-use the port that
+    // was derived on startup (through the use of port "0") in order to have
+    // existing clients re-connect gracefully
+    props.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:$prevPort")
+    props.setProperty(KafkaConfig.QuorumVotersProp, s"1000@localhost:$prevPort")
+    log.info(s"Setting KRaft-based controller port to $prevPort as part of restart")
+    if (!deleteTopicEnabled) {
+      props.setProperty(KafkaConfig.DeleteTopicEnableProp, "false")
+    }
+    val config = new KafkaConfig(props)
+
+    val newControllerServer = new ControllerServer(
+      metaProperties = controllerServer.metaProperties,
+      config = config,
+      raftManager = raftManager,
+      time = Time.SYSTEM,
+      metrics = new Metrics(),
+      controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), Time.SYSTEM),
+      threadNamePrefix = controllerServer.threadNamePrefix,
+      controllerQuorumVotersFuture = controllerQuorumVotersFuture,
+      configSchema = KafkaRaftServer.configSchema,
+      raftApiVersions = controllerServer.raftApiVersions,
+      bootstrapMetadata = controllerServer.bootstrapMetadata,
+      metadataFaultHandler = faultHandler,
+      fatalFaultHandler = faultHandler
+    )
+
+    controllerServer = newControllerServer
+    newControllerServer.startup()
   }
 }
 
@@ -146,6 +190,11 @@ abstract class QuorumTestHarness extends Logging {
 
   private var testInfo: TestInfo = null
   private var implementation: QuorumImplementation = null
+
+  /**
+   * Get the list of brokers, which could be either BrokerServer objects or KafkaServer objects.
+   */
+  def brokers: mutable.Buffer[KafkaBroker] = implementation.brokers
 
   def isKRaftTest(): Boolean = {
     TestInfoUtils.isKRaft(testInfo)
@@ -191,11 +240,41 @@ abstract class QuorumTestHarness extends Logging {
 
   def controllerServer: ControllerServer = asKRaft().controllerServer
 
+  def controllerServerPort: Int = asKRaft().controllerServer.controllerQuorumVotersFuture.
+    get().get(1000).asInstanceOf[InetAddressSpec].address.getPort
+
+  def restartControllerServer(deleteTopicEnabled: Boolean = true): Unit = {
+    if (!isKRaftTest()) {
+      throw new UnsupportedOperationException("Non-KRaft tests do not have a controller server")
+    }
+    asKRaft().restartController(deleteTopicEnabled)
+  }
+
   def controllerServers: Seq[ControllerServer] = {
     if (isKRaftTest()) {
       Seq(asKRaft().controllerServer)
     } else {
       Seq()
+    }
+  }
+
+  def stopController(): Unit = {
+    if (isKRaftTest()) {
+      asKRaft().controllerServer.shutdown()
+    } else {
+      val controllerId = zkClient.getControllerId.getOrElse(throw new RuntimeException("Controller does not exist"))
+      val controller = asZk().brokers.filter(s => s.config.brokerId == controllerId).head
+      controller.shutdown()
+      asZk().prevController = Option(controller)
+    }
+  }
+
+  def restartController(): Unit = {
+    if (isKRaftTest()) {
+      restartControllerServer()
+    } else {
+      asZk().prevController.getOrElse(throw new RuntimeException("No previous controller was stored. " +
+        "Make sure you are using QuorumTestHarness's stopController method first")).startup()
     }
   }
 

@@ -17,30 +17,40 @@
 
 package kafka.server
 
-import java.util.Collections
+import java.util.{Collections, Properties}
 
 import kafka.utils._
 import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+
+import scala.collection.Seq
 
 class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
 
   override def brokerCount: Int = 1
 
-  override def generateConfigs = {
-    val props = TestUtils.createBrokerConfigs(brokerCount, zkConnect,
-      enableControlledShutdown = false, enableDeleteTopic = false,
-      interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
-    props.foreach(brokerPropertyOverrides)
-    props.map(KafkaConfig.fromProps)
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
+    super.brokerPropertyOverrides(properties)
+    addNodeProperties(properties)
   }
 
-  @Test
-  def testDeleteRecordsRequest(): Unit = {
+  private def addNodeProperties(properties: Properties): Unit = {
+    properties.put(KafkaConfig.DeleteTopicEnableProp, "false")
+  }
+
+  override def kraftControllerConfigs(): Seq[Properties] = {
+    val controllerConfigs = super.kraftControllerConfigs()
+    controllerConfigs.foreach(addNodeProperties)
+    controllerConfigs
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteRecordsRequest(quorum: String): Unit = {
     val topic = "topic-1"
     val request = new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()
@@ -58,7 +68,7 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
   }
 
   private def sendDeleteTopicsRequest(request: DeleteTopicsRequest): DeleteTopicsResponse = {
-    connectAndReceive[DeleteTopicsResponse](request, destination = controllerSocketServer)
+    connectAndReceive[DeleteTopicsResponse](request, destination = adminSocketServer)
   }
 
 }
