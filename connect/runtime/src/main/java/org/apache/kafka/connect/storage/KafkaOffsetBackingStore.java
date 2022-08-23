@@ -172,7 +172,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
 
         this.exactlyOnce = config.exactlyOnceSourceEnabled();
 
-        String clusterId = ConnectUtils.lookupKafkaClusterId(config);
+        String clusterId = config.kafkaClusterId();
 
         Map<String, Object> originals = config.originals();
         Map<String, Object> producerProps = new HashMap<>(originals);

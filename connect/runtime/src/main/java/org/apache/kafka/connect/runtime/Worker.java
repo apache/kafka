@@ -153,7 +153,7 @@ public class Worker {
             ExecutorService executorService,
             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy
     ) {
-        this.kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
+        this.kafkaClusterId = config.kafkaClusterId();
         this.metrics = new ConnectMetrics(workerId, config, time, kafkaClusterId);
         this.executor = executorService;
         this.workerId = workerId;
@@ -168,7 +168,6 @@ public class Worker {
         this.internalValueConverter = plugins.newInternalConverter(false, JsonConverter.class.getName(), internalConverterConfig);
 
         this.globalOffsetBackingStore = globalOffsetBackingStore;
-        this.globalOffsetBackingStore.configure(config);
 
         this.workerConfigTransformer = initConfigTransformer();
 
