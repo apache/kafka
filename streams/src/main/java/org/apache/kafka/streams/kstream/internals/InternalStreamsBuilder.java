@@ -420,7 +420,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
      * @return
      */
     private boolean isSelfJoin(final GraphNode streamJoinNode) {
-        final Set<GraphNode> visited = new HashSet<>();
         for (final GraphNode parent: streamJoinNode.parentNodes()) {
             for (final GraphNode sibling : parent.children()) {
                 if (sibling instanceof ProcessorGraphNode) {
@@ -440,7 +439,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     private boolean singleSourceNode() {
         int count = 0;
-        for(final GraphNode child: root.children()) {
+        for (final GraphNode child: root.children()) {
             if (child instanceof StreamSourceNode) {
                 count++;
             }
