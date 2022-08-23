@@ -26,6 +26,7 @@ import java.util.function.Function;
 
 
 public interface EventQueue extends AutoCloseable {
+    interface DEvent extends Event {}
     interface Event {
         /**
          * Run the event.
