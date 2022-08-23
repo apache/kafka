@@ -64,10 +64,8 @@ public class BootstrapDirectory {
         String directoryPath,
         String ibp
     ) {
-        Objects.requireNonNull(directoryPath);
-        Objects.requireNonNull(ibp);
-        this.directoryPath = directoryPath;
-        this.ibp = ibp;
+        this.directoryPath = Objects.requireNonNull(directoryPath);
+        this.ibp = Objects.requireNonNull(ibp);
     }
 
     public BootstrapMetadata read() throws Exception {
@@ -89,21 +87,15 @@ public class BootstrapDirectory {
 
     BootstrapMetadata readFromConfiguration() {
         if (ibp.isEmpty()) {
-            return BootstrapMetadata.fromVersion(MetadataVersion.latest(),
-                "a default bootstrap which sets the latest metadata.version, since no " +
-                "bootstrap file or " + INTER_BROKER_PROTOCOL_CONFIG_KEY + " configuration " +
-                "key was found.");
+            return BootstrapMetadata.fromVersion(MetadataVersion.latest(), "the default bootstrap");
         }
         MetadataVersion version = MetadataVersion.fromVersionString(ibp);
         if (version.isLessThan(MINIMUM_BOOTSTRAP_VERSION)) {
             return BootstrapMetadata.fromVersion(MINIMUM_BOOTSTRAP_VERSION,
-                "a default bootstrap which sets the metadata.version to " + MINIMUM_BOOTSTRAP_VERSION +
-                ", since no bootstrap file was found and " + INTER_BROKER_PROTOCOL_CONFIG_KEY +
-                " was too old.");
+                "the minimum version bootstrap with metadata.version " + MINIMUM_BOOTSTRAP_VERSION);
         }
         return BootstrapMetadata.fromVersion(version,
-            "a default bootstrap setting the metadata.version to " + version + ", as specified " +
-            "by " + INTER_BROKER_PROTOCOL_CONFIG_KEY + ".");
+            "the configured bootstrap with metadata.version " + version);
     }
 
     BootstrapMetadata readFromBinaryFile(String binaryPath) throws Exception {

@@ -47,7 +47,7 @@ object StorageTool extends Logging {
         case "format" =>
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
-          val metadataVersion = getMetadataVersion(namespace)
+          val metadataVersion = getMetadataVersion(namespace, config.get.interBrokerProtocolVersionString)
           if (!metadataVersion.isKRaftSupported) {
             throw new TerseFailure(s"Must specify a valid KRaft metadata version of at least 3.0.")
           }
@@ -113,10 +113,18 @@ object StorageTool extends Logging {
 
   def configToSelfManagedMode(config: KafkaConfig): Boolean = config.processRoles.nonEmpty
 
-  def getMetadataVersion(namespace: Namespace): MetadataVersion = {
+  def getMetadataVersion(
+    namespace: Namespace,
+    defaultValueString: String
+  ): MetadataVersion = {
+    val defaultValue = if (defaultValueString == null) {
+      MetadataVersion.latest()
+    } else {
+      MetadataVersion.fromVersionString(defaultValueString)
+    }
     Option(namespace.getString("release_version"))
       .map(ver => MetadataVersion.fromVersionString(ver))
-      .getOrElse(MetadataVersion.latest())
+      .getOrElse(defaultValue)
   }
 
   def infoCommand(stream: PrintStream, selfManagedMode: Boolean, directories: Seq[String]): Int = {
