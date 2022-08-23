@@ -21,8 +21,9 @@
 package kafka.metrics
 
 import kafka.utils.{CoreUtils, VerifiableProperties}
-import java.util.concurrent.atomic.AtomicBoolean
 
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.Seq
 import scala.collection.mutable.ArrayBuffer
 
@@ -53,11 +54,13 @@ trait KafkaMetricsReporter {
 
 object KafkaMetricsReporter {
   val ReporterStarted: AtomicBoolean = new AtomicBoolean(false)
-  private var reporters: ArrayBuffer[KafkaMetricsReporter] = null
+  val reporterStartedLatch: CountDownLatch = new CountDownLatch(1)
+
+  private var reporters: ArrayBuffer[KafkaMetricsReporter] = _
 
   def startReporters(verifiableProps: VerifiableProperties): Seq[KafkaMetricsReporter] = {
-    ReporterStarted synchronized {
-      if (!ReporterStarted.get()) {
+    if (!ReporterStarted.getAndSet(true)) {
+      try {
         reporters = ArrayBuffer[KafkaMetricsReporter]()
         val metricsConfig = new KafkaMetricsConfig(verifiableProps)
         if (metricsConfig.reporters.nonEmpty) {
@@ -66,13 +69,18 @@ object KafkaMetricsReporter {
             reporter.init(verifiableProps)
             reporters += reporter
             reporter match {
+              // Note that we are silently ignoring if registration is not successful since we do not check the return
+              // type of `CoreUtils.registerMBean`
               case bean: KafkaMetricsReporterMBean => CoreUtils.registerMBean(reporter, bean.getMBeanName)
               case _ =>
             }
           })
-          ReporterStarted.set(true)
         }
+      } finally {
+        reporterStartedLatch.countDown()
       }
+    } else {
+      reporterStartedLatch.await()
     }
     reporters
   }
