@@ -135,7 +135,7 @@ public class QuorumInfo {
          * fetch from this replica.
          * @return The value of the lastFetchTime if known, empty otherwise
          */
-        public OptionalLong lastFetchTimeMs() {
+        public OptionalLong lastFetchTimestamp() {
             return lastFetchTimestamp;
         }
 

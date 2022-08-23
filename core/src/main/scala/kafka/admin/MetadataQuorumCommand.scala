@@ -127,7 +127,7 @@ object MetadataQuorumCommand {
         Array(info.replicaId,
               info.logEndOffset,
               leader.logEndOffset - info.logEndOffset,
-              info.lastFetchTimeMs.orElse(-1),
+              info.lastFetchTimestamp.orElse(-1),
               info.lastCaughtUpTimestamp.orElse(-1),
               status
         ).map(_.toString)
