@@ -46,11 +46,11 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMo
 public class TaskExecutor {
 
     private final Logger log;
-    private final Tasks tasks;
+    private final TasksRegistry tasks;
     private final TaskManager taskManager;
     private final TaskExecutionMetadata executionMetadata;
 
-    public TaskExecutor(final Tasks tasks,
+    public TaskExecutor(final TasksRegistry tasks,
                         final TaskManager taskManager,
                         final TaskExecutionMetadata executionMetadata,
                         final LogContext logContext) {
