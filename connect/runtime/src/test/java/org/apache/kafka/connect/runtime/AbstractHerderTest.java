@@ -482,11 +482,10 @@ public class AbstractHerderTest {
         final Class<? extends Connector> connectorClass = SampleSourceConnector.class;
         AbstractHerder herder = createConfigValidationHerder(connectorClass, noneConnectorClientConfigOverridePolicy);
 
-        // 2 transform aliases defined -> 2 plugin lookups
         when(plugins.transformations()).thenReturn(Collections.singleton(transformationPluginDesc()));
         when(plugins.predicates()).thenReturn(Collections.singleton(predicatePluginDesc()));
 
-        // Define 2 transformations. One has a class defined and so can get embedded configs, the other is missing
+        // Define 2 predicates. One has a class defined and so can get embedded configs, the other is missing
         // class info that should generate an error.
         Map<String, String> config = new HashMap<>();
         config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
@@ -497,8 +496,9 @@ public class AbstractHerderTest {
         config.put(ConnectorConfig.PREDICATES_CONFIG, "predX,predY");
         config.put(ConnectorConfig.PREDICATES_CONFIG + ".predX.type", SamplePredicate.class.getName());
         config.put("required", "value"); // connector required config
+
         ConfigInfos result = herder.validateConnectorConfig(config, false);
-        assertEquals(herder.connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)), ConnectorType.SOURCE);
+        assertEquals(ConnectorType.SOURCE, herder.connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
 
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
@@ -522,25 +522,17 @@ public class AbstractHerderTest {
                 .collect(Collectors.toMap(info -> info.configKey().name(), Function.identity()));
         assertEquals(28, infos.size());
         // Should get 2 type fields from the transforms, first adds its own config since it has a valid class
-        assertEquals("transforms.xformA.type",
-                infos.get("transforms.xformA.type").configValue().name());
+        assertEquals("transforms.xformA.type", infos.get("transforms.xformA.type").configValue().name());
         assertTrue(infos.get("transforms.xformA.type").configValue().errors().isEmpty());
-        assertEquals("transforms.xformA.subconfig",
-                infos.get("transforms.xformA.subconfig").configValue().name());
-        assertEquals("transforms.xformA.predicate",
-                infos.get("transforms.xformA.predicate").configValue().name());
+        assertEquals("transforms.xformA.subconfig", infos.get("transforms.xformA.subconfig").configValue().name());
+        assertEquals("transforms.xformA.predicate", infos.get("transforms.xformA.predicate").configValue().name());
         assertTrue(infos.get("transforms.xformA.predicate").configValue().errors().isEmpty());
-        assertEquals("transforms.xformA.negate",
-                infos.get("transforms.xformA.negate").configValue().name());
+        assertEquals("transforms.xformA.negate", infos.get("transforms.xformA.negate").configValue().name());
         assertTrue(infos.get("transforms.xformA.negate").configValue().errors().isEmpty());
-        assertEquals("predicates.predX.type",
-                infos.get("predicates.predX.type").configValue().name());
-        assertEquals("predicates.predX.predconfig",
-                infos.get("predicates.predX.predconfig").configValue().name());
-        assertEquals("predicates.predY.type",
-                infos.get("predicates.predY.type").configValue().name());
-        assertFalse(
-                infos.get("predicates.predY.type").configValue().errors().isEmpty());
+        assertEquals("predicates.predX.type", infos.get("predicates.predX.type").configValue().name());
+        assertEquals("predicates.predX.predconfig", infos.get("predicates.predX.predconfig").configValue().name());
+        assertEquals("predicates.predY.type", infos.get("predicates.predY.type").configValue().name());
+        assertFalse(infos.get("predicates.predY.type").configValue().errors().isEmpty());
 
         verify(plugins).transformations();
         verify(plugins, times(2)).predicates();
