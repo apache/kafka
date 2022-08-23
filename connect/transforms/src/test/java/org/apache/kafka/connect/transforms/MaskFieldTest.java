@@ -253,19 +253,16 @@ public class MaskFieldTest {
 
     @Test
     public void testNullListAndMapReplacementsAreMutable() {
-        final List<String> maskFields = new ArrayList<>(SCHEMA.fields().size());
-        SCHEMA.fields().forEach(f -> maskFields.add(f.name()));
+        final List<String> maskFields = Arrays.asList("array", "map");
         final Struct updatedValue = (Struct) transform(maskFields, null).apply(record(SCHEMA, VALUES_WITH_SCHEMA)).value();
         @SuppressWarnings("unchecked") List<Integer> actualList = (List<Integer>) updatedValue.get("array");
-        assertEquals(0, actualList.size());
+        assertEquals(Collections.emptyList(), actualList);
         actualList.add(0);
-        List<Integer> expectedList = Collections.singletonList(0);
-        assertEquals(expectedList, actualList);
+        assertEquals(Collections.singletonList(0), actualList);
 
         @SuppressWarnings("unchecked") Map<String, String> actualMap = (Map<String, String>) updatedValue.get("map");
-        assertEquals(0, actualMap.size());
+        assertEquals(Collections.emptyMap(), actualMap);
         actualMap.put("k", "v");
-        Map<String, String> expectedMap = Collections.singletonMap("k", "v");
-        assertEquals(expectedMap, actualMap);
+        assertEquals(Collections.singletonMap("k", "v"), actualMap);
     }
 }
