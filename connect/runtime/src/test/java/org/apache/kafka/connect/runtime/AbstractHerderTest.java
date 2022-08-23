@@ -139,7 +139,7 @@ public class AbstractHerderTest {
     private final String workerId = "workerId";
     private final String kafkaClusterId = "I4ZmrWqfT2e-upky_4fdPA";
     private final int generation = 5;
-    private final String connector = "connector";
+    private final String connectorName = "connector";
     private final ConnectorClientConfigOverridePolicy noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
 
     @Mock private Worker worker;
@@ -150,7 +150,7 @@ public class AbstractHerderTest {
     @Mock private Plugins plugins;
 
     private ClassLoader loader;
-    private Connector insConnector;
+    private Connector connector;
 
     @Before
     public void before() {
@@ -174,24 +174,24 @@ public class AbstractHerderTest {
 
     @Test
     public void testConnectorStatus() {
-        ConnectorTaskId taskId = new ConnectorTaskId(connector, 0);
+        ConnectorTaskId taskId = new ConnectorTaskId(connectorName, 0);
 
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
 
-        when(herder.rawConfig(connector)).thenReturn(null);
+        when(herder.rawConfig(connectorName)).thenReturn(null);
 
-        when(statusStore.get(connector))
-                .thenReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
+        when(statusStore.get(connectorName))
+                .thenReturn(new ConnectorStatus(connectorName, AbstractStatus.State.RUNNING, workerId, generation));
 
-        when(statusStore.getAll(connector))
+        when(statusStore.getAll(connectorName))
                 .thenReturn(Collections.singletonList(
                         new TaskStatus(taskId, AbstractStatus.State.UNASSIGNED, workerId, generation)));
 
-        ConnectorStateInfo state = herder.connectorStatus(connector);
+        ConnectorStateInfo state = herder.connectorStatus(connectorName);
 
-        assertEquals(connector, state.name());
+        assertEquals(connectorName, state.name());
         assertEquals("RUNNING", state.connector().state());
         assertEquals(1, state.tasks().size());
         assertEquals(workerId, state.connector().workerId());
@@ -204,7 +204,7 @@ public class AbstractHerderTest {
 
     @Test
     public void testTaskStatus() {
-        ConnectorTaskId taskId = new ConnectorTaskId("connector", 0);
+        ConnectorTaskId taskId = new ConnectorTaskId(connectorName, 0);
         String workerId = "workerId";
 
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
@@ -276,10 +276,10 @@ public class AbstractHerderTest {
 
     @Test
     public void testBuildRestartPlanForConnectorAndTasks() {
-        RestartRequest restartRequest = new RestartRequest(connector, false, true);
+        RestartRequest restartRequest = new RestartRequest(connectorName, false, true);
 
-        ConnectorTaskId taskId1 = new ConnectorTaskId(connector, 1);
-        ConnectorTaskId taskId2 = new ConnectorTaskId(connector, 2);
+        ConnectorTaskId taskId1 = new ConnectorTaskId(connectorName, 1);
+        ConnectorTaskId taskId2 = new ConnectorTaskId(connectorName, 2);
         List<TaskStatus> taskStatuses = new ArrayList<>();
         taskStatuses.add(new TaskStatus(taskId1, AbstractStatus.State.RUNNING, workerId, generation));
         taskStatuses.add(new TaskStatus(taskId2, AbstractStatus.State.FAILED, workerId, generation));
@@ -288,12 +288,12 @@ public class AbstractHerderTest {
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
 
-        when(herder.rawConfig(connector)).thenReturn(null);
+        when(herder.rawConfig(connectorName)).thenReturn(null);
 
-        when(statusStore.get(connector))
-                .thenReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
+        when(statusStore.get(connectorName))
+                .thenReturn(new ConnectorStatus(connectorName, AbstractStatus.State.RUNNING, workerId, generation));
 
-        when(statusStore.getAll(connector)).thenReturn(taskStatuses);
+        when(statusStore.getAll(connectorName)).thenReturn(taskStatuses);
 
         Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlan(restartRequest);
 
@@ -308,10 +308,10 @@ public class AbstractHerderTest {
 
     @Test
     public void testBuildRestartPlanForNoRestart() {
-        RestartRequest restartRequest = new RestartRequest(connector, true, false);
+        RestartRequest restartRequest = new RestartRequest(connectorName, true, false);
 
-        ConnectorTaskId taskId1 = new ConnectorTaskId(connector, 1);
-        ConnectorTaskId taskId2 = new ConnectorTaskId(connector, 2);
+        ConnectorTaskId taskId1 = new ConnectorTaskId(connectorName, 1);
+        ConnectorTaskId taskId2 = new ConnectorTaskId(connectorName, 2);
         List<TaskStatus> taskStatuses = new ArrayList<>();
         taskStatuses.add(new TaskStatus(taskId1, AbstractStatus.State.RUNNING, workerId, generation));
         taskStatuses.add(new TaskStatus(taskId2, AbstractStatus.State.FAILED, workerId, generation));
@@ -320,12 +320,12 @@ public class AbstractHerderTest {
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
 
-        when(herder.rawConfig(connector)).thenReturn(null);
+        when(herder.rawConfig(connectorName)).thenReturn(null);
 
-        when(statusStore.get(connector))
-                .thenReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
+        when(statusStore.get(connectorName))
+                .thenReturn(new ConnectorStatus(connectorName, AbstractStatus.State.RUNNING, workerId, generation));
 
-        when(statusStore.getAll(connector)).thenReturn(taskStatuses);
+        when(statusStore.getAll(connectorName)).thenReturn(taskStatuses);
 
         Optional<RestartPlan> mayBeRestartPlan = herder.buildRestartPlan(restartRequest);
 
@@ -341,8 +341,7 @@ public class AbstractHerderTest {
         AbstractHerder herder = createConfigValidationHerder(SampleSourceConnector.class, noneConnectorClientConfigOverridePolicy, 0);
 
         assertThrows(BadRequestException.class, () -> herder.validateConnectorConfig(Collections.emptyMap(), false));
-        verify(worker, times(2)).configTransformer();
-
+        verify(transformer).transform(Collections.emptyMap());
     }
 
     @Test
@@ -374,7 +373,7 @@ public class AbstractHerderTest {
         assertEquals(1, infos.get("required").configValue().errors().size());
 
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(insConnector);
+        verify(plugins).compareAndSwapLoaders(connector);
     }
 
     @Test
@@ -390,7 +389,7 @@ public class AbstractHerderTest {
         assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(insConnector);
+        verify(plugins).compareAndSwapLoaders(connector);
     }
 
     @Test
@@ -406,7 +405,7 @@ public class AbstractHerderTest {
         assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(insConnector);
+        verify(plugins).compareAndSwapLoaders(connector);
     }
 
     @Test
@@ -422,7 +421,7 @@ public class AbstractHerderTest {
         assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(insConnector);
+        verify(plugins).compareAndSwapLoaders(connector);
     }
 
     @Test
@@ -475,7 +474,7 @@ public class AbstractHerderTest {
 
         verify(plugins, times(2)).transformations();
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(insConnector);
+        verify(plugins).compareAndSwapLoaders(connector);
     }
 
     @Test
@@ -546,7 +545,7 @@ public class AbstractHerderTest {
         verify(plugins).transformations();
         verify(plugins, times(2)).predicates();
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(insConnector);
+        verify(plugins).compareAndSwapLoaders(connector);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -599,7 +598,7 @@ public class AbstractHerderTest {
             configInfo -> saslConfigKey.equals(configInfo.configValue().name()) && configInfo.configValue().errors().isEmpty()));
 
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(insConnector);
+        verify(plugins).compareAndSwapLoaders(connector);
     }
 
     @Test
@@ -650,7 +649,7 @@ public class AbstractHerderTest {
         assertEquals(rawOverriddenClientConfigs, validatedOverriddenClientConfigs);
 
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(insConnector);
+        verify(plugins).compareAndSwapLoaders(connector);
     }
 
     @Test
@@ -977,7 +976,7 @@ public class AbstractHerderTest {
             when(plugins.newConnector(connectorClass.getName())).thenReturn(connector);
             when(plugins.compareAndSwapLoaders(connector)).thenReturn(classLoader);
         }
-        insConnector = connector;
+        this.connector = connector;
         return herder;
     }
 
