@@ -48,19 +48,19 @@ public class DefaultTaskExecutor implements TaskExecutor {
         private void runOnce(final long nowMs) {
             KafkaFutureImpl<StreamTask> pauseFuture;
             if ((pauseFuture = pauseRequested.getAndSet(null)) != null) {
-                taskManager.unlockTask(currentTask, DefaultTaskExecutor.this);
+                taskManager.unassignTask(currentTask, DefaultTaskExecutor.this);
                 pauseFuture.complete(currentTask);
                 currentTask = null;
             }
 
             if (currentTask == null) {
-                currentTask = taskManager.lockNextTask(DefaultTaskExecutor.this);
+                currentTask = taskManager.assignNextTask(DefaultTaskExecutor.this);
             }
 
             if (currentTask.isProcessable(nowMs)) {
                 currentTask.process(nowMs);
             } else {
-                taskManager.unlockTask(currentTask, DefaultTaskExecutor.this);
+                taskManager.unassignTask(currentTask, DefaultTaskExecutor.this);
                 currentTask = null;
             }
         }
@@ -79,6 +79,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
         this.taskManager = taskManager;
     }
 
+    @Override
     public void start() {
         if (taskExecutorThread == null) {
             taskExecutorThread = new TaskExecutorThread("task-executor");
@@ -87,6 +88,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
         }
     }
 
+    @Override
     public void shutdown(final Duration timeout) {
         if (taskExecutorThread != null) {
             taskExecutorThread.isRunning.set(false);
@@ -101,11 +103,13 @@ public class DefaultTaskExecutor implements TaskExecutor {
         }
     }
 
+    @Override
     public ReadOnlyTask currentTask() {
         return new ReadOnlyTask(currentTask);
     }
 
-    public KafkaFuture<StreamTask> pause() {
+    @Override
+    public KafkaFuture<StreamTask> unassign() {
         final KafkaFutureImpl<StreamTask> future = new KafkaFutureImpl<>();
 
         if (taskExecutorThread != null) {
