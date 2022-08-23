@@ -49,7 +49,6 @@ public class LeaderState<T> implements EpochState {
     private final long epochStartOffset;
 
     private Optional<LogOffsetMetadata> highWatermark;
-    private long highWatermarkUpdateTimeMs;
     private final Map<Integer, ReplicaState> voterStates = new HashMap<>();
     private final Map<Integer, ReplicaState> observerStates = new HashMap<>();
     private final Set<Integer> grantingVoters = new HashSet<>();
@@ -72,7 +71,6 @@ public class LeaderState<T> implements EpochState {
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
         this.highWatermark = Optional.empty();
-        this.highWatermarkUpdateTimeMs = -1;
 
         for (int voterId : voters) {
             boolean hasAcknowledgedLeader = voterId == localId;
@@ -147,7 +145,7 @@ public class LeaderState<T> implements EpochState {
         return nonAcknowledging;
     }
 
-    private boolean maybeUpdateHighWatermark(long currentTimeMs) {
+    private boolean maybeUpdateHighWatermark() {
         // Find the largest offset which is replicated to a majority of replicas (the leader counts)
         List<ReplicaState> followersByDescendingFetchOffset = followersByDescendingFetchOffset();
 
@@ -173,7 +171,6 @@ public class LeaderState<T> implements EpochState {
                         || (highWatermarkUpdateOffset == currentHighWatermarkMetadata.offset &&
                             !highWatermarkUpdateMetadata.metadata.equals(currentHighWatermarkMetadata.metadata))) {
                         setHighWatermark(
-                            currentTimeMs,
                             highWatermarkUpdateOpt,
                             indexOfHw,
                             followersByDescendingFetchOffset
@@ -190,7 +187,6 @@ public class LeaderState<T> implements EpochState {
                     }
                 } else {
                     setHighWatermark(
-                        currentTimeMs,
                         highWatermarkUpdateOpt,
                         indexOfHw,
                         followersByDescendingFetchOffset
@@ -203,13 +199,11 @@ public class LeaderState<T> implements EpochState {
     }
 
     private void setHighWatermark(
-        long currentTimeMs,
         Optional<LogOffsetMetadata> newHighWatermark,
         int indexOfHw,
         List<ReplicaState> followersByDescendingFetchOffset
     ) {
         highWatermark = newHighWatermark;
-        highWatermarkUpdateTimeMs = currentTimeMs;
         log.trace(
             "High watermark set to {} based on indexOfHw {} and voters {}",
             highWatermark,
@@ -221,12 +215,10 @@ public class LeaderState<T> implements EpochState {
     /**
      * Update the local replica state.
      *
-     * @param currentTimeMs current time in milliseconds
      * @param endOffsetMetadata updated log end offset of local replica
      * @return true if the high watermark is updated as a result of this call
      */
     public boolean updateLocalState(
-        long currentTimeMs,
         LogOffsetMetadata endOffsetMetadata
     ) {
         ReplicaState state = getOrCreateReplicaState(localId);
@@ -237,7 +229,7 @@ public class LeaderState<T> implements EpochState {
             }
         });
         state.updateLeaderState(endOffsetMetadata);
-        return maybeUpdateHighWatermark(currentTimeMs);
+        return maybeUpdateHighWatermark();
     }
 
     /**
@@ -279,7 +271,7 @@ public class LeaderState<T> implements EpochState {
             leaderEndOffsetOpt
         );
 
-        return isVoter(state.nodeId) && maybeUpdateHighWatermark(currentTimeMs);
+        return isVoter(state.nodeId) && maybeUpdateHighWatermark();
     }
 
     public List<Integer> nonLeaderVotersByDescendingFetchOffset() {
@@ -328,7 +320,6 @@ public class LeaderState<T> implements EpochState {
             .setLeaderId(localId)
             .setLeaderEpoch(epoch)
             .setHighWatermark(highWatermark().map(offsetMetadata -> offsetMetadata.offset).orElse(-1L))
-            .setHighWatermarkUpdateTimeMs(highWatermarkUpdateTimeMs)
             .setCurrentVoters(describeReplicaStates(voterStates, currentTimeMs))
             .setObservers(describeReplicaStates(observerStates, currentTimeMs));
     }

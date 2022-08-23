@@ -608,7 +608,7 @@ public class KafkaAdminClientTest {
     }
 
     private static QuorumInfo defaultQuorumInfo(boolean emptyOptionals) {
-        return new QuorumInfo(1, 1, 1L, OptionalLong.empty(),
+        return new QuorumInfo(1, 1, 1L,
                 singletonList(new QuorumInfo.ReplicaState(1, 100,
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))),

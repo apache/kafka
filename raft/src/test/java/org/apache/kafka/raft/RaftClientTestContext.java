@@ -454,7 +454,6 @@ public final class RaftClientTestContext {
         int leaderId,
         int leaderEpoch,
         long highWatermark,
-        long highWatermarkUpdateTimeMs,
         List<ReplicaState> voterStates,
         List<ReplicaState> observerStates
     ) {
@@ -465,7 +464,6 @@ public final class RaftClientTestContext {
             .setLeaderId(leaderId)
             .setLeaderEpoch(leaderEpoch)
             .setHighWatermark(highWatermark)
-            .setHighWatermarkUpdateTimeMs(highWatermarkUpdateTimeMs)
             .setCurrentVoters(voterStates)
             .setObservers(observerStates);
         DescribeQuorumResponseData expectedResponse = DescribeQuorumResponse.singletonResponse(
