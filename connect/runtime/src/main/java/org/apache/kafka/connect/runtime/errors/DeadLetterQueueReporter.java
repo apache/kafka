@@ -27,6 +27,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
+import org.apache.kafka.connect.util.Closeables;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,8 +95,13 @@ public class DeadLetterQueueReporter implements ErrorReporter {
             }
         }
 
-        KafkaProducer<byte[], byte[]> dlqProducer = new KafkaProducer<>(producerProps);
-        return new DeadLetterQueueReporter(dlqProducer, sinkConfig, id, errorHandlingMetrics);
+        try (Closeables closeables = new Closeables()) {
+            KafkaProducer<byte[], byte[]> dlqProducer = new KafkaProducer<>(producerProps);
+            closeables.register(dlqProducer, "dead letter queue producer for task " + id);
+            DeadLetterQueueReporter result = new DeadLetterQueueReporter(dlqProducer, sinkConfig, id, errorHandlingMetrics);
+            closeables.clear();
+            return result;
+        }
     }
 
     /**

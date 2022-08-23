@@ -30,6 +30,7 @@ import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
+import org.apache.kafka.connect.util.Closeables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -273,13 +274,14 @@ public class ConnectorConfig extends AbstractConfig {
     public <R extends ConnectRecord<R>> List<Transformation<R>> transformations() {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
 
-        final List<Transformation<R>> transformations = new ArrayList<>(transformAliases.size());
-        for (String alias : transformAliases) {
-            final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
+        try (Closeables closeables = new Closeables()) {
+            final List<Transformation<R>> transformations = new ArrayList<>(transformAliases.size());
+            for (String alias : transformAliases) {
+                final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
 
-            try {
                 @SuppressWarnings("unchecked")
                 final Transformation<R> transformation = Utils.newInstance(getClass(prefix + "type"), Transformation.class);
+                closeables.register(transformation, "transformation " + alias + " for connector " + getString(NAME_CONFIG));
                 Map<String, Object> configs = originalsWithPrefix(prefix);
                 Object predicateAlias = configs.remove(PredicatedTransformation.PREDICATE_CONFIG);
                 Object negate = configs.remove(PredicatedTransformation.NEGATE_CONFIG);
@@ -288,17 +290,16 @@ public class ConnectorConfig extends AbstractConfig {
                     String predicatePrefix = PREDICATES_PREFIX + predicateAlias + ".";
                     @SuppressWarnings("unchecked")
                     Predicate<R> predicate = Utils.newInstance(getClass(predicatePrefix + "type"), Predicate.class);
+                    closeables.register(predicate, "predicate " + predicateAlias + " for connector " + getString(NAME_CONFIG));
                     predicate.configure(originalsWithPrefix(predicatePrefix));
                     transformations.add(new PredicatedTransformation<>(predicate, negate == null ? false : Boolean.parseBoolean(negate.toString()), transformation));
                 } else {
                     transformations.add(transformation);
                 }
-            } catch (Exception e) {
-                throw new ConnectException(e);
             }
+            closeables.clear();
+            return transformations;
         }
-
-        return transformations;
     }
 
     /**

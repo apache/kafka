@@ -300,7 +300,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     }
 
     @Override
-    protected void close() {
+    protected void doClose() {
         if (started) {
             Utils.closeQuietly(task::stop, "source task");
         }

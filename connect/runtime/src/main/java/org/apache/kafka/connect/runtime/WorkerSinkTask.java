@@ -164,7 +164,7 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     @Override
-    protected void close() {
+    protected void doClose() {
         // FIXME Kafka needs to add a timeout parameter here for us to properly obey the timeout
         // passed in
         try {

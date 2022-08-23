@@ -359,7 +359,7 @@ public class WorkerSinkTaskTest {
         sinkTaskContext.getValue().requestCommit(); // Force an offset commit
         workerTask.iteration();
         workerTask.stop();
-        workerTask.close();
+        workerTask.doClose();
 
         PowerMock.verifyAll();
     }

@@ -43,7 +43,7 @@ import java.util.function.Supplier;
  * An {@link OffsetBackingStore} with support for reading from and writing to a worker-global
  * offset backing store and/or a connector-specific offset backing store.
  */
-public class ConnectorOffsetBackingStore implements OffsetBackingStore {
+public class ConnectorOffsetBackingStore implements OffsetBackingStore, AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(ConnectorOffsetBackingStore.class);
 
@@ -185,6 +185,14 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         // Worker offset store should not be stopped as it may be used for multiple connectors
         connectorStore.ifPresent(OffsetBackingStore::stop);
         connectorStoreAdmin.ifPresent(TopicAdmin::close);
+    }
+
+    /**
+     * Synonym for {@link #stop()}, for use with try-with-resources blocks.
+     */
+    @Override
+    public void close() {
+        stop();
     }
 
     /**
