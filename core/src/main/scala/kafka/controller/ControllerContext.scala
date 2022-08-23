@@ -244,6 +244,11 @@ class ControllerContext {
 
   def getLivePreferredControllerIds : Set[Int] = livePreferredControllerIds
 
+  /**
+   * @return brokers that don't accept new replicas, including maintenance brokers and preferred controller brokers
+   */
+  def partitionUnassignableBrokerIds(maintenanceBrokers: Seq[Int]): Seq[Int] = maintenanceBrokers ++ getLivePreferredControllerIds
+
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
     partitionAssignments.flatMap {
       case (topic, topicReplicaAssignment) => topicReplicaAssignment.filter {

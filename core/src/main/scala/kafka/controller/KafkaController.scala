@@ -1226,7 +1226,7 @@ class KafkaController(val config: KafkaConfig,
   // maintenance brokers that do not take new partitions
   private def rearrangePartitionReplicaAssignmentForNewTopics(topics: Set[String]) {
     try {
-      val noNewPartitionBrokerIds = partitionUnassignableBrokerIds
+      val noNewPartitionBrokerIds = controllerContext.partitionUnassignableBrokerIds(config.getMaintenanceBrokerList)
       if (noNewPartitionBrokerIds.nonEmpty) {
         val newTopics = zkClient.getPartitionNodeNonExistsTopics(topics.toSet)
         val newTopicsToBeArranged = zkClient.getPartitionAssignmentForTopics(newTopics).filter {
@@ -2898,7 +2898,7 @@ class KafkaController(val config: KafkaConfig,
 
     val replicationFactor = config.defaultReplicationFactor
     val brokers = controllerContext.liveOrShuttingDownBrokers.map { sb => kafka.admin.BrokerMetadata(sb.id, sb.rack) }.toSeq
-    val noNewPartitionBrokerIds = partitionUnassignableBrokerIds.toSet
+    val noNewPartitionBrokerIds = controllerContext.partitionUnassignableBrokerIds(config.getMaintenanceBrokerList).toSet
 
     topicIdReplicaAssignments.foreach{ topicsIdReplicaAssignment =>
       val topic = topicsIdReplicaAssignment.topic
