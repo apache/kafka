@@ -134,36 +134,36 @@ public class LeaderStateTest {
         // Node 1 falls behind
         assertFalse(state.updateLocalState(new LogOffsetMetadata(11L)));
         assertFalse(state.updateReplicaState(node1, ++fetchTime, new LogOffsetMetadata(10L)));
-        assertEquals(currentTime, state.describeVoterState(localId, currentTime).lastCaughtUpTimestamp());
-        assertEquals(caughtUpTime, state.describeVoterState(node1, currentTime).lastCaughtUpTimestamp());
+        assertEquals(currentTime, describeVoterState(state, localId, currentTime).lastCaughtUpTimestamp());
+        assertEquals(caughtUpTime, describeVoterState(state, node1, currentTime).lastCaughtUpTimestamp());
 
         // Node 1 catches up to leader
         assertTrue(state.updateReplicaState(node1, ++fetchTime, new LogOffsetMetadata(11L)));
         caughtUpTime = fetchTime;
-        assertEquals(currentTime, state.describeVoterState(localId, currentTime).lastCaughtUpTimestamp());
-        assertEquals(caughtUpTime, state.describeVoterState(node1, currentTime).lastCaughtUpTimestamp());
+        assertEquals(currentTime, describeVoterState(state, localId, currentTime).lastCaughtUpTimestamp());
+        assertEquals(caughtUpTime, describeVoterState(state, node1, currentTime).lastCaughtUpTimestamp());
 
         // Node 1 falls behind
         assertFalse(state.updateLocalState(new LogOffsetMetadata(100L)));
         assertTrue(state.updateReplicaState(node1, ++fetchTime, new LogOffsetMetadata(50L)));
-        assertEquals(currentTime, state.describeVoterState(localId, currentTime).lastCaughtUpTimestamp());
-        assertEquals(caughtUpTime, state.describeVoterState(node1, currentTime).lastCaughtUpTimestamp());
+        assertEquals(currentTime, describeVoterState(state, localId, currentTime).lastCaughtUpTimestamp());
+        assertEquals(caughtUpTime, describeVoterState(state, node1, currentTime).lastCaughtUpTimestamp());
 
         // Node 1 catches up to the last fetch offset
         int prevFetchTime = fetchTime;
         assertFalse(state.updateLocalState(new LogOffsetMetadata(200L)));
         assertTrue(state.updateReplicaState(node1, ++fetchTime, new LogOffsetMetadata(100L)));
         caughtUpTime = prevFetchTime;
-        assertEquals(currentTime, state.describeVoterState(localId, currentTime).lastCaughtUpTimestamp());
-        assertEquals(caughtUpTime, state.describeVoterState(node1, currentTime).lastCaughtUpTimestamp());
+        assertEquals(currentTime, describeVoterState(state, localId, currentTime).lastCaughtUpTimestamp());
+        assertEquals(caughtUpTime, describeVoterState(state, node1, currentTime).lastCaughtUpTimestamp());
 
         // Node2 has never caught up to leader
-        assertEquals(-1L, state.describeVoterState(node2, currentTime).lastCaughtUpTimestamp());
+        assertEquals(-1L, describeVoterState(state, node2, currentTime).lastCaughtUpTimestamp());
         assertFalse(state.updateLocalState(new LogOffsetMetadata(300L)));
         assertTrue(state.updateReplicaState(node2, ++fetchTime, new LogOffsetMetadata(200L)));
-        assertEquals(-1L, state.describeVoterState(node2, currentTime).lastCaughtUpTimestamp());
+        assertEquals(-1L, describeVoterState(state, node2, currentTime).lastCaughtUpTimestamp());
         assertTrue(state.updateReplicaState(node2, ++fetchTime, new LogOffsetMetadata(250L)));
-        assertEquals(-1L, state.describeVoterState(node2, currentTime).lastCaughtUpTimestamp());
+        assertEquals(-1L, describeVoterState(state, node2, currentTime).lastCaughtUpTimestamp());
     }
 
     @Test
@@ -179,34 +179,34 @@ public class LeaderStateTest {
         // Node 1 falls behind
         assertTrue(state.updateLocalState(new LogOffsetMetadata(11L)));
         assertFalse(state.updateReplicaState(node1, ++fetchTime, new LogOffsetMetadata(10L)));
-        assertEquals(currentTime, state.describeVoterState(localId, currentTime).lastCaughtUpTimestamp());
-        assertEquals(caughtUpTime, state.describeObserverState(node1, currentTime).lastCaughtUpTimestamp());
+        assertEquals(currentTime, describeVoterState(state, localId, currentTime).lastCaughtUpTimestamp());
+        assertEquals(caughtUpTime, describeObserverState(state, node1, currentTime).lastCaughtUpTimestamp());
 
         // Node 1 catches up to leader
         assertFalse(state.updateReplicaState(node1, ++fetchTime, new LogOffsetMetadata(11L)));
         caughtUpTime = fetchTime;
-        assertEquals(currentTime, state.describeVoterState(localId, currentTime).lastCaughtUpTimestamp());
-        assertEquals(caughtUpTime, state.describeObserverState(node1, currentTime).lastCaughtUpTimestamp());
+        assertEquals(currentTime, describeVoterState(state, localId, currentTime).lastCaughtUpTimestamp());
+        assertEquals(caughtUpTime, describeObserverState(state, node1, currentTime).lastCaughtUpTimestamp());
 
         // Node 1 falls behind
         assertTrue(state.updateLocalState(new LogOffsetMetadata(100L)));
         assertFalse(state.updateReplicaState(node1, ++fetchTime, new LogOffsetMetadata(50L)));
-        assertEquals(currentTime, state.describeVoterState(localId, currentTime).lastCaughtUpTimestamp());
-        assertEquals(caughtUpTime, state.describeObserverState(node1, currentTime).lastCaughtUpTimestamp());
+        assertEquals(currentTime, describeVoterState(state, localId, currentTime).lastCaughtUpTimestamp());
+        assertEquals(caughtUpTime, describeObserverState(state, node1, currentTime).lastCaughtUpTimestamp());
 
         // Node 1 catches up to the last fetch offset
         int prevFetchTime = fetchTime;
         assertTrue(state.updateLocalState(new LogOffsetMetadata(200L)));
         assertFalse(state.updateReplicaState(node1, ++fetchTime, new LogOffsetMetadata(102L)));
         caughtUpTime = prevFetchTime;
-        assertEquals(currentTime, state.describeVoterState(localId, currentTime).lastCaughtUpTimestamp());
-        assertEquals(caughtUpTime, state.describeObserverState(node1, currentTime).lastCaughtUpTimestamp());
+        assertEquals(currentTime, describeVoterState(state, localId, currentTime).lastCaughtUpTimestamp());
+        assertEquals(caughtUpTime, describeObserverState(state, node1, currentTime).lastCaughtUpTimestamp());
 
         // Node 1 catches up to leader
         assertFalse(state.updateReplicaState(node1, ++fetchTime, new LogOffsetMetadata(200L)));
         caughtUpTime = fetchTime;
-        assertEquals(currentTime, state.describeVoterState(localId, currentTime).lastCaughtUpTimestamp());
-        assertEquals(caughtUpTime, state.describeObserverState(node1, currentTime).lastCaughtUpTimestamp());
+        assertEquals(currentTime, describeVoterState(state, localId, currentTime).lastCaughtUpTimestamp());
+        assertEquals(caughtUpTime, describeObserverState(state, node1, currentTime).lastCaughtUpTimestamp());
     }
 
     @Test
@@ -284,7 +284,7 @@ public class LeaderStateTest {
         // Follower crashes and disk is lost. It fetches an earlier offset to rebuild state.
         // The leader will report an error in the logs, but will not let the high watermark rewind
         assertFalse(state.updateReplicaState(node1, time.milliseconds(), new LogOffsetMetadata(5L)));
-        assertEquals(5L, state.describeVoterState(node1, time.milliseconds()).logEndOffset());
+        assertEquals(5L, describeVoterState(state, node1, time.milliseconds()).logEndOffset());
         assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
     }
 
@@ -513,6 +513,36 @@ public class LeaderStateTest {
         public int hashCode() {
             return Objects.hash(value);
         }
+    }
+
+    private DescribeQuorumResponseData.ReplicaState describeVoterState(
+        LeaderState state,
+        int voterId,
+        long currentTimeMs
+    ) {
+        DescribeQuorumResponseData.PartitionData partitionData = state.describeQuorum(currentTimeMs);
+        return findReplicaOrFail(voterId, partitionData.currentVoters());
+    }
+
+    private DescribeQuorumResponseData.ReplicaState describeObserverState(
+        LeaderState state,
+        int observerId,
+        long currentTimeMs
+    ) {
+        DescribeQuorumResponseData.PartitionData partitionData = state.describeQuorum(currentTimeMs);
+        return findReplicaOrFail(observerId, partitionData.observers());
+    }
+
+    private DescribeQuorumResponseData.ReplicaState findReplicaOrFail(
+        int replicaId,
+        List<DescribeQuorumResponseData.ReplicaState> replicas
+    ) {
+        return replicas.stream()
+            .filter(observer -> observer.replicaId() == replicaId)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError(
+                "Failed to find expected replica state for replica " + replicaId
+            ));
     }
 
 }

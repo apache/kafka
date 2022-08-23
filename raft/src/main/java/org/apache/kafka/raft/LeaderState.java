@@ -170,8 +170,9 @@ public class LeaderState<T> implements EpochState {
                     if (highWatermarkUpdateOffset > currentHighWatermarkMetadata.offset
                         || (highWatermarkUpdateOffset == currentHighWatermarkMetadata.offset &&
                             !highWatermarkUpdateMetadata.metadata.equals(currentHighWatermarkMetadata.metadata))) {
-                        setHighWatermark(
-                            highWatermarkUpdateOpt,
+                        highWatermark = highWatermarkUpdateOpt;
+                        logHighWatermarkUpdate(
+                            highWatermarkUpdateMetadata,
                             indexOfHw,
                             followersByDescendingFetchOffset
                         );
@@ -186,8 +187,9 @@ public class LeaderState<T> implements EpochState {
                         return false;
                     }
                 } else {
-                    setHighWatermark(
-                        highWatermarkUpdateOpt,
+                    highWatermark = highWatermarkUpdateOpt;
+                    logHighWatermarkUpdate(
+                        highWatermarkUpdateMetadata,
                         indexOfHw,
                         followersByDescendingFetchOffset
                     );
@@ -198,15 +200,14 @@ public class LeaderState<T> implements EpochState {
         return false;
     }
 
-    private void setHighWatermark(
-        Optional<LogOffsetMetadata> newHighWatermark,
+    private void logHighWatermarkUpdate(
+        LogOffsetMetadata newHighWatermark,
         int indexOfHw,
         List<ReplicaState> followersByDescendingFetchOffset
     ) {
-        highWatermark = newHighWatermark;
         log.trace(
             "High watermark set to {} based on indexOfHw {} and voters {}",
-            highWatermark,
+            newHighWatermark,
             indexOfHw,
             followersByDescendingFetchOffset
         );
@@ -324,24 +325,6 @@ public class LeaderState<T> implements EpochState {
             .setObservers(describeReplicaStates(observerStates, currentTimeMs));
     }
 
-    // Visible for testing
-    DescribeQuorumResponseData.ReplicaState describeVoterState(
-        int voterId,
-        long currentTimeMs
-    ) {
-        ReplicaState replicaState = voterStates.get(voterId);
-        return describeReplicaState(replicaState, currentTimeMs);
-    }
-
-    // Visible for testing
-    DescribeQuorumResponseData.ReplicaState describeObserverState(
-        int observerId,
-        long currentTimeMs
-    ) {
-        ReplicaState replicaState = observerStates.get(observerId);
-        return describeReplicaState(replicaState, currentTimeMs);
-    }
-
     private List<DescribeQuorumResponseData.ReplicaState> describeReplicaStates(
         Map<Integer, ReplicaState> state,
         long currentTimeMs
@@ -412,6 +395,9 @@ public class LeaderState<T> implements EpochState {
             LogOffsetMetadata fetchOffsetMetadata,
             Optional<LogOffsetMetadata> leaderEndOffsetOpt
         ) {
+            // Update the `lastCaughtUpTimestamp` before we update the `lastFetchTimestamp`.
+            // This allows us to use the previous value for `lastFetchTimestamp` if the
+            // follower was able to catch up to `lastFetchLeaderLogEndOffset` on this fetch.
             leaderEndOffsetOpt.ifPresent(leaderEndOffset -> {
                 if (fetchOffsetMetadata.offset >= leaderEndOffset.offset) {
                     lastCaughtUpTimestamp = Math.max(lastCaughtUpTimestamp, currentTimeMs);
