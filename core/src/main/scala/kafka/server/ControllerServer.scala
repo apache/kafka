@@ -79,7 +79,7 @@ class ControllerServer(
   var status: ProcessStatus = SHUTDOWN
 
   var linuxIoMetricsCollector: LinuxIoMetricsCollector = _
-  @volatile var authorizer: Option[Authorizer] = _
+  @volatile var authorizer: Option[Authorizer] = None
   var tokenCache: DelegationTokenCache = _
   var credentialProvider: CredentialProvider = _
   var socketServer: SocketServer = _
