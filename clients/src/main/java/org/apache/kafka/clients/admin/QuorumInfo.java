@@ -95,8 +95,8 @@ public class QuorumInfo {
     public static class ReplicaState {
         private final int replicaId;
         private final long logEndOffset;
-        private final OptionalLong lastFetchTimeMs;
-        private final OptionalLong lastCaughtUpTimeMs;
+        private final OptionalLong lastFetchTimestamp;
+        private final OptionalLong lastCaughtUpTimestamp;
 
         ReplicaState() {
             this(0, 0, OptionalLong.empty(), OptionalLong.empty());
@@ -105,13 +105,13 @@ public class QuorumInfo {
         ReplicaState(
             int replicaId,
             long logEndOffset,
-            OptionalLong lastFetchTimeMs,
-            OptionalLong lastCaughtUpTimeMs
+            OptionalLong lastFetchTimestamp,
+            OptionalLong lastCaughtUpTimestamp
         ) {
             this.replicaId = replicaId;
             this.logEndOffset = logEndOffset;
-            this.lastFetchTimeMs = lastFetchTimeMs;
-            this.lastCaughtUpTimeMs = lastCaughtUpTimeMs;
+            this.lastFetchTimestamp = lastFetchTimestamp;
+            this.lastCaughtUpTimestamp = lastCaughtUpTimestamp;
         }
 
         /**
@@ -135,7 +135,7 @@ public class QuorumInfo {
          * @return The value of the lastFetchTime if known, empty otherwise
          */
         public OptionalLong lastFetchTimeMs() {
-            return lastFetchTimeMs;
+            return lastFetchTimestamp;
         }
 
         /**
@@ -143,7 +143,7 @@ public class QuorumInfo {
          * @return The value of the lastCaughtUpTime if known, empty otherwise
          */
         public OptionalLong lastCaughtUpTimeMs() {
-            return lastCaughtUpTimeMs;
+            return lastCaughtUpTimestamp;
         }
 
         @Override
@@ -153,13 +153,13 @@ public class QuorumInfo {
             ReplicaState that = (ReplicaState) o;
             return replicaId == that.replicaId
                 && logEndOffset == that.logEndOffset
-                && lastFetchTimeMs.equals(that.lastFetchTimeMs)
-                && lastCaughtUpTimeMs.equals(that.lastCaughtUpTimeMs);
+                && lastFetchTimestamp.equals(that.lastFetchTimestamp)
+                && lastCaughtUpTimestamp.equals(that.lastCaughtUpTimestamp);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(replicaId, logEndOffset, lastFetchTimeMs, lastCaughtUpTimeMs);
+            return Objects.hash(replicaId, logEndOffset, lastFetchTimestamp, lastCaughtUpTimestamp);
         }
 
         @Override
@@ -167,8 +167,8 @@ public class QuorumInfo {
             return "ReplicaState(" +
                 "replicaId=" + replicaId +
                 ", logEndOffset=" + logEndOffset +
-                ", lastFetchTimeMs=" + lastFetchTimeMs +
-                ", lastCaughtUpTimeMs=" + lastCaughtUpTimeMs +
+                ", lastFetchTimestamp=" + lastFetchTimestamp +
+                ", lastCaughtUpTimestamp=" + lastCaughtUpTimestamp +
                 ')';
         }
     }
