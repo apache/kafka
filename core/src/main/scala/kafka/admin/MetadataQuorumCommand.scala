@@ -128,7 +128,7 @@ object MetadataQuorumCommand {
               info.logEndOffset,
               leader.logEndOffset - info.logEndOffset,
               info.lastFetchTimeMs.orElse(-1),
-              info.lastCaughtUpTimeMs.orElse(-1),
+              info.lastCaughtUpTimestamp.orElse(-1),
               status
         ).map(_.toString)
       }
@@ -152,8 +152,8 @@ object MetadataQuorumCommand {
     val maxFollowerLagTimeMs =
       if (leader == maxLagFollower) {
         0
-      } else if (leader.lastCaughtUpTimeMs.isPresent && maxLagFollower.lastCaughtUpTimeMs.isPresent) {
-        leader.lastCaughtUpTimeMs.getAsLong - maxLagFollower.lastCaughtUpTimeMs.getAsLong
+      } else if (leader.lastCaughtUpTimestamp.isPresent && maxLagFollower.lastCaughtUpTimestamp.isPresent) {
+        leader.lastCaughtUpTimestamp.getAsLong - maxLagFollower.lastCaughtUpTimestamp.getAsLong
       } else {
         -1
       }

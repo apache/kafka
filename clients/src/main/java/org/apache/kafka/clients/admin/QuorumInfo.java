@@ -131,7 +131,8 @@ public class QuorumInfo {
         }
 
         /**
-         * Return the lastFetchTime in milliseconds for this replica.
+         * Return the last millisecond timestamp that the leader received a
+         * fetch from this replica.
          * @return The value of the lastFetchTime if known, empty otherwise
          */
         public OptionalLong lastFetchTimeMs() {
@@ -139,10 +140,11 @@ public class QuorumInfo {
         }
 
         /**
-         * Return the lastCaughtUpTime in milliseconds for this replica.
+         * Return the last millisecond timestamp at which this replica was known to be
+         * caught up with the leader.
          * @return The value of the lastCaughtUpTime if known, empty otherwise
          */
-        public OptionalLong lastCaughtUpTimeMs() {
+        public OptionalLong lastCaughtUpTimestamp() {
             return lastCaughtUpTimestamp;
         }
 
