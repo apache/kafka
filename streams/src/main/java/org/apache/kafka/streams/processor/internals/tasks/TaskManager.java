@@ -9,46 +9,54 @@ import java.util.Set;
 public interface TaskManager {
 
     /**
-     * Lock the next processible active task for the requested executor. Once the task is locked by
-     * the requested task executor, it should not be locked to any other executors until it was
+     * Get the next processible active task for the requested executor. Once the task is assigned to
+     * the requested task executor, it should not be assigned to any other executors until it was
      * returned to the task manager.
      *
      * @param executor the requesting {@link TaskExecutor}
      */
-    StreamTask lockNextTask(final TaskExecutor executor);
+    StreamTask assignNextTask(final TaskExecutor executor);
 
     /**
-     * Unlock the stream task so that it can be processed by other executors later
+     * Unassign the stream task so that it can be assigned to other executors later
      * or be removed from the task manager. The requested executor must have locked
      * the task already, otherwise an exception would be thrown.
      *
      * @param executor the requesting {@link TaskExecutor}
      */
-    void unlockTask(final StreamTask task, final TaskExecutor executor);
+    void unassignTask(final StreamTask task, final TaskExecutor executor);
 
     /**
-     * Lock a set of active tasks from the task manager.
+     * Lock a set of active tasks from the task manager so that they will not be assigned to
+     * any {@link TaskExecutor}s anymore until they are unlocked. At the time this function
+     * is called, the requested tasks may already be locked by some {@link TaskExecutor}s,
+     * and in that case the task manager need to first unassign these tasks from the
+     * executors.
      *
      * This function is needed when we need to 1) commit these tasks, 2) remove these tasks.
      *
-     * The requested tasks may be locked by {@link TaskExecutor}s at the time, and in that case
-     * the task manager need to ask these executors to unlock the tasks first
-     *
      * This method does not block, instead a future is returned.
      */
-    KafkaFuture<Set<TaskId>> lockTasks(final Set<TaskId> taskIds);
+    KafkaFuture<Void> lockTasks(final Set<TaskId> taskIds);
 
     /**
-     * Lock all of the managed active tasks from the task manager.
-     *
-     * This function is needed when we need to 1) commit these tasks, 2) remove these tasks.
-     *
-     * The requested tasks may be locked by {@link TaskExecutor}s at the time, and in that case
-     * the task manager need to ask these executors to unlock the tasks first
+     * Lock all of the managed active tasks from the task manager. Similar to {@link #lockTasks(Set)}.
      *
      * This method does not block, instead a future is returned.
      */
-    KafkaFuture<Set<TaskId>> lockAllTasks();
+    KafkaFuture<Void> lockAllTasks();
+
+    /**
+     * Unlock the tasks so that they can be assigned to executors
+     */
+    void unlockTasks(final Set<TaskId> taskIds);
+
+    /**
+     * Unlock all of the managed active tasks from the task manager. Similar to {@link #unlockTasks(Set)}.
+     *
+     * This method does not block, instead a future is returned.
+     */
+    void unlockAllTasks();
 
     /**
      * Add a new active task to the task manager.
