@@ -326,7 +326,7 @@ public class FeatureControlManager {
         public List<ApiMessageAndVersion> next() {
             // Write the metadata.version first
             if (!wroteVersion) {
-                if (!metadataVersion.isLessThan(minimumBootstrapVersion)) {
+                if (metadataVersion.isAtLeast(minimumBootstrapVersion)) {
                     wroteVersion = true;
                     return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord()
                             .setName(MetadataVersion.FEATURE_NAME)
