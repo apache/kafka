@@ -198,13 +198,13 @@ public class RetryWithToleranceOperator implements AutoCloseable {
 
     /**
      * Execute a given operation multiple times (if needed), and tolerate certain exceptions.
+     * Visible for testing.
      *
      * @param operation the operation to be executed.
      * @param tolerated the class of exceptions which can be tolerated.
      * @param <V> The return type of the result of the operation.
      * @return the result of the operation
      */
-    // Visible for testing
     protected <V> V execAndHandleError(Operation<V> operation, Class<? extends Exception> tolerated) {
         try {
             V result = execAndRetry(operation);
@@ -256,10 +256,9 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         return errorToleranceType;
     }
 
-    // Visible for testing
-
     /**
-     * Check whether we can continue retrying or not
+     * Check whether we can continue retrying or not.
+     * Visible for testing.
      * @param startTime the time in milliseconds when the retriable operation was first begun
      * @return true if we can continue retrying; false if the retry timeout has been reached and we can't retry anymore
      */
@@ -270,10 +269,10 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         return (time.milliseconds() - startTime) < errorRetryTimeout;
     }
 
-    // Visible for testing
     /**
      * Do an exponential backoff bounded by {@link #RETRIES_DELAY_MIN_MS} and {@link #errorMaxDelayInMillis}
-     * which can be exited prematurely if {@link #exit()} is called
+     * which can be exited prematurely if {@link #exit()} is called.
+     * Visible for testing.
      * @param attempt the number indicating which backoff attempt it is (beginning with 1)
      * @param deadline the time in milliseconds until when retries can be attempted
      * @return true if it is safe to backoff again, false if the exit condition was triggered via
