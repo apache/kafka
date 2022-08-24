@@ -33,8 +33,8 @@ class StreamsShutdownDeadlockTest(KafkaTest):
         self.driver = StreamsSmokeTestShutdownDeadlockService(test_context, self.kafka)
 
     @cluster(num_nodes=3)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_shutdown_wont_deadlock(self, metadata_quorum=quorum.zk):
+    @matrix(metadata_quorum=[quorum.remote_kraft])
+    def test_shutdown_wont_deadlock(self, metadata_quorum):
         """
         Start ShutdownDeadLockTest, wait for upt to 1 minute, and check that the process exited.
         If it hasn't exited then fail as it is deadlocked

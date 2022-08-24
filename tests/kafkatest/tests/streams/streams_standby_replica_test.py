@@ -47,8 +47,8 @@ class StreamsStandbyTask(BaseStreamsTest):
                                                  })
 
     @cluster(num_nodes=10)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_standby_tasks_rebalance(self, metadata_quorum=quorum.zk):
+    @matrix(metadata_quorum=[quorum.remote_kraft])
+    def test_standby_tasks_rebalance(self, metadata_quorum):
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
         configs = self.get_configs(
             ",sourceTopic=%s,sinkTopic1=%s,sinkTopic2=%s,internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor" % (

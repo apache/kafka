@@ -55,8 +55,8 @@ class StreamsStaticMembershipTest(Test):
                                            acks=1)
 
     @cluster(num_nodes=8)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_rolling_bounces_will_not_trigger_rebalance_under_static_membership(self, metadata_quorum=quorum.zk):
+    @matrix(metadata_quorum=[quorum.remote_kraft])
+    def test_rolling_bounces_will_not_trigger_rebalance_under_static_membership(self, metadata_quorum):
         if self.zookeeper:
             self.zookeeper.start()
         self.kafka.start()

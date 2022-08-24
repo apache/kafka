@@ -45,8 +45,8 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
             self.zk.start()
 
     @cluster(num_nodes=7)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_streams_resilient_to_broker_down(self, metadata_quorum=quorum.zk):
+    @matrix(metadata_quorum=[quorum.remote_kraft])
+    def test_streams_resilient_to_broker_down(self, metadata_quorum):
         self.kafka.start()
 
         # Broker should be down over 2x of retries * timeout ms
@@ -82,8 +82,8 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         self.kafka.stop()
 
     @cluster(num_nodes=7)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_streams_runs_with_broker_down_initially(self, metadata_quorum=quorum.zk):
+    @matrix(metadata_quorum=[quorum.remote_kraft])
+    def test_streams_runs_with_broker_down_initially(self, metadata_quorum):
         self.kafka.start()
         node = self.kafka.leader(self.inputTopic)
         self.kafka.stop_node(node)
@@ -150,8 +150,8 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         self.kafka.stop()
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_streams_should_scale_in_while_brokers_down(self, metadata_quorum=quorum.zk):
+    @matrix(metadata_quorum=[quorum.remote_kraft])
+    def test_streams_should_scale_in_while_brokers_down(self, metadata_quorum):
         self.kafka.start()
 
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
@@ -229,8 +229,8 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         self.kafka.stop()
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_streams_should_failover_while_brokers_down(self, metadata_quorum=quorum.zk):
+    @matrix(metadata_quorum=[quorum.remote_kraft])
+    def test_streams_should_failover_while_brokers_down(self, metadata_quorum):
         self.kafka.start()
 
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor

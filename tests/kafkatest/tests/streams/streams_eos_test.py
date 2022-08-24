@@ -40,8 +40,8 @@ class StreamsEosTest(KafkaTest):
 
     @cluster(num_nodes=9)
     @matrix(processing_guarantee=["exactly_once", "exactly_once_v2"],
-            metadata_quorum=quorum.all_non_upgrade)
-    def test_rebalance_simple(self, processing_guarantee, metadata_quorum=quorum.zk):
+            metadata_quorum=[quorum.remote_kraft])
+    def test_rebalance_simple(self, processing_guarantee, metadata_quorum):
         self.run_rebalance(StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                            StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                            StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
@@ -49,8 +49,8 @@ class StreamsEosTest(KafkaTest):
 
     @cluster(num_nodes=9)
     @matrix(processing_guarantee=["exactly_once", "exactly_once_v2"],
-            metadata_quorum=quorum.all_non_upgrade)
-    def test_rebalance_complex(self, processing_guarantee, metadata_quorum=quorum.zk):
+            metadata_quorum=[quorum.remote_kraft])
+    def test_rebalance_complex(self, processing_guarantee, metadata_quorum):
         self.run_rebalance(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                            StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                            StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
@@ -84,8 +84,8 @@ class StreamsEosTest(KafkaTest):
 
     @cluster(num_nodes=9)
     @matrix(processing_guarantee=["exactly_once", "exactly_once_v2"],
-            metadata_quorum=quorum.all_non_upgrade)
-    def test_failure_and_recovery(self, processing_guarantee, metadata_quorum=quorum.zk):
+            metadata_quorum=[quorum.remote_kraft])
+    def test_failure_and_recovery(self, processing_guarantee, metadata_quorum):
         self.run_failure_and_recovery(StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                                       StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                                       StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
@@ -93,8 +93,8 @@ class StreamsEosTest(KafkaTest):
 
     @cluster(num_nodes=9)
     @matrix(processing_guarantee=["exactly_once", "exactly_once_v2"],
-            metadata_quorum=quorum.all_non_upgrade)
-    def test_failure_and_recovery_complex(self, processing_guarantee, metadata_quorum=quorum.zk):
+            metadata_quorum=[quorum.remote_kraft])
+    def test_failure_and_recovery_complex(self, processing_guarantee, metadata_quorum):
         self.run_failure_and_recovery(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                                       StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
                                       StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
