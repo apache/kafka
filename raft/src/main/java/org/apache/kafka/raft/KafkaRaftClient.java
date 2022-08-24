@@ -275,7 +275,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         final LogOffsetMetadata endOffsetMetadata = log.endOffset();
 
-        if (state.updateLocalState(currentTimeMs, endOffsetMetadata)) {
+        if (state.updateLocalState(endOffsetMetadata)) {
             onUpdateLeaderHighWatermark(state, currentTimeMs);
         }
 
@@ -1014,7 +1014,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             if (validOffsetAndEpoch.kind() == ValidOffsetAndEpoch.Kind.VALID) {
                 LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
 
-                if (state.updateReplicaState(replicaId, currentTimeMs, info.startOffsetMetadata, log.endOffset().offset)) {
+                if (state.updateReplicaState(replicaId, currentTimeMs, info.startOffsetMetadata)) {
                     onUpdateLeaderHighWatermark(state, currentTimeMs);
                 }
 
@@ -1176,12 +1176,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         LeaderState<T> leaderState = quorum.leaderStateOrThrow();
-        return DescribeQuorumResponse.singletonResponse(log.topicPartition(),
-            leaderState.localId(),
-            leaderState.epoch(),
-            leaderState.highWatermark().isPresent() ? leaderState.highWatermark().get().offset : -1,
-            leaderState.quorumResponseVoterStates(currentTimeMs),
-            leaderState.quorumResponseObserverStates(currentTimeMs)
+        return DescribeQuorumResponse.singletonResponse(
+            log.topicPartition(),
+            leaderState.describeQuorum(currentTimeMs)
         );
     }
 
