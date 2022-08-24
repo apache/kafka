@@ -381,7 +381,6 @@ public final class MetadataNodeManager implements AutoCloseable {
                     file.setContents(FeatureLevelRecordJsonConverter.write(record,
                         FeatureLevelRecord.HIGHEST_SUPPORTED_VERSION).toPrettyString());
                 }
-
                 break;
             }
             case NO_OP_RECORD: {
