@@ -186,19 +186,19 @@ public interface StateUpdater {
     Set<StreamTask> getActiveTasks();
 
     /**
-     * Returns if the state updater is restoring active tasks.
+     * Returns if the state updater restores active tasks.
      *
-     * An active task is considered in restoration if it was added with the {@link StateUpdater#add(Task)} and
-     * it was not removed from the state updater with one of the following methods:
+     * The state updater restores active tasks if at least one active task was added with the {@link StateUpdater#add(Task)}
+     * and the active task was not removed from the state updater with one of the following methods:
      * <ul>
      *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
      *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
      *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
      * </ul>
      *
-     * @return {@code true} if the state updater is restoring active tasks, {@code false} otherwise
+     * @return {@code true} if the state updater restores active tasks, {@code false} otherwise
      */
-    boolean activeTasksRestoring();
+    boolean restoresActiveTasks();
 
     /**
      * Gets standby tasks that are managed by the state updater.

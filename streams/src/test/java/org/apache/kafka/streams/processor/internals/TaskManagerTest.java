@@ -631,10 +631,10 @@ public class TaskManagerTest {
     @Test
     public void shouldReturnCorrectBooleanWhenTryingToCompleteRestorationWithStateUpdater() {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, true);
-        when(stateUpdater.activeTasksRestoring()).thenReturn(false).thenReturn(true);
+        when(stateUpdater.restoresActiveTasks()).thenReturn(false).thenReturn(true);
 
-        assertFalse(taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter));
         assertTrue(taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter));
+        assertFalse(taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter));
     }
 
     @Test

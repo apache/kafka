@@ -566,9 +566,9 @@ public class DefaultStateUpdater implements StateUpdater {
     }
 
     @Override
-    public boolean activeTasksRestoring() {
-        return executeWithQueuesLocked(
-            () -> getStreamOfTasks().filter(Task::isActive).collect(Collectors.toSet())
+    public boolean restoresActiveTasks() {
+        return !executeWithQueuesLocked(
+            () -> getStreamOfNonPausedTasks().filter(Task::isActive).collect(Collectors.toSet())
         ).isEmpty();
     }
 
@@ -600,6 +600,14 @@ public class DefaultStateUpdater implements StateUpdater {
     private Stream<Task> getStreamOfTasks() {
         return
             Stream.concat(
+                getStreamOfNonPausedTasks(),
+                getPausedTasks().stream()
+            );
+    }
+
+    private Stream<Task> getStreamOfNonPausedTasks() {
+        return
+            Stream.concat(
                 tasksAndActions.stream()
                     .filter(taskAndAction -> taskAndAction.getAction() == Action.ADD)
                     .map(TaskAndAction::getTask),
@@ -609,8 +617,6 @@ public class DefaultStateUpdater implements StateUpdater {
                         restoredActiveTasks.stream(),
                         Stream.concat(
                             exceptionsAndFailedTasks.stream().flatMap(exceptionAndTasks -> exceptionAndTasks.getTasks().stream()),
-                            Stream.concat(
-                                getPausedTasks().stream(),
-                                removedTasks.stream())))));
+                            removedTasks.stream()))));
     }
 }

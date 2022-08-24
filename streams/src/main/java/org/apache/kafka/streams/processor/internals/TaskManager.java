@@ -688,7 +688,7 @@ public class TaskManager {
 
         throwTaskExceptions(taskExceptions);
 
-        return stateUpdater.activeTasksRestoring();
+        return !stateUpdater.restoresActiveTasks();
     }
 
     private void recycleTask(final Task task,
