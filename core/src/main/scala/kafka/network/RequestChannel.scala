@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent._
 import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
-import com.yammer.metrics.core.Meter
+import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network
 import kafka.server.{BrokerMetadataStats, KafkaConfig, Observer}
@@ -511,6 +511,71 @@ class RequestChannel(val queueSize: Int,
   }
 
 }
+
+class RequestBreakdownMetrics(val name: String) extends KafkaMetricsGroup {
+  val HistogramMetricType = "histogram"
+  val DurationDataType = "duration"
+  val tags = Map("request" -> name)
+}
+
+object LiCombinedControlRequestBreakdownMetrics {
+  // The MBean type tag is determined from class name.
+  // Since we want the MBean still have type=RequestBreakdownMetrics, use a delegate instead of inheritance.
+  private val metrics = new RequestBreakdownMetrics(ApiKeys.LI_COMBINED_CONTROL.name)
+  private val decomposedRequestDelayedTime = mutable.Map[ApiKeys, Histogram]()
+  private val decomposedRequestLocalTime = mutable.Map[ApiKeys, Histogram]()
+
+  val RequestDelayedTimeMs = "RequestDelayedTimeMs"
+  val LocalTimeMs = "LocalTimeMs"
+  // The metric names are exposed for observability
+  val DurationHistogramMetricNames: mutable.Set[String] = mutable.Set[String]()
+  val ApiKeysForDecomposedMetrics = Set(
+    ApiKeys.LEADER_AND_ISR,
+    ApiKeys.UPDATE_METADATA,
+    ApiKeys.STOP_REPLICA
+  )
+
+  // Pre-initialize request that we want breakdown time metrics
+  ApiKeysForDecomposedMetrics.foreach {apiKey =>
+    getOrCreateDecomposedRequestDelayedTimeHistogram(apiKey)
+    getOrCreateDecomposedRequestLocalTimeHistogram(apiKey)
+  }
+
+  private def decomposedRequestDelayedTimeMsMetricName(apiKey: ApiKeys): String = s"decomposed-${apiKey.name}-${RequestDelayedTimeMs}"
+
+  private def decomposedRequestLocalTimeMsMetricName(apiKey: ApiKeys): String = s"decomposed-${apiKey.name}-${LocalTimeMs}"
+
+  private def getOrCreateDecomposedRequestDelayedTimeHistogram(apiKey: ApiKeys): Histogram = {
+    decomposedRequestDelayedTime.applyOrElse(
+      apiKey,
+      (apiKey: ApiKeys) => {
+        val decomposedDelayedTimeMetricName = decomposedRequestDelayedTimeMsMetricName(apiKey)
+        DurationHistogramMetricNames.add(decomposedDelayedTimeMetricName)
+        metrics.newHistogram(decomposedRequestDelayedTimeMsMetricName(apiKey), biased = true, metrics.tags)
+      }
+    )
+  }
+
+  private def getOrCreateDecomposedRequestLocalTimeHistogram(apiKey: ApiKeys): Histogram = {
+    decomposedRequestLocalTime.applyOrElse(
+      apiKey,
+      (apiKey: ApiKeys) => {
+        val decomposedLocalTimeMetricName = decomposedRequestLocalTimeMsMetricName(apiKey)
+        DurationHistogramMetricNames.add(decomposedLocalTimeMetricName)
+        metrics.newHistogram(decomposedRequestLocalTimeMsMetricName(apiKey), biased = true, metrics.tags)
+      }
+    )
+  }
+
+  def markDecomposedRequestDelayedTime(apiKey: ApiKeys, requestQueueTime: Double): Unit = {
+    getOrCreateDecomposedRequestDelayedTimeHistogram(apiKey).update(Math.round(requestQueueTime))
+  }
+
+  def markDecomposedRequestLocalTime(apiKey: ApiKeys, requestLocalTime: Double): Unit = {
+    getOrCreateDecomposedRequestLocalTimeHistogram(apiKey).update(Math.round(requestLocalTime))
+  }
+}
+
 
 object RequestMetrics {
   val consumerFetchMetricName = ApiKeys.FETCH.name + "Consumer"

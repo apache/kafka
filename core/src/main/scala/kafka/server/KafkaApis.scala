@@ -26,7 +26,7 @@ import kafka.coordinator.group._
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.AppendOrigin
 import kafka.message.ZStdCompressionCodec
-import kafka.network.RequestChannel
+import kafka.network.{LiCombinedControlRequestBreakdownMetrics, RequestChannel}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.metadata.ConfigRepository
 import kafka.utils.Implicits._
@@ -3564,19 +3564,28 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val responseData = new LiCombinedControlResponseData()
 
+    def updateMetricsOnDecomposedRequestComplete(apiKey: ApiKeys, requestProcessStartTimeNanos: Long, apiLocalCompleteTimeNanos: Long): Unit = {
+      LiCombinedControlRequestBreakdownMetrics.markDecomposedRequestDelayedTime(apiKey, CoreUtils.nanosToMs(requestProcessStartTimeNanos - request.startTimeNanos))
+      LiCombinedControlRequestBreakdownMetrics.markDecomposedRequestLocalTime(apiKey, CoreUtils.nanosToMs(apiLocalCompleteTimeNanos - requestProcessStartTimeNanos))
+    }
+
+
     // The LeaderAndIsr section depends on the UpdateMetadata section, which implies that
     // the UpdateMetadataRequest section should be processed before the LeaderAndIsr section.
     // If the order is reversed, a broker will fail to become the follower
     decomposedRequest.updateMetadataRequest match {
       case Some(updateMetadataRequest) => {
+        val decomposedUpdateMetadataRequestStartTimeNs = time.nanoseconds()
         val updateMetadataResponse = doHandleUpdateMetadataRequest(request, requestLocal, zkSupport, correlationId, updateMetadataRequest)
         responseData.setUpdateMetadataErrorCode(updateMetadataResponse.errorCode())
+        updateMetricsOnDecomposedRequestComplete(ApiKeys.UPDATE_METADATA, decomposedUpdateMetadataRequestStartTimeNs, time.nanoseconds())
       }
       case _ => // do nothing
     }
 
     decomposedRequest.leaderAndIsrRequest match {
       case Some(leaderAndIsrRequest) => {
+        val decomposedLeaderAndIsrRequestStartTimeNs = time.nanoseconds()
         val leaderAndIsrResponse = doHandleLeaderAndIsrRequest(correlationId, leaderAndIsrRequest)
         responseData.setLeaderAndIsrErrorCode(leaderAndIsrResponse.errorCode());
 
@@ -3586,11 +3595,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         } else {
           responseData.setLeaderAndIsrTopics(LiCombinedControlTransformer.transformLeaderAndIsrTopicErrors(leaderAndIsrResponse.rawTopics()))
         }
+        updateMetricsOnDecomposedRequestComplete(ApiKeys.LEADER_AND_ISR, decomposedLeaderAndIsrRequestStartTimeNs, time.nanoseconds())
       }
       case _ => // do nothing
     }
 
 
+    val decomposedStopReplicaRequestStartTimeNs = time.nanoseconds()
     val stopReplicaRequests = decomposedRequest.stopReplicaRequests
     val stopReplicaPartitionErrors = new util.ArrayList[StopReplicaPartitionError]()
     stopReplicaRequests.foreach{ stopReplicaRequest => {
@@ -3601,6 +3612,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         stopReplicaResponse.partitionErrors(), liCombinedControlRequest.version()))
     }}
     responseData.setStopReplicaPartitionErrors(stopReplicaPartitionErrors)
+    updateMetricsOnDecomposedRequestComplete(ApiKeys.STOP_REPLICA, decomposedStopReplicaRequestStartTimeNs, time.nanoseconds())
 
     requestHelper.sendResponseExemptThrottle(request, new LiCombinedControlResponse(responseData, liCombinedControlRequest.version()))
   }
