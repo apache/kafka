@@ -732,7 +732,7 @@ public final class QuorumController implements Controller {
         @Override
         public void run() throws Exception {
             long now = time.nanoseconds();
-            if (deferred) {
+            if (!deferred) {
                 // We exclude deferred events from the event queue time metric to prevent
                 // incorrectly including the deferral time in the queue time.
                 controllerMetrics.updateEventQueueTime(NANOSECONDS.toMillis(now - eventCreatedTimeNs));
