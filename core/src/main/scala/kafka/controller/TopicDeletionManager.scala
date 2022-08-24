@@ -106,7 +106,7 @@ class TopicDeletionManager(config: KafkaConfig,
                            partitionStateMachine: PartitionStateMachine,
                            client: DeletionClient) extends Logging {
   this.logIdent = s"[Topic Deletion Manager ${config.brokerId}] "
-  var isDeleteTopicEnabled: Boolean = config.deleteTopicEnable
+  @volatile var isDeleteTopicEnabled: Boolean = config.deleteTopicEnable
 
   // Try to create the znode for delete topic flag
   try {

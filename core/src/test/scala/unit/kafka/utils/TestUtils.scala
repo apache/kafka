@@ -24,7 +24,7 @@ import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
+import java.util.concurrent.{Callable, ExecutionException, Executors, ScheduledExecutorService, TimeUnit}
 import java.util.{Arrays, Collections, Optional, Properties}
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
 
@@ -964,6 +964,37 @@ object TestUtils extends Logging {
       new TopicPartition(topic, i) -> servers.head.metadataCache.getPartitionInfo(topic, i).getOrElse(
           throw new IllegalStateException(s"Cannot get topic: $topic, partition: $i in server metadata cache"))
     }.toMap
+  }
+
+  def waitUntilTopicPresent(client: Admin, topic: String): Unit = {
+    waitUntilTrue(
+      () => {
+        try {
+          client.describeTopics(List(topic).asJava).values().get(topic).get(JTestUtils.DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS)
+          true
+        } catch {
+          case _: Throwable => false
+        }
+      },
+      s"Timeout awaiting topic ${topic} to present."
+    )
+  }
+
+  def waitUntilTopicNotPresent(client: Admin, topic: String): Unit = {
+    def describeTopicFailWithUnknownTopicOrPartitionException(): Boolean = {
+      try {
+        client.describeTopics(List(topic).asJava).values().get(topic).get(JTestUtils.DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS)
+        false
+      } catch {
+        // On unknown topic, it's wrapped inside an ExecutionException's cause
+        case e: ExecutionException => e.getCause.getClass == classOf[UnknownTopicOrPartitionException]
+        case _ => false
+      }
+    }
+    waitUntilTrue(
+      describeTopicFailWithUnknownTopicOrPartitionException,
+      s"Timeout attempts awaiting topic `${topic}` to not present"
+    )
   }
 
   /**

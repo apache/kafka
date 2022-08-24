@@ -2079,7 +2079,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setErrorCode(Errors.NOT_CONTROLLER.code))
       }
       sendResponseCallback(results)
-    } else if (!config.deleteTopicEnable) {
+    } else if (!zkSupport.controller.topicDeletionManager.isDeleteTopicEnabled) {
       val error = if (request.context.apiVersion < 3) Errors.INVALID_REQUEST else Errors.TOPIC_DELETION_DISABLED
       deleteTopicRequest.topics().forEach { topic =>
         results.add(new DeletableTopicResult()

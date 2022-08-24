@@ -20,11 +20,14 @@ package kafka.server
 import java.util.Collections
 
 import kafka.utils._
+import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+
+import scala.collection.JavaConverters._
 
 class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
 
@@ -59,6 +62,34 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
 
   private def sendDeleteTopicsRequest(request: DeleteTopicsRequest): DeleteTopicsResponse = {
     connectAndReceive[DeleteTopicsResponse](request, destination = controllerSocketServer)
+  }
+
+  @Test
+  def testDeletionDynamicFlag(): Unit = {
+    val topic = "topic-1"
+    val admin = createAdminClient()
+    // Prepare:
+    // 1. Config has topic deletion disabled
+    // 2. Create topic
+    // 3. Wait until topic is present
+    admin.createTopics(List(new NewTopic(topic, 1, brokerCount.toShort)).asJava)
+    TestUtils.waitUntilTopicPresent(admin, topic)
+
+    // Execute:
+    // 1. Set topic deletion flag
+    // 2. Delete topic
+    zkClient.setTopicDeletionFlag("true")
+    val request = new DeleteTopicsRequest.Builder(
+      new DeleteTopicsRequestData()
+        .setTopicNames(Collections.singletonList(topic))
+        .setTimeoutMs(1000)).build()
+    val response = sendDeleteTopicsRequest(request)
+
+    // Assert:
+    // 1. Delete should be enabled
+    // 2. Topic should eventually be deleted
+    assertEquals(Errors.NONE, Errors.forCode(response.data.responses.find(topic).errorCode()))
+    TestUtils.waitUntilTopicNotPresent(admin, topic)
   }
 
 }

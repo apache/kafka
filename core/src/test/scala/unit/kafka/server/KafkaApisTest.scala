@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit
 import java.util.{Collections, Optional, Properties, Random}
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1, LeaderAndIsr}
 import kafka.cluster.{Broker, Partition}
-import kafka.controller.{ControllerContext, KafkaController}
+import kafka.controller.{ControllerContext, KafkaController, TopicDeletionManager}
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import kafka.coordinator.group._
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
@@ -3694,6 +3694,7 @@ class KafkaApisTest {
   def testDeleteTopicsByIdAuthorization(): Unit = {
     val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
     val controllerContext: ControllerContext = EasyMock.mock(classOf[ControllerContext])
+    val topicDeletionManager: TopicDeletionManager = EasyMock.mock(classOf[TopicDeletionManager])
 
     EasyMock.expect(clientControllerQuotaManager.newQuotaFor(
       EasyMock.anyObject(classOf[RequestChannel.Request]),
@@ -3701,6 +3702,8 @@ class KafkaApisTest {
     )).andReturn(UnboundedControllerMutationQuota)
     EasyMock.expect(controller.isActive).andReturn(true)
     EasyMock.expect(controller.controllerContext).andStubReturn(controllerContext)
+    EasyMock.expect(controller.topicDeletionManager).andStubReturn(topicDeletionManager)
+    EasyMock.expect(topicDeletionManager.isDeleteTopicEnabled).andStubReturn(true)
 
     // Try to delete three topics:
     // 1. One without describe permission
@@ -3738,7 +3741,7 @@ class KafkaApisTest {
     val capturedResponse = expectNoThrottling(request)
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, clientControllerQuotaManager,
-      requestChannel, txnCoordinator, controller, controllerContext, authorizer)
+      requestChannel, txnCoordinator, controller, controllerContext, authorizer, topicDeletionManager)
     createKafkaApis(authorizer = Some(authorizer)).handleDeleteTopicsRequest(request)
 
     val deleteResponse = capturedResponse.getValue.asInstanceOf[DeleteTopicsResponse]
@@ -3765,12 +3768,15 @@ class KafkaApisTest {
   @ValueSource(booleans = Array(true, false))
   def testDeleteTopicsByNameAuthorization(usePrimitiveTopicNameArray: Boolean): Unit = {
     val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+    val topicDeletionManager: TopicDeletionManager = EasyMock.mock(classOf[TopicDeletionManager])
 
     EasyMock.expect(clientControllerQuotaManager.newQuotaFor(
       EasyMock.anyObject(classOf[RequestChannel.Request]),
       EasyMock.anyShort()
     )).andReturn(UnboundedControllerMutationQuota)
     EasyMock.expect(controller.isActive).andReturn(true)
+    EasyMock.expect(controller.topicDeletionManager).andStubReturn(topicDeletionManager)
+    EasyMock.expect(topicDeletionManager.isDeleteTopicEnabled).andStubReturn(true)
 
     // Try to delete three topics:
     // 1. One without describe permission
@@ -3808,7 +3814,7 @@ class KafkaApisTest {
     val capturedResponse = expectNoThrottling(request)
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, clientControllerQuotaManager,
-      requestChannel, txnCoordinator, controller, authorizer)
+      requestChannel, txnCoordinator, controller, authorizer, topicDeletionManager)
     createKafkaApis(authorizer = Some(authorizer)).handleDeleteTopicsRequest(request)
 
     val deleteResponse = capturedResponse.getValue.asInstanceOf[DeleteTopicsResponse]

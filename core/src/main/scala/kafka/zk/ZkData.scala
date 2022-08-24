@@ -474,6 +474,7 @@ object DeleteTopicsTopicZNode {
   def path(topic: String) = s"${DeleteTopicsZNode.path}/$topic"
 }
 
+// LI feature of dynamic deletion flag requires Zk, so actually KIP-500 would fail the feature"
 object DeleteTopicFlagZNode {
   def path = "/topic_deletion_flag"
   def encode(topicDeletionFlag: String): Array[Byte] = topicDeletionFlag.getBytes(UTF_8)
