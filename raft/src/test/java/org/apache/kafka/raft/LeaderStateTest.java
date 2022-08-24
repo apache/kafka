@@ -372,10 +372,8 @@ public class LeaderStateTest {
         List<DescribeQuorumResponseData.ReplicaState> voterStates = partitionData.currentVoters();
         assertEquals(3, voterStates.size());
 
-        DescribeQuorumResponseData.ReplicaState leaderState = voterStates.stream()
-            .filter(voterState -> voterState.replicaId() == localId)
-            .findFirst()
-            .orElseThrow(() -> new AssertionError(""));
+        DescribeQuorumResponseData.ReplicaState leaderState =
+            findReplicaOrFail(localId, partitionData.currentVoters());
         assertEquals(new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(localId)
                 .setLogEndOffset(leaderEndOffset)
@@ -383,10 +381,8 @@ public class LeaderStateTest {
                 .setLastCaughtUpTimestamp(time.milliseconds()),
             leaderState);
 
-        DescribeQuorumResponseData.ReplicaState activeFollowerState = voterStates.stream()
-            .filter(voterState -> voterState.replicaId() == activeFollowerId)
-            .findFirst()
-            .orElseThrow(() -> new AssertionError(""));
+        DescribeQuorumResponseData.ReplicaState activeFollowerState =
+            findReplicaOrFail(activeFollowerId, partitionData.currentVoters());
         assertEquals(new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(activeFollowerId)
                 .setLogEndOffset(leaderEndOffset)
@@ -394,10 +390,8 @@ public class LeaderStateTest {
                 .setLastCaughtUpTimestamp(activeFollowerFetchTimeMs),
             activeFollowerState);
 
-        DescribeQuorumResponseData.ReplicaState inactiveFollowerState = voterStates.stream()
-            .filter(voterState -> voterState.replicaId() == inactiveFollowerId)
-            .findFirst()
-            .orElseThrow(() -> new AssertionError(""));
+        DescribeQuorumResponseData.ReplicaState inactiveFollowerState =
+            findReplicaOrFail(inactiveFollowerId, partitionData.currentVoters());
         assertEquals(new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(inactiveFollowerId)
                 .setLogEndOffset(-1)
@@ -437,6 +431,9 @@ public class LeaderStateTest {
         assertEquals(epochStartOffset + 1, partitionData.highWatermark());
         assertEquals(localId, partitionData.leaderId());
         assertEquals(epoch, partitionData.leaderEpoch());
+
+        assertEquals(1, partitionData.currentVoters().size());
+        assertEquals(localId, partitionData.currentVoters().get(0).replicaId());
 
         List<DescribeQuorumResponseData.ReplicaState> observerStates = partitionData.observers();
         assertEquals(1, observerStates.size());
