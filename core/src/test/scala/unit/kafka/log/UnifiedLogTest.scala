@@ -46,7 +46,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 
 class UnifiedLogTest {
-  var config: KafkaConfig = null
+  var config: KafkaConfig = _
   val brokerTopicStats = new BrokerTopicStats
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)

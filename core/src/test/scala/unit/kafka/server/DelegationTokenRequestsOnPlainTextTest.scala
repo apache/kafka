@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import scala.concurrent.ExecutionException
 
 class DelegationTokenRequestsOnPlainTextTest extends BaseRequestTest {
-  var adminClient: Admin = null
+  var adminClient: Admin = _
 
   override def brokerCount = 1
 

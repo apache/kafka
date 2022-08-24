@@ -53,7 +53,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   val t2p0 = new TopicPartition(topic2, 0)
   val t2p2 = new TopicPartition(topic2, 2)
   val tp = t1p0
-  var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
+  var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
 
   @AfterEach
   override def tearDown(): Unit = {

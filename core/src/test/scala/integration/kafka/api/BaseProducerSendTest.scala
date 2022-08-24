@@ -54,7 +54,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
   private var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = _
   private val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
-  protected var admin: Admin = null
+  protected var admin: Admin = _
 
   protected val topic = "topic"
   private val numRecords = 100

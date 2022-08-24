@@ -27,7 +27,7 @@ import org.junit.jupiter.api.{AfterEach, Test}
 
 class ServerStartupTest extends QuorumTestHarness {
 
-  private var server: KafkaServer = null
+  private var server: KafkaServer = _
 
   @AfterEach
   override def tearDown(): Unit = {

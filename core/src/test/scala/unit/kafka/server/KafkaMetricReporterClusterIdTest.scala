@@ -76,8 +76,8 @@ object KafkaMetricReporterClusterIdTest {
 }
 
 class KafkaMetricReporterClusterIdTest extends QuorumTestHarness {
-  var server: KafkaServer = null
-  var config: KafkaConfig = null
+  var server: KafkaServer = _
+  var config: KafkaConfig = _
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {

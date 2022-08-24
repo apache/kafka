@@ -98,10 +98,10 @@ object ReplicationQuotasTestRig {
     val topicName = "my-topic"
     var experimentName = "unset"
     val partitionId = 0
-    var servers: Seq[KafkaServer] = null
+    var servers: Seq[KafkaServer] = _
     val leaderRates = mutable.Map[Int, Array[Double]]()
     val followerRates = mutable.Map[Int, Array[Double]]()
-    var adminClient: Admin = null
+    var adminClient: Admin = _
 
     def startBrokers(brokerIds: Seq[Int]): Unit = {
       println("Starting Brokers")

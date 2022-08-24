@@ -28,7 +28,7 @@ import org.junit.jupiter.api.{BeforeEach, Test}
 
 class ControllerContextTest {
 
-  var context: ControllerContext = null
+  var context: ControllerContext = _
   val brokers: Seq[Int] = Seq(1, 2, 3)
   val tp1 = new TopicPartition("A", 0)
   val tp2 = new TopicPartition("A", 1)
