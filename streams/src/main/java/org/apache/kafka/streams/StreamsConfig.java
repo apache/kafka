@@ -663,6 +663,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka Streams if it should optimize the topology, disabled by default";
 
+    public static final String SELF_JOIN_OPTIMIZATION_CONFIG = "self.join.optimization";
+    private static final String SELF_JOIN_OPTIMIZATION_DOC = "A configuration telling Kafka "
+        + "Streams if it should optimize an inner join that is a self-join by removing the "
+        + "extraneous state store. This config is disabled by default.";
+
+
     /** {@code window.size.ms} */
     public static final String WINDOW_SIZE_MS_CONFIG = "window.size.ms";
     private static final String WINDOW_SIZE_MS_DOC = "Sets window size for the deserializer in order to calculate window end times.";
@@ -844,6 +850,11 @@ public class StreamsConfig extends AbstractConfig {
                     in(NO_OPTIMIZATION, OPTIMIZE),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
+            .define(SELF_JOIN_OPTIMIZATION_CONFIG,
+                    Type.BOOLEAN,
+                    false,
+                    Importance.MEDIUM,
+                    SELF_JOIN_OPTIMIZATION_DOC)
 
             // LOW
 

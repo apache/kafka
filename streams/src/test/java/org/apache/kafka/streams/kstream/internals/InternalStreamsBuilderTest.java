@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
@@ -372,58 +374,91 @@ public class InternalStreamsBuilderTest {
     }
 
     @Test
-    public void shouldMarkStreamStreamJoinAsSelfJoin() {
+    public void shouldMarkStreamStreamJoinAsSelfJoinSingleStream() {
         // Given:
         final KStream<String, String> stream = builder.stream(Collections.singleton("t1"), consumed);
         stream.join(stream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
 
         // When:
-        builder.buildAndOptimizeTopology(true);
+        builder.buildAndOptimizeTopology(true, true);
 
         // Then:
         final GraphNode join = getNodeByType(builder.root, StreamStreamJoinNode.class, new HashSet<>());
         assertNotNull(join);
         assertTrue(((StreamStreamJoinNode) join).getSelfJoin());
         final GraphNode parent = join.parentNodes().stream().findFirst().get();
-        int count = 0;
-        for (final GraphNode child: parent.children()) {
-            if (child != join && child instanceof ProcessorGraphNode) {
-                if (isStreamJoinWindowNode((ProcessorGraphNode) child)) {
-                    count++;
-                }
-            }
-        }
-        assertEquals(count, 1);
+        final AtomicInteger count = new AtomicInteger();
+        countJoinWindowNodes(count, builder.root, new HashSet<>());
+        assertEquals(count.get(), 1);
     }
 
     @Test
-    public void shouldMarkStreamStreamJoinAsSelfJoin2() {
+    public void shouldMarkStreamStreamJoinAsSelfJoinTwoStreams() {
         // Given:
         final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
         final KStream<String, String> stream2 = builder.stream(Collections.singleton("t1"), consumed);
         stream1.join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
 
         // When:
-        builder.buildAndOptimizeTopology(true);
+        builder.buildAndOptimizeTopology(true, true);
 
         // Then:
         final GraphNode join = getNodeByType(builder.root, StreamStreamJoinNode.class, new HashSet<>());
         assertNotNull(join);
         assertTrue(((StreamStreamJoinNode) join).getSelfJoin());
-        final GraphNode parent = join.parentNodes().stream().findFirst().get();
-        int count = 0;
-        for (final GraphNode child: parent.children()) {
-            if (child != join && child instanceof ProcessorGraphNode) {
-                if (isStreamJoinWindowNode((ProcessorGraphNode) child)) {
-                    count++;
-                }
-            }
-        }
-        assertEquals(count, 1);
+        final AtomicInteger count = new AtomicInteger();
+        countJoinWindowNodes(count, builder.root, new HashSet<>());
+        assertEquals(count.get(), 1);
     }
 
     @Test
-    public void shouldNotMarkStreamStreamJoinAsSelfJoin() {
+    public void shouldNotMarkStreamStreamJoinAsSelfJoinTwoStreamsWithFilter() {
+        // Given:
+        final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
+        final KStream<String, String> stream2 = builder.stream(Collections.singleton("t1"), consumed);
+        stream1
+            .filter((key, value) -> value != null)
+            .join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
+
+        // When:
+        builder.buildAndOptimizeTopology(true, true);
+
+        // Then:
+        final GraphNode join = getNodeByType(builder.root, StreamStreamJoinNode.class, new HashSet<>());
+        assertNotNull(join);
+        assertFalse(((StreamStreamJoinNode) join).getSelfJoin());
+        final AtomicInteger count = new AtomicInteger();
+        countJoinWindowNodes(count, builder.root, new HashSet<>());
+        assertEquals(count.get(), 2);
+    }
+
+    @Test
+    public void shouldMarkStreamStreamJoinAsSelfJoin3WayJoin() {
+        // Given:
+        final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
+        final KStream<String, String> stream2 = builder.stream(Collections.singleton("t1"), consumed);
+        final KStream<String, String> stream3 = builder.stream(Collections.singleton("t3"), consumed);
+        stream1
+            .join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)))
+            .join(stream3, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
+
+        // When:
+        builder.buildAndOptimizeTopology(true, true);
+
+        // Then:
+        final List<GraphNode> result = new ArrayList<>();
+        getNodesByType(builder.root, StreamStreamJoinNode.class, new HashSet<>(), result);
+        assertEquals(result.size(), 2);
+        assertTrue(((StreamStreamJoinNode) result.get(0)).getSelfJoin());
+        assertFalse(((StreamStreamJoinNode) result.get(1)).getSelfJoin());
+        final AtomicInteger count = new AtomicInteger();
+        countJoinWindowNodes(count, builder.root, new HashSet<>());
+        assertEquals(count.get(), 3);
+    }
+
+
+    @Test
+    public void shouldNotMarkStreamStreamJoinAsSelfJoinOneStreamWithMap() {
         // Given:
         final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
         stream1.mapValues(v -> v);
@@ -431,23 +466,35 @@ public class InternalStreamsBuilderTest {
         stream1.join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
 
         // When:
-        builder.buildAndOptimizeTopology(true);
+        builder.buildAndOptimizeTopology(true, true);
 
         // Then:
         final GraphNode join = getNodeByType(builder.root, StreamStreamJoinNode.class, new HashSet<>());
         assertNotNull(join);
         assertFalse(((StreamStreamJoinNode) join).getSelfJoin());
-        final GraphNode parent = join.parentNodes().stream().findFirst().get();
-        int count = 0;
-        for (final GraphNode child: parent.children()) {
-            if (child != join && child instanceof ProcessorGraphNode) {
-                if (isStreamJoinWindowNode((ProcessorGraphNode) child)) {
-                    count++;
-                }
-            }
-        }
-        assertEquals(count, 2);
+        final AtomicInteger count = new AtomicInteger();
+        countJoinWindowNodes(count, builder.root, new HashSet<>());
+        assertEquals(count.get(), 2);
     }
+
+    @Test
+    public void shouldNotOptimizeJoinWhenConfigFalse() {
+        // Given:
+        final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
+        stream1.join(stream1, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
+
+        // When:
+        builder.buildAndOptimizeTopology(true, false);
+
+        // Then:
+        final GraphNode join = getNodeByType(builder.root, StreamStreamJoinNode.class, new HashSet<>());
+        assertNotNull(join);
+        assertFalse(((StreamStreamJoinNode) join).getSelfJoin());
+        final AtomicInteger count = new AtomicInteger();
+        countJoinWindowNodes(count, builder.root, new HashSet<>());
+        assertEquals(count.get(), 2);
+    }
+
 
     private GraphNode getNodeByType(
         final GraphNode currentNode,
@@ -469,6 +516,24 @@ public class InternalStreamsBuilderTest {
         return null;
     }
 
+    private void getNodesByType(
+        final GraphNode currentNode,
+        final Class<? extends GraphNode> clazz,
+        final Set<GraphNode> visited,
+        final List<GraphNode> result) {
+
+        if (currentNode.getClass().isAssignableFrom(clazz)) {
+            result.add(currentNode);
+        }
+        for (final GraphNode child: currentNode.children()) {
+            if (!visited.contains(child)) {
+                visited.add(child);
+                getNodesByType(child, clazz, visited, result);
+            }
+        }
+    }
+
+
     private boolean isStreamJoinWindowNode(final ProcessorGraphNode node) {
         if (node.processorParameters() != null
             && node.processorParameters().processorSupplier() != null
@@ -478,5 +543,21 @@ public class InternalStreamsBuilderTest {
         return false;
     }
 
+    private void countJoinWindowNodes(
+        final AtomicInteger count,
+        final GraphNode currentNode,
+        final Set<GraphNode> visited) {
 
+        if (currentNode instanceof ProcessorGraphNode &&
+            isStreamJoinWindowNode((ProcessorGraphNode) currentNode)) {
+            count.incrementAndGet();
+        }
+
+        for (final GraphNode child: currentNode.children()) {
+            if (!visited.contains(child)) {
+                visited.add(child);
+                countJoinWindowNodes(count, child, visited);
+            }
+        }
+    }
 }

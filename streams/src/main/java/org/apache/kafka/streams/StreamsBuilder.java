@@ -625,7 +625,11 @@ public class StreamsBuilder {
             props != null &&
             StreamsConfig.OPTIMIZE.equals(props.getProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG));
 
-        internalStreamsBuilder.buildAndOptimizeTopology(optimizeTopology);
+        final boolean optimizeSelfJoin =
+            props != null &&
+            Boolean.getBoolean(props.getProperty(StreamsConfig.SELF_JOIN_OPTIMIZATION_CONFIG));
+
+        internalStreamsBuilder.buildAndOptimizeTopology(optimizeTopology, optimizeSelfJoin);
         return topology;
     }
 }

@@ -34,7 +34,6 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -273,19 +272,20 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     // use this method for testing only
     public void buildAndOptimizeTopology() {
-        buildAndOptimizeTopology(false);
+        buildAndOptimizeTopology(false, false);
     }
 
-    public void buildAndOptimizeTopology(final boolean optimizeTopology) {
+    public void buildAndOptimizeTopology(
+        final boolean optimizeTopology, final boolean optimizeSelfJoin) {
 
         mergeDuplicateSourceNodes();
         if (optimizeTopology) {
             LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
             optimizeKTableSourceTopics();
             maybeOptimizeRepartitionOperations();
-            // Vicky: Add step to identify if path from source to join nodes has other nodes
-            // Vicky: Apply rewriting
-            rewriteSelfJoin(root, new HashSet<>());
+            if (optimizeSelfJoin) {
+                rewriteSelfJoin(root, new HashSet<>());
+            }
         }
 
         final PriorityQueue<GraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, Comparator.comparing(GraphNode::buildPriority));
@@ -295,9 +295,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         while (!graphNodePriorityQueue.isEmpty()) {
             final GraphNode streamGraphNode = graphNodePriorityQueue.remove();
 
-//            if (LOG.isDebugEnabled()) {
-//                LOG.debug("Adding nodes to topology {} child nodes {}", streamGraphNode, streamGraphNode.children());
-//            }
+            if (LOG.isDebugEnabled()) {
+                LOG.debug("Adding nodes to topology {} child nodes {}", streamGraphNode, streamGraphNode.children());
+            }
 
             if (streamGraphNode.allParentsWrittenToTopology() && !streamGraphNode.hasWrittenToTopology()) {
                 streamGraphNode.writeToTopology(internalTopologyBuilder);
@@ -363,21 +363,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     /**
-     * Remove nodes corresponding tto the right-side argument of join, remove merge node and
-     * replace Join node with SelfJoin node.
-     * What about N-way joins?
-     *
-     * First idea:
-     * Previous step will flag JoinThis and JoinOther as self-joins
-     * Find JoinThis and replace.
-     * Find JoinOther and remove
-     * Find Merge and remove
-     * Keep looking
-     *
-     * Second idea:
-     *
-     * Find Join with single parent and flag StreamStreamJoin as self-join
-     * Find JoinOtherWindowed that is the sibling of the above node and remove it
+     * If the join is a self-join, remove the node KStreamJoinWindow corresponding to the
      */
     @SuppressWarnings("unchecked")
     private void rewriteSelfJoin(final GraphNode currentNode, final Set<GraphNode> visited) {
@@ -386,22 +372,21 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             ((StreamStreamJoinNode) currentNode).setSelfJoin();
             // Remove JoinOtherWindowed node
             final GraphNode parent = currentNode.parentNodes().stream().findFirst().get();
-            GraphNode toRemove = null;
-            boolean other = false;
+            GraphNode left = null, right = null;
             for (final GraphNode child: parent.children()) {
                 if (child instanceof  ProcessorGraphNode
                     && isStreamJoinWindowNode((ProcessorGraphNode) child)) {
-                    // Vicky: check if the build priority of the right side is larger as another
-                    // way to find it
-                    if (!other) {
-                        other = true;
+                    if (left == null) {
+                        left = child;
                     } else {
-                        toRemove = child;
+                        right = child;
                     }
-                    LOG.debug("Adding nodes to topology child nodes ");
                 }
             }
-            parent.removeChild(toRemove);
+            // Sanity check
+            if (left != null && right != null && left.buildPriority() < right.buildPriority()) {
+                parent.removeChild(right);
+            }
         }
         for (final GraphNode child: currentNode.children()) {
             if (!visited.contains(child)) {
@@ -411,20 +396,25 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     /**
-     * Traverse the path from streamJoinNode to Source to check if there are other nodes present.
-     * It's ok if there are other nodes between the join and the source as long as
-     * the join has a single parent and there is a single source.
-     * Check if the streamJoinNode has siblings other nodes with smaller build priority that are
-     * not the StreamJoinWindow nodes
-     * @param streamJoinNode
-     * @return
+     * The self-join rewriting can be applied if:
+     * 1. The path from the StreamStreamJoinNode to the root contains a single source node.
+     * 2. The StreamStreamJoinNode has a single parent.
+     * 3. There are no other nodes besides the KStreamJoinWindow  that are siblings of the
+     * StreamStreamJoinNode and have smaller build priority.
      */
     private boolean isSelfJoin(final GraphNode streamJoinNode) {
+        final AtomicInteger count = new AtomicInteger();
+        countSourceNodes(count, streamJoinNode, new HashSet<>());
+        if (count.get() > 1) {
+            return false;
+        }
+        if (streamJoinNode.parentNodes().size() > 1) {
+            return false;
+        }
         for (final GraphNode parent: streamJoinNode.parentNodes()) {
             for (final GraphNode sibling : parent.children()) {
                 if (sibling instanceof ProcessorGraphNode) {
                     if (isStreamJoinWindowNode((ProcessorGraphNode) sibling)) {
-                        System.out.println("-------> FOUND IT");
                         continue;
                     }
                 }
@@ -434,43 +424,31 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 }
             }
         }
-        return streamJoinNode.parentNodes().size() == 1 && singleSourceNode();
+        return true;
     }
 
-    private boolean singleSourceNode() {
-        int count = 0;
-        for (final GraphNode child: root.children()) {
-            if (child instanceof StreamSourceNode) {
-                count++;
-            }
-        }
-        return count == 1;
-    }
+    private void countSourceNodes(
+        final AtomicInteger count,
+        final GraphNode currentNode,
+        final Set<GraphNode> visited) {
 
-    // When are nodes added as a sibling of the join and when as parents of it?
-    private boolean isPathToRootEmpty(final GraphNode currentNode, final Set<GraphNode> visited) {
-        if (currentNode == root) {
-            return true;
+        if (currentNode instanceof StreamSourceNode) {
+            count.incrementAndGet();
         }
+
         for (final GraphNode parent: currentNode.parentNodes()) {
             if (!visited.contains(parent)) {
                 visited.add(parent);
-                if (!(parent instanceof StreamSourceNode) && parent != root)
-                    return false;
-                return isPathToRootEmpty(parent, visited);
+                countSourceNodes(count, parent, visited);
             }
         }
-        return false;
     }
 
     private boolean isStreamJoinWindowNode(final ProcessorGraphNode node) {
-        if (node.processorParameters() != null
+        return node.processorParameters() != null
             && node.processorParameters().processorSupplier() != null
-            && node.processorParameters().processorSupplier().getClass().isAssignableFrom(KStreamJoinWindow.class)) {
-            System.out.println("-------> FOUND IT");
-            return true;
-        }
-        return false;
+            && node.processorParameters().processorSupplier().getClass()
+            .isAssignableFrom(KStreamJoinWindow.class);
     }
 
     private void optimizeKTableSourceTopics() {
