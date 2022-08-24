@@ -356,7 +356,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * This can be called from a separate thread to break out of an infinite retry loop in
      * {@link #execAndRetry(Operation)}
      */
-    public synchronized void exit() {
+    public void exit() {
         exitLatch.countDown();
     }
 
