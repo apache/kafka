@@ -644,7 +644,7 @@ public class KafkaAdminClientTest {
                 .setErrorCode(error.code()));
     }
 
-    private static QuorumInfo defaultQuorumInfo(Boolean emptyOptionals) {
+    private static QuorumInfo defaultQuorumInfo(boolean emptyOptionals) {
         return new QuorumInfo(1, 1, 1L,
                 singletonList(new QuorumInfo.ReplicaState(1, 100,
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
@@ -674,8 +674,8 @@ public class KafkaAdminClientTest {
             replica.setLastCaughtUpTimestamp(emptyOptionals ? -1 : 1000);
             partitions.add(new DescribeQuorumResponseData.PartitionData().setPartitionIndex(partitionIndex)
                     .setLeaderId(1)
-                    .setLeaderEpoch(0)
-                    .setHighWatermark(0)
+                    .setLeaderEpoch(1)
+                    .setHighWatermark(1)
                     .setCurrentVoters(singletonList(replica))
                     .setObservers(singletonList(replica))
                     .setErrorCode(partitionLevelError.code()));
