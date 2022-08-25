@@ -54,8 +54,8 @@ class LogManagerTest {
   logProps.put(LogConfig.RetentionMsProp, maxLogAgeMs: java.lang.Integer)
   logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
   val logConfig = LogConfig(logProps)
-  var logDir: File = null
-  var logManager: LogManager = null
+  var logDir: File = _
+  var logManager: LogManager = _
   val name = "kafka"
   val veryLargeLogFlushInterval = 10000000L
 

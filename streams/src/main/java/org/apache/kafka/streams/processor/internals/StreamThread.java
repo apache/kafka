@@ -393,6 +393,7 @@ public class StreamThread extends Thread {
             logPrefix,
             activeTaskCreator,
             standbyTaskCreator,
+            new Tasks(new LogContext(logPrefix)),
             topologyMetadata,
             adminClient,
             stateDirectory,

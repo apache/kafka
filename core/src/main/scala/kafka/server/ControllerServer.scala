@@ -78,18 +78,18 @@ class ControllerServer(
   val awaitShutdownCond = lock.newCondition()
   var status: ProcessStatus = SHUTDOWN
 
-  var linuxIoMetricsCollector: LinuxIoMetricsCollector = null
-  @volatile var authorizer: Option[Authorizer] = null
-  var tokenCache: DelegationTokenCache = null
-  var credentialProvider: CredentialProvider = null
-  var socketServer: SocketServer = null
+  var linuxIoMetricsCollector: LinuxIoMetricsCollector = _
+  @volatile var authorizer: Option[Authorizer] = None
+  var tokenCache: DelegationTokenCache = _
+  var credentialProvider: CredentialProvider = _
+  var socketServer: SocketServer = _
   val socketServerFirstBoundPortFuture = new CompletableFuture[Integer]()
   var createTopicPolicy: Option[CreateTopicPolicy] = None
   var alterConfigPolicy: Option[AlterConfigPolicy] = None
-  var controller: Controller = null
-  var quotaManagers: QuotaManagers = null
-  var controllerApis: ControllerApis = null
-  var controllerApisHandlerPool: KafkaRequestHandlerPool = null
+  var controller: Controller = _
+  var quotaManagers: QuotaManagers = _
+  var controllerApis: ControllerApis = _
+  var controllerApisHandlerPool: KafkaRequestHandlerPool = _
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()

@@ -30,7 +30,7 @@ import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SslConfigs}
-import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
+import org.apache.kafka.common.metrics.{JmxReporter, Metrics, MetricsReporter}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
@@ -210,7 +210,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private val reconfigurables = new CopyOnWriteArrayList[Reconfigurable]()
   private val brokerReconfigurables = new CopyOnWriteArrayList[BrokerReconfigurable]()
   private val lock = new ReentrantReadWriteLock
-  private var currentConfig: KafkaConfig = null
+  private var currentConfig: KafkaConfig = _
   private val dynamicConfigPasswordEncoder = if (kafkaConfig.processRoles.isEmpty) {
     maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderSecret)
   } else {
@@ -750,7 +750,7 @@ class DynamicThreadPool(server: KafkaBroker) extends BrokerReconfigurable {
 
 class DynamicMetricsReporters(brokerId: Int, config: KafkaConfig, metrics: Metrics, clusterId: String) extends Reconfigurable {
   private val reporterState = new DynamicMetricReporterState(brokerId, config, metrics, clusterId)
-  private val currentReporters = reporterState.currentReporters
+  private[server] val currentReporters = reporterState.currentReporters
   private val dynamicConfig = reporterState.dynamicConfig
 
   private def metricsReporterClasses(configs: util.Map[String, _]): mutable.Buffer[String] =
@@ -824,6 +824,7 @@ class DynamicMetricReporterState(brokerId: Int, config: KafkaConfig, metrics: Me
     updatedConfigs.forEach((k, v) => props.put(k, v.asInstanceOf[AnyRef]))
     propsOverride.forKeyValue((k, v) => props.put(k, v))
     val reporters = dynamicConfig.currentKafkaConfig.getConfiguredInstances(reporterClasses, classOf[MetricsReporter], props)
+
     // Call notifyMetricsReporters first to satisfy the contract for MetricsReporter.contextChange,
     // which provides that MetricsReporter.contextChange must be called before the first call to MetricsReporter.init.
     // The first call to MetricsReporter.init is done when we call metrics.addReporter below.
@@ -839,8 +840,15 @@ class DynamicMetricReporterState(brokerId: Int, config: KafkaConfig, metrics: Me
     currentReporters.remove(className).foreach(metrics.removeReporter)
   }
 
+  @nowarn("cat=deprecation")
   private[server] def metricsReporterClasses(configs: util.Map[String, _]): mutable.Buffer[String] = {
-    configs.get(KafkaConfig.MetricReporterClassesProp).asInstanceOf[util.List[String]].asScala
+    val reporters = mutable.Buffer[String]()
+    reporters ++= configs.get(KafkaConfig.MetricReporterClassesProp).asInstanceOf[util.List[String]].asScala
+    if (configs.get(KafkaConfig.AutoIncludeJmxReporterProp).asInstanceOf[Boolean] &&
+        !reporters.contains(classOf[JmxReporter].getName)) {
+      reporters += classOf[JmxReporter].getName
+    }
+    reporters
   }
 }
 

@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.TopologyConfig;
@@ -202,6 +203,7 @@ public class TaskManagerTest {
             "taskManagerTest",
             activeTaskCreator,
             standbyTaskCreator,
+            new Tasks(new LogContext()),
             topologyMetadata,
             adminClient,
             stateDirectory,
@@ -540,7 +542,7 @@ public class TaskManagerTest {
             "taskManagerTest",
             activeTaskCreator,
             standbyTaskCreator,
-            topologyMetadata,
+            new Tasks(new LogContext()), topologyMetadata,
             adminClient,
             stateDirectory,
             stateUpdater

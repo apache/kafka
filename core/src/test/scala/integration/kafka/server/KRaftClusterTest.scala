@@ -810,16 +810,16 @@ class KRaftClusterTest {
         quorumInfo.voters.forEach { voter =>
           assertTrue(0 < voter.logEndOffset,
             s"logEndOffset for voter with ID ${voter.replicaId} was ${voter.logEndOffset}")
-          assertNotEquals(OptionalLong.empty(), voter.lastFetchTimeMs)
-          assertNotEquals(OptionalLong.empty(), voter.lastCaughtUpTimeMs)
+          assertNotEquals(OptionalLong.empty(), voter.lastFetchTimestamp)
+          assertNotEquals(OptionalLong.empty(), voter.lastCaughtUpTimestamp)
         }
 
         assertEquals(cluster.brokers.asScala.keySet, quorumInfo.observers.asScala.map(_.replicaId).toSet)
         quorumInfo.observers.forEach { observer =>
           assertTrue(0 < observer.logEndOffset,
             s"logEndOffset for observer with ID ${observer.replicaId} was ${observer.logEndOffset}")
-          assertNotEquals(OptionalLong.empty(), observer.lastFetchTimeMs)
-          assertNotEquals(OptionalLong.empty(), observer.lastCaughtUpTimeMs)
+          assertNotEquals(OptionalLong.empty(), observer.lastFetchTimestamp)
+          assertNotEquals(OptionalLong.empty(), observer.lastCaughtUpTimestamp)
         }
       } finally {
         admin.close()

@@ -127,13 +127,13 @@ object MetadataQuorumCommand {
         Array(info.replicaId,
               info.logEndOffset,
               leader.logEndOffset - info.logEndOffset,
-              info.lastFetchTimeMs.orElse(-1),
-              info.lastCaughtUpTimeMs.orElse(-1),
+              info.lastFetchTimestamp.orElse(-1),
+              info.lastCaughtUpTimestamp.orElse(-1),
               status
         ).map(_.toString)
       }
     prettyPrintTable(
-      Array("NodeId", "LogEndOffset", "Lag", "LastFetchTimeMs", "LastCaughtUpTimeMs", "Status"),
+      Array("NodeId", "LogEndOffset", "Lag", "LastFetchTimestamp", "LastCaughtUpTimestamp", "Status"),
       (convertQuorumInfo(Seq(leader), "Leader")
         ++ convertQuorumInfo(quorumInfo.voters.asScala.filter(_.replicaId != leaderId).toSeq, "Follower")
         ++ convertQuorumInfo(quorumInfo.observers.asScala.toSeq, "Observer")).asJava,
@@ -152,8 +152,8 @@ object MetadataQuorumCommand {
     val maxFollowerLagTimeMs =
       if (leader == maxLagFollower) {
         0
-      } else if (leader.lastCaughtUpTimeMs.isPresent && maxLagFollower.lastCaughtUpTimeMs.isPresent) {
-        leader.lastCaughtUpTimeMs.getAsLong - maxLagFollower.lastCaughtUpTimeMs.getAsLong
+      } else if (leader.lastCaughtUpTimestamp.isPresent && maxLagFollower.lastCaughtUpTimestamp.isPresent) {
+        leader.lastCaughtUpTimestamp.getAsLong - maxLagFollower.lastCaughtUpTimestamp.getAsLong
       } else {
         -1
       }

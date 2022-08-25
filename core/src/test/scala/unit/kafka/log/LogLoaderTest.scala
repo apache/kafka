@@ -45,7 +45,7 @@ import scala.collection.{Iterable, Map, mutable}
 import scala.jdk.CollectionConverters._
 
 class LogLoaderTest {
-  var config: KafkaConfig = null
+  var config: KafkaConfig = _
   val brokerTopicStats = new BrokerTopicStats
   val maxTransactionTimeoutMs: Int = 5 * 60 * 1000
   val maxProducerIdExpirationMs: Int = 60 * 60 * 1000

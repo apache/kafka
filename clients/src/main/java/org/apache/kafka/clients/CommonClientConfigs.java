@@ -19,12 +19,16 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -97,6 +101,10 @@ public class CommonClientConfigs {
     public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.";
 
     public static final String METRICS_CONTEXT_PREFIX = "metrics.context.";
+
+    @Deprecated
+    public static final String AUTO_INCLUDE_JMX_REPORTER_CONFIG = "auto.include.jmx.reporter";
+    public static final String AUTO_INCLUDE_JMX_REPORTER_DOC = "Deprecated. Whether to automatically include JmxReporter even if it's not listed in <code>metric.reporters</code>. This configuration will be removed in Kafka 4.0, users should instead include <code>org.apache.kafka.common.metrics.JmxReporter</code> in <code>metric.reporters</code> in order to enable the JmxReporter.";
 
     public static final String SECURITY_PROTOCOL_CONFIG = "security.protocol";
     public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers. Valid values are: " +
@@ -215,5 +223,25 @@ public class CommonClientConfigs {
                         " configuration enables SASL, mechanism must be non-null and non-empty string.");
             }
         }
+    }
+
+    public static List<MetricsReporter> metricsReporters(AbstractConfig config) {
+        return metricsReporters(Collections.emptyMap(), config);
+    }
+
+    public static List<MetricsReporter> metricsReporters(String clientId, AbstractConfig config) {
+        return metricsReporters(Collections.singletonMap(CommonClientConfigs.CLIENT_ID_CONFIG, clientId), config);
+    }
+
+    public static List<MetricsReporter> metricsReporters(Map<String, Object> clientIdOverride, AbstractConfig config) {
+        List<MetricsReporter> reporters = config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
+                MetricsReporter.class, clientIdOverride);
+        if (config.getBoolean(CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG) &&
+                reporters.stream().noneMatch(r -> JmxReporter.class.equals(r.getClass()))) {
+            JmxReporter jmxReporter = new JmxReporter();
+            jmxReporter.configure(config.originals(clientIdOverride));
+            reporters.add(jmxReporter);
+        }
+        return reporters;
     }
 }

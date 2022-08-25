@@ -29,7 +29,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -104,7 +103,6 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
@@ -992,17 +990,13 @@ public class KafkaStreams implements AutoCloseable {
         return streamThread;
     }
 
-    private static Metrics getMetrics(final StreamsConfig config, final Time time, final String clientId) {
+    static Metrics getMetrics(final StreamsConfig config, final Time time, final String clientId) {
         final MetricConfig metricConfig = new MetricConfig()
             .samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
             .recordLevel(Sensor.RecordingLevel.forName(config.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)))
             .timeWindow(config.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS);
-        final List<MetricsReporter> reporters = config.getConfiguredInstances(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                                                                              MetricsReporter.class,
-                                                                              Collections.singletonMap(StreamsConfig.CLIENT_ID_CONFIG, clientId));
-        final JmxReporter jmxReporter = new JmxReporter();
-        jmxReporter.configure(config.originals());
-        reporters.add(jmxReporter);
+        final List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
+
         final MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                                                                       config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
         return new Metrics(metricConfig, reporters, time, metricsContext);
@@ -1253,7 +1247,7 @@ public class KafkaStreams implements AutoCloseable {
 
     private static ScheduledExecutorService maybeCreateRocksDBMetricsRecordingService(final String clientId,
                                                                                       final StreamsConfig config) {
-        if (RecordingLevel.forName(config.getString(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
+        if (RecordingLevel.forName(config.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
             return Executors.newSingleThreadScheduledExecutor(r -> {
                 final Thread thread = new Thread(r, clientId + "-RocksDBMetricsRecordingTrigger");
                 thread.setDaemon(true);

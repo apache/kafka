@@ -46,9 +46,9 @@ class ReplicationQuotasTest extends QuorumTestHarness {
   def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100.0)
 
   val msg100KB = new Array[Byte](100000)
-  var brokers: Seq[KafkaServer] = null
+  var brokers: Seq[KafkaServer] = _
   val topic = "topic1"
-  var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
+  var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
 
   @AfterEach
   override def tearDown(): Unit = {

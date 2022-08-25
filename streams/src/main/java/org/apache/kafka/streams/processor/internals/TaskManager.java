@@ -72,7 +72,7 @@ public class TaskManager {
     // by QueryableState
     private final Logger log;
     private final Time time;
-    private final Tasks tasks;
+    private final TasksRegistry tasks;
     private final UUID processId;
     private final String logPrefix;
     private final Admin adminClient;
@@ -102,6 +102,7 @@ public class TaskManager {
                 final String logPrefix,
                 final ActiveTaskCreator activeTaskCreator,
                 final StandbyTaskCreator standbyTaskCreator,
+                final TasksRegistry tasks,
                 final TopologyMetadata topologyMetadata,
                 final Admin adminClient,
                 final StateDirectory stateDirectory,
@@ -121,9 +122,9 @@ public class TaskManager {
         this.log = logContext.logger(getClass());
 
         this.stateUpdater = stateUpdater;
-        this.tasks = new Tasks(logContext);
+        this.tasks = tasks;
         this.taskExecutor = new TaskExecutor(
-            tasks,
+            this.tasks,
             this,
             topologyMetadata.taskExecutionMetadata(),
             logContext
@@ -927,7 +928,7 @@ public class TaskManager {
         // so we consider all tasks that are either owned or on disk. This includes stateless tasks, which should
         // just have an empty changelogOffsets map.
         for (final TaskId id : union(HashSet::new, lockedTaskDirectories, tasks.allTaskIds())) {
-            final Task task = tasks.owned(id) ? tasks.task(id) : null;
+            final Task task = tasks.contains(id) ? tasks.task(id) : null;
             // Closed and uninitialized tasks don't have any offsets so we should read directly from the checkpoint
             if (task != null && task.state() != State.CREATED && task.state() != State.CLOSED) {
                 final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
@@ -969,7 +970,7 @@ public class TaskManager {
                 final TaskId id = parseTaskDirectoryName(dir.getName(), namedTopology);
                 if (stateDirectory.lock(id)) {
                     lockedTaskDirectories.add(id);
-                    if (!tasks.owned(id)) {
+                    if (!tasks.contains(id)) {
                         log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
                     }
                 }
@@ -1002,7 +1003,7 @@ public class TaskManager {
         final Iterator<TaskId> taskIdIterator = lockedTaskDirectories.iterator();
         while (taskIdIterator.hasNext()) {
             final TaskId id = taskIdIterator.next();
-            if (!tasks.owned(id)) {
+            if (!tasks.contains(id)) {
                 stateDirectory.unlock(id);
                 taskIdIterator.remove();
             }
@@ -1575,7 +1576,7 @@ public class TaskManager {
         tasks.addTask(task);
     }
 
-    Tasks tasks() {
+    TasksRegistry tasks() {
         return tasks;
     }
 }
