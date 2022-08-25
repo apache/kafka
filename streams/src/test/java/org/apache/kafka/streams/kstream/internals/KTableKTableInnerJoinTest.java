@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.Arrays;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValueTimestamp;
@@ -39,7 +40,6 @@ import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
-import java.util.Arrays;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -76,23 +76,6 @@ public class KTableKTableInnerJoinTest {
         final KTable<Integer, String> joined;
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
-        joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
-        joined.toStream().to(output);
-
-        doTestJoin(builder, expectedKeys);
-    }
-
-    @Test
-    public void testVicky() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
-
-        final KTable<Integer, String> table1;
-        final KTable<Integer, String> table2;
-        final KTable<Integer, String> joined;
-        table1 = builder.table(topic1, consumed);
-        table2 = builder.table(topic1, consumed);
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
         joined.toStream().to(output);
 
