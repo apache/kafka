@@ -42,7 +42,7 @@ import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_BOOTSTRAP_V
  * format is the same as a KRaft snapshot.
  */
 public class BootstrapDirectory {
-    final static String BINARY_BOOTSTRAP = "bootstrap.checkpoint";
+    public static final String BINARY_BOOTSTRAP_FILENAME = "bootstrap.checkpoint";
 
     private final String directoryPath;
     private final Optional<String> ibp;
@@ -71,7 +71,7 @@ public class BootstrapDirectory {
                 throw new RuntimeException("No such directory as " + directoryPath);
             }
         }
-        Path binaryBootstrapPath = Paths.get(directoryPath, BINARY_BOOTSTRAP);
+        Path binaryBootstrapPath = Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME);
         if (!Files.exists(binaryBootstrapPath)) {
             return readFromConfiguration();
         } else {
@@ -111,14 +111,14 @@ public class BootstrapDirectory {
         if (!Files.isDirectory(Paths.get(directoryPath))) {
             throw new RuntimeException("No such directory as " + directoryPath);
         }
-        Path tempPath = Paths.get(directoryPath, BINARY_BOOTSTRAP + ".tmp");
+        Path tempPath = Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME + ".tmp");
         Files.deleteIfExists(tempPath);
         try (BatchFileWriter writer = BatchFileWriter.open(tempPath)) {
             for (ApiMessageAndVersion message : bootstrapMetadata.records()) {
                 writer.append(message);
             }
         }
-        Files.move(tempPath, Paths.get(directoryPath, BINARY_BOOTSTRAP),
+        Files.move(tempPath, Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME),
                 ATOMIC_MOVE, REPLACE_EXISTING);
     }
 }

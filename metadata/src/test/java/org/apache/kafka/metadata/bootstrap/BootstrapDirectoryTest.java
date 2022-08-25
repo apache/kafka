@@ -58,7 +58,7 @@ public class BootstrapDirectoryTest {
         }
 
         synchronized String binaryBootstrapPath() {
-            return new File(directory, BootstrapDirectory.BINARY_BOOTSTRAP).getAbsolutePath();
+            return new File(directory, BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME).getAbsolutePath();
         }
 
         @Override
