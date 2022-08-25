@@ -1463,10 +1463,19 @@ class ReplicaManager(val config: KafkaConfig,
   def becomeLeaderOrFollower(correlationId: Int,
                              leaderAndIsrRequest: LeaderAndIsrRequest,
                              onLeadershipChange: (Iterable[Partition], Iterable[Partition]) => Unit): LeaderAndIsrResponse = {
+
+    val breakdown = mutable.Map[String, Long]().withDefaultValue(0L)
+
     val startMs = time.milliseconds()
+    val intervalMarker = new CoreUtils.TimeIntervalMarker(startMs)
+
     replicaStateChangeLock synchronized {
+      intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
+      breakdown("acquireReplicaStateChangeLock") = intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
+
       val controllerId = leaderAndIsrRequest.controllerId
       val requestPartitionStates = leaderAndIsrRequest.partitionStates.asScala
+      breakdown("convertLeaderAndIsrRequestPartitionStates") = intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
       stateChangeLogger.info(s"Handling LeaderAndIsr request correlationId $correlationId from controller " +
         s"$controllerId for ${requestPartitionStates.size} partitions")
       if (stateChangeLogger.isTraceEnabled)
@@ -1502,6 +1511,7 @@ class ReplicaManager(val config: KafkaConfig,
             val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
             allRequestPartitions.add(topicPartition)
 
+            intervalMarker.markTime(time.milliseconds())
             val partitionOpt = getPartition(topicPartition) match {
               case HostedPartition.Offline =>
                 stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from " +
@@ -1519,6 +1529,7 @@ class ReplicaManager(val config: KafkaConfig,
                 allPartitions.putIfNotExists(topicPartition, HostedPartition.Online(partition))
                 Some(partition)
             }
+            breakdown("validateTopicPartitionInfo") += intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
 
             // Next check the topic ID and the partition's leader epoch
             partitionOpt.foreach { partition =>
@@ -1577,12 +1588,18 @@ class ReplicaManager(val config: KafkaConfig,
                 responseMap.put(topicPartition, error)
               }
             }
+
+            breakdown("validateTopicIdInfo") += intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
           }
+
 
           if (leaderAndIsrRequest.`type`() == LeaderAndIsrRequestType.FULL) {
             stateChangeLogger.trace("received FULL LeaderAndISR request")
+            intervalMarker.markTime(time.milliseconds())
             val partitionsToDelete = findStrayPartitions(allRequestPartitions, logManager.allLogs)
+            breakdown("findStrayPartition") = intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
             deleteStrayReplicas(partitionsToDelete)
+            breakdown("deleteStrayReplicas") = intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
           } else if (leaderAndIsrRequest.`type`() == LeaderAndIsrRequestType.INCREMENTAL) {
             stateChangeLogger.trace("received INCREMENTAL LeaderAndISR request, skip finding of stray partitions")
           } else {
@@ -1594,20 +1611,25 @@ class ReplicaManager(val config: KafkaConfig,
           }
           val partitionsToBeFollower = partitionStates.filter { case (k, _) => !partitionsToBeLeader.contains(k) }
 
+          intervalMarker.markTime(time.milliseconds())
           val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
+          breakdown("generateHighWatermarkCheckpoints") = intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
           val partitionsBecomeLeader = if (partitionsToBeLeader.nonEmpty)
             makeLeaders(controllerId, controllerEpoch, partitionsToBeLeader, correlationId, responseMap,
               highWatermarkCheckpoints, topicIdFromRequest)
           else
             Set.empty[Partition]
+          breakdown("makeLeaders") = intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
           val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty)
             makeFollowers(controllerId, controllerEpoch, partitionsToBeFollower, correlationId, responseMap,
               highWatermarkCheckpoints, topicIdFromRequest)
           else
             Set.empty[Partition]
+          breakdown("makeFollowers") = intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
 
           val followerTopicSet = partitionsBecomeFollower.map(_.topic).toSet
           updateLeaderAndFollowerMetrics(followerTopicSet)
+          breakdown("updateLeaderAndFollowerMetrics") = intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
 
           leaderAndIsrRequest.partitionStates.forEach { partitionState =>
             val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
@@ -1620,19 +1642,25 @@ class ReplicaManager(val config: KafkaConfig,
             if (localLog(topicPartition).isEmpty)
               markPartitionOffline(topicPartition)
           }
+          breakdown("markPartitionOffline") = intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
 
           // we initialize highwatermark thread after the first leaderisrrequest. This ensures that all the partitions
           // have been completely populated before starting the checkpointing there by avoiding weird race conditions
           startHighWatermarkCheckPointThread()
+          breakdown("startHighWatermarkCheckPointThread") = intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
 
           maybeAddLogDirFetchers(partitionStates.keySet, highWatermarkCheckpoints, topicIdFromRequest)
+          breakdown("maybeAddLogDirFetchers") = intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
 
           replicaFetcherManager.shutdownIdleFetcherThreads()
           // replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
+          breakdown("shutdownIdleFetcherThreads") = intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
 
           remoteLogManager.foreach(rlm => rlm.onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower, topicIds))
+          breakdown("remoteLogManagerOnLeadershipChangeCallback") = intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
 
           onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
+          breakdown("localLogManagerOnLeadershipChangeCallback") = intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
 
           val data = new LeaderAndIsrResponseData().setErrorCode(Errors.NONE.code)
           /* In version 5 and below, response contains a list of topic-partitions with
@@ -1658,6 +1686,7 @@ class ReplicaManager(val config: KafkaConfig,
                 .setErrorCode(error.code))
             }
           }
+          breakdown("constructLeaderAndIsrResponse") = intervalMarker.markTimeAndReturnLatestInterval(time.milliseconds())
           new LeaderAndIsrResponse(data, leaderAndIsrRequest.version)
         }
       }
@@ -1665,6 +1694,8 @@ class ReplicaManager(val config: KafkaConfig,
       val elapsedMs = endMs - startMs
       stateChangeLogger.info(s"Finished LeaderAndIsr request in ${elapsedMs}ms correlationId $correlationId from controller " +
         s"$controllerId for ${requestPartitionStates.size} partitions")
+      stateChangeLogger.info(s"Breakdown time in milliseconds for LeaderAndIsr request with correlationId $correlationId from controller " +
+        s"$controllerId: " + breakdown)
       response
     }
   }

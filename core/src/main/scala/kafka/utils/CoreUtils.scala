@@ -338,4 +338,26 @@ object CoreUtils {
     TimeUnit.NANOSECONDS.toMicros(positiveNanos).toDouble / TimeUnit.MILLISECONDS.toMicros(1)
   }
 
+  /**
+   * An easy helper to help calculate breakdown times
+   * Meant not to be complicated like handling thread-safety
+   * @param startTime
+   */
+  class TimeIntervalMarker(startTime: Long) {
+    var previous = startTime
+    var current = startTime
+
+    def latestInterval = current - previous
+
+    def markTime(mark: Long): Unit = {
+      previous = current
+      current = mark
+    }
+
+    def markTimeAndReturnLatestInterval(mark: Long): Long = {
+      markTime(mark)
+      latestInterval
+    }
+  }
+
 }
