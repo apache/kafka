@@ -412,27 +412,6 @@ public class InternalStreamsBuilderTest {
     }
 
     @Test
-    public void shouldNotMarkStreamStreamJoinAsSelfJoinTwoStreamsWithFilter() {
-        // Given:
-        final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
-        final KStream<String, String> stream2 = builder.stream(Collections.singleton("t1"), consumed);
-        stream1
-            .filter((key, value) -> value != null)
-            .join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
-
-        // When:
-        builder.buildAndOptimizeTopology(true, true);
-
-        // Then:
-        final GraphNode join = getNodeByType(builder.root, StreamStreamJoinNode.class, new HashSet<>());
-        assertNotNull(join);
-        assertFalse(((StreamStreamJoinNode) join).getSelfJoin());
-        final AtomicInteger count = new AtomicInteger();
-        countJoinWindowNodes(count, builder.root, new HashSet<>());
-        assertEquals(count.get(), 2);
-    }
-
-    @Test
     public void shouldMarkStreamStreamJoinAsSelfJoin3WayJoin() {
         // Given:
         final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
@@ -456,6 +435,26 @@ public class InternalStreamsBuilderTest {
         assertEquals(count.get(), 3);
     }
 
+    @Test
+    public void shouldNotMarkStreamStreamJoinAsSelfJoinTwoStreamsWithFilter() {
+        // Given:
+        final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
+        final KStream<String, String> stream2 = builder.stream(Collections.singleton("t1"), consumed);
+        stream1
+            .filter((key, value) -> value != null)
+            .join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
+
+        // When:
+        builder.buildAndOptimizeTopology(true, true);
+
+        // Then:
+        final GraphNode join = getNodeByType(builder.root, StreamStreamJoinNode.class, new HashSet<>());
+        assertNotNull(join);
+        assertFalse(((StreamStreamJoinNode) join).getSelfJoin());
+        final AtomicInteger count = new AtomicInteger();
+        countJoinWindowNodes(count, builder.root, new HashSet<>());
+        assertEquals(count.get(), 2);
+    }
 
     @Test
     public void shouldNotMarkStreamStreamJoinAsSelfJoinOneStreamWithMap() {
@@ -463,6 +462,26 @@ public class InternalStreamsBuilderTest {
         final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
         stream1.mapValues(v -> v);
         final KStream<String, String> stream2 = builder.stream(Collections.singleton("t1"), consumed);
+        stream1.join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
+
+        // When:
+        builder.buildAndOptimizeTopology(true, true);
+
+        // Then:
+        final GraphNode join = getNodeByType(builder.root, StreamStreamJoinNode.class, new HashSet<>());
+        assertNotNull(join);
+        assertFalse(((StreamStreamJoinNode) join).getSelfJoin());
+        final AtomicInteger count = new AtomicInteger();
+        countJoinWindowNodes(count, builder.root, new HashSet<>());
+        assertEquals(count.get(), 2);
+    }
+
+    @Test
+    public void shouldNotMarkStreamStreamJoinAsSelfJoinMultipleSources() {
+        // Given:
+        final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
+        stream1.mapValues(v -> v);
+        final KStream<String, String> stream2 = builder.stream(Collections.singleton("t2"), consumed);
         stream1.join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
 
         // When:

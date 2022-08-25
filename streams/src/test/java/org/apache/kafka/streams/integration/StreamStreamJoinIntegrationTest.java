@@ -66,39 +66,34 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @Test
-    public void testVicky() {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
+    public void testSelfJoin() {
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-selfJoin");
+        STREAMS_CONFIG.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        STREAMS_CONFIG.put(StreamsConfig.SELF_JOIN_OPTIMIZATION_CONFIG, "true");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
-            null,
-            null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-A", null, 2L)),
             Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "A-b", null, 6L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
-            null,
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-A", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-B", null, 3L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-B", null, 3L)),
             null,
             Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-a", null, 9L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-b", null, 9L)),
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "A-c", null, 10L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "B-c", null, 10L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
-            null,
-            null,
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-A", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-B", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-C", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-C", null, 5L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-C", null, 5L)),
             null,
             Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "A-d", null, 14L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "B-d", null, 14L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-d", null, 14L)),
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L))
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-A", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-B", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-C", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "A-D", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "B-D", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "C-D", null, 7L),
+                new TestRecord<>(ANY_UNIQUE_KEY, "D-D", null, 7L))
         );
 
         leftStream.join(
@@ -107,7 +102,7 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
             JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(10), ofHours(24))
         ).to(OUTPUT_TOPIC);
 
-        runTestWithDriver(expectedResult);
+        runSelfJoinTestWithDriver(expectedResult);
     }
 
     @Test

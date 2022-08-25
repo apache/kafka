@@ -166,10 +166,12 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
                 }
 
                 // Join current with itself
+//                if (windowStore.fetch(record.key(), timeFrom, timeTo).hasNext()) {
                 context().forward(
                     record.withValue(joinerThis.apply(
                         record.key(), record.value(), (V2) record.value()))
                           .withTimestamp(inputRecordTimestamp));
+//                }
             }
         }
     }
