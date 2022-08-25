@@ -191,7 +191,7 @@ Found problem:
   @Test
   def testDefaultMetadataVersion(): Unit = {
     val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
-    val mv = StorageTool.getMetadataVersion(namespace, "")
+    val mv = StorageTool.getMetadataVersion(namespace, defaultVersionString = None)
     assertEquals(MetadataVersion.latest().featureLevel(), mv.featureLevel(),
       "Expected the default metadata.version to be the latest version")
   }
@@ -199,7 +199,7 @@ Found problem:
   @Test
   def testConfiguredMetadataVersion(): Unit = {
     val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
-    val mv = StorageTool.getMetadataVersion(namespace, MetadataVersion.IBP_3_3_IV2.toString)
+    val mv = StorageTool.getMetadataVersion(namespace, defaultVersionString = Some(MetadataVersion.IBP_3_3_IV2.toString))
     assertEquals(MetadataVersion.IBP_3_3_IV2.featureLevel(), mv.featureLevel(),
       "Expected the default metadata.version to be 3.3-IV2")
   }
@@ -210,7 +210,7 @@ Found problem:
       var args = mutable.Seq("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ")
       args ++= strings
       val namespace = StorageTool.parseArguments(args.toArray)
-      StorageTool.getMetadataVersion(namespace, "")
+      StorageTool.getMetadataVersion(namespace, defaultVersionString = None)
     }
 
     var mv = parseMetadataVersion("--release-version", "3.0")

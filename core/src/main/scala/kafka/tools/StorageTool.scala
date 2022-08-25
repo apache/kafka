@@ -48,7 +48,7 @@ object StorageTool extends Logging {
         case "format" =>
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
-          val metadataVersion = getMetadataVersion(namespace, config.get.interBrokerProtocolVersionString)
+          val metadataVersion = getMetadataVersion(namespace, Option(config.get.interBrokerProtocolVersionString))
           if (!metadataVersion.isKRaftSupported) {
             throw new TerseFailure(s"Must specify a valid KRaft metadata version of at least 3.0.")
           }
@@ -116,13 +116,13 @@ object StorageTool extends Logging {
 
   def getMetadataVersion(
     namespace: Namespace,
-    defaultValueString: String
+    defaultVersionString: Option[String]
   ): MetadataVersion = {
-    val defaultValue = if (defaultValueString == null) {
-      MetadataVersion.latest()
-    } else {
-      MetadataVersion.fromVersionString(defaultValueString)
+    val defaultValue = defaultVersionString match {
+      case Some(versionString) => MetadataVersion.fromVersionString(versionString)
+      case None => MetadataVersion.latest()
     }
+
     Option(namespace.getString("release_version"))
       .map(ver => MetadataVersion.fromVersionString(ver))
       .getOrElse(defaultValue)
