@@ -249,7 +249,7 @@ public class RetryWithToleranceOperatorTest {
             return false;
         });
         EasyMock.expect(exitLatch.await(4800, TimeUnit.MILLISECONDS)).andReturn(true);
-        retryWithToleranceOperator.exit();
+        retryWithToleranceOperator.triggerStop();
         exitLatch.countDown();
         EasyMock.expectLastCall().once();
 
