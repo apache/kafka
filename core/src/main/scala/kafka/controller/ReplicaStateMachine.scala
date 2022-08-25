@@ -34,14 +34,14 @@ abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends
   /**
    * Invoked on successful controller election.
    */
-  def startup(controllerStartMs: Long = Time.SYSTEM.milliseconds): Unit = {
+  def startup(controllerContextSnapshot: ControllerContextSnapshot, controllerStartMs: Long = Time.SYSTEM.milliseconds): Unit = {
     info(s"Initializing replica state ${KafkaController.timing(-1, controllerStartMs)}")
-    initializeReplicaState()
+    initializeReplicaState(controllerContextSnapshot)
     val (onlineReplicas, offlineReplicas) = controllerContext.onlineAndOfflineReplicas
     info(s"Triggering online replica state changes for ${onlineReplicas.size} replicas ${KafkaController.timing(-1, controllerStartMs)}")
-    handleStateChanges(onlineReplicas.toSeq, OnlineReplica)
+    handleStateChanges(onlineReplicas.toSeq, OnlineReplica, controllerContextSnapshot)
     info(s"Triggering offline replica state changes for ${offlineReplicas.size} replicas ${KafkaController.timing(-1, controllerStartMs)}")
-    handleStateChanges(offlineReplicas.toSeq, OfflineReplica)
+    handleStateChanges(offlineReplicas.toSeq, OfflineReplica, controllerContextSnapshot)
     debug(s"Started replica state machine ${KafkaController.timing(-1, controllerStartMs)} with initial state -> ${controllerContext.replicaStates}")
   }
 
@@ -56,8 +56,7 @@ abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends
    * Invoked on startup of the replica's state machine to set the initial state for replicas of all existing partitions
    * in zookeeper
    */
-  private def initializeReplicaState(): Unit = {
-    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
+  private def initializeReplicaState(controllerContextSnapshot: ControllerContextSnapshot): Unit = {
     controllerContext.allPartitions.foreach { partition =>
       val replicas = controllerContext.partitionReplicaAssignment(partition)
       replicas.foreach { replicaId =>
@@ -74,7 +73,7 @@ abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends
     }
   }
 
-  def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit
+  def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState, controllerContextSnapshot: ControllerContextSnapshot = ControllerContextSnapshot(controllerContext)): Unit
 }
 
 /**
@@ -106,19 +105,21 @@ class ZkReplicaStateMachine(config: KafkaConfig,
   private val controllerId = config.brokerId
   this.logIdent = s"[ReplicaStateMachine controllerId=$controllerId] "
 
-  override def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {
+  override def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState, controllerContextSnapshot: ControllerContextSnapshot = ControllerContextSnapshot(controllerContext)): Unit = {
     if (replicas.nonEmpty) {
       try {
-        var taskStartMs: Long = Time.SYSTEM.milliseconds
+        val taskStartMs: Long = Time.SYSTEM.milliseconds
         val doExtraTiming: Boolean = (targetState == OnlineReplica && replicas.size > 250000)
         val timingsOpt = if (doExtraTiming) Some(AggregatedTimings()) else None
 
         controllerBrokerRequestBatch.newBatch()
+        // replicaId == brokerId, not topic-partition-replica ("replicas") ID, i.e., this is called once per
+        // leader-hosting broker:
         replicas.groupBy(_.replica).forKeyValue { (replicaId, replicas) =>
-          doHandleStateChanges(replicaId, replicas, targetState, timingsOpt)
+          doHandleStateChanges(replicaId, replicas, targetState, timingsOpt, controllerContextSnapshot)
         }
 
-        var startMs: Long = if (doExtraTiming) Time.SYSTEM.milliseconds else 0L
+        val startMs: Long = if (doExtraTiming) Time.SYSTEM.milliseconds else 0L
         controllerBrokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
         timingsOpt.foreach { timings =>
           timings.sendRequestsToBrokersSumMs += (Time.SYSTEM.milliseconds - startMs)
@@ -181,11 +182,11 @@ class ZkReplicaStateMachine(config: KafkaConfig,
    * ReplicaDeletionSuccessful -> NonExistentReplica
    * -- remove the replica from the in memory partition replica assignment cache
    *
-   * @param replicaId The replica for which the state transition is invoked
+   * @param replicaId The replica (brokerId) for which the state transition is invoked
    * @param replicas The partitions on this replica for which the state transition is invoked
    * @param targetState The end state that the replica should be moved to
    */
-  private def doHandleStateChanges(replicaId: Int, replicas: Seq[PartitionAndReplica], targetState: ReplicaState, timingsOpt: Option[AggregatedTimings]): Unit = {
+  private def doHandleStateChanges(replicaId: Int, replicas: Seq[PartitionAndReplica], targetState: ReplicaState, timingsOpt: Option[AggregatedTimings], controllerContextSnapshot: ControllerContextSnapshot): Unit = {
     val stateLogger = stateChangeLogger.withControllerEpoch(controllerContext.epoch)
     val traceEnabled = stateLogger.isTraceEnabled
     replicas.foreach(replica => controllerContext.putReplicaStateIfNotExists(replica, NonExistentReplica))
@@ -257,7 +258,9 @@ class ZkReplicaStateMachine(config: KafkaConfig,
                   controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(replicaId),
                     replica.topicPartition,
                     leaderIsrAndControllerEpoch,
-                    controllerContext.partitionFullReplicaAssignment(partition), isNew = false)
+                    controllerContext.partitionFullReplicaAssignment(partition),
+                    isNew = false,
+                    controllerContextSnapshot)
                 case None =>
               }
               timingsOpt.foreach { timings =>
@@ -287,6 +290,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
           stateLogger.info(s"Partition $partition state changed to $leaderIsrAndControllerEpoch after removing replica $replicaId from the ISR as part of transition to $OfflineReplica")
           if (!controllerContext.isTopicQueuedUpForDeletion(partition.topic)) {
             val recipients = controllerContext.partitionReplicaAssignment(partition).filterNot(_ == replicaId)
+            // possible PERF TODO?  could add controllerContextSnapshot as 6th arg here, too:
             controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(recipients,
               partition,
               leaderIsrAndControllerEpoch,
@@ -303,6 +307,9 @@ class ZkReplicaStateMachine(config: KafkaConfig,
           val currentState = controllerContext.replicaState(replica)
           if (traceEnabled)
             logSuccessfulTransition(stateLogger, replicaId, replica.topicPartition, currentState, OfflineReplica)
+          // possible PERF TODO:  switch to controllerContextSnapshot.liveOrShuttingDownBrokerIds.toSeq and add
+          // controllerContextSnapshot as 3rd arg?  (almost certainly need to add latter to more handleStateChanges()
+          // call sites; onControllerFailover() call path rarely has any OfflineReplica cases)
           controllerBrokerRequestBatch.addUpdateMetadataRequestForBrokers(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(replica.topicPartition))
           controllerContext.putReplicaState(replica, OfflineReplica)
         }
