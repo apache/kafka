@@ -23,6 +23,6 @@
     { "name": "Name", "type": "string", "versions": "0+",
       "about": "The feature name." },
     { "name": "FeatureLevel", "type": "int16", "versions": "0+",
-      "about": "The current finalized feature level of this feature for the cluster." }
+      "about": "The current finalized feature level of this feature for the cluster, a value of 0 means feature not supported." }
   ]
 }
