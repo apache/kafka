@@ -29,8 +29,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import static java.nio.file.StandardCopyOption.ATOMIC_MOVE;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
@@ -42,16 +42,10 @@ import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_BOOTSTRAP_V
  * format is the same as a KRaft snapshot.
  */
 public class BootstrapDirectory {
-    final static String INTER_BROKER_PROTOCOL_CONFIG_KEY = "inter.broker.protocol.version";
     final static String BINARY_BOOTSTRAP = "bootstrap.checkpoint";
 
-    public static String ibpStringFromConfigMap(Map<String, Object> staticConfig) {
-        Object value = staticConfig.get(INTER_BROKER_PROTOCOL_CONFIG_KEY);
-        return value == null ? "" : value.toString();
-    }
-
     private final String directoryPath;
-    private final String ibp;
+    private final Optional<String> ibp;
 
     /**
      * Create a new BootstrapDirectory object.
@@ -62,7 +56,7 @@ public class BootstrapDirectory {
      */
     public BootstrapDirectory(
         String directoryPath,
-        String ibp
+        Optional<String> ibp
     ) {
         this.directoryPath = Objects.requireNonNull(directoryPath);
         this.ibp = Objects.requireNonNull(ibp);
@@ -86,10 +80,10 @@ public class BootstrapDirectory {
     }
 
     BootstrapMetadata readFromConfiguration() {
-        if (ibp.isEmpty()) {
+        if (!ibp.isPresent()) {
             return BootstrapMetadata.fromVersion(MetadataVersion.latest(), "the default bootstrap");
         }
-        MetadataVersion version = MetadataVersion.fromVersionString(ibp);
+        MetadataVersion version = MetadataVersion.fromVersionString(ibp.get());
         if (version.isLessThan(MINIMUM_BOOTSTRAP_VERSION)) {
             return BootstrapMetadata.fromVersion(MINIMUM_BOOTSTRAP_VERSION,
                 "the minimum version bootstrap with metadata.version " + MINIMUM_BOOTSTRAP_VERSION);

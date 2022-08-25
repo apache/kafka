@@ -18,7 +18,7 @@ package kafka.server
 
 import java.io.File
 import java.nio.file.Files
-import java.util.Properties
+import java.util.{Optional, Properties}
 import kafka.common.{InconsistentBrokerMetadataException, InconsistentNodeIdException}
 import kafka.log.UnifiedLog
 import org.apache.kafka.common.{KafkaException, Uuid}
@@ -97,7 +97,7 @@ class KafkaRaftServerTest {
   }
 
   private def writeBootstrapMetadata(logDir: File, metadataVersion: MetadataVersion): Unit = {
-    val bootstrapDirectory = new BootstrapDirectory(logDir.toString(), "")
+    val bootstrapDirectory = new BootstrapDirectory(logDir.toString(), Optional.empty())
     bootstrapDirectory.writeBinaryFile(BootstrapMetadata.fromVersion(metadataVersion, "test"))
   }
 

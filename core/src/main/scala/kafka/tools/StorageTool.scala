@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.server.common.MetadataVersion
 
+import java.util.Optional
 import scala.collection.mutable
 
 object StorageTool extends Logging {
@@ -241,7 +242,7 @@ object StorageTool extends Logging {
       if (!Files.isDirectory(Paths.get(directory)) || !Files.exists(Paths.get(directory, "meta.properties"))) {
           true
       } else if (!ignoreFormatted) {
-        throw new TerseFailure(s"Log directory ${directory} is already formatted. " +
+        throw new TerseFailure(s"Log directory $directory is already formatted. " +
           "Use --ignore-formatted to ignore this directory and format the others.")
       } else {
         false
@@ -255,14 +256,14 @@ object StorageTool extends Logging {
         Files.createDirectories(Paths.get(directory))
       } catch {
         case e: Throwable => throw new TerseFailure(s"Unable to create storage " +
-          s"directory ${directory}: ${e.getMessage}")
+          s"directory $directory: ${e.getMessage}")
       }
       val metaPropertiesPath = Paths.get(directory, "meta.properties")
       val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
       checkpoint.write(metaProperties.toProperties)
 
       val bootstrapMetadata = BootstrapMetadata.fromVersion(metadataVersion, "format command")
-      val bootstrapDirectory = new BootstrapDirectory(directory.toString, "")
+      val bootstrapDirectory = new BootstrapDirectory(directory, Optional.empty())
       bootstrapDirectory.writeBinaryFile(bootstrapMetadata)
 
       stream.println(s"Formatting ${directory} with metadata.version ${metadataVersion}.")

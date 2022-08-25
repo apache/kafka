@@ -33,10 +33,11 @@ import org.apache.kafka.controller.QuorumControllerMetrics
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.metadata.{KafkaConfigSchema, MetadataRecordSerde}
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.server.common.{ApiMessageAndVersion}
+import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{LoggingFaultHandler, ProcessExitingFaultHandler}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
+import java.util.Optional
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -201,7 +202,7 @@ object KafkaRaftServer {
     }
 
     val bootstrapDirectory = new BootstrapDirectory(config.metadataLogDir,
-      Option(config.interBrokerProtocolVersionString).getOrElse(""))
+      Optional.ofNullable(config.interBrokerProtocolVersionString))
     val bootstrapMetadata = bootstrapDirectory.read()
 
     (metaProperties, bootstrapMetadata, offlineDirs.toSeq)

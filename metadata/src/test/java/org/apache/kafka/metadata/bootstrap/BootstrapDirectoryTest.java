@@ -28,12 +28,10 @@ import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
 import java.util.List;
+import java.util.Optional;
 
 import static java.util.Arrays.asList;
-import static java.util.Collections.emptyMap;
-import static java.util.Collections.singletonMap;
 import static java.util.Collections.unmodifiableList;
-import static org.apache.kafka.metadata.bootstrap.BootstrapDirectory.INTER_BROKER_PROTOCOL_CONFIG_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -46,14 +44,6 @@ public class BootstrapDirectoryTest {
                     setFeatureLevel((short) 7), (short) 0),
             new ApiMessageAndVersion(new NoOpRecord(), (short) 0),
             new ApiMessageAndVersion(new NoOpRecord(), (short) 0)));
-
-    @Test
-    public void testIbpStringFromConfigMap() {
-        assertEquals("3.2", BootstrapDirectory.
-                ibpStringFromConfigMap(singletonMap(INTER_BROKER_PROTOCOL_CONFIG_KEY, "3.2")));
-        assertEquals("", BootstrapDirectory.
-                ibpStringFromConfigMap(emptyMap()));
-    }
 
     static class BootstrapTestDirectory implements AutoCloseable {
         File directory = null;
@@ -86,7 +76,7 @@ public class BootstrapDirectoryTest {
             assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.latest(),
                 "a default bootstrap which sets the latest metadata.version, since no bootstrap " +
                     "file or inter.broker.protocol.version configuration key was found."),
-                        new BootstrapDirectory(testDirectory.path(), "").read());
+                        new BootstrapDirectory(testDirectory.path(), Optional.empty()).read());
         }
     }
 
@@ -96,7 +86,7 @@ public class BootstrapDirectoryTest {
             assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_3_IV0,
                 "a default bootstrap which sets the metadata.version to 3.3-IV0, since no bootstrap " +
                     "file was found and inter.broker.protocol.version was too old."),
-                        new BootstrapDirectory(testDirectory.path(), "2.7").read());
+                        new BootstrapDirectory(testDirectory.path(), Optional.of("2.7")).read());
         }
     }
 
@@ -106,7 +96,7 @@ public class BootstrapDirectoryTest {
             assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_3_IV2,
                 "a default bootstrap setting the metadata.version to 3.3-IV2, as " +
                     "specified by inter.broker.protocol.version."),
-                new BootstrapDirectory(testDirectory.path(), "3.3-IV2").read());
+                new BootstrapDirectory(testDirectory.path(), Optional.of("3.3-IV2")).read());
         }
     }
 
@@ -114,13 +104,13 @@ public class BootstrapDirectoryTest {
     public void testMissingDirectory() throws Exception {
         assertEquals("No such directory as ./non/existent/directory",
             assertThrows(RuntimeException.class, () ->
-                new BootstrapDirectory("./non/existent/directory", "").read()).getMessage());
+                new BootstrapDirectory("./non/existent/directory", Optional.empty()).read()).getMessage());
     }
 
     @Test
     public void testReadFromConfigurationFile() throws Exception {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
-            BootstrapDirectory directory = new BootstrapDirectory(testDirectory.path(), "3.0-IV0");
+            BootstrapDirectory directory = new BootstrapDirectory(testDirectory.path(), Optional.of("3.0-IV0"));
             BootstrapMetadata metadata = BootstrapMetadata.fromRecords(SAMPLE_RECORDS1,
                     "the binary bootstrap metadata file: " + testDirectory.binaryBootstrapPath());
             directory.writeBinaryFile(metadata);
