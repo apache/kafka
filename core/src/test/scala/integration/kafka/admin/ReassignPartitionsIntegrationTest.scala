@@ -643,7 +643,7 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         case (topicName, parts) =>
           val partMap = new HashMap[Integer, List[Integer]]()
           parts.zipWithIndex.foreach {
-            case (part, index) => partMap.put(index, part.map(Integer.valueOf(_)).asJava)
+            case (part, index) => partMap.put(index, part.map(Integer.valueOf).asJava)
           }
           new NewTopic(topicName, partMap)
       }.toList.asJava).all().get()

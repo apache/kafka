@@ -287,10 +287,10 @@ abstract class QuorumTestHarness extends Logging {
     val nodeId = Integer.parseInt(props.getProperty(KafkaConfig.NodeIdProp))
     val metadataDir = TestUtils.tempDir()
     val metaProperties = new MetaProperties(Uuid.randomUuid().toString, nodeId)
-    formatDirectories(immutable.Seq(metadataDir.getAbsolutePath()), metaProperties)
+    formatDirectories(immutable.Seq(metadataDir.getAbsolutePath), metaProperties)
     val controllerMetrics = new Metrics()
-    props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath())
-    val proto = controllerListenerSecurityProtocol.toString()
+    props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath)
+    val proto = controllerListenerSecurityProtocol.toString
     props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:${proto}")
     props.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:0")
     props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
