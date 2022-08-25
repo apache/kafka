@@ -673,7 +673,7 @@ object TestUtils extends Logging {
 
   def stackedIterator[T](s: Iterator[T]*): Iterator[T] = {
     new Iterator[T] {
-      var cur: Iterator[T] = null
+      var cur: Iterator[T] = _
       val topIterator = s.iterator
 
       def hasNext: Boolean = {
@@ -1346,6 +1346,7 @@ object TestUtils extends Logging {
                    retentionCheckMs = 1000L,
                    maxTransactionTimeoutMs = 5 * 60 * 1000,
                    maxPidExpirationMs = 60 * 60 * 1000,
+                   producerIdExpirationCheckIntervalMs = 10 * 60 * 1000,
                    scheduler = time.scheduler,
                    time = time,
                    brokerTopicStats = new BrokerTopicStats,

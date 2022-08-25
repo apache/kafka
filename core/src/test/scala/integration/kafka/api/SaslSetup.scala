@@ -56,7 +56,7 @@ case object Both extends SaslSetupMode
 trait SaslSetup {
   private val workDir = TestUtils.tempDir()
   private val kdcConf = MiniKdc.createConfig
-  private var kdc: MiniKdc = null
+  private var kdc: MiniKdc = _
   private var serverKeytabFile: Option[File] = None
   private var clientKeytabFile: Option[File] = None
 

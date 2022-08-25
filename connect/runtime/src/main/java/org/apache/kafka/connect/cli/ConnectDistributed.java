@@ -94,7 +94,7 @@ public class ConnectDistributed {
         plugins.compareAndSwapWithDelegatingLoader();
         DistributedConfig config = new DistributedConfig(workerProps);
 
-        String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
+        String kafkaClusterId = config.kafkaClusterId();
         log.debug("Kafka cluster ID: {}", kafkaClusterId);
 
         RestServer rest = new RestServer(config);

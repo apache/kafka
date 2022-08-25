@@ -121,10 +121,17 @@ object RequestChannel extends Logging {
 
     def isForwarded: Boolean = envelope.isDefined
 
+    private def shouldReturnNotController(response: AbstractResponse): Boolean = {
+      response match {
+        case describeQuorumResponse: DescribeQuorumResponse => response.errorCounts.containsKey(Errors.NOT_LEADER_OR_FOLLOWER)
+        case _ => response.errorCounts.containsKey(Errors.NOT_CONTROLLER)
+      }
+    }
+
     def buildResponseSend(abstractResponse: AbstractResponse): Send = {
       envelope match {
         case Some(request) =>
-          val envelopeResponse = if (abstractResponse.errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
+          val envelopeResponse = if (shouldReturnNotController(abstractResponse)) {
             // Since it's a NOT_CONTROLLER error response, we need to make envelope response with NOT_CONTROLLER error
             // to notify the requester (i.e. BrokerToControllerRequestThread) to update active controller
             new EnvelopeResponse(new EnvelopeResponseData()
@@ -536,7 +543,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   class ErrorMeter(name: String, error: Errors) {
     private val tags = Map("request" -> name, "error" -> error.name)
 
-    @volatile private var meter: Meter = null
+    @volatile private var meter: Meter = _
 
     def getOrCreateMeter(): Meter = {
       if (meter != null)

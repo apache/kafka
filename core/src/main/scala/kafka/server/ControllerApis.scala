@@ -20,7 +20,7 @@ package kafka.server
 import java.util
 import java.util.{Collections, OptionalLong}
 import java.util.Map.Entry
-import java.util.concurrent.{CompletableFuture, CompletionException}
+import java.util.concurrent.CompletableFuture
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
@@ -68,6 +68,7 @@ class ControllerApis(val requestChannel: RequestChannel,
                      val controllerNodes: Seq[Node],
                      val apiVersionManager: ApiVersionManager) extends ApiRequestHandler with Logging {
 
+  this.logIdent = s"[ControllerApis nodeId=${config.nodeId}] "
   val authHelper = new AuthHelper(authorizer)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   private val aclApis = new AclApis(authHelper, authorizer, requestHelper, "controller", config)
@@ -117,10 +118,7 @@ class ControllerApis(val requestChannel: RequestChannel,
           // log the original exception here
           error(s"Unexpected error handling request ${request.requestDesc(true)} " +
             s"with context ${request.context}", exception)
-
-          // For building the correct error request, we do need send the "cause" exception
-          val actualException = if (exception.isInstanceOf[CompletionException]) exception.getCause else exception
-          requestHelper.handleError(request, actualException)
+          requestHelper.handleError(request, exception)
         }
       }
     } catch {

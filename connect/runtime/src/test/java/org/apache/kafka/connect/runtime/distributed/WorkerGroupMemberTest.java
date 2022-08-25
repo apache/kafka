@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.utils.LogContext;
@@ -25,7 +26,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
-import org.apache.kafka.connect.util.ConnectUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -65,23 +65,28 @@ public class WorkerGroupMemberTest {
 
 
         LogContext logContext = new LogContext("[Worker clientId=client-1 + groupId= group-1]");
-
-        try (MockedStatic<ConnectUtils> utilities = mockStatic(ConnectUtils.class)) {
-            utilities.when(() -> ConnectUtils.lookupKafkaClusterId(any())).thenReturn("cluster-1");
+        try (MockedStatic<WorkerConfig> utilities = mockStatic(WorkerConfig.class)) {
+            utilities.when(() -> WorkerConfig.lookupKafkaClusterId(any())).thenReturn("cluster-1");
             member = new WorkerGroupMember(config, "", configBackingStore, null, Time.SYSTEM, "client-1", logContext);
-            utilities.verify(() -> ConnectUtils.lookupKafkaClusterId(any()));
-        }     
+            utilities.verify(() -> WorkerConfig.lookupKafkaClusterId(any()));
+        }
 
-        boolean entered = false;
+        boolean foundMockReporter = false;
+        boolean foundJmxReporter = false;
+        assertEquals(2, member.metrics().reporters().size());
         for (MetricsReporter reporter : member.metrics().reporters()) {
             if (reporter instanceof MockConnectMetrics.MockMetricsReporter) {
-                entered = true;
+                foundMockReporter = true;
                 MockConnectMetrics.MockMetricsReporter mockMetricsReporter = (MockConnectMetrics.MockMetricsReporter) reporter;
                 assertEquals("cluster-1", mockMetricsReporter.getMetricsContext().contextLabels().get(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
                 assertEquals("group-1", mockMetricsReporter.getMetricsContext().contextLabels().get(WorkerConfig.CONNECT_GROUP_ID));
             }
+            if (reporter instanceof JmxReporter) {
+                foundJmxReporter = true;
+            }
         }
-        assertTrue("Failed to verify MetricsReporter", entered);
+        assertTrue("Failed to find MockMetricsReporter", foundMockReporter);
+        assertTrue("Failed to find JmxReporter", foundJmxReporter);
 
         MetricName name = member.metrics().metricName("test.avg", "grp1");
         member.metrics().addMetric(name, new Avg());
@@ -89,4 +94,29 @@ public class WorkerGroupMemberTest {
         //verify metric exists with correct prefix
         assertNotNull(server.getObjectInstance(new ObjectName("kafka.connect:type=grp1,client-id=client-1")));
     }
+
+    @Test
+    public void testDisableJmxReporter() {
+        WorkerGroupMember member;
+        Map<String, String> workerProps = new HashMap<>();
+        workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put("group.id", "group-1");
+        workerProps.put("offset.storage.topic", "topic-1");
+        workerProps.put("config.storage.topic", "topic-1");
+        workerProps.put("status.storage.topic", "topic-1");
+        workerProps.put("auto.include.jmx.reporter", "false");
+        DistributedConfig config = new DistributedConfig(workerProps);
+
+        LogContext logContext = new LogContext("[Worker clientId=client-1 + groupId= group-1]");
+        try (MockedStatic<WorkerConfig> utilities = mockStatic(WorkerConfig.class)) {
+            utilities.when(() -> WorkerConfig.lookupKafkaClusterId(any())).thenReturn("cluster-1");
+            member = new WorkerGroupMember(config, "", configBackingStore, null, Time.SYSTEM, "client-1", logContext);
+            utilities.verify(() -> WorkerConfig.lookupKafkaClusterId(any()));
+        }
+
+        assertTrue(member.metrics().reporters().isEmpty());
+        member.stop();
+    }
+
 }

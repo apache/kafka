@@ -45,6 +45,7 @@ import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, TestInfo}
 
+import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
 import scala.compat.java8.OptionConverters._
 
@@ -141,8 +142,10 @@ abstract class QuorumTestHarness extends Logging {
 
   protected def metadataVersion: MetadataVersion = MetadataVersion.latest()
 
-  private var testInfo: TestInfo = null
-  private var implementation: QuorumImplementation = null
+  private var testInfo: TestInfo = _
+  private var implementation: QuorumImplementation = _
+
+  val bootstrapRecords: ListBuffer[ApiMessageAndVersion] = ListBuffer()
 
   def isKRaftTest(): Boolean = {
     TestInfoUtils.isKRaft(testInfo)
@@ -284,10 +287,10 @@ abstract class QuorumTestHarness extends Logging {
     val nodeId = Integer.parseInt(props.getProperty(KafkaConfig.NodeIdProp))
     val metadataDir = TestUtils.tempDir()
     val metaProperties = new MetaProperties(Uuid.randomUuid().toString, nodeId)
-    formatDirectories(immutable.Seq(metadataDir.getAbsolutePath()), metaProperties)
+    formatDirectories(immutable.Seq(metadataDir.getAbsolutePath), metaProperties)
     val controllerMetrics = new Metrics()
-    props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath())
-    val proto = controllerListenerSecurityProtocol.toString()
+    props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath)
+    val proto = controllerListenerSecurityProtocol.toString
     props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:${proto}")
     props.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:0")
     props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")

@@ -55,7 +55,6 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -365,12 +364,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                     .recordLevel(Sensor.RecordingLevel.forName(config.getString(ProducerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                     .tags(metricTags);
-            List<MetricsReporter> reporters = config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                    MetricsReporter.class,
-                    Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
-            JmxReporter jmxReporter = new JmxReporter();
-            jmxReporter.configure(config.originals(Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId)));
-            reporters.add(jmxReporter);
+            List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
@@ -675,6 +669,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * and should also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
      * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
      *
+     * <p>
+     * This method is a blocking call that waits until the request has been received and acknowledged by the consumer group
+     * coordinator; but the offsets are not considered as committed until the transaction itself is successfully committed later (via
+     * the {@link #commitTransaction()} call).
+     *
      * @throws IllegalStateException if no transactional.id has been configured, no transaction has been started
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
@@ -685,6 +684,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *         transactional.id is not authorized, or the consumer group id is not authorized.
      * @throws org.apache.kafka.common.errors.InvalidProducerEpochException if the producer has attempted to produce with an old epoch
      *         to the partition leader. See the exception for more details
+     * @throws TimeoutException if the time taken for sending the offsets has surpassed <code>max.block.ms</code>.
      * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
      *         other unexpected error
      *
@@ -711,6 +711,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * requires the brokers to be on version 2.5 or newer to understand.
      *
      * <p>
+     * This method is a blocking call that waits until the request has been received and acknowledged by the consumer group
+     * coordinator; but the offsets are not considered as committed until the transaction itself is successfully committed later (via
+     * the {@link #commitTransaction()} call).
+     *
+     * <p>
      * Note, that the consumer should have {@code enable.auto.commit=false} and should
      * also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
      * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
@@ -735,7 +740,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *         to the partition leader. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
      *         other unexpected error
-     * @throws TimeoutException if the time taken for sending offsets has surpassed max.block.ms.
+     * @throws TimeoutException if the time taken for sending the offsets has surpassed <code>max.block.ms</code>.
      * @throws InterruptException if the thread is interrupted while blocked
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -765,7 +770,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Note that exceptions thrown by callbacks are ignored; the producer proceeds to commit the transaction in any case.
      * <p>
      * Note that this method will raise {@link TimeoutException} if the transaction cannot be committed before expiration
-     * of {@code max.block.ms}. Additionally, it will raise {@link InterruptException} if interrupted.
+     * of {@code max.block.ms}, but this does not mean the request did not actually reach the broker. In fact, it only indicates
+     * that we cannot get the acknowledgement response in time, so it's up to the application's logic
+     * to decide how to handle time outs.
+     * Additionally, it will raise {@link InterruptException} if interrupted.
      * It is safe to retry in either case, but it is not possible to attempt a different operation (such as abortTransaction)
      * since the commit may already be in the progress of completing. If not retrying, the only option is to close the producer.
      *
@@ -798,7 +806,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * {@link ProducerFencedException} or an instance of {@link org.apache.kafka.common.errors.AuthorizationException}.
      *
      * Note that this method will raise {@link TimeoutException} if the transaction cannot be aborted before expiration
-     * of {@code max.block.ms}. Additionally, it will raise {@link InterruptException} if interrupted.
+     * of {@code max.block.ms}, but this does not mean the request did not actually reach the broker. In fact, it only indicates
+     * that we cannot get the acknowledgement response in time, so it's up to the application's logic
+     * to decide how to handle time outs. Additionally, it will raise {@link InterruptException} if interrupted.
      * It is safe to retry in either case, but it is not possible to attempt a different operation (such as commitTransaction)
      * since the abort may already be in the progress of completing. If not retrying, the only option is to close the producer.
      *

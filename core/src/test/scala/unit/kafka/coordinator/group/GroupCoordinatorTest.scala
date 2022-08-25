@@ -71,11 +71,11 @@ class GroupCoordinatorTest {
   val DefaultRebalanceTimeout = 500
   val DefaultSessionTimeout = 500
   val GroupInitialRebalanceDelay = 50
-  var timer: MockTimer = null
-  var groupCoordinator: GroupCoordinator = null
-  var replicaManager: ReplicaManager = null
-  var scheduler: KafkaScheduler = null
-  var zkClient: KafkaZkClient = null
+  var timer: MockTimer = _
+  var groupCoordinator: GroupCoordinator = _
+  var replicaManager: ReplicaManager = _
+  var scheduler: KafkaScheduler = _
+  var zkClient: KafkaZkClient = _
 
   private val groupId = "groupId"
   private val protocolType = "consumer"

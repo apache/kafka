@@ -70,9 +70,9 @@ public class TasksTest {
                 mkEntry(standbyTask.id(), standbyTask)
             ),
             tasks.allTasksPerId());
-        assertTrue(tasks.owned(statefulTask.id()));
-        assertTrue(tasks.owned(statelessTask.id()));
-        assertTrue(tasks.owned(statefulTask.id()));
+        assertTrue(tasks.contains(statefulTask.id()));
+        assertTrue(tasks.contains(statelessTask.id()));
+        assertTrue(tasks.contains(statefulTask.id()));
     }
 
     @Test

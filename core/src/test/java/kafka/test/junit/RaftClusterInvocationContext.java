@@ -183,6 +183,10 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             ));
         }
 
+        public Collection<ControllerServer> controllerServers() {
+            return controllers().collect(Collectors.toList());
+        }
+
         @Override
         public ClusterType clusterType() {
             return ClusterType.RAFT;
@@ -267,11 +271,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
         }
 
-        private Stream<BrokerServer> brokers() {
+        public Stream<BrokerServer> brokers() {
             return clusterReference.get().brokers().values().stream();
         }
 
-        private Stream<ControllerServer> controllers() {
+        public Stream<ControllerServer> controllers() {
             return clusterReference.get().controllers().values().stream();
         }
 

@@ -36,7 +36,7 @@ class TimerTest {
     }
   }
 
-  private[this] var timer: Timer = null
+  private[this] var timer: Timer = _
 
   @BeforeEach
   def setup(): Unit = {

@@ -54,8 +54,8 @@ class LogManagerTest {
   logProps.put(LogConfig.RetentionMsProp, maxLogAgeMs: java.lang.Integer)
   logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
   val logConfig = LogConfig(logProps)
-  var logDir: File = null
-  var logManager: LogManager = null
+  var logDir: File = _
+  var logManager: LogManager = _
   val name = "kafka"
   val veryLargeLogFlushInterval = 10000000L
 
@@ -647,7 +647,7 @@ class LogManagerTest {
     val segmentBytes = 1024
 
     val log = LogTestUtils.createLog(tpFile, logConfig, brokerTopicStats, time.scheduler, time, 0, 0,
-      5 * 60 * 1000, 60 * 60 * 1000, LogManager.ProducerIdExpirationCheckIntervalMs)
+      5 * 60 * 1000, 60 * 60 * 1000, 10 * 60 * 1000)
 
     assertTrue(expectedSegmentsPerLog > 0)
     // calculate numMessages to append to logs. It'll create "expectedSegmentsPerLog" log segments with segment.bytes=1024
@@ -783,7 +783,7 @@ class LogManagerTest {
         recoveryPoint = 0,
         maxTransactionTimeoutMs = 5 * 60 * 1000,
         maxProducerIdExpirationMs = 5 * 60 * 1000,
-        producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+        producerIdExpirationCheckIntervalMs = 10 * 60 * 1000,
         scheduler = mockTime.scheduler,
         time = mockTime,
         brokerTopicStats = mockBrokerTopicStats,

@@ -106,6 +106,7 @@ class LogCleanerTest {
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val maxTransactionTimeoutMs = 5 * 60 * 1000
     val maxProducerIdExpirationMs = 60 * 60 * 1000
+    val producerIdExpirationCheckIntervalMs = 10 * 60 * 1000
     val logSegments = new LogSegments(topicPartition)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.recordVersion, "")
     val producerStateManager = new ProducerStateManager(topicPartition, dir,
@@ -129,7 +130,7 @@ class LogCleanerTest {
     val log = new UnifiedLog(offsets.logStartOffset,
                       localLog,
                       brokerTopicStats = new BrokerTopicStats,
-                      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+                      producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
                       leaderEpochCache = leaderEpochCache,
                       producerStateManager = producerStateManager,
                       _topicId = None,
@@ -1973,7 +1974,7 @@ class LogCleanerTest {
       brokerTopicStats = new BrokerTopicStats,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+      producerIdExpirationCheckIntervalMs = 10 * 60 * 1000,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
       keepPartitionMetadataFile = true

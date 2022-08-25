@@ -211,6 +211,9 @@ object Defaults {
   val TransactionsAbortTimedOutTransactionsCleanupIntervalMS = TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs
   val TransactionsRemoveExpiredTransactionsCleanupIntervalMS = TransactionStateManager.DefaultRemoveExpiredTransactionalIdsIntervalMs
 
+  val ProducerIdExpirationMs = 86400000
+  val ProducerIdExpirationCheckIntervalMs = 600000
+
   /** ********* Fetch Configuration **************/
   val MaxIncrementalFetchSessionCacheSlots = 1000
   val FetchMaxBytes = 55 * 1024 * 1024
@@ -238,6 +241,7 @@ object Defaults {
   val MetricSampleWindowMs = 30000
   val MetricReporterClasses = ""
   val MetricRecordingLevel = Sensor.RecordingLevel.INFO.toString()
+  val AutoIncludeJmxReporter = true
 
 
   /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
@@ -534,6 +538,9 @@ object KafkaConfig {
   val TransactionsAbortTimedOutTransactionCleanupIntervalMsProp = "transaction.abort.timed.out.transaction.cleanup.interval.ms"
   val TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp = "transaction.remove.expired.transaction.cleanup.interval.ms"
 
+  val ProducerIdExpirationMsProp = "producer.id.expiration.ms"
+  val ProducerIdExpirationCheckIntervalMsProp = "producer.id.expiration.check.ms"
+
   /** ********* Fetch Configuration **************/
   val MaxIncrementalFetchSessionCacheSlots = "max.incremental.fetch.session.cache.slots"
   val FetchMaxBytes = "fetch.max.bytes"
@@ -557,6 +564,9 @@ object KafkaConfig {
   val MetricNumSamplesProp: String = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG
   val MetricReporterClassesProp: String = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG
   val MetricRecordingLevelProp: String = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG
+  @deprecated
+  @nowarn("cat=deprecation")
+  val AutoIncludeJmxReporterProp: String = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG
 
   /** ********* Kafka Yammer Metrics Reporters Configuration ***********/
   val KafkaMetricsReporterClassesProp = "kafka.metrics.reporters"
@@ -944,16 +954,18 @@ object KafkaConfig {
   val OffsetsTopicPartitionsDoc = "The number of partitions for the offset commit topic (should not change after deployment)"
   val OffsetsTopicSegmentBytesDoc = "The offsets topic segment bytes should be kept relatively small in order to facilitate faster log compaction and cache loads"
   val OffsetsTopicCompressionCodecDoc = "Compression codec for the offsets topic - compression may be used to achieve \"atomic\" commits"
-  val OffsetsRetentionMinutesDoc = "After a consumer group loses all its consumers (i.e. becomes empty) its offsets will be kept for this retention period before getting discarded. " +
-    "For standalone consumers (using manual assignment), offsets will be expired after the time of last commit plus this retention period."
+  val OffsetsRetentionMinutesDoc = "For subscribed consumers, committed offset of a specific partition will be expired and discarded when 1) this retention period has elapsed after the consumer group loses all its consumers (i.e. becomes empty); " +
+    "2) this retention period has elapsed since the last time an offset is committed for the partition and the group is no longer subscribed to the corresponding topic. " +
+    "For standalone consumers (using manual assignment), offsets will be expired after this retention period has elapsed since the time of last commit. " +
+    "Note that when a group is deleted via the delete-group request, its committed offsets will also be deleted without extra retention period; " +
+    "also when a topic is deleted via the delete-topic request, upon propagated metadata update any group's committed offsets for that topic will also be deleted without extra retention period."
   val OffsetsRetentionCheckIntervalMsDoc = "Frequency at which to check for stale offsets"
   val OffsetCommitTimeoutMsDoc = "Offset commit will be delayed until all replicas for the offsets topic receive the commit " +
   "or this timeout is reached. This is similar to the producer request timeout."
   val OffsetCommitRequiredAcksDoc = "The required acks before the commit can be accepted. In general, the default (-1) should not be overridden"
   /** ********* Transaction management configuration ***********/
   val TransactionalIdExpirationMsDoc = "The time in ms that the transaction coordinator will wait without receiving any transaction status updates " +
-    "for the current transaction before expiring its transactional id. This setting also influences producer id expiration - producer ids are expired " +
-    "once this time has elapsed after the last write with the given producer id. Note that producer ids may expire sooner if the last write from the producer id is deleted due to the topic's retention settings."
+    "for the current transaction before expiring its transactional id. Transactional IDs will not expire while a the transaction is still ongoing."
   val TransactionsMaxTimeoutMsDoc = "The maximum allowed timeout for transactions. " +
     "If a client’s requested transaction time exceed this, then the broker will return an error in InitProducerIdRequest. This prevents a client from too large of a timeout, which can stall consumers reading from topics included in the transaction."
   val TransactionsTopicMinISRDoc = "Overridden " + MinInSyncReplicasProp + " config for the transaction topic."
@@ -964,6 +976,11 @@ object KafkaConfig {
   val TransactionsTopicSegmentBytesDoc = "The transaction topic segment bytes should be kept relatively small in order to facilitate faster log compaction and cache loads"
   val TransactionsAbortTimedOutTransactionsIntervalMsDoc = "The interval at which to rollback transactions that have timed out"
   val TransactionsRemoveExpiredTransactionsIntervalMsDoc = "The interval at which to remove transactions that have expired due to <code>transactional.id.expiration.ms</code> passing"
+
+  val ProducerIdExpirationMsDoc = "The time in ms that a topic partition leader will wait before expiring producer IDs. Producer IDs will not expire while a transaction associated to them is still ongoing. " +
+    "Note that producer IDs may expire sooner if the last write from the producer ID is deleted due to the topic's retention settings. Setting this value the same or higher than " +
+    "<code>delivery.timeout.ms</code> can help prevent expiration during retries and protect against message duplication, but the default should be reasonable for most use cases."
+  val ProducerIdExpirationCheckIntervalMsDoc = "The interval at which to remove producer IDs that have expired due to <code>producer.id.expiration.ms</code> passing"
 
   /** ********* Fetch Configuration **************/
   val MaxIncrementalFetchSessionCacheSlotsDoc = "The maximum number of incremental fetch sessions that we will maintain."
@@ -994,6 +1011,7 @@ object KafkaConfig {
   val MetricNumSamplesDoc = CommonClientConfigs.METRICS_NUM_SAMPLES_DOC
   val MetricReporterClassesDoc = CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC
   val MetricRecordingLevelDoc = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC
+  val AutoIncludeJmxReporterDoc = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC
 
 
   /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
@@ -1288,6 +1306,10 @@ object KafkaConfig {
       .define(TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, INT, Defaults.TransactionsAbortTimedOutTransactionsCleanupIntervalMS, atLeast(1), LOW, TransactionsAbortTimedOutTransactionsIntervalMsDoc)
       .define(TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp, INT, Defaults.TransactionsRemoveExpiredTransactionsCleanupIntervalMS, atLeast(1), LOW, TransactionsRemoveExpiredTransactionsIntervalMsDoc)
 
+      .define(ProducerIdExpirationMsProp, INT, Defaults.ProducerIdExpirationMs, atLeast(1), LOW, ProducerIdExpirationMsDoc)
+      // Configuration for testing only as default value should be sufficient for typical usage
+      .defineInternal(ProducerIdExpirationCheckIntervalMsProp, INT, Defaults.ProducerIdExpirationCheckIntervalMs, atLeast(1), LOW, ProducerIdExpirationMsDoc)
+
       /** ********* Fetch Configuration **************/
       .define(MaxIncrementalFetchSessionCacheSlots, INT, Defaults.MaxIncrementalFetchSessionCacheSlots, atLeast(0), MEDIUM, MaxIncrementalFetchSessionCacheSlotsDoc)
       .define(FetchMaxBytes, INT, Defaults.FetchMaxBytes, atLeast(1024), MEDIUM, FetchMaxBytesDoc)
@@ -1297,6 +1319,7 @@ object KafkaConfig {
       .define(MetricSampleWindowMsProp, LONG, Defaults.MetricSampleWindowMs, atLeast(1), LOW, MetricSampleWindowMsDoc)
       .define(MetricReporterClassesProp, LIST, Defaults.MetricReporterClasses, LOW, MetricReporterClassesDoc)
       .define(MetricRecordingLevelProp, STRING, Defaults.MetricRecordingLevel, LOW, MetricRecordingLevelDoc)
+      .define(AutoIncludeJmxReporterProp, BOOLEAN, Defaults.AutoIncludeJmxReporter, LOW, AutoIncludeJmxReporterDoc)
 
       /** ********* Kafka Yammer Metrics Reporter Configuration for docs ***********/
       .define(KafkaMetricsReporterClassesProp, LIST, Defaults.KafkaMetricReporterClasses, LOW, KafkaMetricsReporterClassesDoc)
@@ -1849,6 +1872,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val transactionAbortTimedOutTransactionCleanupIntervalMs = getInt(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp)
   val transactionRemoveExpiredTransactionalIdCleanupIntervalMs = getInt(KafkaConfig.TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp)
 
+  val producerIdExpirationMs = getInt(KafkaConfig.ProducerIdExpirationMsProp)
+  val producerIdExpirationCheckIntervalMs = getInt(KafkaConfig.ProducerIdExpirationCheckIntervalMsProp)
 
   /** ********* Metric Configuration **************/
   val metricNumSamples = getInt(KafkaConfig.MetricNumSamplesProp)

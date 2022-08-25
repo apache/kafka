@@ -46,6 +46,7 @@ public class LogManagerBuilder {
     private long retentionCheckMs = 1000L;
     private int maxTransactionTimeoutMs = 15 * 60 * 1000;
     private int maxPidExpirationMs = 60000;
+    private int producerIdExpirationCheckIntervalMs = 600000;
     private MetadataVersion interBrokerProtocolVersion = MetadataVersion.latest();
     private Scheduler scheduler = null;
     private BrokerTopicStats brokerTopicStats = null;
@@ -164,6 +165,7 @@ public class LogManagerBuilder {
                               retentionCheckMs,
                               maxTransactionTimeoutMs,
                               maxPidExpirationMs,
+                              producerIdExpirationCheckIntervalMs,
                               interBrokerProtocolVersion,
                               scheduler,
                               brokerTopicStats,

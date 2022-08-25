@@ -100,6 +100,7 @@ class LogCleanerManagerTest extends Logging {
     val config = createLowRetentionLogConfig(logSegmentSize, LogConfig.Compact)
     val maxTransactionTimeoutMs = 5 * 60 * 1000
     val maxProducerIdExpirationMs = 60 * 60 * 1000
+    val producerIdExpirationCheckIntervalMs = 10 * 60 * 1000
     val segments = new LogSegments(tp)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(tpDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
     val producerStateManager = new ProducerStateManager(topicPartition, tpDir, maxTransactionTimeoutMs, maxProducerIdExpirationMs, time)
@@ -121,7 +122,7 @@ class LogCleanerManagerTest extends Logging {
       offsets.nextOffsetMetadata, time.scheduler, time, tp, logDirFailureChannel)
     // the exception should be caught and the partition that caused it marked as uncleanable
     class LogMock extends UnifiedLog(offsets.logStartOffset, localLog, new BrokerTopicStats,
-        LogManager.ProducerIdExpirationCheckIntervalMs, leaderEpochCache,
+        producerIdExpirationCheckIntervalMs, leaderEpochCache,
         producerStateManager, _topicId = None, keepPartitionMetadataFile = true) {
       // Throw an error in getFirstBatchTimestampForSegments since it is called in grabFilthiestLog()
       override def getFirstBatchTimestampForSegments(segments: Iterable[LogSegment]): Iterable[Long] =
@@ -808,7 +809,7 @@ class LogCleanerManagerTest extends Logging {
       brokerTopicStats = new BrokerTopicStats,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+      producerIdExpirationCheckIntervalMs = 10 * 60 * 1000,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
       keepPartitionMetadataFile = true)
@@ -862,7 +863,7 @@ class LogCleanerManagerTest extends Logging {
       brokerTopicStats = new BrokerTopicStats,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+      producerIdExpirationCheckIntervalMs = 10 * 60 * 1000,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
       keepPartitionMetadataFile = true

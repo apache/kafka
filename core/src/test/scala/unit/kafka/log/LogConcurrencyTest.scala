@@ -150,7 +150,7 @@ class LogConcurrencyTest {
       time = Time.SYSTEM,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+      producerIdExpirationCheckIntervalMs = 10 * 60 * 1000,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
       keepPartitionMetadataFile = true

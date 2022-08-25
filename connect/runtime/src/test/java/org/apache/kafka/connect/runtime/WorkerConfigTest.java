@@ -17,9 +17,16 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
+import org.mockito.MockedStatic;
+import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -31,6 +38,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
 
 public class WorkerConfigTest {
     private static final List<String> VALID_HEADER_CONFIGS = Arrays.asList(
@@ -57,6 +67,20 @@ public class WorkerConfigTest {
             "add X-XSS-Protection",
             "set X-Frame-Options:DENY, add  :no-cache, no-store, must-revalidate "
     );
+
+    private static final String CLUSTER_ID = "cluster-id";
+    private MockedStatic<WorkerConfig> workerConfigMockedStatic;
+
+    @Before
+    public void setup() {
+        workerConfigMockedStatic = mockStatic(WorkerConfig.class, new CallsRealMethods());
+        workerConfigMockedStatic.when(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class))).thenReturn(CLUSTER_ID);
+    }
+
+    @After
+    public void teardown() {
+        workerConfigMockedStatic.close();
+    }
 
     @Test
     public void testListenersConfigAllowedValues() {
@@ -155,6 +179,50 @@ public class WorkerConfigTest {
         props.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "abc");
         ConfigException ce = assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
         assertTrue(ce.getMessage().contains(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG));
+    }
+
+    @Test
+    public void testLookupKafkaClusterId() {
+        final Node broker1 = new Node(0, "dummyHost-1", 1234);
+        final Node broker2 = new Node(1, "dummyHost-2", 1234);
+        List<Node> cluster = Arrays.asList(broker1, broker2);
+        MockAdminClient adminClient = new MockAdminClient.Builder().
+                brokers(cluster).build();
+        assertEquals(MockAdminClient.DEFAULT_CLUSTER_ID, WorkerConfig.lookupKafkaClusterId(adminClient));
+    }
+
+    @Test
+    public void testLookupNullKafkaClusterId() {
+        final Node broker1 = new Node(0, "dummyHost-1", 1234);
+        final Node broker2 = new Node(1, "dummyHost-2", 1234);
+        List<Node> cluster = Arrays.asList(broker1, broker2);
+        MockAdminClient adminClient = new MockAdminClient.Builder().
+                brokers(cluster).clusterId(null).build();
+        assertNull(WorkerConfig.lookupKafkaClusterId(adminClient));
+    }
+
+    @Test
+    public void testLookupKafkaClusterIdTimeout() {
+        final Node broker1 = new Node(0, "dummyHost-1", 1234);
+        final Node broker2 = new Node(1, "dummyHost-2", 1234);
+        List<Node> cluster = Arrays.asList(broker1, broker2);
+        MockAdminClient adminClient = new MockAdminClient.Builder().
+                brokers(cluster).build();
+        adminClient.timeoutNextRequest(1);
+
+        assertThrows(ConnectException.class, () -> WorkerConfig.lookupKafkaClusterId(adminClient));
+    }
+
+    @Test
+    public void testKafkaClusterId() {
+        Map<String, String> props = baseProps();
+        WorkerConfig config = new WorkerConfig(WorkerConfig.baseConfigDef(), props);
+        assertEquals(CLUSTER_ID, config.kafkaClusterId());
+        workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)), times(1));
+
+        // next calls hit the cache
+        assertEquals(CLUSTER_ID, config.kafkaClusterId());
+        workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)), times(1));
     }
 
     private void assertInvalidHeaderConfig(String config) {

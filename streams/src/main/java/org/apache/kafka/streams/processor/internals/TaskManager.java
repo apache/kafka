@@ -72,7 +72,7 @@ public class TaskManager {
     // by QueryableState
     private final Logger log;
     private final Time time;
-    private final Tasks tasks;
+    private final TasksRegistry tasks;
     private final UUID processId;
     private final String logPrefix;
     private final Admin adminClient;
@@ -102,6 +102,7 @@ public class TaskManager {
                 final String logPrefix,
                 final ActiveTaskCreator activeTaskCreator,
                 final StandbyTaskCreator standbyTaskCreator,
+                final TasksRegistry tasks,
                 final TopologyMetadata topologyMetadata,
                 final Admin adminClient,
                 final StateDirectory stateDirectory,
@@ -121,9 +122,9 @@ public class TaskManager {
         this.log = logContext.logger(getClass());
 
         this.stateUpdater = stateUpdater;
-        this.tasks = new Tasks(logContext);
+        this.tasks = tasks;
         this.taskExecutor = new TaskExecutor(
-            tasks,
+            this.tasks,
             this,
             topologyMetadata.taskExecutionMetadata(),
             logContext
@@ -465,7 +466,7 @@ public class TaskManager {
                 standbyTasksToCreate.remove(taskId);
             } else {
                 stateUpdater.remove(taskId);
-                tasks.addPendingTaskToClose(taskId);
+                tasks.addPendingTaskToCloseClean(taskId);
             }
         }
     }
@@ -692,7 +693,7 @@ public class TaskManager {
 
                     taskExceptions.putIfAbsent(taskId, e);
                 }
-            } else if (tasks.removePendingTaskToClose(task.id())) {
+            } else if (tasks.removePendingTaskToCloseClean(task.id())) {
                 try {
                     task.suspend();
                     task.closeClean();
@@ -710,6 +711,8 @@ public class TaskManager {
 
                     taskExceptions.putIfAbsent(task.id(), e);
                 }
+            } else if (tasks.removePendingTaskToCloseDirty(task.id())) {
+                tasksToCloseDirty.add(task);
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
                 stateUpdater.add(task);
@@ -754,6 +757,8 @@ public class TaskManager {
                 commitNeededActiveTasks.add(task);
             }
         }
+
+        removeRevokedTasksFromStateUpdater(remainingRevokedPartitions);
 
         if (!remainingRevokedPartitions.isEmpty()) {
             log.debug("The following revoked partitions {} are missing from the current task partitions. It could "
@@ -840,6 +845,20 @@ public class TaskManager {
         }
     }
 
+    private void removeRevokedTasksFromStateUpdater(final Set<TopicPartition> remainingRevokedPartitions) {
+        if (stateUpdater != null) {
+            for (final Task restoringTask : stateUpdater.getTasks()) {
+                if (restoringTask.isActive()) {
+                    if (remainingRevokedPartitions.containsAll(restoringTask.inputPartitions())) {
+                        tasks.addPendingTaskToCloseClean(restoringTask.id());
+                        stateUpdater.remove(restoringTask.id());
+                        remainingRevokedPartitions.removeAll(restoringTask.inputPartitions());
+                    }
+                }
+            }
+        }
+    }
+
     private void prepareCommitAndAddOffsetsToMap(final Set<Task> tasksToPrepare,
                                                  final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsPerTask) {
         for (final Task task : tasksToPrepare) {
@@ -867,6 +886,15 @@ public class TaskManager {
     void handleLostAll() {
         log.debug("Closing lost active tasks as zombies.");
 
+        closeRunningTasksDirty();
+        removeLostTasksFromStateUpdater();
+
+        if (processingMode == EXACTLY_ONCE_V2) {
+            activeTaskCreator.reInitializeThreadProducer();
+        }
+    }
+
+    private void closeRunningTasksDirty() {
         final Set<Task> allTask = tasks.allTasks();
         for (final Task task : allTask) {
             // Even though we've apparently dropped out of the group, we can continue safely to maintain our
@@ -875,9 +903,16 @@ public class TaskManager {
                 closeTaskDirty(task);
             }
         }
+    }
 
-        if (processingMode == EXACTLY_ONCE_V2) {
-            activeTaskCreator.reInitializeThreadProducer();
+    private void removeLostTasksFromStateUpdater() {
+        if (stateUpdater != null) {
+            for (final Task restoringTask : stateUpdater.getTasks()) {
+                if (restoringTask.isActive()) {
+                    tasks.addPendingTaskToCloseDirty(restoringTask.id());
+                    stateUpdater.remove(restoringTask.id());
+                }
+            }
         }
     }
 
@@ -893,7 +928,7 @@ public class TaskManager {
         // so we consider all tasks that are either owned or on disk. This includes stateless tasks, which should
         // just have an empty changelogOffsets map.
         for (final TaskId id : union(HashSet::new, lockedTaskDirectories, tasks.allTaskIds())) {
-            final Task task = tasks.owned(id) ? tasks.task(id) : null;
+            final Task task = tasks.contains(id) ? tasks.task(id) : null;
             // Closed and uninitialized tasks don't have any offsets so we should read directly from the checkpoint
             if (task != null && task.state() != State.CREATED && task.state() != State.CLOSED) {
                 final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
@@ -935,7 +970,7 @@ public class TaskManager {
                 final TaskId id = parseTaskDirectoryName(dir.getName(), namedTopology);
                 if (stateDirectory.lock(id)) {
                     lockedTaskDirectories.add(id);
-                    if (!tasks.owned(id)) {
+                    if (!tasks.contains(id)) {
                         log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
                     }
                 }
@@ -968,7 +1003,7 @@ public class TaskManager {
         final Iterator<TaskId> taskIdIterator = lockedTaskDirectories.iterator();
         while (taskIdIterator.hasNext()) {
             final TaskId id = taskIdIterator.next();
-            if (!tasks.owned(id)) {
+            if (!tasks.contains(id)) {
                 stateDirectory.unlock(id);
                 taskIdIterator.remove();
             }
@@ -1541,7 +1576,7 @@ public class TaskManager {
         tasks.addTask(task);
     }
 
-    Tasks tasks() {
+    TasksRegistry tasks() {
         return tasks;
     }
 }

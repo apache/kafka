@@ -46,7 +46,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 
 class UnifiedLogTest {
-  var config: KafkaConfig = null
+  var config: KafkaConfig = _
   val brokerTopicStats = new BrokerTopicStats
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
@@ -3505,7 +3505,7 @@ class UnifiedLogTest {
                         time: Time = mockTime,
                         maxTransactionTimeoutMs: Int = 60 * 60 * 1000,
                         maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
-                        producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
+                        producerIdExpirationCheckIntervalMs: Int = 10 * 60 * 1000,
                         lastShutdownClean: Boolean = true,
                         topicId: Option[Uuid] = None,
                         keepPartitionMetadataFile: Boolean = true): UnifiedLog = {

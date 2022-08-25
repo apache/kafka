@@ -278,6 +278,10 @@
     <!-- Shell -->
     <suppress checks="CyclomaticComplexity"
               files="(GlobComponent|MetadataNodeManager).java"/>
+    <suppress checks="MethodLength"
+              files="(MetadataNodeManager).java"/>
+    <suppress checks="JavaNCSS"
+              files="(MetadataNodeManager).java"/>
 
     <!-- Log4J-Appender -->
     <suppress checks="CyclomaticComplexity"

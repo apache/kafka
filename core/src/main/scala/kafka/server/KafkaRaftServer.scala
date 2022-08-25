@@ -56,6 +56,7 @@ class KafkaRaftServer(
   threadNamePrefix: Option[String]
 ) extends Server with Logging {
 
+  this.logIdent = s"[KafkaRaftServer nodeId=${config.nodeId}] "
   KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
   KafkaYammerMetrics.INSTANCE.configure(config.originals)
 
@@ -133,6 +134,8 @@ class KafkaRaftServer(
 
   override def startup(): Unit = {
     Mx4jLoader.maybeLoad()
+    // Note that we startup `RaftManager` first so that the controller and broker
+    // can register listeners during initialization.
     raftManager.startup()
     controller.foreach(_.startup())
     broker.foreach(_.startup())
@@ -142,6 +145,10 @@ class KafkaRaftServer(
 
   override def shutdown(): Unit = {
     broker.foreach(_.shutdown())
+    // The order of shutdown for `RaftManager` and `ControllerServer` is backwards
+    // compared to `startup()`. This is because the `SocketServer` implementation that
+    // we rely on to receive requests is owned by `ControllerServer`, so we need it
+    // to stick around until graceful shutdown of `RaftManager` can be completed.
     raftManager.shutdown()
     controller.foreach(_.shutdown())
     CoreUtils.swallow(AppInfoParser.unregisterAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics), this)

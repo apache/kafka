@@ -21,7 +21,7 @@ import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
 import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, Config, ConfigEntry, NewPartitionReassignment, NewTopic}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, Config, ConfigEntry, DescribeMetadataQuorumOptions, NewPartitionReassignment, NewTopic}
 import org.apache.kafka.common.{TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.network.ListenerName
@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Test, Timeout}
 
 import java.util
-import java.util.{Arrays, Collections, Optional}
+import java.util.{Arrays, Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
@@ -51,7 +51,7 @@ import scala.jdk.CollectionConverters._
 @Tag("integration")
 class KRaftClusterTest {
   val log = LoggerFactory.getLogger(classOf[KRaftClusterTest])
-  val log2 = LoggerFactory.getLogger(classOf[KRaftClusterTest].getCanonicalName() + "2")
+  val log2 = LoggerFactory.getLogger(classOf[KRaftClusterTest].getCanonicalName + "2")
 
   @Test
   def testCreateClusterAndClose(): Unit = {
@@ -412,7 +412,7 @@ class KRaftClusterTest {
           Optional.of(new NewPartitionReassignment(Arrays.asList(3, 2, 0, 1))))
         admin.alterPartitionReassignments(reassignments).all().get()
         TestUtils.waitUntilTrue(
-          () => admin.listPartitionReassignments().reassignments().get().isEmpty(),
+          () => admin.listPartitionReassignments().reassignments().get().isEmpty,
           "The reassignment never completed.")
         var currentMapping: Seq[Seq[Int]] = Seq()
         val expectedMapping = Seq(Seq(2, 1, 0), Seq(0, 1, 2), Seq(2, 3), Seq(3, 2, 0, 1))
@@ -478,7 +478,7 @@ class KRaftClusterTest {
                                   expectedAbsent: Seq[String]): Unit = {
     val topicsNotFound = new util.HashSet[String]
     var extraTopics: mutable.Set[String] = null
-    expectedPresent.foreach(topicsNotFound.add(_))
+    expectedPresent.foreach(topicsNotFound.add)
     TestUtils.waitUntilTrue(() => {
       admin.listTopics().names().get().forEach(name => topicsNotFound.remove(name))
       extraTopics = admin.listTopics().names().get().asScala.filter(expectedAbsent.contains(_))
@@ -622,29 +622,29 @@ class KRaftClusterTest {
             new ApiError(INVALID_REQUEST, "APPEND operation is not allowed for the BROKER_LOGGER resource")),
           incrementalAlter(admin, Seq(
             (broker2, Seq(
-              new AlterConfigOp(new ConfigEntry(log.getName(), "TRACE"), OpType.SET),
-              new AlterConfigOp(new ConfigEntry(log2.getName(), "TRACE"), OpType.SET))),
+              new AlterConfigOp(new ConfigEntry(log.getName, "TRACE"), OpType.SET),
+              new AlterConfigOp(new ConfigEntry(log2.getName, "TRACE"), OpType.SET))),
             (broker3, Seq(
-              new AlterConfigOp(new ConfigEntry(log.getName(), "TRACE"), OpType.APPEND),
-              new AlterConfigOp(new ConfigEntry(log2.getName(), "TRACE"), OpType.APPEND))))))
+              new AlterConfigOp(new ConfigEntry(log.getName, "TRACE"), OpType.APPEND),
+              new AlterConfigOp(new ConfigEntry(log2.getName, "TRACE"), OpType.APPEND))))))
 
         validateConfigs(admin, Map(broker2 -> Seq(
-          (log.getName(), "TRACE"),
-          (log2.getName(), "TRACE"))))
+          (log.getName, "TRACE"),
+          (log2.getName, "TRACE"))))
 
         assertEquals(Seq(ApiError.NONE,
           new ApiError(INVALID_REQUEST, "SUBTRACT operation is not allowed for the BROKER_LOGGER resource")),
           incrementalAlter(admin, Seq(
             (broker2, Seq(
-              new AlterConfigOp(new ConfigEntry(log.getName(), ""), OpType.DELETE),
-              new AlterConfigOp(new ConfigEntry(log2.getName(), ""), OpType.DELETE))),
+              new AlterConfigOp(new ConfigEntry(log.getName, ""), OpType.DELETE),
+              new AlterConfigOp(new ConfigEntry(log2.getName, ""), OpType.DELETE))),
             (broker3, Seq(
-              new AlterConfigOp(new ConfigEntry(log.getName(), "TRACE"), OpType.SUBTRACT),
-              new AlterConfigOp(new ConfigEntry(log2.getName(), "TRACE"), OpType.SUBTRACT))))))
+              new AlterConfigOp(new ConfigEntry(log.getName, "TRACE"), OpType.SUBTRACT),
+              new AlterConfigOp(new ConfigEntry(log2.getName, "TRACE"), OpType.SUBTRACT))))))
 
         validateConfigs(admin, Map(broker2 -> Seq(
-          (log.getName(), initialLog4j.get(broker2).get.get(log.getName())),
-          (log2.getName(), initialLog4j.get(broker2).get.get(log2.getName())))))
+          (log.getName, initialLog4j(broker2).get(log.getName)),
+          (log2.getName, initialLog4j(broker2).get(log2.getName)))))
       } finally {
         admin.close()
       }
@@ -781,4 +781,55 @@ class KRaftClusterTest {
       cluster.close()
     }
   }
+  def createAdminClient(cluster: KafkaClusterTestKit): Admin = {
+    var props: Properties = null
+    props = cluster.clientProperties()
+    props.put(AdminClientConfig.CLIENT_ID_CONFIG, this.getClass.getName)
+    Admin.create(props)
+  }
+
+  @Test
+  def testDescribeQuorumRequestToBrokers() : Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(4).
+        setNumControllerNodes(3).build()).build()
+    try {
+      cluster.format
+      cluster.startup
+      for (i <- 0 to 3) {
+        TestUtils.waitUntilTrue(() => cluster.brokers.get(i).brokerState == BrokerState.RUNNING,
+          "Broker Never started up")
+      }
+      val admin = createAdminClient(cluster)
+      try {
+        val quorumState = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
+        val quorumInfo = quorumState.quorumInfo.get()
+
+        assertEquals(cluster.controllers.asScala.keySet, quorumInfo.voters.asScala.map(_.replicaId).toSet)
+        assertTrue(cluster.controllers.asScala.keySet.contains(quorumInfo.leaderId),
+          s"Leader ID ${quorumInfo.leaderId} was not a controller ID.")
+
+        quorumInfo.voters.forEach { voter =>
+          assertTrue(0 < voter.logEndOffset,
+            s"logEndOffset for voter with ID ${voter.replicaId} was ${voter.logEndOffset}")
+          assertNotEquals(OptionalLong.empty(), voter.lastFetchTimestamp)
+          assertNotEquals(OptionalLong.empty(), voter.lastCaughtUpTimestamp)
+        }
+
+        assertEquals(cluster.brokers.asScala.keySet, quorumInfo.observers.asScala.map(_.replicaId).toSet)
+        quorumInfo.observers.forEach { observer =>
+          assertTrue(0 < observer.logEndOffset,
+            s"logEndOffset for observer with ID ${observer.replicaId} was ${observer.logEndOffset}")
+          assertNotEquals(OptionalLong.empty(), observer.lastFetchTimestamp)
+          assertNotEquals(OptionalLong.empty(), observer.lastCaughtUpTimestamp)
+        }
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
 }

@@ -295,9 +295,9 @@ object ConsoleConsumer extends Logging {
     val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
 
     // topic must be specified.
-    var topicArg: String = null
-    var includedTopicsArg: String = null
-    var filterSpec: TopicFilter = null
+    var topicArg: String = _
+    var includedTopicsArg: String = _
+    var filterSpec: TopicFilter = _
     val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt).asScala)
     val consumerProps = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))

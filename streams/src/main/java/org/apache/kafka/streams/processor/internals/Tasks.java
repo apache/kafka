@@ -40,7 +40,7 @@ import static org.apache.kafka.common.utils.Utils.union;
  * i.e. all running active tasks are processed by the former and all restoring active tasks and standby tasks are
  * processed by the latter.
  */
-class Tasks {
+class Tasks implements TasksRegistry {
     private final Logger log;
 
     // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
@@ -55,7 +55,9 @@ class Tasks {
     private final Map<TaskId, Set<TopicPartition>> pendingTasksToRecycle = new HashMap<>();
     private final Map<TaskId, Set<TopicPartition>> pendingTasksToUpdateInputPartitions = new HashMap<>();
     private final Set<Task> pendingTasksToInit = new HashSet<>();
-    private final Set<TaskId> pendingTasksToClose = new HashSet<>();
+    private final Set<TaskId> pendingTasksToCloseClean = new HashSet<>();
+
+    private final Set<TaskId> pendingTasksToCloseDirty = new HashSet<>();
 
     // TODO: convert to Stream/StandbyTask when we remove TaskManager#StateMachineTask with mocks
     private final Map<TopicPartition, Task> activeTasksPerPartition = new HashMap<>();
@@ -64,12 +66,14 @@ class Tasks {
         this.log = logContext.logger(getClass());
     }
 
-    void clearPendingTasksToCreate() {
+    @Override
+    public void clearPendingTasksToCreate() {
         pendingActiveTasksToCreate.clear();
         pendingStandbyTasksToCreate.clear();
     }
 
-    Map<TaskId, Set<TopicPartition>> drainPendingActiveTasksForTopologies(final Set<String> currentTopologies) {
+    @Override
+    public Map<TaskId, Set<TopicPartition>> drainPendingActiveTasksForTopologies(final Set<String> currentTopologies) {
         final Map<TaskId, Set<TopicPartition>> pendingActiveTasksForTopologies =
             filterMap(pendingActiveTasksToCreate, t -> currentTopologies.contains(t.getKey().topologyName()));
 
@@ -78,7 +82,8 @@ class Tasks {
         return pendingActiveTasksForTopologies;
     }
 
-    Map<TaskId, Set<TopicPartition>> drainPendingStandbyTasksForTopologies(final Set<String> currentTopologies) {
+    @Override
+    public Map<TaskId, Set<TopicPartition>> drainPendingStandbyTasksForTopologies(final Set<String> currentTopologies) {
         final Map<TaskId, Set<TopicPartition>> pendingActiveTasksForTopologies =
             filterMap(pendingStandbyTasksToCreate, t -> currentTopologies.contains(t.getKey().topologyName()));
 
@@ -87,49 +92,70 @@ class Tasks {
         return pendingActiveTasksForTopologies;
     }
 
-    void addPendingActiveTasksToCreate(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
+    @Override
+    public void addPendingActiveTasksToCreate(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
         pendingActiveTasksToCreate.putAll(pendingTasks);
     }
 
-    void addPendingStandbyTasksToCreate(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
+    @Override
+    public void addPendingStandbyTasksToCreate(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
         pendingStandbyTasksToCreate.putAll(pendingTasks);
     }
 
-    Set<TopicPartition> removePendingTaskToRecycle(final TaskId taskId) {
+    @Override
+    public Set<TopicPartition> removePendingTaskToRecycle(final TaskId taskId) {
         return pendingTasksToRecycle.remove(taskId);
     }
 
-    void addPendingTaskToRecycle(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
+    @Override
+    public void addPendingTaskToRecycle(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
         pendingTasksToRecycle.put(taskId, inputPartitions);
     }
 
-    Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId) {
+    @Override
+    public Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId) {
         return pendingTasksToUpdateInputPartitions.remove(taskId);
     }
 
-    void addPendingTaskToUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
+    @Override
+    public void addPendingTaskToUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
         pendingTasksToUpdateInputPartitions.put(taskId, inputPartitions);
     }
 
-    boolean removePendingTaskToClose(final TaskId taskId) {
-        return pendingTasksToClose.remove(taskId);
+    @Override
+    public boolean removePendingTaskToCloseDirty(final TaskId taskId) {
+        return pendingTasksToCloseDirty.remove(taskId);
     }
 
-    void addPendingTaskToClose(final TaskId taskId) {
-        pendingTasksToClose.add(taskId);
+    @Override
+    public void addPendingTaskToCloseDirty(final TaskId taskId) {
+        pendingTasksToCloseDirty.add(taskId);
     }
 
-    Set<Task> drainPendingTaskToInit() {
+    @Override
+    public boolean removePendingTaskToCloseClean(final TaskId taskId) {
+        return pendingTasksToCloseClean.remove(taskId);
+    }
+
+    @Override
+    public void addPendingTaskToCloseClean(final TaskId taskId) {
+        pendingTasksToCloseClean.add(taskId);
+    }
+
+    @Override
+    public Set<Task> drainPendingTaskToInit() {
         final Set<Task> result = new HashSet<>(pendingTasksToInit);
         pendingTasksToInit.clear();
         return result;
     }
 
-    void addPendingTaskToInit(final Collection<Task> tasks) {
+    @Override
+    public void addPendingTaskToInit(final Collection<Task> tasks) {
         pendingTasksToInit.addAll(tasks);
     }
 
-    void addNewActiveTasks(final Collection<Task> newTasks) {
+    @Override
+    public void addNewActiveTasks(final Collection<Task> newTasks) {
         if (!newTasks.isEmpty()) {
             for (final Task activeTask : newTasks) {
                 final TaskId taskId = activeTask.id();
@@ -150,7 +176,8 @@ class Tasks {
         }
     }
 
-    void addNewStandbyTasks(final Collection<Task> newTasks) {
+    @Override
+    public void addNewStandbyTasks(final Collection<Task> newTasks) {
         if (!newTasks.isEmpty()) {
             for (final Task standbyTask : newTasks) {
                 final TaskId taskId = standbyTask.id();
@@ -168,7 +195,8 @@ class Tasks {
         }
     }
 
-    void removeTask(final Task taskToRemove) {
+    @Override
+    public void removeTask(final Task taskToRemove) {
         final TaskId taskId = taskToRemove.id();
 
         if (taskToRemove.state() != Task.State.CLOSED) {
@@ -187,7 +215,8 @@ class Tasks {
         }
     }
 
-    void replaceActiveWithStandby(final StandbyTask standbyTask) {
+    @Override
+    public void replaceActiveWithStandby(final StandbyTask standbyTask) {
         final TaskId taskId = standbyTask.id();
         if (activeTasksPerId.remove(taskId) == null) {
             throw new IllegalStateException("Attempted to replace unknown active task with standby task: " + taskId);
@@ -197,7 +226,8 @@ class Tasks {
         standbyTasksPerId.put(standbyTask.id(), standbyTask);
     }
 
-    void replaceStandbyWithActive(final StreamTask activeTask) {
+    @Override
+    public void replaceStandbyWithActive(final StreamTask activeTask) {
         final TaskId taskId = activeTask.id();
         if (standbyTasksPerId.remove(taskId) == null) {
             throw new IllegalStateException("Attempted to convert unknown standby task to stream task: " + taskId);
@@ -209,7 +239,8 @@ class Tasks {
         }
     }
 
-    boolean updateActiveTaskInputPartitions(final Task task, final Set<TopicPartition> topicPartitions) {
+    @Override
+    public boolean updateActiveTaskInputPartitions(final Task task, final Set<TopicPartition> topicPartitions) {
         final boolean requiresUpdate = !task.inputPartitions().equals(topicPartitions);
         if (requiresUpdate) {
             log.debug("Update task {} inputPartitions: current {}, new {}", task, task.inputPartitions(), topicPartitions);
@@ -234,14 +265,16 @@ class Tasks {
         toBeRemoved.forEach(activeTasksPerPartition::remove);
     }
 
-    void clear() {
+    @Override
+    public void clear() {
         activeTasksPerId.clear();
         standbyTasksPerId.clear();
         activeTasksPerPartition.clear();
     }
 
     // TODO: change return type to `StreamTask`
-    Task activeTasksForInputPartition(final TopicPartition partition) {
+    @Override
+    public Task activeTasksForInputPartition(final TopicPartition partition) {
         return activeTasksPerPartition.get(partition);
     }
 
@@ -255,7 +288,8 @@ class Tasks {
         return null;
     }
 
-    Task task(final TaskId taskId) {
+    @Override
+    public Task task(final TaskId taskId) {
         final Task task = getTask(taskId);
 
         if (task != null)
@@ -264,7 +298,8 @@ class Tasks {
             throw new IllegalStateException("Task unknown: " + taskId);
     }
 
-    Collection<Task> tasks(final Collection<TaskId> taskIds) {
+    @Override
+    public Collection<Task> tasks(final Collection<TaskId> taskIds) {
         final Set<Task> tasks = new HashSet<>();
         for (final TaskId taskId : taskIds) {
             tasks.add(task(taskId));
@@ -272,7 +307,8 @@ class Tasks {
         return tasks;
     }
 
-    Collection<Task> activeTasks() {
+    @Override
+    public Collection<Task> activeTasks() {
         return Collections.unmodifiableCollection(activeTasksPerId.values());
     }
 
@@ -280,27 +316,32 @@ class Tasks {
      * All tasks returned by any of the getters are read-only and should NOT be modified;
      * and the returned task could be modified by other threads concurrently
      */
-    Set<Task> allTasks() {
+    @Override
+    public Set<Task> allTasks() {
         return union(HashSet::new, new HashSet<>(activeTasksPerId.values()), new HashSet<>(standbyTasksPerId.values()));
     }
 
-    Set<TaskId> allTaskIds() {
+    @Override
+    public Set<TaskId> allTaskIds() {
         return union(HashSet::new, activeTasksPerId.keySet(), standbyTasksPerId.keySet());
     }
 
-    Map<TaskId, Task> allTasksPerId() {
+    @Override
+    public Map<TaskId, Task> allTasksPerId() {
         final Map<TaskId, Task> ret = new HashMap<>();
         ret.putAll(activeTasksPerId);
         ret.putAll(standbyTasksPerId);
         return ret;
     }
 
-    boolean owned(final TaskId taskId) {
+    @Override
+    public boolean contains(final TaskId taskId) {
         return getTask(taskId) != null;
     }
 
     // for testing only
-    void addTask(final Task task) {
+    @Override
+    public void addTask(final Task task) {
         if (task.isActive()) {
             activeTasksPerId.put(task.id(), task);
         } else {

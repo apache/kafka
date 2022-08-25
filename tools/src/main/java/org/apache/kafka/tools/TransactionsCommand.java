@@ -66,6 +66,7 @@ import java.util.stream.Collectors;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
+import static org.apache.kafka.server.util.ToolsUtils.prettyPrintTable;
 
 public abstract class TransactionsCommand {
     private static final Logger log = LoggerFactory.getLogger(TransactionsCommand.class);
@@ -901,51 +902,6 @@ public abstract class TransactionsCommand {
                 batchStartIndex = batchEndIndex;
             }
         }
-    }
-
-    private static void appendColumnValue(
-        StringBuilder rowBuilder,
-        String value,
-        int length
-    ) {
-        int padLength = length - value.length();
-        rowBuilder.append(value);
-        for (int i = 0; i < padLength; i++)
-            rowBuilder.append(' ');
-    }
-
-    private static void printRow(
-        List<Integer> columnLengths,
-        String[] row,
-        PrintStream out
-    ) {
-        StringBuilder rowBuilder = new StringBuilder();
-        for (int i = 0; i < row.length; i++) {
-            Integer columnLength = columnLengths.get(i);
-            String columnValue = row[i];
-            appendColumnValue(rowBuilder, columnValue, columnLength);
-            rowBuilder.append('\t');
-        }
-        out.println(rowBuilder);
-    }
-
-    private static void prettyPrintTable(
-        String[] headers,
-        List<String[]> rows,
-        PrintStream out
-    ) {
-        List<Integer> columnLengths = Arrays.stream(headers)
-            .map(String::length)
-            .collect(Collectors.toList());
-
-        for (String[] row : rows) {
-            for (int i = 0; i < headers.length; i++) {
-                columnLengths.set(i, Math.max(columnLengths.get(i), row[i].length()));
-            }
-        }
-
-        printRow(columnLengths, headers, out);
-        rows.forEach(row -> printRow(columnLengths, row, out));
     }
 
     private static void printErrorAndExit(String message, Throwable t) {

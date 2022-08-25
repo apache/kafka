@@ -172,7 +172,7 @@ public class KafkaProducerTest {
                   KafkaClient kafkaClient,
                   ProducerInterceptors<K, V> interceptors,
                   Time time) {
-        return new KafkaProducer<K, V>(new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer)),
+        return new KafkaProducer<>(new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer)),
             keySerializer, valueSerializer, metadata, kafkaClient, interceptors, time);
     }
 
@@ -455,6 +455,28 @@ public class KafkaProducerTest {
         MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) producer.metrics.reporters().get(0);
 
         assertEquals(producer.getClientId(), mockMetricsReporter.clientId);
+        assertEquals(2, producer.metrics.reporters().size());
+        producer.close();
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testDisableJmxReporter() {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
+        assertTrue(producer.metrics.reporters().isEmpty());
+        producer.close();
+    }
+
+    @Test
+    public void testExplicitlyEnableJmxReporter() {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
+        assertEquals(1, producer.metrics.reporters().size());
         producer.close();
     }
 
@@ -1901,7 +1923,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testCallbackAndInterceptorHandleError() throws Exception {
+    public void testCallbackAndInterceptorHandleError() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "1000");
