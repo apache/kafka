@@ -21,6 +21,7 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -86,6 +87,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.controller.QuorumController.ConfigResourceExistenceChecker;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
+import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
@@ -1343,9 +1345,31 @@ public class QuorumControllerTest {
                 b.setConfigSchema(SCHEMA);
             }, OptionalLong.empty(), OptionalLong.empty(), COMPLEX_BOOTSTRAP)) {
                 QuorumController active = controlEnv.activeController();
-                assertEquals(MetadataVersion.IBP_3_3_IV1, active.featureControl().metadataVersion());
-                assertEquals(Collections.singletonMap("foo", "bar"), active.configurationControl().
-                        getConfigs(new ConfigResource(BROKER, "")));
+
+                ControllerRequestContext ctx = new ControllerRequestContext(
+                    new RequestHeaderData(), KafkaPrincipal.ANONYMOUS, OptionalLong.of(Long.MAX_VALUE));
+
+                TestUtils.waitForCondition(() -> {
+                    FinalizedControllerFeatures features = active.finalizedFeatures(ctx).get();
+                    Optional<Short> metadataVersionOpt = features.get(MetadataVersion.FEATURE_NAME);
+                    return Optional.of(MetadataVersion.IBP_3_3_IV1.featureLevel()).equals(metadataVersionOpt);
+                }, "Failed to see expected metadata version from bootstrap metadata");
+
+                TestUtils.waitForCondition(() -> {
+                    ConfigResource defaultBrokerResource = new ConfigResource(BROKER, "");
+
+                    Map<ConfigResource, Collection<String>> configs = Collections.singletonMap(
+                        defaultBrokerResource,
+                        Collections.emptyList()
+                    );
+
+                    Map<ConfigResource, ResultOrError<Map<String, String>>> results =
+                        active.describeConfigs(ctx, configs).get();
+
+                    ResultOrError<Map<String, String>> resultOrError = results.get(defaultBrokerResource);
+                    return resultOrError.isResult() &&
+                        Collections.singletonMap("foo", "bar").equals(resultOrError.result());
+                }, "Failed to see expected config change from bootstrap metadata");
             }
         }
     }
