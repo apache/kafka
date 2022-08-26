@@ -1050,8 +1050,11 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def handleFetchOffsets(groupId: String, requireStable: Boolean, partitions: Option[Seq[TopicPartition]] = None):
-  (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) = {
+  def handleFetchOffsets(
+    groupId: String,
+    requireStable: Boolean,
+    partitions: Option[Seq[TopicPartition]] = None
+  ): (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) = {
 
     validateGroupStatus(groupId, ApiKeys.OFFSET_FETCH) match {
       case Some(error) => error -> Map.empty
