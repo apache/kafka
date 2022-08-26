@@ -20,7 +20,6 @@ name: Code analysis
 on:
   workflow_call:
   pull_request:
-  push:
     # Using wildcard (e.g. '**') to build on all branches will cause PRs to run duplicate checks like `test (pull_request)` with `test (push)`.
     branches:
       - 3.0-li
