@@ -59,7 +59,7 @@ public class SnapshotRegistryTest {
         assertEquals(snapshot123, registry.getSnapshot(123));
         assertThrows(RuntimeException.class, () -> registry.getSnapshot(456));
         assertIteratorContains(registry.iterator(), snapshot123);
-        assertEquals("Can't create a new snapshot at epoch 1 because there is already " +
+        assertEquals("Can't create a new in-memory snapshot at epoch 1 because there is already " +
             "a snapshot with epoch 123", assertThrows(RuntimeException.class,
                 () -> registry.getOrCreateSnapshot(1)).getMessage());
         Snapshot snapshot456 = registry.getOrCreateSnapshot(456);

@@ -167,7 +167,16 @@ public enum MetadataVersion {
     
     public static final String FEATURE_NAME = "metadata.version";
 
+    /**
+     * The first version we currently support in KRaft.
+     */
     public static final MetadataVersion MINIMUM_KRAFT_VERSION = IBP_3_0_IV1;
+
+    /**
+     * The first version we currently support in the bootstrap metadata. We chose 3.3IV0 since it
+     * is the first version that supports storing the metadata.version in the log.
+     */
+    public static final MetadataVersion MINIMUM_BOOTSTRAP_VERSION = IBP_3_3_IV0;
 
     public static final MetadataVersion[] VERSIONS;
 
