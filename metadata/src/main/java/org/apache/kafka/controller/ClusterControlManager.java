@@ -353,19 +353,16 @@ public class ClusterControlManager {
                 setSecurityProtocol(listener.securityProtocol()));
         }
         for (BrokerRegistrationRequestData.Feature feature : request.features()) {
-            Optional<Short> finalized = finalizedFeatures.get(feature.name());
-            if (finalized.isPresent()) {
-                if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized.get())) {
-                    throw new UnsupportedVersionException("Unable to register because " +
-                            "the broker has an unsupported version of " + feature.name());
-                }
-            } else {
-                log.warn("Broker registered with feature {} that is unknown to the controller", feature.name());
-            }
-            record.features().add(new BrokerFeature().
-                setName(feature.name()).
-                setMinSupportedVersion(feature.minSupportedVersion()).
-                setMaxSupportedVersion(feature.maxSupportedVersion()));
+            record.features().add(processRegistrationFeature(brokerId, finalizedFeatures, feature));
+        }
+        if (request.features().find(MetadataVersion.FEATURE_NAME) == null) {
+            // Brokers that don't send a supported metadata.version range are assumed to only
+            // support the original metadata.version.
+            record.features().add(processRegistrationFeature(brokerId, finalizedFeatures,
+                    new BrokerRegistrationRequestData.Feature().
+                            setName(MetadataVersion.FEATURE_NAME).
+                            setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                            setMaxSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel())));
         }
 
         heartbeatManager.register(brokerId, record.fenced());
@@ -374,6 +371,29 @@ public class ClusterControlManager {
         records.add(new ApiMessageAndVersion(record, featureControl.metadataVersion().
             registerBrokerRecordVersion()));
         return ControllerResult.atomicOf(records, new BrokerRegistrationReply(brokerEpoch));
+    }
+
+    BrokerFeature processRegistrationFeature(
+        int brokerId,
+        FinalizedControllerFeatures finalizedFeatures,
+        BrokerRegistrationRequestData.Feature feature
+    ) {
+        Optional<Short> finalized = finalizedFeatures.get(feature.name());
+        if (finalized.isPresent()) {
+            if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized.get())) {
+                throw new UnsupportedVersionException("Unable to register because the broker " +
+                    "does not support version " + finalized.get() + " of " + feature.name() +
+                        ". It wants a version between " + feature.minSupportedVersion() + " and " +
+                        feature.maxSupportedVersion() + ", inclusive.");
+            }
+        } else {
+            log.warn("Broker {} registered with feature {} that is unknown to the controller",
+                    brokerId, feature.name());
+        }
+        return new BrokerFeature().
+                setName(feature.name()).
+                setMinSupportedVersion(feature.minSupportedVersion()).
+                setMaxSupportedVersion(feature.maxSupportedVersion());
     }
 
     public OptionalLong registerBrokerRecordOffset(int brokerId) {

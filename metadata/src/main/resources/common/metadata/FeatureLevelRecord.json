@@ -14,6 +14,9 @@
 // limitations under the License.
 
 {
+  // Note: New metadata logs and snapshots begin with a FeatureLevelRecord which specifies the
+  // metadata level that is required to read them. The version of that record cannot advance
+  // beyond 0, for backwards compatibility reasons.
   "apiKey": 12,
   "type": "metadata",
   "name": "FeatureLevelRecord",

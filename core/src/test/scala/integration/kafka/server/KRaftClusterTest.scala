@@ -296,13 +296,14 @@ class KRaftClusterTest {
 
   @Test
   def testCreateClusterInvalidMetadataVersion(): Unit = {
-    assertThrows(classOf[IllegalArgumentException], () => {
-      new KafkaClusterTestKit.Builder(
-        new TestKitNodes.Builder().
-          setBootstrapMetadataVersion(MetadataVersion.IBP_2_7_IV0).
-          setNumBrokerNodes(1).
-          setNumControllerNodes(1).build()).build()
-    })
+    assertEquals("Bootstrap metadata versions before 3.3-IV0 are not supported. Can't load " +
+      "metadata from testkit", assertThrows(classOf[RuntimeException], () => {
+        new KafkaClusterTestKit.Builder(
+          new TestKitNodes.Builder().
+            setBootstrapMetadataVersion(MetadataVersion.IBP_2_7_IV0).
+            setNumBrokerNodes(1).
+            setNumControllerNodes(1).build()).build()
+    }).getMessage)
   }
 
   private def doOnStartedKafkaCluster(numControllerNodes: Int = 1,
@@ -426,15 +427,17 @@ class KRaftClusterTest {
         }, "Timed out waiting for replica assignments for topic foo. " +
           s"Wanted: ${expectedMapping}. Got: ${currentMapping}")
 
-        checkReplicaManager(
-          cluster,
-          List(
-            (0, List(true, true, false, true)),
-            (1, List(true, true, false, true)),
-            (2, List(true, true, true, true)),
-            (3, List(false, false, true, true))
+        TestUtils.retry(60000) {
+          checkReplicaManager(
+            cluster,
+            List(
+              (0, List(true, true, false, true)),
+              (1, List(true, true, false, true)),
+              (2, List(true, true, true, true)),
+              (3, List(false, false, true, true))
+            )
           )
-        )
+        }
       } finally {
         admin.close()
       }

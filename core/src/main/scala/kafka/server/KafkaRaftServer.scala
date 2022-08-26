@@ -29,16 +29,16 @@ import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{KafkaException, Uuid}
-import org.apache.kafka.controller.{BootstrapMetadata, QuorumControllerMetrics}
+import org.apache.kafka.controller.QuorumControllerMetrics
+import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.metadata.{KafkaConfigSchema, MetadataRecordSerde}
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{LoggingFaultHandler, ProcessExitingFaultHandler}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
-import java.nio.file.Paths
+import java.util.Optional
 import scala.collection.Seq
-import scala.compat.java8.FunctionConverters.asJavaSupplier
 import scala.jdk.CollectionConverters._
 
 /**
@@ -208,16 +208,9 @@ object KafkaRaftServer {
           "If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
     }
 
-    // Load the bootstrap metadata file. In the case of an upgrade from older KRaft where there is no bootstrap metadata,
-    // read the IBP from config in order to bootstrap the equivalent metadata version.
-    def getUserDefinedIBPVersionOrThrow(): MetadataVersion = {
-      if (config.originals.containsKey(KafkaConfig.InterBrokerProtocolVersionProp)) {
-        MetadataVersion.fromVersionString(config.interBrokerProtocolVersionString)
-      } else {
-        throw new KafkaException(s"Cannot upgrade from KRaft version prior to 3.3 without first setting ${KafkaConfig.InterBrokerProtocolVersionProp} on each broker.")
-      }
-    }
-    val bootstrapMetadata = BootstrapMetadata.load(Paths.get(config.metadataLogDir), asJavaSupplier(() => getUserDefinedIBPVersionOrThrow()))
+    val bootstrapDirectory = new BootstrapDirectory(config.metadataLogDir,
+      Optional.ofNullable(config.interBrokerProtocolVersionString))
+    val bootstrapMetadata = bootstrapDirectory.read()
 
     (metaProperties, bootstrapMetadata, offlineDirs.toSeq)
   }

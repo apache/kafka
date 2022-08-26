@@ -36,14 +36,14 @@ import static org.apache.kafka.raft.KafkaRaftClient.MAX_BATCH_SIZE_BYTES;
 
 
 /**
- * Write an arbitrary set of metadata records into a Kafka metadata snapshot format. The resulting snapshot will be use
- * epoch of zero and an initial offset of zero. This class should not be used for creating actual metadata snapshots.
+ * Write an arbitrary set of metadata records into a Kafka metadata log batch format. This is similar to the binary
+ * format used for metadata snapshot files, but the log epoch and initial offset are set to zero.
  */
-public class SnapshotFileWriter implements AutoCloseable {
+public class BatchFileWriter implements AutoCloseable {
     private final FileChannel channel;
     private final BatchAccumulator<ApiMessageAndVersion> batchAccumulator;
 
-    SnapshotFileWriter(FileChannel channel, BatchAccumulator<ApiMessageAndVersion> batchAccumulator) {
+    BatchFileWriter(FileChannel channel, BatchAccumulator<ApiMessageAndVersion> batchAccumulator) {
         this.channel = channel;
         this.batchAccumulator = batchAccumulator;
     }
@@ -63,7 +63,7 @@ public class SnapshotFileWriter implements AutoCloseable {
         channel.close();
     }
 
-    public static SnapshotFileWriter open(Path snapshotPath) throws IOException {
+    public static BatchFileWriter open(Path snapshotPath) throws IOException {
         BatchAccumulator<ApiMessageAndVersion> batchAccumulator = new BatchAccumulator<>(
             0,
             0,
@@ -76,6 +76,6 @@ public class SnapshotFileWriter implements AutoCloseable {
 
         FileChannel channel = FileChannel.open(snapshotPath, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
 
-        return new SnapshotFileWriter(channel, batchAccumulator);
+        return new BatchFileWriter(channel, batchAccumulator);
     }
 }

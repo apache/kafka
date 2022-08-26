@@ -26,9 +26,10 @@ import net.sourceforge.argparse4j.impl.Arguments.{store, storeTrue}
 import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.controller.BootstrapMetadata
+import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.server.common.MetadataVersion
 
+import java.util.Optional
 import scala.collection.mutable
 
 object StorageTool extends Logging {
@@ -47,7 +48,7 @@ object StorageTool extends Logging {
         case "format" =>
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
-          val metadataVersion = getMetadataVersion(namespace)
+          val metadataVersion = getMetadataVersion(namespace, Option(config.get.interBrokerProtocolVersionString))
           if (!metadataVersion.isKRaftSupported) {
             throw new TerseFailure(s"Must specify a valid KRaft metadata version of at least 3.0.")
           }
@@ -113,10 +114,18 @@ object StorageTool extends Logging {
 
   def configToSelfManagedMode(config: KafkaConfig): Boolean = config.processRoles.nonEmpty
 
-  def getMetadataVersion(namespace: Namespace): MetadataVersion = {
+  def getMetadataVersion(
+    namespace: Namespace,
+    defaultVersionString: Option[String]
+  ): MetadataVersion = {
+    val defaultValue = defaultVersionString match {
+      case Some(versionString) => MetadataVersion.fromVersionString(versionString)
+      case None => MetadataVersion.latest()
+    }
+
     Option(namespace.getString("release_version"))
       .map(ver => MetadataVersion.fromVersionString(ver))
-      .getOrElse(MetadataVersion.latest())
+      .getOrElse(defaultValue)
   }
 
   def infoCommand(stream: PrintStream, selfManagedMode: Boolean, directories: Seq[String]): Int = {
@@ -233,7 +242,7 @@ object StorageTool extends Logging {
       if (!Files.isDirectory(Paths.get(directory)) || !Files.exists(Paths.get(directory, "meta.properties"))) {
           true
       } else if (!ignoreFormatted) {
-        throw new TerseFailure(s"Log directory ${directory} is already formatted. " +
+        throw new TerseFailure(s"Log directory $directory is already formatted. " +
           "Use --ignore-formatted to ignore this directory and format the others.")
       } else {
         false
@@ -247,14 +256,15 @@ object StorageTool extends Logging {
         Files.createDirectories(Paths.get(directory))
       } catch {
         case e: Throwable => throw new TerseFailure(s"Unable to create storage " +
-          s"directory ${directory}: ${e.getMessage}")
+          s"directory $directory: ${e.getMessage}")
       }
       val metaPropertiesPath = Paths.get(directory, "meta.properties")
       val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
       checkpoint.write(metaProperties.toProperties)
 
-      val bootstrapMetadata = BootstrapMetadata.create(metadataVersion)
-      BootstrapMetadata.write(bootstrapMetadata, Paths.get(directory))
+      val bootstrapMetadata = BootstrapMetadata.fromVersion(metadataVersion, "format command")
+      val bootstrapDirectory = new BootstrapDirectory(directory, Optional.empty())
+      bootstrapDirectory.writeBinaryFile(bootstrapMetadata)
 
       stream.println(s"Formatting ${directory} with metadata.version ${metadataVersion}.")
     })

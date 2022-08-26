@@ -41,6 +41,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
@@ -91,9 +93,10 @@ public class FeatureControlManagerTest {
         FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(features("foo", 1, 2)).
             setSnapshotRegistry(snapshotRegistry).
+            setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
             build();
         snapshotRegistry.getOrCreateSnapshot(-1);
-        assertEquals(new FinalizedControllerFeatures(Collections.singletonMap("metadata.version", (short) 1), -1),
+        assertEquals(new FinalizedControllerFeatures(Collections.singletonMap("metadata.version", (short) 4), -1),
             manager.finalizedFeatures(-1));
         assertEquals(ControllerResult.atomicOf(emptyList(), Collections.
                 singletonMap("foo", new ApiError(Errors.INVALID_UPDATE_VERSION,
@@ -128,10 +131,11 @@ public class FeatureControlManagerTest {
                 setLogContext(logContext).
                 setQuorumFeatures(features("foo", 1, 2)).
                 setSnapshotRegistry(snapshotRegistry).
+                setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
                 build();
         manager.replay(record);
         snapshotRegistry.getOrCreateSnapshot(123);
-        assertEquals(new FinalizedControllerFeatures(versionMap("metadata.version", 1, "foo", 2), 123),
+        assertEquals(new FinalizedControllerFeatures(versionMap("metadata.version", 4, "foo", 2), 123),
             manager.finalizedFeatures(123));
     }
 
@@ -204,6 +208,7 @@ public class FeatureControlManagerTest {
             setLogContext(logContext).
             setQuorumFeatures(features("foo", 1, 5, "bar", 1, 2)).
             setSnapshotRegistry(snapshotRegistry).
+            setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
             build();
         ControllerResult<Map<String, ApiError>> result = manager.
             updateFeatures(updateMap("foo", 5, "bar", 1),
@@ -212,7 +217,7 @@ public class FeatureControlManagerTest {
         RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
             Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                     setName("metadata.version").
-                    setFeatureLevel((short) 1), (short) 0)),
+                    setFeatureLevel((short) 4), (short) 0)),
             Arrays.asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName("foo").
                 setFeatureLevel((short) 5), (short) 0)),
@@ -222,52 +227,147 @@ public class FeatureControlManagerTest {
             manager.iterator(Long.MAX_VALUE));
     }
 
+    private static final FeatureControlManager.Builder TEST_MANAGER_BUILDER1 =
+            new FeatureControlManager.Builder().
+                    setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
+                            MetadataVersion.IBP_3_3_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV3.featureLevel())).
+                    setMetadataVersion(MetadataVersion.IBP_3_3_IV2);
+
     @Test
     public void testApplyMetadataVersionChangeRecord() {
-        QuorumFeatures features = features(MetadataVersion.FEATURE_NAME,
-                MetadataVersion.IBP_3_0_IV1.featureLevel(), MetadataVersion.IBP_3_3_IV0.featureLevel());
-        FeatureControlManager manager = new FeatureControlManager.Builder().
-            setQuorumFeatures(features).build();
+        FeatureControlManager manager = TEST_MANAGER_BUILDER1.build();
         manager.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
-            setFeatureLevel(MetadataVersion.IBP_3_0_IV1.featureLevel()));
-        assertEquals(MetadataVersion.IBP_3_0_IV1, manager.metadataVersion());
+            setFeatureLevel(MetadataVersion.IBP_3_3_IV3.featureLevel()));
+        assertEquals(MetadataVersion.IBP_3_3_IV3, manager.metadataVersion());
     }
 
     @Test
-    public void testDowngradeMetadataVersion() {
-        QuorumFeatures features = features(MetadataVersion.FEATURE_NAME,
-                MetadataVersion.IBP_3_2_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV0.featureLevel());
+    public void testCannotDowngradeToVersionBeforeMinimumSupportedKraftVersion() {
+        FeatureControlManager manager = TEST_MANAGER_BUILDER1.build();
+        assertEquals(ControllerResult.of(Collections.emptyList(),
+            singletonMap(MetadataVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
+                "Invalid update version 3 for feature metadata.version. Local controller 0 only " +
+                "supports versions 4-7"))),
+            manager.updateFeatures(
+                singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_2_IV0.featureLevel()),
+                singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE),
+                emptyMap(),
+                true));
+    }
+
+    @Test
+    public void testCannotDowngradeToHigherVersion() {
+        FeatureControlManager manager = TEST_MANAGER_BUILDER1.build();
+        assertEquals(ControllerResult.of(Collections.emptyList(),
+            singletonMap(MetadataVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
+                "Invalid update version 7 for feature metadata.version. Can't downgrade to a " +
+                "newer version."))),
+            manager.updateFeatures(
+                singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV3.featureLevel()),
+                singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
+                emptyMap(),
+                true));
+    }
+
+    @Test
+    public void testCannotUnsafeDowngradeToHigherVersion() {
+        FeatureControlManager manager = TEST_MANAGER_BUILDER1.build();
+        assertEquals(ControllerResult.of(Collections.emptyList(),
+            singletonMap(MetadataVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
+                "Invalid update version 7 for feature metadata.version. Can't downgrade to a " +
+                "newer version."))),
+            manager.updateFeatures(
+                singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV3.featureLevel()),
+                singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE),
+                emptyMap(),
+                true));
+    }
+
+    @Test
+    public void testCannotUpgradeToLowerVersion() {
+        FeatureControlManager manager = TEST_MANAGER_BUILDER1.build();
+        assertEquals(ControllerResult.of(Collections.emptyList(),
+            singletonMap(MetadataVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
+                "Invalid update version 4 for feature metadata.version. Can't downgrade the " +
+                "version of this feature without setting the upgrade type to either safe or " +
+                "unsafe downgrade."))),
+            manager.updateFeatures(
+                singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV0.featureLevel()),
+                singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UPGRADE),
+                emptyMap(),
+                true));
+    }
+
+    @Test
+    public void testCanUpgradeToHigherVersion() {
+        FeatureControlManager manager = TEST_MANAGER_BUILDER1.build();
+        assertEquals(ControllerResult.of(Collections.emptyList(),
+            singletonMap(MetadataVersion.FEATURE_NAME, ApiError.NONE)),
+            manager.updateFeatures(
+                singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV3.featureLevel()),
+                singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UPGRADE),
+                emptyMap(),
+                true));
+    }
+
+    @Test
+    public void testCannotUseSafeDowngradeIfMetadataChanged() {
+        FeatureControlManager manager = TEST_MANAGER_BUILDER1.build();
+        assertEquals(ControllerResult.of(Collections.emptyList(),
+            singletonMap(MetadataVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
+                "Invalid metadata.version 4. Refusing to perform the requested downgrade because " +
+                "it might delete metadata information. Retry using UNSAFE_DOWNGRADE if you want to " +
+                "force the downgrade to proceed."))),
+            manager.updateFeatures(
+                singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV0.featureLevel()),
+                singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
+                emptyMap(),
+                true));
+    }
+
+    @Test
+    public void testCanUseUnsafeDowngradeIfMetadataChanged() {
+        FeatureControlManager manager = TEST_MANAGER_BUILDER1.build();
+        assertEquals(ControllerResult.of(Collections.emptyList(),
+                        singletonMap(MetadataVersion.FEATURE_NAME, ApiError.NONE)),
+                manager.updateFeatures(
+                        singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV0.featureLevel()),
+                        singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE),
+                        emptyMap(),
+                        true));
+    }
+
+    @Test
+    public void testCanUseSafeDowngradeIfMetadataDidNotChange() {
         FeatureControlManager manager = new FeatureControlManager.Builder().
-            setQuorumFeatures(features).
-            setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
-            build();
-        assertEquals(manager.metadataVersion(), MetadataVersion.IBP_3_3_IV0);
+                setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
+                        MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV1.featureLevel())).
+                setMetadataVersion(MetadataVersion.IBP_3_1_IV0).
+                setMinimumBootstrapVersion(MetadataVersion.IBP_3_0_IV0).build();
+        assertEquals(ControllerResult.of(Collections.emptyList(),
+                        singletonMap(MetadataVersion.FEATURE_NAME, ApiError.NONE)),
+                manager.updateFeatures(
+                        singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_0_IV1.featureLevel()),
+                        singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
+                        emptyMap(),
+                        true));
+    }
 
-        ControllerResult<Map<String, ApiError>> result;
-        result = manager.updateFeatures(
-            Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_2_IV0.featureLevel()),
-            Collections.singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UPGRADE),
-            Collections.emptyMap(),
-            true);
-        assertEquals(Errors.INVALID_UPDATE_VERSION, result.response().get(MetadataVersion.FEATURE_NAME).error());
-
-
-        result = manager.updateFeatures(
-            Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_1_IV0.featureLevel()),
-            Collections.singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
-            Collections.emptyMap(),
-            true);
-        assertEquals(Errors.INVALID_UPDATE_VERSION, result.response().get(MetadataVersion.FEATURE_NAME).error());
-
-        result = manager.updateFeatures(
-                Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()),
-                Collections.singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE),
-                Collections.emptyMap(),
-                true);
-        assertEquals(Errors.INVALID_UPDATE_VERSION, result.response().get(MetadataVersion.FEATURE_NAME).error());
-        assertEquals("Invalid update version 1 for feature metadata.version. Local controller 0 only supports versions 3-4",
-            result.response().get(MetadataVersion.FEATURE_NAME).message());
+    @Test
+    public void testCanotDowngradeBefore3_3_IV0() {
+        FeatureControlManager manager = new FeatureControlManager.Builder().
+            setQuorumFeatures(features(MetadataVersion.FEATURE_NAME,
+                    MetadataVersion.IBP_3_0_IV0.featureLevel(), MetadataVersion.IBP_3_3_IV3.featureLevel())).
+                    setMetadataVersion(MetadataVersion.IBP_3_3_IV0).build();
+        assertEquals(ControllerResult.of(Collections.emptyList(),
+                        singletonMap(MetadataVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
+                        "Invalid metadata.version 3. Unable to set a metadata.version less than 3.3-IV0"))),
+                manager.updateFeatures(
+                        singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_2_IV0.featureLevel()),
+                        singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE),
+                        emptyMap(),
+                        true));
     }
 
     @Test
