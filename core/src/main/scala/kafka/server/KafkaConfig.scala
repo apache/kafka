@@ -539,7 +539,7 @@ object KafkaConfig {
   val TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp = "transaction.remove.expired.transaction.cleanup.interval.ms"
 
   val ProducerIdExpirationMsProp = "producer.id.expiration.ms"
-  val ProducerIdExpirationCheckIntervalMsProp = "producer.id.expiration.check.ms"
+  val ProducerIdExpirationCheckIntervalMsProp = "producer.id.expiration.check.interval.ms"
 
   /** ********* Fetch Configuration **************/
   val MaxIncrementalFetchSessionCacheSlots = "max.incremental.fetch.session.cache.slots"
