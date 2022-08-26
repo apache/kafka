@@ -81,6 +81,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
         @SuppressWarnings("unchecked")
         @Override
         public void process(final Record<K, V1> record) {
+            // Copied from inner join:
             // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
             //
             // we also ignore the record if value is null, because in a key-value data model a null-value indicates
@@ -109,8 +110,6 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
 
             sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
-            System.out.printf("-----> current record: key=%s, value=%s, ts=%d %n",
-                              record.key(), record.value(), inputRecordTimestamp);
 
             // Join current record with other
             try (final WindowStoreIterator<V2> iter = windowStore.fetch(
@@ -118,61 +117,36 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
                 while (iter.hasNext()) {
                     final KeyValue<Long, V2> otherRecord = iter.next();
                     final long otherRecordTimestamp = otherRecord.key;
-                    System.out.printf("-----> other record: value=%s, ts=%d %n",
-                                      otherRecord.value, otherRecordTimestamp);
 
                     // Join this with other
                     context().forward(
                         record.withValue(joinerThis.apply(
                                 record.key(), record.value(), otherRecord.value))
                             .withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
-
-                    System.out.printf("-----> join this with other: key=%s, this=%s, other=%s %n",
-                                      record.key(), record.value(), otherRecord.value);
-
-                    // Join other with this
-//                    context().forward(
-//                        record.withValue(joinerThis.apply(
-//                            record.key(), (V1) otherRecord.value, (V2) record.value()))
-//                            .withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
-//
-//                    System.out.printf("-----> join other with this: key=%s, this=%s, other=%s %n",
-//                                      record.key(), otherRecord.value, record.value());
-//
-                    // Join with self
                 }
-
-                // Join other with current record
-                try (final WindowStoreIterator<V2> iter2 = windowStore.fetch(
-                    record.key(), timeFrom, timeTo)) {
-                    while (iter2.hasNext()) {
-                        final KeyValue<Long, V2> otherRecord = iter2.next();
-                        final long otherRecordTimestamp = otherRecord.key;
-                        System.out.printf("-----> other record: value=%s, ts=%d %n",
-                                          otherRecord.value, otherRecordTimestamp);
-                        context().forward(
-                            record.withValue(joinerThis.apply(
-                                    record.key(), (V1) otherRecord.value, (V2) record.value()))
-                                .withTimestamp(Math.max(inputRecordTimestamp,
-                                                        otherRecordTimestamp)));
-
-                        System.out.printf(
-                            "-----> join other with this: key=%s, other=%s, this=%s %n",
-                            record.key(),
-                            otherRecord.value,
-                            record.value());
-
-                    }
-                }
-
-                // Join current with itself
-//                if (windowStore.fetch(record.key(), timeFrom, timeTo).hasNext()) {
-                context().forward(
-                    record.withValue(joinerThis.apply(
-                        record.key(), record.value(), (V2) record.value()))
-                          .withTimestamp(inputRecordTimestamp));
-//                }
             }
+
+            // Needs to be in a different loop to ensure correct ordering of records where
+            // correct ordering means it matches the output of an inner join.
+            // Join other with current record
+            try (final WindowStoreIterator<V2> iter2 = windowStore.fetch(
+                record.key(), timeFrom, timeTo)) {
+                while (iter2.hasNext()) {
+                    final KeyValue<Long, V2> otherRecord = iter2.next();
+                    final long otherRecordTimestamp = otherRecord.key;
+                    context().forward(
+                        record.withValue(joinerThis.apply(
+                                record.key(), (V1) otherRecord.value, (V2) record.value()))
+                            .withTimestamp(Math.max(inputRecordTimestamp,
+                                                    otherRecordTimestamp)));
+                }
+            }
+
+            // Join current with itself
+            context().forward(
+                record.withValue(joinerThis.apply(
+                    record.key(), record.value(), (V2) record.value()))
+                      .withTimestamp(inputRecordTimestamp));
         }
     }
 }

@@ -53,6 +53,7 @@ public class KStreamKStreamSelfJoinTest {
         // Given:
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        props.put(StreamsConfig.SELF_JOIN_OPTIMIZATION_CONFIG, "true");
         final StreamsBuilder builder1 = new StreamsBuilder();
         final StreamsBuilder builder2 = new StreamsBuilder();
         final MockApiProcessorSupplier<String, String, Void, Void> supplier1 =
@@ -83,6 +84,7 @@ public class KStreamKStreamSelfJoinTest {
 
         final Topology topology2 =  builder2.build();
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology2)) {
+            System.out.println("-------->" + topology2.describe().toString());
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic("topic2", new StringSerializer(), new StringSerializer());
             final MockApiProcessor<String, String, Void, Void> processor =
@@ -97,6 +99,7 @@ public class KStreamKStreamSelfJoinTest {
 
         // When:
         final Topology topology1 =  builder1.build(props);
+        System.out.println("-------->" + topology1.describe().toString());
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology1, props)) {
 
             final TestInputTopic<String, String> inputTopic =
@@ -182,99 +185,6 @@ public class KStreamKStreamSelfJoinTest {
 
             // Then:
             processor.checkAndClearProcessResult(expected.toArray(new KeyValueTimestamp[0]));
-        }
-    }
-
-    @Test
-    public void playing() {
-        // Given:
-        final StreamsBuilder builder1 = new StreamsBuilder();
-        final StreamsBuilder builder2 = new StreamsBuilder();
-        final MockApiProcessorSupplier<String, String, Void, Void> supplier1 =
-            new MockApiProcessorSupplier<>();
-        final MockApiProcessorSupplier<String, String, Void, Void> supplier2 =
-            new MockApiProcessorSupplier<>();
-        final ValueJoiner<String, String, String> valueJoiner = (v, v2) -> v + v2;
-        final KStream<String, String> stream1 = builder1.stream("topic1",
-                                                              Consumed.with(Serdes.String(), Serdes.String()));
-        final KStream<String, String> stream2 = builder2.stream("topic2",
-                                                              Consumed.with(Serdes.String(), Serdes.String()));
-        final KStream<String, String> stream3 = builder2.stream("topic3",
-                                                                Consumed.with(Serdes.String(), Serdes.String()));
-
-        final KStream<String, String> selfJoin = stream1.join(
-            stream1,
-            valueJoiner,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
-            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
-        );
-        selfJoin.process(supplier1);
-
-        final KStream<String, String> innerJoin = stream2.join(
-            stream2,
-            valueJoiner,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
-            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
-        );
-        innerJoin.process(supplier2);
-
-        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
-        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        props.put(StreamsConfig.SELF_JOIN_OPTIMIZATION_CONFIG, "true");
-
-        final Topology topology1 =  builder1.build(props);
-        System.out.println(topology1.describe().toString());
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology1, props)) {
-
-            final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic("topic1", new StringSerializer(), new StringSerializer());
-            final MockApiProcessor<String, String, Void, Void> processor =
-                supplier1.theCapturedProcessor();
-
-            inputTopic.pipeInput("A", "1", 1L);
-//            inputTopic.pipeInput("A", "2", 3L);
-
-//            inputTopic.pipeInput("A", "1", 3L);
-//            inputTopic.pipeInput("B", "2", 4L);
-//
-//            inputTopic.pipeInput("A", "2", 5L);
-//            inputTopic.pipeInput("B", "3", 6L);
-
-            processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>("A", "11", 1L)
-//                new KeyValueTimestamp<>("A", "21", 3L),
-//                new KeyValueTimestamp<>("A", "12", 3L),
-//                new KeyValueTimestamp<>("A", "22", 3L)
-            );
-        }
-
-        final Topology topology2 =  builder2.build();
-        System.out.println(topology2.describe().toString());
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(topology2)) {
-
-            final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic("topic2", new StringSerializer(), new StringSerializer());
-
-            final MockApiProcessor<String, String, Void, Void> processor =
-                supplier2.theCapturedProcessor();
-
-            inputTopic.pipeInput("A", "1", 1L);
-//            inputTopic.pipeInput("A", "2", 3L);
-
-//            inputTopic.pipeInput("A", "2", 3L);
-//            inputTopic.pipeInput("B", "2", 4L);
-//
-//            inputTopic.pipeInput("A", "3", 5L);
-//            inputTopic.pipeInput("B", "3", 6L);
-
-            processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>("A", "11", 1L)
-//                new KeyValueTimestamp<>("A", "21", 3L),
-//                new KeyValueTimestamp<>("A", "12", 3L),
-//                new KeyValueTimestamp<>("A", "22", 3L)
-            );
         }
     }
 }
