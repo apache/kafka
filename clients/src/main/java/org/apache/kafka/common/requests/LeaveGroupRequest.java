@@ -21,9 +21,9 @@ import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -81,27 +81,20 @@ public class LeaveGroupRequest extends AbstractRequest {
         }
     }
     private final LeaveGroupRequestData data;
-    private final short version;
 
     private LeaveGroupRequest(LeaveGroupRequestData data, short version) {
         super(ApiKeys.LEAVE_GROUP, version);
         this.data = data;
-        this.version = version;
     }
 
-    public LeaveGroupRequest(Struct struct, short version) {
-        super(ApiKeys.LEAVE_GROUP, version);
-        this.data = new LeaveGroupRequestData(struct, version);
-        this.version = version;
-    }
-
+    @Override
     public LeaveGroupRequestData data() {
         return data;
     }
 
     public List<MemberIdentity> members() {
         // Before version 3, leave group request is still in single mode
-        return version <= 2 ? Collections.singletonList(
+        return version() <= 2 ? Collections.singletonList(
             new MemberIdentity()
                 .setMemberId(data.memberId())) : data.members();
     }
@@ -118,11 +111,6 @@ public class LeaveGroupRequest extends AbstractRequest {
     }
 
     public static LeaveGroupRequest parse(ByteBuffer buffer, short version) {
-        return new LeaveGroupRequest(ApiKeys.LEAVE_GROUP.parseRequest(version, buffer), version);
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version);
+        return new LeaveGroupRequest(new LeaveGroupRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

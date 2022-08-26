@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit}
 
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils}
+import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ClientResponse, ClientUtils, CommonClientConfigs, Metadata, NetworkClient, NodeApiVersions}
@@ -35,12 +36,12 @@ import org.apache.kafka.common.errors.AuthenticationException
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse}
+import org.apache.kafka.common.security.auth.SecurityProtocol
 
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
@@ -59,7 +60,7 @@ object BrokerApiVersionsCommand {
     val adminClient = createAdminClient(opts)
     adminClient.awaitBrokers()
     val brokerMap = adminClient.listAllBrokerVersionInfo()
-    brokerMap.foreach { case (broker, versionInfoOrError) =>
+    brokerMap.forKeyValue { (broker, versionInfoOrError) =>
       versionInfoOrError match {
         case Success(v) => out.print(s"${broker} -> ${v.toString(true)}\n")
         case Failure(v) => out.print(s"${broker} -> ERROR: ${v}\n")
@@ -102,12 +103,10 @@ object BrokerApiVersionsCommand {
   // org.apache.kafka.clients.admin.AdminClient doesn't currently expose a way to retrieve the supported api versions.
   // We inline the bits we need from kafka.admin.AdminClient so that we can delete it.
   private class AdminClient(val time: Time,
-                            val requestTimeoutMs: Int,
-                            val retryBackoffMs: Long,
                             val client: ConsumerNetworkClient,
                             val bootstrapBrokers: List[Node]) extends Logging {
 
-    @volatile var running: Boolean = true
+    @volatile var running = true
     val pendingFutures = new ConcurrentLinkedQueue[RequestFuture[ClientResponse]]()
 
     val networkThread = new KafkaThread("admin-client-network-thread", () => {
@@ -132,9 +131,8 @@ object BrokerApiVersionsCommand {
     networkThread.start()
 
     private def send(target: Node,
-                     api: ApiKeys,
                      request: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {
-      val future: RequestFuture[ClientResponse] = client.send(target, request)
+      val future = client.send(target, request)
       pendingFutures.add(future)
       future.awaitDone(Long.MaxValue, TimeUnit.MILLISECONDS)
       pendingFutures.remove(future)
@@ -144,24 +142,24 @@ object BrokerApiVersionsCommand {
         throw future.exception()
     }
 
-    private def sendAnyNode(api: ApiKeys, request: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {
+    private def sendAnyNode(request: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {
       bootstrapBrokers.foreach { broker =>
         try {
-          return send(broker, api, request)
+          return send(broker, request)
         } catch {
           case e: AuthenticationException =>
             throw e
           case e: Exception =>
-            debug(s"Request $api failed against node $broker", e)
+            debug(s"Request ${request.apiKey()} failed against node $broker", e)
         }
       }
-      throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
+      throw new RuntimeException(s"Request ${request.apiKey()} failed on brokers $bootstrapBrokers")
     }
 
-    private def getApiVersions(node: Node): ApiVersionsResponseKeyCollection = {
-      val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
+    private def getNodeApiVersions(node: Node): NodeApiVersions = {
+      val response = send(node, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
       Errors.forCode(response.data.errorCode).maybeThrow()
-      response.data.apiKeys
+      new NodeApiVersions(response.data.apiKeys, response.data.supportedFeatures)
     }
 
     /**
@@ -178,16 +176,16 @@ object BrokerApiVersionsCommand {
 
     private def findAllBrokers(): List[Node] = {
       val request = MetadataRequest.Builder.allTopics()
-      val response = sendAnyNode(ApiKeys.METADATA, request).asInstanceOf[MetadataResponse]
+      val response = sendAnyNode(request).asInstanceOf[MetadataResponse]
       val errors = response.errors
       if (!errors.isEmpty)
         debug(s"Metadata request contained errors: $errors")
-      response.cluster.nodes.asScala.toList
+      response.buildCluster.nodes.asScala.toList
     }
 
     def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] =
       findAllBrokers().map { broker =>
-        broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker)))
+        broker -> Try[NodeApiVersions](getNodeApiVersions(broker))
       }.toMap
 
     def close(): Unit = {
@@ -225,8 +223,7 @@ object BrokerApiVersionsCommand {
         .define(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG,
           Type.STRING,
           ClientDnsLookup.USE_ALL_DNS_IPS.toString,
-          in(ClientDnsLookup.DEFAULT.toString,
-            ClientDnsLookup.USE_ALL_DNS_IPS.toString,
+          in(ClientDnsLookup.USE_ALL_DNS_IPS.toString,
             ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString),
           Importance.MEDIUM,
           CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
@@ -234,6 +231,7 @@ object BrokerApiVersionsCommand {
           CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
           ConfigDef.Type.STRING,
           CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+          in(Utils.enumOptions(classOf[SecurityProtocol]):_*),
           ConfigDef.Importance.MEDIUM,
           CommonClientConfigs.SECURITY_PROTOCOL_DOC)
         .define(
@@ -266,11 +264,6 @@ object BrokerApiVersionsCommand {
     }
 
     class AdminConfig(originals: Map[_,_]) extends AbstractConfig(AdminConfigDef, originals.asJava, false)
-
-    def createSimplePlaintext(brokerUrl: String): AdminClient = {
-      val config = Map(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG -> brokerUrl)
-      create(new AdminConfig(config))
-    }
 
     def create(props: Properties): AdminClient = create(props.asScala.toMap)
 
@@ -314,7 +307,6 @@ object BrokerApiVersionsCommand {
         requestTimeoutMs,
         connectionSetupTimeoutMs,
         connectionSetupTimeoutMaxMs,
-        ClientDnsLookup.USE_ALL_DNS_IPS,
         time,
         true,
         new ApiVersions,
@@ -331,8 +323,6 @@ object BrokerApiVersionsCommand {
 
       new AdminClient(
         time,
-        requestTimeoutMs,
-        retryBackoffMs,
         highLevelClient,
         metadata.fetch.nodes.asScala.toList)
     }

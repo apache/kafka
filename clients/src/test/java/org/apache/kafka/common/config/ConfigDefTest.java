@@ -18,13 +18,14 @@ package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString;
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.ListSize;
 import org.apache.kafka.common.config.ConfigDef.Range;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.ValidString;
 import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.types.Password;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -38,11 +39,14 @@ import java.util.Properties;
 import java.util.Set;
 
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static java.util.Collections.singletonList;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ConfigDefTest {
 
@@ -84,9 +88,9 @@ public class ConfigDefTest {
         assertEquals(Password.HIDDEN, vals.get("j").toString());
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testInvalidDefault() {
-        new ConfigDef().define("a", Type.INT, "hello", Importance.HIGH, "docs");
+        assertThrows(ConfigException.class, () -> new ConfigDef().define("a", Type.INT, "hello", Importance.HIGH, "docs"));
     }
 
     @Test
@@ -94,12 +98,12 @@ public class ConfigDefTest {
         ConfigDef def = new ConfigDef().define("a", Type.INT, null, null, null, "docs");
         Map<String, Object> vals = def.parse(new Properties());
 
-        assertEquals(null, vals.get("a"));
+        assertNull(vals.get("a"));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testMissingRequired() {
-        new ConfigDef().define("a", Type.INT, Importance.HIGH, "docs").parse(new HashMap<String, Object>());
+        assertThrows(ConfigException.class, () -> new ConfigDef().define("a", Type.INT, Importance.HIGH, "docs").parse(new HashMap<String, Object>()));
     }
 
     @Test
@@ -108,9 +112,10 @@ public class ConfigDefTest {
                 .parse(new HashMap<String, Object>());
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testDefinedTwice() {
-        new ConfigDef().define("a", Type.STRING, Importance.HIGH, "docs").define("a", Type.INT, Importance.HIGH, "docs");
+        assertThrows(ConfigException.class, () -> new ConfigDef().define("a", Type.STRING,
+            Importance.HIGH, "docs").define("a", Type.INT, Importance.HIGH, "docs"));
     }
 
     @Test
@@ -138,14 +143,16 @@ public class ConfigDefTest {
         }
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testInvalidDefaultRange() {
-        new ConfigDef().define("name", Type.INT, -1, Range.between(0, 10), Importance.HIGH, "docs");
+        assertThrows(ConfigException.class, () -> new ConfigDef().define("name", Type.INT, -1,
+            Range.between(0, 10), Importance.HIGH, "docs"));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testInvalidDefaultString() {
-        new ConfigDef().define("name", Type.STRING, "bad", ValidString.in("valid", "values"), Importance.HIGH, "docs");
+        assertThrows(ConfigException.class, () -> new ConfigDef().define("name", Type.STRING, "bad",
+            ValidString.in("valid", "values"), Importance.HIGH, "docs"));
     }
 
     @Test
@@ -364,12 +371,16 @@ public class ConfigDefTest {
     }
 
     @Test
-    public void testInternalConfigDoesntShowUpInDocs() throws Exception {
+    public void testInternalConfigDoesntShowUpInDocs() {
         final String name = "my.config";
         final ConfigDef configDef = new ConfigDef().defineInternal(name, Type.STRING, "", Importance.LOW);
+        configDef.defineInternal("my.other.config", Type.STRING, "", null, Importance.LOW, null);
         assertFalse(configDef.toHtmlTable().contains("my.config"));
         assertFalse(configDef.toEnrichedRst().contains("my.config"));
         assertFalse(configDef.toRst().contains("my.config"));
+        assertFalse(configDef.toHtmlTable().contains("my.other.config"));
+        assertFalse(configDef.toEnrichedRst().contains("my.other.config"));
+        assertFalse(configDef.toRst().contains("my.other.config"));
     }
 
     @Test
@@ -414,12 +425,12 @@ public class ConfigDefTest {
         }
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testMissingDependentConfigs() {
         // Should not be possible to parse a config if a dependent config has not been defined
         final ConfigDef configDef = new ConfigDef()
-                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", Collections.singletonList("child"));
-        configDef.parse(Collections.emptyMap());
+                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", singletonList("child"));
+        assertThrows(ConfigException.class, () -> configDef.parse(Collections.emptyMap()));
     }
 
     @Test
@@ -430,7 +441,7 @@ public class ConfigDefTest {
         assertEquals(new HashSet<>(Arrays.asList("a")), baseConfigDef.getConfigsWithNoParent());
 
         final ConfigDef configDef = new ConfigDef(baseConfigDef)
-                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", Collections.singletonList("child"))
+                .define("parent", Type.STRING, Importance.HIGH, "parent docs", "group", 1, Width.LONG, "Parent", singletonList("child"))
                 .define("child", Type.STRING, Importance.HIGH, "docs");
 
         assertEquals(new HashSet<>(Arrays.asList("a", "parent")), configDef.getConfigsWithNoParent());
@@ -488,7 +499,8 @@ public class ConfigDefTest {
         final ConfigDef def = new ConfigDef()
                 .define("opt1", Type.STRING, "a", ValidString.in("a", "b", "c"), Importance.HIGH, "docs1")
                 .define("opt2", Type.INT, Importance.MEDIUM, "docs2")
-                .define("opt3", Type.LIST, Arrays.asList("a", "b"), Importance.LOW, "docs3");
+                .define("opt3", Type.LIST, Arrays.asList("a", "b"), Importance.LOW, "docs3")
+                .define("opt4", Type.BOOLEAN, false, Importance.LOW, null);
 
         final String expectedRst = "" +
                 "``opt2``\n" +
@@ -511,6 +523,12 @@ public class ConfigDefTest {
                 "  * Type: list\n" +
                 "  * Default: a,b\n" +
                 "  * Importance: low\n" +
+                "\n" +
+                "``opt4``\n" +
+                "\n" +
+                "  * Type: boolean\n" +
+                "  * Default: false\n" +
+                "  * Importance: low\n" +
                 "\n";
 
         assertEquals(expectedRst, def.toRst());
@@ -526,7 +544,7 @@ public class ConfigDefTest {
                 .define("opt2.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc.",
                         "Group Two", 1, Width.NONE, "..", Collections.<String>emptyList())
                 .define("opt1.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc doc.",
-                        "Group Two", 0, Width.NONE, "..", Collections.singletonList("some.option"))
+                        "Group Two", 0, Width.NONE, "..", singletonList("some.option"))
                 .define("poor.opt", Type.STRING, "foo", Importance.HIGH, "Doc doc doc doc.");
 
         final String expectedRst = "" +
@@ -705,6 +723,44 @@ public class ConfigDefTest {
 
         assertEquals(" (7 days)", ConfigDef.niceTimeUnits(Duration.ofDays(7).toMillis()));
         assertEquals(" (365 days)", ConfigDef.niceTimeUnits(Duration.ofDays(365).toMillis()));
+    }
+
+    @Test
+    public void testThrowsExceptionWhenListSizeExceedsLimit() {
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new ConfigDef().define("lst",
+                                                                                                           Type.LIST,
+                                                                                                           asList("a", "b"),
+                                                                                                           ListSize.atMostOfSize(1),
+                                                                                                           Importance.HIGH,
+                                                                                                           "lst doc"));
+        assertEquals("Invalid value [a, b] for configuration lst: exceeds maximum list size of [1].",
+                     exception.getMessage());
+    }
+
+    @Test
+    public void testNoExceptionIsThrownWhenListSizeEqualsTheLimit() {
+        final List<String> lst = asList("a", "b", "c");
+        assertDoesNotThrow(() -> new ConfigDef().define("lst",
+                                                        Type.LIST,
+                                                        lst,
+                                                        ListSize.atMostOfSize(lst.size()),
+                                                        Importance.HIGH,
+                                                        "lst doc"));
+    }
+
+    @Test
+    public void testNoExceptionIsThrownWhenListSizeIsBelowTheLimit() {
+        assertDoesNotThrow(() -> new ConfigDef().define("lst",
+                                                        Type.LIST,
+                                                        asList("a", "b"),
+                                                        ListSize.atMostOfSize(3),
+                                                        Importance.HIGH,
+                                                        "lst doc"));
+    }
+
+    @Test
+    public void testListSizeValidatorToString() {
+        assertEquals("List containing maximum of 5 elements", ListSize.atMostOfSize(5).toString());
     }
 
 }

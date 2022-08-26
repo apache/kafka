@@ -18,18 +18,28 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.StandbyTask;
+import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.state.KeyValueIterator;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -37,11 +47,15 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertFalse;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public final class StreamsTestUtils {
     private StreamsTestUtils() {}
@@ -63,8 +77,21 @@ public final class StreamsTestUtils {
         return props;
     }
 
-    public static Properties getStreamsConfig(final Serde keyDeserializer,
-                                              final Serde valueDeserializer) {
+    public static Properties getStreamsConfig(final String applicationId,
+                                              final String bootstrapServers,
+                                              final Properties additional) {
+
+        final Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, DEBUG.name);
+        props.putAll(additional);
+        return props;
+    }
+
+    public static Properties getStreamsConfig(final Serde<?> keyDeserializer,
+                                              final Serde<?> valueDeserializer) {
         return getStreamsConfig(
                 UUID.randomUUID().toString(),
                 "localhost:9091",
@@ -81,8 +108,6 @@ public final class StreamsTestUtils {
         return getStreamsConfig(
             applicationId,
             "localhost:9091",
-            Serdes.ByteArraySerde.class.getName(),
-            Serdes.ByteArraySerde.class.getName(),
             additional);
     }
 
@@ -117,11 +142,18 @@ public final class StreamsTestUtils {
         while (iterator.hasNext()) {
             results.add(iterator.next());
         }
+
+        if (iterator instanceof Closeable) {
+            try {
+                ((Closeable) iterator).close();
+            } catch (IOException e) { /* do nothing */ }
+        }
+
         return results;
     }
 
     public static <K, V> Set<KeyValue<K, V>> toSet(final Iterator<KeyValue<K, V>> iterator) {
-        final Set<KeyValue<K, V>> results = new HashSet<>();
+        final Set<KeyValue<K, V>> results = new LinkedHashSet<>();
 
         while (iterator.hasNext()) {
             results.add(iterator.next());
@@ -146,6 +178,24 @@ public final class StreamsTestUtils {
             assertThat(actualKv.key, equalTo(expectedKv.key));
             assertThat(actualKv.value, equalTo(expectedKv.value));
         }
+    }
+
+    public static void verifyAllWindowedKeyValues(final KeyValueIterator<Windowed<Bytes>, byte[]> iterator,
+                                                  final List<Windowed<Bytes>> expectedKeys,
+                                                  final List<String> expectedValues) {
+        if (expectedKeys.size() != expectedValues.size()) {
+            throw new IllegalArgumentException("expectedKeys and expectedValues should have the same size. " +
+                "expectedKeys size: " + expectedKeys.size() + ", expectedValues size: " + expectedValues.size());
+        }
+
+        for (int i = 0; i < expectedKeys.size(); i++) {
+            verifyWindowedKeyValue(
+                iterator.next(),
+                expectedKeys.get(i),
+                expectedValues.get(i)
+            );
+        }
+        assertFalse(iterator.hasNext());
     }
 
     public static void verifyWindowedKeyValue(final KeyValue<Windowed<Bytes>, byte[]> actual,
@@ -221,5 +271,67 @@ public final class StreamsTestUtils {
                                          final Map<String, String> tags) {
         final MetricName metricName = metrics.metricName(name, group, tags);
         return metrics.metric(metricName) != null;
+    }
+
+    /**
+     * Used to keep tests simple, and ignore calls from {@link org.apache.kafka.streams.internals.ApiUtils#checkSupplier(Supplier)} )}.
+     * @return true if the stack context is within a {@link org.apache.kafka.streams.internals.ApiUtils#checkSupplier(Supplier)} )} call
+     */
+    public static boolean isCheckSupplierCall() {
+        return Arrays.stream(Thread.currentThread().getStackTrace())
+                .anyMatch(caller -> "org.apache.kafka.streams.internals.ApiUtils".equals(caller.getClassName()) && "checkSupplier".equals(caller.getMethodName()));
+    }
+
+    public static class TaskBuilder<T extends Task> {
+        private final T task;
+
+        private TaskBuilder(final T task) {
+            this.task = task;
+        }
+
+        public static TaskBuilder<StreamTask> statelessTask(final TaskId taskId) {
+            final StreamTask task = mock(StreamTask.class);
+            when(task.changelogPartitions()).thenReturn(Collections.emptySet());
+            when(task.isActive()).thenReturn(true);
+            when(task.id()).thenReturn(taskId);
+            return new TaskBuilder<>(task);
+        }
+
+        public static TaskBuilder<StreamTask> statefulTask(final TaskId taskId,
+                                                           final Set<TopicPartition> changelogPartitions) {
+            final StreamTask task = mock(StreamTask.class);
+            when(task.isActive()).thenReturn(true);
+            setupStatefulTask(task, taskId, changelogPartitions);
+            return new TaskBuilder<>(task);
+        }
+
+        public static TaskBuilder<StandbyTask> standbyTask(final TaskId taskId,
+                                                           final Set<TopicPartition> changelogPartitions) {
+            final StandbyTask task = mock(StandbyTask.class);
+            when(task.isActive()).thenReturn(false);
+            setupStatefulTask(task, taskId, changelogPartitions);
+            return new TaskBuilder<>(task);
+        }
+
+        private static void setupStatefulTask(final Task task,
+                                              final TaskId taskId,
+                                              final Set<TopicPartition> changelogPartitions) {
+            when(task.changelogPartitions()).thenReturn(changelogPartitions);
+            when(task.id()).thenReturn(taskId);
+        }
+
+        public TaskBuilder<T> inState(final Task.State state) {
+            when(task.state()).thenReturn(state);
+            return this;
+        }
+
+        public TaskBuilder<T> withInputPartitions(final Set<TopicPartition> inputPartitions) {
+            when(task.inputPartitions()).thenReturn(inputPartitions);
+            return this;
+        }
+
+        public T build() {
+            return task;
+        }
     }
 }

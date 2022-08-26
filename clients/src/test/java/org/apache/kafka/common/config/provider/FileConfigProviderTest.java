@@ -17,8 +17,8 @@
 package org.apache.kafka.common.config.provider;
 
 import org.apache.kafka.common.config.ConfigData;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -26,15 +26,18 @@ import java.io.StringReader;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ServiceLoader;
+import java.util.stream.StreamSupport;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FileConfigProviderTest {
 
     private FileConfigProvider configProvider;
 
-    @Before
+    @BeforeEach
     public void setup() {
         configProvider = new TestFileConfigProvider();
     }
@@ -46,7 +49,7 @@ public class FileConfigProviderTest {
         result.put("testKey", "testResult");
         result.put("testKey2", "testResult2");
         assertEquals(result, configData.data());
-        assertEquals(null, configData.ttl());
+        assertNull(configData.ttl());
     }
 
     @Test
@@ -55,35 +58,41 @@ public class FileConfigProviderTest {
         Map<String, String> result = new HashMap<>();
         result.put("testKey", "testResult");
         assertEquals(result, configData.data());
-        assertEquals(null, configData.ttl());
+        assertNull(configData.ttl());
     }
 
     @Test
     public void testEmptyPath() throws Exception {
         ConfigData configData = configProvider.get("", Collections.singleton("testKey"));
         assertTrue(configData.data().isEmpty());
-        assertEquals(null, configData.ttl());
+        assertNull(configData.ttl());
     }
 
     @Test
     public void testEmptyPathWithKey() throws Exception {
         ConfigData configData = configProvider.get("");
         assertTrue(configData.data().isEmpty());
-        assertEquals(null, configData.ttl());
+        assertNull(configData.ttl());
     }
 
     @Test
     public void testNullPath() throws Exception {
         ConfigData configData = configProvider.get(null);
         assertTrue(configData.data().isEmpty());
-        assertEquals(null, configData.ttl());
+        assertNull(configData.ttl());
     }
 
     @Test
     public void testNullPathWithKey() throws Exception {
         ConfigData configData = configProvider.get(null, Collections.singleton("testKey"));
         assertTrue(configData.data().isEmpty());
-        assertEquals(null, configData.ttl());
+        assertNull(configData.ttl());
+    }
+
+    @Test
+    public void testServiceLoaderDiscovery() {
+        ServiceLoader<ConfigProvider> serviceLoader = ServiceLoader.load(ConfigProvider.class);
+        assertTrue(StreamSupport.stream(serviceLoader.spliterator(), false).anyMatch(configProvider -> configProvider instanceof FileConfigProvider));
     }
 
     public static class TestFileConfigProvider extends FileConfigProvider {

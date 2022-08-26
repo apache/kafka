@@ -15,13 +15,13 @@
 
 import time
 from ducktape.mark import matrix
+from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, \
-    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, \
-    DEV_BRANCH, DEV_VERSION, KafkaVersion
+    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3
 from kafkatest.services.streams import CooperativeRebalanceUpgradeService
 from kafkatest.tests.streams.utils import verify_stopped, stop_processors, verify_running
 
@@ -39,8 +39,8 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
     processing_message = "Processed [0-9]* records so far"
     stopped_message = "COOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED"
     running_state_msg = "STREAMS in a RUNNING State"
-    cooperative_turned_off_msg = "Eager rebalancing enabled now for upgrade from %s"
-    cooperative_enabled_msg = "Cooperative rebalancing enabled now"
+    cooperative_turned_off_msg = "Eager rebalancing protocol is enabled now for upgrade from %s"
+    cooperative_enabled_msg = "Cooperative rebalancing protocol is enabled now"
     first_bounce_phase = "first_bounce_phase-"
     second_bounce_phase = "second_bounce_phase-"
 
@@ -67,6 +67,7 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
                                            throughput=1000,
                                            acks=1)
 
+    @cluster(num_nodes=8)
     @matrix(upgrade_from_version=streams_eager_rebalance_upgrade_versions)
     def test_upgrade_to_cooperative_rebalance(self, upgrade_from_version):
         self.zookeeper.start()

@@ -58,19 +58,18 @@ public class CopartitionedTopicsEnforcerTest {
             new PartitionInfo("second", 1, null, null, null));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void shouldThrowTopologyBuilderExceptionIfNoPartitionsFoundForCoPartitionedTopic() {
-        validator.enforce(Collections.singleton("topic"),
-                          Collections.emptyMap(),
-                          cluster);
+        assertThrows(IllegalStateException.class, () -> validator.enforce(Collections.singleton("topic"),
+            Collections.emptyMap(), cluster));
     }
 
-    @Test(expected = TopologyException.class)
+    @Test
     public void shouldThrowTopologyBuilderExceptionIfPartitionCountsForCoPartitionedTopicsDontMatch() {
         partitions.remove(new TopicPartition("second", 0));
-        validator.enforce(Utils.mkSet("first", "second"),
+        assertThrows(TopologyException.class, () -> validator.enforce(Utils.mkSet("first", "second"),
                           Collections.emptyMap(),
-                          cluster.withPartitions(partitions));
+                          cluster.withPartitions(partitions)));
     }
 
 

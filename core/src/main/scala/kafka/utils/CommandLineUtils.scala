@@ -52,7 +52,7 @@ object CommandLineUtils extends Logging {
     * @param commandOpts Acceptable options for a command
     * @param message     Message to display on successful check
     */
-  def printHelpAndExitIfNeeded(commandOpts: CommandDefaultOptions, message: String) = {
+  def printHelpAndExitIfNeeded(commandOpts: CommandDefaultOptions, message: String): Unit = {
     if (isPrintHelpNeeded(commandOpts))
       printUsageAndDie(commandOpts.parser, message)
     if (isPrintVersionNeeded(commandOpts))
@@ -84,11 +84,12 @@ object CommandLineUtils extends Logging {
   /**
     * Check that none of the listed options are present with the combination of used options
     */
-  def checkInvalidArgsSet(parser: OptionParser, options: OptionSet, usedOptions: Set[OptionSpec[_]], invalidOptions: Set[OptionSpec[_]]): Unit = {
+  def checkInvalidArgsSet(parser: OptionParser, options: OptionSet, usedOptions: Set[OptionSpec[_]], invalidOptions: Set[OptionSpec[_]],
+                         trailingAdditionalMessage: Option[String] = None): Unit = {
     if (usedOptions.count(options.has) == usedOptions.size) {
       for (arg <- invalidOptions) {
         if (options.has(arg))
-          printUsageAndDie(parser, "Option combination \"" + usedOptions.mkString(",") + "\" can't be used with option \"" + arg + "\"")
+          printUsageAndDie(parser, "Option combination \"" + usedOptions.mkString(",") + "\" can't be used with option \"" + arg + "\"" + trailingAdditionalMessage.getOrElse(""))
       }
     }
   }
@@ -116,7 +117,7 @@ object CommandLineUtils extends Logging {
 
     val props = new Properties
     for (a <- splits) {
-      if (a.length == 1 || (a.length == 2 && a(1).isEmpty())) {
+      if (a.length == 1 || (a.length == 2 && a(1).isEmpty)) {
         if (acceptMissingValue) props.put(a(0), "")
         else throw new IllegalArgumentException(s"Missing value for key ${a(0)}")
       }

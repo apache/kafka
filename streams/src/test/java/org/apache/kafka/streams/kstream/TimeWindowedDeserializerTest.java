@@ -16,44 +16,76 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.StreamsConfig;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class TimeWindowedDeserializerTest {
     private final long windowSize = 5000000;
-    private final TimeWindowedDeserializer<?> timeWindowedDeserializer = new TimeWindowedDeserializer<>(null, windowSize);
+    private final TimeWindowedDeserializer<?> timeWindowedDeserializer = new TimeWindowedDeserializer<>(new StringDeserializer(), windowSize);
     private final Map<String, String> props = new HashMap<>();
 
-    @Before
-    public void setUp() {
-        props.put(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class.getName());
-        props.put(StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS, Serdes.ByteArraySerde.class.getName());
-    }
-
     @Test
-    public void testWindowedKeyDeserializerNoArgConstructors() {
+    public void testTimeWindowedDeserializerConstructor() {
         timeWindowedDeserializer.configure(props, true);
         final Deserializer<?> inner = timeWindowedDeserializer.innerDeserializer();
         assertNotNull("Inner deserializer should be not null", inner);
         assertTrue("Inner deserializer type should be StringDeserializer", inner instanceof StringDeserializer);
+        assertThat(timeWindowedDeserializer.getWindowSize(), is(5000000L));
     }
 
     @Test
-    public void testWindowedValueDeserializerNoArgConstructors() {
-        timeWindowedDeserializer.configure(props, false);
-        final Deserializer<?> inner = timeWindowedDeserializer.innerDeserializer();
-        assertNotNull("Inner deserializer should be not null", inner);
-        assertTrue("Inner deserializer type should be ByteArrayDeserializer", inner instanceof ByteArrayDeserializer);
+    public void shouldSetWindowSizeAndWindowedInnerDeserialiserThroughConfigs() {
+        props.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, "500");
+        props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, Serdes.ByteArraySerde.class.getName());
+        final TimeWindowedDeserializer<?> deserializer = new TimeWindowedDeserializer<>();
+        deserializer.configure(props, false);
+        assertThat(deserializer.getWindowSize(), is(500L));
+        assertTrue(deserializer.innerDeserializer() instanceof ByteArrayDeserializer);
+    }
+
+    @Test
+    public void shouldThrowErrorIfWindowSizeSetInConfigsAndConstructor() {
+        props.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, "500");
+        assertThrows(IllegalArgumentException.class, () -> timeWindowedDeserializer.configure(props, false));
+    }
+
+    @Test
+    public void shouldThrowErrorIfWindowSizeIsNotSet() {
+        props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, Serdes.ByteArraySerde.class.getName());
+        final TimeWindowedDeserializer<?> deserializer = new TimeWindowedDeserializer<>();
+        assertThrows(IllegalArgumentException.class, () -> deserializer.configure(props, false));
+    }
+
+    @Test
+    public void shouldThrowErrorIfWindowedInnerClassDeserialiserIsNotSet() {
+        props.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, "500");
+        final TimeWindowedDeserializer<?> deserializer = new TimeWindowedDeserializer<>();
+        assertThrows(IllegalArgumentException.class, () -> deserializer.configure(props, false));
+    }
+
+    @Test
+    public void shouldThrowErrorIfWindowedInnerClassDeserialisersConflictInConstructorAndConfig() {
+        props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, Serdes.ByteArraySerde.class.getName());
+        assertThrows(IllegalArgumentException.class, () -> timeWindowedDeserializer.configure(props, false));
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionWhenInvalidWindowedInnerClassDeserialiserSupplied() {
+        props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, "some.non.existent.class");
+        assertThrows(ConfigException.class, () -> timeWindowedDeserializer.configure(props, false));
     }
 }

@@ -50,9 +50,13 @@ class KafkaVersionTest(Test):
         the other on the current development branch."""
         self.kafka = KafkaService(self.test_context, num_nodes=2, zk=self.zk,
                                   topics={self.topic: {"partitions": 1, "replication-factor": 2}})
-        self.kafka.nodes[1].version = LATEST_0_8_2
-        self.kafka.nodes[1].config[config_property.INTER_BROKER_PROTOCOL_VERSION] = "0.8.2.X"
+        # Be sure to make node[0] the one with v0.8.2 because the topic will be created using the --zookeeper option
+        # since not all nodes support the --bootstrap-server option; the --zookeeper option is removed as of v3.0,
+        # and the topic will be created against the broker on node[0], so that node has to be the one running the older
+        # version (otherwise the kafka-topics --zookeeper command will fail).
+        self.kafka.nodes[0].version = LATEST_0_8_2
+        self.kafka.nodes[0].config[config_property.INTER_BROKER_PROTOCOL_VERSION] = "0.8.2.X"
         self.kafka.start()
 
-        assert is_version(self.kafka.nodes[0], [DEV_BRANCH.vstring], logger=self.logger)
-        assert is_version(self.kafka.nodes[1], [LATEST_0_8_2], logger=self.logger)
+        assert is_version(self.kafka.nodes[0], [LATEST_0_8_2], logger=self.logger)
+        assert is_version(self.kafka.nodes[1], [DEV_BRANCH.vstring], logger=self.logger)

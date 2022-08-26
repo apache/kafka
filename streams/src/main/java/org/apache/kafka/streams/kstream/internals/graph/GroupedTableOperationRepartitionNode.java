@@ -35,7 +35,7 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
                                                  final String sinkName,
                                                  final String sourceName,
                                                  final String repartitionTopic,
-                                                 final ProcessorParameters<K, V> processorParameters) {
+                                                 final ProcessorParameters<K, V, ?, ?> processorParameters) {
 
         super(
             nodeName,

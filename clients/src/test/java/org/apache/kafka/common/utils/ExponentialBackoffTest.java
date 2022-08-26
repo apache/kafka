@@ -17,10 +17,10 @@
 
 package org.apache.kafka.common.utils;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ExponentialBackoffTest {
     @Test
@@ -44,5 +44,14 @@ public class ExponentialBackoffTest {
                 }
             }
         }
+    }
+
+    @Test
+    public void testExponentialBackoffWithoutJitter() {
+        ExponentialBackoff exponentialBackoff = new ExponentialBackoff(100, 2, 400, 0.0);
+        assertEquals(100, exponentialBackoff.backoff(0));
+        assertEquals(200, exponentialBackoff.backoff(1));
+        assertEquals(400, exponentialBackoff.backoff(2));
+        assertEquals(400, exponentialBackoff.backoff(3));
     }
 }

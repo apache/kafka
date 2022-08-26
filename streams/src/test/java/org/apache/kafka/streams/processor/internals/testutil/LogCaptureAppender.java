@@ -69,6 +69,10 @@ public class LogCaptureAppender extends AppenderSkeleton implements AutoCloseabl
         Logger.getLogger(clazz).setLevel(Level.DEBUG);
     }
 
+    public static void setClassLoggerToTrace(final Class<?> clazz) {
+        Logger.getLogger(clazz).setLevel(Level.TRACE);
+    }
+
     public static void unregister(final LogCaptureAppender logCaptureAppender) {
         Logger.getRootLogger().removeAppender(logCaptureAppender);
     }

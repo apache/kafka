@@ -19,12 +19,12 @@ package org.apache.kafka.common.metrics;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class KafkaMetricsContextTest {
 
@@ -37,7 +37,7 @@ public class KafkaMetricsContextTest {
     private Map<String, String> labels;
     private KafkaMetricsContext context;
 
-    @Before
+    @BeforeEach
     public void beforeEach() {
         namespace = SAMPLE_NAMESPACE;
         labels = new HashMap<>();

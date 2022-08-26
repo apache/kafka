@@ -28,7 +28,7 @@ package object api {
         Set.empty
       } else {
         self.data.topicPartitions.asScala.iterator.flatMap { topicPartition =>
-          topicPartition.partitionId.asScala.map { partitionId =>
+          topicPartition.partitions.asScala.map { partitionId =>
             new TopicPartition(topicPartition.topic, partitionId)
           }
         }.toSet

@@ -64,8 +64,14 @@ public class Decimal {
      * @return the encoded value
      */
     public static byte[] fromLogical(Schema schema, BigDecimal value) {
-        if (value.scale() != scale(schema))
-            throw new DataException("BigDecimal has mismatching scale value for given Decimal schema");
+        int schemaScale = scale(schema);
+        if (value.scale() != schemaScale)
+            throw new DataException(String.format(
+                "Decimal value has mismatching scale for given Decimal schema. "
+                    + "Schema has scale %d, value has scale %d.",
+                schemaScale,
+                value.scale()
+            ));
         return value.unscaledValue().toByteArray();
     }
 

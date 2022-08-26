@@ -18,6 +18,11 @@ Define Kafka configuration property names here.
 """
 
 BROKER_ID = "broker.id"
+NODE_ID = "node.id"
+FIRST_BROKER_PORT = 9092
+FIRST_CONTROLLER_PORT = FIRST_BROKER_PORT + 500
+FIRST_CONTROLLER_ID = 3001
+CLUSTER_ID = "I2eXt9rvSnyhct8BYmW6-w"
 PORT = "port"
 ADVERTISED_HOSTNAME = "advertised.host.name"
 
@@ -35,6 +40,12 @@ LOG_SEGMENT_BYTES = "log.segment.bytes"
 LOG_RETENTION_CHECK_INTERVAL_MS = "log.retention.check.interval.ms"
 LOG_RETENTION_MS = "log.retention.ms"
 LOG_CLEANER_ENABLE = "log.cleaner.enable"
+
+METADATA_LOG_DIR = "metadata.log.dir"
+METADATA_LOG_SEGMENT_BYTES = "metadata.log.segment.bytes"
+METADATA_LOG_RETENTION_BYTES = "metadata.max.retention.bytes"
+METADATA_LOG_SEGMENT_MS = "metadata.log.segment.ms"
+METADATA_LOG_BYTES_BETWEEN_SNAPSHOTS = "metadata.log.max.record.bytes.between.snapshots"
 
 AUTO_CREATE_TOPICS_ENABLE = "auto.create.topics.enable"
 
@@ -55,7 +66,7 @@ OFFSETS_TOPIC_NUM_PARTITIONS = "offsets.topic.num.partitions"
 
 DELEGATION_TOKEN_MAX_LIFETIME_MS="delegation.token.max.lifetime.ms"
 DELEGATION_TOKEN_EXPIRY_TIME_MS="delegation.token.expiry.time.ms"
-DELEGATION_TOKEN_MASTER_KEY="delegation.token.master.key"
+DELEGATION_TOKEN_SECRET_KEY="delegation.token.secret.key"
 SASL_ENABLED_MECHANISMS="sasl.enabled.mechanisms"
 
 

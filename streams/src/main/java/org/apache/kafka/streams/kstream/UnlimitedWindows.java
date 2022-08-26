@@ -64,29 +64,17 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
     /**
      * Return a new unlimited window for the specified start timestamp.
      *
-     * @param startMs the window start time
-     * @return a new unlimited window that starts at {@code startMs}
-     * @throws IllegalArgumentException if the start time is negative
-     * @deprecated Use {@link #startOn(Instant)} instead
-     */
-    @Deprecated
-    public UnlimitedWindows startOn(final long startMs) throws IllegalArgumentException {
-        if (startMs < 0) {
-            throw new IllegalArgumentException("Window start time (startMs) cannot be negative.");
-        }
-        return new UnlimitedWindows(startMs);
-    }
-
-    /**
-     * Return a new unlimited window for the specified start timestamp.
-     *
      * @param start the window start time
      * @return a new unlimited window that starts at {@code start}
      * @throws IllegalArgumentException if the start time is negative or can't be represented as {@code long milliseconds}
      */
     public UnlimitedWindows startOn(final Instant start) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(start, "start");
-        return startOn(ApiUtils.validateMillisecondInstant(start, msgPrefix));
+        final long startMs = ApiUtils.validateMillisecondInstant(start, msgPrefix);
+        if (startMs < 0) {
+            throw new IllegalArgumentException("Window start time (startMs) cannot be negative.");
+        }
+        return new UnlimitedWindows(startMs);
     }
 
     @Override
@@ -112,38 +100,11 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
         return Long.MAX_VALUE;
     }
 
-    /**
-     * Throws an {@link IllegalArgumentException} because the retention time for unlimited windows is always infinite
-     * and cannot be changed.
-     *
-     * @throws IllegalArgumentException on every invocation.
-     * @deprecated since 2.1.
-     */
-    @Override
-    @Deprecated
-    public UnlimitedWindows until(final long durationMs) {
-        throw new IllegalArgumentException("Window retention time (durationMs) cannot be set for UnlimitedWindows.");
-    }
-
-    /**
-     * {@inheritDoc}
-     * The retention time for unlimited windows in infinite and thus represented as {@link Long#MAX_VALUE}.
-     *
-     * @return the window retention time that is {@link Long#MAX_VALUE}
-     * @deprecated since 2.1. Use {@link Materialized#retention} instead.
-     */
-    @Override
-    @Deprecated
-    public long maintainMs() {
-        return Long.MAX_VALUE;
-    }
-
     @Override
     public long gracePeriodMs() {
         return 0L;
     }
 
-    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Override
     public boolean equals(final Object o) {
         if (this == o) {
@@ -153,21 +114,18 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
             return false;
         }
         final UnlimitedWindows that = (UnlimitedWindows) o;
-        return startMs == that.startMs && segments == that.segments;
+        return startMs == that.startMs;
     }
 
-    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Override
     public int hashCode() {
-        return Objects.hash(startMs, segments);
+        return Objects.hash(startMs);
     }
 
-    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Override
     public String toString() {
         return "UnlimitedWindows{" +
             "startMs=" + startMs +
-            ", segments=" + segments +
             '}';
     }
 }

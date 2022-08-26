@@ -44,9 +44,9 @@ public class Heartbeat {
     public static final Schema HEADER_SCHEMA = new Schema(
             new Field(VERSION_KEY, Type.INT16));
 
-    private String sourceClusterAlias;
-    private String targetClusterAlias;
-    private long timestamp;
+    private final String sourceClusterAlias;
+    private final String targetClusterAlias;
+    private final long timestamp;
 
     public Heartbeat(String sourceClusterAlias, String targetClusterAlias, long timestamp) {
         this.sourceClusterAlias = sourceClusterAlias;
@@ -141,5 +141,5 @@ public class Heartbeat {
         assert version == 0;
         return VALUE_SCHEMA_V0;
     }
-};
+}
 

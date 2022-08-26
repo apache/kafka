@@ -18,8 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -39,14 +39,11 @@ import java.util.Map;
  */
 public class AddOffsetsToTxnResponse extends AbstractResponse {
 
-    public AddOffsetsToTxnResponseData data;
+    private final AddOffsetsToTxnResponseData data;
 
     public AddOffsetsToTxnResponse(AddOffsetsToTxnResponseData data) {
+        super(ApiKeys.ADD_OFFSETS_TO_TXN);
         this.data = data;
-    }
-
-    public AddOffsetsToTxnResponse(Struct struct, short version) {
-        this.data = new AddOffsetsToTxnResponseData(struct, version);
     }
 
     @Override
@@ -55,17 +52,17 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
-    }
-
-    @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
     }
 
+    @Override
+    public AddOffsetsToTxnResponseData data() {
+        return data;
+    }
+
     public static AddOffsetsToTxnResponse parse(ByteBuffer buffer, short version) {
-        return new AddOffsetsToTxnResponse(ApiKeys.ADD_OFFSETS_TO_TXN.parseResponse(version, buffer), version);
+        return new AddOffsetsToTxnResponse(new AddOffsetsToTxnResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

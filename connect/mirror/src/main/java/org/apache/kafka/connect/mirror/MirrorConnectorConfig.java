@@ -18,15 +18,19 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.ValidString;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.ConfigUtils;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -76,6 +80,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final String ENABLED = "enabled";
     private static final String ENABLED_DOC = "Whether to replicate source->target.";
     public static final String SOURCE_CLUSTER_ALIAS = "source.cluster.alias";
+    public static final String SOURCE_CLUSTER_ALIAS_DEFAULT = "source";
     private static final String SOURCE_CLUSTER_ALIAS_DOC = "Alias of source cluster";
     public static final String TARGET_CLUSTER_ALIAS = "target.cluster.alias";
     public static final String TARGET_CLUSTER_ALIAS_DEFAULT = "target";
@@ -90,24 +95,28 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final String REPLICATION_FACTOR = "replication.factor";
     private static final String REPLICATION_FACTOR_DOC = "Replication factor for newly created remote topics.";
     public static final int REPLICATION_FACTOR_DEFAULT = 2;
-    public static final String TOPICS = DefaultTopicFilter.TOPICS_WHITELIST_CONFIG;
-    public static final String TOPICS_DEFAULT = DefaultTopicFilter.TOPICS_WHITELIST_DEFAULT;
+    public static final String TOPICS = DefaultTopicFilter.TOPICS_INCLUDE_CONFIG;
+    public static final String TOPICS_DEFAULT = DefaultTopicFilter.TOPICS_INCLUDE_DEFAULT;
     private static final String TOPICS_DOC = "Topics to replicate. Supports comma-separated topic names and regexes.";
-    public static final String TOPICS_BLACKLIST = DefaultTopicFilter.TOPICS_BLACKLIST_CONFIG;
-    public static final String TOPICS_BLACKLIST_DEFAULT = DefaultTopicFilter.TOPICS_BLACKLIST_DEFAULT;
-    private static final String TOPICS_BLACKLIST_DOC = "Blacklisted topics. Supports comma-separated topic names and regexes."
-            + " Blacklists take precedence over whitelists.";
-    public static final String GROUPS = DefaultGroupFilter.GROUPS_WHITELIST_CONFIG;
-    public static final String GROUPS_DEFAULT = DefaultGroupFilter.GROUPS_WHITELIST_DEFAULT;
+    public static final String TOPICS_EXCLUDE = DefaultTopicFilter.TOPICS_EXCLUDE_CONFIG;
+    public static final String TOPICS_EXCLUDE_ALIAS = DefaultTopicFilter.TOPICS_EXCLUDE_CONFIG_ALIAS;
+    public static final String TOPICS_EXCLUDE_DEFAULT = DefaultTopicFilter.TOPICS_EXCLUDE_DEFAULT;
+    private static final String TOPICS_EXCLUDE_DOC = "Excluded topics. Supports comma-separated topic names and regexes."
+                                                     + " Excludes take precedence over includes.";
+    public static final String GROUPS = DefaultGroupFilter.GROUPS_INCLUDE_CONFIG;
+    public static final String GROUPS_DEFAULT = DefaultGroupFilter.GROUPS_INCLUDE_DEFAULT;
     private static final String GROUPS_DOC = "Consumer groups to replicate. Supports comma-separated group IDs and regexes.";
-    public static final String GROUPS_BLACKLIST = DefaultGroupFilter.GROUPS_BLACKLIST_CONFIG;
-    public static final String GROUPS_BLACKLIST_DEFAULT = DefaultGroupFilter.GROUPS_BLACKLIST_DEFAULT;
-    private static final String GROUPS_BLACKLIST_DOC = "Blacklisted groups. Supports comma-separated group IDs and regexes."
-            + " Blacklists take precedence over whitelists.";
-    public static final String CONFIG_PROPERTIES_BLACKLIST = DefaultConfigPropertyFilter.CONFIG_PROPERTIES_BLACKLIST_CONFIG;
-    public static final String CONFIG_PROPERTIES_BLACKLIST_DEFAULT = DefaultConfigPropertyFilter.CONFIG_PROPERTIES_BLACKLIST_DEFAULT;
-    private static final String CONFIG_PROPERTIES_BLACKLIST_DOC = "Topic config properties that should not be replicated. Supports "
-            + "comma-separated property names and regexes.";
+    public static final String GROUPS_EXCLUDE = DefaultGroupFilter.GROUPS_EXCLUDE_CONFIG;
+    public static final String GROUPS_EXCLUDE_ALIAS = DefaultGroupFilter.GROUPS_EXCLUDE_CONFIG_ALIAS;
+
+    public static final String GROUPS_EXCLUDE_DEFAULT = DefaultGroupFilter.GROUPS_EXCLUDE_DEFAULT;
+    private static final String GROUPS_EXCLUDE_DOC = "Exclude groups. Supports comma-separated group IDs and regexes."
+                                                     + " Excludes take precedence over includes.";
+    public static final String CONFIG_PROPERTIES_EXCLUDE = DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG;
+    public static final String CONFIG_PROPERTIES_EXCLUDE_ALIAS = DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_ALIAS_CONFIG;
+    public static final String CONFIG_PROPERTIES_EXCLUDE_DEFAULT = DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_DEFAULT;
+    private static final String CONFIG_PROPERTIES_EXCLUDE_DOC = "Topic config properties that should not be replicated. Supports "
+                                        + "comma-separated property names and regexes.";
 
     public static final String HEARTBEATS_TOPIC_REPLICATION_FACTOR = "heartbeats.topic.replication.factor";
     public static final String HEARTBEATS_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor for heartbeats topic.";
@@ -197,16 +206,23 @@ public class MirrorConnectorConfig extends AbstractConfig {
     private static final String OFFSET_LAG_MAX_DOC = "How out-of-sync a remote partition can be before it is resynced.";
     public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
 
+    private static final String OFFSET_SYNCS_TOPIC_LOCATION = "offset-syncs.topic.location";
+    private static final String OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT = SOURCE_CLUSTER_ALIAS_DEFAULT;
+    private static final String OFFSET_SYNCS_TOPIC_LOCATION_DOC = "The location (source/target) of the offset-syncs topic.";
+
     protected static final String SOURCE_CLUSTER_PREFIX = MirrorMakerConfig.SOURCE_CLUSTER_PREFIX;
     protected static final String TARGET_CLUSTER_PREFIX = MirrorMakerConfig.TARGET_CLUSTER_PREFIX;
+    protected static final String SOURCE_PREFIX = MirrorMakerConfig.SOURCE_PREFIX;
+    protected static final String TARGET_PREFIX = MirrorMakerConfig.TARGET_PREFIX;
     protected static final String PRODUCER_CLIENT_PREFIX = "producer.";
     protected static final String CONSUMER_CLIENT_PREFIX = "consumer.";
     protected static final String ADMIN_CLIENT_PREFIX = "admin.";
-    protected static final String SOURCE_ADMIN_CLIENT_PREFIX = "source.admin.";
-    protected static final String TARGET_ADMIN_CLIENT_PREFIX = "target.admin.";
 
     public MirrorConnectorConfig(Map<String, String> props) {
-        this(CONNECTOR_CONFIG_DEF, props);
+        this(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
+            {TOPICS_EXCLUDE, TOPICS_EXCLUDE_ALIAS},
+            {GROUPS_EXCLUDE, GROUPS_EXCLUDE_ALIAS},
+            {CONFIG_PROPERTIES_EXCLUDE, CONFIG_PROPERTIES_EXCLUDE_ALIAS}}));
     }
 
     protected MirrorConnectorConfig(ConfigDef configDef, Map<String, String> props) {
@@ -234,6 +250,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(PRODUCER_CLIENT_PREFIX));
+        props.putAll(originalsWithPrefix(SOURCE_PREFIX + PRODUCER_CLIENT_PREFIX));
         return props;
     }
 
@@ -242,8 +259,9 @@ public class MirrorConnectorConfig extends AbstractConfig {
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(CONSUMER_CLIENT_PREFIX));
+        props.putAll(originalsWithPrefix(SOURCE_PREFIX + CONSUMER_CLIENT_PREFIX));
         props.put(ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "earliest");
         return props;
     }
 
@@ -267,7 +285,27 @@ public class MirrorConnectorConfig extends AbstractConfig {
         props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX));
-        props.putAll(originalsWithPrefix(TARGET_ADMIN_CLIENT_PREFIX));
+        props.putAll(originalsWithPrefix(TARGET_PREFIX + ADMIN_CLIENT_PREFIX));
+        return props;
+    }
+
+    Map<String, Object> targetProducerConfig() {
+        Map<String, Object> props = new HashMap<>();
+        props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
+        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
+        props.putAll(originalsWithPrefix(PRODUCER_CLIENT_PREFIX));
+        props.putAll(originalsWithPrefix(TARGET_PREFIX + PRODUCER_CLIENT_PREFIX));
+        return props;
+    }
+
+    Map<String, Object> targetConsumerConfig() {
+        Map<String, Object> props = new HashMap<>();
+        props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
+        props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
+        props.putAll(originalsWithPrefix(CONSUMER_CLIENT_PREFIX));
+        props.putAll(originalsWithPrefix(TARGET_PREFIX + CONSUMER_CLIENT_PREFIX));
+        props.put(ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.putIfAbsent(AUTO_OFFSET_RESET_CONFIG, "earliest");
         return props;
     }
 
@@ -276,16 +314,12 @@ public class MirrorConnectorConfig extends AbstractConfig {
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX));
-        props.putAll(originalsWithPrefix(SOURCE_ADMIN_CLIENT_PREFIX));
+        props.putAll(originalsWithPrefix(SOURCE_PREFIX + ADMIN_CLIENT_PREFIX));
         return props;
     }
 
     List<MetricsReporter> metricsReporters() {
-        List<MetricsReporter> reporters = getConfiguredInstances(
-                CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
-        JmxReporter jmxReporter = new JmxReporter();
-        jmxReporter.configure(this.originals());
-        reporters.add(jmxReporter);
+        List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(this);
         MetricsContext metricsContext = new KafkaMetricsContext("kafka.connect.mirror");
 
         for (MetricsReporter reporter : reporters) {
@@ -304,23 +338,40 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     String offsetSyncsTopic() {
-        // ".internal" suffix ensures this doesn't get replicated
-        return "mm2-offset-syncs." + targetClusterAlias() + ".internal";
+        String otherClusterAlias = SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
+                ? targetClusterAlias()
+                : sourceClusterAlias();
+        return replicationPolicy().offsetSyncsTopic(otherClusterAlias);
+    }
+
+    String offsetSyncsTopicLocation() {
+        return getString(OFFSET_SYNCS_TOPIC_LOCATION);
+    }
+
+    Map<String, Object> offsetSyncsTopicAdminConfig() {
+        return SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
+                ? sourceAdminConfig()
+                : targetAdminConfig();
+    }
+
+    Map<String, Object> offsetSyncsTopicProducerConfig() {
+        return SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
+                ? sourceProducerConfig()
+                : targetProducerConfig();
+    }
+
+    Map<String, Object> offsetSyncsTopicConsumerConfig() {
+        return SOURCE_CLUSTER_ALIAS_DEFAULT.equals(offsetSyncsTopicLocation())
+                ? sourceConsumerConfig()
+                : targetConsumerConfig();
     }
 
     String heartbeatsTopic() {
-        return MirrorClientConfig.HEARTBEATS_TOPIC;
-    }
-
-    // e.g. source1.heartbeats
-    String targetHeartbeatsTopic() {
-        return replicationPolicy().formatRemoteTopic(sourceClusterAlias(), heartbeatsTopic());
+        return replicationPolicy().heartbeatsTopic();
     }
 
     String checkpointsTopic() {
-        // Checkpoint topics are not "remote topics", as they are not replicated, so we don't
-        // need to use ReplicationPolicy here.
-        return sourceClusterAlias() + MirrorClientConfig.CHECKPOINTS_TOPIC_SUFFIX;
+        return replicationPolicy().checkpointsTopic(sourceClusterAlias());
     }
 
     long maxOffsetLag() {
@@ -422,6 +473,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
         }
     }
 
+    @SuppressWarnings("deprecation")
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = ConnectorConfig.configDef()
             .define(
                     ENABLED,
@@ -436,11 +488,17 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     ConfigDef.Importance.HIGH,
                     TOPICS_DOC) 
             .define(
-                    TOPICS_BLACKLIST,
+                    TOPICS_EXCLUDE,
                     ConfigDef.Type.LIST,
-                    TOPICS_BLACKLIST_DEFAULT,
+                    TOPICS_EXCLUDE_DEFAULT,
                     ConfigDef.Importance.HIGH,
-                    TOPICS_BLACKLIST_DOC)
+                    TOPICS_EXCLUDE_DOC)
+            .define(
+                    TOPICS_EXCLUDE_ALIAS,
+                    ConfigDef.Type.LIST,
+                    null,
+                    ConfigDef.Importance.HIGH,
+                    "Deprecated. Use " + TOPICS_EXCLUDE + " instead.")
             .define(
                     GROUPS,
                     ConfigDef.Type.LIST,
@@ -448,17 +506,29 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     ConfigDef.Importance.HIGH,
                     GROUPS_DOC) 
             .define(
-                    GROUPS_BLACKLIST,
+                    GROUPS_EXCLUDE,
                     ConfigDef.Type.LIST,
-                    GROUPS_BLACKLIST_DEFAULT,
+                    GROUPS_EXCLUDE_DEFAULT,
                     ConfigDef.Importance.HIGH,
-                    GROUPS_BLACKLIST_DOC)
+                    GROUPS_EXCLUDE_DOC)
             .define(
-                    CONFIG_PROPERTIES_BLACKLIST,
+                    GROUPS_EXCLUDE_ALIAS,
                     ConfigDef.Type.LIST,
-                    CONFIG_PROPERTIES_BLACKLIST_DEFAULT,
+                    null,
                     ConfigDef.Importance.HIGH,
-                    CONFIG_PROPERTIES_BLACKLIST_DOC)
+                    "Deprecated. Use " + GROUPS_EXCLUDE + " instead.")
+            .define(
+                    CONFIG_PROPERTIES_EXCLUDE,
+                    ConfigDef.Type.LIST,
+                    CONFIG_PROPERTIES_EXCLUDE_DEFAULT,
+                    ConfigDef.Importance.HIGH,
+                    CONFIG_PROPERTIES_EXCLUDE_DOC)
+            .define(
+                    CONFIG_PROPERTIES_EXCLUDE_ALIAS,
+                    ConfigDef.Type.LIST,
+                    null,
+                    ConfigDef.Importance.HIGH,
+                    "Deprecated. Use " + CONFIG_PROPERTIES_EXCLUDE + " instead.")
             .define(
                     TOPIC_FILTER_CLASS,
                     ConfigDef.Type.CLASS,
@@ -627,6 +697,13 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     ConfigDef.Importance.LOW,
                     OFFSET_LAG_MAX_DOC)
             .define(
+                    OFFSET_SYNCS_TOPIC_LOCATION,
+                    ConfigDef.Type.STRING,
+                    OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT,
+                    ValidString.in(SOURCE_CLUSTER_ALIAS_DEFAULT, TARGET_CLUSTER_ALIAS_DEFAULT),
+                    ConfigDef.Importance.LOW,
+                    OFFSET_SYNCS_TOPIC_LOCATION_DOC)
+            .define(
                     CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
                     ConfigDef.Type.LIST,
                     null,
@@ -636,8 +713,16 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                     ConfigDef.Type.STRING,
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                    in(Utils.enumOptions(SecurityProtocol.class)),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .define(
+                    CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG,
+                    ConfigDef.Type.BOOLEAN,
+                    true,
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC
+            )
             .withClientSslSupport()
             .withClientSaslSupport();
 }

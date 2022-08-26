@@ -22,7 +22,7 @@ import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartiti
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 
 import java.nio.ByteBuffer;
 
@@ -55,15 +55,7 @@ public class CreatePartitionsRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public CreatePartitionsRequest(Struct struct, short apiVersion) {
-        this(new CreatePartitionsRequestData(struct, apiVersion), apiVersion);
-    }
-
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
-    }
-
     public CreatePartitionsRequestData data() {
         return data;
     }
@@ -85,6 +77,6 @@ public class CreatePartitionsRequest extends AbstractRequest {
     }
 
     public static CreatePartitionsRequest parse(ByteBuffer buffer, short version) {
-        return new CreatePartitionsRequest(ApiKeys.CREATE_PARTITIONS.parseRequest(version, buffer), version);
+        return new CreatePartitionsRequest(new CreatePartitionsRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

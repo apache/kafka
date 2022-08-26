@@ -115,7 +115,7 @@ class MirrorMetrics implements AutoCloseable {
         ReplicationPolicy replicationPolicy = taskConfig.replicationPolicy();
         partitionMetrics = taskConfig.taskTopicPartitions().stream()
             .map(x -> new TopicPartition(replicationPolicy.formatRemoteTopic(source, x.topic()), x.partition()))
-            .collect(Collectors.toMap(x -> x, x -> new PartitionMetrics(x)));
+            .collect(Collectors.toMap(x -> x, PartitionMetrics::new));
 
     }
 

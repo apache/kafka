@@ -17,11 +17,14 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -30,10 +33,10 @@ import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
-public abstract class AbstractProcessorContext implements InternalProcessorContext {
+public abstract class AbstractProcessorContext<KOut, VOut> implements InternalProcessorContext<KOut, VOut> {
 
-    public static final String NONEXIST_TOPIC = "__null_topic__";
     private final TaskId taskId;
     private final String applicationId;
     private final StreamsConfig config;
@@ -43,9 +46,9 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private boolean initialized;
     protected ProcessorRecordContext recordContext;
     protected ProcessorNode<?, ?, ?, ?> currentNode;
-    private long currentSystemTimeMs;
-
+    private long cachedSystemTimeMs;
     protected ThreadCache cache;
+    private ProcessorMetadata processorMetadata;
 
     public AbstractProcessorContext(final TaskId taskId,
                                     final StreamsConfig config,
@@ -55,21 +58,22 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.config = config;
         this.metrics = metrics;
-        valueSerde = config.defaultValueSerde();
-        keySerde = config.defaultKeySerde();
+        valueSerde = null;
+        keySerde = null;
         this.cache = cache;
+        processorMetadata = new ProcessorMetadata();
     }
 
     protected abstract StateManager stateManager();
 
     @Override
     public void setSystemTimeMs(final long timeMs) {
-        currentSystemTimeMs = timeMs;
+        cachedSystemTimeMs = timeMs;
     }
 
     @Override
     public long currentSystemTimeMs() {
-        return currentSystemTimeMs;
+        return cachedSystemTimeMs;
     }
 
     @Override
@@ -84,11 +88,17 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
     @Override
     public Serde<?> keySerde() {
+        if (keySerde == null) {
+            return config.defaultKeySerde();
+        }
         return keySerde;
     }
 
     @Override
     public Serde<?> valueSerde() {
+        if (valueSerde == null) {
+            return config.defaultValueSerde();
+        }
         return valueSerde;
     }
 
@@ -105,71 +115,83 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallback) {
+        register(store, stateRestoreCallback, () -> { });
+    }
+
+    @Override
+    public void register(final StateStore store,
+                         final StateRestoreCallback stateRestoreCallback,
+                         final CommitCallback checkpoint) {
         if (initialized) {
             throw new IllegalStateException("Can only create state stores during initialization.");
         }
         Objects.requireNonNull(store, "store must not be null");
-        stateManager().registerStore(store, stateRestoreCallback);
+        stateManager().registerStore(store, stateRestoreCallback, checkpoint);
     }
 
-    /**
-     * @throws IllegalStateException if the task's record is null
-     */
     @Override
     public String topic() {
         if (recordContext == null) {
-            throw new IllegalStateException("This should not happen as topic() should only be called while a record is processed");
-        }
-
-        final String topic = recordContext.topic();
-
-        if (NONEXIST_TOPIC.equals(topic)) {
+            // This is only exposed via the deprecated ProcessorContext,
+            // in which case, we're preserving the pre-existing behavior
+            // of returning dummy values when the record context is undefined.
+            // For topic, the dummy value is `null`.
             return null;
+        } else {
+            return recordContext.topic();
         }
-
-        return topic;
     }
 
-    /**
-     * @throws IllegalStateException if partition is null
-     */
     @Override
     public int partition() {
         if (recordContext == null) {
-            throw new IllegalStateException("This should not happen as partition() should only be called while a record is processed");
+            // This is only exposed via the deprecated ProcessorContext,
+            // in which case, we're preserving the pre-existing behavior
+            // of returning dummy values when the record context is undefined.
+            // For partition, the dummy value is `-1`.
+            return -1;
+        } else {
+            return recordContext.partition();
         }
-
-        return recordContext.partition();
     }
 
-    /**
-     * @throws IllegalStateException if offset is null
-     */
     @Override
     public long offset() {
         if (recordContext == null) {
-            throw new IllegalStateException("This should not happen as offset() should only be called while a record is processed");
+            // This is only exposed via the deprecated ProcessorContext,
+            // in which case, we're preserving the pre-existing behavior
+            // of returning dummy values when the record context is undefined.
+            // For offset, the dummy value is `-1L`.
+            return -1L;
+        } else {
+            return recordContext.offset();
         }
-        return recordContext.offset();
     }
 
     @Override
     public Headers headers() {
         if (recordContext == null) {
-            throw new IllegalStateException("This should not happen as headers() should only be called while a record is processed");
+            // This is only exposed via the deprecated ProcessorContext,
+            // in which case, we're preserving the pre-existing behavior
+            // of returning dummy values when the record context is undefined.
+            // For headers, the dummy value is an empty headers collection.
+            return new RecordHeaders();
+        } else {
+            return recordContext.headers();
         }
-        return recordContext.headers();
     }
 
-    /**
-     * @throws IllegalStateException if timestamp is null
-     */
     @Override
     public long timestamp() {
         if (recordContext == null) {
-            throw new IllegalStateException("This should not happen as timestamp() should only be called while a record is processed");
+            // This is only exposed via the deprecated ProcessorContext,
+            // in which case, we're preserving the pre-existing behavior
+            // of returning dummy values when the record context is undefined.
+            // For timestamp, the dummy value is `0L`.
+            return 0L;
+        } else {
+            return recordContext.timestamp();
         }
-        return recordContext.timestamp();
     }
 
     @Override
@@ -193,6 +215,11 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public ProcessorRecordContext recordContext() {
         return recordContext;
+    }
+
+    @Override
+    public Optional<RecordMetadata> recordMetadata() {
+        return Optional.ofNullable(recordContext);
     }
 
     @Override
@@ -228,5 +255,26 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public String changelogFor(final String storeName) {
         return stateManager().changelogFor(storeName);
+    }
+
+    @Override
+    public void addProcessorMetadataKeyValue(final String key, final long value) {
+        processorMetadata.put(key, value);
+    }
+
+    @Override
+    public Long processorMetadataForKey(final String key) {
+        return processorMetadata.get(key);
+    }
+
+    @Override
+    public void setProcessorMetadata(final ProcessorMetadata metadata) {
+        Objects.requireNonNull(metadata);
+        processorMetadata = metadata;
+    }
+
+    @Override
+    public ProcessorMetadata getProcessorMetadata() {
+        return processorMetadata;
     }
 }

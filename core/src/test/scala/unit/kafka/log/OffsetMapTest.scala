@@ -20,8 +20,8 @@ package kafka.log
 import java.nio._
 
 import kafka.utils.Exit
-import org.junit._
-import org.junit.Assert._
+import org.junit.jupiter.api._
+import org.junit.jupiter.api.Assertions._
 
 class OffsetMapTest {
   

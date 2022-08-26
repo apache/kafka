@@ -20,20 +20,20 @@ package kafka.network
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.concurrent._
-
+import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
-import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
+import kafka.network
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, NotNothing, Pool}
-import org.apache.kafka.common.config.types.Password
+import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
+import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.message.EnvelopeResponseData
 import org.apache.kafka.common.network.Send
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, ObjectSerializationCache}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
@@ -59,16 +59,19 @@ object RequestChannel extends Logging {
     val sanitizedUser: String = Sanitizer.sanitize(principal.getName)
   }
 
-  class Metrics {
+  class Metrics(enabledApis: Iterable[ApiKeys]) {
+    def this(scope: ListenerType) = {
+      this(ApiKeys.apisForListener(scope).asScala)
+    }
 
     private val metricsMap = mutable.Map[String, RequestMetrics]()
 
-    (ApiKeys.values.toSeq.map(_.name) ++
-        Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName)).foreach { name =>
+    (enabledApis.map(_.name) ++
+      Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName)).foreach { name =>
       metricsMap.put(name, new RequestMetrics(name))
     }
 
-    def apply(metricName: String) = metricsMap(metricName)
+    def apply(metricName: String): RequestMetrics = metricsMap(metricName)
 
     def close(): Unit = {
        metricsMap.values.foreach(_.removeMetrics())
@@ -78,9 +81,10 @@ object RequestChannel extends Logging {
   class Request(val processor: Int,
                 val context: RequestContext,
                 val startTimeNanos: Long,
-                memoryPool: MemoryPool,
-                @volatile private var buffer: ByteBuffer,
-                metrics: RequestChannel.Metrics) extends BaseRequest {
+                val memoryPool: MemoryPool,
+                @volatile var buffer: ByteBuffer,
+                metrics: RequestChannel.Metrics,
+                val envelope: Option[RequestChannel.Request] = None) extends BaseRequest {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
     @volatile var requestDequeueTimeNanos = -1L
@@ -93,10 +97,20 @@ object RequestChannel extends Logging {
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
 
     val session = Session(context.principal, context.clientAddress)
+
     private val bodyAndSize: RequestAndSize = context.parseRequest(buffer)
 
+    // This is constructed on creation of a Request so that the JSON representation is computed before the request is
+    // processed by the api layer. Otherwise, a ProduceRequest can occur without its data (ie. it goes into purgatory).
+    val requestLog: Option[JsonNode] =
+      if (RequestChannel.isRequestLoggingEnabled) Some(RequestConvertToJson.request(loggableRequest))
+      else None
+
     def header: RequestHeader = context.header
+
     def sizeOfBodyInBytes: Int = bodyAndSize.size
+
+    def sizeInBytes: Int = header.size(new ObjectSerializationCache) + sizeOfBodyInBytes
 
     //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
     //some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
@@ -105,7 +119,55 @@ object RequestChannel extends Logging {
       releaseBuffer()
     }
 
-    def requestDesc(details: Boolean): String = s"$header -- ${loggableRequest.toString(details)}"
+    def isForwarded: Boolean = envelope.isDefined
+
+    private def shouldReturnNotController(response: AbstractResponse): Boolean = {
+      response match {
+        case describeQuorumResponse: DescribeQuorumResponse => response.errorCounts.containsKey(Errors.NOT_LEADER_OR_FOLLOWER)
+        case _ => response.errorCounts.containsKey(Errors.NOT_CONTROLLER)
+      }
+    }
+
+    def buildResponseSend(abstractResponse: AbstractResponse): Send = {
+      envelope match {
+        case Some(request) =>
+          val envelopeResponse = if (shouldReturnNotController(abstractResponse)) {
+            // Since it's a NOT_CONTROLLER error response, we need to make envelope response with NOT_CONTROLLER error
+            // to notify the requester (i.e. BrokerToControllerRequestThread) to update active controller
+            new EnvelopeResponse(new EnvelopeResponseData()
+              .setErrorCode(Errors.NOT_CONTROLLER.code()))
+          } else {
+            val responseBytes = context.buildResponseEnvelopePayload(abstractResponse)
+            new EnvelopeResponse(responseBytes, Errors.NONE)
+          }
+          request.context.buildResponseSend(envelopeResponse)
+        case None =>
+          context.buildResponseSend(abstractResponse)
+      }
+    }
+
+    def responseNode(response: AbstractResponse): Option[JsonNode] = {
+      if (RequestChannel.isRequestLoggingEnabled)
+        Some(RequestConvertToJson.response(response, context.apiVersion))
+      else
+        None
+    }
+
+    def headerForLoggingOrThrottling(): RequestHeader = {
+      envelope match {
+        case Some(request) =>
+          request.context.header
+        case None =>
+          context.header
+      }
+    }
+
+    def requestDesc(details: Boolean): String = {
+      val forwardDescription = envelope.map { request =>
+        s"Forwarded request: ${request.context} "
+      }.getOrElse("")
+      s"$forwardDescription$header -- ${loggableRequest.toString(details)}"
+    }
 
     def body[T <: AbstractRequest](implicit classTag: ClassTag[T], @nowarn("cat=unused") nn: NotNothing[T]): T = {
       bodyAndSize.request match {
@@ -117,44 +179,26 @@ object RequestChannel extends Logging {
 
     def loggableRequest: AbstractRequest = {
 
-      def loggableValue(resourceType: ConfigResource.Type, name: String, value: String): String = {
-        val maybeSensitive = resourceType match {
-          case ConfigResource.Type.BROKER => KafkaConfig.maybeSensitive(KafkaConfig.configType(name))
-          case ConfigResource.Type.TOPIC => KafkaConfig.maybeSensitive(LogConfig.configType(name))
-          case ConfigResource.Type.BROKER_LOGGER => false
-          case _ => true
-        }
-        if (maybeSensitive) Password.HIDDEN else value
-      }
-
       bodyAndSize.request match {
         case alterConfigs: AlterConfigsRequest =>
-          val loggableConfigs = alterConfigs.configs().asScala.map { case (resource, config) =>
-            val loggableEntries = new AlterConfigsRequest.Config(config.entries.asScala.map { entry =>
-                new AlterConfigsRequest.ConfigEntry(entry.name, loggableValue(resource.`type`, entry.name, entry.value))
-            }.asJavaCollection)
-            (resource, loggableEntries)
-          }.asJava
-          new AlterConfigsRequest.Builder(loggableConfigs, alterConfigs.validateOnly).build(alterConfigs.version())
+          val newData = alterConfigs.data().duplicate()
+          newData.resources().forEach(resource => {
+            val resourceType = ConfigResource.Type.forId(resource.resourceType())
+            resource.configs().forEach(config => {
+              config.setValue(KafkaConfig.loggableValue(resourceType, config.name(), config.value()))
+            })
+          })
+          new AlterConfigsRequest(newData, alterConfigs.version())
 
         case alterConfigs: IncrementalAlterConfigsRequest =>
-          val resources = new AlterConfigsResourceCollection(alterConfigs.data.resources.size)
-          alterConfigs.data.resources.forEach { resource =>
-            val newResource = new AlterConfigsResource()
-              .setResourceName(resource.resourceName)
-              .setResourceType(resource.resourceType)
-            resource.configs.forEach { config =>
-              newResource.configs.add(new AlterableConfig()
-                .setName(config.name)
-                .setValue(loggableValue(ConfigResource.Type.forId(resource.resourceType), config.name, config.value))
-                .setConfigOperation(config.configOperation))
-            }
-            resources.add(newResource)
-          }
-          val data = new IncrementalAlterConfigsRequestData()
-            .setValidateOnly(alterConfigs.data().validateOnly())
-            .setResources(resources)
-          new IncrementalAlterConfigsRequest.Builder(data).build(alterConfigs.version)
+          val newData = alterConfigs.data().duplicate()
+          newData.resources().forEach(resource => {
+            val resourceType = ConfigResource.Type.forId(resource.resourceType())
+            resource.configs().forEach(config => {
+              config.setValue(KafkaConfig.loggableValue(resourceType, config.name(), config.value()))
+            })
+          })
+          new IncrementalAlterConfigsRequest.Builder(newData).build(alterConfigs.version())
 
         case _ =>
           bodyAndSize.request
@@ -222,36 +266,25 @@ object RequestChannel extends Logging {
       recordNetworkThreadTimeCallback.foreach(record => record(networkThreadTimeNanos))
 
       if (isRequestLoggingEnabled) {
-        val detailsEnabled = requestLogger.underlying.isTraceEnabled
-        val responseString = response.responseString.getOrElse(
-          throw new IllegalStateException("responseAsString should always be defined if request logging is enabled"))
-        val builder = new StringBuilder(256)
-        builder.append("Completed request:").append(requestDesc(detailsEnabled))
-          .append(",response:").append(responseString)
-          .append(" from connection ").append(context.connectionId)
-          .append(";totalTime:").append(totalTimeMs)
-          .append(",requestQueueTime:").append(requestQueueTimeMs)
-          .append(",localTime:").append(apiLocalTimeMs)
-          .append(",remoteTime:").append(apiRemoteTimeMs)
-          .append(",throttleTime:").append(apiThrottleTimeMs)
-          .append(",responseQueueTime:").append(responseQueueTimeMs)
-          .append(",sendTime:").append(responseSendTimeMs)
-          .append(",securityProtocol:").append(context.securityProtocol)
-          .append(",principal:").append(session.principal)
-          .append(",listener:").append(context.listenerName.value)
-          .append(",clientInformation:").append(context.clientInformation)
-        if (temporaryMemoryBytes > 0)
-          builder.append(",temporaryMemoryBytes:").append(temporaryMemoryBytes)
-        if (messageConversionsTimeMs > 0)
-          builder.append(",messageConversionsTime:").append(messageConversionsTimeMs)
-        requestLogger.debug(builder.toString)
+        val desc = RequestConvertToJson.requestDescMetrics(header, requestLog, response.responseLog,
+          context, session, isForwarded,
+          totalTimeMs, requestQueueTimeMs, apiLocalTimeMs,
+          apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
+          responseSendTimeMs, temporaryMemoryBytes,
+          messageConversionsTimeMs)
+        requestLogger.debug("Completed request:" + desc.toString)
       }
     }
 
     def releaseBuffer(): Unit = {
-      if (buffer != null) {
-        memoryPool.release(buffer)
-        buffer = null
+      envelope match {
+        case Some(request) =>
+          request.releaseBuffer()
+        case None =>
+          if (buffer != null) {
+            memoryPool.release(buffer)
+            buffer = null
+          }
       }
     }
 
@@ -260,32 +293,31 @@ object RequestChannel extends Logging {
       s"session=$session, " +
       s"listenerName=${context.listenerName}, " +
       s"securityProtocol=${context.securityProtocol}, " +
-      s"buffer=$buffer)"
+      s"buffer=$buffer, " +
+      s"envelope=$envelope)"
 
   }
 
-  abstract class Response(val request: Request) {
+  sealed abstract class Response(val request: Request) {
 
     def processor: Int = request.processor
 
-    def responseString: Option[String] = Some("")
+    def responseLog: Option[JsonNode] = None
 
     def onComplete: Option[Send => Unit] = None
-
-    override def toString: String
   }
 
-  /** responseAsString should only be defined if request logging is enabled */
+  /** responseLogValue should only be defined if request logging is enabled */
   class SendResponse(request: Request,
                      val responseSend: Send,
-                     val responseAsString: Option[String],
+                     val responseLogValue: Option[JsonNode],
                      val onCompleteCallback: Option[Send => Unit]) extends Response(request) {
-    override def responseString: Option[String] = responseAsString
+    override def responseLog: Option[JsonNode] = responseLogValue
 
     override def onComplete: Option[Send => Unit] = onCompleteCallback
 
     override def toString: String =
-      s"Response(type=Send, request=$request, send=$responseSend, asString=$responseAsString)"
+      s"Response(type=Send, request=$request, send=$responseSend, asString=$responseLogValue)"
   }
 
   class NoOpResponse(request: Request) extends Response(request) {
@@ -309,9 +341,11 @@ object RequestChannel extends Logging {
   }
 }
 
-class RequestChannel(val queueSize: Int, val metricNamePrefix : String, time: Time) extends KafkaMetricsGroup {
+class RequestChannel(val queueSize: Int,
+                     val metricNamePrefix: String,
+                     time: Time,
+                     val metrics: RequestChannel.Metrics) extends KafkaMetricsGroup {
   import RequestChannel._
-  val metrics = new RequestChannel.Metrics
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()
   val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)
@@ -343,11 +377,46 @@ class RequestChannel(val queueSize: Int, val metricNamePrefix : String, time: Ti
     requestQueue.put(request)
   }
 
-  /** Send a response back to the socket server to be sent over the network */
-  def sendResponse(response: RequestChannel.Response): Unit = {
+  def closeConnection(
+    request: RequestChannel.Request,
+    errorCounts: java.util.Map[Errors, Integer]
+  ): Unit = {
+    // This case is used when the request handler has encountered an error, but the client
+    // does not expect a response (e.g. when produce request has acks set to 0)
+    updateErrorMetrics(request.header.apiKey, errorCounts.asScala)
+    sendResponse(new RequestChannel.CloseConnectionResponse(request))
+  }
 
+  def sendResponse(
+    request: RequestChannel.Request,
+    response: AbstractResponse,
+    onComplete: Option[Send => Unit]
+  ): Unit = {
+    updateErrorMetrics(request.header.apiKey, response.errorCounts.asScala)
+    sendResponse(new RequestChannel.SendResponse(
+      request,
+      request.buildResponseSend(response),
+      request.responseNode(response),
+      onComplete
+    ))
+  }
+
+  def sendNoOpResponse(request: RequestChannel.Request): Unit = {
+    sendResponse(new network.RequestChannel.NoOpResponse(request))
+  }
+
+  def startThrottling(request: RequestChannel.Request): Unit = {
+    sendResponse(new RequestChannel.StartThrottlingResponse(request))
+  }
+
+  def endThrottling(request: RequestChannel.Request): Unit = {
+    sendResponse(new EndThrottlingResponse(request))
+  }
+
+  /** Send a response back to the socket server to be sent over the network */
+  private[network] def sendResponse(response: RequestChannel.Response): Unit = {
     if (isTraceEnabled) {
-      val requestHeader = response.request.header
+      val requestHeader = response.request.headerForLoggingOrThrottling()
       val message = response match {
         case sendResponse: SendResponse =>
           s"Sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} of ${sendResponse.responseSend.size} bytes."
@@ -392,7 +461,7 @@ class RequestChannel(val queueSize: Int, val metricNamePrefix : String, time: Ti
     requestQueue.take()
 
   def updateErrorMetrics(apiKey: ApiKeys, errors: collection.Map[Errors, Integer]): Unit = {
-    errors.foreach { case (error, count) =>
+    errors.forKeyValue { (error, count) =>
       metrics(apiKey.name).markErrorMeter(error, count)
     }
   }
@@ -468,13 +537,13 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   Errors.values.foreach(error => errorMeters.put(error, new ErrorMeter(name, error)))
 
   def requestRate(version: Short): Meter = {
-    requestRateInternal.getAndMaybePut(version, newMeter("RequestsPerSec", "requests", TimeUnit.SECONDS, tags + ("version" -> version.toString)))
+    requestRateInternal.getAndMaybePut(version, newMeter(RequestsPerSec, "requests", TimeUnit.SECONDS, tags + ("version" -> version.toString)))
   }
 
   class ErrorMeter(name: String, error: Errors) {
     private val tags = Map("request" -> name, "error" -> error.name)
 
-    @volatile private var meter: Meter = null
+    @volatile private var meter: Meter = _
 
     def getOrCreateMeter(): Meter = {
       if (meter != null)
@@ -513,7 +582,6 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
     removeMetric(TotalTimeMs, tags)
     removeMetric(ResponseSendTimeMs, tags)
     removeMetric(RequestBytes, tags)
-    removeMetric(ResponseSendTimeMs, tags)
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name) {
       removeMetric(MessageConversionsTimeMs, tags)
       removeMetric(TemporaryMemoryBytes, tags)

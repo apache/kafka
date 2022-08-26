@@ -18,21 +18,27 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
+import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
@@ -43,7 +49,9 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.internals.PositionSerde;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
@@ -55,10 +63,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
-public class InternalMockProcessorContext
-    extends AbstractProcessorContext
+public class InternalMockProcessorContext<KOut, VOut>
+    extends AbstractProcessorContext<KOut, VOut>
     implements RecordCollector.Supplier {
 
     private StateManager stateManager = new StateManagerStub();
@@ -72,7 +81,9 @@ public class InternalMockProcessorContext
     private Serde<?> keySerde;
     private Serde<?> valueSerde;
     private long timestamp = -1L;
+    private final Time time;
     private final Map<String, String> storeToChangelogTopic = new HashMap<>();
+    private final boolean consistencyEnabled;
 
     public InternalMockProcessorContext() {
         this(null,
@@ -81,7 +92,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -99,7 +111,8 @@ public class InternalMockProcessorContext
             ),
             config,
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -111,7 +124,8 @@ public class InternalMockProcessorContext
             streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -130,7 +144,8 @@ public class InternalMockProcessorContext
             ),
             config,
             () -> collector,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -145,7 +160,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             config,
             null,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -164,7 +180,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(metrics, "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
-            null
+            null,
+            Time.SYSTEM
         );
     }
 
@@ -180,7 +197,8 @@ public class InternalMockProcessorContext
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
-            cache
+            cache,
+            Time.SYSTEM
         );
     }
 
@@ -190,9 +208,22 @@ public class InternalMockProcessorContext
                                         final StreamsMetricsImpl metrics,
                                         final StreamsConfig config,
                                         final RecordCollector.Supplier collectorSupplier,
-                                        final ThreadCache cache) {
+                                        final ThreadCache cache,
+                                        final Time time) {
+        this(stateDir, keySerde, valueSerde, metrics, config, collectorSupplier, cache, time, new TaskId(0, 0));
+    }
+
+    public InternalMockProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valueSerde,
+                                        final StreamsMetricsImpl metrics,
+                                        final StreamsConfig config,
+                                        final RecordCollector.Supplier collectorSupplier,
+                                        final ThreadCache cache,
+                                        final Time time,
+                                        final TaskId taskId) {
         super(
-            new TaskId(0, 0),
+            taskId,
             config,
             metrics,
             cache
@@ -202,6 +233,11 @@ public class InternalMockProcessorContext
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.recordCollectorSupplier = collectorSupplier;
+        this.time = time;
+        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+                appConfigs(),
+                IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+                false);
     }
 
     @Override
@@ -255,21 +291,17 @@ public class InternalMockProcessorContext
 
     @Override
     public void register(final StateStore store,
-                         final StateRestoreCallback func) {
+                         final StateRestoreCallback func,
+                         final CommitCallback checkpoint) {
         storeMap.put(store.name(), store);
         restoreFuncs.put(store.name(), func);
-        stateManager().registerStore(store, func);
+        stateManager().registerStore(store, func, checkpoint);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public StateStore getStateStore(final String name) {
-        return storeMap.get(name);
-    }
-
-    @Override
-    @Deprecated
-    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
-        throw new UnsupportedOperationException("schedule() not supported.");
+    public <S extends StateStore> S getStateStore(final String name) {
+        return (S) storeMap.get(name);
     }
 
     @Override
@@ -283,20 +315,30 @@ public class InternalMockProcessorContext
     public void commit() {}
 
     @Override
+    public <K extends KOut, V extends VOut> void forward(final Record<K, V> record) {
+        forward(record, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <K extends KOut, V extends VOut> void forward(final Record<K, V> record, final String childName) {
+        if (recordContext != null && record.timestamp() != recordContext.timestamp()) {
+            setTime(record.timestamp());
+        }
+        final ProcessorNode<?, ?, ?, ?> thisNode = currentNode;
+        try {
+            for (final ProcessorNode<?, ?, ?, ?> childNode : thisNode.children()) {
+                currentNode = childNode;
+                ((ProcessorNode<K, V, ?, ?>) childNode).process(record);
+            }
+        } finally {
+            currentNode = thisNode;
+        }
+    }
+
+    @Override
     public void forward(final Object key, final Object value) {
         forward(key, value, To.all());
-    }
-
-    @Override
-    @Deprecated
-    public void forward(final Object key, final Object value, final int childIndex) {
-        forward(key, value, To.child((currentNode().children()).get(childIndex).name()));
-    }
-
-    @Override
-    @Deprecated
-    public void forward(final Object key, final Object value, final String childName) {
-        forward(key, value, To.child(childName));
     }
 
     @SuppressWarnings("unchecked")
@@ -311,7 +353,8 @@ public class InternalMockProcessorContext
             for (final ProcessorNode<?, ?, ?, ?> childNode : thisNode.children()) {
                 if (toInternal.child() == null || toInternal.child().equals(childNode.name())) {
                     currentNode = childNode;
-                    ((ProcessorNode<Object, Object, ?, ?>) childNode).process(key, value);
+                    final Record<Object, Object> record = new Record<>(key, value, toInternal.timestamp(), headers());
+                    ((ProcessorNode<Object, Object, ?, ?>) childNode).process(record);
                     toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple
                                            // Processors and toInternal might have been modified
                 }
@@ -342,6 +385,16 @@ public class InternalMockProcessorContext
             return timestamp;
         }
         return recordContext.timestamp();
+    }
+
+    @Override
+    public long currentSystemTimeMs() {
+        return time.milliseconds();
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        throw new UnsupportedOperationException("this method is not supported in InternalMockProcessorContext");
     }
 
     @Override
@@ -385,16 +438,31 @@ public class InternalMockProcessorContext
     public void logChange(final String storeName,
                           final Bytes key,
                           final byte[] value,
-                          final long timestamp) {
+                          final long timestamp,
+                          final Position position) {
+
+        Headers headers = new RecordHeaders();
+        if (!consistencyEnabled) {
+            headers = null;
+        } else {
+            // Add the vector clock to the header part of every record
+            headers.add(ChangelogRecordDeserializationHelper.CHANGELOG_VERSION_HEADER_RECORD_CONSISTENCY);
+            headers.add(new RecordHeader(
+                    ChangelogRecordDeserializationHelper.CHANGELOG_POSITION_HEADER_KEY,
+                    PositionSerde.serialize(position).array()));
+        }
+
         recordCollector().send(
             storeName + "-changelog",
             key,
             value,
-            null,
-            taskId().partition,
+            headers,
+            taskId().partition(),
             timestamp,
             BYTES_KEY_SERIALIZER,
-            BYTEARRAY_VALUE_SERIALIZER);
+            BYTEARRAY_VALUE_SERIALIZER,
+            null,
+            null);
     }
 
     @Override
@@ -422,6 +490,11 @@ public class InternalMockProcessorContext
         restoreCallback.restoreBatch(records);
     }
 
+    public void restoreWithHeaders(final String storeName, final List<ConsumerRecord<byte[], byte[]>> changeLog) {
+        final RecordBatchingStateRestoreCallback restoreCallback = adapt(restoreFuncs.get(storeName));
+        restoreCallback.restoreBatch(changeLog);
+    }
+
     public void addChangelogForStore(final String storeName, final String changelogTopic) {
         storeToChangelogTopic.put(storeName, changelogTopic);
     }
@@ -429,5 +502,19 @@ public class InternalMockProcessorContext
     @Override
     public String changelogFor(final String storeName) {
         return storeToChangelogTopic.get(storeName);
+    }
+
+    @Override
+    public <K extends KOut, V extends VOut> void forward(final FixedKeyRecord<K, V> record) {
+        forward(new Record<>(record.key(), record.value(), record.timestamp(), record.headers()));
+    }
+
+    @Override
+    public <K extends KOut, V extends VOut> void forward(final FixedKeyRecord<K, V> record,
+                                                         final String childName) {
+        forward(
+            new Record<>(record.key(), record.value(), record.timestamp(), record.headers()),
+            childName
+        );
     }
 }

@@ -24,7 +24,8 @@ import kafka.controller.ReplicaAssignment
 import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
 import kafka.utils._
-import org.apache.kafka.common.TopicPartition
+import kafka.utils.Implicits._
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.zookeeper.KeeperException.NodeExistsException
@@ -45,23 +46,26 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * @param partitions  Number of partitions to be set
    * @param replicationFactor Replication factor
    * @param topicConfig  topic configs
-   * @param rackAwareMode
+   * @param rackAwareMode rack aware mode for replica assignment
+   * @param usesTopicId Boolean indicating whether the topic ID will be created
    */
   def createTopic(topic: String,
                   partitions: Int,
                   replicationFactor: Int,
                   topicConfig: Properties = new Properties,
-                  rackAwareMode: RackAwareMode = RackAwareMode.Enforced): Unit = {
+                  rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
+                  usesTopicId: Boolean = false): Unit = {
     val brokerMetadatas = getBrokerMetadatas(rackAwareMode)
     val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitions, replicationFactor)
-    createTopicWithAssignment(topic, topicConfig, replicaAssignment)
+    createTopicWithAssignment(topic, topicConfig, replicaAssignment, usesTopicId = usesTopicId)
   }
 
   /**
    * Gets broker metadata list
-   * @param rackAwareMode
-   * @param brokerList
-   * @return
+   *
+   * @param rackAwareMode rack aware mode for replica assignment
+   * @param brokerList The brokers to gather metadata about.
+   * @return The metadata for each broker that was found.
    */
   def getBrokerMetadatas(rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
                          brokerList: Option[Seq[Int]] = None): Seq[BrokerMetadata] = {
@@ -89,11 +93,13 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * @param config The config of the topic
    * @param partitionReplicaAssignment The assignments of the topic
    * @param validate Boolean indicating if parameters must be validated or not (true by default)
+   * @param usesTopicId Boolean indicating whether the topic ID will be created
    */
   def createTopicWithAssignment(topic: String,
                                 config: Properties,
                                 partitionReplicaAssignment: Map[Int, Seq[Int]],
-                                validate: Boolean = true): Unit = {
+                                validate: Boolean = true,
+                                usesTopicId: Boolean = false): Unit = {
     if (validate)
       validateTopicCreate(topic, partitionReplicaAssignment, config)
 
@@ -105,7 +111,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
 
     // create the partition assignment
     writeTopicPartitionAssignment(topic, partitionReplicaAssignment.map { case (k, v) => k -> ReplicaAssignment(v) },
-      isUpdate = false)
+      isUpdate = false, usesTopicId)
   }
 
   /**
@@ -120,7 +126,9 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
                           partitionReplicaAssignment: Map[Int, Seq[Int]],
                           config: Properties): Unit = {
     Topic.validate(topic)
-
+    if (zkClient.isTopicMarkedForDeletion(topic)) {
+      throw new TopicExistsException(s"Topic '$topic' is marked for deletion.")
+    }
     if (zkClient.topicExists(topic))
       throw new TopicExistsException(s"Topic '$topic' already exists.")
     else if (Topic.hasCollisionChars(topic)) {
@@ -152,14 +160,17 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     LogConfig.validate(config)
   }
 
-  private def writeTopicPartitionAssignment(topic: String, replicaAssignment: Map[Int, ReplicaAssignment], isUpdate: Boolean): Unit = {
+  private def writeTopicPartitionAssignment(topic: String, replicaAssignment: Map[Int, ReplicaAssignment],
+                                            isUpdate: Boolean, usesTopicId: Boolean = false): Unit = {
     try {
       val assignment = replicaAssignment.map { case (partitionId, replicas) => (new TopicPartition(topic,partitionId), replicas) }.toMap
 
       if (!isUpdate) {
-        zkClient.createTopicAssignment(topic, assignment.map { case (k, v) => k -> v.replicas })
+        val topicIdOpt = if (usesTopicId) Some(Uuid.randomUuid()) else None
+        zkClient.createTopicAssignment(topic, topicIdOpt, assignment.map { case (k, v) => k -> v.replicas })
       } else {
-        zkClient.setTopicAssignment(topic, assignment)
+        val topicIds = zkClient.getTopicIdsForTopics(Set(topic))
+        zkClient.setTopicAssignment(topic, topicIds.get(topic), assignment)
       }
       debug("Updated path %s with %s for replica assignment".format(TopicZNode.path(topic), assignment))
     } catch {
@@ -170,7 +181,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
 
   /**
    * Creates a delete path for a given topic
-   * @param topic
+   * @param topic Topic name to delete
    */
   def deleteTopic(topic: String): Unit = {
     if (zkClient.topicExists(topic)) {
@@ -293,7 +304,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
                                         expectedReplicationFactor: Int,
                                         availableBrokerIds: Set[Int]): Unit = {
 
-    replicaAssignment.foreach { case (partitionId, replicas) =>
+    replicaAssignment.forKeyValue { (partitionId, replicas) =>
       if (replicas.isEmpty)
         throw new InvalidReplicaAssignmentException(
           s"Cannot have replication factor of 0 for partition id $partitionId.")
@@ -321,6 +332,11 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     }
   }
 
+  /**
+   * Parse broker from entity name to integer id
+   * @param broker The broker entity name to parse
+   * @return Integer brokerId after successfully parsed or default None
+   */
   def parseBroker(broker: String): Option[Int] = {
     broker match {
       case ConfigEntityName.Default => None
@@ -335,9 +351,9 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
 
   /**
    * Change the configs for a given entityType and entityName
-   * @param entityType
-   * @param entityName
-   * @param configs
+   * @param entityType The entityType of the configs that will be changed
+   * @param entityName The entityName of the entityType
+   * @param configs The config of the entityName
    */
   def changeConfigs(entityType: String, entityName: String, configs: Properties): Unit = {
 
@@ -346,7 +362,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       case ConfigType.Client => changeClientIdConfig(entityName, configs)
       case ConfigType.User => changeUserOrUserClientIdConfig(entityName, configs)
       case ConfigType.Broker => changeBrokerConfig(parseBroker(entityName), configs)
-      case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.Topic}, ${ConfigType.Client}, ${ConfigType.Broker}")
+      case ConfigType.Ip => changeIpConfig(entityName, configs)
+      case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.all}")
     }
   }
 
@@ -384,9 +401,31 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   }
 
   /**
+   * Validates the IP configs.
+   * @param ip ip for which configs are being validated
+   * @param configs properties to validate for the IP
+   */
+  def validateIpConfig(ip: String, configs: Properties): Unit = {
+    if (!DynamicConfig.Ip.isValidIpEntity(ip))
+      throw new AdminOperationException(s"$ip is not a valid IP or resolvable host.")
+    DynamicConfig.Ip.validate(configs)
+  }
+
+  /**
+   * Update the config for an IP. These overrides will be persisted between sessions, and will override any default
+   * IP properties.
+   * @param ip ip for which configs are being updated
+   * @param configs properties to update for the IP
+   */
+  def changeIpConfig(ip: String, configs: Properties): Unit = {
+    validateIpConfig(ip, configs)
+    changeEntityConfig(ConfigType.Ip, ip, configs)
+  }
+
+  /**
    * validates the topic configs
-   * @param topic
-   * @param configs
+   * @param topic topic for which configs are being validated
+   * @param configs properties to validate for the topic
    */
   def validateTopicConfig(topic: String, configs: Properties): Unit = {
     Topic.validate(topic)
@@ -453,11 +492,11 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   }
 
   /**
-   * Read the entity (topic, broker, client, user or <user, client>) config (if any) from zk
-   * sanitizedEntityName is <topic>, <broker>, <client-id>, <user> or <user>/clients/<client-id>.
-   * @param rootEntityType
-   * @param sanitizedEntityName
-   * @return
+   * Read the entity (topic, broker, client, user, <user, client> or <ip>) config (if any) from zk
+   * sanitizedEntityName is <topic>, <broker>, <client-id>, <user>, <user>/clients/<client-id> or <ip>.
+   * @param rootEntityType entityType for which configs are being fetched
+   * @param sanitizedEntityName entityName of the entityType
+   * @return The successfully gathered configs
    */
   def fetchEntityConfig(rootEntityType: String, sanitizedEntityName: String): Properties = {
     zkClient.getEntityConfigs(rootEntityType, sanitizedEntityName)
@@ -465,24 +504,24 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
 
   /**
    * Gets all topic configs
-   * @return
+   * @return The successfully gathered configs of all topics
    */
   def getAllTopicConfigs(): Map[String, Properties] =
     zkClient.getAllTopicsInCluster().map(topic => (topic, fetchEntityConfig(ConfigType.Topic, topic))).toMap
 
   /**
    * Gets all the entity configs for a given entityType
-   * @param entityType
-   * @return
+   * @param entityType entityType for which configs are being fetched
+   * @return The successfully gathered configs of the entityType
    */
   def fetchAllEntityConfigs(entityType: String): Map[String, Properties] =
     zkClient.getAllEntitiesWithConfig(entityType).map(entity => (entity, fetchEntityConfig(entityType, entity))).toMap
 
   /**
    * Gets all the entity configs for a given childEntityType
-   * @param rootEntityType
-   * @param childEntityType
-   * @return
+   * @param rootEntityType rootEntityType for which configs are being fetched
+   * @param childEntityType childEntityType of the rootEntityType
+   * @return The successfully gathered configs of the childEntityType
    */
   def fetchAllChildEntityConfigs(rootEntityType: String, childEntityType: String): Map[String, Properties] = {
     def entityPaths(rootPath: Option[String]): Seq[String] = {

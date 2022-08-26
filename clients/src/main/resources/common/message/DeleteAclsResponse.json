@@ -20,7 +20,8 @@
   // Version 1 adds the resource pattern type.
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
   // Version 2 enables flexible versions.
-  "validVersions": "0-2",
+  // Version 3 adds the user resource type.
+  "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

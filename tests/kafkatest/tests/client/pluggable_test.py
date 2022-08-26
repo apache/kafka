@@ -13,8 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark import matrix
+from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 
+from kafkatest.services.kafka import quorum
 from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
 
 class PluggableConsumerTest(VerifiableConsumerTest):
@@ -29,13 +32,15 @@ class PluggableConsumerTest(VerifiableConsumerTest):
                                 self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 1 },
         })
 
-    def test_start_stop(self):
+    @cluster(num_nodes=4)
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_start_stop(self, metadata_quorum=quorum.zk):
         """
         Test that a pluggable VerifiableConsumer module load works
         """
         consumer = self.setup_consumer(self.TOPIC)
 
-        for num_started, node in enumerate(consumer.nodes, 1):
+        for _, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
 
         self.logger.debug("Waiting for %d nodes to start" % len(consumer.nodes))

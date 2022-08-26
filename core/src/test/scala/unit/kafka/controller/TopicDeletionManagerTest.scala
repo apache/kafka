@@ -22,8 +22,8 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import org.mockito.Mockito._
 
 class TopicDeletionManagerTest {
@@ -43,7 +43,11 @@ class TopicDeletionManagerTest {
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
     replicaStateMachine.startup()
 
-    val partitionStateMachine = new MockPartitionStateMachine(controllerContext, uncleanLeaderElectionEnabled = false)
+    val partitionStateMachine = new MockPartitionStateMachine(
+      controllerContext,
+      uncleanLeaderElectionEnabled = false,
+      isLeaderRecoverySupported = true
+    )
     partitionStateMachine.startup()
 
     val deletionManager = new TopicDeletionManager(config, controllerContext, replicaStateMachine,
@@ -66,7 +70,11 @@ class TopicDeletionManagerTest {
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
     replicaStateMachine.startup()
 
-    val partitionStateMachine = new MockPartitionStateMachine(controllerContext, uncleanLeaderElectionEnabled = false)
+    val partitionStateMachine = new MockPartitionStateMachine(
+      controllerContext,
+      uncleanLeaderElectionEnabled = false,
+      isLeaderRecoverySupported = true
+    )
     partitionStateMachine.startup()
 
     val deletionManager = new TopicDeletionManager(config, controllerContext, replicaStateMachine,
@@ -126,7 +134,11 @@ class TopicDeletionManagerTest {
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
     replicaStateMachine.startup()
 
-    val partitionStateMachine = new MockPartitionStateMachine(controllerContext, uncleanLeaderElectionEnabled = false)
+    val partitionStateMachine = new MockPartitionStateMachine(
+      controllerContext,
+      uncleanLeaderElectionEnabled = false,
+      isLeaderRecoverySupported = true
+    )
     partitionStateMachine.startup()
 
     val deletionManager = new TopicDeletionManager(config, controllerContext, replicaStateMachine,
@@ -194,7 +206,11 @@ class TopicDeletionManagerTest {
     val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
     replicaStateMachine.startup()
 
-    val partitionStateMachine = new MockPartitionStateMachine(controllerContext, uncleanLeaderElectionEnabled = false)
+    val partitionStateMachine = new MockPartitionStateMachine(
+      controllerContext,
+      uncleanLeaderElectionEnabled = false,
+      isLeaderRecoverySupported = true
+    )
     partitionStateMachine.startup()
 
     val deletionManager = new TopicDeletionManager(config, controllerContext, replicaStateMachine,

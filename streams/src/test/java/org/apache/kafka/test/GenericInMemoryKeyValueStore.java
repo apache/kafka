@@ -58,8 +58,9 @@ public class GenericInMemoryKeyValueStore<K extends Comparable, V>
         return this.name;
     }
 
+    @SuppressWarnings("deprecation")
+    @Deprecated
     @Override
-    @SuppressWarnings("unchecked")
     /* This is a "dummy" store used for testing;
        it does not support restoring from changelog since we allow it to be serde-ignorant */
     public void init(final ProcessorContext context, final StateStore root) {

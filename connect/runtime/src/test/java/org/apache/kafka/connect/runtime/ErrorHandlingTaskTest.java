@@ -33,12 +33,13 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.integration.MonitorableSourceConnector;
 import org.apache.kafka.connect.json.JsonConverter;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
+import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
@@ -47,6 +48,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
@@ -56,7 +58,9 @@ import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.ParameterizedTest;
 import org.apache.kafka.connect.util.TopicAdmin;
+import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IExpectationSetters;
@@ -69,14 +73,19 @@ import org.powermock.api.easymock.annotation.Mock;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+import org.powermock.modules.junit4.PowerMockRunnerDelegate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Executor;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
@@ -86,10 +95,16 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_C
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_GROUPS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
 import static org.junit.Assert.assertEquals;
 
 @RunWith(PowerMockRunner.class)
+@PowerMockRunnerDelegate(ParameterizedTest.class)
 @PrepareForTest({WorkerSinkTask.class, WorkerSourceTask.class})
 @PowerMockIgnore("javax.management.*")
 public class ErrorHandlingTaskTest {
@@ -147,6 +162,8 @@ public class ErrorHandlingTaskTest {
     OffsetStorageReaderImpl offsetReader;
     @Mock
     OffsetStorageWriter offsetWriter;
+    @Mock
+    private ConnectorOffsetBackingStore offsetStore;
 
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
     @SuppressWarnings("unused")
@@ -155,10 +172,21 @@ public class ErrorHandlingTaskTest {
     @SuppressWarnings("unused")
     @Mock private StatusBackingStore statusBackingStore;
 
+    @Mock
+    private WorkerErrantRecordReporter workerErrantRecordReporter;
+
     private ErrorHandlingMetrics errorHandlingMetrics;
 
-    // when this test becomes parameterized, this variable will be a test parameter
-    public boolean enableTopicCreation = false;
+    private boolean enableTopicCreation;
+
+    @ParameterizedTest.Parameters
+    public static Collection<Boolean> parameters() {
+        return Arrays.asList(false, true);
+    }
+
+    public ErrorHandlingTaskTest(boolean enableTopicCreation) {
+        this.enableTopicCreation = enableTopicCreation;
+    }
 
     @Before
     public void setup() {
@@ -167,10 +195,6 @@ public class ErrorHandlingTaskTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter.schemas.enable", "false");
-        workerProps.put("internal.value.converter.schemas.enable", "false");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(enableTopicCreation));
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
@@ -188,6 +212,10 @@ public class ErrorHandlingTaskTest {
         props.put(TOPIC_CONFIG, topic);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(TOPIC_CREATION_GROUPS_CONFIG, String.join(",", "foo", "bar"));
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
+        props.put(SourceConnectorConfig.TOPIC_CREATION_PREFIX + "foo" + "." + INCLUDE_REGEX_CONFIG, topic);
         return props;
     }
 
@@ -217,6 +245,9 @@ public class ErrorHandlingTaskTest {
         consumer.close();
         EasyMock.expectLastCall();
 
+        headerConverter.close();
+        EasyMock.expectLastCall();
+
         PowerMock.replayAll();
 
         workerSinkTask.initialize(TASK_CONFIG);
@@ -235,9 +266,6 @@ public class ErrorHandlingTaskTest {
         retryWithToleranceOperator.reporters(singletonList(reporter));
 
         createSourceTask(initialState, retryWithToleranceOperator);
-
-        sourceTask.stop();
-        PowerMock.expectLastCall();
 
         expectClose();
 
@@ -262,9 +290,6 @@ public class ErrorHandlingTaskTest {
         retryWithToleranceOperator.reporters(Arrays.asList(reporterA, reporterB));
 
         createSourceTask(initialState, retryWithToleranceOperator);
-
-        sourceTask.stop();
-        PowerMock.expectLastCall();
 
         expectClose();
 
@@ -360,11 +385,10 @@ public class ErrorHandlingTaskTest {
 
         EasyMock.expect(workerSourceTask.commitOffsets()).andReturn(true);
 
-        offsetWriter.offset(EasyMock.anyObject(), EasyMock.anyObject());
-        EasyMock.expectLastCall().times(2);
+        offsetStore.start();
+        EasyMock.expectLastCall();
         sourceTask.initialize(EasyMock.anyObject());
         EasyMock.expectLastCall();
-
         sourceTask.start(EasyMock.anyObject());
         EasyMock.expectLastCall();
 
@@ -376,6 +400,7 @@ public class ErrorHandlingTaskTest {
         PowerMock.replayAll();
 
         workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.initializeAndStart();
         workerSourceTask.execute();
 
         // two records were consumed from Kafka
@@ -425,11 +450,10 @@ public class ErrorHandlingTaskTest {
 
         EasyMock.expect(workerSourceTask.commitOffsets()).andReturn(true);
 
-        offsetWriter.offset(EasyMock.anyObject(), EasyMock.anyObject());
-        EasyMock.expectLastCall().times(2);
+        offsetStore.start();
+        EasyMock.expectLastCall();
         sourceTask.initialize(EasyMock.anyObject());
         EasyMock.expectLastCall();
-
         sourceTask.start(EasyMock.anyObject());
         EasyMock.expectLastCall();
 
@@ -441,6 +465,7 @@ public class ErrorHandlingTaskTest {
         PowerMock.replayAll();
 
         workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.initializeAndStart();
         workerSourceTask.execute();
 
         // two records were consumed from Kafka
@@ -475,7 +500,7 @@ public class ErrorHandlingTaskTest {
         assertEquals(expected, measured, 0.001d);
     }
 
-    private void expectInitializeTask() throws Exception {
+    private void expectInitializeTask() {
         consumer.subscribe(EasyMock.eq(singletonList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
 
@@ -514,14 +539,34 @@ public class ErrorHandlingTaskTest {
 
         admin.close(EasyMock.anyObject(Duration.class));
         EasyMock.expectLastCall();
+
+        offsetReader.close();
+        EasyMock.expectLastCall();
+
+        offsetStore.stop();
+        EasyMock.expectLastCall();
+
+        try {
+            headerConverter.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        EasyMock.expectLastCall();
     }
 
     private void expectTopicCreation(String topic) {
         if (workerConfig.topicCreationEnable()) {
             EasyMock.expect(admin.describeTopics(topic)).andReturn(Collections.emptyMap());
-
             Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
-            EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture))).andReturn(true);
+
+            if (enableTopicCreation) {
+                Set<String> created = Collections.singleton(topic);
+                Set<String> existing = Collections.emptySet();
+                TopicAdmin.TopicCreationResponse response = new TopicAdmin.TopicCreationResponse(created, existing);
+                EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture))).andReturn(response);
+            } else {
+                EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture))).andReturn(true);
+            }
         }
     }
 
@@ -538,7 +583,7 @@ public class ErrorHandlingTaskTest {
             taskId, sinkTask, statusListener, initialState, workerConfig,
             ClusterConfigState.EMPTY, metrics, converter, converter,
             headerConverter, sinkTransforms, consumer, pluginLoader, time,
-                retryWithToleranceOperator, null, statusBackingStore);
+            retryWithToleranceOperator, workerErrantRecordReporter, statusBackingStore);
     }
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
@@ -564,12 +609,12 @@ public class ErrorHandlingTaskTest {
         TransformationChain<SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SourceRecord>()), retryWithToleranceOperator);
 
         workerSourceTask = PowerMock.createPartialMock(
-                WorkerSourceTask.class, new String[]{"commitOffsets", "isStopping"},
-                taskId, sourceTask, statusListener, initialState, converter, converter, headerConverter, sourceTransforms,
-                producer, admin, null,
-                offsetReader, offsetWriter, workerConfig,
-                ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator,
-                statusBackingStore);
+            WorkerSourceTask.class, new String[]{"commitOffsets", "isStopping"},
+            taskId, sourceTask, statusListener, initialState, converter, converter, headerConverter, sourceTransforms,
+            producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
+            offsetReader, offsetWriter, offsetStore, workerConfig,
+            ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator,
+            statusBackingStore, (Executor) Runnable::run);
     }
 
     private ConsumerRecords<byte[], byte[]> records(ConsumerRecord<byte[], byte[]> record) {

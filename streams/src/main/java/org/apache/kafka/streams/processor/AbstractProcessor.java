@@ -22,13 +22,15 @@ package org.apache.kafka.streams.processor;
  *
  * @param <K> the type of keys
  * @param <V> the type of values
+ * @deprecated Since 3.0. Use {@link org.apache.kafka.streams.processor.api.Processor} or
+ *             {@link org.apache.kafka.streams.processor.api.ContextualProcessor} instead.
  */
+@Deprecated
 public abstract class AbstractProcessor<K, V> implements Processor<K, V> {
 
-    private ProcessorContext context;
+    protected ProcessorContext context;
 
-    protected AbstractProcessor() {
-    }
+    protected AbstractProcessor() {}
 
     @Override
     public void init(final ProcessorContext context) {

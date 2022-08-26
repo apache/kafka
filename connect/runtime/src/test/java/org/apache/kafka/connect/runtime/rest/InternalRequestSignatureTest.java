@@ -34,6 +34,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -71,14 +72,16 @@ public class InternalRequestSignatureTest {
         assertNull(InternalRequestSignature.fromHeaders(REQUEST_BODY, internalRequestHeaders(ENCODED_SIGNATURE, null)));
     }
 
-    @Test(expected = BadRequestException.class)
+    @Test
     public void fromHeadersShouldThrowExceptionOnInvalidSignatureAlgorithm() {
-        InternalRequestSignature.fromHeaders(REQUEST_BODY, internalRequestHeaders(ENCODED_SIGNATURE, "doesn'texist"));
+        assertThrows(BadRequestException.class, () -> InternalRequestSignature.fromHeaders(REQUEST_BODY,
+            internalRequestHeaders(ENCODED_SIGNATURE, "doesn'texist")));
     }
 
-    @Test(expected = BadRequestException.class)
+    @Test
     public void fromHeadersShouldThrowExceptionOnInvalidBase64Signature() {
-        InternalRequestSignature.fromHeaders(REQUEST_BODY, internalRequestHeaders("not valid base 64", SIGNATURE_ALGORITHM));
+        assertThrows(BadRequestException.class, () -> InternalRequestSignature.fromHeaders(REQUEST_BODY,
+            internalRequestHeaders("not valid base 64", SIGNATURE_ALGORITHM)));
     }
 
     @Test
@@ -89,10 +92,10 @@ public class InternalRequestSignatureTest {
         assertNotNull(signature.keyAlgorithm());
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void addToRequestShouldThrowExceptionOnInvalidSignatureAlgorithm() {
         Request request = mock(Request.class);
-        InternalRequestSignature.addToRequest(KEY, REQUEST_BODY, "doesn'texist", request);
+        assertThrows(ConnectException.class, () -> InternalRequestSignature.addToRequest(KEY, REQUEST_BODY, "doesn'texist", request));
     }
 
     @Test

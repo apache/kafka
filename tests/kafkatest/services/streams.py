@@ -15,15 +15,14 @@
 
 import os.path
 import signal
-import streams_property
-import consumer_property
-from ducktape.cluster.remoteaccount import RemoteCommandError
+from . import streams_property
+from . import consumer_property
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import KafkaConfig
 from kafkatest.services.monitor.jmx import JmxMixin
-from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1
+from kafkatest.version import KafkaVersion, LATEST_0_10_0, LATEST_0_10_1
 
 STATE_DIR = "state.dir"
 
@@ -231,7 +230,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
         try:
             pids = [pid for pid in node.account.ssh_capture("cat " + self.PID_FILE, callback=str)]
             return [int(pid) for pid in pids]
-        except Exception, exception:
+        except Exception as exception:
             self.logger.debug(str(exception))
             return []
 
@@ -348,7 +347,10 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
                       "buffered.records.per.partition": 100,
                       "commit.interval.ms": 1000,
                       "auto.offset.reset": "earliest",
-                      "acks": "all"}
+                      "acks": "all",
+                      "acceptable.recovery.lag": "9223372036854775807", # enable a one-shot assignment
+                      "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
+                      }
 
         if self.UPGRADE_FROM is not None:
             properties['upgrade.from'] = self.UPGRADE_FROM
@@ -392,7 +394,10 @@ class StreamsEosTestBaseService(StreamsTestBaseService):
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
-                      streams_property.PROCESSING_GUARANTEE: self.PROCESSING_GUARANTEE}
+                      streams_property.PROCESSING_GUARANTEE: self.PROCESSING_GUARANTEE,
+                      "acceptable.recovery.lag": "9223372036854775807", # enable a one-shot assignment
+                      "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
+                      }
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
@@ -466,6 +471,18 @@ class StreamsBrokerCompatibilityService(StreamsTestBaseService):
                                                                 kafka,
                                                                 "org.apache.kafka.streams.tests.BrokerCompatibilityTest",
                                                                 processingMode)
+
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      # the old broker (< 2.4) does not support configuration replication.factor=-1
+                      "replication.factor": 1,
+                      "acceptable.recovery.lag": "9223372036854775807", # enable a one-shot assignment
+                      "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
+                      }
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
 
 
 class StreamsBrokerDownResilienceService(StreamsTestBaseService):
@@ -555,16 +572,16 @@ class StreamsOptimizedUpgradeTestService(StreamsTestBaseService):
 
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
-                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()}
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      'topology.optimization': self.OPTIMIZED_CONFIG,
+                      'input.topic': self.INPUT_TOPIC,
+                      'aggregation.topic': self.AGGREGATION_TOPIC,
+                      'reduce.topic': self.REDUCE_TOPIC,
+                      'join.topic': self.JOIN_TOPIC,
+                      "acceptable.recovery.lag": "9223372036854775807", # enable a one-shot assignment
+                      "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
+                      }
 
-        properties['topology.optimization'] = self.OPTIMIZED_CONFIG
-        properties['input.topic'] = self.INPUT_TOPIC
-        properties['aggregation.topic'] = self.AGGREGATION_TOPIC
-        properties['reduce.topic'] = self.REDUCE_TOPIC
-        properties['join.topic'] = self.JOIN_TOPIC
-
-        # Long.MAX_VALUE lets us do the assignment without a warmup
-        properties['acceptable.recovery.lag'] = "9223372036854775807"
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
@@ -599,8 +616,15 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
 
         if self.UPGRADE_FROM is not None:
             properties['upgrade.from'] = self.UPGRADE_FROM
+        if (self.UPGRADE_FROM is not None and KafkaVersion(self.UPGRADE_FROM).supports_fk_joins()) or \
+            (self.KAFKA_STREAMS_VERSION is not None and KafkaVersion(self.KAFKA_STREAMS_VERSION).supports_fk_joins()):
+            properties['test.run_fk_join'] = "true"
         if self.UPGRADE_TO == "future_version":
             properties['test.future.metadata'] = "any_value"
+
+        # Long.MAX_VALUE lets us do the assignment without a warmup
+        properties['acceptable.recovery.lag'] = "9223372036854775807"
+        properties["session.timeout.ms"] = "10000" # set back to 10s for tests. See KIP-735
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
@@ -642,11 +666,14 @@ class StreamsNamedRepartitionTopicService(StreamsTestBaseService):
 
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
-                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()}
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      'input.topic': self.INPUT_TOPIC,
+                      'aggregation.topic': self.AGGREGATION_TOPIC,
+                      'add.operations': self.ADD_ADDITIONAL_OPS,
+                      "acceptable.recovery.lag": "9223372036854775807", # enable a one-shot assignment
+                      "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
+                      }
 
-        properties['input.topic'] = self.INPUT_TOPIC
-        properties['aggregation.topic'] = self.AGGREGATION_TOPIC
-        properties['add.operations'] = self.ADD_ADDITIONAL_OPS
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
@@ -666,11 +693,11 @@ class StaticMemberTestService(StreamsTestBaseService):
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       streams_property.NUM_THREADS: self.NUM_THREADS,
                       consumer_property.GROUP_INSTANCE_ID: self.GROUP_INSTANCE_ID,
-                      consumer_property.SESSION_TIMEOUT_MS: 60000}
+                      consumer_property.SESSION_TIMEOUT_MS: 60000, # set longer session timeout for static member test
+                      'input.topic': self.INPUT_TOPIC,
+                      "acceptable.recovery.lag": "9223372036854775807" # enable a one-shot assignment
+                      }
 
-        properties['input.topic'] = self.INPUT_TOPIC
-        # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
-        properties['internal.task.assignor.class'] = "org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor"
 
         cfg = KafkaConfig(**properties)
         return cfg.render()
@@ -733,7 +760,14 @@ class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
 
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
-                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()}
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      'source.topic': self.SOURCE_TOPIC,
+                      'sink.topic': self.SINK_TOPIC,
+                      'task.delimiter': self.TASK_DELIMITER,
+                      'report.interval': self.REPORT_INTERVAL,
+                      "acceptable.recovery.lag": "9223372036854775807", # enable a one-shot assignment
+                      "session.timeout.ms": "10000" # set back to 10s for tests. See KIP-735
+                      }
 
         if self.UPGRADE_FROM is not None:
             properties['upgrade.from'] = self.UPGRADE_FROM
@@ -746,10 +780,6 @@ class CooperativeRebalanceUpgradeService(StreamsTestBaseService):
         if self.upgrade_phase is not None:
             properties['upgrade.phase'] = self.upgrade_phase
 
-        properties['source.topic'] = self.SOURCE_TOPIC
-        properties['sink.topic'] = self.SINK_TOPIC
-        properties['task.delimiter'] = self.TASK_DELIMITER
-        properties['report.interval'] = self.REPORT_INTERVAL
 
         cfg = KafkaConfig(**properties)
         return cfg.render()

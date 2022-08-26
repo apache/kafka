@@ -28,13 +28,13 @@ import org.apache.kafka.common.security.scram.internals.ScramMessages.ClientFirs
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFinalMessage;
 import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFirstMessage;
 
-import org.junit.Before;
-import org.junit.Test;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ScramMessagesTest {
 
@@ -63,7 +63,7 @@ public class ScramMessagesTest {
 
     private ScramFormatter formatter;
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
         formatter  = new ScramFormatter(ScramMechanism.SCRAM_SHA_256);
     }
@@ -85,13 +85,13 @@ public class ScramMessagesTest {
         str = String.format("n,,n=test=2Cuser,r=%s", nonce);
         m = createScramMessage(ClientFirstMessage.class, str);
         checkClientFirstMessage(m, "test=2Cuser", nonce, "");
-        assertEquals("test,user", formatter.username(m.saslName()));
+        assertEquals("test,user", ScramFormatter.username(m.saslName()));
 
         // Username containing equals, encoded as =3D
         str = String.format("n,,n=test=3Duser,r=%s", nonce);
         m = createScramMessage(ClientFirstMessage.class, str);
         checkClientFirstMessage(m, "test=3Duser", nonce, "");
-        assertEquals("test=user", formatter.username(m.saslName()));
+        assertEquals("test=user", ScramFormatter.username(m.saslName()));
 
         // Optional authorization id specified
         str = String.format("n,a=testauthzid,n=testuser,r=%s", nonce);
@@ -112,7 +112,7 @@ public class ScramMessagesTest {
         //optional tokenauth specified as extensions
         str = String.format("n,,n=testuser,r=%s,%s", nonce, "tokenauth=true");
         m = createScramMessage(ClientFirstMessage.class, str);
-        assertTrue("Token authentication not set from extensions", m.extensions().tokenAuthenticated());
+        assertTrue(m.extensions().tokenAuthenticated(), "Token authentication not set from extensions");
     }
 
     @Test
@@ -202,7 +202,7 @@ public class ScramMessagesTest {
         String proof = randomBytesAsString();
 
         ClientFinalMessage m = new ClientFinalMessage(toBytes(channelBinding), nonce);
-        assertNull("Invalid proof", m.proof());
+        assertNull(m.proof(), "Invalid proof");
         m.proof(toBytes(proof));
         checkClientFinalMessage(m, channelBinding, nonce, proof);
 
@@ -322,7 +322,7 @@ public class ScramMessagesTest {
     private void checkServerFinalMessage(ServerFinalMessage message, String error, String serverSignature) {
         assertEquals(error, message.error());
         if (serverSignature == null)
-            assertNull("Unexpected server signature", message.serverSignature());
+            assertNull(message.serverSignature(), "Unexpected server signature");
         else
             assertArrayEquals(Base64.getDecoder().decode(serverSignature), message.serverSignature());
     }

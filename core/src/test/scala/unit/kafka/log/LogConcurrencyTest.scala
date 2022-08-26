@@ -24,8 +24,8 @@ import kafka.server.{BrokerTopicStats, FetchHighWatermark, LogDirFailureChannel}
 import kafka.utils.{KafkaScheduler, TestUtils}
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
@@ -37,12 +37,12 @@ class LogConcurrencyTest {
   private val tmpDir = TestUtils.tempDir()
   private val logDir = TestUtils.randomPartitionLogDir(tmpDir)
 
-  @Before
+  @BeforeEach
   def setup(): Unit = {
     scheduler.startup()
   }
 
-  @After
+  @AfterEach
   def shutdown(): Unit = {
     scheduler.shutdown()
     Utils.delete(tmpDir)
@@ -61,7 +61,7 @@ class LogConcurrencyTest {
     testUncommittedDataNotConsumed(createLog(logConfig))
   }
 
-  def testUncommittedDataNotConsumed(log: Log): Unit = {
+  def testUncommittedDataNotConsumed(log: UnifiedLog): Unit = {
     val executor = Executors.newFixedThreadPool(2)
     try {
       val maxOffset = 5000
@@ -82,7 +82,7 @@ class LogConcurrencyTest {
    * Simple consumption task which reads the log in ascending order and collects
    * consumed batches for validation
    */
-  private class ConsumerTask(log: Log, lastOffset: Int) extends Callable[Unit] {
+  private class ConsumerTask(log: UnifiedLog, lastOffset: Int) extends Callable[Unit] {
     val consumedBatches = ListBuffer.empty[FetchedBatch]
 
     override def call(): Unit = {
@@ -105,7 +105,7 @@ class LogConcurrencyTest {
   /**
    * This class simulates basic leader/follower behavior.
    */
-  private class LogAppendTask(log: Log, lastOffset: Long) extends Callable[Unit] {
+  private class LogAppendTask(log: UnifiedLog, lastOffset: Long) extends Callable[Unit] {
     override def call(): Unit = {
       var leaderEpoch = 1
       var isLeader = true
@@ -140,30 +140,34 @@ class LogConcurrencyTest {
     }
   }
 
-  private def createLog(config: LogConfig = LogConfig(new Properties())): Log = {
-    Log(dir = logDir,
+  private def createLog(config: LogConfig = LogConfig(new Properties())): UnifiedLog = {
+    UnifiedLog(dir = logDir,
       config = config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
       scheduler = scheduler,
       brokerTopicStats = brokerTopicStats,
       time = Time.SYSTEM,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
       maxProducerIdExpirationMs = 60 * 60 * 1000,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10))
+      producerIdExpirationCheckIntervalMs = 10 * 60 * 1000,
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true
+    )
   }
 
-  private def validateConsumedData(log: Log, consumedBatches: Iterable[FetchedBatch]): Unit = {
+  private def validateConsumedData(log: UnifiedLog, consumedBatches: Iterable[FetchedBatch]): Unit = {
     val iter = consumedBatches.iterator
     log.logSegments.foreach { segment =>
       segment.log.batches.forEach { batch =>
         if (iter.hasNext) {
           val consumedBatch = iter.next()
           try {
-            assertEquals("Consumed batch with unexpected leader epoch",
-              batch.partitionLeaderEpoch, consumedBatch.epoch)
-            assertEquals("Consumed batch with unexpected base offset",
-              batch.baseOffset, consumedBatch.baseOffset)
+            assertEquals(batch.partitionLeaderEpoch,
+              consumedBatch.epoch, "Consumed batch with unexpected leader epoch")
+            assertEquals(batch.baseOffset,
+              consumedBatch.baseOffset, "Consumed batch with unexpected base offset")
           } catch {
             case t: Throwable =>
               throw new AssertionError(s"Consumed batch $consumedBatch " +

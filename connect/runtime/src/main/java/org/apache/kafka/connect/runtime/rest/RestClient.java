@@ -19,10 +19,6 @@ package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
-import javax.crypto.SecretKey;
-import javax.ws.rs.core.HttpHeaders;
-
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -37,6 +33,8 @@ import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.crypto.SecretKey;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -101,6 +99,21 @@ public class RestClient {
         }
 
         try {
+            return httpRequest(client, url, method, headers, requestBodyData, responseFormat, sessionKey, requestSignatureAlgorithm);
+        } finally {
+            try {
+                client.stop();
+            } catch (Exception e) {
+                log.error("Failed to stop HTTP client", e);
+            }
+        }
+    }
+
+    static <T> HttpResponse<T> httpRequest(HttpClient client, String url, String method,
+                                           HttpHeaders headers, Object requestBodyData,
+                                           TypeReference<T> responseFormat, SecretKey sessionKey,
+                                           String requestSignatureAlgorithm) {
+        try {
             String serializedBody = requestBodyData == null ? null : JSON_SERDE.writeValueAsString(requestBodyData);
             log.trace("Sending {} with input {} to {}", method, serializedBody, url);
 
@@ -112,14 +125,15 @@ public class RestClient {
 
             if (serializedBody != null) {
                 req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
-                if (sessionKey != null && requestSignatureAlgorithm != null) {
-                    InternalRequestSignature.addToRequest(
-                        sessionKey,
-                        serializedBody.getBytes(StandardCharsets.UTF_8),
-                        requestSignatureAlgorithm,
-                        req
-                    );
-                }
+            }
+
+            if (sessionKey != null && requestSignatureAlgorithm != null) {
+                InternalRequestSignature.addToRequest(
+                    sessionKey,
+                    serializedBody != null ? serializedBody.getBytes(StandardCharsets.UTF_8) : null,
+                    requestSignatureAlgorithm,
+                    req
+                );
             }
 
             ContentResponse res = req.send();
@@ -142,12 +156,14 @@ public class RestClient {
         } catch (IOException | InterruptedException | TimeoutException | ExecutionException e) {
             log.error("IO error forwarding REST request: ", e);
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "IO Error trying to forward REST request: " + e.getMessage(), e);
-        } finally {
-            try {
-                client.stop();
-            } catch (Exception e) {
-                log.error("Failed to stop HTTP client", e);
-            }
+        } catch (ConnectRestException e) {
+            // catching any explicitly thrown ConnectRestException-s to preserve its status code
+            // and to avoid getting it overridden by the more generic catch (Throwable) clause down below
+            log.error("Error forwarding REST request", e);
+            throw e;
+        } catch (Throwable t) {
+            log.error("Error forwarding REST request", t);
+            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "Error trying to forward REST request: " + t.getMessage(), t);
         }
     }
 
@@ -172,7 +188,7 @@ public class RestClient {
      * @return
      */
     private static Map<String, String> convertHttpFieldsToMap(HttpFields httpFields) {
-        Map<String, String> headers = new HashMap<String, String>();
+        Map<String, String> headers = new HashMap<>();
 
         if (httpFields == null || httpFields.size() == 0)
             return headers;
@@ -185,9 +201,9 @@ public class RestClient {
     }
 
     public static class HttpResponse<T> {
-        private int status;
-        private Map<String, String> headers;
-        private T body;
+        private final int status;
+        private final Map<String, String> headers;
+        private final T body;
 
         public HttpResponse(int status, Map<String, String> headers, T body) {
             this.status = status;

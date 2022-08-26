@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -30,19 +29,19 @@ import java.util.ListIterator;
 import java.util.Random;
 import java.util.Set;
 
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * A unit test for ImplicitLinkedHashCollection.
  */
+@Timeout(120)
 public class ImplicitLinkedHashCollectionTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     final static class TestElement implements ImplicitLinkedHashCollection.Element {
         private int prev = ImplicitLinkedHashCollection.INVALID_INDEX;
@@ -103,7 +102,8 @@ public class ImplicitLinkedHashCollectionTest {
 
         @Override
         public int hashCode() {
-            return key;
+            long hashCode = 2654435761L * key;
+            return (int) (hashCode >> 32);
         }
     }
 
@@ -137,29 +137,27 @@ public class ImplicitLinkedHashCollectionTest {
         int i = 0;
         while (iterator.hasNext()) {
             TestElement element = iterator.next();
-            Assert.assertTrue("Iterator yieled " + (i + 1) + " elements, but only " +
-                    sequence.length + " were expected.", i < sequence.length);
-            Assert.assertEquals("Iterator value number " + (i + 1) + " was incorrect.",
-                    sequence[i].intValue(), element.key);
+            assertTrue(i < sequence.length, "Iterator yieled " + (i + 1) + " elements, but only " +
+                sequence.length + " were expected.");
+            assertEquals(sequence[i].intValue(), element.key, "Iterator value number " + (i + 1) + " was incorrect.");
             i = i + 1;
         }
-        Assert.assertTrue("Iterator yieled " + (i + 1) + " elements, but " +
-                sequence.length + " were expected.", i == sequence.length);
+        assertTrue(i == sequence.length, "Iterator yieled " + (i + 1) + " elements, but " +
+            sequence.length + " were expected.");
     }
 
     static void expectTraversal(Iterator<TestElement> iter, Iterator<Integer> expectedIter) {
         int i = 0;
         while (iter.hasNext()) {
             TestElement element = iter.next();
-            Assert.assertTrue("Iterator yieled " + (i + 1) + " elements, but only " +
-                    i + " were expected.", expectedIter.hasNext());
+            assertTrue(expectedIter.hasNext(), "Iterator yieled " + (i + 1) + " elements, but only " + i +
+                " were expected.");
             Integer expected = expectedIter.next();
-            Assert.assertEquals("Iterator value number " + (i + 1) + " was incorrect.",
-                    expected.intValue(), element.key);
+            assertEquals(expected.intValue(), element.key, "Iterator value number " + (i + 1) + " was incorrect.");
             i = i + 1;
         }
-        Assert.assertFalse("Iterator yieled " + i + " elements, but at least " +
-                (i + 1) + " were expected.", expectedIter.hasNext());
+        assertFalse(expectedIter.hasNext(), "Iterator yieled " + i + " elements, but at least " + (i + 1) +
+            " were expected.");
     }
 
     @Test
@@ -485,7 +483,7 @@ public class ImplicitLinkedHashCollectionTest {
         assertEquals(6, coll.size());
         expectTraversal(coll.iterator(), 0, 1, 2, 3, 4, 5);
         for (int i = 0; i < 6; i++) {
-            assertTrue("Failed to find element " + i, coll.contains(new TestElement(i)));
+            assertTrue(coll.contains(new TestElement(i)), "Failed to find element " + i);
         }
         coll.remove(new TestElement(3));
         assertEquals(23, coll.numSlots());
@@ -502,7 +500,7 @@ public class ImplicitLinkedHashCollectionTest {
             addRandomElement(random, existing, coll);
             addRandomElement(random, existing, coll);
             addRandomElement(random, existing, coll);
-            removeRandomElement(random, existing, coll);
+            removeRandomElement(random, existing);
             expectTraversal(coll.iterator(), existing.iterator());
         }
     }
@@ -561,8 +559,7 @@ public class ImplicitLinkedHashCollectionTest {
     }
 
     @SuppressWarnings("unlikely-arg-type")
-    private void removeRandomElement(Random random, Collection<Integer> existing,
-                                     ImplicitLinkedHashCollection<TestElement> coll) {
+    private void removeRandomElement(Random random, Collection<Integer> existing) {
         int removeIdx = random.nextInt(existing.size());
         Iterator<Integer> iter = existing.iterator();
         Integer element = null;
@@ -581,5 +578,93 @@ public class ImplicitLinkedHashCollectionTest {
         TestElement element1 = coll.find(element2);
         assertFalse(element2.equals(element1));
         assertTrue(element2.elementKeysAreEqual(element1));
+    }
+
+    @Test
+    public void testMoveToEnd() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        TestElement e1 = new TestElement(1, 1);
+        TestElement e2 = new TestElement(2, 2);
+        TestElement e3 = new TestElement(3, 3);
+        assertTrue(coll.add(e1));
+        assertTrue(coll.add(e2));
+        assertTrue(coll.add(e3));
+        coll.moveToEnd(e1);
+        expectTraversal(coll.iterator(), 2, 3, 1);
+        assertThrows(RuntimeException.class, () -> coll.moveToEnd(new TestElement(4, 4)));
+    }
+
+    @Test
+    public void testRemovals() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        List<TestElement> elements  = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            TestElement element  = new TestElement(i, i);
+            elements.add(element);
+            coll.add(element);
+        }
+        assertEquals(100, coll.size());
+        Iterator<TestElement> iter = coll.iterator();
+        for (int i = 0; i < 50; i++) {
+            iter.next();
+            iter.remove();
+        }
+        assertEquals(50, coll.size());
+        for (int i = 50; i < 100; i++) {
+            assertEquals(new TestElement(i, i), coll.find(elements.get(i)));
+        }
+    }
+
+    static class TestElementComparator implements Comparator<TestElement> {
+        static final TestElementComparator INSTANCE = new TestElementComparator();
+
+        @Override
+        public int compare(TestElement a, TestElement b) {
+            if (a.key < b.key) {
+                return -1;
+            } else if (a.key > b.key) {
+                return 1;
+            } else if (a.val < b.val) {
+                return -1;
+            } else if (a.val > b.val) {
+                return 1;
+            } else {
+                return 0;
+            }
+        }
+    }
+
+    static class ReverseTestElementComparator implements Comparator<TestElement> {
+        static final ReverseTestElementComparator INSTANCE = new ReverseTestElementComparator();
+
+        @Override
+        public int compare(TestElement a, TestElement b) {
+            return TestElementComparator.INSTANCE.compare(b, a);
+        }
+    }
+
+    @Test
+    public void testSort() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        coll.add(new TestElement(3, 3));
+        coll.add(new TestElement(1, 1));
+        coll.add(new TestElement(10, 10));
+        coll.add(new TestElement(9, 9));
+        coll.add(new TestElement(2, 2));
+        coll.add(new TestElement(4, 4));
+        coll.add(new TestElement(0, 0));
+        coll.add(new TestElement(30, 30));
+        coll.add(new TestElement(20, 20));
+        coll.add(new TestElement(11, 11));
+        coll.add(new TestElement(15, 15));
+        coll.add(new TestElement(5, 5));
+
+        expectTraversal(coll.iterator(), 3, 1, 10, 9, 2, 4, 0, 30, 20, 11, 15, 5);
+        coll.sort(TestElementComparator.INSTANCE);
+        expectTraversal(coll.iterator(), 0, 1, 2, 3, 4, 5, 9, 10, 11, 15, 20, 30);
+        coll.sort(TestElementComparator.INSTANCE);
+        expectTraversal(coll.iterator(), 0, 1, 2, 3, 4, 5, 9, 10, 11, 15, 20, 30);
+        coll.sort(ReverseTestElementComparator.INSTANCE);
+        expectTraversal(coll.iterator(), 30, 20, 15, 11, 10, 9, 5, 4, 3, 2, 1, 0);
     }
 }

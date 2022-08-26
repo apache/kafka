@@ -18,17 +18,17 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterResult;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsMatchingAcl;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.PatternType;
-import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.slf4j.Logger;
@@ -44,18 +44,15 @@ public class DeleteAclsResponse extends AbstractResponse {
 
     private final DeleteAclsResponseData data;
 
-    public DeleteAclsResponse(DeleteAclsResponseData data) {
+    public DeleteAclsResponse(DeleteAclsResponseData data, short version) {
+        super(ApiKeys.DELETE_ACLS);
         this.data = data;
-    }
-
-    public DeleteAclsResponse(Struct struct, short version) {
-        data = new DeleteAclsResponseData(struct, version);
+        validate(version);
     }
 
     @Override
-    protected Struct toStruct(short version) {
-        validate(version);
-        return data.toStruct(version);
+    public DeleteAclsResponseData data() {
+        return data;
     }
 
     @Override
@@ -73,7 +70,7 @@ public class DeleteAclsResponse extends AbstractResponse {
     }
 
     public static DeleteAclsResponse parse(ByteBuffer buffer, short version) {
-        return new DeleteAclsResponse(ApiKeys.DELETE_ACLS.parseResponse(version, buffer), version);
+        return new DeleteAclsResponse(new DeleteAclsResponseData(new ByteBufferAccessor(buffer), version), version);
     }
 
     public String toString() {

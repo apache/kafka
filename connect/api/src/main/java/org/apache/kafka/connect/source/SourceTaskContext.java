@@ -32,10 +32,35 @@ public interface SourceTaskContext {
      * and the configuration is using variable references such as those compatible with
      * {@link org.apache.kafka.common.config.ConfigTransformer}.
      */
-    public Map<String, String> configs();
+    Map<String, String> configs();
 
     /**
      * Get the OffsetStorageReader for this SourceTask.
      */
     OffsetStorageReader offsetStorageReader();
+
+    /**
+     * Get a {@link TransactionContext} that can be used to define producer transaction boundaries
+     * when exactly-once support is enabled for the connector.
+     *
+     * <p>This method was added in Apache Kafka 3.2. Source tasks that use this method but want to
+     * maintain backward compatibility so they can also be deployed to older Connect runtimes
+     * should guard the call to this method with a try-catch block, since calling this method will result in a
+     * {@link NoSuchMethodException} or {@link NoClassDefFoundError} when the source connector is deployed to
+     * Connect runtimes older than Kafka 3.2. For example:
+     * <pre>
+     *     TransactionContext transactionContext;
+     *     try {
+     *         transactionContext = context.transactionContext();
+     *     } catch (NoSuchMethodError | NoClassDefFoundError e) {
+     *         transactionContext = null;
+     *     }
+     * </pre>
+     *
+     * @return the transaction context, or null if the connector was not configured to specify transaction boundaries
+     * @since 3.3
+     */
+    default TransactionContext transactionContext() {
+        return null;
+    }
 }

@@ -16,6 +16,7 @@
 {
   "apiKey": 39,
   "type": "request",
+  "listeners": ["zkBroker"],
   "name": "RenewDelegationTokenRequest",
   // Version 1 is the same as version 0.
   // Version 2 adds flexible version support

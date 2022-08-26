@@ -44,7 +44,7 @@ public interface QueryableStoreType<T> {
      * @param storeProvider     provides access to all the underlying StateStore instances
      * @param storeName         The name of the Store
      * @return a read-only interface over a {@code StateStore}
-     *        (cf. {@link org.apache.kafka.streams.state.QueryableStoreTypes.KeyValueStoreType})
+     *        (cf. {@link QueryableStoreTypes.KeyValueStoreType})
      */
     T create(final StateStoreProvider storeProvider,
              final String storeName);

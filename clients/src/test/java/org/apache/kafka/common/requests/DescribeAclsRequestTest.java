@@ -22,14 +22,13 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DescribeAclsRequestTest {
     private static final short V0 = 0;
@@ -60,9 +59,7 @@ public class DescribeAclsRequestTest {
     @Test
     public void shouldRoundTripLiteralV0() {
         final DescribeAclsRequest original = new DescribeAclsRequest.Builder(LITERAL_FILTER).build(V0);
-        final Struct struct = original.toStruct();
-
-        final DescribeAclsRequest result = new DescribeAclsRequest(struct, V0);
+        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serialize(), V0);
 
         assertRequestEquals(original, result);
     }
@@ -77,39 +74,28 @@ public class DescribeAclsRequestTest {
                 PatternType.LITERAL),
                 ANY_FILTER.entryFilter())).build(V0);
 
-        final Struct struct = original.toStruct();
-        final DescribeAclsRequest result = new DescribeAclsRequest(struct, V0);
-
+        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serialize(), V0);
         assertRequestEquals(expected, result);
     }
 
     @Test
     public void shouldRoundTripLiteralV1() {
         final DescribeAclsRequest original = new DescribeAclsRequest.Builder(LITERAL_FILTER).build(V1);
-        final Struct struct = original.toStruct();
-
-        final DescribeAclsRequest result = new DescribeAclsRequest(struct, V1);
-
+        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serialize(), V1);
         assertRequestEquals(original, result);
     }
 
     @Test
     public void shouldRoundTripPrefixedV1() {
         final DescribeAclsRequest original = new DescribeAclsRequest.Builder(PREFIXED_FILTER).build(V1);
-        final Struct struct = original.toStruct();
-
-        final DescribeAclsRequest result = new DescribeAclsRequest(struct, V1);
-
+        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serialize(), V1);
         assertRequestEquals(original, result);
     }
 
     @Test
     public void shouldRoundTripAnyV1() {
         final DescribeAclsRequest original = new DescribeAclsRequest.Builder(ANY_FILTER).build(V1);
-        final Struct struct = original.toStruct();
-
-        final DescribeAclsRequest result = new DescribeAclsRequest(struct, V1);
-
+        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serialize(), V1);
         assertRequestEquals(original, result);
     }
 

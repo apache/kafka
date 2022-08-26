@@ -28,6 +28,7 @@ import java.util.Collections;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class DelegatingClassLoaderTest {
@@ -36,7 +37,7 @@ public class DelegatingClassLoaderTest {
     public TemporaryFolder pluginDir = new TemporaryFolder();
 
     @Test
-    public void testWhiteListedManifestResources() {
+    public void testPermittedManifestResources() {
         assertTrue(
             DelegatingClassLoader.serviceLoaderManifestForPlugin("META-INF/services/org.apache.kafka.connect.rest.ConnectRestExtension"));
         assertTrue(
@@ -50,13 +51,13 @@ public class DelegatingClassLoaderTest {
         assertFalse(DelegatingClassLoader.serviceLoaderManifestForPlugin("resource/version.properties"));
     }
 
-    @Test(expected = ClassNotFoundException.class)
-    public void testLoadingUnloadedPluginClass() throws ClassNotFoundException {
+    @Test
+    public void testLoadingUnloadedPluginClass() {
         TestPlugins.assertAvailable();
         DelegatingClassLoader classLoader = new DelegatingClassLoader(Collections.emptyList());
         classLoader.initLoaders();
         for (String pluginClassName : TestPlugins.pluginClasses()) {
-            classLoader.loadClass(pluginClassName);
+            assertThrows(ClassNotFoundException.class, () -> classLoader.loadClass(pluginClassName));
         }
     }
 
@@ -91,7 +92,7 @@ public class DelegatingClassLoaderTest {
     }
 
     @Test
-    public void testLoadingNoPlugins() throws Exception {
+    public void testLoadingNoPlugins() {
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
             Collections.singletonList(pluginDir.getRoot().getAbsolutePath()));
         classLoader.initLoaders();

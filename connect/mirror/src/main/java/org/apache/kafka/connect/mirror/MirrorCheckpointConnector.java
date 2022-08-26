@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -48,7 +49,6 @@ public class MirrorCheckpointConnector extends SourceConnector {
     private GroupFilter groupFilter;
     private AdminClient sourceAdminClient;
     private SourceAndTarget sourceAndTarget;
-    private String connectorName;
     private List<String> knownConsumerGroups = Collections.emptyList();
 
     public MirrorCheckpointConnector() {
@@ -67,7 +67,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         if (!config.enabled()) {
             return;
         }
-        connectorName = config.connectorName();
+        String connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
         groupFilter = config.groupFilter();
         sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
@@ -118,7 +118,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     @Override
     public String version() {
-        return "1";
+        return AppInfoParser.getVersion();
     }
 
     private void refreshConsumerGroups()
@@ -145,16 +145,15 @@ public class MirrorCheckpointConnector extends SourceConnector {
         knownConsumerGroups = findConsumerGroups();
     }
 
-    private List<String> findConsumerGroups()
+    List<String> findConsumerGroups()
             throws InterruptedException, ExecutionException {
         return listConsumerGroups().stream()
-                .filter(x -> !x.isSimpleConsumerGroup())
-                .map(x -> x.groupId())
+                .map(ConsumerGroupListing::groupId)
                 .filter(this::shouldReplicate)
                 .collect(Collectors.toList());
     }
 
-    private Collection<ConsumerGroupListing> listConsumerGroups()
+    Collection<ConsumerGroupListing> listConsumerGroups()
             throws InterruptedException, ExecutionException {
         return sourceAdminClient.listConsumerGroups().valid().get();
     }

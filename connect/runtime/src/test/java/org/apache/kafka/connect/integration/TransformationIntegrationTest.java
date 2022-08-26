@@ -173,7 +173,7 @@ public class TransformationIntegrationTest {
         connectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
 
         // Assert that we didn't see any baz
-        Map<String, Long> expectedRecordCounts = singletonMap(fooTopic, Long.valueOf(numFooRecords));
+        Map<String, Long> expectedRecordCounts = singletonMap(fooTopic, (long) numFooRecords);
         assertObservedRecords(observedRecords, expectedRecordCounts);
 
         // delete connector
@@ -236,7 +236,7 @@ public class TransformationIntegrationTest {
         props.put(PREDICATES_CONFIG + ".barPredicate.type", RecordIsTombstone.class.getSimpleName());
 
         // expect only half the records to be consumed by the connector
-        connectorHandle.expectedCommits(numRecords);
+        connectorHandle.expectedCommits(numRecords / 2);
         connectorHandle.expectedRecords(numRecords / 2);
 
         // start a sink connector
@@ -258,7 +258,7 @@ public class TransformationIntegrationTest {
         // wait for the connector tasks to commit all records.
         connectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
 
-        Map<String, Long> expectedRecordCounts = singletonMap(topic, Long.valueOf(numRecords / 2));
+        Map<String, Long> expectedRecordCounts = singletonMap(topic, (long) (numRecords / 2));
         assertObservedRecords(observedRecords, expectedRecordCounts);
 
         // delete connector

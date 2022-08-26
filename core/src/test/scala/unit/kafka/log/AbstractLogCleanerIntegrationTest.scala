@@ -19,28 +19,25 @@ package kafka.log
 import java.io.File
 import java.nio.file.Files
 import java.util.Properties
-
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.{MockTime, Pool, TestUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.test.IntegrationTest
-import org.junit.After
-import org.junit.experimental.categories.Category
+import org.junit.jupiter.api.{AfterEach, Tag}
 
 import scala.collection.Seq
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
 
-@Category(Array(classOf[IntegrationTest]))
+@Tag("integration")
 abstract class AbstractLogCleanerIntegrationTest {
 
   var cleaner: LogCleaner = _
   val logDir = TestUtils.tempDir()
 
-  private val logs = ListBuffer.empty[Log]
+  private val logs = ListBuffer.empty[UnifiedLog]
   private val defaultMaxMessageSize = 128
   private val defaultMinCleanableDirtyRatio = 0.0F
   private val defaultMinCompactionLagMS = 0L
@@ -50,7 +47,7 @@ abstract class AbstractLogCleanerIntegrationTest {
 
   def time: MockTime
 
-  @After
+  @AfterEach
   def teardown(): Unit = {
     if (cleaner != null)
       cleaner.shutdown()
@@ -92,7 +89,7 @@ abstract class AbstractLogCleanerIntegrationTest {
                   cleanerIoBufferSize: Option[Int] = None,
                   propertyOverrides: Properties = new Properties()): LogCleaner = {
 
-    val logMap = new Pool[TopicPartition, Log]()
+    val logMap = new Pool[TopicPartition, UnifiedLog]()
     for (partition <- partitions) {
       val dir = new File(logDir, s"${partition.topic}-${partition.partition}")
       Files.createDirectories(dir.toPath)
@@ -104,16 +101,20 @@ abstract class AbstractLogCleanerIntegrationTest {
         deleteDelay = deleteDelay,
         segmentSize = segmentSize,
         maxCompactionLagMs = maxCompactionLagMs))
-      val log = Log(dir,
-        logConfig,
+      val log = UnifiedLog(
+        dir = dir,
+        config = logConfig,
         logStartOffset = 0L,
         recoveryPoint = 0L,
         scheduler = time.scheduler,
         time = time,
         brokerTopicStats = new BrokerTopicStats,
+        maxTransactionTimeoutMs = 5 * 60 * 1000,
         maxProducerIdExpirationMs = 60 * 60 * 1000,
-        producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-        logDirFailureChannel = new LogDirFailureChannel(10))
+        producerIdExpirationCheckIntervalMs = 10 * 60 * 1000,
+        logDirFailureChannel = new LogDirFailureChannel(10),
+        topicId = None,
+        keepPartitionMetadataFile = true)
       logMap.put(partition, log)
       this.logs += log
     }
@@ -130,23 +131,24 @@ abstract class AbstractLogCleanerIntegrationTest {
       time = time)
   }
 
-  def codec: CompressionType
   private var ctr = 0
   def counter: Int = ctr
   def incCounter(): Unit = ctr += 1
 
-  def writeDups(numKeys: Int, numDups: Int, log: Log, codec: CompressionType,
-                        startKey: Int = 0, magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): Seq[(Int, String, Long)] = {
+  def writeDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: CompressionType,
+                startKey: Int = 0, magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): Seq[(Int, String, Long)] = {
     for(_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val value = counter.toString
-      val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.toString.getBytes, codec = codec,
+      val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.getBytes, codec = codec,
         key = key.toString.getBytes, magicValue = magicValue), leaderEpoch = 0)
+      // move LSO forward to increase compaction bound
+      log.updateHighWatermark(log.logEndOffset)
       incCounter()
-      (key, value, appendInfo.firstOffset.get)
+      (key, value, appendInfo.firstOffset.get.messageOffset)
     }
   }
 
-  def createLargeSingleMessageSet(key: Int, messageFormatVersion: Byte): (String, MemoryRecords) = {
+  def createLargeSingleMessageSet(key: Int, messageFormatVersion: Byte, codec: CompressionType): (String, MemoryRecords) = {
     def messageValue(length: Int): String = {
       val random = new Random(0)
       new String(random.alphanumeric.take(length).toArray)

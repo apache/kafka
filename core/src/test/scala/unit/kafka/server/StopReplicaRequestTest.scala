@@ -24,8 +24,8 @@ import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartit
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
-import org.junit.Assert._
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -53,13 +53,13 @@ class StopReplicaRequestTest extends BaseRequestTest {
         .setTopicName(tp0.topic())
         .setPartitionStates(Seq(new StopReplicaPartitionState()
           .setPartitionIndex(tp0.partition())
-          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+          .setLeaderEpoch(LeaderAndIsr.InitialLeaderEpoch + 2)
           .setDeletePartition(true)).asJava),
       new StopReplicaTopicState()
         .setTopicName(tp1.topic())
         .setPartitionStates(Seq(new StopReplicaPartitionState()
           .setPartitionIndex(tp1.partition())
-          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+          .setLeaderEpoch(LeaderAndIsr.InitialLeaderEpoch + 2)
           .setDeletePartition(true)).asJava)
     ).asJava
 

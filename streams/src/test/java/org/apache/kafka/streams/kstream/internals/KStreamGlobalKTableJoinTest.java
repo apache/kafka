@@ -28,8 +28,8 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.After;
@@ -52,7 +52,7 @@ public class KStreamGlobalKTableJoinTest {
     private final int[] expectedKeys = {0, 1, 2, 3};
 
     private TopologyTestDriver driver;
-    private MockProcessor<Integer, String> processor;
+    private MockApiProcessor<Integer, String, Void, Void> processor;
     private StreamsBuilder builder;
 
     @Before
@@ -63,7 +63,7 @@ public class KStreamGlobalKTableJoinTest {
         final GlobalKTable<String, String> table; // value of stream optionally contains key of table
         final KeyValueMapper<Integer, String, String> keyMapper;
 
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Consumed<Integer, String> streamConsumed = Consumed.with(Serdes.Integer(), Serdes.String());
         final Consumed<String, String> tableConsumed = Consumed.with(Serdes.String(), Serdes.String());
         stream = builder.stream(streamTopic, streamConsumed);
@@ -87,7 +87,7 @@ public class KStreamGlobalKTableJoinTest {
         driver.close();
     }
 
-    private void pushToStream(final int messageCount, final String valuePrefix, final boolean includeForeignKey) {
+    private void pushToStream(final int messageCount, final String valuePrefix, final boolean includeForeignKey, final boolean includeNullKey) {
         final TestInputTopic<Integer, String> inputTopic =
             driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ofMillis(1L));
         for (int i = 0; i < messageCount; i++) {
@@ -95,7 +95,11 @@ public class KStreamGlobalKTableJoinTest {
             if (includeForeignKey) {
                 value = value + ",FKey" + expectedKeys[i];
             }
-            inputTopic.pipeInput(expectedKeys[i], value);
+            Integer key = expectedKeys[i];
+            if (includeNullKey && i == 0) {
+                key = null;
+            }
+            inputTopic.pipeInput(key, value);
         }
     }
 
@@ -128,7 +132,7 @@ public class KStreamGlobalKTableJoinTest {
 
         // push two items to the primary stream. the globalTable is empty
 
-        pushToStream(2, "X", true);
+        pushToStream(2, "X", true, false);
         processor.checkAndClearProcessResult(EMPTY);
     }
 
@@ -137,7 +141,7 @@ public class KStreamGlobalKTableJoinTest {
 
         // push two items to the primary stream. the globalTable is empty
 
-        pushToStream(2, "X", true);
+        pushToStream(2, "X", true, false);
         processor.checkAndClearProcessResult(EMPTY);
 
         // push two items to the globalTable. this should not produce any item.
@@ -147,7 +151,7 @@ public class KStreamGlobalKTableJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        pushToStream(4, "X", true);
+        pushToStream(4, "X", true, false);
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0,FKey0+Y0", 0),
                 new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 1));
 
@@ -158,7 +162,7 @@ public class KStreamGlobalKTableJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        pushToStream(4, "X", true);
+        pushToStream(4, "X", true, false);
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0,FKey0+YY0", 0),
                 new KeyValueTimestamp<>(1, "X1,FKey1+YY1", 1),
                 new KeyValueTimestamp<>(2, "X2,FKey2+YY2", 2),
@@ -180,7 +184,7 @@ public class KStreamGlobalKTableJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        pushToStream(4, "X", true);
+        pushToStream(4, "X", true, false);
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0,FKey0+Y0", 0),
                 new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 1));
 
@@ -196,7 +200,7 @@ public class KStreamGlobalKTableJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        pushToStream(4, "X", true);
+        pushToStream(4, "X", true, false);
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "X0,FKey0+Y0", 0),
                 new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 1),
                 new KeyValueTimestamp<>(2, "X2,FKey2+Y2", 2),
@@ -209,7 +213,7 @@ public class KStreamGlobalKTableJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        pushToStream(4, "XX", true);
+        pushToStream(4, "XX", true, false);
         processor.checkAndClearProcessResult(new KeyValueTimestamp<>(2, "XX2,FKey2+Y2", 2),
                 new KeyValueTimestamp<>(3, "XX3,FKey3+Y3", 3));
     }
@@ -225,8 +229,21 @@ public class KStreamGlobalKTableJoinTest {
         // push all four items to the primary stream with no foreign key, resulting in null keyMapper values.
         // this should not produce any item.
 
-        pushToStream(4, "XXX", false);
+        pushToStream(4, "XXX", false, false);
         processor.checkAndClearProcessResult(EMPTY);
     }
 
+    @Test
+    public void shouldJoinOnNullKeyWithNonNullKeyMapperValues() {
+        // push two items to the globalTable. this should not produce any item.
+
+        pushToGlobalTable(2, "Y");
+        processor.checkAndClearProcessResult(EMPTY);
+
+        // push all four items to the primary stream. this should produce two items.
+
+        pushToStream(4, "X", true, true);
+        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(null, "X0,FKey0+Y0", 0),
+                new KeyValueTimestamp<>(1, "X1,FKey1+Y1", 1));
+    }
 }

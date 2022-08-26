@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -23,6 +24,8 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Objects;
 
 public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowStore<K, V>> {
     private final Logger log = LoggerFactory.getLogger(WindowStoreBuilder.class);
@@ -34,7 +37,13 @@ public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowS
                               final Serde<V> valueSerde,
                               final Time time) {
         super(storeSupplier.name(), keySerde, valueSerde, time);
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        Objects.requireNonNull(storeSupplier.metricsScope(), "storeSupplier's metricsScope can't be null");
         this.storeSupplier = storeSupplier;
+
+        if (storeSupplier.retainDuplicates()) {
+            this.logConfig.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
+        }
     }
 
     @Override
@@ -67,7 +76,11 @@ public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowS
         if (!enableLogging) {
             return inner;
         }
-        return new ChangeLoggingWindowBytesStore(inner, storeSupplier.retainDuplicates());
+        return new ChangeLoggingWindowBytesStore(
+            inner,
+            storeSupplier.retainDuplicates(),
+            WindowKeySchema::toStoreKeyBinary
+        );
     }
 
     public long retentionPeriod() {

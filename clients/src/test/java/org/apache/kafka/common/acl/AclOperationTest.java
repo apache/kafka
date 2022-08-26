@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.common.acl;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AclOperationTest {
     private static class AclOperationTestInfo {
@@ -48,14 +48,16 @@ public class AclOperationTest {
         new AclOperationTestInfo(AclOperation.CLUSTER_ACTION, 9, "cluster_action", false),
         new AclOperationTestInfo(AclOperation.DESCRIBE_CONFIGS, 10, "describe_configs", false),
         new AclOperationTestInfo(AclOperation.ALTER_CONFIGS, 11, "alter_configs", false),
-        new AclOperationTestInfo(AclOperation.IDEMPOTENT_WRITE, 12, "idempotent_write", false)
+        new AclOperationTestInfo(AclOperation.IDEMPOTENT_WRITE, 12, "idempotent_write", false),
+        new AclOperationTestInfo(AclOperation.CREATE_TOKENS, 13, "create_tokens", false),
+        new AclOperationTestInfo(AclOperation.DESCRIBE_TOKENS, 14, "describe_tokens", false)
     };
 
     @Test
     public void testIsUnknown() throws Exception {
         for (AclOperationTestInfo info : INFOS) {
-            assertEquals(info.operation + " was supposed to have unknown == " + info.unknown,
-                info.unknown, info.operation.isUnknown());
+            assertEquals(info.unknown, info.operation.isUnknown(),
+                info.operation + " was supposed to have unknown == " + info.unknown);
         }
     }
 
@@ -63,10 +65,9 @@ public class AclOperationTest {
     public void testCode() throws Exception {
         assertEquals(AclOperation.values().length, INFOS.length);
         for (AclOperationTestInfo info : INFOS) {
-            assertEquals(info.operation + " was supposed to have code == " + info.code,
-                info.code, info.operation.code());
-            assertEquals("AclOperation.fromCode(" + info.code + ") was supposed to be " +  info.operation,
-                info.operation, AclOperation.fromCode((byte) info.code));
+            assertEquals(info.code, info.operation.code(), info.operation + " was supposed to have code == " + info.code);
+            assertEquals(info.operation, AclOperation.fromCode((byte) info.code),
+                "AclOperation.fromCode(" + info.code + ") was supposed to be " +  info.operation);
         }
         assertEquals(AclOperation.UNKNOWN, AclOperation.fromCode((byte) 120));
     }
@@ -74,14 +75,14 @@ public class AclOperationTest {
     @Test
     public void testName() throws Exception {
         for (AclOperationTestInfo info : INFOS) {
-            assertEquals("AclOperation.fromString(" + info.name + ") was supposed to be " +  info.operation,
-                info.operation, AclOperation.fromString(info.name));
+            assertEquals(info.operation, AclOperation.fromString(info.name),
+                "AclOperation.fromString(" + info.name + ") was supposed to be " +  info.operation);
         }
         assertEquals(AclOperation.UNKNOWN, AclOperation.fromString("something"));
     }
 
     @Test
-    public void testExhaustive() throws Exception {
+    public void testExhaustive() {
         assertEquals(INFOS.length, AclOperation.values().length);
         for (int i = 0; i < INFOS.length; i++) {
             assertEquals(INFOS[i].operation, AclOperation.values()[i]);

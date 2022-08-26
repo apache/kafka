@@ -17,13 +17,18 @@
 package org.apache.kafka.clients.consumer;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Optional;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Utils;
 
 /**
  * This interface is used to define custom partition assignment for use in
@@ -132,6 +137,16 @@ public interface ConsumerPartitionAssignor {
         public Optional<String> groupInstanceId() {
             return groupInstanceId;
         }
+
+        @Override
+        public String toString() {
+            return "Subscription(" +
+                "topics=" + topics +
+                (userData == null ? "" : ", userDataSize=" + userData.remaining()) +
+                ", ownedPartitions=" + ownedPartitions +
+                ", groupInstanceId=" + (groupInstanceId.map(String::toString).orElse("null")) +
+                ")";
+        }
     }
 
     final class Assignment {
@@ -158,9 +173,9 @@ public interface ConsumerPartitionAssignor {
         @Override
         public String toString() {
             return "Assignment(" +
-                    "partitions=" + partitions +
-                    (userData == null ? "" : ", userDataSize=" + userData.remaining()) +
-                    ')';
+                "partitions=" + partitions +
+                (userData == null ? "" : ", userDataSize=" + userData.remaining()) +
+                ')';
         }
     }
 
@@ -174,6 +189,13 @@ public interface ConsumerPartitionAssignor {
         public Map<String, Subscription> groupSubscription() {
             return subscriptions;
         }
+
+        @Override
+        public String toString() {
+            return "GroupSubscription(" +
+                "subscriptions=" + subscriptions +
+                ")";
+        }
     }
 
     final class GroupAssignment {
@@ -185,6 +207,13 @@ public interface ConsumerPartitionAssignor {
 
         public Map<String, Assignment> groupAssignment() {
             return assignments;
+        }
+
+        @Override
+        public String toString() {
+            return "GroupAssignment(" +
+                "assignments=" + assignments +
+                ")";
         }
     }
 
@@ -228,6 +257,51 @@ public interface ConsumerPartitionAssignor {
                     throw new IllegalArgumentException("Unknown rebalance protocol id: " + id);
             }
         }
+    }
+
+    /**
+     * Get a list of configured instances of {@link org.apache.kafka.clients.consumer.ConsumerPartitionAssignor}
+     * based on the class names/types specified by {@link org.apache.kafka.clients.consumer.ConsumerConfig#PARTITION_ASSIGNMENT_STRATEGY_CONFIG}
+     */
+    static List<ConsumerPartitionAssignor> getAssignorInstances(List<String> assignorClasses, Map<String, Object> configs) {
+        List<ConsumerPartitionAssignor> assignors = new ArrayList<>();
+        // a map to store assignor name -> assignor class name
+        Map<String, String> assignorNameMap = new HashMap<>();
+
+        if (assignorClasses == null)
+            return assignors;
+
+        for (Object klass : assignorClasses) {
+            // first try to get the class if passed in as a string
+            if (klass instanceof String) {
+                try {
+                    klass = Class.forName((String) klass, true, Utils.getContextOrKafkaClassLoader());
+                } catch (ClassNotFoundException classNotFound) {
+                    throw new KafkaException(klass + " ClassNotFoundException exception occurred", classNotFound);
+                }
+            }
+
+            if (klass instanceof Class<?>) {
+                Object assignor = Utils.newInstance((Class<?>) klass);
+                if (assignor instanceof Configurable)
+                    ((Configurable) assignor).configure(configs);
+
+                if (assignor instanceof ConsumerPartitionAssignor) {
+                    String assignorName = ((ConsumerPartitionAssignor) assignor).name();
+                    if (assignorNameMap.containsKey(assignorName)) {
+                        throw new KafkaException("The assignor name: '" + assignorName + "' is used in more than one assignor: " +
+                            assignorNameMap.get(assignorName) + ", " + assignor.getClass().getName());
+                    }
+                    assignorNameMap.put(assignorName, assignor.getClass().getName());
+                    assignors.add((ConsumerPartitionAssignor) assignor);
+                } else {
+                    throw new KafkaException(klass + " is not an instance of " + ConsumerPartitionAssignor.class.getName());
+                }
+            } else {
+                throw new KafkaException("List contains element of type " + klass.getClass().getName() + ", expected String or Class");
+            }
+        }
+        return assignors;
     }
 
 }

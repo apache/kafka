@@ -20,8 +20,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -31,24 +31,18 @@ import java.util.Map;
 public class DescribeLogDirsResponse extends AbstractResponse {
 
     public static final long INVALID_OFFSET_LAG = -1L;
+    public static final long UNKNOWN_VOLUME_BYTES = -1L;
 
     private final DescribeLogDirsResponseData data;
 
-    public DescribeLogDirsResponse(Struct struct, short version) {
-        this.data = new DescribeLogDirsResponseData(struct, version);
-    }
-
     public DescribeLogDirsResponse(DescribeLogDirsResponseData data) {
+        super(ApiKeys.DESCRIBE_LOG_DIRS);
         this.data = data;
     }
 
+    @Override
     public DescribeLogDirsResponseData data() {
         return data;
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override
@@ -59,6 +53,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
+        errorCounts.put(Errors.forCode(data.errorCode()), 1);
         data.results().forEach(result -> {
             updateErrorCounts(errorCounts, Errors.forCode(result.errorCode()));
         });
@@ -66,7 +61,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
     }
 
     public static DescribeLogDirsResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeLogDirsResponse(ApiKeys.DESCRIBE_LOG_DIRS.responseSchema(version).read(buffer), version);
+        return new DescribeLogDirsResponse(new DescribeLogDirsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     // Note this class is part of the public API, reachable from Admin.describeLogDirs()

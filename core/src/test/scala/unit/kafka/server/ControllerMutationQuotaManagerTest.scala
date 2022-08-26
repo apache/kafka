@@ -26,10 +26,10 @@ import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.QuotaViolationException
 import org.apache.kafka.common.metrics.stats.TokenBucket
 import org.apache.kafka.common.utils.MockTime
-import org.junit.Assert._
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Test
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Test
 
 class StrictControllerMutationQuotaTest {
   @Test
@@ -59,8 +59,7 @@ class StrictControllerMutationQuotaTest {
 
     // Recording a third value at T is rejected immediately because there are not
     // tokens available in the bucket.
-    assertThrows(classOf[ThrottlingQuotaExceededException],
-      () => quota.record(90))
+    assertThrows(classOf[ThrottlingQuotaExceededException], () => quota.record(90))
     assertTrue(quota.isExceeded)
     assertEquals(8000, quota.throttleTime)
 
@@ -166,7 +165,7 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
       // As we use the Strict enforcement, the quota is checked before updating the rate. Hence,
       // the spike is accepted and no quota violation error is raised.
       var throttleTime = maybeRecord(quotaManager, User, ClientId, 110)
-      assertEquals("Should not be throttled", 0, throttleTime)
+      assertEquals(0, throttleTime, "Should not be throttled")
 
       // Create a spike worth of 110 mutations.
       // Current tokens in the bucket = 100 - 110 = -10
@@ -174,7 +173,7 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
       // rate. The client must wait:
       // 10 / 10 = 1s
       throttleTime = maybeRecord(quotaManager, User, ClientId, 110)
-      assertEquals("Should be throttled", 1000, throttleTime)
+      assertEquals(1000, throttleTime, "Should be throttled")
 
       // Throttle
       throttle(quotaManager, User, ClientId, throttleTime, callback)
@@ -193,7 +192,7 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
       // Retry to spike worth of 110 mutations after having waited the required throttle time.
       // Current tokens in the bucket = 0
       throttleTime = maybeRecord(quotaManager, User, ClientId, 110)
-      assertEquals("Should be throttled", 0, throttleTime)
+      assertEquals(0, throttleTime, "Should be throttled")
     }
   }
 

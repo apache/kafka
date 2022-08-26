@@ -47,4 +47,8 @@ public class CumulativeSum implements MeasurableStat {
         return total;
     }
 
+    @Override
+    public String toString() {
+        return "CumulativeSum(total=" + total + ")";
+    }
 }

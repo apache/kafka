@@ -23,13 +23,13 @@ import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartiti
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnTopicResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AddPartitionsToTxnResponseTest {
 
@@ -47,7 +47,7 @@ public class AddPartitionsToTxnResponseTest {
     protected Map<Errors, Integer> expectedErrorCounts;
     protected Map<TopicPartition, Errors> errorsMap;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         expectedErrorCounts = new HashMap<>();
         expectedErrorCounts.put(errorOne, 1);
@@ -67,7 +67,7 @@ public class AddPartitionsToTxnResponseTest {
     }
 
     @Test
-    public void testConstructorWithStruct() {
+    public void testParse() {
 
         AddPartitionsToTxnTopicResultCollection topicCollection = new AddPartitionsToTxnTopicResultCollection();
 
@@ -87,14 +87,13 @@ public class AddPartitionsToTxnResponseTest {
         AddPartitionsToTxnResponseData data = new AddPartitionsToTxnResponseData()
                                                   .setResults(topicCollection)
                                                   .setThrottleTimeMs(throttleTimeMs);
+        AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data);
 
-        for (short version = 0; version <= ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion(); version++) {
-            AddPartitionsToTxnResponse response = new AddPartitionsToTxnResponse(data.toStruct(version), version);
-            assertEquals(expectedErrorCounts, response.errorCounts());
-
-            assertEquals(throttleTimeMs, response.throttleTimeMs());
-
-            assertEquals(version >= 1, response.shouldClientThrottle(version));
+        for (short version : ApiKeys.ADD_PARTITIONS_TO_TXN.allVersions()) {
+            AddPartitionsToTxnResponse parsedResponse = AddPartitionsToTxnResponse.parse(response.serialize(version), version);
+            assertEquals(expectedErrorCounts, parsedResponse.errorCounts());
+            assertEquals(throttleTimeMs, parsedResponse.throttleTimeMs());
+            assertEquals(version >= 1, parsedResponse.shouldClientThrottle(version));
         }
     }
 }

@@ -1,0 +1,47 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 60,
+  "type": "response",
+  "name": "DescribeClusterResponse",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "ErrorCode", "type": "int16", "versions": "0+",
+      "about": "The top-level error code, or 0 if there was no error" },
+    { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "about": "The top-level error message, or null if there was no error." },
+    { "name": "ClusterId", "type": "string", "versions": "0+",
+      "about": "The cluster ID that responding broker belongs to." },
+    { "name": "ControllerId", "type": "int32", "versions": "0+", "default": "-1", "entityType": "brokerId",
+      "about": "The ID of the controller broker." },
+    { "name": "Brokers", "type": "[]DescribeClusterBroker", "versions": "0+",
+      "about": "Each broker in the response.", "fields": [
+      { "name": "BrokerId", "type": "int32", "versions": "0+", "mapKey": true, "entityType": "brokerId",
+        "about": "The broker ID." },
+      { "name": "Host", "type": "string", "versions": "0+",
+        "about": "The broker hostname." },
+      { "name": "Port", "type": "int32", "versions": "0+",
+        "about": "The broker port." },
+      { "name": "Rack", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+        "about": "The rack of the broker, or null if it has not been assigned to a rack." }
+    ]},
+    { "name": "ClusterAuthorizedOperations", "type": "int32", "versions": "0+", "default": "-2147483648",
+      "about": "32-bit bitfield to represent authorized operations for this cluster." }
+  ]
+}

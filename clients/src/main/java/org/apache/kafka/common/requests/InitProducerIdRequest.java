@@ -19,15 +19,15 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
 
 public class InitProducerIdRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<InitProducerIdRequest> {
-        private final InitProducerIdRequestData data;
+        public final InitProducerIdRequestData data;
 
         public Builder(InitProducerIdRequestData data) {
             super(ApiKeys.INIT_PRODUCER_ID);
@@ -51,18 +51,12 @@ public class InitProducerIdRequest extends AbstractRequest {
         }
     }
 
-    public final InitProducerIdRequestData data;
+    private final InitProducerIdRequestData data;
 
     private InitProducerIdRequest(InitProducerIdRequestData data, short version) {
         super(ApiKeys.INIT_PRODUCER_ID, version);
         this.data = data;
     }
-
-    public InitProducerIdRequest(Struct struct, short version) {
-        super(ApiKeys.INIT_PRODUCER_ID, version);
-        this.data = new InitProducerIdRequestData(struct, version);
-    }
-
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
@@ -75,12 +69,12 @@ public class InitProducerIdRequest extends AbstractRequest {
     }
 
     public static InitProducerIdRequest parse(ByteBuffer buffer, short version) {
-        return new InitProducerIdRequest(ApiKeys.INIT_PRODUCER_ID.parseRequest(version, buffer), version);
+        return new InitProducerIdRequest(new InitProducerIdRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 
     @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+    public InitProducerIdRequestData data() {
+        return data;
     }
 
 }

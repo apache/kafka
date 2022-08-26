@@ -46,12 +46,11 @@ public interface Processor<KIn, VIn, KOut, VOut> {
     default void init(final ProcessorContext<KOut, VOut> context) {}
 
     /**
-     * Process the record with the given key and value.
+     * Process the record. Note that record metadata is undefined in cases such as a forward call from a punctuator.
      *
-     * @param key the key for the record
-     * @param value the value for the record
+     * @param record the record to process
      */
-    void process(KIn key, VIn value);
+    void process(Record<KIn, VIn> record);
 
     /**
      * Close this processor and clean up any resources. Be aware that {@code #close()} is called after an internal cleanup.

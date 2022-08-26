@@ -46,7 +46,7 @@ import static org.junit.Assert.assertTrue;
 public class KeyValueSegmentTest {
 
     private final RocksDBMetricsRecorder metricsRecorder =
-        new RocksDBMetricsRecorder("metrics-scope", "thread-id", "store-name");
+        new RocksDBMetricsRecorder("metrics-scope", "store-name");
 
     @Before
     public void setUp() {
@@ -67,7 +67,7 @@ public class KeyValueSegmentTest {
         expect(mockContext.stateDir()).andReturn(directory);
         replay(mockContext);
 
-        segment.openDB(mockContext);
+        segment.openDB(mockContext.appConfigs(), mockContext.stateDir());
 
         assertTrue(new File(directoryPath, "window").exists());
         assertTrue(new File(directoryPath + File.separator + "window", "segment").exists());
@@ -75,6 +75,8 @@ public class KeyValueSegmentTest {
         segment.destroy();
         assertFalse(new File(directoryPath + File.separator + "window", "segment").exists());
         assertTrue(new File(directoryPath, "window").exists());
+
+        segment.close();
     }
 
     @Test
@@ -89,6 +91,8 @@ public class KeyValueSegmentTest {
         assertThat(segment, not(equalTo(segmentDifferentId)));
         assertThat(segment, not(equalTo(null)));
         assertThat(segment, not(equalTo("anyName")));
+
+        segment.close();
     }
 
     @Test
@@ -102,6 +106,8 @@ public class KeyValueSegmentTest {
         assertTrue(set.add(segment));
         assertFalse(set.add(segmentSameId));
         assertTrue(set.add(segmentDifferentId));
+
+        segment.close();
     }
 
     @Test
@@ -117,5 +123,9 @@ public class KeyValueSegmentTest {
         assertThat(segment3.compareTo(segment1), equalTo(-1));
         assertThat(segment2.compareTo(segment3), equalTo(1));
         assertThat(segment3.compareTo(segment2), equalTo(-1));
+
+        segment1.close();
+        segment2.close();
+        segment3.close();
     }
 }

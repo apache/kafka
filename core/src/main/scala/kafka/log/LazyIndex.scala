@@ -54,11 +54,11 @@ class LazyIndex[T <: AbstractIndex] private (@volatile private var indexWrapper:
 
   def get: T = {
     indexWrapper match {
-      case indexValue: IndexValue[T] => indexValue.index
+      case indexValue: IndexValue[_] => indexValue.index.asInstanceOf[T]
       case _: IndexFile =>
         inLock(lock) {
           indexWrapper match {
-            case indexValue: IndexValue[T] => indexValue.index
+            case indexValue: IndexValue[_] => indexValue.index.asInstanceOf[T]
             case indexFile: IndexFile =>
               val indexValue = new IndexValue(loadIndex(indexFile.file))
               indexWrapper = indexValue
@@ -131,7 +131,7 @@ object LazyIndex {
     def updateParentDir(parentDir: File): Unit = _file = new File(parentDir, file.getName)
 
     def renameTo(f: File): Unit = {
-      try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+      try Utils.atomicMoveWithFallback(file.toPath, f.toPath, false)
       catch {
         case _: NoSuchFileException if !file.exists => ()
       }

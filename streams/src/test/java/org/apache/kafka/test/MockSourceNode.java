@@ -17,13 +17,14 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class MockSourceNode<KIn, VIn, KOut, VOut> extends SourceNode<KIn, VIn, KOut, VOut> {
+public class MockSourceNode<KIn, VIn> extends SourceNode<KIn, VIn> {
 
     private static final String NAME = "MOCK-SOURCE-";
     private static final AtomicInteger INDEX = new AtomicInteger(1);
@@ -39,14 +40,14 @@ public class MockSourceNode<KIn, VIn, KOut, VOut> extends SourceNode<KIn, VIn, K
     }
 
     @Override
-    public void process(final KIn key, final VIn value) {
-        this.numReceived++;
-        this.keys.add(key);
-        this.values.add(value);
+    public void process(final Record<KIn, VIn> record) {
+        numReceived++;
+        keys.add(record.key());
+        values.add(record.value());
     }
 
     @Override
-    public void init(final InternalProcessorContext context) {
+    public void init(final InternalProcessorContext<KIn, VIn> context) {
         super.init(context);
         initialized = true;
     }
@@ -54,6 +55,6 @@ public class MockSourceNode<KIn, VIn, KOut, VOut> extends SourceNode<KIn, VIn, K
     @Override
     public void close() {
         super.close();
-        this.closed = true;
+        closed = true;
     }
 }

@@ -21,8 +21,9 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -70,11 +71,11 @@ public class NetworkTestUtils {
         String prefix = TestUtils.randomString(minMessageSize);
         int requests = 0;
         int responses = 0;
-        selector.send(new NetworkSend(node, ByteBuffer.wrap((prefix + "-0").getBytes(StandardCharsets.UTF_8))));
+        selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap((prefix + "-0").getBytes(StandardCharsets.UTF_8)))));
         requests++;
         while (responses < messageCount) {
             selector.poll(0L);
-            assertEquals("No disconnects should have occurred ." + selector.disconnected(),  0, selector.disconnected().size());
+            assertEquals(0, selector.disconnected().size(), "No disconnects should have occurred ." + selector.disconnected());
 
             for (NetworkReceive receive : selector.completedReceives()) {
                 assertEquals(prefix + "-" + responses, new String(Utils.toArray(receive.payload()), StandardCharsets.UTF_8));
@@ -82,9 +83,19 @@ public class NetworkTestUtils {
             }
 
             for (int i = 0; i < selector.completedSends().size() && requests < messageCount && selector.isChannelReady(node); i++, requests++) {
-                selector.send(new NetworkSend(node, ByteBuffer.wrap((prefix + "-" + requests).getBytes())));
+                selector.send(new NetworkSend(node, ByteBufferSend.sizePrefixed(ByteBuffer.wrap((prefix + "-" + requests).getBytes()))));
             }
         }
+    }
+
+    public static void waitForChannelConnected(Selector selector, String node) throws IOException {
+        int secondsLeft = 30;
+        while (selector.channel(node) != null
+                && !selector.channel(node).isConnected() && secondsLeft-- > 0) {
+            selector.poll(1000L);
+        }
+        assertNotNull(selector.channel(node));
+        assertTrue(selector.channel(node).isConnected(), String.format("Channel %s was not connected after 30 seconds", node));
     }
 
     public static void waitForChannelReady(Selector selector, String node) throws IOException {
@@ -93,20 +104,26 @@ public class NetworkTestUtils {
         while (!selector.isChannelReady(node) && secondsLeft-- > 0) {
             selector.poll(1000L);
         }
-        assertTrue(selector.isChannelReady(node));
+        assertTrue(selector.isChannelReady(node), String.format("Channel %s was not ready after 30 seconds", node));
     }
 
-    public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState)
+    public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState) throws IOException {
+        return waitForChannelClose(selector, node, channelState, 0);
+    }
+
+    public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState, int delayBetweenPollMs)
             throws IOException {
         boolean closed = false;
         for (int i = 0; i < 300; i++) {
+            if (delayBetweenPollMs > 0)
+                Utils.sleep(delayBetweenPollMs);
             selector.poll(100L);
             if (selector.channel(node) == null && selector.closingChannel(node) == null) {
                 closed = true;
                 break;
             }
         }
-        assertTrue("Channel was not closed by timeout", closed);
+        assertTrue(closed, "Channel was not closed by timeout");
         ChannelState finalState = selector.disconnected().get(node);
         assertEquals(channelState, finalState.state());
         return finalState;

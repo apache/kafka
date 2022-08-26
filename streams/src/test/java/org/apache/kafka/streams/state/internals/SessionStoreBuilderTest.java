@@ -51,10 +51,10 @@ public class SessionStoreBuilderTest {
     private SessionStoreBuilder<String, String> builder;
 
     @Before
-    public void setUp() throws Exception {
-
+    public void setUp() {
         expect(supplier.get()).andReturn(inner);
         expect(supplier.name()).andReturn("name");
+        expect(supplier.metricsScope()).andReturn("metricScope");
         replay(supplier);
 
         builder = new SessionStoreBuilder<>(
@@ -120,7 +120,7 @@ public class SessionStoreBuilderTest {
     @Test
     public void shouldThrowNullPointerIfInnerIsNull() {
         final Exception e = assertThrows(NullPointerException.class, () -> new SessionStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime()));
-        assertThat(e.getMessage(), equalTo("supplier cannot be null"));
+        assertThat(e.getMessage(), equalTo("storeSupplier cannot be null"));
     }
 
     @Test
@@ -146,8 +146,21 @@ public class SessionStoreBuilderTest {
 
     @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
-        final Exception e = assertThrows(NullPointerException.class, () -> new SessionStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
-        assertThat(e.getMessage(), equalTo("name cannot be null"));
+        reset(supplier);
+        expect(supplier.get()).andReturn(new RocksDBSessionStore(
+            new RocksDBSegmentedBytesStore(
+                "name",
+                null,
+                10L,
+                5L,
+                new SessionKeySchema())
+        ));
+        expect(supplier.name()).andReturn("name");
+        replay(supplier);
+
+        final Exception e = assertThrows(NullPointerException.class,
+            () -> new SessionStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
+        assertThat(e.getMessage(), equalTo("storeSupplier's metricsScope can't be null"));
     }
 
 }

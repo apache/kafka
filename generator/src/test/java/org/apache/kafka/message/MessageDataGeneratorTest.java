@@ -17,19 +17,17 @@
 
 package org.apache.kafka.message;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
 
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
+@Timeout(120)
 public class MessageDataGeneratorTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testNullDefaults() throws Exception {
@@ -38,6 +36,7 @@ public class MessageDataGeneratorTest {
                 "  \"type\": \"request\",",
                 "  \"name\": \"FooBar\",",
                 "  \"validVersions\": \"0-2\",",
+                "  \"flexibleVersions\": \"none\",",
                 "  \"fields\": [",
                 "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\" },",
                 "    { \"name\": \"field2\", \"type\": \"[]TestStruct\", \"versions\": \"1+\", ",
@@ -52,8 +51,8 @@ public class MessageDataGeneratorTest {
     }
 
     private void assertStringContains(String substring, String value) {
-        assertTrue("Expected string to contain '" + substring + "', but it was " + value,
-            value.contains(substring));
+        assertTrue(value.contains(substring),
+                   "Expected string to contain '" + substring + "', but it was " + value);
     }
 
     @Test
@@ -63,6 +62,7 @@ public class MessageDataGeneratorTest {
             "  \"type\": \"request\",",
             "  \"name\": \"FooBar\",",
             "  \"validVersions\": \"0-2\",",
+            "  \"flexibleVersions\": \"none\",",
             "  \"fields\": [",
             "    { \"name\": \"field1\", \"type\": \"int32\", \"versions\": \"0+\", \"default\": \"null\" }",
             "  ]",
@@ -80,6 +80,7 @@ public class MessageDataGeneratorTest {
                 "  \"type\": \"request\",",
                 "  \"name\": \"FooBar\",",
                 "  \"validVersions\": \"0-2\",",
+                "  \"flexibleVersions\": \"none\",",
                 "  \"fields\": [",
                 "    { \"name\": \"field1\", \"type\": \"[]int32\", \"versions\": \"0+\", \"nullableVersions\": \"1+\", ",
                 "    \"default\": \"null\" }",
@@ -105,6 +106,7 @@ public class MessageDataGeneratorTest {
                     "  \"type\": \"request\",",
                     "  \"name\": \"FooBar\",",
                     "  \"validVersions\": \"0-2\",",
+                    "  \"flexibleVersions\": \"0+\",",
                     "  \"fields\": [",
                     "    { \"name\": \"_badName\", \"type\": \"[]int32\", \"versions\": \"0+\" }",
                     "  ]",

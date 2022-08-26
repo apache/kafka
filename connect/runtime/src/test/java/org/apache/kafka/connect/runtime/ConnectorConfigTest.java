@@ -41,9 +41,9 @@ import static org.junit.Assert.fail;
 
 public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
-    public static final Plugins MOCK_PLUGINS = new Plugins(new HashMap<String, String>()) {
+    public static final Plugins MOCK_PLUGINS = new Plugins(new HashMap<>()) {
         @Override
-        public Set<PluginDesc<Transformation>> transformations() {
+        public Set<PluginDesc<Transformation<?>>> transformations() {
             return Collections.emptySet();
         }
     };
@@ -149,11 +149,11 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
         final List<Transformation<R>> transformations = config.transformations();
         assertEquals(1, transformations.size());
-        final SimpleTransformation xform = (SimpleTransformation) transformations.get(0);
+        final SimpleTransformation<R> xform = (SimpleTransformation<R>) transformations.get(0);
         assertEquals(42, xform.magicNumber);
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void multipleTransformsOneDangling() {
         Map<String, String> props = new HashMap<>();
         props.put("name", "test");
@@ -161,7 +161,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms", "a, b");
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "42");
-        new ConnectorConfig(MOCK_PLUGINS, props);
+        assertThrows(ConfigException.class, () -> new ConnectorConfig(MOCK_PLUGINS, props));
     }
 
     @Test
@@ -177,8 +177,8 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
         final List<Transformation<R>> transformations = config.transformations();
         assertEquals(2, transformations.size());
-        assertEquals(42, ((SimpleTransformation) transformations.get(0)).magicNumber);
-        assertEquals(84, ((SimpleTransformation) transformations.get(1)).magicNumber);
+        assertEquals(42, ((SimpleTransformation<R>) transformations.get(0)).magicNumber);
+        assertEquals(84, ((SimpleTransformation<R>) transformations.get(1)).magicNumber);
     }
 
     @Test
@@ -427,11 +427,11 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         }
 
 
-        public static class Key extends AbstractKeyValueTransformation {
+        public static class Key<R extends ConnectRecord<R>> extends AbstractKeyValueTransformation<R> {
 
 
         }
-        public static class Value extends AbstractKeyValueTransformation {
+        public static class Value<R extends ConnectRecord<R>> extends AbstractKeyValueTransformation<R> {
 
         }
     }

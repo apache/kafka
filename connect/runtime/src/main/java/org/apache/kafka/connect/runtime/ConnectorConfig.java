@@ -36,7 +36,6 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -151,9 +150,11 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String ERRORS_LOG_INCLUDE_MESSAGES_CONFIG = "errors.log.include.messages";
     public static final String ERRORS_LOG_INCLUDE_MESSAGES_DISPLAY = "Log Error Details";
     public static final boolean ERRORS_LOG_INCLUDE_MESSAGES_DEFAULT = false;
-    public static final String ERRORS_LOG_INCLUDE_MESSAGES_DOC = "Whether to the include in the log the Connect record that resulted in " +
-            "a failure. This is 'false' by default, which will prevent record keys, values, and headers from being written to log files, " +
-            "although some information such as topic and partition number will still be logged.";
+    public static final String ERRORS_LOG_INCLUDE_MESSAGES_DOC = "Whether to include in the log the Connect record that resulted in a failure." +
+            "For sink records, the topic, partition, offset, and timestamp will be logged. " +
+            "For source records, the key and value (and their schemas), all headers, and the timestamp, Kafka topic, Kafka partition, source partition, " +
+            "and source offset will be logged. " +
+            "This is 'false' by default, which will prevent record keys, values, and headers from being written to log files.";
 
 
     public static final String CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX = "producer.override.";
@@ -220,7 +221,7 @@ public class ConnectorConfig extends AbstractConfig {
     }
 
     public ConnectorConfig(Plugins plugins) {
-        this(plugins, new HashMap<String, String>());
+        this(plugins, Collections.emptyMap());
     }
 
     public ConnectorConfig(Plugins plugins, Map<String, String> props) {
@@ -313,7 +314,7 @@ public class ConnectorConfig extends AbstractConfig {
             @SuppressWarnings("rawtypes")
             @Override
             protected Set<PluginDesc<Transformation<?>>> plugins() {
-                return (Set) plugins.transformations();
+                return plugins.transformations();
             }
 
             @Override
@@ -363,7 +364,7 @@ public class ConnectorConfig extends AbstractConfig {
                 (Class) Predicate.class, props, requireFullConfig) {
             @Override
             protected Set<PluginDesc<Predicate<?>>> plugins() {
-                return (Set) plugins.predicates();
+                return plugins.predicates();
             }
 
             @Override
@@ -495,7 +496,7 @@ public class ConnectorConfig extends AbstractConfig {
                         .filter(c -> Modifier.isPublic(c.getModifiers()))
                         .map(Class::getName)
                         .collect(Collectors.joining(", "));
-                String message = childClassNames.trim().isEmpty() ?
+                String message = Utils.isBlank(childClassNames) ?
                         aliasKind + " is abstract and cannot be created." :
                         aliasKind + " is abstract and cannot be created. Did you mean " + childClassNames + "?";
                 throw new ConfigException(key, String.valueOf(cls), message);

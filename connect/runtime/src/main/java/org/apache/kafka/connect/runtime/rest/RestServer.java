@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectClusterDetails;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
@@ -27,6 +28,7 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.health.ConnectClusterDetailsImpl;
 import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
+import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorPluginsResource;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.runtime.rest.resources.LoggingResource;
@@ -59,6 +61,7 @@ import javax.ws.rs.core.UriBuilder;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
@@ -84,9 +87,10 @@ public class RestServer {
     private static final String PROTOCOL_HTTPS = "https";
 
     private final WorkerConfig config;
-    private ContextHandlerCollection handlers;
-    private Server jettyServer;
+    private final ContextHandlerCollection handlers;
+    private final Server jettyServer;
 
+    private Collection<ConnectResource> resources;
     private List<ConnectRestExtension> connectRestExtensions = Collections.emptyList();
 
     /**
@@ -95,28 +99,13 @@ public class RestServer {
     public RestServer(WorkerConfig config) {
         this.config = config;
 
-        List<String> listeners = parseListeners();
+        List<String> listeners = config.getList(WorkerConfig.LISTENERS_CONFIG);
         List<String> adminListeners = config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG);
 
         jettyServer = new Server();
         handlers = new ContextHandlerCollection();
 
         createConnectors(listeners, adminListeners);
-    }
-
-    @SuppressWarnings("deprecation")
-    List<String> parseListeners() {
-        List<String> listeners = config.getList(WorkerConfig.LISTENERS_CONFIG);
-        if (listeners == null || listeners.size() == 0) {
-            String hostname = config.getString(WorkerConfig.REST_HOST_NAME_CONFIG);
-
-            if (hostname == null)
-                hostname = "";
-
-            listeners = Collections.singletonList(String.format("%s://%s:%d", PROTOCOL_HTTP, hostname, config.getInt(WorkerConfig.REST_PORT_CONFIG)));
-        }
-
-        return listeners;
     }
 
     /**
@@ -126,14 +115,12 @@ public class RestServer {
         List<Connector> connectors = new ArrayList<>();
 
         for (String listener : listeners) {
-            if (!listener.isEmpty()) {
-                Connector connector = createConnector(listener);
-                connectors.add(connector);
-                log.info("Added connector for {}", listener);
-            }
+            Connector connector = createConnector(listener);
+            connectors.add(connector);
+            log.info("Added connector for {}", listener);
         }
 
-        jettyServer.setConnectors(connectors.toArray(new Connector[connectors.size()]));
+        jettyServer.setConnectors(connectors.toArray(new Connector[0]));
 
         if (adminListeners != null && !adminListeners.isEmpty()) {
             for (String adminListener : adminListeners) {
@@ -226,9 +213,11 @@ public class RestServer {
         ResourceConfig resourceConfig = new ResourceConfig();
         resourceConfig.register(new JacksonJsonProvider());
 
-        resourceConfig.register(new RootResource(herder));
-        resourceConfig.register(new ConnectorsResource(herder, config));
-        resourceConfig.register(new ConnectorPluginsResource(herder));
+        this.resources = new ArrayList<>();
+        resources.add(new RootResource(herder));
+        resources.add(new ConnectorsResource(herder, config));
+        resources.add(new ConnectorPluginsResource(herder));
+        resources.forEach(resourceConfig::register);
 
         resourceConfig.register(ConnectExceptionMapper.class);
         resourceConfig.property(ServerProperties.WADL_FEATURE_DISABLE, true);
@@ -240,14 +229,18 @@ public class RestServer {
         if (adminListeners == null) {
             log.info("Adding admin resources to main listener");
             adminResourceConfig = resourceConfig;
-            adminResourceConfig.register(new LoggingResource());
+            LoggingResource loggingResource = new LoggingResource();
+            this.resources.add(loggingResource);
+            adminResourceConfig.register(loggingResource);
         } else if (adminListeners.size() > 0) {
             // TODO: we need to check if these listeners are same as 'listeners'
             // TODO: the following code assumes that they are different
             log.info("Adding admin resources to admin listener");
             adminResourceConfig = new ResourceConfig();
             adminResourceConfig.register(new JacksonJsonProvider());
-            adminResourceConfig.register(new LoggingResource());
+            LoggingResource loggingResource = new LoggingResource();
+            this.resources.add(loggingResource);
+            adminResourceConfig.register(loggingResource);
             adminResourceConfig.register(ConnectExceptionMapper.class);
         } else {
             log.info("Skipping adding admin resources");
@@ -275,32 +268,32 @@ public class RestServer {
         }
 
         String allowedOrigins = config.getString(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG);
-        if (allowedOrigins != null && !allowedOrigins.trim().isEmpty()) {
+        if (!Utils.isBlank(allowedOrigins)) {
             FilterHolder filterHolder = new FilterHolder(new CrossOriginFilter());
             filterHolder.setName("cross-origin");
             filterHolder.setInitParameter(CrossOriginFilter.ALLOWED_ORIGINS_PARAM, allowedOrigins);
             String allowedMethods = config.getString(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG);
-            if (allowedMethods != null && !allowedOrigins.trim().isEmpty()) {
+            if (!Utils.isBlank(allowedMethods)) {
                 filterHolder.setInitParameter(CrossOriginFilter.ALLOWED_METHODS_PARAM, allowedMethods);
             }
             context.addFilter(filterHolder, "/*", EnumSet.of(DispatcherType.REQUEST));
         }
 
         String headerConfig = config.getString(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG);
-        if (headerConfig != null && !headerConfig.trim().isEmpty()) {
+        if (!Utils.isBlank(headerConfig)) {
             configureHttpResponsHeaderFilter(context);
         }
 
         RequestLogHandler requestLogHandler = new RequestLogHandler();
         Slf4jRequestLogWriter slf4jRequestLogWriter = new Slf4jRequestLogWriter();
         slf4jRequestLogWriter.setLoggerName(RestServer.class.getCanonicalName());
-        CustomRequestLog requestLog = new CustomRequestLog(slf4jRequestLogWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT + " %msT");
+        CustomRequestLog requestLog = new CustomRequestLog(slf4jRequestLogWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT + " %{ms}T");
         requestLogHandler.setRequestLog(requestLog);
 
         contextHandlers.add(new DefaultHandler());
         contextHandlers.add(requestLogHandler);
 
-        handlers.setHandlers(contextHandlers.toArray(new Handler[]{}));
+        handlers.setHandlers(contextHandlers.toArray(new Handler[0]));
         try {
             context.start();
         } catch (Exception e) {
@@ -401,6 +394,11 @@ public class RestServer {
         return builder.build();
     }
 
+    // For testing only
+    public void requestTimeout(long requestTimeoutMs) {
+        this.resources.forEach(resource -> resource.requestTimeout(requestTimeoutMs));
+    }
+
     String determineAdvertisedProtocol() {
         String advertisedSecurityProtocol = config.getString(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG);
         if (advertisedSecurityProtocol == null) {
@@ -448,7 +446,7 @@ public class RestServer {
             config.getList(WorkerConfig.REST_EXTENSION_CLASSES_CONFIG),
             config, ConnectRestExtension.class);
 
-        long herderRequestTimeoutMs = ConnectorsResource.REQUEST_TIMEOUT_MS;
+        long herderRequestTimeoutMs = ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
         Integer rebalanceTimeoutMs = config.getRebalanceTimeout();
 
@@ -469,13 +467,6 @@ public class RestServer {
             connectRestExtension.register(connectRestExtensionContext);
         }
 
-    }
-
-    public static String urlJoin(String base, String path) {
-        if (base.endsWith("/") && path.startsWith("/"))
-            return base + path.substring(1);
-        else
-            return base + path;
     }
 
     /**

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
@@ -39,18 +39,14 @@ public class KTableMaterializedValueGetterSupplier<K, V> implements KTableValueG
     private class KTableMaterializedValueGetter implements KTableValueGetter<K, V> {
         private TimestampedKeyValueStore<K, V> store;
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            store = (TimestampedKeyValueStore<K, V>) context.getStateStore(storeName);
+        public void init(final ProcessorContext<?, ?> context) {
+            store = context.getStateStore(storeName);
         }
 
         @Override
         public ValueAndTimestamp<V> get(final K key) {
             return store.get(key);
         }
-
-        @Override
-        public void close() {}
     }
 }

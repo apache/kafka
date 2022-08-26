@@ -16,24 +16,24 @@
  */
 package org.apache.kafka.common.utils;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 public class JavaTest {
 
     private String javaVendor;
 
-    @Before
+    @BeforeEach
     public void before() {
         javaVendor = System.getProperty("java.vendor");
     }
 
-    @After
+    @AfterEach
     public void after() {
         System.setProperty("java.vendor", javaVendor);
     }

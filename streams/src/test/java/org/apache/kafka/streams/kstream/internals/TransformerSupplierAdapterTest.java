@@ -34,7 +34,6 @@ import static org.hamcrest.core.IsSame.sameInstance;
 import static org.hamcrest.core.IsNot.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-@SuppressWarnings("unchecked")
 public class TransformerSupplierAdapterTest extends EasyMockSupport {
 
     private ProcessorContext context;

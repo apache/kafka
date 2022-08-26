@@ -24,6 +24,7 @@ import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import javax.ws.rs.core.HttpHeaders;
 import java.security.InvalidKeyException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Base64;
@@ -108,7 +109,7 @@ public class InternalRequestSignature {
     }
 
     public boolean isValid(SecretKey key) {
-        return Arrays.equals(sign(mac, key, requestBody), requestSignature);
+        return MessageDigest.isEqual(sign(mac, key, requestBody), requestSignature);
     }
 
     private static Mac mac(String signatureAlgorithm) throws NoSuchAlgorithmException {

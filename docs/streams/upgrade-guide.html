@@ -34,9 +34,9 @@
     </div>
 
     <p>
-        Upgrading from any older version to {{fullDotVersion}} is possible: if upgrading from 2.3 or below, you will need to do two rolling bounces, where during the first rolling bounce phase you set the config <code>upgrade.from="older version"</code>
-        (possible values are <code>"0.10.0" - "2.3"</code>) and during the second you remove it. This is required to safely upgrade to the new cooperative rebalancing protocol of the embedded consumer. Note that you will remain using the old eager
-        rebalancing protocol if you skip or delay the second rolling bounce, but you can safely switch over to cooperative at any time once the entire group is on 2.4+ by removing the config value and bouncing. For more details please refer to
+        Upgrading from any older version to {{fullDotVersion}} is possible: if upgrading from 3.2 or below, you will need to do two rolling bounces, where during the first rolling bounce phase you set the config <code>upgrade.from="older version"</code>
+        (possible values are <code>"0.10.0" - "3.2"</code>) and during the second you remove it. This is required to safely handle 2 changes. The first is introduction of the new cooperative rebalancing protocol of the embedded consumer. The second is a change in foreign-key join serialization format.
+        Note that you will remain using the old eager rebalancing protocol if you skip or delay the second rolling bounce, but you can safely switch over to cooperative at any time once the entire group is on 2.4+ by removing the config value and bouncing. For more details please refer to
         <a href="https://cwiki.apache.org/confluence/x/vAclBg">KIP-429</a>:
     </p>
     <ul>
@@ -52,19 +52,40 @@
         <li> restart all new ({{fullDotVersion}}) application instances </li>
     </ul>
 
+    <h3 class="anchor-heading"><a id="streams_notable_changes" class="anchor-link"></a><a href="#streams_notable_changes">Notable compatibility changes in past releases</a></h3>
     <p>
-        Starting in Kafka Streams 2.6.x, a new processing mode <code>"exactly_once_beta"</code> (configurable via parameter
-        <code>processing.guarantee</code>) is available.
+        Downgrading from 3.0.x or newer version to 2.8.x or older version needs special attention:
+        Since 3.0.0 release, Kafka Streams uses a newer RocksDB version whose on-disk format changed.
+        This means that old versioned RocksDB would not be able to recognize the bytes written by that newer versioned RocksDB,
+        and hence it is harder to downgrade Kafka Streams with version 3.0.0 or newer to older versions in-flight.
+        Users need to wipe out the local RocksDB state stores written by the new versioned Kafka Streams before swapping in the
+        older versioned Kafka Streams bytecode, which would then restore the state stores with the old on-disk format from the
+        changelogs.
+    </p>
+
+    <p>
+        Kafka Streams does not support running multiple instances of the same application as different processes on the same physical state directory. Starting in 2.8.0 (as well as 2.7.1 and 2.6.2),
+        this restriction will be enforced. If you wish to run more than one instance of Kafka Streams, you must configure them with different values for <code>state.dir</code>.
+    </p>
+
+    <p>
+        Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS version 2. This can be configured
+        by setting <code>"processing.guarantee"</code> to <code>"exactly_once_v2"</code> for
+        application versions 3.0+, or setting it to <code>"exactly_once_beta"</code> for versions between 2.6 and 2.8.
         To use this new feature, your brokers must be on version 2.5.x or newer.
-        A switch from <code>"exactly_once"</code> to <code>"exactly_once_beta"</code> (or the other way around) is
-        only possible if the application is on version 2.6.x.
-        If you want to upgrade your application from an older version and enable this feature,
-        you first need to upgrade your application to version 2.6.x, staying on <code>"exactly_once"</code>,
-        and then do second round of rolling bounces to switch to <code>"exactly_once_beta"</code>.
-        For a downgrade, do the reverse: first switch the config from <code>"exactly_once_beta"</code> to
+        If you want to upgrade your EOS application from an older version and enable this feature in version 3.0+,
+        you first need to upgrade your application to version 3.0.x, staying on <code>"exactly_once"</code>,
+        and then do second round of rolling bounces to switch to <code>"exactly_once_v2"</code>. If you
+        are upgrading an EOS application from an older (pre-2.6) version to a version between 2.6 and 2.8, follow these
+        same steps but with the config <code>"exactly_once_beta"</code> instead. No special steps are required
+        to upgrade an application using <code>"exactly_once_beta"</code> from version 2.6+ to 3.0 or higher: you can
+        just change the config from <code>"exactly_once_beta"</code> to <code>"exactly_once_v2"</code> during the rolling upgrade.
+        For a downgrade, do the reverse: first switch the config from <code>"exactly_once_v2"</code> to
         <code>"exactly_once"</code> to disable the feature in your 2.6.x application.
         Afterward, you can downgrade your application to a pre-2.6.x version.
     </p>
+
+    <p>Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires MacOS 10.14 or higher.</p>
 
     <p>
         To run a Kafka Streams application version 2.2.1, 2.3.0, or higher a broker version 0.11.0 or higher is required
@@ -74,10 +95,8 @@
         For Kafka Streams 0.10.0, broker version 0.10.0 or higher is required.
     </p>
 
-    <p>Since 2.6.0 release, Kafka Streams depends on a RocksDB version that requires MacOS 10.14 or higher.</p>
-
     <p>
-        Another important thing to keep in mind: in deprecated <code>KStreamBuilder</code> class, when a <code>KTable</code> is created from a source topic via <code>KStreamBuilder.table()</code>, its materialized state store
+        In deprecated <code>KStreamBuilder</code> class, when a <code>KTable</code> is created from a source topic via <code>KStreamBuilder.table()</code>, its materialized state store
         will reuse the source topic as its changelog topic for restoring, and will disable logging to avoid appending new updates to the source topic; in the <code>StreamsBuilder</code> class introduced in 1.0, this behavior was changed
         accidentally: we still reuse the source topic as the changelog topic for restoring, but will also create a separate changelog topic to append the update records from source topic to. In the 2.0 release, we have fixed this issue and now users
         can choose whether or not to reuse the source topic based on the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code>: if you are upgrading from the old <code>KStreamBuilder</code> class and hence you need to change your code to use
@@ -86,32 +105,233 @@
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
+    <h3><a id="streams_api_changes_300" href="#streams_api_changes_300">Streams API changes in 3.0.0</a></h3>
+    <p>
+      We improved the semantics of
+      <a href="/documentation/streams/developer-guide/config-streams.html#max-task-idle-ms">task idling (<code>max.task.idle.ms</code>)</a>.
+      Now Streams provides stronger in-order join and merge processing semantics.
+      Streams's new default pauses processing on tasks with multiple input partitions
+      when one of the partitions has no data buffered locally but has a non-zero lag. In other
+      words, Streams will wait to fetch records that are already available on the broker. This
+      results in improved join semantics, since it allows Streams to interleave the two input
+      partitions in timestamp order instead of just processing whichever partition happens to be
+      buffered. There is an option to disable this new behavior, and there is also an option to
+      make Streams wait even longer for new records to be <em>produced</em> to the input partitions,
+      which you can use to get stronger time semantics when you know some of your producers may be
+      slow. See the
+      <a href="/documentation/streams/developer-guide/config-streams.html#max-task-idle-ms">config reference</a>
+      for more information, and <a href="https://cwiki.apache.org/confluence/x/JSXZCQ">KIP-695</a>
+      for the larger context of this change.
+    </p>
+    <p>
+        Interactive Queries may throw new exceptions for different errors:
+    </p>
+    <ul>
+        <li> <code>UnknownStateStoreException</code>: If the specified store name does not exist in the topology, an <code>UnknownStateStoreException</code> will be thrown instead of the former <code>InvalidStateStoreException</code>.</li>
+        <li> <code>StreamsNotStartedException</code>: If Streams state is <code>CREATED</code>, a <code>StreamsNotStartedException</code> will be thrown.</li>
+        <li> <code>InvalidStateStorePartitionException</code>: If the specified partition does not exist, a <code>InvalidStateStorePartitionException</code> will be thrown.</li>
+    </ul>
+    <p>
+        See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-216%3A+IQ+should+throw+different+exceptions+for+different+errors">KIP-216</a> for more information.
+    </p>
+    <p>
+      We deprecated the StreamsConfig <code>processing.guarantee</code> configuration value <code>"exactly_once"</code> (for EOS version 1) in favor of the improved EOS version 2, formerly configured via
+      <code>"exactly_once_beta</code>. To avoid confusion about the term "beta" in the config name and highlight the production-readiness of EOS version 2, we have also renamed "eos-beta" to "eos-v2"
+      and deprecated the configuration value <code>"exactly_once_beta"</code>, replacing it with a new configuration value <code>"exactly_once_v2"</code>
+      Users of exactly-once semantics should plan to migrate to the eos-v2 config and prepare for the removal of the deprecated configs in 4.0 or after at least a year
+      from the release of 3.0, whichever comes last. Note that eos-v2 requires broker version 2.5 or higher, like eos-beta, so users should begin to upgrade their kafka cluster if necessary. See
+      <a href="https://cwiki.apache.org/confluence/x/zJONCg">KIP-732</a> for more details.
+    </p>
+    <p>
+        We removed the default implementation of <code>RocksDBConfigSetter#close()</code>.
+    </p>
+    <p>
+        We dropped the default 24 hours grace period for windowed operations such as Window or Session aggregates, or
+        stream-stream joins. This period determines how long after a window ends any out-of-order records will still
+        be processed. Records coming in after the grace period has elapsed are considered late and will be dropped.
+        But in operators such as suppression, a large grace period has the drawback of incurring an equally large
+        output latency. The current API made it all too easy to miss the grace period config completely, leading you
+        to wonder why your application seems to produce no output -- it actually is, but not for 24 hours.
+        <p>
+        To prevent accidentally or unknowingly falling back to the default 24hr grace period, we deprecated all of the
+        existing static constructors for the <code>Windows</code> classes (such as <code>TimeWindows#of</code>). These
+        are replaced by new static constructors of two flavors: <code>#ofSizeAndGrace</code> and <code>#ofSizeWithNoGrace</code>
+        (these are for the <code>TimeWindows</code> class; analogous APIs exist for the <code>JoinWindows</code>,
+        <code>SessionWindows</code>, and SlidingWindows classes). With these new APIs you are forced to set the grace
+        period explicitly, or else consciously choose to opt out by selecting the <code>WithNoGrace</code> flavor which
+        sets it to 0 for situations where you really don't care about the grace period, for example during testing or
+        when playing around with Kafka Streams for the first time. Note that using the new APIs for the
+        <code>JoinWindows</code> class will also enable a fix for spurious left/outer join results, as described in
+        the following paragraph. For more details on the grace period and new static constructors, see
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-633%3A+Drop+24+hour+default+of+grace+period+in+Streams">KIP-633</a>
+    </p>
+    <p>
+        Additionally, in older versions Kafka Streams emitted stream-stream left/outer join results eagerly. This behavior may lead to spurious left/outer join result records.
+        In this release, we changed the behavior to avoid spurious results and left/outer join result are only emitted after the join window is closed, i.e., after the grace period elapsed.
+        To maintain backward compatibility, the old API <code>JoinWindows#of(timeDifference)</code> preserves the old eager-emit behavior and only the new
+        APIs <code>JoinWindows#ofTimeDifferenceAndGrace()</code> and <code>JoinsWindows#ofTimeDifferenceNoGrace</code> enable the new behavior. Check out
+        <a href="https://issues.apache.org/jira/browse/KAFKA-10847">KAFKA-10847</a> for more information.
+    </p>
+    <p>
+        The public <code>topicGroupId</code> and <code>partition</code> fields on TaskId have been deprecated and replaced with getters. Please migrate to using the new <code>TaskId.subtopology()</code>
+        (which replaces <code>topicGroupId</code>) and <code>TaskId.partition()</code> APIs instead. Also, the <code>TaskId#readFrom</code> and <code>TaskId#writeTo</code> methods have been deprecated
+        and will be removed, as they were never intended for public use. We have also deprecated the <code>org.apache.kafka.streams.processsor.TaskMetadata</code> class and introduced a new interface
+        <code>org.apache.kafka.streams.TaskMetadata</code> to be used instead. This change was introduced to better reflect the fact that <code>TaskMetadata</code> was not meant to be instantiated outside
+        of Kafka codebase.
+        Please note that the new <code>TaskMetadata</code> offers APIs that better represent the task id as an actual <code>TaskId</code> object instead of a String. Please migrate to the new
+        <code>org.apache.kafka.streams.TaskMetadata</code> which offers these better methods, for example, by using the new <code>ThreadMetadata#activeTasks</code> and <code>ThreadMetadata#standbyTasks</code>.
+        <code>org.apache.kafka.streams.processor.ThreadMetadata</code> class is also now deprecated and the newly introduced interface <code>org.apache.kafka.streams.ThreadMetadata</code> is to be used instead. In this new <code>ThreadMetadata</code>
+        interface, any reference to the deprecated <code>TaskMetadata</code> is replaced by the new interface.
+        Finally, also <code>org.apache.kafka.streams.state.StreamsMetadata</code> has been deprecated. Please migrate to the new <code>org.apache.kafka.streams.StreamsMetadata</code>.
+        We have deprecated several methods under <code>org.apache.kafka.streams.KafkaStreams</code> that returned the aforementioned deprecated classes:
+    </p>
+    <ul>
+        <li>Users of <code>KafkaStreams#allMetadata</code> are meant to migrate to the new <code>KafkaStreams#metadataForAllStreamsClients</code>.</li>
+        <li>Users of <code>KafkaStreams#allMetadataForStore(String)</code> are meant to migrate to the new <code>KafkaStreams#streamsMetadataForStore(String)</code>.</li>
+        <li>Users of <code>KafkaStreams#localThreadsMetadata</code> are meant to migrate to the new <code>KafkaStreams#metadataForLocalThreads</code>.</li>
+    </ul>
+    <p>See <a href="https://cwiki.apache.org/confluence/x/vYTOCg">KIP-740</a> and <a href="https://cwiki.apache.org/confluence/x/XIrOCg">KIP-744</a> for more details.</p>
+
+    <p>
+        We removed the following deprecated APIs:
+    </p>
+    <ul>
+        <li> <code>--zookeeper</code> flag of the application reset tool: deprecated in Kafka 1.0.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-198%3A+Remove+ZK+dependency+from+Streams+Reset+Tool">KIP-198</a>).</li>
+        <li> <code>--execute</code> flag of the application reset tool: deprecated in Kafka 1.1.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-171+-+Extend+Consumer+Group+Reset+Offset+for+Stream+Application">KIP-171</a>).</li>
+        <li> <code>StreamsBuilder#addGlobalStore</code> (one overload): deprecated in Kafka 1.1.0 (<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=74689212">KIP-233</a>).</li>
+        <li> <code>ProcessorContext#forward</code> (some overloads): deprecated in Kafka 2.0.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-251%3A+Allow+timestamp+manipulation+in+Processor+API">KIP-251</a>).</li>
+        <li> <code>WindowBytesStoreSupplier#segments</code>: deprecated in Kafka 2.1.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-319%3A+Replace+segments+with+segmentInterval+in+WindowBytesStoreSupplier">KIP-319</a>).</li>
+        <li> <code>segments, until, maintainMs</code> on <code>TimeWindows</code>, <code>JoinWindows</code>, and <code>SessionWindows</code>: deprecated in Kafka 2.1.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-328%3A+Ability+to+suppress+updates+for+KTables">KIP-328</a>).</li>
+        <li> Overloaded <code>JoinWindows#of, before, after</code>, <code>SessionWindows#with</code>, <code>TimeWindows#of, advanceBy</code>, <code>UnlimitedWindows#startOn</code> and <code>KafkaStreams#close</code> with <code>long</code> typed parameters: deprecated in Kafka 2.1.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-358%3A+Migrate+Streams+API+to+Duration+instead+of+long+ms+times">KIP-358</a>).</li>
+        <li> Overloaded <code>KStream#groupBy, groupByKey</code> and <code>KTable#groupBy</code> with <code>Serialized</code> parameter: deprecated in Kafka 2.1.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-372%3A+Naming+Repartition+Topics+for+Joins+and+Grouping">KIP-372</a>).</li>
+        <li> <code>Joined#named, name</code>: deprecated in Kafka 2.3.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-307%3A+Allow+to+define+custom+processor+names+with+KStreams+DSL">KIP-307</a>).</li>
+        <li> <code>TopologyTestDriver#pipeInput, readOutput</code>, <code>OutputVerifier</code> and <code>ConsumerRecordFactory</code> classes (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-470%3A+TopologyTestDriver+test+input+and+output+usability+improvements">KIP-470</a>).</li>
+        <li> <code>KafkaClientSupplier#getAdminClient</code>: deprecated in Kafka 2.4.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-476%3A+Add+Java+AdminClient+Interface">KIP-476</a>).</li>
+        <li> Overloaded <code>KStream#join, leftJoin, outerJoin</code> with <code>KStream</code> and <code>Joined</code> parameters: deprecated in Kafka 2.4.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-479%3A+Add+StreamJoined+config+object+to+Join">KIP-479</a>).</li>
+        <li> <code>WindowStore#put(K key, V value)</code>: deprecated in Kafka 2.4.0 (<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=115526545">KIP-474</a>).</li>
+        <li> <code>UsePreviousTimeOnInvalidTimestamp</code>: deprecated in Kafka 2.5.0 as renamed to <code>UsePartitionTimeOnInvalidTimestamp</code> (<a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=130028807">KIP-530</a>).</li>
+        <li> Overloaded <code>KafkaStreams#metadataForKey</code>: deprecated in Kafka 2.5.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-535%3A+Allow+state+stores+to+serve+stale+reads+during+rebalance">KIP-535</a>).</li>
+        <li> Overloaded <code>KafkaStreams#store</code>: deprecated in Kafka 2.5.0 (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-562%3A+Allow+fetching+a+key+from+a+single+partition+rather+than+iterating+over+all+the+stores+on+an+instance">KIP-562</a>).</li>
+    </ul>
+    <p>
+        The following dependencies were removed from Kafka Streams:
+    </p>
+    <ul>
+        <li>Connect-json: As of Kafka Streams no longer has a compile time dependency on "connect:json" module (<a href="https://issues.apache.org/jira/browse/KAFKA-5146">KAFKA-5146</a>).
+            Projects that were relying on this transitive dependency will have to explicitly declare it.</li>
+    </ul>
+    <p>
+      The default value for configuration parameter <code>replication.factor</code> was changed to <code>-1</code>
+      (meaning: use broker default replication factor).
+      The <code>replication.factor</code> value of <code>-1</code> requires broker version 2.4 or newer.
+    </p>
+    <p> The new serde type was introduced <code>ListSerde</code>: </p>
+    <ul>
+        <li> Added class <code>ListSerde</code> to (de)serialize <code>List</code>-based objects </li>
+        <li> Introduced <code>ListSerializer</code> and <code>ListDeserializer</code> to power the new functionality </li>
+    </ul>
+
+    <h3><a id="streams_api_changes_280" href="#streams_api_changes_280">Streams API changes in 2.8.0</a></h3>
+    <p>
+        We extended <code>StreamJoined</code> to include the options <code>withLoggingEnabled()</code> and <code>withLoggingDisabled()</code> in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-689%3A+Extend+%60StreamJoined%60+to+allow+more+store+configs">KIP-689</a>.
+    </p>
+    <p>
+        We added two new methods to <code>KafkaStreams</code>, namely <code>KafkaStreams#addStreamThread()</code> and <code>KafkaStreams#removeStreamThread()</code> in
+        <a href="https://cwiki.apache.org/confluence/x/FDd4CQ">KIP-663</a>.
+        These methods have enabled adding and removing StreamThreads to a running KafkaStreams client.
+   </p>
+    <p>
+        We deprecated <code>KafkaStreams#setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler uncaughtExceptionHandler)</code>
+        in favor of <code>KafkaStreams#setUncaughtExceptionHandler(final StreamsUncaughtExceptionHandler streamsUncaughtExceptionHandler)</code>
+        in <a href="https://cwiki.apache.org/confluence/x/lkN4CQ">KIP-671</a>.
+        The default handler will close the Kafka Streams client and the client will transit to state ERROR.
+        If you implement a custom handler, the new interface allows you to return a <code>StreamThreadExceptionResponse</code>,
+        which will determine how the application will respond to a stream thread failure.
+    </p>
+    <p>
+        Changes in <a href="https://cwiki.apache.org/confluence/x/FDd4CQ">KIP-663</a> necessitated the KafkaStreams client
+        state machine to update, which was done in <a href="https://cwiki.apache.org/confluence/x/lCvZCQ">KIP-696</a>.
+        The ERROR state is now terminal with PENDING_ERROR being a transitional state where the resources are closing.
+        The ERROR state indicates that there is something wrong and the Kafka Streams client should not be blindly
+        restarted without classifying the error that caused the thread to fail.
+        If the error is of a type that you would like to retry, you should have the
+        <code>StreamsUncaughtExceptionHandler</code> return <code>REPLACE_THREAD</code>.
+        When all stream threads are dead there is no automatic transition to ERROR as a new stream thread can be added.
+    </p>
+    <p>
+        The <code>TimeWindowedDeserializer</code> constructor <code>TimeWindowedDeserializer(final Deserializer inner)</code>
+        was deprecated to encourage users to properly set their window size through <code>TimeWindowedDeserializer(final Deserializer inner, Long windowSize)</code>.
+        An additional streams config, <code>window.size.ms</code>, was added for users that cannot set the window size through
+        the constructor, such as when using the console consumer. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-659%3A+Improve+TimeWindowedDeserializer+and+TimeWindowedSerde+to+handle+window+size">KIP-659</a>
+        has more details.
+    </p>
+    <p>
+        To simplify testing, two new constructors that don't require a <code>Properties</code> parameter have been
+        added to the <code>TopologyTestDriver</code> class. If <code>Properties</code> are passed
+        into the constructor, it is no longer required to set mandatory configuration parameters
+        (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-680%3A+TopologyTestDriver+should+not+require+a+Properties+argument">KIP-680</a>).
+    </p>
+    <p>
+        We added the <code>prefixScan()</code> method to interface <code>ReadOnlyKeyValueStore</code>.
+        The new <code>prefixScan()</code> allows fetching all values whose keys start with a given prefix.
+        See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-614%3A+Add+Prefix+Scan+support+for+State+Stores">KIP-614</a> for more details.
+    </p>
+    <p>
+        Kafka Streams is now handling <code>TimeoutException</code> thrown by the consumer, producer, and admin client.
+        If a timeout occurs on a task, Kafka Streams moves to the next task and retries to make progress on the failed
+        task in the next iteration.
+        To bound how long Kafka Streams retries a task, you can set <code>task.timeout.ms</code> (default is 5 minutes).
+        If a task does not make progress within the specified task timeout, which is tracked on a per-task basis,
+        Kafka Streams throws a <code>TimeoutException</code>
+        (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-572%3A+Improve+timeouts+and+retries+in+Kafka+Streams">KIP-572</a>).
+    </p>
+    <p>
+        We changed the default value of <code>default.key.serde</code> and <code>default.value.serde</code> to be <code>null</code> instead of <code>ByteArraySerde</code>.
+        Users will now see a <code>ConfigException</code> if their serdes are not correctly configured through those configs or passed in explicitly.
+        See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-741%3A+Change+default+serde+to+be+null">KIP-741</a> for more details.
+    </p>
+
     <h3><a id="streams_api_changes_270" href="#streams_api_changes_270">Streams API changes in 2.7.0</a></h3>
+    <p>
+        In <code>KeyQueryMetadata</code> we deprecated <code>getActiveHost()</code>, <code>getStandbyHosts()</code> as well as <code>getPartition()</code>
+        and replaced them with <code>activeHost()</code>, <code>standbyHosts()</code> and <code>partition()</code> respectively.
+        <code>KeyQueryMetadata</code> was introduced in Kafka Streams 2.5 release with getter methods having prefix <code>get</code>.
+        The intend of this change is to bring the method names to Kafka custom to not use the <code>get</code> prefix for getter methods.
+        The old methods are deprecated and is not effected.
+        (Cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-648%3A+Renaming+getter+method+for+Interactive+Queries">KIP-648</a>.)
+    </p>
     <p>
         The <code>StreamsConfig</code> variable for configuration parameter <code>"topology.optimization"</code>
         is renamed from <code>TOPOLOGY_OPTIMIZATION</code> to <code>TOPOLOGY_OPTIMIZATION_CONFIG</code>.
         The old variable is deprecated. Note, that the parameter name itself is not affected.
         (Cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-626%3A+Rename+StreamsConfig+config+variable+name">KIP-629</a>.)
     </p>
-
     <p>
         The configuration parameter <code>retries</code> is deprecated in favor of the new parameter <code>task.timeout.ms</code>.
         Kafka Streams' runtime ignores <code>retries</code> if set, however, it would still forward the parameter
-        to its internal clients. Note though, that <code>retries</code> is deprecated for the producer and admin client, too.
-        Thus, instead of setting <code>retries</code>, you should configure the corresponding client timeouts, namely
-        <code>delivery.timeout.ms</code> and <code>max.block.ms</code> for the producer and
-        <code>default.api.timeout.ms</code> for the admin client.
+        to its internal clients.
+    </p>
+    <p>
+        We added <code>SlidingWindows</code> as an option for <code>windowedBy()</code> windowed aggregations as described in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-450%3A+Sliding+Window+Aggregations+in+the+DSL">KIP-450</a>.
+        Sliding windows are fixed-time and data-aligned windows that allow for flexible and efficient windowed aggregations.
+    </p>
+
+    <p>
+        The end-to-end latency metrics introduced in 2.6 have been expanded to include store-level metrics. The new store-level
+        metrics are recorded at the TRACE level, a new metrics recording level. Enabling TRACE level metrics will automatically
+        turn on all higher levels, ie INFO and DEBUG. See <a href="https://cwiki.apache.org/confluence/x/gBkRCQ">KIP-613</a> for more information.
     </p>
 
     <h3><a id="streams_api_changes_260" href="#streams_api_changes_260">Streams API changes in 2.6.0</a></h3>
     <p>
-        We added a new processing mode that improves application scalability using exactly-once guarantees
+        We added a new processing mode, EOS version 2, that improves application scalability using exactly-once guarantees
         (via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a>).
         You can enable this new feature by setting the configuration parameter <code>processing.guarantee</code> to the
         new value <code>"exactly_once_beta"</code>.
         Note that you need brokers with version 2.5 or newer to use this feature.
     </p>
-
     <p>
         For more highly available stateful applications, we've modified the task assignment algorithm to delay the movement of stateful active tasks to instances
         that aren't yet caught up with that task's state. Instead, to migrate a task from one instance to another (eg when scaling out),
@@ -120,12 +340,10 @@
         tasks to their new owners in the background. Check out <a href="https://cwiki.apache.org/confluence/x/0i4lBg">KIP-441</a>
         for full details, including several new configs for control over this new feature.
     </p>
-
     <p>
         New end-to-end latency metrics have been added. These task-level metrics will be logged at the INFO level and report the min and max end-to-end latency of a record at the beginning/source node(s)
         and end/terminal node(s) of a task. See <a href="https://cwiki.apache.org/confluence/x/gBkRCQ">KIP-613</a> for more information.
     </p>
-
     <p>
         As of 2.6.0 Kafka Streams deprecates <code>KStream.through()</code> in favor of the new <code>KStream.repartition()</code> operator
         (as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-221%3A+Enhance+DSL+with+Connecting+Topic+Creation+and+Repartition+Hint">KIP-221</a>).
@@ -144,8 +362,13 @@
         We added a <code>--force</code> option in StreamsResetter to force remove left-over members on broker side when long session time out was configured
         as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-571%3A+Add+option+to+force+remove+members+in+StreamsResetter">KIP-571</a>.
     </p>
+    <p>
+        We added <code>Suppressed.withLoggingDisabled()</code> and <code>Suppressed.withLoggingEnabled(config)</code>
+        methods to allow disabling or configuring of the changelog topic and allows for configuration of the changelog topic
+        as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-446%3A+Add+changelog+topic+configuration+to+KTable+suppress">KIP-446</a>.
+    </p>
 
-    <h3><a id="streams_api_changes_250" href="#streams_api_changes_250">Streams API changes in 2.5.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_250" class="anchor-link"></a><a href="#streams_api_changes_250">Streams API changes in 2.5.0</a></h3>
     <p>
         We add a new <code>cogroup()</code> operator (via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-150+-+Kafka-Streams+Cogroup">KIP-150</a>)
         that allows to aggregate multiple streams in a single operation.
@@ -171,7 +394,7 @@
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-535%3A+Allow+state+stores+to+serve+stale+reads+during+rebalance">KIP-535</a> respectively.
     </p>
 
-    <h3><a id="streams_api_changes_240" href="#streams_api_changes_240">Streams API changes in 2.4.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_240" class="anchor-link"></a><a href="#streams_api_changes_240">Streams API changes in 2.4.0</a></h3>
     <p>     
          As of 2.4.0 Kafka Streams offers a KTable-KTable foreign-key join (as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-213+Support+non-key+joining+in+KTable">KIP-213</a>). 
          This joiner allows for records to be joined between two KTables with different keys. 
@@ -262,7 +485,7 @@
         Hence, you will need to reset your application to upgrade it.
     
 
-    <h3><a id="streams_api_changes_230" href="#streams_api_changes_230">Streams API changes in 2.3.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_230" class="anchor-link"></a><a href="#streams_api_changes_230">Streams API changes in 2.3.0</a></h3>
 
     <p>Version 2.3.0 adds the Suppress operator to the <code>kafka-streams-scala</code> Ktable API.</p>
 
@@ -331,13 +554,7 @@
         For more details please read <a href="https://issues.apache.org/jira/browse/KAFKA-8215">KAFKA-8215</a>.
     </p>
 
-    <h3><a id="streams_notable_changes_221" href="#streams_api_changes_221">Notable changes in Kafka Streams 2.2.1</a></h3>
-    <p>
-        As of Kafka Streams 2.2.1 a message format 0.11 or higher is required;
-        this implies that brokers must be on version 0.11.0 or higher.
-    </p>
-
-    <h3><a id="streams_api_changes_220" href="#streams_api_changes_220">Streams API changes in 2.2.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_220" class="anchor-link"></a><a href="#streams_api_changes_220">Streams API changes in 2.2.0</a></h3>
     <p>
         We've simplified the <code>KafkaStreams#state</code> transition diagram during the starting up phase a bit in 2.2.0: in older versions the state will transit from <code>CREATED</code> to <code>RUNNING</code>, and then to <code>REBALANCING</code> to get the first
         stream task assignment, and then back to <code>RUNNING</code>; starting in 2.2.0 it will transit from <code>CREATED</code> directly to <code>REBALANCING</code> and then to <code>RUNNING</code>.
@@ -354,7 +571,7 @@
         used in a try-with-resource statement. For a full list of public interfaces that get impacted please read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-376%3A+Implement+AutoClosable+on+appropriate+classes+that+want+to+be+used+in+a+try-with-resource+statement">KIP-376</a>.
     </p>
 
-    <h3><a id="streams_api_changes_210" href="#streams_api_changes_210">Streams API changes in 2.1.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_210" class="anchor-link"></a><a href="#streams_api_changes_210">Streams API changes in 2.1.0</a></h3>
     <p>
         We updated <code>TopologyDescription</code> API to allow for better runtime checking.
         Users are encouraged to use <code>#topicSet()</code> and <code>#topicPattern()</code> accordingly on <code>TopologyDescription.Source</code> nodes,
@@ -454,7 +671,7 @@
         different stream instances in one application.
     </p>
 
-    <h3><a id="streams_api_changes_200" href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_200" class="anchor-link"></a><a href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>
     <p>
         In 2.0.0 we have added a few new APIs on the <code>ReadOnlyWindowStore</code> interface (for details please read <a href="#streams_api_changes_200">Streams API changes</a> below).
         If you have customized window store implementations that extends the <code>ReadOnlyWindowStore</code> interface you need to make code changes.
@@ -565,7 +782,7 @@
         Kafka Streams DSL for Scala is a new Kafka Streams client library available for developers authoring Kafka Streams applications in Scala.  It wraps core Kafka Streams DSL types to make it easier to call when
         interoperating with Scala code.  For example, it includes higher order functions as parameters for transformations avoiding the need anonymous classes in Java 7 or experimental SAM type conversions in Scala 2.11,
         automatic conversion between Java and Scala collection types, a way
-        to implicitly provide SerDes to reduce boilerplate from your application and make it more typesafe, and more!  For more information see the
+        to implicitly provide Serdes to reduce boilerplate from your application and make it more typesafe, and more!  For more information see the
         <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html#scala-dsl">Kafka Streams DSL for Scala documentation</a> and
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-270+-+A+Scala+Wrapper+Library+for+Kafka+Streams">KIP-270</a>.
     </p>
@@ -590,7 +807,7 @@
         <li><code>StreamsConfig#ZOOKEEPER_CONNECT_CONFIG</code> are removed as we do not need ZooKeeper dependency in Streams any more (it is deprecated since 0.10.2.0). </li>
     </ul>
 
-    <h3><a id="streams_api_changes_110" href="#streams_api_changes_110">Streams API changes in 1.1.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_110" class="anchor-link"></a><a href="#streams_api_changes_110">Streams API changes in 1.1.0</a></h3>
     <p>
         We have added support for methods in <code>ReadOnlyWindowStore</code> which allows for querying <code>WindowStore</code>s without the necessity of providing keys.
         For users who have customized window store implementations on the above interface, they'd need to update their code to implement the newly added method as well.
@@ -648,7 +865,7 @@
         <li> added options to specify input topics offsets to reset according to <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-171+-+Extend+Consumer+Group+Reset+Offset+for+Stream+Application">KIP-171</a></li>
     </ul>
 
-    <h3><a id="streams_api_changes_100" href="#streams_api_changes_100">Streams API changes in 1.0.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_100" class="anchor-link"></a><a href="#streams_api_changes_100">Streams API changes in 1.0.0</a></h3>
 
     <p>
         With 1.0 a major API refactoring was accomplished and the new API is cleaner and easier to use.
@@ -782,7 +999,7 @@
         If you already use <code>StateStoreSupplier</code> or <code>Materialized</code> to provide configs for changelogs, then they will take precedence over those supplied in the config.
     </p>
 
-    <h3><a id="streams_api_changes_0110" href="#streams_api_changes_0110">Streams API changes in 0.11.0.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_0110" class="anchor-link"></a><a href="#streams_api_changes_0110">Streams API changes in 0.11.0.0</a></h3>
 
     <p> Updates in <code>StreamsConfig</code>: </p>
     <ul>
@@ -835,9 +1052,9 @@
 
     <p> Metrics using exactly-once semantics: </p>
     <p>
-        If <code>"exactly_once"</code> processing is enabled via the <code>processing.guarantee</code> parameter,
+        If <code>"exactly_once"</code> processing (EOS version 1) is enabled via the <code>processing.guarantee</code> parameter,
         internally Streams switches from a producer-per-thread to a producer-per-task runtime model.
-        Using <code>"exactly_once_beta"</code> does use a producer-per-thread, so <code>client.id</code> doesn't change,
+        Using <code>"exactly_once_beta"</code> (EOS version 2) does use a producer-per-thread, so <code>client.id</code> doesn't change,
         compared with <code>"at_least_once"</code> for this case).
         In order to distinguish the different producers, the producer's <code>client.id</code> additionally encodes the task-ID for this case.
         Because the producer's <code>client.id</code> is used to report JMX metrics, it might be required to update tools that receive those metrics.
@@ -851,7 +1068,7 @@
     </ul>
     <p> <code>[client.Id]</code> is either set via Streams configuration parameter <code>client.id</code> or defaults to <code>[application.id]-[processId]</code> (<code>[processId]</code> is a random UUID). </p>
 
-    <h3><a id="streams_api_changes_01021" href="#streams_api_changes_01021">Notable changes in 0.10.2.1</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_01021" class="anchor-link"></a><a href="#streams_api_changes_01021">Notable changes in 0.10.2.1</a></h3>
 
     <p>
         Parameter updates in <code>StreamsConfig</code>:
@@ -860,7 +1077,7 @@
         <li> The default config values of embedded producer's <code>retries</code> and consumer's <code>max.poll.interval.ms</code> have been changed to improve the resiliency of a Kafka Streams application </li>
     </ul>
 
-    <h3><a id="streams_api_changes_0102" href="#streams_api_changes_0102">Streams API changes in 0.10.2.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_0102" class="anchor-link"></a><a href="#streams_api_changes_0102">Streams API changes in 0.10.2.0</a></h3>
 
     <p>
         New methods in <code>KafkaStreams</code>:
@@ -931,7 +1148,7 @@
 
     <p> Relaxed type constraints of many DSL interfaces, classes, and methods (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-100+-+Relax+Type+constraints+in+Kafka+Streams+API">KIP-100</a>). </p>
 
-    <h3><a id="streams_api_changes_0101" href="#streams_api_changes_0101">Streams API changes in 0.10.1.0</a></h3>
+    <h3 class="anchor-heading"><a id="streams_api_changes_0101" class="anchor-link"></a><a href="#streams_api_changes_0101">Streams API changes in 0.10.1.0</a></h3>
 
     <p> Stream grouping and aggregation split into two methods: </p>
     <ul>
@@ -974,10 +1191,10 @@
 
 <!--#include virtual="../../includes/_header.htm" -->
 <!--#include virtual="../../includes/_top.htm" -->
-<div class="content documentation documentation--current">
+<div class="content documentation">
     <!--#include virtual="../../includes/_nav.htm" -->
     <div class="right">
-        <!--#include virtual="../../includes/_docs_banner.htm" -->
+        <!--//#include virtual="../../includes/_docs_banner.htm" -->
         <ul class="breadcrumbs">
             <li><a href="/documentation">Documentation</a></li>
             <li><a href="/documentation/streams">Kafka Streams</a></li>

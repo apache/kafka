@@ -19,7 +19,7 @@ package org.apache.kafka.common.replica;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
 import java.util.HashSet;
@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.test.TestUtils.assertOptional;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ReplicaSelectorTest {
 
@@ -45,19 +45,19 @@ public class ReplicaSelectorTest {
         ReplicaSelector selector = new RackAwareReplicaSelector();
         Optional<ReplicaView> selected = selector.select(tp, metadata("rack-b"), partitionView);
         assertOptional(selected, replicaInfo -> {
-            assertEquals("Expect replica to be in rack-b", replicaInfo.endpoint().rack(), "rack-b");
-            assertEquals("Expected replica 3 since it is more caught-up", replicaInfo.endpoint().id(), 3);
+            assertEquals(replicaInfo.endpoint().rack(), "rack-b", "Expect replica to be in rack-b");
+            assertEquals(replicaInfo.endpoint().id(), 3, "Expected replica 3 since it is more caught-up");
         });
 
         selected = selector.select(tp, metadata("not-a-rack"), partitionView);
         assertOptional(selected, replicaInfo -> {
-            assertEquals("Expect leader when we can't find any nodes in given rack", replicaInfo, leader);
+            assertEquals(replicaInfo, leader, "Expect leader when we can't find any nodes in given rack");
         });
 
         selected = selector.select(tp, metadata("rack-a"), partitionView);
         assertOptional(selected, replicaInfo -> {
-            assertEquals("Expect replica to be in rack-a", replicaInfo.endpoint().rack(), "rack-a");
-            assertEquals("Expect the leader since it's in rack-a", replicaInfo, leader);
+            assertEquals(replicaInfo.endpoint().rack(), "rack-a", "Expect replica to be in rack-a");
+            assertEquals(replicaInfo, leader, "Expect the leader since it's in rack-a");
         });
 
 

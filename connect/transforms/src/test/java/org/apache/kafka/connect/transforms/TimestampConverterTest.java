@@ -25,8 +25,8 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.source.SourceRecord;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Calendar;
 import java.util.Collections;
@@ -36,8 +36,10 @@ import java.util.Map;
 import java.util.TimeZone;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class TimestampConverterTest {
     private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
@@ -46,6 +48,9 @@ public class TimestampConverterTest {
     private static final Calendar DATE;
     private static final Calendar DATE_PLUS_TIME;
     private static final long DATE_PLUS_TIME_UNIX;
+    private static final long DATE_PLUS_TIME_UNIX_MICROS;
+    private static final long DATE_PLUS_TIME_UNIX_NANOS;
+    private static final long DATE_PLUS_TIME_UNIX_SECONDS;
     private static final String STRING_DATE_FMT = "yyyy MM dd HH mm ss SSS z";
     private static final String DATE_PLUS_TIME_STRING;
 
@@ -69,41 +74,65 @@ public class TimestampConverterTest {
         DATE_PLUS_TIME.setTimeInMillis(0L);
         DATE_PLUS_TIME.add(Calendar.DATE, 1);
         DATE_PLUS_TIME.add(Calendar.MILLISECOND, 1234);
-
+        // 86 401 234 milliseconds
         DATE_PLUS_TIME_UNIX = DATE_PLUS_TIME.getTime().getTime();
+        // 86 401 234 123 microseconds
+        DATE_PLUS_TIME_UNIX_MICROS = DATE_PLUS_TIME_UNIX * 1000 + 123;
+        // 86 401 234 123 456 nanoseconds
+        DATE_PLUS_TIME_UNIX_NANOS = DATE_PLUS_TIME_UNIX_MICROS * 1000 + 456;
+        // 86401 seconds
+        DATE_PLUS_TIME_UNIX_SECONDS = DATE_PLUS_TIME.getTimeInMillis() / 1000;
         DATE_PLUS_TIME_STRING = "1970 01 02 00 00 01 234 UTC";
     }
 
 
     // Configuration
 
-    @After
+    @AfterEach
     public void teardown() {
         xformKey.close();
         xformValue.close();
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigNoTargetType() {
-        xformValue.configure(Collections.<String, String>emptyMap());
+        assertThrows(ConfigException.class, () -> xformValue.configure(Collections.<String, String>emptyMap()));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigInvalidTargetType() {
-        xformValue.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "invalid"));
+        assertThrows(ConfigException.class,
+            () -> xformValue.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "invalid")));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
+    public void testConfigInvalidUnixPrecision() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "unix");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "invalid");
+        assertThrows(ConfigException.class, () -> xformValue.configure(config));
+    }
+
+    @Test
+    public void testConfigValidUnixPrecision() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "unix");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "seconds");
+        assertDoesNotThrow(() -> xformValue.configure(config));
+    }
+
+    @Test
     public void testConfigMissingFormat() {
-        xformValue.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "string"));
+        assertThrows(ConfigException.class,
+            () -> xformValue.configure(Collections.singletonMap(TimestampConverter.TARGET_TYPE_CONFIG, "string")));
     }
 
-    @Test(expected = ConfigException.class)
+    @Test
     public void testConfigInvalidFormat() {
         Map<String, String> config = new HashMap<>();
         config.put(TimestampConverter.TARGET_TYPE_CONFIG, "string");
         config.put(TimestampConverter.FORMAT_CONFIG, "bad-format");
-        xformValue.configure(config);
+        assertThrows(ConfigException.class, () -> xformValue.configure(config));
     }
 
     // Conversions without schemas (most flexible Timestamp -> other types)
@@ -523,6 +552,123 @@ public class TimestampConverterTest {
         assertEquals("test", ((Struct) transformed.value()).get("other"));
     }
 
+    @Test
+    public void testWithSchemaFieldConversion_Micros() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp");
+        config.put(TimestampConverter.FIELD_CONFIG, "ts");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "microseconds");
+        xformValue.configure(config);
+
+        // ts field is a unix timestamp with microseconds precision
+        Schema structWithTimestampFieldSchema = SchemaBuilder.struct()
+                .field("ts", Schema.INT64_SCHEMA)
+                .build();
+        Struct original = new Struct(structWithTimestampFieldSchema);
+        original.put("ts", DATE_PLUS_TIME_UNIX_MICROS);
+
+        SourceRecord transformed = xformValue.apply(createRecordWithSchema(structWithTimestampFieldSchema, original));
+
+        Schema expectedSchema = SchemaBuilder.struct()
+                .field("ts", Timestamp.SCHEMA)
+                .build();
+        assertEquals(expectedSchema, transformed.valueSchema());
+        assertEquals(DATE_PLUS_TIME.getTime(), ((Struct) transformed.value()).get("ts"));
+    }
+
+    @Test
+    public void testWithSchemaFieldConversion_Nanos() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp");
+        config.put(TimestampConverter.FIELD_CONFIG, "ts");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "nanoseconds");
+        xformValue.configure(config);
+
+        // ts field is a unix timestamp with microseconds precision
+        Schema structWithTimestampFieldSchema = SchemaBuilder.struct()
+                .field("ts", Schema.INT64_SCHEMA)
+                .build();
+        Struct original = new Struct(structWithTimestampFieldSchema);
+        original.put("ts", DATE_PLUS_TIME_UNIX_NANOS);
+
+        SourceRecord transformed = xformValue.apply(createRecordWithSchema(structWithTimestampFieldSchema, original));
+
+        Schema expectedSchema = SchemaBuilder.struct()
+                .field("ts", Timestamp.SCHEMA)
+                .build();
+        assertEquals(expectedSchema, transformed.valueSchema());
+        assertEquals(DATE_PLUS_TIME.getTime(), ((Struct) transformed.value()).get("ts"));
+    }
+
+    @Test
+    public void testWithSchemaFieldConversion_Seconds() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "Timestamp");
+        config.put(TimestampConverter.FIELD_CONFIG, "ts");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "seconds");
+        xformValue.configure(config);
+
+        // ts field is a unix timestamp with seconds precision
+        Schema structWithTimestampFieldSchema = SchemaBuilder.struct()
+                .field("ts", Schema.INT64_SCHEMA)
+                .build();
+        Struct original = new Struct(structWithTimestampFieldSchema);
+        original.put("ts", DATE_PLUS_TIME_UNIX_SECONDS);
+
+        SourceRecord transformed = xformValue.apply(createRecordWithSchema(structWithTimestampFieldSchema, original));
+
+        Calendar expectedDate = GregorianCalendar.getInstance(UTC);
+        expectedDate.setTimeInMillis(0L);
+        expectedDate.add(Calendar.DATE, 1);
+        expectedDate.add(Calendar.SECOND, 1);
+
+        Schema expectedSchema = SchemaBuilder.struct()
+                .field("ts", Timestamp.SCHEMA)
+                .build();
+        assertEquals(expectedSchema, transformed.valueSchema());
+        assertEquals(expectedDate.getTime(), ((Struct) transformed.value()).get("ts"));
+    }
+
+    @Test
+    public void testSchemalessStringToUnix_Micros() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "unix");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "microseconds");
+        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
+        xformValue.configure(config);
+        SourceRecord transformed = xformValue.apply(createRecordSchemaless(DATE_PLUS_TIME_STRING));
+
+        assertNull(transformed.valueSchema());
+        // Conversion loss as expected, sub-millisecond part is not stored in pivot java.util.Date
+        assertEquals(86401234000L, transformed.value());
+    }
+
+    @Test
+    public void testSchemalessStringToUnix_Nanos() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "unix");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "nanoseconds");
+        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
+        xformValue.configure(config);
+        SourceRecord transformed = xformValue.apply(createRecordSchemaless(DATE_PLUS_TIME_STRING));
+
+        assertNull(transformed.valueSchema());
+        // Conversion loss as expected, sub-millisecond part is not stored in pivot java.util.Date
+        assertEquals(86401234000000L, transformed.value());
+    }
+
+    @Test
+    public void testSchemalessStringToUnix_Seconds() {
+        Map<String, String> config = new HashMap<>();
+        config.put(TimestampConverter.TARGET_TYPE_CONFIG, "unix");
+        config.put(TimestampConverter.UNIX_PRECISION_CONFIG, "seconds");
+        config.put(TimestampConverter.FORMAT_CONFIG, STRING_DATE_FMT);
+        xformValue.configure(config);
+        SourceRecord transformed = xformValue.apply(createRecordSchemaless(DATE_PLUS_TIME_STRING));
+
+        assertNull(transformed.valueSchema());
+        assertEquals(DATE_PLUS_TIME_UNIX_SECONDS, transformed.value());
+    }
 
     // Validate Key implementation in addition to Value
 

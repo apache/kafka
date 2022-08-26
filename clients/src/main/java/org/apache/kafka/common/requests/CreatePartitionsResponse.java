@@ -19,33 +19,25 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
-
 
 public class CreatePartitionsResponse extends AbstractResponse {
 
     private final CreatePartitionsResponseData data;
 
     public CreatePartitionsResponse(CreatePartitionsResponseData data) {
+        super(ApiKeys.CREATE_PARTITIONS);
         this.data = data;
     }
 
-    public CreatePartitionsResponse(Struct struct, short version) {
-        this.data = new CreatePartitionsResponseData(struct, version);
-    }
-
+    @Override
     public CreatePartitionsResponseData data() {
         return data;
-    }
-
-    @Override
-    protected Struct toStruct(short version) {
-        return data.toStruct(version);
     }
 
     @Override
@@ -58,7 +50,7 @@ public class CreatePartitionsResponse extends AbstractResponse {
     }
 
     public static CreatePartitionsResponse parse(ByteBuffer buffer, short version) {
-        return new CreatePartitionsResponse(ApiKeys.CREATE_PARTITIONS.parseResponse(version, buffer), version);
+        return new CreatePartitionsResponse(new CreatePartitionsResponseData(new ByteBufferAccessor(buffer), version));
     }
 
     @Override

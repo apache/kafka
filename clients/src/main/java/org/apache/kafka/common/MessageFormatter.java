@@ -19,7 +19,6 @@ package org.apache.kafka.common;
 import java.io.Closeable;
 import java.io.PrintStream;
 import java.util.Map;
-import java.util.Properties;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
@@ -35,32 +34,20 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 public interface MessageFormatter extends Configurable, Closeable {
 
     /**
-     * Initialises the MessageFormatter
-     * @param props Properties to configure the formatter
-     * @deprecated Use {@link #configure(Map)} instead, this method is for backward compatibility with the older Formatter interface
-     */
-    @Deprecated
-    default public void init(Properties props) {}
-
-    /**
      * Configures the MessageFormatter
      * @param configs Map to configure the formatter
      */
-    default public void configure(Map<String, ?> configs) {
-        Properties properties = new Properties();
-        properties.putAll(configs);
-        init(properties);
-    }
+    default void configure(Map<String, ?> configs) {}
 
     /**
      * Parses and formats a record for display
      * @param consumerRecord the record to format
      * @param output the print stream used to output the record
      */
-    public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output);
+    void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output);
 
     /**
      * Closes the formatter
      */
-    default public void close() {}
+    default void close() {}
 }

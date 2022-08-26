@@ -20,24 +20,24 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class LoginManagerTest {
 
     private Password dynamicPlainContext;
     private Password dynamicDigestContext;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         dynamicPlainContext = new Password(PlainLoginModule.class.getName() +
                 " required user=\"plainuser\" password=\"plain-secret\";");
@@ -47,7 +47,7 @@ public class LoginManagerTest {
                 Collections.singletonList("SCRAM-SHA-256"));
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         LoginManager.closeAll();
     }

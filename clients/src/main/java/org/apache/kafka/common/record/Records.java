@@ -19,8 +19,6 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
 
-import java.io.IOException;
-import java.nio.channels.GatheringByteChannel;
 import java.util.Iterator;
 
 
@@ -43,7 +41,7 @@ import java.util.Iterator;
  *
  * See {@link MemoryRecords} for the in-memory representation and {@link FileRecords} for the on-disk representation.
  */
-public interface Records extends BaseRecords {
+public interface Records extends TransferableRecords {
     int OFFSET_OFFSET = 0;
     int OFFSET_LENGTH = 8;
     int SIZE_OFFSET = OFFSET_OFFSET + OFFSET_LENGTH;
@@ -55,16 +53,6 @@ public interface Records extends BaseRecords {
     int MAGIC_OFFSET = 16;
     int MAGIC_LENGTH = 1;
     int HEADER_SIZE_UP_TO_MAGIC = MAGIC_OFFSET + MAGIC_LENGTH;
-
-    /**
-     * Attempts to write the contents of this buffer to a channel.
-     * @param channel The channel to write to
-     * @param position The position in the buffer to write from
-     * @param length The number of bytes to write
-     * @return The number of bytes actually written
-     * @throws IOException For any IO errors
-     */
-    long writeTo(GatheringByteChannel channel, long position, int length) throws IOException;
 
     /**
      * Get the record batches. Note that the signature allows subclasses
@@ -88,14 +76,6 @@ public interface Records extends BaseRecords {
      * @return true if all record batches have a matching magic value, false otherwise
      */
     boolean hasMatchingMagic(byte magic);
-
-    /**
-     * Check whether this log buffer has a magic value compatible with a particular value
-     * (i.e. whether all message sets contained in the buffer have a matching or lower magic).
-     * @param magic The magic version to ensure compatibility with
-     * @return true if all batches have compatible magic, false otherwise
-     */
-    boolean hasCompatibleMagic(byte magic);
 
     /**
      * Convert all batches in this buffer to the format passed as a parameter. Note that this requires

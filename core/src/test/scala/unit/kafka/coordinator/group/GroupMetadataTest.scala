@@ -22,9 +22,9 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.utils.Time
-import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.apache.kafka.common.utils.{Time, MockTime}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -33,22 +33,18 @@ import scala.jdk.CollectionConverters._
  */
 class GroupMetadataTest {
   private val protocolType = "consumer"
-  private val groupId = "groupId"
-  private val groupInstanceId = Some("groupInstanceId")
+  private val groupInstanceId = "groupInstanceId"
   private val memberId = "memberId"
   private val clientId = "clientId"
   private val clientHost = "clientHost"
   private val rebalanceTimeoutMs = 60000
   private val sessionTimeoutMs = 10000
 
-  private var group: GroupMetadata = null
-  private var member: MemberMetadata = null
+  private var group: GroupMetadata = _
 
-  @Before
+  @BeforeEach
   def setUp(): Unit = {
     group = new GroupMetadata("groupId", Empty, Time.SYSTEM)
-    member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
-      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
   }
 
   @Test
@@ -127,9 +123,9 @@ class GroupMetadataTest {
     assertState(group, Stable)
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testEmptyToStableIllegalTransition(): Unit = {
-    group.transitionTo(Stable)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(Stable))
   }
 
   @Test
@@ -137,36 +133,31 @@ class GroupMetadataTest {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(CompletingRebalance)
     group.transitionTo(Stable)
-    try {
-      group.transitionTo(Stable)
-      fail("should have failed due to illegal transition")
-    } catch {
-      case e: IllegalStateException => // ok
-    }
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(Stable))
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testEmptyToAwaitingRebalanceIllegalTransition(): Unit = {
-    group.transitionTo(CompletingRebalance)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(CompletingRebalance))
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testPreparingRebalanceToPreparingRebalanceIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
-    group.transitionTo(PreparingRebalance)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(PreparingRebalance))
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testPreparingRebalanceToStableIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
-    group.transitionTo(Stable)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(Stable))
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testAwaitingRebalanceToAwaitingRebalanceIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(CompletingRebalance)
-    group.transitionTo(CompletingRebalance)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(CompletingRebalance))
   }
 
   def testDeadToDeadIllegalTransition(): Unit = {
@@ -176,38 +167,38 @@ class GroupMetadataTest {
     assertState(group, Dead)
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testDeadToStableIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
-    group.transitionTo(Stable)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(Stable))
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testDeadToPreparingRebalanceIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
-    group.transitionTo(PreparingRebalance)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(PreparingRebalance))
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testDeadToAwaitingRebalanceIllegalTransition(): Unit = {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
-    group.transitionTo(CompletingRebalance)
+    assertThrows(classOf[IllegalStateException], () => group.transitionTo(CompletingRebalance))
   }
 
   @Test
   def testSelectProtocol(): Unit = {
     val memberId = "memberId"
-    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
 
     group.add(member)
     assertEquals("range", group.selectProtocol)
 
     val otherMemberId = "otherMemberId"
-    val otherMember = new MemberMetadata(otherMemberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
+    val otherMember = new MemberMetadata(otherMemberId, None, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, List(("roundrobin", Array.empty[Byte]), ("range", Array.empty[Byte])))
 
     group.add(otherMember)
@@ -215,7 +206,7 @@ class GroupMetadataTest {
     assertTrue(Set("range", "roundrobin")(group.selectProtocol))
 
     val lastMemberId = "lastMemberId"
-    val lastMember = new MemberMetadata(lastMemberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
+    val lastMember = new MemberMetadata(lastMemberId, None, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, List(("roundrobin", Array.empty[Byte]), ("range", Array.empty[Byte])))
 
     group.add(lastMember)
@@ -223,20 +214,19 @@ class GroupMetadataTest {
     assertEquals("roundrobin", group.selectProtocol)
   }
 
-  @Test(expected = classOf[IllegalStateException])
+  @Test
   def testSelectProtocolRaisesIfNoMembers(): Unit = {
-    group.selectProtocol
-    fail()
+    assertThrows(classOf[IllegalStateException], () => group.selectProtocol)
   }
 
   @Test
   def testSelectProtocolChoosesCompatibleProtocol(): Unit = {
     val memberId = "memberId"
-    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
 
     val otherMemberId = "otherMemberId"
-    val otherMember = new MemberMetadata(otherMemberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
+    val otherMember = new MemberMetadata(otherMemberId, None, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, List(("roundrobin", Array.empty[Byte]), ("blah", Array.empty[Byte])))
 
     group.add(member)
@@ -246,6 +236,9 @@ class GroupMetadataTest {
 
   @Test
   def testSupportsProtocols(): Unit = {
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+
     // by default, the group supports everything
     assertTrue(group.supportsProtocols(protocolType, Set("roundrobin", "range")))
 
@@ -256,7 +249,7 @@ class GroupMetadataTest {
     assertFalse(group.supportsProtocols(protocolType, Set("foo", "bar")))
 
     val otherMemberId = "otherMemberId"
-    val otherMember = new MemberMetadata(otherMemberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
+    val otherMember = new MemberMetadata(otherMemberId, None, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, List(("roundrobin", Array.empty[Byte]), ("blah", Array.empty[Byte])))
 
     group.add(otherMember)
@@ -267,12 +260,54 @@ class GroupMetadataTest {
   }
 
   @Test
+  def testOffsetRemovalDuringTransitionFromEmptyToNonEmpty(): Unit = {
+    val topic = "foo"
+    val partition = new TopicPartition(topic, 0)
+    val time = new MockTime()
+    group = new GroupMetadata("groupId", Empty, time)
+
+    // Rebalance once in order to commit offsets
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs,
+      sessionTimeoutMs, protocolType, List(("range", ConsumerProtocol.serializeSubscription(new Subscription(List("foo").asJava)).array())))
+    group.transitionTo(PreparingRebalance)
+    group.add(member)
+    group.initNextGeneration()
+    assertEquals(Some(Set("foo")), group.getSubscribedTopics)
+
+    val offset = offsetAndMetadata(offset = 37, timestamp = time.milliseconds())
+    val commitRecordOffset = 3
+
+    group.prepareOffsetCommit(Map(partition -> offset))
+    assertTrue(group.hasOffsets)
+    assertEquals(None, group.offset(partition))
+    group.onOffsetCommitAppend(partition, CommitRecordMetadataAndOffset(Some(commitRecordOffset), offset))
+
+    val offsetRetentionMs = 50000L
+    time.sleep(offsetRetentionMs + 1)
+
+    // Rebalance again so that the group becomes empty
+    group.transitionTo(PreparingRebalance)
+    group.remove(memberId)
+    group.initNextGeneration()
+
+    // The group is empty, but we should not expire the offset because the state was just changed
+    assertEquals(Empty, group.currentState)
+    assertEquals(Map.empty, group.removeExpiredOffsets(time.milliseconds(), offsetRetentionMs))
+
+    // Start a new rebalance to add the member back. The offset should not be expired
+    // while the rebalance is in progress.
+    group.transitionTo(PreparingRebalance)
+    group.add(member)
+    assertEquals(Map.empty, group.removeExpiredOffsets(time.milliseconds(), offsetRetentionMs))
+  }
+
+  @Test
   def testSubscribedTopics(): Unit = {
     // not able to compute it for a newly created group
     assertEquals(None, group.getSubscribedTopics)
 
     val memberId = "memberId"
-    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, List(("range", ConsumerProtocol.serializeSubscription(new Subscription(List("foo").asJava)).array())))
 
     group.transitionTo(PreparingRebalance)
@@ -289,7 +324,7 @@ class GroupMetadataTest {
 
     assertEquals(Some(Set.empty), group.getSubscribedTopics)
 
-    val memberWithFaultyProtocol  = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
+    val memberWithFaultyProtocol  = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
 
     group.transitionTo(PreparingRebalance)
@@ -306,7 +341,7 @@ class GroupMetadataTest {
     assertEquals(None, group.getSubscribedTopics)
 
     val memberId = "memberId"
-    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, "My Protocol", List(("range", Array.empty[Byte])))
 
     group.transitionTo(PreparingRebalance)
@@ -319,6 +354,9 @@ class GroupMetadataTest {
 
   @Test
   def testInitNextGeneration(): Unit = {
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+
     member.supportedProtocols = List(("roundrobin", Array.empty[Byte]))
 
     group.transitionTo(PreparingRebalance)
@@ -519,25 +557,17 @@ class GroupMetadataTest {
     assertFalse(group.hasPendingOffsetCommitsFromProducer(producerId))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
-  def testReplaceGroupInstanceWithEmptyGroupInstanceId(): Unit = {
-    group.add(member)
-    group.addStaticMember(groupInstanceId, memberId)
-    assertTrue(group.isLeader(memberId))
-    assertEquals(memberId, group.getStaticMemberId(groupInstanceId))
-
-    val newMemberId = "newMemberId"
-    group.replaceGroupInstance(memberId, newMemberId, Option.empty)
-  }
-
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def testReplaceGroupInstanceWithNonExistingMember(): Unit = {
     val newMemberId = "newMemberId"
-    group.replaceGroupInstance(memberId, newMemberId, groupInstanceId)
+    assertThrows(classOf[IllegalArgumentException], () => group.replaceStaticMember(groupInstanceId, memberId, newMemberId))
   }
 
   @Test
   def testReplaceGroupInstance(): Unit = {
+    val member = new MemberMetadata(memberId, Some(groupInstanceId), clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+
     var joinAwaitingMemberFenced = false
     group.add(member, joinGroupResult => {
       joinAwaitingMemberFenced = joinGroupResult.error == Errors.FENCED_INSTANCE_ID
@@ -546,14 +576,13 @@ class GroupMetadataTest {
     member.awaitingSyncCallback = syncGroupResult => {
       syncAwaitingMemberFenced = syncGroupResult.error == Errors.FENCED_INSTANCE_ID
     }
-    group.addStaticMember(groupInstanceId, memberId)
     assertTrue(group.isLeader(memberId))
-    assertEquals(memberId, group.getStaticMemberId(groupInstanceId))
+    assertEquals(Some(memberId), group.currentStaticMemberId(groupInstanceId))
 
     val newMemberId = "newMemberId"
-    group.replaceGroupInstance(memberId, newMemberId, groupInstanceId)
+    group.replaceStaticMember(groupInstanceId, memberId, newMemberId)
     assertTrue(group.isLeader(newMemberId))
-    assertEquals(newMemberId, group.getStaticMemberId(groupInstanceId))
+    assertEquals(Some(newMemberId), group.currentStaticMemberId(groupInstanceId))
     assertTrue(joinAwaitingMemberFenced)
     assertTrue(syncAwaitingMemberFenced)
     assertFalse(member.isAwaitingJoin)
@@ -562,6 +591,9 @@ class GroupMetadataTest {
 
   @Test
   def testInvokeJoinCallback(): Unit = {
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+
     var invoked = false
     group.add(member, _ => {
       invoked = true
@@ -575,6 +607,8 @@ class GroupMetadataTest {
 
   @Test
   def testNotInvokeJoinCallback(): Unit = {
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
     group.add(member)
 
     assertFalse(member.isAwaitingJoin)
@@ -584,6 +618,9 @@ class GroupMetadataTest {
 
   @Test
   def testInvokeSyncCallback(): Unit = {
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+
     group.add(member)
     member.awaitingSyncCallback = _ => {}
 
@@ -594,6 +631,8 @@ class GroupMetadataTest {
 
   @Test
   def testNotInvokeSyncCallback(): Unit = {
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
     group.add(member)
 
     val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Errors.NONE))
@@ -622,6 +661,96 @@ class GroupMetadataTest {
     assertFalse(group.hasPendingOffsetCommitsForTopicPartition(new TopicPartition("non-exist", 0)))
   }
 
+  @Test
+  def testCannotAddPendingMemberIfStable(): Unit = {
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+    group.add(member)
+    assertThrows(classOf[IllegalStateException], () => group.addPendingMember(memberId))
+  }
+
+  @Test
+  def testRemovalFromPendingAfterMemberIsStable(): Unit = {
+    group.addPendingMember(memberId)
+    assertFalse(group.has(memberId))
+    assertTrue(group.isPendingMember(memberId))
+
+    val member = new MemberMetadata(memberId, None, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+    group.add(member)
+    assertTrue(group.has(memberId))
+    assertFalse(group.isPendingMember(memberId))
+  }
+
+  @Test
+  def testRemovalFromPendingWhenMemberIsRemoved(): Unit = {
+    group.addPendingMember(memberId)
+    assertFalse(group.has(memberId))
+    assertTrue(group.isPendingMember(memberId))
+
+    group.remove(memberId)
+    assertFalse(group.has(memberId))
+    assertFalse(group.isPendingMember(memberId))
+  }
+
+  @Test
+  def testCannotAddStaticMemberIfAlreadyPresent(): Unit = {
+    val member = new MemberMetadata(memberId, Some(groupInstanceId), clientId, clientHost,
+      rebalanceTimeoutMs, sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
+    group.add(member)
+    assertTrue(group.has(memberId))
+    assertTrue(group.hasStaticMember(groupInstanceId))
+
+    // We aren ot permitted to add the member again if it is already present
+    assertThrows(classOf[IllegalStateException], () => group.add(member))
+  }
+
+  @Test
+  def testCannotAddPendingSyncOfUnknownMember(): Unit = {
+    assertThrows(classOf[IllegalStateException],
+      () => group.addPendingSyncMember(memberId))
+  }
+
+  @Test
+  def testCannotRemovePendingSyncOfUnknownMember(): Unit = {
+    assertThrows(classOf[IllegalStateException],
+      () => group.removePendingSyncMember(memberId))
+  }
+
+  @Test
+  def testCanAddAndRemovePendingSyncMember(): Unit = {
+    val member = new MemberMetadata(memberId, Some(groupInstanceId), clientId, clientHost,
+      rebalanceTimeoutMs, sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
+    group.add(member)
+    group.addPendingSyncMember(memberId)
+    assertEquals(Set(memberId), group.allPendingSyncMembers)
+    group.removePendingSyncMember(memberId)
+    assertEquals(Set(), group.allPendingSyncMembers)
+  }
+
+  @Test
+  def testRemovalFromPendingSyncWhenMemberIsRemoved(): Unit = {
+    val member = new MemberMetadata(memberId, Some(groupInstanceId), clientId, clientHost,
+      rebalanceTimeoutMs, sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
+    group.add(member)
+    group.addPendingSyncMember(memberId)
+    assertEquals(Set(memberId), group.allPendingSyncMembers)
+    group.remove(memberId)
+    assertEquals(Set(), group.allPendingSyncMembers)
+  }
+
+  @Test
+  def testNewGenerationClearsPendingSyncMembers(): Unit = {
+    val member = new MemberMetadata(memberId, Some(groupInstanceId), clientId, clientHost,
+      rebalanceTimeoutMs, sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
+    group.add(member)
+    group.transitionTo(PreparingRebalance)
+    group.addPendingSyncMember(memberId)
+    assertEquals(Set(memberId), group.allPendingSyncMembers)
+    group.initNextGeneration()
+    assertEquals(Set(), group.allPendingSyncMembers)
+  }
+
   private def assertState(group: GroupMetadata, targetState: GroupState): Unit = {
     val states: Set[GroupState] = Set(Stable, PreparingRebalance, CompletingRebalance, Dead)
     val otherStates = states - targetState
@@ -631,8 +760,8 @@ class GroupMetadataTest {
     assertTrue(group.is(targetState))
   }
 
-  private def offsetAndMetadata(offset: Long): OffsetAndMetadata = {
-    OffsetAndMetadata(offset, "", Time.SYSTEM.milliseconds())
+  private def offsetAndMetadata(offset: Long, timestamp: Long = Time.SYSTEM.milliseconds()): OffsetAndMetadata = {
+    OffsetAndMetadata(offset, "", timestamp)
   }
 
 }

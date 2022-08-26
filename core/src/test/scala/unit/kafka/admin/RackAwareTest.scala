@@ -17,7 +17,7 @@
 package kafka.admin
 
 import scala.collection.{Map, Seq, mutable}
-import org.junit.Assert._
+import org.junit.jupiter.api.Assertions._
 
 trait RackAwareTest {
 
@@ -31,26 +31,29 @@ trait RackAwareTest {
                                verifyReplicasDistribution: Boolean = true): Unit = {
     // always verify that no broker will be assigned for more than one replica
     for ((_, brokerList) <- assignment) {
-      assertEquals("More than one replica is assigned to same broker for the same partition", brokerList.toSet.size, brokerList.size)
+      assertEquals(brokerList.toSet.size, brokerList.size,
+        "More than one replica is assigned to same broker for the same partition")
     }
     val distribution = getReplicaDistribution(assignment, brokerRackMapping)
 
     if (verifyRackAware) {
       val partitionRackMap = distribution.partitionRacks
-      assertEquals("More than one replica of the same partition is assigned to the same rack",
-        List.fill(numPartitions)(replicationFactor), partitionRackMap.values.toList.map(_.distinct.size))
+      assertEquals(List.fill(numPartitions)(replicationFactor), partitionRackMap.values.toList.map(_.distinct.size),
+        "More than one replica of the same partition is assigned to the same rack")
     }
 
     if (verifyLeaderDistribution) {
       val leaderCount = distribution.brokerLeaderCount
       val leaderCountPerBroker = numPartitions / numBrokers
-      assertEquals("Preferred leader count is not even for brokers", List.fill(numBrokers)(leaderCountPerBroker), leaderCount.values.toList)
+      assertEquals(List.fill(numBrokers)(leaderCountPerBroker), leaderCount.values.toList,
+        "Preferred leader count is not even for brokers")
     }
 
     if (verifyReplicasDistribution) {
       val replicasCount = distribution.brokerReplicasCount
       val numReplicasPerBroker = numPartitions * replicationFactor / numBrokers
-      assertEquals("Replica count is not even for broker", List.fill(numBrokers)(numReplicasPerBroker), replicasCount.values.toList)
+      assertEquals(List.fill(numBrokers)(numReplicasPerBroker), replicasCount.values.toList,
+        "Replica count is not even for broker")
     }
   }
 

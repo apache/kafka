@@ -32,7 +32,7 @@ public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K
     /**
      * Update the value associated with this key.
      *
-     * @param key The key to associate the value to
+     * @param key   The key to associate the value to
      * @param value The value to update, it can be {@code null};
      *              if the serialized bytes are also {@code null} it is interpreted as deletes
      * @throws NullPointerException If {@code null} is used for key.
@@ -42,7 +42,7 @@ public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K
     /**
      * Update the value associated with this key, unless a value is already associated with the key.
      *
-     * @param key The key to associate the value to
+     * @param key   The key to associate the value to
      * @param value The value to update, it can be {@code null};
      *              if the serialized bytes are also {@code null} it is interpreted as deletes
      * @return The old value or {@code null} if there is no such key.

@@ -59,6 +59,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertThrows;
 
+@SuppressWarnings("deprecation")
 @RunWith(EasyMockRunner.class)
 public class KStreamRepartitionTest {
     private final String inputTopic = "input-topic";

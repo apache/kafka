@@ -17,27 +17,25 @@
 
 package org.apache.kafka.message;
 
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.StringWriter;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Timeout(120)
 public class VersionConditionalTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
-    static void assertEquals(CodeBuffer buffer, String... lines) throws Exception {
+    static void claimEquals(CodeBuffer buffer, String... lines) throws Exception {
         StringWriter stringWriter = new StringWriter();
         buffer.write(stringWriter);
         StringBuilder expectedStringBuilder = new StringBuilder();
         for (String line : lines) {
             expectedStringBuilder.append(String.format(line));
         }
-        Assert.assertEquals(expectedStringBuilder.toString(), stringWriter.toString());
+        assertEquals(stringWriter.toString(), expectedStringBuilder.toString());
     }
 
     @Test
@@ -52,7 +50,7 @@ public class VersionConditionalTest {
                 buffer.printf("System.out.println(\"foobar\");%n");
             }).
             generate(buffer);
-        assertEquals(buffer,
+        claimEquals(buffer,
             "System.out.println(\"foobar\");%n");
     }
 
@@ -68,7 +66,7 @@ public class VersionConditionalTest {
                 buffer.printf("System.out.println(\"foobar\");%n");
             }).
             generate(buffer);
-        assertEquals(buffer,
+        claimEquals(buffer,
             "System.out.println(\"foobar\");%n");
     }
 
@@ -104,7 +102,7 @@ public class VersionConditionalTest {
             }).
             allowMembershipCheckAlwaysFalse(false).
             generate(buffer);
-        assertEquals(buffer,
+        claimEquals(buffer,
             "System.out.println(\"hello world\");%n");
     }
 
@@ -121,7 +119,7 @@ public class VersionConditionalTest {
             }).
             alwaysEmitBlockScope(true).
             generate(buffer);
-        assertEquals(buffer,
+        claimEquals(buffer,
             "{%n",
             "    System.out.println(\"hello world\");%n",
             "}%n");
@@ -139,7 +137,7 @@ public class VersionConditionalTest {
                 buffer.printf("System.out.println(\"foobar\");%n");
             }).
             generate(buffer);
-        assertEquals(buffer,
+        claimEquals(buffer,
             "if (_version >= 1) {%n",
             "    System.out.println(\"hello world\");%n",
             "} else {%n",
@@ -156,7 +154,7 @@ public class VersionConditionalTest {
                 buffer.printf("System.out.println(\"hello world\");%n");
             }).
             generate(buffer);
-        assertEquals(buffer,
+        claimEquals(buffer,
             "if (_version >= 1) {%n",
             "    System.out.println(\"hello world\");%n",
             "}%n");
@@ -171,7 +169,7 @@ public class VersionConditionalTest {
                 buffer.printf("System.out.println(\"hello world\");%n");
             }).
             generate(buffer);
-        assertEquals(buffer,
+        claimEquals(buffer,
             "if (_version < 1) {%n",
             "    System.out.println(\"hello world\");%n",
             "}%n");
@@ -189,7 +187,7 @@ public class VersionConditionalTest {
                 buffer.printf("System.out.println(\"foobar\");%n");
             }).
             generate(buffer);
-        assertEquals(buffer,
+        claimEquals(buffer,
             "if (_version <= 10) {%n",
             "    System.out.println(\"hello world\");%n",
             "} else {%n",
@@ -206,7 +204,7 @@ public class VersionConditionalTest {
                 buffer.printf("System.out.println(\"hello world\");%n");
             }).
             generate(buffer);
-        assertEquals(buffer,
+        claimEquals(buffer,
             "if (_version <= 10) {%n",
             "    System.out.println(\"hello world\");%n",
             "}%n");
@@ -221,7 +219,7 @@ public class VersionConditionalTest {
                 buffer.printf("System.out.println(\"hello world\");%n");
             }).
             generate(buffer);
-        assertEquals(buffer,
+        claimEquals(buffer,
             "if (_version < 1) {%n",
             "    System.out.println(\"hello world\");%n",
             "}%n");
@@ -237,7 +235,7 @@ public class VersionConditionalTest {
             }).
             allowMembershipCheckAlwaysFalse(false).
             generate(buffer);
-        assertEquals(buffer,
+        claimEquals(buffer,
             "if ((_version >= 5) && (_version <= 10)) {%n",
             "    System.out.println(\"hello world\");%n",
             "}%n");

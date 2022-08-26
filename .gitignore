@@ -51,8 +51,8 @@ docs/generated/
 kafkatest.egg-info/
 systest/
 *.swp
-clients/src/generated
-clients/src/generated-test
 jmh-benchmarks/generated
 jmh-benchmarks/src/main/generated
-streams/src/generated
+raft/.jqwik-database
+**/src/generated
+**/src/generated-test

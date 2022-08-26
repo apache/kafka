@@ -17,8 +17,9 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
-import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -36,6 +37,7 @@ import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -51,8 +53,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
 
 /**
  * ChangelogReader is created and maintained by the stream thread and used for both updating standby tasks and
@@ -204,18 +204,13 @@ public class StoreChangelogReader implements ChangelogReader {
     // is being removed from the thread; otherwise it would stay in this map even after completed
     private final Map<TopicPartition, ChangelogMetadata> changelogs;
 
-    // the changelog reader only need the main consumer to get committed offsets for source changelog partitions
-    // to update offset limit for standby tasks;
-    private Consumer<byte[], byte[]> mainConsumer;
+    // groupId is needed for the admin client to retrieve committed offsets
+    private final String groupId;
 
-    // the changelog reader needs the admin client to list end offsets
+    // the changelog reader needs the admin client to list end offsets and committed offsets
     private final Admin adminClient;
 
     private long lastUpdateOffsetTime;
-
-    void setMainConsumer(final Consumer<byte[], byte[]> consumer) {
-        this.mainConsumer = consumer;
-    }
 
     public StoreChangelogReader(final Time time,
                                 final StreamsConfig config,
@@ -230,6 +225,7 @@ public class StoreChangelogReader implements ChangelogReader {
         this.restoreConsumer = restoreConsumer;
         this.stateRestoreListener = stateRestoreListener;
 
+        this.groupId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         this.updateOffsetIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) == Long.MAX_VALUE ?
             DEFAULT_OFFSET_UPDATE_MS : config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
@@ -269,9 +265,9 @@ public class StoreChangelogReader implements ChangelogReader {
             final TopicPartition partition = metadata.storeMetadata.changelogPartition();
             try {
                 return restoreConsumer.position(partition) >= endOffset;
-            } catch (final TimeoutException e) {
-                // if we cannot get the position of the consumer within timeout, just return false
-                return false;
+            } catch (final TimeoutException timeoutException) {
+                // re-throw to trigger `task.timeout.ms`
+                throw timeoutException;
             } catch (final KafkaException e) {
                 // this also includes InvalidOffsetException, which should not happen under normal
                 // execution, hence it is also okay to wrap it as fatal StreamsException
@@ -394,7 +390,8 @@ public class StoreChangelogReader implements ChangelogReader {
             .collect(Collectors.toSet());
     }
 
-    private boolean allChangelogsCompleted() {
+    @Override
+    public boolean allChangelogsCompleted() {
         return changelogs.values().stream()
             .allMatch(metadata -> metadata.changelogState == ChangelogState.COMPLETED);
     }
@@ -410,8 +407,9 @@ public class StoreChangelogReader implements ChangelogReader {
     // 1. if there are any registered changelogs that needs initialization, try to initialize them first;
     // 2. if all changelogs have finished, return early;
     // 3. if there are any restoring changelogs, try to read from the restore consumer and process them.
-    public void restore() {
-        initializeChangelogs(registeredChangelogs());
+    @Override
+    public void restore(final Map<TaskId, Task> tasks) {
+        initializeChangelogs(tasks, registeredChangelogs());
 
         if (!activeRestoringChangelogs().isEmpty() && state == ChangelogReaderState.STANDBY_UPDATING) {
             throw new IllegalStateException("Should not be in standby updating state if there are still un-completed active changelogs");
@@ -427,10 +425,15 @@ public class StoreChangelogReader implements ChangelogReader {
             final ConsumerRecords<byte[], byte[]> polledRecords;
 
             try {
+                pauseResumePartitions(tasks, restoringChangelogs);
+
                 // for restoring active and updating standby we may prefer different poll time
                 // in order to make sure we call the main consumer#poll in time.
                 // TODO: once we move ChangelogReader to a separate thread this may no longer be a concern
                 polledRecords = restoreConsumer.poll(state == ChangelogReaderState.STANDBY_UPDATING ? Duration.ZERO : pollTime);
+
+                // TODO (?) If we cannot fetch records during restore, should we trigger `task.timeout.ms` ?
+                // TODO (?) If we cannot fetch records for standby task, should we trigger `task.timeout.ms` ?
             } catch (final InvalidOffsetException e) {
                 log.warn("Encountered " + e.getClass().getName() +
                     " fetching records from restore consumer for partitions " + e.partitions() + ", it is likely that " +
@@ -438,12 +441,9 @@ public class StoreChangelogReader implements ChangelogReader {
                     "truncated or compacted on the broker, marking the corresponding tasks as corrupted and re-initializing" +
                     " it later.", e);
 
-                final Map<TaskId, Collection<TopicPartition>> taskWithCorruptedChangelogs = new HashMap<>();
-                for (final TopicPartition partition : e.partitions()) {
-                    final TaskId taskId = changelogs.get(partition).stateManager.taskId();
-                    taskWithCorruptedChangelogs.computeIfAbsent(taskId, k -> new HashSet<>()).add(partition);
-                }
-                throw new TaskCorruptedException(taskWithCorruptedChangelogs, e);
+                final Set<TaskId> corruptedTasks = new HashSet<>();
+                e.partitions().forEach(partition -> corruptedTasks.add(changelogs.get(partition).stateManager.taskId()));
+                throw new TaskCorruptedException(corruptedTasks, e);
             } catch (final KafkaException e) {
                 throw new StreamsException("Restore consumer get unexpected error polling records.", e);
             }
@@ -458,13 +458,67 @@ public class StoreChangelogReader implements ChangelogReader {
                 // restore to end check needs to be executed still.
                 // TODO: we always try to restore as a batch when some records are accumulated, which may result in
                 //       small batches; this can be optimized in the future, e.g. wait longer for larger batches.
-                restoreChangelog(changelogs.get(partition));
+                final TaskId taskId = changelogs.get(partition).stateManager.taskId();
+                try {
+                    if (restoreChangelog(changelogs.get(partition))) {
+                        final Task task = tasks.get(taskId);
+                        if (task != null) {
+                            task.clearTaskTimeout();
+                        }
+                    }
+                } catch (final TimeoutException timeoutException) {
+                    tasks.get(taskId).maybeInitTaskTimeoutOrThrow(
+                        time.milliseconds(),
+                        timeoutException
+                    );
+                }
             }
 
-            maybeUpdateLimitOffsetsForStandbyChangelogs();
+            maybeUpdateLimitOffsetsForStandbyChangelogs(tasks);
 
             maybeLogRestorationProgress();
         }
+    }
+
+    private void pauseResumePartitions(final Map<TaskId, Task> tasks,
+                                       final Set<TopicPartition> restoringChangelogs) {
+        if (state == ChangelogReaderState.ACTIVE_RESTORING) {
+            updatePartitionsByType(tasks, restoringChangelogs, TaskType.ACTIVE);
+        }
+        if (state == ChangelogReaderState.STANDBY_UPDATING) {
+            updatePartitionsByType(tasks, restoringChangelogs, TaskType.STANDBY);
+        }
+    }
+
+    private void updatePartitionsByType(final Map<TaskId, Task> tasks,
+                                        final Set<TopicPartition> restoringChangelogs,
+                                        final TaskType taskType) {
+        final Collection<TopicPartition> toResume =
+            restoringChangelogs.stream().filter(t -> shouldResume(tasks, t, taskType)).collect(Collectors.toList());
+        final Collection<TopicPartition> toPause =
+            restoringChangelogs.stream().filter(t -> shouldPause(tasks, t, taskType)).collect(Collectors.toList());
+        restoreConsumer.resume(toResume);
+        restoreConsumer.pause(toPause);
+    }
+
+    private boolean shouldResume(final Map<TaskId, Task> tasks, final TopicPartition partition, final TaskType taskType) {
+        final ProcessorStateManager manager = changelogs.get(partition).stateManager;
+        final TaskId taskId = manager.taskId();
+        final Task task = tasks.get(taskId);
+        if (manager.taskType() == taskType) {
+            return task != null;
+        }
+        return false;
+    }
+
+    private boolean shouldPause(final Map<TaskId, Task> tasks, final TopicPartition partition, final TaskType taskType) {
+        final ProcessorStateManager manager = changelogs.get(partition).stateManager;
+        final TaskId taskId = manager.taskId();
+        final Task task = tasks.get(taskId);
+        if (manager.taskType() == taskType) {
+            return task == null;
+        }
+        return false;
     }
 
     private void maybeLogRestorationProgress() {
@@ -504,7 +558,7 @@ public class StoreChangelogReader implements ChangelogReader {
         return offsets == null ? "unknown" : String.valueOf(offsets);
     }
 
-    private void maybeUpdateLimitOffsetsForStandbyChangelogs() {
+    private void maybeUpdateLimitOffsetsForStandbyChangelogs(final Map<TaskId, Task> tasks) {
         // we only consider updating the limit offset for standbys if we are not restoring active tasks
         if (state == ChangelogReaderState.STANDBY_UPDATING &&
             updateOffsetIntervalMs < time.milliseconds() - lastUpdateOffsetTime) {
@@ -522,7 +576,8 @@ public class StoreChangelogReader implements ChangelogReader {
 
             for (final TopicPartition partition : changelogsWithLimitOffsets) {
                 if (!changelogs.get(partition).bufferedRecords().isEmpty()) {
-                    updateLimitOffsetsForStandbyChangelogs(committedOffsetForChangelogs(changelogsWithLimitOffsets));
+                    updateLimitOffsetsForStandbyChangelogs(committedOffsetForChangelogs(tasks, changelogsWithLimitOffsets));
+                    lastUpdateOffsetTime = time.milliseconds();
                     break;
                 }
             }
@@ -550,14 +605,18 @@ public class StoreChangelogReader implements ChangelogReader {
      * restore a changelog with its buffered records if there's any; for active changelogs also check if
      * it has completed the restoration and can transit to COMPLETED state and trigger restore callbacks
      */
-    private void restoreChangelog(final ChangelogMetadata changelogMetadata) {
+    private boolean restoreChangelog(final ChangelogMetadata changelogMetadata) {
         final ProcessorStateManager stateManager = changelogMetadata.stateManager;
         final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
         final TopicPartition partition = storeMetadata.changelogPartition();
         final String storeName = storeMetadata.store().name();
         final int numRecords = changelogMetadata.bufferedLimitIndex;
 
+        boolean madeProgress = false;
+
         if (numRecords != 0) {
+            madeProgress = true;
+
             final List<ConsumerRecord<byte[], byte[]>> records = changelogMetadata.bufferedRecords.subList(0, numRecords);
             stateManager.restore(storeMetadata, records);
 
@@ -589,6 +648,8 @@ public class StoreChangelogReader implements ChangelogReader {
 
         // we should check even if there's nothing restored, but do not check completed if we are processing standby tasks
         if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE && hasRestoredToEnd(changelogMetadata)) {
+            madeProgress = true;
+
             log.info("Finished restoring changelog {} to store {} with a total number of {} records",
                 partition, storeName, changelogMetadata.totalRestored);
 
@@ -601,35 +662,82 @@ public class StoreChangelogReader implements ChangelogReader {
                 throw new StreamsException("State restore listener failed on restore completed", e);
             }
         }
+
+        return madeProgress;
     }
 
-    private Map<TopicPartition, Long> committedOffsetForChangelogs(final Set<TopicPartition> partitions) {
-        final Map<TopicPartition, Long> committedOffsets;
-        try {
-            committedOffsets = fetchCommittedOffsets(partitions, mainConsumer);
-        } catch (final TimeoutException e) {
-            // if it timed out we just retry next time
-            return Collections.emptyMap();
+    private Set<Task> getTasksFromPartitions(final Map<TaskId, Task> tasks,
+                                             final Set<TopicPartition> partitions) {
+        final Set<Task> result = new HashSet<>();
+        for (final TopicPartition partition : partitions) {
+            result.add(tasks.get(changelogs.get(partition).stateManager.taskId()));
         }
-        lastUpdateOffsetTime = time.milliseconds();
-        return committedOffsets;
+        return result;
     }
 
-    private Map<TopicPartition, Long> endOffsetForChangelogs(final Set<TopicPartition> partitions) {
+    private void clearTaskTimeout(final Set<Task> tasks) {
+        tasks.forEach(t -> {
+            if (t != null) {
+                t.clearTaskTimeout();
+            }
+        });
+    }
+
+    private void maybeInitTaskTimeoutOrThrow(final Set<Task> tasks,
+                                             final Exception cause) {
+        final long now = time.milliseconds();
+        tasks.forEach(t -> t.maybeInitTaskTimeoutOrThrow(now, cause));
+    }
+
+    private Map<TopicPartition, Long> committedOffsetForChangelogs(final Map<TaskId, Task> tasks, final Set<TopicPartition> partitions) {
         if (partitions.isEmpty()) {
             return Collections.emptyMap();
         }
 
         try {
-            final ListOffsetsResult result = adminClient.listOffsets(
-                    partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest())),
-                    new ListOffsetsOptions(IsolationLevel.READ_UNCOMMITTED)
-            );
-            return result.all().get().entrySet().stream().collect(
-                    Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset()));
-        } catch (final TimeoutException | InterruptedException | ExecutionException e) {
-            // if timeout exception gets thrown we just give up this time and retry in the next run loop
-            log.debug("Could not fetch all end offsets for {}, will retry in the next run loop", partitions);
+            // those which do not have a committed offset would default to 0
+            final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions()
+                    .requireStable(true);
+            final ListConsumerGroupOffsetsSpec spec = new ListConsumerGroupOffsetsSpec()
+                    .topicPartitions(new ArrayList<>(partitions));
+            final Map<TopicPartition, Long> committedOffsets = adminClient.listConsumerGroupOffsets(Collections.singletonMap(groupId, spec))
+                    .partitionsToOffsetAndMetadata(groupId).get().entrySet()
+                    .stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
+
+            clearTaskTimeout(getTasksFromPartitions(tasks, partitions));
+            return committedOffsets;
+        } catch (final TimeoutException | InterruptedException | ExecutionException retriableException) {
+            log.debug("Could not retrieve the committed offsets for partitions {} due to {}, will retry in the next run loop",
+                partitions, retriableException.toString());
+            maybeInitTaskTimeoutOrThrow(getTasksFromPartitions(tasks, partitions), retriableException);
+            return Collections.emptyMap();
+        } catch (final KafkaException e) {
+            throw new StreamsException(String.format("Failed to retrieve committed offsets for %s", partitions), e);
+        }
+    }
+
+    private Map<TopicPartition, Long> endOffsetForChangelogs(final Map<TaskId, Task> tasks, final Set<TopicPartition> partitions) {
+        if (partitions.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        try {
+            // we always use read_uncommitted to get log end offset since the last committed txn may have not advanced the LSO for EOS,
+            // see KAFKA-10167 for more details
+            final ListOffsetsOptions options = new ListOffsetsOptions(IsolationLevel.READ_UNCOMMITTED);
+            final Map<TopicPartition, OffsetSpec> offsetSpecs =
+                partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()));
+            final Map<TopicPartition, Long> logEndOffsets = adminClient.listOffsets(offsetSpecs, options)
+                .all().get().entrySet()
+                .stream().collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset()));
+
+            clearTaskTimeout(getTasksFromPartitions(tasks, partitions));
+            return logEndOffsets;
+        } catch (final TimeoutException | InterruptedException | ExecutionException retriableException) {
+            log.debug("Could not fetch all end offsets for {} due to {}, will retry in the next run loop",
+                partitions, retriableException.toString());
+            maybeInitTaskTimeoutOrThrow(getTasksFromPartitions(tasks, partitions), retriableException);
             return Collections.emptyMap();
         } catch (final KafkaException e) {
             throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
@@ -661,7 +769,8 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private void initializeChangelogs(final Set<ChangelogMetadata> newPartitionsToRestore) {
+    private void initializeChangelogs(final Map<TaskId, Task> tasks,
+                                      final Set<ChangelogMetadata> newPartitionsToRestore) {
         if (newPartitionsToRestore.isEmpty()) {
             return;
         }
@@ -688,8 +797,8 @@ public class StoreChangelogReader implements ChangelogReader {
 
         // NOTE we assume that all requested partitions will be included in the returned map for both end/committed
         // offsets, i.e., it would not return partial result and would timeout if some of the results cannot be found
-        final Map<TopicPartition, Long> endOffsets = endOffsetForChangelogs(newPartitionsToFindEndOffset);
-        final Map<TopicPartition, Long> committedOffsets = committedOffsetForChangelogs(newPartitionsToFindCommittedOffset);
+        final Map<TopicPartition, Long> endOffsets = endOffsetForChangelogs(tasks, newPartitionsToFindEndOffset);
+        final Map<TopicPartition, Long> committedOffsets = committedOffsetForChangelogs(tasks, newPartitionsToFindCommittedOffset);
 
         for (final TopicPartition partition : newPartitionsToFindEndOffset) {
             final ChangelogMetadata changelogMetadata = changelogs.get(partition);
@@ -832,7 +941,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 long startOffset = 0L;
                 try {
                     startOffset = restoreConsumer.position(partition);
-                } catch (final TimeoutException e) {
+                } catch (final TimeoutException swallow) {
                     // if we cannot find the starting position at the beginning, just use the default 0L
                 } catch (final KafkaException e) {
                     // this also includes InvalidOffsetException, which should not happen under normal

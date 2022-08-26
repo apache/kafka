@@ -20,8 +20,8 @@ package kafka.zk
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.TOPIC
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
+import org.junit.jupiter.api.Test
 
 class ExtendedAclStoreTest {
   private val literalResource = new ResourcePattern(TOPIC, "some-topic", LITERAL)
@@ -40,14 +40,14 @@ class ExtendedAclStoreTest {
     assertEquals(PREFIXED, store.patternType)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldThrowIfConstructedWithLiteral(): Unit = {
-    new ExtendedAclStore(LITERAL)
+    assertThrows(classOf[IllegalArgumentException], () => new ExtendedAclStore(LITERAL))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test
   def shouldThrowFromEncodeOnLiteral(): Unit = {
-    store.changeStore.createChangeNode(literalResource)
+    assertThrows(classOf[IllegalArgumentException], () => store.changeStore.createChangeNode(literalResource))
   }
 
   @Test

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
@@ -26,7 +25,8 @@ import java.util.Objects;
 
 /**
  * This class is used to provide the optional parameters when producing to new topics
- * using {@link KStream#through(String, Produced)} or {@link KStream#to(String, Produced)}.
+ * using {@link KStream#to(String, Produced)}.
+ *
  * @param <K> key type
  * @param <V> value type
  */
@@ -61,7 +61,6 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
      * @param <K>           key type
      * @param <V>           value type
      * @return  A new {@link Produced} instance configured with keySerde and valueSerde
-     * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
     public static <K, V> Produced<K, V> with(final Serde<K> keySerde,
@@ -80,7 +79,6 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
      * @param <K>           key type
      * @param <V>           value type
      * @return  A new {@link Produced} instance configured with keySerde, valueSerde, and partitioner
-     * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
     public static <K, V> Produced<K, V> with(final Serde<K> keySerde,
@@ -107,7 +105,6 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
      * @param <K>           key type
      * @param <V>           value type
      * @return  A new {@link Produced} instance configured with keySerde
-     * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
     public static <K, V> Produced<K, V> keySerde(final Serde<K> keySerde) {
@@ -120,7 +117,6 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
      * @param <K>           key type
      * @param <V>           value type
      * @return  A new {@link Produced} instance configured with valueSerde
-     * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
     public static <K, V> Produced<K, V> valueSerde(final Serde<V> valueSerde) {
@@ -135,7 +131,6 @@ public class Produced<K, V> implements NamedOperation<Produced<K, V>> {
      * @param <K>           key type
      * @param <V>           value type
      * @return  A new {@link Produced} instance configured with partitioner
-     * @see KStream#through(String, Produced)
      * @see KStream#to(String, Produced)
      */
     public static <K, V> Produced<K, V> streamPartitioner(final StreamPartitioner<? super K, ? super V> partitioner) {

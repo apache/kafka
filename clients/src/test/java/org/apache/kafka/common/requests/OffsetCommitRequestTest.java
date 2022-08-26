@@ -25,8 +25,8 @@ import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResp
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -35,8 +35,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.requests.OffsetCommitRequest.getErrorResponseTopics;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class OffsetCommitRequestTest {
 
@@ -56,7 +56,7 @@ public class OffsetCommitRequestTest {
     private static OffsetCommitRequestData data;
     private static List<OffsetCommitRequestTopic> topics;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         topics = Arrays.asList(
             new OffsetCommitRequestTopic()
@@ -91,7 +91,7 @@ public class OffsetCommitRequestTest {
 
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
 
-        for (short version = 0; version <= ApiKeys.TXN_OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.TXN_OFFSET_COMMIT.allVersions()) {
             OffsetCommitRequest request = builder.build(version);
             assertEquals(expectedOffsets, request.offsets());
 
@@ -130,7 +130,7 @@ public class OffsetCommitRequestTest {
                 .setGroupInstanceId(groupInstanceId)
         );
 
-        for (short version = 0; version <= ApiKeys.OFFSET_COMMIT.latestVersion(); version++) {
+        for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
             if (version >= 7) {
                 builder.build(version);
             } else {

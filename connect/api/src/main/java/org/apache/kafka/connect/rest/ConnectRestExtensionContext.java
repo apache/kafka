@@ -33,7 +33,7 @@ public interface ConnectRestExtensionContext {
      *
      * @return @return the JAX-RS {@link javax.ws.rs.core.Configurable}; never {@code null}
      */
-    Configurable<? extends Configurable> configurable();
+    Configurable<? extends Configurable<?>> configurable();
 
     /**
      * Provides the cluster state and health information about the connectors and tasks.

@@ -36,7 +36,7 @@ public class DescribeConfigsResult {
 
     private final Map<ConfigResource, KafkaFuture<Config>> futures;
 
-    DescribeConfigsResult(Map<ConfigResource, KafkaFuture<Config>> futures) {
+    protected DescribeConfigsResult(Map<ConfigResource, KafkaFuture<Config>> futures) {
         this.futures = futures;
     }
 

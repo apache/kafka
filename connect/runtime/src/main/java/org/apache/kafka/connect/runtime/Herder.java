@@ -20,6 +20,7 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -65,7 +66,7 @@ public interface Herder {
      * Get a list of connectors currently running in this cluster. This is a full list of connectors in the cluster gathered
      * from the current configuration. However, note
      *
-     * @returns A list of connector names
+     * @return A list of connector names
      * @throws org.apache.kafka.connect.runtime.distributed.RequestTargetException if this node can not resolve the request
      *         (e.g., because it has not joined the cluster or does not have configs in sync with the group) and it is
      *         not the leader or the task owner (e.g., task restart must be handled by the worker which owns the task)
@@ -85,6 +86,13 @@ public interface Herder {
      * @param callback callback to invoke with the configuration
      */
     void connectorConfig(String connName, Callback<Map<String, String>> callback);
+
+    /**
+     * Get the configuration for all tasks.
+     * @param connName name of the connector
+     * @param callback callback to invoke with the configuration
+     */
+    void tasksConfig(String connName, Callback<Map<ConnectorTaskId, Map<String, String>>> callback);
 
     /**
      * Set the configuration for a connector. This supports creation and updating.
@@ -131,8 +139,20 @@ public interface Herder {
     void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback, InternalRequestSignature requestSignature);
 
     /**
+     * Fence out any older task generations for a source connector, and then write a record to the config topic
+     * indicating that it is safe to bring up a new generation of tasks. If that record is already present, do nothing
+     * and invoke the callback successfully.
+     * @param connName the name of the connector to fence out, which must refer to a source connector; if the
+     *                 connector does not exist or is not a source connector, the callback will be invoked with an error
+     * @param callback callback to invoke upon completion
+     * @param requestSignature the signature of the request made for this connector;
+     *                         may be null if no signature was provided
+     */
+    void fenceZombieSourceTasks(String connName, Callback<Void> callback, InternalRequestSignature requestSignature);
+
+    /**
      * Get a list of connectors currently running in this cluster.
-     * @returns A list of connector names
+     * @return A list of connector names
      */
     Collection<String> connectors();
 
@@ -213,9 +233,16 @@ public interface Herder {
      * @param delayMs delay before restart
      * @param connName name of the connector
      * @param cb callback to invoke upon completion
-     * @returns The id of the request
+     * @return The id of the request
      */
     HerderRequest restartConnector(long delayMs, String connName, Callback<Void> cb);
+
+    /**
+     * Restart the connector and optionally its tasks.
+     * @param request the details of the restart request
+     * @param cb      callback to invoke upon completion with the connector state info
+     */
+    void restartConnectorAndTasks(RestartRequest request, Callback<ConnectorStateInfo> cb);
 
     /**
      * Pause the connector. This call will asynchronously suspend processing by the connector and all
@@ -243,6 +270,14 @@ public interface Herder {
      * @return the cluster ID of the Kafka cluster backing this connect cluster
      */
     String kafkaClusterId();
+
+
+    /**
+     * Returns the configuration of a plugin
+     * @param pluginName the name of the plugin
+     * @return the list of ConfigKeyInfo of the plugin
+     */
+    List<ConfigKeyInfo> connectorPluginConfig(String pluginName);
 
     enum ConfigReloadAction {
         NONE,

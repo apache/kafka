@@ -16,29 +16,32 @@
  */
 package org.apache.kafka.common.security;
 
+import java.util.Collections;
 import org.apache.kafka.common.security.auth.SaslExtensions;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SaslExtensionsTest {
     Map<String, String> map;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         this.map = new HashMap<>();
         this.map.put("what", "42");
         this.map.put("who", "me");
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void testReturnedMapIsImmutable() {
         SaslExtensions extensions = new SaslExtensions(this.map);
-        extensions.map().put("hello", "test");
+        assertThrows(UnsupportedOperationException.class, () -> extensions.map().put("hello", "test"));
     }
 
     @Test
@@ -48,5 +51,31 @@ public class SaslExtensionsTest {
         assertNull(extensions.map().get("hello"));
         this.map.put("hello", "42");
         assertNull(extensions.map().get("hello"));
+    }
+
+    /**
+     * Tests that even when using the same underlying values in the map, two {@link SaslExtensions}
+     * are considered unique.
+     *
+     * @see SaslExtensions class-level documentation
+     */
+    @Test
+    public void testExtensionsWithEqualValuesAreUnique() {
+        // If the maps are distinct objects but have the same underlying values, the SaslExtension
+        // objects should still be unique.
+        assertNotEquals(new SaslExtensions(Collections.singletonMap("key", "value")),
+            new SaslExtensions(Collections.singletonMap("key", "value")),
+            "SaslExtensions with unique maps should be unique");
+
+        // If the maps are the same object (with the same underlying values), the SaslExtension
+        // objects should still be unique.
+        assertNotEquals(new SaslExtensions(map),
+            new SaslExtensions(map),
+            "SaslExtensions with duplicate maps should be unique");
+
+        // If the maps are empty, the SaslExtension objects should still be unique.
+        assertNotEquals(SaslExtensions.empty(),
+            SaslExtensions.empty(),
+            "SaslExtensions returned from SaslExtensions.empty() should be unique");
     }
 }

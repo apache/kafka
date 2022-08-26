@@ -25,14 +25,13 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import static org.junit.Assume.assumeTrue;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledForJreRange;
+import org.junit.jupiter.api.condition.JRE;
 
 public class SslTransportTls12Tls13Test {
     private static final int BUFFER_SIZE = 4 * 1024;
@@ -43,7 +42,7 @@ public class SslTransportTls12Tls13Test {
     private Map<String, Object> sslClientConfigs;
     private Map<String, Object> sslServerConfigs;
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         // Create certificates for use by client and server. Add server cert to client truststore and vice versa.
         CertStores serverCertStores = new CertStores(true, "server", "localhost");
@@ -57,7 +56,7 @@ public class SslTransportTls12Tls13Test {
         this.selector = new Selector(5000, new Metrics(), TIME, "MetricGroup", channelBuilder, logContext);
     }
 
-    @After
+    @AfterEach
     public void teardown() throws Exception {
         if (selector != null)
             this.selector.close();
@@ -69,9 +68,8 @@ public class SslTransportTls12Tls13Test {
      * Tests that connections fails if TLSv1.3 enabled but cipher suite suitable only for TLSv1.2 used.
      */
     @Test
+    @EnabledForJreRange(min = JRE.JAVA_11)
     public void testCiphersSuiteForTls12FailsForTls13() throws Exception {
-        assumeTrue(Java.IS_JAVA11_COMPATIBLE);
-
         String cipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
 
         sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.3"));
@@ -89,9 +87,8 @@ public class SslTransportTls12Tls13Test {
      * Tests that connections can't be made if server uses TLSv1.2 with custom cipher suite and client uses TLSv1.3.
      */
     @Test
+    @EnabledForJreRange(min = JRE.JAVA_11)
     public void testCiphersSuiteFailForServerTls12ClientTls13() throws Exception {
-        assumeTrue(Java.IS_JAVA11_COMPATIBLE);
-
         String tls12CipherSuite = "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
         String tls13CipherSuite = "TLS_AES_128_GCM_SHA256";
 
@@ -111,9 +108,8 @@ public class SslTransportTls12Tls13Test {
      * Tests that connections can be made with TLSv1.3 cipher suite.
      */
     @Test
+    @EnabledForJreRange(min = JRE.JAVA_11)
     public void testCiphersSuiteForTls13() throws Exception {
-        assumeTrue(Java.IS_JAVA11_COMPATIBLE);
-
         String cipherSuite = "TLS_AES_128_GCM_SHA256";
 
         sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuite));

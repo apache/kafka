@@ -26,30 +26,29 @@ import ExecutionContext.Implicits._
 
 import kafka.common.{InconsistentBrokerMetadataException, InconsistentClusterIdException}
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
-import org.scalatest.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.apache.kafka.test.TestUtils.isValidClusterId
 
 
-class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
-  var config1: KafkaConfig = null
-  var config2: KafkaConfig = null
-  var config3: KafkaConfig = null
+class ServerGenerateClusterIdTest extends QuorumTestHarness {
+  var config1: KafkaConfig = _
+  var config2: KafkaConfig = _
+  var config3: KafkaConfig = _
   var servers: Seq[KafkaServer] = Seq()
   val brokerMetaPropsFile = "meta.properties"
 
-  @Before
-  override def setUp(): Unit = {
-    super.setUp()
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     config1 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, zkConnect))
     config2 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(2, zkConnect))
     config3 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(3, zkConnect))
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
@@ -175,9 +174,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     val server = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
 
     // Startup fails
-    assertThrows[InconsistentClusterIdException] {
-      server.startup()
-    }
+    assertThrows(classOf[InconsistentClusterIdException], () => server.startup())
 
     server.shutdown()
 
@@ -201,9 +198,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
 
     // Startup fails
-    assertThrows[InconsistentBrokerMetadataException] {
-      server.startup()
-    }
+    assertThrows(classOf[InconsistentBrokerMetadataException], () => server.startup())
 
     server.shutdown()
 
@@ -219,7 +214,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   def forgeBrokerMetadata(logDir: String, brokerId: Int, clusterId: String): Unit = {
     val checkpoint = new BrokerMetadataCheckpoint(
       new File(logDir + File.separator + brokerMetaPropsFile))
-    checkpoint.write(BrokerMetadata(brokerId, Option(clusterId)))
+    checkpoint.write(ZkMetaProperties(clusterId, brokerId).toProperties)
   }
 
   def verifyBrokerMetadata(logDirs: Seq[String], clusterId: String): Boolean = {
@@ -227,11 +222,13 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
       val brokerMetadataOpt = new BrokerMetadataCheckpoint(
         new File(logDir + File.separator + brokerMetaPropsFile)).read()
       brokerMetadataOpt match {
-        case Some(brokerMetadata) =>
-          if (brokerMetadata.clusterId.isDefined && brokerMetadata.clusterId.get != clusterId) return false
+        case Some(properties) =>
+          val brokerMetadata = new RawMetaProperties(properties)
+          if (brokerMetadata.clusterId.exists(_ != clusterId)) return false
         case _ => return false
       }
     }
     true
   }
+
 }

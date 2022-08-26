@@ -24,19 +24,18 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 
 public class ByteArrayConverterTest {
     private static final String TOPIC = "topic";
     private static final byte[] SAMPLE_BYTES = "sample string".getBytes(StandardCharsets.UTF_8);
 
-    private ByteArrayConverter converter = new ByteArrayConverter();
+    private final ByteArrayConverter converter = new ByteArrayConverter();
 
     @Before
     public void setUp() {
@@ -59,14 +58,16 @@ public class ByteArrayConverterTest {
         );
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testFromConnectBadSchema() {
-        converter.fromConnectData(TOPIC, Schema.INT32_SCHEMA, SAMPLE_BYTES);
+        assertThrows(DataException.class,
+            () -> converter.fromConnectData(TOPIC, Schema.INT32_SCHEMA, SAMPLE_BYTES));
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void testFromConnectInvalidValue() {
-        converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, 12);
+        assertThrows(DataException.class,
+            () -> converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, 12));
     }
 
     @Test
@@ -78,7 +79,7 @@ public class ByteArrayConverterTest {
     public void testToConnect() {
         SchemaAndValue data = converter.toConnectData(TOPIC, SAMPLE_BYTES);
         assertEquals(Schema.OPTIONAL_BYTES_SCHEMA, data.schema());
-        assertTrue(Arrays.equals(SAMPLE_BYTES, (byte[]) data.value()));
+        assertArrayEquals(SAMPLE_BYTES, (byte[]) data.value());
     }
 
     @Test

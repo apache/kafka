@@ -190,9 +190,9 @@ public final class LoggingContext implements AutoCloseable {
         if (taskNumber != null) {
             // There is a task number, so this is a task
             sb.append("|");
-            sb.append(Scope.TASK.toString());
+            sb.append(Scope.TASK);
             sb.append("-");
-            sb.append(taskNumber.toString());
+            sb.append(taskNumber);
         }
         // Append non-task scopes (e.g., worker and offset)
         if (scope != Scope.TASK) {

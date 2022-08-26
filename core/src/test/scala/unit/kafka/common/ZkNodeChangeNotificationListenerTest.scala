@@ -17,29 +17,30 @@
 package kafka.common
 
 import kafka.utils.TestUtils
-import kafka.zk.{LiteralAclChangeStore, LiteralAclStore, ZkAclChangeStore, ZooKeeperTestHarness}
+import kafka.zk.{LiteralAclChangeStore, LiteralAclStore, ZkAclChangeStore}
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.GROUP
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.Seq
 
-class ZkNodeChangeNotificationListenerTest extends ZooKeeperTestHarness {
+class ZkNodeChangeNotificationListenerTest extends QuorumTestHarness {
 
   private val changeExpirationMs = 1000
   private var notificationListener: ZkNodeChangeNotificationListener = _
   private var notificationHandler: TestNotificationHandler = _
 
-  @Before
-  override def setUp(): Unit = {
-    super.setUp()
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     zkClient.createAclPaths()
     notificationHandler = new TestNotificationHandler()
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     if (notificationListener != null) {
       notificationListener.close()

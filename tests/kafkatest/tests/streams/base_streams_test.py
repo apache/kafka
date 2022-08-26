@@ -100,6 +100,6 @@ class BaseStreamsTest(KafkaTest):
         try:
           return int(result)
         except ValueError:
-          self.logger.warn("Command failed with ValueError: " + result)
+          self.logger.warn("Command failed with ValueError: " + str(result, errors='strict'))
           return 0
 

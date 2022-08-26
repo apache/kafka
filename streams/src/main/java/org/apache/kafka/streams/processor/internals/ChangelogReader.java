@@ -17,7 +17,9 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -27,7 +29,7 @@ public interface ChangelogReader extends ChangelogRegister {
     /**
      * Restore all registered state stores by reading from their changelogs
      */
-    void restore();
+    void restore(final Map<TaskId, Task> tasks);
 
     /**
      * Transit to restore active changelogs mode
@@ -43,6 +45,17 @@ public interface ChangelogReader extends ChangelogRegister {
      * @return the changelog partitions that have been completed restoring
      */
     Set<TopicPartition> completedChangelogs();
+
+    /**
+     * Returns whether all changelog partitions were completely read.
+     *
+     * Since changelog partitions for standby tasks are never completely read, this method will always return
+     * {@code false} if the changelog reader registered changelog partitions for standby tasks.
+     *
+     * @return {@code true} if all changelog partitions were completely read and no standby changelog partitions are read,
+     *         {@code false} otherwise
+     */
+    boolean allChangelogsCompleted();
 
     /**
      * Clear all partitions

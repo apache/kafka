@@ -19,43 +19,28 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.To;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
-import org.easymock.MockType;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
-@RunWith(EasyMockRunner.class)
+import static org.junit.Assert.assertThrows;
+import static org.mockito.Mockito.mock;
+
 public class ForwardingDisabledProcessorContextTest {
-    @Mock(MockType.NICE)
-    private ProcessorContext delegate;
+
     private ForwardingDisabledProcessorContext context;
 
     @Before
     public void setUp() {
-        context = new ForwardingDisabledProcessorContext(delegate);
+        context = new ForwardingDisabledProcessorContext(mock(ProcessorContext.class));
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowOnForward() {
-        context.forward("key", "value");
+        assertThrows(StreamsException.class, () -> context.forward("key", "value"));
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowOnForwardWithTo() {
-        context.forward("key", "value", To.all());
-    }
-
-    @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test(expected = StreamsException.class)
-    public void shouldThrowOnForwardWithChildIndex() {
-        context.forward("key", "value", 1);
-    }
-
-    @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test(expected = StreamsException.class)
-    public void shouldThrowOnForwardWithChildName() {
-        context.forward("key", "value", "child1");
+        assertThrows(StreamsException.class, () -> context.forward("key", "value", To.all()));
     }
 }

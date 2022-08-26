@@ -22,6 +22,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
+import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
@@ -140,14 +141,10 @@ private object GroupMetadata extends Logging {
     group.protocolName = Option(protocolName)
     group.leaderId = Option(leaderId)
     group.currentStateTimestamp = currentStateTimestamp
-    members.foreach(member => {
+    members.foreach { member =>
       group.add(member, null)
-      if (member.isStaticMember) {
-        info(s"Static member $member.groupInstanceId of group $groupId loaded " +
-          s"with member id ${member.memberId} at generation ${group.generationId}.")
-        group.addStaticMember(member.groupInstanceId, member.memberId)
-      }
-    })
+      info(s"Loaded member $member in group $groupId with generation ${group.generationId}.")
+    }
     group.subscribedTopics = group.computeSubscribedTopics()
     group
   }
@@ -217,6 +214,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private val pendingTransactionalOffsetCommits = new mutable.HashMap[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]]()
   private var receivedTransactionalOffsetCommits = false
   private var receivedConsumerOffsetCommits = false
+  private val pendingSyncMembers = new mutable.HashSet[String]
 
   // When protocolType == `consumer`, a set of subscribed topics is maintained. The set is
   // computed when a new generation is created or when the group is restored from the log.
@@ -226,11 +224,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def inLock[T](fun: => T): T = CoreUtils.inLock(lock)(fun)
 
-  def is(groupState: GroupState) = state == groupState
-  def not(groupState: GroupState) = state != groupState
-  def has(memberId: String) = members.contains(memberId)
-  def get(memberId: String) = members(memberId)
-  def size = members.size
+  def is(groupState: GroupState): Boolean = state == groupState
+  def has(memberId: String): Boolean = members.contains(memberId)
+  def get(memberId: String): MemberMetadata = members(memberId)
+  def size: Int = members.size
 
   def isLeader(memberId: String): Boolean = leaderId.contains(memberId)
   def leaderOrNull: String = leaderId.orNull
@@ -239,31 +236,46 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def isConsumerGroup: Boolean = protocolType.contains(ConsumerProtocol.PROTOCOL_TYPE)
 
   def add(member: MemberMetadata, callback: JoinCallback = null): Unit = {
+    member.groupInstanceId.foreach { instanceId =>
+      if (staticMembers.contains(instanceId))
+        throw new IllegalStateException(s"Static member with groupInstanceId=$instanceId " +
+          s"cannot be added to group $groupId since it is already a member")
+      staticMembers.put(instanceId, member.memberId)
+    }
+
     if (members.isEmpty)
       this.protocolType = Some(member.protocolType)
 
-    assert(groupId == member.groupId)
     assert(this.protocolType.orNull == member.protocolType)
     assert(supportsProtocols(member.protocolType, MemberMetadata.plainProtocolSet(member.supportedProtocols)))
 
     if (leaderId.isEmpty)
       leaderId = Some(member.memberId)
+
     members.put(member.memberId, member)
-    member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) += 1 }
+    incSupportedProtocols(member)
     member.awaitingJoinCallback = callback
+
     if (member.isAwaitingJoin)
       numMembersAwaitingJoin += 1
+
+    pendingMembers.remove(member.memberId)
   }
 
   def remove(memberId: String): Unit = {
     members.remove(memberId).foreach { member =>
-      member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) -= 1 }
+      decSupportedProtocols(member)
       if (member.isAwaitingJoin)
         numMembersAwaitingJoin -= 1
+
+      member.groupInstanceId.foreach(staticMembers.remove)
     }
 
     if (isLeader(memberId))
       leaderId = members.keys.headOption
+
+    pendingMembers.remove(memberId)
+    pendingSyncMembers.remove(memberId)
   }
 
   /**
@@ -301,82 +313,100 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     * [For static members only]: Replace the old member id with the new one,
     * keep everything else unchanged and return the updated member.
     */
-  def replaceGroupInstance(oldMemberId: String,
-                           newMemberId: String,
-                           groupInstanceId: Option[String]): MemberMetadata = {
-    if(groupInstanceId.isEmpty) {
-      throw new IllegalArgumentException(s"unexpected null group.instance.id in replaceGroupInstance")
-    }
-    val oldMember = members.remove(oldMemberId)
+  def replaceStaticMember(
+    groupInstanceId: String,
+    oldMemberId: String,
+    newMemberId: String
+  ): MemberMetadata = {
+    val memberMetadata = members.remove(oldMemberId)
       .getOrElse(throw new IllegalArgumentException(s"Cannot replace non-existing member id $oldMemberId"))
 
     // Fence potential duplicate member immediately if someone awaits join/sync callback.
-    maybeInvokeJoinCallback(oldMember, JoinGroupResult(oldMemberId, Errors.FENCED_INSTANCE_ID))
+    maybeInvokeJoinCallback(memberMetadata, JoinGroupResult(oldMemberId, Errors.FENCED_INSTANCE_ID))
+    maybeInvokeSyncCallback(memberMetadata, SyncGroupResult(Errors.FENCED_INSTANCE_ID))
 
-    maybeInvokeSyncCallback(oldMember, SyncGroupResult(Errors.FENCED_INSTANCE_ID))
+    memberMetadata.memberId = newMemberId
+    members.put(newMemberId, memberMetadata)
 
-    oldMember.memberId = newMemberId
-    members.put(newMemberId, oldMember)
-
-    if (isLeader(oldMemberId))
+    if (isLeader(oldMemberId)) {
       leaderId = Some(newMemberId)
-    addStaticMember(groupInstanceId, newMemberId)
-    oldMember
-  }
-
-  def isPendingMember(memberId: String): Boolean = pendingMembers.contains(memberId) && !has(memberId)
-
-  def addPendingMember(memberId: String) = pendingMembers.add(memberId)
-
-  def removePendingMember(memberId: String) = pendingMembers.remove(memberId)
-
-  def hasStaticMember(groupInstanceId: Option[String]) = groupInstanceId.isDefined && staticMembers.contains(groupInstanceId.get)
-
-  def getStaticMemberId(groupInstanceId: Option[String]) = {
-    if(groupInstanceId.isEmpty) {
-      throw new IllegalArgumentException(s"unexpected null group.instance.id in getStaticMemberId")
     }
-    staticMembers(groupInstanceId.get)
+
+    staticMembers.put(groupInstanceId, newMemberId)
+    memberMetadata
   }
 
-  def addStaticMember(groupInstanceId: Option[String], newMemberId: String) = {
-    if(groupInstanceId.isEmpty) {
-      throw new IllegalArgumentException(s"unexpected null group.instance.id in addStaticMember")
+  def isPendingMember(memberId: String): Boolean = pendingMembers.contains(memberId)
+
+  def addPendingMember(memberId: String): Boolean = {
+    if (has(memberId)) {
+      throw new IllegalStateException(s"Attempt to add pending member $memberId which is already " +
+        s"a stable member of the group")
     }
-    staticMembers.put(groupInstanceId.get, newMemberId)
+    pendingMembers.add(memberId)
   }
 
-  def removeStaticMember(groupInstanceId: Option[String]) = {
-    if (groupInstanceId.isDefined) {
-      staticMembers.remove(groupInstanceId.get)
+  def addPendingSyncMember(memberId: String): Boolean = {
+    if (!has(memberId)) {
+      throw new IllegalStateException(s"Attempt to add a pending sync for member $memberId which " +
+        "is not a member of the group")
     }
+    pendingSyncMembers.add(memberId)
   }
 
-  def currentState = state
+  def removePendingSyncMember(memberId: String): Boolean = {
+    if (!has(memberId)) {
+      throw new IllegalStateException(s"Attempt to remove a pending sync for member $memberId which " +
+        "is not a member of the group")
+    }
+    pendingSyncMembers.remove(memberId)
+  }
 
-  def notYetRejoinedMembers = members.filter(!_._2.isAwaitingJoin).toMap
+  def hasReceivedSyncFromAllMembers: Boolean = {
+    pendingSyncMembers.isEmpty
+  }
 
-  def hasAllMembersJoined = members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
+  def allPendingSyncMembers: Set[String] = {
+    pendingSyncMembers.toSet
+  }
 
-  def allMembers = members.keySet
+  def clearPendingSyncMembers(): Unit = {
+    pendingSyncMembers.clear()
+  }
 
-  def allStaticMembers = staticMembers.keySet
+  def hasStaticMember(groupInstanceId: String): Boolean = {
+    staticMembers.contains(groupInstanceId)
+  }
+
+  def currentStaticMemberId(groupInstanceId: String): Option[String] = {
+    staticMembers.get(groupInstanceId)
+  }
+
+  def currentState: GroupState = state
+
+  def notYetRejoinedMembers: Map[String, MemberMetadata] = members.filter(!_._2.isAwaitingJoin).toMap
+
+  def hasAllMembersJoined: Boolean = members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
+
+  def allMembers: collection.Set[String] = members.keySet
+
+  def allStaticMembers: collection.Set[String] = staticMembers.keySet
 
   // For testing only.
-  def allDynamicMembers = {
+  private[group] def allDynamicMembers: Set[String] = {
     val dynamicMemberSet = new mutable.HashSet[String]
     allMembers.foreach(memberId => dynamicMemberSet.add(memberId))
     staticMembers.values.foreach(memberId => dynamicMemberSet.remove(memberId))
     dynamicMemberSet.toSet
   }
 
-  def numPending = pendingMembers.size
+  def numPending: Int = pendingMembers.size
 
   def numAwaiting: Int = numMembersAwaitingJoin
 
-  def allMemberMetadata = members.values.toList
+  def allMemberMetadata: List[MemberMetadata] = members.values.toList
 
-  def rebalanceTimeoutMs = members.values.foldLeft(0) { (timeout, member) =>
+  def rebalanceTimeoutMs: Int = members.values.foldLeft(0) { (timeout, member) =>
     timeout.max(member.rebalanceTimeoutMs)
   }
 
@@ -395,20 +425,14 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     *   1. given member is a known static member to group
     *   2. group stored member.id doesn't match with given member.id
     */
-  def isStaticMemberFenced(memberId: String,
-                           groupInstanceId: Option[String],
-                           operation: String): Boolean = {
-    if (hasStaticMember(groupInstanceId)
-      && getStaticMemberId(groupInstanceId) != memberId) {
-      error(s"given member.id $memberId is identified as a known static member ${groupInstanceId.get}, " +
-        s"but not matching the expected member.id ${getStaticMemberId(groupInstanceId)} during $operation, will " +
-        s"respond with instance fenced error")
-      true
-    } else
-      false
+  def isStaticMemberFenced(
+    groupInstanceId: String,
+    memberId: String
+  ): Boolean = {
+    currentStaticMemberId(groupInstanceId).exists(_ != memberId)
   }
 
-  def canRebalance = PreparingRebalance.validPreviousStates.contains(state)
+  def canRebalance: Boolean = PreparingRebalance.validPreviousStates.contains(state)
 
   def transitionTo(groupState: GroupState): Unit = {
     assertValidTransition(groupState)
@@ -432,15 +456,23 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     protocol
   }
 
+  private def incSupportedProtocols(member: MemberMetadata): Unit = {
+    member.supportedProtocols.foreach { case (protocol, _) => supportedProtocols(protocol) += 1 }
+  }
+
+  private def decSupportedProtocols(member: MemberMetadata): Unit = {
+    member.supportedProtocols.foreach { case (protocol, _) => supportedProtocols(protocol) -= 1 }
+  }
+
   private def candidateProtocols: Set[String] = {
     // get the set of protocols that are commonly supported by all members
     val numMembers = members.size
-    supportedProtocols.filter(_._2 == numMembers).map(_._1).toSet
+    supportedProtocols.filter(_._2 == numMembers).keys.toSet
   }
 
   def supportsProtocols(memberProtocolType: String, memberProtocols: Set[String]): Boolean = {
     if (is(Empty))
-      !memberProtocolType.isEmpty && memberProtocols.nonEmpty
+      memberProtocolType.nonEmpty && memberProtocols.nonEmpty
     else
       protocolType.contains(memberProtocolType) && memberProtocols.exists(supportedProtocols(_) == members.size)
   }
@@ -475,7 +507,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
               // future versions of the consumer protocol. VO must prefix all new versions.
               val buffer = ByteBuffer.wrap(member.metadata(protocolName.get))
               ConsumerProtocol.deserializeVersion(buffer)
-              ConsumerProtocol.deserializeSubscriptionV0(buffer).topics.asScala.toSet
+              ConsumerProtocol.deserializeSubscription(buffer, 0).topics.asScala.toSet
             }.reduceLeft(_ ++ _)
           )
         } catch {
@@ -495,9 +527,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def updateMember(member: MemberMetadata,
                    protocols: List[(String, Array[Byte])],
                    callback: JoinCallback): Unit = {
-    member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) -= 1 }
-    protocols.foreach{ case (protocol, _) => supportedProtocols(protocol) += 1 }
+    decSupportedProtocols(member)
     member.supportedProtocols = protocols
+    incSupportedProtocols(member)
 
     if (callback != null && !member.isAwaitingJoin) {
       numMembersAwaitingJoin += 1
@@ -544,6 +576,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
     receivedConsumerOffsetCommits = false
     receivedTransactionalOffsetCommits = false
+    clearPendingSyncMembers()
   }
 
   def currentMemberMetadata: List[JoinGroupResponseMember] = {
@@ -616,7 +649,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     val producerOffsets = pendingTransactionalOffsetCommits.getOrElseUpdate(producerId,
       mutable.Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
 
-    offsets.foreach { case (topicPartition, offsetAndMetadata) =>
+    offsets.forKeyValue { (topicPartition, offsetAndMetadata) =>
       producerOffsets.put(topicPartition, CommitRecordMetadataAndOffset(None, offsetAndMetadata))
     }
   }
@@ -660,7 +693,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     val pendingOffsetsOpt = pendingTransactionalOffsetCommits.remove(producerId)
     if (isCommit) {
       pendingOffsetsOpt.foreach { pendingOffsets =>
-        pendingOffsets.foreach { case (topicPartition, commitRecordMetadataAndOffset) =>
+        pendingOffsets.forKeyValue { (topicPartition, commitRecordMetadataAndOffset) =>
           if (commitRecordMetadataAndOffset.appendedBatchOffset.isEmpty)
             throw new IllegalStateException(s"Trying to complete a transactional offset commit for producerId $producerId " +
               s"and groupId $groupId even though the offset commit record itself hasn't been appended to the log.")
@@ -698,7 +731,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, OffsetAndMetadata] = {
     topicPartitions.flatMap { topicPartition =>
       pendingOffsetCommits.remove(topicPartition)
-      pendingTransactionalOffsetCommits.foreach { case (_, pendingOffsets) =>
+      pendingTransactionalOffsetCommits.forKeyValue { (_, pendingOffsets) =>
         pendingOffsets.remove(topicPartition)
       }
       val removedOffset = offsets.remove(topicPartition)
@@ -741,8 +774,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
             .getOrElse(commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestamp)
         )
 
-      case Some(ConsumerProtocol.PROTOCOL_TYPE) if subscribedTopics.isDefined =>
-        // consumers exist in the group =>
+      case Some(ConsumerProtocol.PROTOCOL_TYPE) if subscribedTopics.isDefined && is(Stable) =>
+        // consumers exist in the group and group is stable =>
         // - if the group is aware of the subscribed topics and retention period had passed since the
         //   the last commit timestamp, expire the offset. offset with pending offset commit are not
         //   expired
@@ -767,7 +800,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     expiredOffsets
   }
 
-  def allOffsets = offsets.map { case (topicPartition, commitRecordMetadataAndOffset) =>
+  def allOffsets: Map[TopicPartition, OffsetAndMetadata] = offsets.map { case (topicPartition, commitRecordMetadataAndOffset) =>
     (topicPartition, commitRecordMetadataAndOffset.offsetAndMetadata)
   }.toMap
 
@@ -776,9 +809,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   // visible for testing
   private[group] def offsetWithRecordMetadata(topicPartition: TopicPartition): Option[CommitRecordMetadataAndOffset] = offsets.get(topicPartition)
 
-  def numOffsets = offsets.size
+  def numOffsets: Int = offsets.size
 
-  def hasOffsets = offsets.nonEmpty || pendingOffsetCommits.nonEmpty || pendingTransactionalOffsetCommits.nonEmpty
+  def hasOffsets: Boolean = offsets.nonEmpty || pendingOffsetCommits.nonEmpty || pendingTransactionalOffsetCommits.nonEmpty
 
   private def assertValidTransition(targetState: GroupState): Unit = {
     if (!targetState.validPreviousStates.contains(state))

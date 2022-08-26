@@ -26,6 +26,7 @@ public abstract class AbstractStatus<T> {
         PAUSED,
         FAILED,
         DESTROYED,
+        RESTARTING,
     }
 
     private final T id;

@@ -22,7 +22,8 @@ import kafka.utils.Json
 import org.apache.kafka.common.acl.AclOperation.READ
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.junit.{Assert, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -40,7 +41,7 @@ class AclEntryTest {
 
     val acls = Set[AclEntry](acl1, acl2, acl3)
 
-    Assert.assertEquals(acls, AclEntry.fromBytes(Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls).asJava)))
-    Assert.assertEquals(acls, AclEntry.fromBytes(AclJson.getBytes(UTF_8)))
+    assertEquals(acls, AclEntry.fromBytes(Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls).asJava)))
+    assertEquals(acls, AclEntry.fromBytes(AclJson.getBytes(UTF_8)))
   }
 }

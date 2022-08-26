@@ -16,6 +16,7 @@
 {
   "apiKey": 18,
   "type": "request",
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "ApiVersionsRequest",
   // Versions 0 through 2 of ApiVersionsRequest are the same.
   //

@@ -16,6 +16,7 @@
 {
   "apiKey": 21,
   "type": "request",
+  "listeners": ["zkBroker", "broker"],
   "name": "DeleteRecordsRequest",
   // Version 1 is the same as version 0.
 

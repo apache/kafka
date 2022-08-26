@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.StrictBufferConfigImp
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.Map;
 
 public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
@@ -48,7 +49,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
          * Create a size-constrained buffer in terms of the maximum number of keys it will store.
          */
         static EagerBufferConfig maxRecords(final long recordLimit) {
-            return new EagerBufferConfigImpl(recordLimit, Long.MAX_VALUE);
+            return new EagerBufferConfigImpl(recordLimit, Long.MAX_VALUE, Collections.emptyMap());
         }
 
         /**
@@ -60,7 +61,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
          * Create a size-constrained buffer in terms of the maximum number of bytes it will use.
          */
         static EagerBufferConfig maxBytes(final long byteLimit) {
-            return new EagerBufferConfigImpl(Long.MAX_VALUE, byteLimit);
+            return new EagerBufferConfigImpl(Long.MAX_VALUE, byteLimit, Collections.emptyMap());
         }
 
         /**
@@ -153,7 +154,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
      * To accomplish this, the operator will buffer events from the window until the window close (that is,
      * until the end-time passes, and additionally until the grace period expires). Since windowed operators
      * are required to reject out-of-order events for a window whose grace period is expired, there is an additional
-     * guarantee that the final results emitted from this suppression will match any queriable state upstream.
+     * guarantee that the final results emitted from this suppression will match any queryable state upstream.
      *
      * @param bufferConfig A configuration specifying how much space to use for buffering intermediate results.
      *                     This is required to be a "strict" config, since it would violate the "final results"

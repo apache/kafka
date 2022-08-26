@@ -25,11 +25,11 @@ import kafka.server.QuotaType._
 import kafka.utils.TestUtils._
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.junit.Assert._
-import org.junit.{After, Test}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -42,15 +42,15 @@ import scala.jdk.CollectionConverters._
   *
   * Anything over 100MB/s tends to fail as this is the non-throttled replication rate
   */
-class ReplicationQuotasTest extends ZooKeeperTestHarness {
+class ReplicationQuotasTest extends QuorumTestHarness {
   def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100.0)
 
   val msg100KB = new Array[Byte](100000)
-  var brokers: Seq[KafkaServer] = null
+  var brokers: Seq[KafkaServer] = _
   val topic = "topic1"
-  var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
+  var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     producer.close()
     shutdownServers(brokers)
@@ -114,7 +114,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       adminZkClient.changeTopicConfig(topic, propsWith(FollowerReplicationThrottledReplicasProp, "0:106,1:106,2:106,3:107,4:107,5:107"))
 
     //Add data equally to each partition
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = 1)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = 1)
     (0 until msgCount).foreach { _ =>
       (0 to 7).foreach { partition =>
         producer.send(new ProducerRecord(topic, partition, null, msg))
@@ -154,17 +154,17 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     //Check the times for throttled/unthrottled are each side of what we expect
     val throttledLowerBound = expectedDuration * 1000 * 0.9
     val throttledUpperBound = expectedDuration * 1000 * 3
-    assertTrue(s"Expected $unthrottledTook < $throttledLowerBound", unthrottledTook < throttledLowerBound)
-    assertTrue(s"Expected $throttledTook > $throttledLowerBound", throttledTook > throttledLowerBound)
-    assertTrue(s"Expected $throttledTook < $throttledUpperBound", throttledTook < throttledUpperBound)
+    assertTrue(unthrottledTook < throttledLowerBound, s"Expected $unthrottledTook < $throttledLowerBound")
+    assertTrue(throttledTook > throttledLowerBound, s"Expected $throttledTook > $throttledLowerBound")
+    assertTrue(throttledTook < throttledUpperBound, s"Expected $throttledTook < $throttledUpperBound")
 
     // Check the rate metric matches what we expect.
     // In a short test the brokers can be read unfairly, so assert against the average
     val rateUpperBound = throttle * 1.1
     val rateLowerBound = throttle * 0.5
     val rate = if (leaderThrottle) avRate(LeaderReplication, 100 to 105) else avRate(FollowerReplication, 106 to 107)
-    assertTrue(s"Expected ${rate} < $rateUpperBound", rate < rateUpperBound)
-    assertTrue(s"Expected ${rate} > $rateLowerBound", rate > rateLowerBound)
+    assertTrue(rate < rateUpperBound, s"Expected ${rate} < $rateUpperBound")
+    assertTrue(rate > rateLowerBound, s"Expected ${rate} > $rateLowerBound")
   }
 
   def tp(partition: Int): TopicPartition = new TopicPartition(topic, partition)
@@ -203,14 +203,14 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     val throttledTook = System.currentTimeMillis() - start
 
-    assertTrue(s"Throttled replication of ${throttledTook}ms should be > ${expectedDuration * 1000 * 0.9}ms",
-      throttledTook > expectedDuration * 1000 * 0.9)
-    assertTrue(s"Throttled replication of ${throttledTook}ms should be < ${expectedDuration * 1500}ms",
-      throttledTook < expectedDuration * 1000 * 1.5)
+    assertTrue(throttledTook > expectedDuration * 1000 * 0.9,
+      s"Throttled replication of ${throttledTook}ms should be > ${expectedDuration * 1000 * 0.9}ms")
+    assertTrue(throttledTook < expectedDuration * 1000 * 1.5,
+      s"Throttled replication of ${throttledTook}ms should be < ${expectedDuration * 1500}ms")
   }
 
   def addData(msgCount: Int, msg: Array[Byte]): Unit = {
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = 0)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = 0)
     (0 until msgCount).map(_ => producer.send(new ProducerRecord(topic, msg))).foreach(_.get)
     waitForOffsetsToMatch(msgCount, 0, 100)
   }

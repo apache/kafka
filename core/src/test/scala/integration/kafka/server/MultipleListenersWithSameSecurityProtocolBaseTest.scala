@@ -27,14 +27,13 @@ import kafka.coordinator.group.OffsetConfig
 import kafka.utils.JaasTestUtils.JaasSection
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.utils.Implicits._
-import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
-import org.junit.Assert.assertEquals
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -49,7 +48,7 @@ object MultipleListenersWithSameSecurityProtocolBaseTest {
   val Plain = "PLAIN"
 }
 
-abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeeperTestHarness with SaslSetup {
+abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumTestHarness with SaslSetup {
 
   import MultipleListenersWithSameSecurityProtocolBaseTest._
 
@@ -66,10 +65,10 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
   protected def staticJaasSections: Seq[JaasSection]
   protected def dynamicJaasSections: Properties
 
-  @Before
-  override def setUp(): Unit = {
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
     startSasl(staticJaasSections)
-    super.setUp()
+    super.setUp(testInfo)
     // 2 brokers so that we can test that the data propagates correctly via UpdateMetadadaRequest
     val numServers = 2
 
@@ -104,10 +103,10 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
     }
 
     servers.map(_.config).foreach { config =>
-      assertEquals(s"Unexpected listener count for broker ${config.brokerId}", 4, config.listeners.size)
+      assertEquals(4, config.listeners.size, s"Unexpected listener count for broker ${config.brokerId}")
       // KAFKA-5184 seems to show that this value can sometimes be PLAINTEXT, so verify it here
-      assertEquals(s"Unexpected ${KafkaConfig.InterBrokerListenerNameProp} for broker ${config.brokerId}",
-        Internal, config.interBrokerListenerName.value)
+      assertEquals(Internal, config.interBrokerListenerName.value,
+        s"Unexpected ${KafkaConfig.InterBrokerListenerNameProp} for broker ${config.brokerId}")
     }
 
     TestUtils.createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, OffsetConfig.DefaultOffsetsTopicNumPartitions,
@@ -147,7 +146,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
     }
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     producers.values.foreach(_.close())
     consumers.values.foreach(_.close())
@@ -180,7 +179,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
     props.put(s"${prefix}${KafkaConfig.SaslJaasConfigProp}", jaasConfig)
   }
 
-  case class ClientMetadata(val listenerName: ListenerName, val saslMechanism: String, topic: String) {
+  case class ClientMetadata(listenerName: ListenerName, saslMechanism: String, topic: String) {
     override def hashCode: Int = Objects.hash(listenerName, saslMechanism)
     override def equals(obj: Any): Boolean = obj match {
       case other: ClientMetadata => listenerName == other.listenerName && saslMechanism == other.saslMechanism && topic == other.topic

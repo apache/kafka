@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 
 import java.util.Set;
@@ -29,6 +30,7 @@ import java.util.regex.Pattern;
  * In contrast, two sub-topologies are not connected but can be linked to each other via topics, i.e., if one
  * sub-topology {@link Topology#addSink(String, String, String...) writes} into a topic and another sub-topology
  * {@link Topology#addSource(String, String...) reads} from the same topic.
+ * Message {@link ProcessorContext#forward(Object, Object) forwards} using custom Processors and Transformers are not considered in the topology graph.
  * <p>
  * When {@link KafkaStreams#start()} is called, different sub-topologies will be constructed and executed as independent
  * {@link StreamTask tasks}.
@@ -37,8 +39,8 @@ public interface TopologyDescription {
     /**
      * A connected sub-graph of a {@link Topology}.
      * <p>
-     * Nodes of a {@code Subtopology} are connected {@link Topology#addProcessor(String,
-     * org.apache.kafka.streams.processor.ProcessorSupplier, String...) directly} or indirectly via
+     * Nodes of a {@code Subtopology} are connected
+     * {@link Topology#addProcessor(String, ProcessorSupplier, String...) directly} or indirectly via
      * {@link Topology#connectProcessorAndStateStores(String, String...) state stores}
      * (i.e., if multiple processors share the same state).
      */
@@ -59,7 +61,7 @@ public interface TopologyDescription {
     /**
      * Represents a {@link Topology#addGlobalStore(org.apache.kafka.streams.state.StoreBuilder, String,
      * org.apache.kafka.common.serialization.Deserializer, org.apache.kafka.common.serialization.Deserializer, String,
-     * String, org.apache.kafka.streams.processor.ProcessorSupplier) global store}.
+     * String, org.apache.kafka.streams.processor.api.ProcessorSupplier) global store}.
      * Adding a global store results in adding a source node and one stateful processor node.
      * Note, that all added global stores form a single unit (similar to a {@link Subtopology}) even if different
      * global stores are not connected to each other.
@@ -112,13 +114,6 @@ public interface TopologyDescription {
      * A source node of a topology.
      */
     interface Source extends Node {
-        /**
-         * The topic names this source node is reading from.
-         * @return comma separated list of topic names or pattern (as String)
-         * @deprecated use {@link #topicSet()} or {@link #topicPattern()} instead
-         */
-        @Deprecated
-        String topics();
 
         /**
          * The topic names this source node is reading from.

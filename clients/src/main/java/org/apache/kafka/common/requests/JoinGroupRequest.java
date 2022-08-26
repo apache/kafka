@@ -18,11 +18,12 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -59,49 +60,33 @@ public class JoinGroupRequest extends AbstractRequest {
     public static final int UNKNOWN_GENERATION_ID = -1;
     public static final String UNKNOWN_PROTOCOL_NAME = "";
 
-    private static final int MAX_GROUP_INSTANCE_ID_LENGTH = 249;
-
     /**
      * Ported from class Topic in {@link org.apache.kafka.common.internals} to restrict the charset for
      * static member id.
      */
     public static void validateGroupInstanceId(String id) {
-        if (id.equals(""))
-            throw new InvalidConfigurationException("Group instance id must be non-empty string");
-        if (id.equals(".") || id.equals(".."))
-            throw new InvalidConfigurationException("Group instance id cannot be \".\" or \"..\"");
-        if (id.length() > MAX_GROUP_INSTANCE_ID_LENGTH)
-            throw new InvalidConfigurationException("Group instance id can't be longer than " + MAX_GROUP_INSTANCE_ID_LENGTH +
-                    " characters: " + id);
-        if (!containsValidPattern(id))
-            throw new InvalidConfigurationException("Group instance id \"" + id + "\" is illegal, it contains a character other than " +
-                    "ASCII alphanumerics, '.', '_' and '-'");
+        Topic.validate(id, "Group instance id", message -> {
+            throw new InvalidConfigurationException(message);
+        });
     }
 
     /**
-     * Valid characters for Consumer group.instance.id are the ASCII alphanumerics, '.', '_', and '-'
+     * Ensures that the provided {@code reason} remains within a range of 255 chars.
+     * @param reason This is the reason that is sent to the broker over the wire
+     *               as a part of {@code JoinGroupRequest} or {@code LeaveGroupRequest} messages.
+     * @return a provided reason as is or truncated reason if it exceeds the 255 chars threshold.
      */
-    static boolean containsValidPattern(String topic) {
-        for (int i = 0; i < topic.length(); ++i) {
-            char c = topic.charAt(i);
-
-            boolean validChar = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || c == '.' ||
-                    c == '_' || c == '-';
-            if (!validChar)
-                return false;
+    public static String maybeTruncateReason(final String reason) {
+        if (reason.length() > 255) {
+            return reason.substring(0, 255);
+        } else {
+            return reason;
         }
-        return true;
     }
 
     public JoinGroupRequest(JoinGroupRequestData data, short version) {
         super(ApiKeys.JOIN_GROUP, version);
         this.data = data;
-        maybeOverrideRebalanceTimeout(version);
-    }
-
-    public JoinGroupRequest(Struct struct, short version) {
-        super(ApiKeys.JOIN_GROUP, version);
-        this.data = new JoinGroupRequestData(struct, version);
         maybeOverrideRebalanceTimeout(version);
     }
 
@@ -113,6 +98,7 @@ public class JoinGroupRequest extends AbstractRequest {
         }
     }
 
+    @Override
     public JoinGroupRequestData data() {
         return data;
     }
@@ -137,11 +123,6 @@ public class JoinGroupRequest extends AbstractRequest {
     }
 
     public static JoinGroupRequest parse(ByteBuffer buffer, short version) {
-        return new JoinGroupRequest(ApiKeys.JOIN_GROUP.parseRequest(version, buffer), version);
-    }
-
-    @Override
-    protected Struct toStruct() {
-        return data.toStruct(version());
+        return new JoinGroupRequest(new JoinGroupRequestData(new ByteBufferAccessor(buffer), version), version);
     }
 }

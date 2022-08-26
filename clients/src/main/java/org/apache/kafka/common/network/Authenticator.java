@@ -18,6 +18,7 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -50,6 +51,11 @@ public interface Authenticator extends Closeable {
      * Returns Principal using PrincipalBuilder
      */
     KafkaPrincipal principal();
+
+    /**
+     * Returns the serializer/deserializer interface for principal
+     */
+    Optional<KafkaPrincipalSerde> principalSerde();
 
     /**
      * returns true if authentication is complete otherwise returns false;

@@ -20,13 +20,13 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
@@ -75,14 +75,10 @@ public class ConnectMetrics {
         int numSamples = config.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG);
         long sampleWindowMs = config.getLong(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG);
         String metricsRecordingLevel = config.getString(CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG);
-        List<MetricsReporter> reporters = config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
-
+        List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(workerId, config);
         MetricConfig metricConfig = new MetricConfig().samples(numSamples)
                 .timeWindow(sampleWindowMs, TimeUnit.MILLISECONDS).recordLevel(
                         Sensor.RecordingLevel.forName(metricsRecordingLevel));
-        JmxReporter jmxReporter = new JmxReporter();
-        jmxReporter.configure(config.originals());
-        reporters.add(jmxReporter);
 
         Map<String, Object> contextLabels = new HashMap<>();
         contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
@@ -148,7 +144,7 @@ public class ConnectMetrics {
     }
 
     protected MetricGroupId groupId(String groupName, String... tagKeyValues) {
-        Map<String, String> tags = tags(tagKeyValues);
+        Map<String, String> tags = MetricsUtils.getTags(tagKeyValues);
         return new MetricGroupId(groupName, tags);
     }
 
@@ -259,7 +255,7 @@ public class ConnectMetrics {
         protected MetricGroup(MetricGroupId groupId) {
             Objects.requireNonNull(groupId);
             this.groupId = groupId;
-            sensorPrefix = "connect-sensor-group: " + groupId.toString() + ";";
+            sensorPrefix = "connect-sensor-group: " + groupId + ";";
         }
 
         /**
@@ -318,9 +314,7 @@ public class ConnectMetrics {
          */
         public <T> void addValueMetric(MetricNameTemplate nameTemplate, final LiteralSupplier<T> supplier) {
             MetricName metricName = metricName(nameTemplate);
-            if (metrics().metric(metricName) == null) {
-                metrics().addMetric(metricName, (Gauge<T>) (config, now) -> supplier.metricValue(now));
-            }
+            metrics().addMetricIfAbsent(metricName, null, (Gauge<T>) (config, now) -> supplier.metricValue(now));
         }
 
         /**
@@ -332,9 +326,7 @@ public class ConnectMetrics {
          */
         public <T> void addImmutableValueMetric(MetricNameTemplate nameTemplate, final T value) {
             MetricName metricName = metricName(nameTemplate);
-            if (metrics().metric(metricName) == null) {
-                metrics().addMetric(metricName, (Gauge<T>) (config, now) -> value);
-            }
+            metrics().addMetricIfAbsent(metricName, null, (Gauge<T>) (config, now) -> value);
         }
 
         /**
@@ -431,22 +423,6 @@ public class ConnectMetrics {
          * @return the literal metric value; may not be null
          */
         T metricValue(long now);
-    }
-
-    /**
-     * Create a set of tags using the supplied key and value pairs. The order of the tags will be kept.
-     *
-     * @param keyValue the key and value pairs for the tags; must be an even number
-     * @return the map of tags that can be supplied to the {@link Metrics} methods; never null
-     */
-    static Map<String, String> tags(String... keyValue) {
-        if ((keyValue.length % 2) != 0)
-            throw new IllegalArgumentException("keyValue needs to be specified in pairs");
-        Map<String, String> tags = new LinkedHashMap<>();
-        for (int i = 0; i < keyValue.length; i += 2) {
-            tags.put(keyValue[i], keyValue[i + 1]);
-        }
-        return tags;
     }
 
     /**

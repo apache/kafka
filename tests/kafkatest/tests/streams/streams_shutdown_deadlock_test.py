@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark.resource import cluster
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.streams import StreamsSmokeTestShutdownDeadlockService
 
@@ -29,6 +30,7 @@ class StreamsShutdownDeadlockTest(KafkaTest):
 
         self.driver = StreamsSmokeTestShutdownDeadlockService(test_context, self.kafka)
 
+    @cluster(num_nodes=3)
     def test_shutdown_wont_deadlock(self):
         """
         Start ShutdownDeadLockTest, wait for upt to 1 minute, and check that the process exited.

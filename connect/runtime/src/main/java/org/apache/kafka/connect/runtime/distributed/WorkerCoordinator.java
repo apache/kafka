@@ -20,12 +20,12 @@ import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.metrics.Measurable;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
@@ -50,9 +50,6 @@ import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompat
  * to workers.
  */
 public class WorkerCoordinator extends AbstractCoordinator implements Closeable {
-    // Currently doesn't support multiple task assignment strategies, so we just fill in a default value
-    public static final String DEFAULT_SUBPROTOCOL = "default";
-
     private final Logger log;
     private final String restUrl;
     private final ConfigBackingStore configStorage;
@@ -105,7 +102,8 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     }
 
     @Override
-    public void requestRejoin() {
+    public void requestRejoin(final String reason) {
+        log.debug("Request joining group due to: {}", reason);
         rejoinRequested = true;
     }
 
@@ -214,14 +212,20 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     }
 
     @Override
-    protected Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, List<JoinGroupResponseMember> allMemberMetadata) {
+    protected Map<String, ByteBuffer> onLeaderElected(String leaderId,
+                                                      String protocol,
+                                                      List<JoinGroupResponseMember> allMemberMetadata,
+                                                      boolean skipAssignment) {
+        if (skipAssignment)
+            throw new IllegalStateException("Can't skip assignment because Connect does not support static membership.");
+
         return ConnectProtocolCompatibility.fromProtocol(protocol) == EAGER
                ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
                : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
     }
 
     @Override
-    protected void onJoinPrepare(int generation, String memberId) {
+    protected boolean onJoinPrepare(Timer timer, int generation, String memberId) {
         log.info("Rebalance started");
         leaderState(null);
         final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
@@ -233,6 +237,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             log.debug("Cooperative rebalance triggered. Keeping assignment {} until it's "
                       + "explicitly revoked.", localAssignmentSnapshot);
         }
+        return true;
     }
 
     @Override
@@ -350,34 +355,28 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         public WorkerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
-            Measurable numConnectors = new Measurable() {
-                @Override
-                public double measure(MetricConfig config, long now) {
-                    final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
-                    if (localAssignmentSnapshot == null) {
-                        return 0.0;
-                    }
-                    return localAssignmentSnapshot.connectors().size();
+            Measurable numConnectors = (config, now) -> {
+                final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
+                if (localAssignmentSnapshot == null) {
+                    return 0.0;
                 }
+                return localAssignmentSnapshot.connectors().size();
             };
 
-            Measurable numTasks = new Measurable() {
-                @Override
-                public double measure(MetricConfig config, long now) {
-                    final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
-                    if (localAssignmentSnapshot == null) {
-                        return 0.0;
-                    }
-                    return localAssignmentSnapshot.tasks().size();
+            Measurable numTasks = (config, now) -> {
+                final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
+                if (localAssignmentSnapshot == null) {
+                    return 0.0;
                 }
+                return localAssignmentSnapshot.tasks().size();
             };
 
             metrics.addMetric(metrics.metricName("assigned-connectors",
                               this.metricGrpName,
-                              "The number of connector instances currently assigned to this consumer"), numConnectors);
+                              "The number of connector instances currently assigned to this worker"), numConnectors);
             metrics.addMetric(metrics.metricName("assigned-tasks",
                               this.metricGrpName,
-                              "The number of tasks currently assigned to this consumer"), numTasks);
+                              "The number of tasks currently assigned to this worker"), numTasks);
         }
     }
 
@@ -418,6 +417,29 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             return allMembers.get(ownerId).url();
         }
 
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof LeaderState)) return false;
+            LeaderState that = (LeaderState) o;
+            return Objects.equals(allMembers, that.allMembers)
+                    && Objects.equals(connectorOwners, that.connectorOwners)
+                    && Objects.equals(taskOwners, that.taskOwners);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(allMembers, connectorOwners, taskOwners);
+        }
+
+        @Override
+        public String toString() {
+            return "LeaderState{"
+                    + "allMembers=" + allMembers
+                    + ", connectorOwners=" + connectorOwners
+                    + ", taskOwners=" + taskOwners
+                    + '}';
+        }
     }
 
     public static class ConnectorsAndTasks {
@@ -498,7 +520,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         }
 
         public static class Builder {
-            private String withWorker;
+            private final String withWorker;
             private Collection<String> withConnectors;
             private Collection<ConnectorTaskId> withTasks;
 

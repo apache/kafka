@@ -20,13 +20,13 @@ package kafka.log
 import java.io.PrintWriter
 
 import com.yammer.metrics.core.{Gauge, MetricName}
-import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
+import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
-import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
-import org.junit.Assert._
-import org.junit.{After, Test}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.collection.{Iterable, Seq}
 import scala.jdk.CollectionConverters._
@@ -41,15 +41,15 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
   val time = new MockTime()
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
-  @After
+  @AfterEach
   def cleanup(): Unit = {
     TestUtils.clearYammerMetrics()
   }
 
-  @Test(timeout = DEFAULT_MAX_WAIT_MS)
+  @Test
   def testMarksPartitionsAsOfflineAndPopulatesUncleanableMetrics(): Unit = {
     val largeMessageKey = 20
-    val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
+    val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
     val maxMessageSize = largeMessageSet.sizeInBytes
     cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, backOffMs = 100)
 
@@ -86,6 +86,21 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     assertTrue(uncleanablePartitions.contains(topicPartitions(0)))
     assertTrue(uncleanablePartitions.contains(topicPartitions(1)))
     assertFalse(uncleanablePartitions.contains(topicPartitions(2)))
+
+    // Delete one partition
+    cleaner.logs.remove(topicPartitions(0))
+    TestUtils.waitUntilTrue(
+      () => {
+        time.sleep(1000)
+        uncleanablePartitionsCountGauge.value() == 1
+      },
+      "There should be 1 uncleanable partitions",
+      2000L)
+
+    val uncleanablePartitions2 = cleaner.cleanerManager.uncleanablePartitions(uncleanableDirectory)
+    assertFalse(uncleanablePartitions2.contains(topicPartitions(0)))
+    assertTrue(uncleanablePartitions2.contains(topicPartitions(1)))
+    assertFalse(uncleanablePartitions2.contains(topicPartitions(2)))
   }
 
   private def getGauge[T](filter: MetricName => Boolean): Gauge[T] = {
@@ -138,7 +153,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     // advance to a time still less than maxCompactionLagMs from start
     time.sleep(maxCompactionLagMs/2)
     Thread.sleep(5 * cleanerBackOffMs) // give cleaning thread a chance to _not_ clean
-    assertEquals("There should be no cleaning until the max compaction lag has passed", startSizeBlock0, log.size)
+    assertEquals(startSizeBlock0, log.size, "There should be no cleaning until the max compaction lag has passed")
 
     // advance to time a bit more than one maxCompactionLagMs from start
     time.sleep(maxCompactionLagMs/2 + 1)
@@ -157,11 +172,11 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
     val read1 = readFromLog(log)
     val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints(new TopicPartition("log", 0))
-    assertTrue(s"log cleaner should have processed at least to offset $firstBlockCleanableSegmentOffset, " +
-      s"but lastCleaned=$lastCleaned", lastCleaned >= firstBlockCleanableSegmentOffset)
+    assertTrue(lastCleaned >= firstBlockCleanableSegmentOffset,
+      s"log cleaner should have processed at least to offset $firstBlockCleanableSegmentOffset, but lastCleaned=$lastCleaned")
 
     //minCleanableDirtyRatio  will prevent second block of data from compacting
-    assertNotEquals(s"log should still contain non-zero keys", appends1, read1)
+    assertNotEquals(appends1, read1, s"log should still contain non-zero keys")
 
     time.sleep(maxCompactionLagMs + 1)
     // the second block should get cleaned. only zero keys left
@@ -169,15 +184,15 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
 
     val read2 = readFromLog(log)
 
-    assertEquals(s"log should only contains zero keys now", appends1, read2)
+    assertEquals(appends1, read2, s"log should only contains zero keys now")
 
     val lastCleaned2 = cleaner.cleanerManager.allCleanerCheckpoints(new TopicPartition("log", 0))
     val secondBlockCleanableSegmentOffset = activeSegAtT1.baseOffset
-    assertTrue(s"log cleaner should have processed at least to offset $secondBlockCleanableSegmentOffset, " +
-      s"but lastCleaned=$lastCleaned2", lastCleaned2 >= secondBlockCleanableSegmentOffset)
+    assertTrue(lastCleaned2 >= secondBlockCleanableSegmentOffset,
+      s"log cleaner should have processed at least to offset $secondBlockCleanableSegmentOffset, but lastCleaned=$lastCleaned2")
   }
 
-  private def readFromLog(log: Log): Iterable[(Int, Int)] = {
+  private def readFromLog(log: UnifiedLog): Iterable[(Int, Int)] = {
     for (segment <- log.logSegments; record <- segment.log.records.asScala) yield {
       val key = TestUtils.readString(record.key).toInt
       val value = TestUtils.readString(record.value).toInt
@@ -185,12 +200,15 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest with K
     }
   }
 
-  private def writeKeyDups(numKeys: Int, numDups: Int, log: Log, codec: CompressionType, timestamp: Long, startValue: Int, step: Int): Seq[(Int, Int)] = {
+  private def writeKeyDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: CompressionType, timestamp: Long,
+                           startValue: Int, step: Int): Seq[(Int, Int)] = {
     var valCounter = startValue
     for (_ <- 0 until numDups; key <- 0 until numKeys) yield {
       val curValue = valCounter
       log.appendAsLeader(TestUtils.singletonRecords(value = curValue.toString.getBytes, codec = codec,
         key = key.toString.getBytes, timestamp = timestamp), leaderEpoch = 0)
+      // move LSO forward to increase compaction bound
+      log.updateHighWatermark(log.logEndOffset)
       valCounter += step
       (key, curValue)
     }

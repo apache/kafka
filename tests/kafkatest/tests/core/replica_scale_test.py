@@ -14,18 +14,16 @@
 # limitations under the License.
 
 from ducktape.mark.resource import cluster
-from ducktape.mark import parametrize
+from ducktape.mark import matrix
 from ducktape.tests.test import Test
-from ducktape.utils.util import wait_until
 
 from kafkatest.services.trogdor.produce_bench_workload import ProduceBenchWorkloadService, ProduceBenchWorkloadSpec
 from kafkatest.services.trogdor.consume_bench_workload import ConsumeBenchWorkloadService, ConsumeBenchWorkloadSpec
 from kafkatest.services.trogdor.task_spec import TaskSpec
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, quorum
 from kafkatest.services.trogdor.trogdor import TrogdorService
 from kafkatest.services.zookeeper import ZookeeperService
 
-import json
 import time
 
 
@@ -33,11 +31,12 @@ class ReplicaScaleTest(Test):
     def __init__(self, test_context):
         super(ReplicaScaleTest, self).__init__(test_context=test_context)
         self.test_context = test_context
-        self.zk = ZookeeperService(test_context, num_nodes=1)
-        self.kafka = KafkaService(self.test_context, num_nodes=8, zk=self.zk)
+        self.zk = ZookeeperService(test_context, num_nodes=1) if quorum.for_test(test_context) == quorum.zk else None
+        self.kafka = KafkaService(self.test_context, num_nodes=8, zk=self.zk, controller_num_nodes_override=1)
 
     def setUp(self):
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
         self.kafka.start()
 
     def teardown(self):
@@ -45,15 +44,16 @@ class ReplicaScaleTest(Test):
         for node in self.kafka.nodes:
             self.kafka.stop_node(node, clean_shutdown=False, timeout_sec=60)
         self.kafka.stop()
-        self.zk.stop()
+        if self.zk:
+            self.zk.stop()
 
     @cluster(num_nodes=12)
-    @parametrize(topic_count=500, partition_count=34, replication_factor=3)
-    def test_produce_consume(self, topic_count, partition_count, replication_factor):
+    @matrix(topic_count=[50], partition_count=[34], replication_factor=[3], metadata_quorum=quorum.all_non_upgrade)
+    def test_produce_consume(self, topic_count, partition_count, replication_factor, metadata_quorum=quorum.zk):
         topics_create_start_time = time.time()
         for i in range(topic_count):
             topic = "replicas_produce_consume_%d" % i
-            print("Creating topic %s" % topic)  # Force some stdout for Jenkins
+            print("Creating topic %s" % topic, flush=True)  # Force some stdout for Jenkins
             topic_cfg = {
                 "topic": topic,
                 "partitions": partition_count,
@@ -74,7 +74,7 @@ class ReplicaScaleTest(Test):
         produce_spec = ProduceBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 producer_workload_service.producer_node,
                                                 producer_workload_service.bootstrap_servers,
-                                                target_messages_per_sec=10000,
+                                                target_messages_per_sec=150000,
                                                 max_messages=3400000,
                                                 producer_conf={},
                                                 admin_client_conf={},
@@ -85,12 +85,12 @@ class ReplicaScaleTest(Test):
                                                 }})
         produce_workload = trogdor.create_task("replicas-produce-workload", produce_spec)
         produce_workload.wait_for_done(timeout_sec=600)
-        self.logger.info("Completed produce bench")
+        print("Completed produce bench", flush=True)  # Force some stdout for Travis
 
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 consumer_workload_service.consumer_node,
                                                 consumer_workload_service.bootstrap_servers,
-                                                target_messages_per_sec=10000,
+                                                target_messages_per_sec=150000,
                                                 max_messages=3400000,
                                                 consumer_conf={},
                                                 admin_client_conf={},
@@ -103,12 +103,12 @@ class ReplicaScaleTest(Test):
         trogdor.stop()
 
     @cluster(num_nodes=12)
-    @parametrize(topic_count=500, partition_count=34, replication_factor=3)
-    def test_clean_bounce(self, topic_count, partition_count, replication_factor):
+    @matrix(topic_count=[50], partition_count=[34], replication_factor=[3], metadata_quorum=quorum.all_non_upgrade)
+    def test_clean_bounce(self, topic_count, partition_count, replication_factor, metadata_quorum=quorum.zk):
         topics_create_start_time = time.time()
         for i in range(topic_count):
             topic = "topic-%04d" % i
-            print("Creating topic %s" % topic)  # Force some stdout for Jenkins
+            print("Creating topic %s" % topic, flush=True)  # Force some stdout for Jenkins
             topic_cfg = {
                 "topic": topic,
                 "partitions": partition_count,

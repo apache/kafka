@@ -19,9 +19,9 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class CheckpointTest {
 
@@ -32,9 +32,13 @@ public class CheckpointTest {
         byte[] value = checkpoint.recordValue();
         ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>("any-topic", 7, 8, key, value);
         Checkpoint deserialized = Checkpoint.deserializeRecord(record);
-        assertEquals(checkpoint.consumerGroupId(), deserialized.consumerGroupId());
-        assertEquals(checkpoint.topicPartition(), deserialized.topicPartition());
-        assertEquals(checkpoint.upstreamOffset(), deserialized.upstreamOffset());
-        assertEquals(checkpoint.downstreamOffset(), deserialized.downstreamOffset());
+        assertEquals(checkpoint.consumerGroupId(), deserialized.consumerGroupId(),
+                "Failure on checkpoint consumerGroupId serde");
+        assertEquals(checkpoint.topicPartition(), deserialized.topicPartition(),
+                "Failure on checkpoint topicPartition serde");
+        assertEquals(checkpoint.upstreamOffset(), deserialized.upstreamOffset(),
+                "Failure on checkpoint upstreamOffset serde");
+        assertEquals(checkpoint.downstreamOffset(), deserialized.downstreamOffset(),
+                "Failure on checkpoint downstreamOffset serde");
     }
 }

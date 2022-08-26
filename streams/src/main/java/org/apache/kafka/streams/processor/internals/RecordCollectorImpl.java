@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
@@ -24,6 +23,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Sensor;
@@ -39,17 +40,23 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler.ProductionExceptionHandlerResponse;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
+
 import org.slf4j.Logger;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
 
 public class RecordCollectorImpl implements RecordCollector {
     private final static String SEND_EXCEPTION_MESSAGE = "Error encountered sending record to topic %s for task %s due to:%n%s";
@@ -58,9 +65,12 @@ public class RecordCollectorImpl implements RecordCollector {
     private final TaskId taskId;
     private final StreamsProducer streamsProducer;
     private final ProductionExceptionHandler productionExceptionHandler;
-    private final Sensor droppedRecordsSensor;
     private final boolean eosEnabled;
     private final Map<TopicPartition, Long> offsets;
+
+    private final StreamsMetricsImpl streamsMetrics;
+    private final Sensor droppedRecordsSensor;
+    private final Map<String, Map<String, Sensor>> sinkNodeToProducedSensorByTopic = new HashMap<>();
 
     private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
 
@@ -71,15 +81,29 @@ public class RecordCollectorImpl implements RecordCollector {
                                final TaskId taskId,
                                final StreamsProducer streamsProducer,
                                final ProductionExceptionHandler productionExceptionHandler,
-                               final StreamsMetricsImpl streamsMetrics) {
+                               final StreamsMetricsImpl streamsMetrics,
+                               final ProcessorTopology topology) {
         this.log = logContext.logger(getClass());
         this.taskId = taskId;
         this.streamsProducer = streamsProducer;
         this.productionExceptionHandler = productionExceptionHandler;
         this.eosEnabled = streamsProducer.eosEnabled();
+        this.streamsMetrics = streamsMetrics;
 
         final String threadId = Thread.currentThread().getName();
-        this.droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, taskId.toString(), streamsMetrics);
+        this.droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), streamsMetrics);
+        for (final String topic : topology.sinkTopics()) {
+            final String processorNodeId = topology.sink(topic).name();
+            sinkNodeToProducedSensorByTopic.computeIfAbsent(processorNodeId, t -> new HashMap<>()).put(
+                topic,
+                TopicMetrics.producedSensor(
+                    threadId,
+                    taskId.toString(),
+                    processorNodeId,
+                    topic,
+                    streamsMetrics
+                ));
+        }
 
         this.offsets = new HashMap<>();
     }
@@ -103,6 +127,8 @@ public class RecordCollectorImpl implements RecordCollector {
                             final Long timestamp,
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer,
+                            final String processorNodeId,
+                            final InternalProcessorContext<Void, Void> context,
                             final StreamPartitioner<? super K, ? super V> partitioner) {
         final Integer partition;
 
@@ -110,11 +136,18 @@ public class RecordCollectorImpl implements RecordCollector {
             final List<PartitionInfo> partitions;
             try {
                 partitions = streamsProducer.partitionsFor(topic);
-            } catch (final KafkaException e) {
+            } catch (final TimeoutException timeoutException) {
+                log.warn("Could not get partitions for topic {}, will retry", topic);
+
+                // re-throw to trigger `task.timeout.ms`
+                throw timeoutException;
+            } catch (final KafkaException fatal) {
                 // here we cannot drop the message on the floor even if it is a transient timeout exception,
                 // so we treat everything the same as a fatal exception
                 throw new StreamsException("Could not determine the number of partitions for topic '" + topic +
-                    "' for task " + taskId + " due to " + e.toString());
+                    "' for task " + taskId + " due to " + fatal,
+                    fatal
+                );
             }
             if (partitions.size() > 0) {
                 partition = partitioner.partition(topic, key, value, partitions.size());
@@ -126,7 +159,7 @@ public class RecordCollectorImpl implements RecordCollector {
             partition = null;
         }
 
-        send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer);
+        send(topic, key, value, headers, partition, timestamp, keySerializer, valueSerializer, processorNodeId, context);
     }
 
     @Override
@@ -137,7 +170,9 @@ public class RecordCollectorImpl implements RecordCollector {
                             final Integer partition,
                             final Long timestamp,
                             final Serializer<K> keySerializer,
-                            final Serializer<V> valueSerializer) {
+                            final Serializer<V> valueSerializer,
+                            final String processorNodeId,
+                            final InternalProcessorContext<Void, Void> context) {
         checkForException();
 
         final byte[] keyBytes;
@@ -163,7 +198,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     valueClass),
                 exception);
         } catch (final RuntimeException exception) {
-            final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception.toString());
+            final String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception);
             throw new StreamsException(errorMessage, exception);
         }
 
@@ -182,6 +217,29 @@ public class RecordCollectorImpl implements RecordCollector {
                 } else {
                     log.warn("Received offset={} in produce response for {}", metadata.offset(), tp);
                 }
+
+                if (!topic.endsWith("-changelog")) {
+                    final Map<String, Sensor> producedSensorByTopic = sinkNodeToProducedSensorByTopic.get(processorNodeId);
+                    if (producedSensorByTopic == null) {
+                        log.error("Unable to records bytes produced to topic {} by sink node {} as the node is not recognized.\n"
+                                      + "Known sink nodes are {}.", topic, processorNodeId, sinkNodeToProducedSensorByTopic.keySet());
+                    } else {
+                        // we may not have created a sensor during initialization if the node uses dynamic topic routing,
+                        // as all topics are not known up front, so create the sensor for that topic if absent
+                        final Sensor topicProducedSensor = producedSensorByTopic.computeIfAbsent(
+                            topic,
+                            t -> TopicMetrics.producedSensor(
+                                Thread.currentThread().getName(),
+                                taskId.toString(),
+                                processorNodeId,
+                                topic,
+                                context.metrics()
+                            )
+                        );
+                        final long bytesProduced = producerRecordSizeInBytes(serializedRecord);
+                        topicProducedSensor.record(bytesProduced, context.currentSystemTimeMs());
+                    }
+                }
             } else {
                 recordSendError(topic, exception, serializedRecord);
 
@@ -197,7 +255,9 @@ public class RecordCollectorImpl implements RecordCollector {
         if (isFatalException(exception)) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.";
             sendException.set(new StreamsException(errorMessage, exception));
-        } else if (exception instanceof ProducerFencedException || exception instanceof OutOfOrderSequenceException) {
+        } else if (exception instanceof ProducerFencedException ||
+                exception instanceof InvalidProducerEpochException ||
+                exception instanceof OutOfOrderSequenceException) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced, " +
                 "indicating the task may be migrated out";
             sendException.set(new TaskMigratedException(errorMessage, exception));
@@ -207,18 +267,19 @@ public class RecordCollectorImpl implements RecordCollector {
                     "or the connection to broker was interrupted sending the request or receiving the response. " +
                     "\nConsider overwriting `max.block.ms` and /or " +
                     "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
-            }
-
-            if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
-                errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
-                sendException.set(new StreamsException(errorMessage, exception));
+                sendException.set(new TaskCorruptedException(Collections.singleton(taskId)));
             } else {
-                errorMessage += "\nException handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded.";
-                droppedRecordsSensor.record();
+                if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
+                    errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
+                    sendException.set(new StreamsException(errorMessage, exception));
+                } else {
+                    errorMessage += "\nException handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded.";
+                    droppedRecordsSensor.record();
+                }
             }
         }
 
-        log.error(errorMessage);
+        log.error(errorMessage, exception);
     }
 
     private boolean isFatalException(final Exception exception) {
@@ -254,6 +315,8 @@ public class RecordCollectorImpl implements RecordCollector {
     public void closeClean() {
         log.info("Closing record collector clean");
 
+        removeAllProducedSensors();
+
         // No need to abort transaction during a clean close: either we have successfully committed the ongoing
         // transaction during handleRevocation and thus there is no transaction in flight, or else none of the revoked
         // tasks had any data in the current transaction and therefore there is no need to commit or abort it.
@@ -275,6 +338,14 @@ public class RecordCollectorImpl implements RecordCollector {
         }
 
         checkForException();
+    }
+
+    private void removeAllProducedSensors() {
+        for (final Map<String, Sensor> nodeMap : sinkNodeToProducedSensorByTopic.values()) {
+            for (final Sensor sensor : nodeMap.values()) {
+                streamsMetrics.removeSensor(sensor);
+            }
+        }
     }
 
     @Override

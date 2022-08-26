@@ -16,9 +16,11 @@
 {
   "apiKey": 49,
   "type": "request",
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "AlterClientQuotasRequest",
-  "validVersions": "0",
-  "flexibleVersions": "none",
+  "validVersions": "0-1",
+  // Version 1 enables flexible versions.
+  "flexibleVersions": "1+",
   "fields": [
     { "name": "Entries", "type": "[]EntryData", "versions": "0+",
       "about": "The quota configuration entries to alter.", "fields": [

@@ -16,71 +16,126 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.zk.KafkaZkClient
+import kafka.server.BrokerToControllerChannelManager
+import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
 import org.apache.kafka.common.KafkaException
-import org.easymock.{Capture, EasyMock}
-import org.junit.{After, Test}
-import org.junit.Assert._
+import org.apache.kafka.common.message.AllocateProducerIdsResponseData
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.AllocateProducerIdsResponse
+import org.apache.kafka.server.common.ProducerIdsBlock
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
+import org.mockito.ArgumentCaptor
+import org.mockito.ArgumentMatchers.{any, anyString}
+import org.mockito.Mockito.{mock, when}
+
+import java.util.stream.IntStream
 
 class ProducerIdManagerTest {
 
-  private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+  var brokerToController: BrokerToControllerChannelManager = mock(classOf[BrokerToControllerChannelManager])
+  val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
 
-  @After
-  def tearDown(): Unit = {
-    EasyMock.reset(zkClient)
+  // Mutable test implementation that lets us easily set the idStart and error
+  class MockProducerIdManager(val brokerId: Int, var idStart: Long, val idLen: Int, var error: Errors = Errors.NONE)
+    extends RPCProducerIdManager(brokerId, () => 1, brokerToController, 100) {
+
+    override private[transaction] def sendRequest(): Unit = {
+      if (error == Errors.NONE) {
+        handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
+          new AllocateProducerIdsResponseData().setProducerIdStart(idStart).setProducerIdLen(idLen)))
+        idStart += idLen
+      } else {
+        handleAllocateProducerIdsResponse(new AllocateProducerIdsResponse(
+          new AllocateProducerIdsResponseData().setErrorCode(error.code)))
+      }
+    }
   }
 
   @Test
-  def testGetProducerId(): Unit = {
+  def testGetProducerIdZk(): Unit = {
     var zkVersion: Option[Int] = None
     var data: Array[Byte] = null
-    EasyMock.expect(zkClient.getDataAndVersion(EasyMock.anyString)).andAnswer(() =>
-      zkVersion.map(Some(data) -> _).getOrElse(None, 0)).anyTimes()
+    when(zkClient.getDataAndVersion(anyString)).thenAnswer(_ =>
+      zkVersion.map(Some(data) -> _).getOrElse(None, 0))
 
-    val capturedVersion: Capture[Int] = EasyMock.newCapture()
-    val capturedData: Capture[Array[Byte]] = EasyMock.newCapture()
-    EasyMock.expect(zkClient.conditionalUpdatePath(EasyMock.anyString(),
-      EasyMock.capture(capturedData),
-      EasyMock.capture(capturedVersion),
-      EasyMock.anyObject[Option[(KafkaZkClient, String, Array[Byte]) => (Boolean, Int)]])
-    ).andAnswer(() => {
+    val capturedVersion: ArgumentCaptor[Int] = ArgumentCaptor.forClass(classOf[Int])
+    val capturedData: ArgumentCaptor[Array[Byte]] = ArgumentCaptor.forClass(classOf[Array[Byte]])
+    when(zkClient.conditionalUpdatePath(anyString(),
+      capturedData.capture(),
+      capturedVersion.capture(),
+      any[Option[(KafkaZkClient, String, Array[Byte]) => (Boolean, Int)]])
+    ).thenAnswer(_ => {
       val newZkVersion = capturedVersion.getValue + 1
       zkVersion = Some(newZkVersion)
       data = capturedData.getValue
       (true, newZkVersion)
-    }).anyTimes()
+    })
 
-    EasyMock.replay(zkClient)
-
-    val manager1 = new ProducerIdManager(0, zkClient)
-    val manager2 = new ProducerIdManager(1, zkClient)
+    val manager1 = new ZkProducerIdManager(0, zkClient)
+    val manager2 = new ZkProducerIdManager(1, zkClient)
 
     val pid1 = manager1.generateProducerId()
     val pid2 = manager2.generateProducerId()
 
     assertEquals(0, pid1)
-    assertEquals(ProducerIdManager.PidBlockSize, pid2)
+    assertEquals(ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE, pid2)
 
-    for (i <- 1L until ProducerIdManager.PidBlockSize)
+    for (i <- 1L until ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE)
       assertEquals(pid1 + i, manager1.generateProducerId())
 
-    for (i <- 1L until ProducerIdManager.PidBlockSize)
+    for (i <- 1L until ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE)
       assertEquals(pid2 + i, manager2.generateProducerId())
 
-    assertEquals(pid2 + ProducerIdManager.PidBlockSize, manager1.generateProducerId())
-    assertEquals(pid2 + ProducerIdManager.PidBlockSize * 2, manager2.generateProducerId())
+    assertEquals(pid2 + ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE, manager1.generateProducerId())
+    assertEquals(pid2 + ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE * 2, manager2.generateProducerId())
   }
 
-  @Test(expected = classOf[KafkaException])
-  def testExceedProducerIdLimit(): Unit = {
-    EasyMock.expect(zkClient.getDataAndVersion(EasyMock.anyString)).andAnswer(() => {
-      val json = ProducerIdManager.generateProducerIdBlockJson(
-        ProducerIdBlock(0, Long.MaxValue - ProducerIdManager.PidBlockSize, Long.MaxValue))
+  @Test
+  def testExceedProducerIdLimitZk(): Unit = {
+    when(zkClient.getDataAndVersion(anyString)).thenAnswer(_ => {
+      val json = ProducerIdBlockZNode.generateProducerIdBlockJson(
+        new ProducerIdsBlock(0, Long.MaxValue - ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE, ProducerIdsBlock.PRODUCER_ID_BLOCK_SIZE))
       (Some(json), 0)
-    }).anyTimes()
-    EasyMock.replay(zkClient)
-    new ProducerIdManager(0, zkClient)
+    })
+    assertThrows(classOf[KafkaException], () => new ZkProducerIdManager(0, zkClient))
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = Array(1, 2, 10))
+  def testContiguousIds(idBlockLen: Int): Unit = {
+    val manager = new MockProducerIdManager(0, 0, idBlockLen)
+
+    IntStream.range(0, idBlockLen * 3).forEach { i =>
+      assertEquals(i, manager.generateProducerId())
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[Errors], names = Array("UNKNOWN_SERVER_ERROR", "INVALID_REQUEST"))
+  def testUnrecoverableErrors(error: Errors): Unit = {
+    val manager = new MockProducerIdManager(0, 0, 1)
+    assertEquals(0, manager.generateProducerId())
+
+    manager.error = error
+    assertThrows(classOf[Throwable], () => manager.generateProducerId())
+
+    manager.error = Errors.NONE
+    assertEquals(1, manager.generateProducerId())
+  }
+
+  @Test
+  def testInvalidRanges(): Unit = {
+    var manager = new MockProducerIdManager(0, -1, 10)
+    assertThrows(classOf[KafkaException], () => manager.generateProducerId())
+
+    manager = new MockProducerIdManager(0, 0, -1)
+    assertThrows(classOf[KafkaException], () => manager.generateProducerId())
+
+    manager = new MockProducerIdManager(0, Long.MaxValue-1, 10)
+    assertThrows(classOf[KafkaException], () => manager.generateProducerId())
   }
 }
 

@@ -115,8 +115,6 @@ public abstract class AbstractJoinIntegrationTest {
 
     @BeforeClass
     public static void setupConfigsAndUtils() {
-
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "topology_driver:0000");
         STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
@@ -190,7 +188,7 @@ public abstract class AbstractJoinIntegrationTest {
             }
 
             final TestRecord<Long, String> updatedExpectedFinalResult =
-                new TestRecord<Long, String>(
+                new TestRecord<>(
                     expectedFinalResult.key(),
                     expectedFinalResult.value(),
                     null,

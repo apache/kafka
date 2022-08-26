@@ -16,29 +16,30 @@
   */
 package kafka.server.checkpoints
 
-import java.io._
-import java.util.regex.Pattern
-
 import kafka.server.LogDirFailureChannel
 import kafka.server.epoch.EpochEntry
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.common.CheckpointFile.EntryFormatter
 
+import java.io._
+import java.util.Optional
+import java.util.regex.Pattern
 import scala.collection._
 
 object OffsetCheckpointFile {
   private val WhiteSpacesPattern = Pattern.compile("\\s+")
   private[checkpoints] val CurrentVersion = 0
 
-  object Formatter extends CheckpointFileFormatter[(TopicPartition, Long)] {
-    override def toLine(entry: (TopicPartition, Long)): String = {
+  object Formatter extends EntryFormatter[(TopicPartition, Long)] {
+    override def toString(entry: (TopicPartition, Long)): String = {
       s"${entry._1.topic} ${entry._1.partition} ${entry._2}"
     }
 
-    override def fromLine(line: String): Option[(TopicPartition, Long)] = {
+    override def fromString(line: String): Optional[(TopicPartition, Long)] = {
       WhiteSpacesPattern.split(line) match {
         case Array(topic, partition, offset) =>
-          Some(new TopicPartition(topic, partition.toInt), offset.toLong)
-        case _ => None
+          Optional.of(new TopicPartition(topic, partition.toInt), offset.toLong)
+        case _ => Optional.empty()
       }
     }
   }
@@ -50,10 +51,18 @@ trait OffsetCheckpoint {
 }
 
 /**
-  * This class persists a map of (Partition => Offsets) to a file (for a certain replica)
-  */
+ * This class persists a map of (Partition => Offsets) to a file (for a certain replica)
+ *
+ * The format in the offset checkpoint file is like this:
+ *  -----checkpoint file begin------
+ *  0                <- OffsetCheckpointFile.currentVersion
+ *  2                <- following entries size
+ *  tp1  par1  1     <- the format is: TOPIC  PARTITION  OFFSET
+ *  tp1  par2  2
+ *  -----checkpoint file end----------
+ */
 class OffsetCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureChannel = null) {
-  val checkpoint = new CheckpointFile[(TopicPartition, Long)](file, OffsetCheckpointFile.CurrentVersion,
+  val checkpoint = new CheckpointFileWithFailureHandler[(TopicPartition, Long)](file, OffsetCheckpointFile.CurrentVersion,
     OffsetCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
 
   def write(offsets: Map[TopicPartition, Long]): Unit = checkpoint.write(offsets)

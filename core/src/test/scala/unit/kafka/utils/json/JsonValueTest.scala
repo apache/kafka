@@ -20,8 +20,8 @@ package kafka.utils.json
 import scala.collection.Seq
 
 import com.fasterxml.jackson.databind.{ObjectMapper, JsonMappingException}
-import org.junit.Test
-import org.junit.Assert._
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions._
 
 import kafka.utils.Json
 

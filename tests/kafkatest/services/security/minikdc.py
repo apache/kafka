@@ -14,8 +14,6 @@
 # limitations under the License.
 
 import os
-import random
-import uuid
 from io import open
 from os import remove, close
 from shutil import move

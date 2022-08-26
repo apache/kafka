@@ -44,7 +44,7 @@ public class PluginUtils {
     private static final Logger log = LoggerFactory.getLogger(PluginUtils.class);
 
     // Be specific about javax packages and exclude those existing in Java SE and Java EE libraries.
-    private static final Pattern BLACKLIST = Pattern.compile("^(?:"
+    private static final Pattern EXCLUDE = Pattern.compile("^(?:"
             + "java"
             + "|javax\\.accessibility"
             + "|javax\\.activation"
@@ -125,9 +125,9 @@ public class PluginUtils {
 
     // If the base interface or class that will be used to identify Connect plugins resides within
     // the same java package as the plugins that need to be loaded in isolation (and thus are
-    // added to the WHITELIST), then this base interface or class needs to be excluded in the
+    // added to the INCLUDE pattern), then this base interface or class needs to be excluded in the
     // regular expression pattern
-    private static final Pattern WHITELIST = Pattern.compile("^org\\.apache\\.kafka\\.(?:connect\\.(?:"
+    private static final Pattern INCLUDE = Pattern.compile("^org\\.apache\\.kafka\\.(?:connect\\.(?:"
             + "transforms\\.(?!Transformation|predicates\\.Predicate$).*"
             + "|json\\..*"
             + "|file\\..*"
@@ -142,13 +142,8 @@ public class PluginUtils {
             + "|common\\.config\\.provider\\.(?!ConfigProvider$).*"
             + ")$");
 
-    private static final DirectoryStream.Filter<Path> PLUGIN_PATH_FILTER = new DirectoryStream
-            .Filter<Path>() {
-        @Override
-        public boolean accept(Path path) {
-            return Files.isDirectory(path) || isArchive(path) || isClassFile(path);
-        }
-    };
+    private static final DirectoryStream.Filter<Path> PLUGIN_PATH_FILTER = path ->
+        Files.isDirectory(path) || isArchive(path) || isClassFile(path);
 
     /**
      * Return whether the class with the given name should be loaded in isolation using a plugin
@@ -158,7 +153,7 @@ public class PluginUtils {
      * @return true if this class should be loaded in isolation, false otherwise.
      */
     public static boolean shouldLoadInIsolation(String name) {
-        return !(BLACKLIST.matcher(name).matches() && !WHITELIST.matcher(name).matches());
+        return !(EXCLUDE.matcher(name).matches() && !INCLUDE.matcher(name).matches());
     }
 
     /**
@@ -324,7 +319,6 @@ public class PluginUtils {
         switch (plugin.type()) {
             case SOURCE:
             case SINK:
-            case CONNECTOR:
                 return prunePluginName(plugin, "Connector");
             default:
                 return prunePluginName(plugin, plugin.type().simpleName());

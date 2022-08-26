@@ -93,6 +93,15 @@ public abstract class SampledStat implements MeasurableStat {
         return oldest;
     }
 
+    @Override
+    public String toString() {
+        return "SampledStat(" +
+            "initialValue=" + initialValue +
+            ", current=" + current +
+            ", samples=" + samples +
+            ')';
+    }
+
     protected abstract void update(Sample sample, MetricConfig config, double value, long timeMs);
 
     public abstract double combine(List<Sample> samples, MetricConfig config, long now);
@@ -127,6 +136,16 @@ public abstract class SampledStat implements MeasurableStat {
 
         public boolean isComplete(long timeMs, MetricConfig config) {
             return timeMs - lastWindowMs >= config.timeWindowMs() || eventCount >= config.eventWindow();
+        }
+
+        @Override
+        public String toString() {
+            return "Sample(" +
+                "value=" + value +
+                ", eventCount=" + eventCount +
+                ", lastWindowMs=" + lastWindowMs +
+                ", initialValue=" + initialValue +
+                ')';
         }
     }
 

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -29,7 +28,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -37,11 +35,11 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -68,6 +66,8 @@ import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -133,7 +133,7 @@ public class GlobalStateManagerImplTest {
                 put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
             }
         });
-        stateDirectory = new StateDirectory(streamsConfig, time, true);
+        stateDirectory = new StateDirectory(streamsConfig, time, true, false);
         consumer = new MockConsumer<>(OffsetResetStrategy.NONE);
         stateManager = new GlobalStateManagerImpl(
             new LogContext("test"),
@@ -149,28 +149,6 @@ public class GlobalStateManagerImplTest {
         checkpointFile = new File(stateManager.baseDir(), StateManagerUtil.CHECKPOINT_FILE_NAME);
     }
 
-    @After
-    public void after() throws IOException {
-        stateDirectory.unlockGlobalState();
-    }
-
-    @Test
-    public void shouldLockGlobalStateDirectory() {
-        stateManager.initialize();
-        assertTrue(new File(stateDirectory.globalStateDir(), ".lock").exists());
-    }
-
-    @Test(expected = LockException.class)
-    public void shouldThrowLockExceptionIfCantGetLock() throws IOException {
-        final StateDirectory stateDir = new StateDirectory(streamsConfig, time, true);
-        try {
-            stateDir.lockGlobalState();
-            stateManager.initialize();
-        } finally {
-            stateDir.unlockGlobalState();
-        }
-    }
-
     @Test
     public void shouldReadCheckpointOffsets() throws IOException {
         final Map<TopicPartition, Long> expected = writeCheckpoint();
@@ -178,6 +156,25 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         final Map<TopicPartition, Long> offsets = stateManager.changelogOffsets();
         assertEquals(expected, offsets);
+    }
+
+    @Test
+    public void shouldLogWarningMessageWhenIOExceptionInCheckPoint() throws IOException {
+        final Map<TopicPartition, Long> offsets = Collections.singletonMap(t1, 25L);
+        stateManager.initialize();
+        stateManager.updateChangelogOffsets(offsets);
+
+        // set readonly to the CHECKPOINT_FILE_NAME.tmp file because we will write data to the .tmp file first
+        // and then swap to CHECKPOINT_FILE_NAME by replacing it
+        final File file = new File(stateDirectory.globalStateDir(), StateManagerUtil.CHECKPOINT_FILE_NAME + ".tmp");
+        Files.createFile(file.toPath());
+        file.setWritable(false);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(GlobalStateManagerImpl.class)) {
+            stateManager.checkpoint();
+            assertThat(appender.getMessages(), hasItem(containsString(
+                "Failed to write offset checkpoint file to " + checkpointFile.getPath() + " for global stores")));
+        }
     }
 
     @Test
@@ -210,10 +207,10 @@ public class GlobalStateManagerImplTest {
         assertTrue(checkpointFile.exists());
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionIfFailedToReadCheckpointedOffsets() throws IOException {
         writeCorruptCheckpoint();
-        stateManager.initialize();
+        assertThrows(StreamsException.class, stateManager::initialize);
     }
 
     @Test
@@ -234,7 +231,7 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
 
         try {
-            stateManager.registerStore(new NoOpReadOnlyStore<>("not-in-topology"), stateRestoreCallback);
+            stateManager.registerStore(new NoOpReadOnlyStore<>("not-in-topology"), stateRestoreCallback, null);
             fail("should have raised an illegal argument exception as store is not in the topology");
         } catch (final IllegalArgumentException e) {
             // pass
@@ -245,9 +242,9 @@ public class GlobalStateManagerImplTest {
     public void shouldThrowIllegalArgumentExceptionIfAttemptingToRegisterStoreTwice() {
         stateManager.initialize();
         initializeConsumer(2, 0, t1);
-        stateManager.registerStore(store1, stateRestoreCallback);
+        stateManager.registerStore(store1, stateRestoreCallback, null);
         try {
-            stateManager.registerStore(store1, stateRestoreCallback);
+            stateManager.registerStore(store1, stateRestoreCallback, null);
             fail("should have raised an illegal argument exception as store has already been registered");
         } catch (final IllegalArgumentException e) {
             // pass
@@ -258,7 +255,7 @@ public class GlobalStateManagerImplTest {
     public void shouldThrowStreamsExceptionIfNoPartitionsFoundForStore() {
         stateManager.initialize();
         try {
-            stateManager.registerStore(store1, stateRestoreCallback);
+            stateManager.registerStore(store1, stateRestoreCallback, null);
             fail("Should have raised a StreamsException as there are no partition for the store");
         } catch (final StreamsException e) {
             // pass
@@ -270,7 +267,7 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(1, 0, t1);
 
         stateManager.initialize();
-        stateManager.registerStore(store1, stateRestoreCallback);
+        stateManager.registerStore(store1, stateRestoreCallback, null);
 
         final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
         assertEquals(3, restoredRecord.key.length);
@@ -285,8 +282,8 @@ public class GlobalStateManagerImplTest {
         stateManager.registerStore(
             new WrappedStateStore<NoOpReadOnlyStore<Object, Object>, Object, Object>(store1) {
             },
-            stateRestoreCallback
-        );
+            stateRestoreCallback,
+                null);
 
         final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
         assertEquals(3, restoredRecord.key.length);
@@ -298,7 +295,7 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(1, 0, t2);
 
         stateManager.initialize();
-        stateManager.registerStore(store2, stateRestoreCallback);
+        stateManager.registerStore(store2, stateRestoreCallback, null);
 
         final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
         assertEquals(3, restoredRecord.key.length);
@@ -313,8 +310,8 @@ public class GlobalStateManagerImplTest {
         stateManager.registerStore(
             new WrappedStateStore<NoOpReadOnlyStore<Object, Object>, Object, Object>(store2) {
             },
-            stateRestoreCallback
-        );
+            stateRestoreCallback,
+            null);
 
         final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
         assertEquals(3, restoredRecord.key.length);
@@ -327,7 +324,7 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize();
 
-        stateManager.registerStore(store1, stateRestoreCallback);
+        stateManager.registerStore(store1, stateRestoreCallback, null);
         assertEquals(2, stateRestoreCallback.restored.size());
     }
 
@@ -336,7 +333,7 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(5, 1, t1);
         stateManager.initialize();
 
-        stateManager.registerStore(store1, stateRestoreCallback);
+        stateManager.registerStore(store1, stateRestoreCallback, null);
 
         assertThat(stateRestoreListener.restoreStartOffset, equalTo(1L));
         assertThat(stateRestoreListener.restoreEndOffset, equalTo(6L));
@@ -357,7 +354,7 @@ public class GlobalStateManagerImplTest {
         offsetCheckpoint.write(Collections.singletonMap(t1, 5L));
 
         stateManager.initialize();
-        stateManager.registerStore(store1, stateRestoreCallback);
+        stateManager.registerStore(store1, stateRestoreCallback, null);
         assertEquals(5, stateRestoreCallback.restored.size());
     }
 
@@ -367,16 +364,16 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         // register the stores
         initializeConsumer(1, 0, t1);
-        stateManager.registerStore(store1, stateRestoreCallback);
+        stateManager.registerStore(store1, stateRestoreCallback, null);
         initializeConsumer(1, 0, t2);
-        stateManager.registerStore(store2, stateRestoreCallback);
+        stateManager.registerStore(store2, stateRestoreCallback, null);
 
         stateManager.flush();
         assertTrue(store1.flushed);
         assertTrue(store2.flushed);
     }
 
-    @Test(expected = ProcessorStateException.class)
+    @Test
     public void shouldThrowProcessorStateStoreExceptionIfStoreFlushFailed() {
         stateManager.initialize();
         // register the stores
@@ -386,9 +383,8 @@ public class GlobalStateManagerImplTest {
             public void flush() {
                 throw new RuntimeException("KABOOM!");
             }
-        }, stateRestoreCallback);
-
-        stateManager.flush();
+        }, stateRestoreCallback, null);
+        assertThrows(StreamsException.class, stateManager::flush);
     }
 
     @Test
@@ -396,17 +392,17 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         // register the stores
         initializeConsumer(1, 0, t1);
-        stateManager.registerStore(store1, stateRestoreCallback);
+        stateManager.registerStore(store1, stateRestoreCallback, null);
         initializeConsumer(1, 0, t2);
-        stateManager.registerStore(store2, stateRestoreCallback);
+        stateManager.registerStore(store2, stateRestoreCallback, null);
 
         stateManager.close();
         assertFalse(store1.isOpen());
         assertFalse(store2.isOpen());
     }
 
-    @Test(expected = ProcessorStateException.class)
-    public void shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed() throws IOException {
+    @Test
+    public void shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed() {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
         stateManager.registerStore(new NoOpReadOnlyStore<Object, Object>(store1.name()) {
@@ -414,16 +410,16 @@ public class GlobalStateManagerImplTest {
             public void close() {
                 throw new RuntimeException("KABOOM!");
             }
-        }, stateRestoreCallback);
+        }, stateRestoreCallback, null);
 
-        stateManager.close();
+        assertThrows(ProcessorStateException.class, stateManager::close);
     }
 
     @Test
     public void shouldThrowIllegalArgumentExceptionIfCallbackIsNull() {
         stateManager.initialize();
         try {
-            stateManager.registerStore(store1, null);
+            stateManager.registerStore(store1, null, null);
             fail("should have thrown due to null callback");
         } catch (final IllegalArgumentException e) {
             //pass
@@ -431,20 +427,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldUnlockGlobalStateDirectoryOnClose() throws IOException {
-        stateManager.initialize();
-        stateManager.close();
-        final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime(), true);
-        try {
-            // should be able to get the lock now as it should've been released in close
-            assertTrue(stateDir.lockGlobalState());
-        } finally {
-            stateDir.unlockGlobalState();
-        }
-    }
-
-    @Test
-    public void shouldNotCloseStoresIfCloseAlreadyCalled() throws IOException {
+    public void shouldNotCloseStoresIfCloseAlreadyCalled() {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
         stateManager.registerStore(new NoOpReadOnlyStore<Object, Object>("t1-store") {
@@ -455,14 +438,14 @@ public class GlobalStateManagerImplTest {
                 }
                 super.close();
             }
-        }, stateRestoreCallback);
+        }, stateRestoreCallback, null);
         stateManager.close();
 
         stateManager.close();
     }
 
     @Test
-    public void shouldAttemptToCloseAllStoresEvenWhenSomeException() throws IOException {
+    public void shouldAttemptToCloseAllStoresEvenWhenSomeException() {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
         final NoOpReadOnlyStore<Object, Object> store = new NoOpReadOnlyStore<Object, Object>("t1-store") {
@@ -472,10 +455,10 @@ public class GlobalStateManagerImplTest {
                 throw new RuntimeException("KABOOM!");
             }
         };
-        stateManager.registerStore(store, stateRestoreCallback);
+        stateManager.registerStore(store, stateRestoreCallback, null);
 
         initializeConsumer(1, 0, t2);
-        stateManager.registerStore(store2, stateRestoreCallback);
+        stateManager.registerStore(store2, stateRestoreCallback, null);
 
         try {
             stateManager.close();
@@ -484,23 +467,6 @@ public class GlobalStateManagerImplTest {
         }
         assertFalse(store.isOpen());
         assertFalse(store2.isOpen());
-    }
-
-    @Test
-    public void shouldReleaseLockIfExceptionWhenLoadingCheckpoints() throws IOException {
-        writeCorruptCheckpoint();
-        try {
-            stateManager.initialize();
-        } catch (final StreamsException e) {
-            // expected
-        }
-        final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime(), true);
-        try {
-            // should be able to get the lock now as it should've been released
-            assertTrue(stateDir.lockGlobalState());
-        } finally {
-            stateDir.unlockGlobalState();
-        }
     }
 
     @Test
@@ -520,9 +486,9 @@ public class GlobalStateManagerImplTest {
     public void shouldNotRemoveOffsetsOfUnUpdatedTablesDuringCheckpoint() {
         stateManager.initialize();
         initializeConsumer(10, 0, t1);
-        stateManager.registerStore(store1, stateRestoreCallback);
+        stateManager.registerStore(store1, stateRestoreCallback, null);
         initializeConsumer(20, 0, t2);
-        stateManager.registerStore(store2, stateRestoreCallback);
+        stateManager.registerStore(store2, stateRestoreCallback, null);
 
         final Map<TopicPartition, Long> initialCheckpoint = stateManager.changelogOffsets();
         stateManager.updateChangelogOffsets(Collections.singletonMap(t1, 101L));
@@ -549,7 +515,7 @@ public class GlobalStateManagerImplTest {
         consumer.addRecord(new ConsumerRecord<>(t1.topic(), t1.partition(), 2, expectedKey, expectedValue));
 
         stateManager.initialize();
-        stateManager.registerStore(store1, stateRestoreCallback);
+        stateManager.registerStore(store1, stateRestoreCallback, null);
         final KeyValue<byte[], byte[]> restoredKv = stateRestoreCallback.restored.get(0);
         assertThat(stateRestoreCallback.restored, equalTo(Collections.singletonList(KeyValue.pair(restoredKv.key, restoredKv.value))));
     }
@@ -558,7 +524,7 @@ public class GlobalStateManagerImplTest {
     public void shouldCheckpointRestoredOffsetsToFile() throws IOException {
         stateManager.initialize();
         initializeConsumer(10, 0, t1);
-        stateManager.registerStore(store1, stateRestoreCallback);
+        stateManager.registerStore(store1, stateRestoreCallback, null);
         stateManager.checkpoint();
         stateManager.close();
 
@@ -571,7 +537,7 @@ public class GlobalStateManagerImplTest {
     public void shouldSkipGlobalInMemoryStoreOffsetsToFile() throws IOException {
         stateManager.initialize();
         initializeConsumer(10, 0, t3);
-        stateManager.registerStore(store3, stateRestoreCallback);
+        stateManager.registerStore(store3, stateRestoreCallback, null);
         stateManager.close();
 
         assertThat(readOffsetsCheckpoint(), equalTo(Collections.emptyMap()));
@@ -581,31 +547,6 @@ public class GlobalStateManagerImplTest {
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
                                                                                 StateManagerUtil.CHECKPOINT_FILE_NAME));
         return offsetCheckpoint.read();
-    }
-
-    @Test
-    public void shouldThrowLockExceptionIfIOExceptionCaughtWhenTryingToLockStateDir() {
-        stateManager = new GlobalStateManagerImpl(
-            new LogContext("mock"),
-            time,
-            topology,
-            consumer,
-            new StateDirectory(streamsConfig, time, true) {
-                @Override
-                public boolean lockGlobalState() throws IOException {
-                    throw new IOException("KABOOM!");
-                }
-            },
-            stateRestoreListener,
-            streamsConfig
-        );
-
-        try {
-            stateManager.initialize();
-            fail("Should have thrown LockException");
-        } catch (final LockException e) {
-            // pass
-        }
     }
 
     @Test
@@ -1102,7 +1043,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldUseRequestTimeoutPlusTaskTimeoutInPollDuringRestoreAndFailIfNoDataReturned() {
+    public void shouldUsePollMsPlusRequestTimeoutInPollDuringRestoreAndTimeoutWhenNoProgressDuringRestore() {
         consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
             public synchronized ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
@@ -1123,62 +1064,7 @@ public class GlobalStateManagerImplTest {
         streamsConfig = new StreamsConfig(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            mkEntry(StreamsConfig.POLL_MS_CONFIG, 5L),
-            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 10L),
-            mkEntry(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, 100)
-        ));
-
-        stateManager = new GlobalStateManagerImpl(
-            new LogContext("mock"),
-            time,
-            topology,
-            consumer,
-            stateDirectory,
-            stateRestoreListener,
-            streamsConfig
-        );
-        processorContext.setStateManger(stateManager);
-        stateManager.setGlobalProcessorContext(processorContext);
-
-        final long startTime = time.milliseconds();
-        final TimeoutException exception = assertThrows(
-            TimeoutException.class,
-            () -> stateManager.initialize()
-        );
-        assertThat(
-            exception.getMessage(),
-            equalTo("Global task did not make progress to restore state within 10 ms. Adjust `task.timeout.ms` if needed.")
-        );
-
-        assertThat(time.milliseconds() - startTime, equalTo(110L));
-
-    }
-
-    @Test
-    public void shouldTimeoutWhenNoProgressDuringRestore() {
-        consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
-            @Override
-            public synchronized ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
-                time.sleep(1L);
-                return super.poll(timeout);
-            }
-        };
-
-        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
-        startOffsets.put(t1, 1L);
-        final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(t1, 3L);
-        consumer.updatePartitions(t1.topic(), Collections.singletonList(new PartitionInfo(t1.topic(), t1.partition(), null, null, null)));
-        consumer.assign(Collections.singletonList(t1));
-        consumer.updateBeginningOffsets(startOffsets);
-        consumer.updateEndOffsets(endOffsets);
-
-        streamsConfig = new StreamsConfig(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234"),
-            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            mkEntry(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 5L)
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
 
         stateManager = new GlobalStateManagerImpl(
@@ -1201,9 +1087,9 @@ public class GlobalStateManagerImplTest {
         );
         assertThat(
             exception.getMessage(),
-            equalTo("Global task did not make progress to restore state within 5 ms. Adjust `task.timeout.ms` if needed.")
+            equalTo("Global task did not make progress to restore state within 301000 ms. Adjust `task.timeout.ms` if needed.")
         );
-        assertThat(time.milliseconds() - startTime, equalTo(1L));
+        assertThat(time.milliseconds() - startTime, equalTo(331_100L));
     }
 
     private void writeCorruptCheckpoint() throws IOException {

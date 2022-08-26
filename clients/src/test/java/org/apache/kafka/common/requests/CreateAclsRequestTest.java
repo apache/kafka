@@ -23,17 +23,18 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.CreateAclsRequestData;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CreateAclsRequestTest {
     private static final short V0 = 0;
@@ -51,38 +52,38 @@ public class CreateAclsRequestTest {
     private static final AclBinding UNKNOWN_ACL1 = new AclBinding(new ResourcePattern(ResourceType.UNKNOWN, "unknown", PatternType.LITERAL),
         new AccessControlEntry("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void shouldThrowOnV0IfNotLiteral() {
-        new CreateAclsRequest(V0, data(PREFIXED_ACL1));
+        assertThrows(UnsupportedVersionException.class, () -> new CreateAclsRequest(data(PREFIXED_ACL1), V0));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowOnIfUnknown() {
-        new CreateAclsRequest(V0, data(UNKNOWN_ACL1));
+        assertThrows(IllegalArgumentException.class, () -> new CreateAclsRequest(data(UNKNOWN_ACL1), V0));
     }
 
     @Test
     public void shouldRoundTripV0() {
-        final CreateAclsRequest original = new CreateAclsRequest(V0, data(LITERAL_ACL1, LITERAL_ACL2));
-        final Struct struct = original.toStruct();
+        final CreateAclsRequest original = new CreateAclsRequest(data(LITERAL_ACL1, LITERAL_ACL2), V0);
+        final ByteBuffer buffer = original.serialize();
 
-        final CreateAclsRequest result = new CreateAclsRequest(struct, V0);
+        final CreateAclsRequest result = CreateAclsRequest.parse(buffer, V0);
 
         assertRequestEquals(original, result);
     }
 
     @Test
     public void shouldRoundTripV1() {
-        final CreateAclsRequest original = new CreateAclsRequest(V1, data(LITERAL_ACL1, PREFIXED_ACL1));
-        final Struct struct = original.toStruct();
+        final CreateAclsRequest original = new CreateAclsRequest(data(LITERAL_ACL1, PREFIXED_ACL1), V1);
+        final ByteBuffer buffer = original.serialize();
 
-        final CreateAclsRequest result = new CreateAclsRequest(struct, V1);
+        final CreateAclsRequest result = CreateAclsRequest.parse(buffer, V1);
 
         assertRequestEquals(original, result);
     }
 
     private static void assertRequestEquals(final CreateAclsRequest original, final CreateAclsRequest actual) {
-        assertEquals("Number of Acls wrong", original.aclCreations().size(), actual.aclCreations().size());
+        assertEquals(original.aclCreations().size(), actual.aclCreations().size(), "Number of Acls wrong");
 
         for (int idx = 0; idx != original.aclCreations().size(); ++idx) {
             final AclBinding originalBinding = CreateAclsRequest.aclBinding(original.aclCreations().get(idx));

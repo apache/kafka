@@ -33,17 +33,17 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.WallclockTimestampExtractor;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -52,33 +52,25 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Category({IntegrationTest.class})
+@Timeout(600)
+@Tag("integration")
 public class KTableSourceTopicRestartIntegrationTest {
     private static final int NUM_BROKERS = 3;
     private static final String SOURCE_TOPIC = "source-topic";
     private static final Properties PRODUCER_CONFIG = new Properties();
     private static final Properties STREAMS_CONFIG = new Properties();
 
-    @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    private final Time time = CLUSTER.time;
-    private final StreamsBuilder streamsBuilder = new StreamsBuilder();
-    private final Map<String, String> readKeyValues = new ConcurrentHashMap<>();
-
-    private String sourceTopic;
-    private KafkaStreams streams;
-    private Map<String, String> expectedInitialResultsMap;
-    private Map<String, String> expectedResultsWithDataWrittenDuringRestoreMap;
-
-    @BeforeClass
-    public static void setUpBeforeAllTests() {
+    @BeforeAll
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
         STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         STREAMS_CONFIG.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5);
+        STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5L);
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, WallclockTimestampExtractor.class);
         STREAMS_CONFIG.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         STREAMS_CONFIG.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 300);
@@ -89,15 +81,27 @@ public class KTableSourceTopicRestartIntegrationTest {
         PRODUCER_CONFIG.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
     }
 
-    @Rule
-    public TestName testName = new TestName();
+    @AfterAll
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
 
-    @Before
-    public void before() throws Exception {
-        sourceTopic = SOURCE_TOPIC + "-" + testName.getMethodName();
+
+    private final Time time = CLUSTER.time;
+    private final StreamsBuilder streamsBuilder = new StreamsBuilder();
+    private final Map<String, String> readKeyValues = new ConcurrentHashMap<>();
+
+    private String sourceTopic;
+    private KafkaStreams streams;
+    private Map<String, String> expectedInitialResultsMap;
+    private Map<String, String> expectedResultsWithDataWrittenDuringRestoreMap;
+
+    @BeforeEach
+    public void before(final TestInfo testInfo) throws Exception {
+        sourceTopic = SOURCE_TOPIC + "-" + IntegrationTestUtils.safeUniqueTestName(getClass(), testInfo);
         CLUSTER.createTopic(sourceTopic);
 
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, IntegrationTestUtils.safeUniqueTestName(getClass(), testName));
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, IntegrationTestUtils.safeUniqueTestName(getClass(), testInfo));
 
         final KTable<String, String> kTable = streamsBuilder.table(sourceTopic, Materialized.as("store"));
         kTable.toStream().foreach(readKeyValues::put);
@@ -106,7 +110,7 @@ public class KTableSourceTopicRestartIntegrationTest {
         expectedResultsWithDataWrittenDuringRestoreMap = createExpectedResultsMap("a", "b", "c", "d", "f", "g", "h");
     }
 
-    @After
+    @AfterEach
     public void after() throws Exception {
         IntegrationTestUtils.purgeLocalStreamsState(STREAMS_CONFIG);
         CLUSTER.deleteAllTopicsAndWait(60000L);
@@ -139,6 +143,7 @@ public class KTableSourceTopicRestartIntegrationTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosAlphaEnabled() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
@@ -146,8 +151,8 @@ public class KTableSourceTopicRestartIntegrationTest {
     }
 
     @Test
-    public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosBetaEnabled() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+    public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosV2Enabled() throws Exception {
+        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled();
     }
 

@@ -18,19 +18,20 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueJoiner;
 
-abstract class KTableKTableAbstractJoin<K, R, V1, V2> implements KTableProcessorSupplier<K, V1, R> {
+abstract class KTableKTableAbstractJoin<K, V1, V2, VOut> implements
+    KTableProcessorSupplier<K, V1, K, VOut> {
 
     private final KTableImpl<K, ?, V1> table1;
     private final KTableImpl<K, ?, V2> table2;
     final KTableValueGetterSupplier<K, V1> valueGetterSupplier1;
     final KTableValueGetterSupplier<K, V2> valueGetterSupplier2;
-    final ValueJoiner<? super V1, ? super V2, ? extends R> joiner;
+    final ValueJoiner<? super V1, ? super V2, ? extends VOut> joiner;
 
     boolean sendOldValues = false;
 
     KTableKTableAbstractJoin(final KTableImpl<K, ?, V1> table1,
                              final KTableImpl<K, ?, V2> table2,
-                             final ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
+                             final ValueJoiner<? super V1, ? super V2, ? extends VOut> joiner) {
         this.table1 = table1;
         this.table2 = table2;
         this.valueGetterSupplier1 = table1.valueGetterSupplier();
@@ -39,9 +40,11 @@ abstract class KTableKTableAbstractJoin<K, R, V1, V2> implements KTableProcessor
     }
 
     @Override
-    public final void enableSendingOldValues() {
-        table1.enableSendingOldValues();
-        table2.enableSendingOldValues();
+    public final boolean enableSendingOldValues(final boolean forceMaterialization) {
+        // Table-table joins require upstream materialization:
+        table1.enableSendingOldValues(true);
+        table2.enableSendingOldValues(true);
         sendOldValues = true;
+        return true;
     }
 }

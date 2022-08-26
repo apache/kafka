@@ -17,25 +17,20 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
-import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
-import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.slf4j.Logger;
 
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
@@ -47,8 +42,7 @@ public final class AssignorConfiguration {
 
     private final String logPrefix;
     private final Logger log;
-    private final TaskManager taskManager;
-    private final Admin adminClient;
+    private final ReferenceContainer referenceContainer;
 
     private final StreamsConfig streamsConfig;
     private final Map<String, ?> internalConfigs;
@@ -66,41 +60,22 @@ public final class AssignorConfiguration {
         log = logContext.logger(getClass());
 
         {
-            final Object o = configs.get(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR);
+            final Object o = configs.get(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR);
             if (o == null) {
-                final KafkaException fatalException = new KafkaException("TaskManager is not specified");
+                final KafkaException fatalException = new KafkaException("ReferenceContainer is not specified");
                 log.error(fatalException.getMessage(), fatalException);
                 throw fatalException;
             }
 
-            if (!(o instanceof TaskManager)) {
+            if (!(o instanceof ReferenceContainer)) {
                 final KafkaException fatalException = new KafkaException(
-                    String.format("%s is not an instance of %s", o.getClass().getName(), TaskManager.class.getName())
+                    String.format("%s is not an instance of %s", o.getClass().getName(), ReferenceContainer.class.getName())
                 );
                 log.error(fatalException.getMessage(), fatalException);
                 throw fatalException;
             }
 
-            taskManager = (TaskManager) o;
-        }
-
-        {
-            final Object o = configs.get(StreamsConfig.InternalConfig.STREAMS_ADMIN_CLIENT);
-            if (o == null) {
-                final KafkaException fatalException = new KafkaException("Admin is not specified");
-                log.error(fatalException.getMessage(), fatalException);
-                throw fatalException;
-            }
-
-            if (!(o instanceof Admin)) {
-                final KafkaException fatalException = new KafkaException(
-                    String.format("%s is not an instance of %s", o.getClass().getName(), Admin.class.getName())
-                );
-                log.error(fatalException.getMessage(), fatalException);
-                throw fatalException;
-            }
-
-            adminClient = (Admin) o;
+            referenceContainer = (ReferenceContainer) o;
         }
 
         {
@@ -113,83 +88,8 @@ public final class AssignorConfiguration {
         }
     }
 
-    public AtomicInteger assignmentErrorCode() {
-        final Object ai = internalConfigs.get(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE);
-        if (ai == null) {
-            final KafkaException fatalException = new KafkaException("assignmentErrorCode is not specified");
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        if (!(ai instanceof AtomicInteger)) {
-            final KafkaException fatalException = new KafkaException(
-                String.format("%s is not an instance of %s", ai.getClass().getName(), AtomicInteger.class.getName())
-            );
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-        return (AtomicInteger) ai;
-    }
-
-    public AtomicLong nextScheduledRebalanceMs() {
-        final Object al = internalConfigs.get(InternalConfig.NEXT_SCHEDULED_REBALANCE_MS);
-        if (al == null) {
-            final KafkaException fatalException = new KafkaException("nextProbingRebalanceMs is not specified");
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        if (!(al instanceof AtomicLong)) {
-            final KafkaException fatalException = new KafkaException(
-                String.format("%s is not an instance of %s", al.getClass().getName(), AtomicLong.class.getName())
-            );
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        return (AtomicLong) al;
-    }
-
-    public Time time() {
-        final Object t = internalConfigs.get(InternalConfig.TIME);
-        if (t == null) {
-            final KafkaException fatalException = new KafkaException("time is not specified");
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        if (!(t instanceof Time)) {
-            final KafkaException fatalException = new KafkaException(
-                String.format("%s is not an instance of %s", t.getClass().getName(), Time.class.getName())
-            );
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        return (Time) t;
-    }
-
-    public TaskManager taskManager() {
-        return taskManager;
-    }
-
-    public StreamsMetadataState streamsMetadataState() {
-        final Object o = internalConfigs.get(StreamsConfig.InternalConfig.STREAMS_METADATA_STATE_FOR_PARTITION_ASSIGNOR);
-        if (o == null) {
-            final KafkaException fatalException = new KafkaException("StreamsMetadataState is not specified");
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        if (!(o instanceof StreamsMetadataState)) {
-            final KafkaException fatalException = new KafkaException(
-                String.format("%s is not an instance of %s", o.getClass().getName(), StreamsMetadataState.class.getName())
-            );
-            log.error(fatalException.getMessage(), fatalException);
-            throw fatalException;
-        }
-
-        return (StreamsMetadataState) o;
+    public ReferenceContainer referenceContainer() {
+        return referenceContainer;
     }
 
     public RebalanceProtocol rebalanceProtocol() {
@@ -206,13 +106,34 @@ public final class AssignorConfiguration {
                 case StreamsConfig.UPGRADE_FROM_21:
                 case StreamsConfig.UPGRADE_FROM_22:
                 case StreamsConfig.UPGRADE_FROM_23:
-                    log.info("Eager rebalancing enabled now for upgrade from {}.x", upgradeFrom);
+                    // ATTENTION: The following log messages is used for verification in system test
+                    // streams/streams_cooperative_rebalance_upgrade_test.py::StreamsCooperativeRebalanceUpgradeTest.test_upgrade_to_cooperative_rebalance
+                    // If you change it, please do also change the system test accordingly and
+                    // verify whether the test passes.
+                    log.info("Eager rebalancing protocol is enabled now for upgrade from {}.x", upgradeFrom);
+                    log.warn("The eager rebalancing protocol is deprecated and will stop being supported in a future release." +
+                        " Please be prepared to remove the 'upgrade.from' config soon.");
                     return RebalanceProtocol.EAGER;
+                case StreamsConfig.UPGRADE_FROM_24:
+                case StreamsConfig.UPGRADE_FROM_25:
+                case StreamsConfig.UPGRADE_FROM_26:
+                case StreamsConfig.UPGRADE_FROM_27:
+                case StreamsConfig.UPGRADE_FROM_28:
+                case StreamsConfig.UPGRADE_FROM_30:
+                case StreamsConfig.UPGRADE_FROM_31:
+                case StreamsConfig.UPGRADE_FROM_32:
+                    // This config is for explicitly sending FK response to a requested partition
+                    // and should not affect the rebalance protocol
+                    break;
                 default:
                     throw new IllegalArgumentException("Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom);
             }
         }
-        log.info("Cooperative rebalancing enabled now");
+        // ATTENTION: The following log messages is used for verification in system test
+        // streams/streams_cooperative_rebalance_upgrade_test.py::StreamsCooperativeRebalanceUpgradeTest.test_upgrade_to_cooperative_rebalance
+        // If you change it, please do also change the system test accordingly and
+        // verify whether the test passes.
+        log.info("Cooperative rebalancing protocol is enabled now");
         return RebalanceProtocol.COOPERATIVE;
     }
 
@@ -247,6 +168,17 @@ public final class AssignorConfiguration {
                 case StreamsConfig.UPGRADE_FROM_23:
                     // These configs are for cooperative rebalancing and should not affect the metadata version
                     break;
+                case StreamsConfig.UPGRADE_FROM_24:
+                case StreamsConfig.UPGRADE_FROM_25:
+                case StreamsConfig.UPGRADE_FROM_26:
+                case StreamsConfig.UPGRADE_FROM_27:
+                case StreamsConfig.UPGRADE_FROM_28:
+                case StreamsConfig.UPGRADE_FROM_30:
+                case StreamsConfig.UPGRADE_FROM_31:
+                case StreamsConfig.UPGRADE_FROM_32:
+                    // This config is for explicitly sending FK response to a requested partition
+                    // and should not affect the metadata version
+                    break;
                 default:
                     throw new IllegalArgumentException(
                         "Unknown configuration value for parameter 'upgrade.from': " + upgradeFrom
@@ -254,14 +186,6 @@ public final class AssignorConfiguration {
             }
         }
         return priorVersion;
-    }
-
-    @SuppressWarnings("deprecation")
-    public org.apache.kafka.streams.processor.PartitionGrouper partitionGrouper() {
-        return streamsConfig.getConfiguredInstance(
-            StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG,
-            org.apache.kafka.streams.processor.PartitionGrouper.class
-        );
     }
 
     public String userEndPoint() {
@@ -291,12 +215,8 @@ public final class AssignorConfiguration {
         }
     }
 
-    public Admin adminClient() {
-        return adminClient;
-    }
-
     public InternalTopicManager internalTopicManager() {
-        return new InternalTopicManager(time(), adminClient, streamsConfig);
+        return new InternalTopicManager(referenceContainer.time, referenceContainer.adminClient, streamsConfig);
     }
 
     public CopartitionedTopicsEnforcer copartitionedTopicsEnforcer() {
@@ -344,22 +264,26 @@ public final class AssignorConfiguration {
         public final int maxWarmupReplicas;
         public final int numStandbyReplicas;
         public final long probingRebalanceIntervalMs;
+        public final List<String> rackAwareAssignmentTags;
 
         private AssignmentConfigs(final StreamsConfig configs) {
             acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
             maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
             numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
             probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
+            rackAwareAssignmentTags = configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         }
 
         AssignmentConfigs(final Long acceptableRecoveryLag,
                           final Integer maxWarmupReplicas,
                           final Integer numStandbyReplicas,
-                          final Long probingRebalanceIntervalMs) {
+                          final Long probingRebalanceIntervalMs,
+                          final List<String> rackAwareAssignmentTags) {
             this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
             this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
             this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
             this.probingRebalanceIntervalMs = validated(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, probingRebalanceIntervalMs);
+            this.rackAwareAssignmentTags = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, rackAwareAssignmentTags);
         }
 
         private static <T> T validated(final String configKey, final T value) {
@@ -377,6 +301,7 @@ public final class AssignorConfiguration {
                 "\n  maxWarmupReplicas=" + maxWarmupReplicas +
                 "\n  numStandbyReplicas=" + numStandbyReplicas +
                 "\n  probingRebalanceIntervalMs=" + probingRebalanceIntervalMs +
+                "\n  rackAwareAssignmentTags=" + rackAwareAssignmentTags +
                 "\n}";
         }
 

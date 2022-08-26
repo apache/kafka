@@ -20,8 +20,6 @@ import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.common.utils.Checksums;
-import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.PrimitiveRef.IntRef;
 import org.apache.kafka.common.utils.Utils;
@@ -33,7 +31,6 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.zip.Checksum;
 
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 
@@ -121,18 +118,6 @@ public class DefaultRecord implements Record {
 
     public byte attributes() {
         return attributes;
-    }
-
-    @Override
-    public Long checksumOrNull() {
-        return null;
-    }
-
-    @Override
-    public boolean isValid() {
-        // new versions of the message format (2 and above) do not contain an individual record checksum;
-        // instead they are validated with the checksum at the log entry level
-        return true;
     }
 
     @Override
@@ -308,7 +293,9 @@ public class DefaultRecord implements Record {
                                          Long logAppendTime) {
         int sizeOfBodyInBytes = ByteUtils.readVarint(buffer);
         if (buffer.remaining() < sizeOfBodyInBytes)
-            return null;
+            throw new InvalidRecordException("Invalid record size: expected " + sizeOfBodyInBytes +
+                " bytes in record payload, but instead the buffer has only " + buffer.remaining() +
+                " remaining bytes.");
 
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
         return readFrom(buffer, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
@@ -535,7 +522,8 @@ public class DefaultRecord implements Record {
             if (headerKeySize < 0)
                 throw new InvalidRecordException("Invalid negative header key size " + headerKeySize);
 
-            String headerKey = Utils.utf8(buffer, headerKeySize);
+            ByteBuffer headerKeyBuffer = buffer.slice();
+            headerKeyBuffer.limit(headerKeySize);
             buffer.position(buffer.position() + headerKeySize);
 
             ByteBuffer headerValue = null;
@@ -546,7 +534,7 @@ public class DefaultRecord implements Record {
                 buffer.position(buffer.position() + headerValueSize);
             }
 
-            headers[i] = new RecordHeader(headerKey, headerValue);
+            headers[i] = new RecordHeader(headerKeyBuffer, headerValue);
         }
 
         return headers;
@@ -575,17 +563,16 @@ public class DefaultRecord implements Record {
                                          ByteBuffer key,
                                          ByteBuffer value,
                                          Header[] headers) {
-
         int keySize = key == null ? -1 : key.remaining();
         int valueSize = value == null ? -1 : value.remaining();
         return sizeOfBodyInBytes(offsetDelta, timestampDelta, keySize, valueSize, headers);
     }
 
-    private static int sizeOfBodyInBytes(int offsetDelta,
-                                         long timestampDelta,
-                                         int keySize,
-                                         int valueSize,
-                                         Header[] headers) {
+    public static int sizeOfBodyInBytes(int offsetDelta,
+                                        long timestampDelta,
+                                        int keySize,
+                                        int valueSize,
+                                        Header[] headers) {
         int size = 1; // always one byte for attributes
         size += ByteUtils.sizeOfVarint(offsetDelta);
         size += ByteUtils.sizeOfVarlong(timestampDelta);
@@ -631,14 +618,5 @@ public class DefaultRecord implements Record {
         int keySize = key == null ? -1 : key.remaining();
         int valueSize = value == null ? -1 : value.remaining();
         return MAX_RECORD_OVERHEAD + sizeOf(keySize, valueSize, headers);
-    }
-
-
-    public static long computePartialChecksum(long timestamp, int serializedKeySize, int serializedValueSize) {
-        Checksum checksum = Crc32C.create();
-        Checksums.updateLong(checksum, timestamp);
-        Checksums.updateInt(checksum, serializedKeySize);
-        Checksums.updateInt(checksum, serializedValueSize);
-        return checksum.getValue();
     }
 }

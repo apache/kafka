@@ -17,14 +17,10 @@ from ducktape.mark import parametrize, matrix
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 
-from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.services.kafka import KafkaService
 from kafkatest.services.kafka import config_property
-from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.end_to_end import EndToEndTest
-from kafkatest.utils import is_int
-from kafkatest.version import LATEST_0_9, LATEST_0_10, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, V_0_9_0_0, V_0_11_0_0, DEV_BRANCH, KafkaVersion
+from kafkatest.version import LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, \
+    LATEST_2_6, LATEST_2_7, LATEST_2_8, LATEST_3_0, LATEST_3_1, LATEST_3_2, DEV_BRANCH, KafkaVersion
 
 class TestDowngrade(EndToEndTest):
     PARTITIONS = 3
@@ -58,7 +54,7 @@ class TestDowngrade(EndToEndTest):
             self.wait_until_rejoin()
 
     def setup_services(self, kafka_version, compression_types, security_protocol, static_membership):
-        self.create_zookeeper()
+        self.create_zookeeper_if_necessary()
         self.zk.start()
 
         self.create_kafka(num_nodes=3,
@@ -84,6 +80,24 @@ class TestDowngrade(EndToEndTest):
                     timeout_sec=60, backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
 
     @cluster(num_nodes=7)
+    @parametrize(version=str(LATEST_3_2), compression_types=["snappy"])
+    @parametrize(version=str(LATEST_3_2), compression_types=["zstd"], security_protocol="SASL_SSL")
+    @matrix(version=[str(LATEST_3_2)], compression_types=[["none"]], static_membership=[False, True])
+    @parametrize(version=str(LATEST_3_1), compression_types=["snappy"])
+    @parametrize(version=str(LATEST_3_1), compression_types=["zstd"], security_protocol="SASL_SSL")
+    @matrix(version=[str(LATEST_3_1)], compression_types=[["none"]], static_membership=[False, True])
+    @parametrize(version=str(LATEST_3_0), compression_types=["snappy"])
+    @parametrize(version=str(LATEST_3_0), compression_types=["zstd"], security_protocol="SASL_SSL")
+    @matrix(version=[str(LATEST_3_0)], compression_types=[["none"]], static_membership=[False, True])
+    @parametrize(version=str(LATEST_2_8), compression_types=["snappy"])
+    @parametrize(version=str(LATEST_2_8), compression_types=["zstd"], security_protocol="SASL_SSL")
+    @matrix(version=[str(LATEST_2_8)], compression_types=[["none"]], static_membership=[False, True])
+    @parametrize(version=str(LATEST_2_7), compression_types=["lz4"])
+    @parametrize(version=str(LATEST_2_7), compression_types=["zstd"], security_protocol="SASL_SSL")
+    @matrix(version=[str(LATEST_2_7)], compression_types=[["none"]], static_membership=[False, True])
+    @parametrize(version=str(LATEST_2_6), compression_types=["lz4"])
+    @parametrize(version=str(LATEST_2_6), compression_types=["zstd"], security_protocol="SASL_SSL")
+    @matrix(version=[str(LATEST_2_6)], compression_types=[["none"]], static_membership=[False, True])
     @matrix(version=[str(LATEST_2_5)], compression_types=[["none"]], static_membership=[False, True])
     @parametrize(version=str(LATEST_2_5), compression_types=["zstd"], security_protocol="SASL_SSL")
     # static membership was introduced with a buggy verifiable console consumer which
@@ -125,11 +139,20 @@ class TestDowngrade(EndToEndTest):
         self.setup_services(kafka_version, compression_types, security_protocol, static_membership)
         self.await_startup()
 
+        start_topic_id = self.kafka.topic_id(self.topic)
+
         self.logger.info("First pass bounce - rolling upgrade")
         self.upgrade_from(kafka_version)
-        self.run_validation()
+        self.await_consumed_records(min_records=5000)
+
+        upgrade_topic_id = self.kafka.topic_id(self.topic)
+        assert start_topic_id == upgrade_topic_id
 
         self.logger.info("Second pass bounce - rolling downgrade")
+        num_records_acked = self.producer.num_acked
         self.downgrade_to(kafka_version)
-        self.run_validation()
+        self.run_validation(min_records=num_records_acked+5000)
+
+        downgrade_topic_id = self.kafka.topic_id(self.topic)
+        assert upgrade_topic_id == downgrade_topic_id
         assert self.kafka.check_protocol_errors(self)

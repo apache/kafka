@@ -63,6 +63,7 @@ public class ConnectHeaders implements Headers {
         } else {
             headers = new LinkedList<>();
             for (Header header : original) {
+                Objects.requireNonNull(header, "Unable to add a null header.");
                 headers.add(header);
             }
         }
@@ -75,7 +76,7 @@ public class ConnectHeaders implements Headers {
 
     @Override
     public boolean isEmpty() {
-        return headers == null ? true : headers.isEmpty();
+        return headers == null || headers.isEmpty();
     }
 
     @Override

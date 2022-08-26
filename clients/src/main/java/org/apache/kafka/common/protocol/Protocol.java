@@ -112,7 +112,7 @@ public class Protocol {
             b.append("</td>");
             b.append("</tr>\n");
         }
-        b.append("</table>\n");
+        b.append("</tbody></table>\n");
     }
 
     public static String toHtml() {
@@ -133,7 +133,7 @@ public class Protocol {
             b.append("</pre>\n");
             schemaToFieldTableHtml(ResponseHeaderData.SCHEMAS[i], b);
         }
-        for (ApiKeys key : ApiKeys.values()) {
+        for (ApiKeys key : ApiKeys.zkBrokerApis()) {
             // Key
             b.append("<h5>");
             b.append("<a name=\"The_Messages_" + key.name + "\">");
@@ -143,12 +143,12 @@ public class Protocol {
             b.append("):</a></h5>\n\n");
             // Requests
             b.append("<b>Requests:</b><br>\n");
-            Schema[] requests = key.requestSchemas;
+            Schema[] requests = key.messageType.requestSchemas();
             for (int i = 0; i < requests.length; i++) {
                 Schema schema = requests[i];
                 // Schema
                 if (schema != null) {
-                    b.append("<p>");
+                    b.append("<div>");
                     // Version header
                     b.append("<pre>");
                     b.append(key.name);
@@ -159,17 +159,17 @@ public class Protocol {
                     b.append("</pre>");
                     schemaToFieldTableHtml(requests[i], b);
                 }
-                b.append("</p>\n");
+                b.append("</div>\n");
             }
 
             // Responses
             b.append("<b>Responses:</b><br>\n");
-            Schema[] responses = key.responseSchemas;
+            Schema[] responses = key.messageType.responseSchemas();
             for (int i = 0; i < responses.length; i++) {
                 Schema schema = responses[i];
                 // Schema
                 if (schema != null) {
-                    b.append("<p>");
+                    b.append("<div>");
                     // Version header
                     b.append("<pre>");
                     b.append(key.name);
@@ -180,7 +180,7 @@ public class Protocol {
                     b.append("</pre>");
                     schemaToFieldTableHtml(responses[i], b);
                 }
-                b.append("</p>\n");
+                b.append("</div>\n");
             }
         }
 

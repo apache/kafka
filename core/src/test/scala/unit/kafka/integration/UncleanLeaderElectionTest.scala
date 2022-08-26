@@ -18,7 +18,7 @@
 package kafka.integration
 
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
-import org.junit.{After, Before, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.util.Random
 import scala.jdk.CollectionConverters._
@@ -30,19 +30,16 @@ import java.util.concurrent.ExecutionException
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigsResult, Config, ConfigEntry}
-import org.junit.Assert._
-import org.scalatest.Assertions.intercept
+import org.junit.jupiter.api.Assertions._
 
 import scala.annotation.nowarn
 
-class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
+class UncleanLeaderElectionTest extends QuorumTestHarness {
   val brokerId1 = 0
   val brokerId2 = 1
 
@@ -50,8 +47,8 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   // reduce test execution time
   val enableControlledShutdown = true
 
-  var configProps1: Properties = null
-  var configProps2: Properties = null
+  var configProps1: Properties = _
+  var configProps2: Properties = _
 
   var configs: Seq[KafkaConfig] = Seq.empty[KafkaConfig]
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
@@ -63,9 +60,9 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   val kafkaApisLogger = Logger.getLogger(classOf[kafka.server.KafkaApis])
   val networkProcessorLogger = Logger.getLogger(classOf[kafka.network.Processor])
 
-  @Before
-  override def setUp(): Unit = {
-    super.setUp()
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     configProps1 = createBrokerConfig(brokerId1, zkConnect)
     configProps2 = createBrokerConfig(brokerId2, zkConnect)
@@ -81,7 +78,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     networkProcessorLogger.setLevel(Level.FATAL)
   }
 
-  @After
+  @AfterEach
   override def tearDown(): Unit = {
     servers.foreach(server => shutdownServer(server))
     servers.foreach(server => CoreUtils.delete(server.config.logDirs))
@@ -164,23 +161,23 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     val topicProps = new Properties()
     topicProps.put("unclean.leader.election.enable", "invalid")
 
-    intercept[ConfigException] {
-      TestUtils.createTopic(zkClient, topic, Map(partitionId -> Seq(brokerId1)), servers, topicProps)
-    }
+    assertThrows(classOf[ConfigException],
+      () => TestUtils.createTopic(zkClient, topic, Map(partitionId -> Seq(brokerId1)), servers, topicProps))
   }
 
   def verifyUncleanLeaderElectionEnabled(): Unit = {
     // wait until leader is elected
     val leaderId = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
     debug("Leader for " + topic  + " is elected to be: %s".format(leaderId))
-    assertTrue("Leader id is set to expected value for topic: " + topic, leaderId == brokerId1 || leaderId == brokerId2)
+    assertTrue(leaderId == brokerId1 || leaderId == brokerId2,
+      "Leader id is set to expected value for topic: " + topic)
 
     // the non-leader broker is the follower
     val followerId = if (leaderId == brokerId1) brokerId2 else brokerId1
     debug("Follower for " + topic  + " is: %s".format(followerId))
 
     produceMessage(servers, topic, "first")
-    waitUntilMetadataIsPropagated(servers, topic, partitionId)
+    waitForPartitionMetadata(servers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic, 1))
 
     // shutdown follower server
@@ -211,14 +208,15 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     // wait until leader is elected
     val leaderId = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
     debug("Leader for " + topic  + " is elected to be: %s".format(leaderId))
-    assertTrue("Leader id is set to expected value for topic: " + topic, leaderId == brokerId1 || leaderId == brokerId2)
+    assertTrue(leaderId == brokerId1 || leaderId == brokerId2,
+      "Leader id is set to expected value for topic: " + topic)
 
     // the non-leader broker is the follower
     val followerId = if (leaderId == brokerId1) brokerId2 else brokerId1
     debug("Follower for " + topic  + " is: %s".format(followerId))
 
     produceMessage(servers, topic, "first")
-    waitUntilMetadataIsPropagated(servers, topic, partitionId)
+    waitForPartitionMetadata(servers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic, 1))
 
     // shutdown follower server
@@ -240,12 +238,8 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     assertEquals(0, followerServer.kafkaController.controllerContext.stats.uncleanLeaderElectionRate.count())
 
     // message production and consumption should both fail while leader is down
-    try {
-      produceMessage(servers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000)
-      fail("Message produced while leader is down should fail, but it succeeded")
-    } catch {
-      case e: ExecutionException if e.getCause.isInstanceOf[TimeoutException] => // expected
-    }
+    val e = assertThrows(classOf[ExecutionException], () => produceMessage(servers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000))
+    assertEquals(classOf[TimeoutException], e.getCause.getClass)
 
     assertEquals(List.empty[String], consumeAllMessages(topic, 0))
 
@@ -274,7 +268,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   }
 
   private def consumeAllMessages(topic: String, numMessages: Int): Seq[String] = {
-    val brokerList = TestUtils.bootstrapServers(servers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+    val brokerList = TestUtils.plaintextBootstrapServers(servers)
     // Don't rely on coordinator as it may be down when this method is called
     val consumer = TestUtils.createConsumer(brokerList,
       groupId = "group" + random.nextLong(),
@@ -303,7 +297,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     val followerId = if (leaderId == brokerId1) brokerId2 else brokerId1
 
     produceMessage(servers, topic, "first")
-    waitUntilMetadataIsPropagated(servers, topic, partitionId)
+    waitForPartitionMetadata(servers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic, 1))
 
     // shutdown follower server
@@ -323,12 +317,8 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     assertEquals(0, followerServer.kafkaController.controllerContext.stats.uncleanLeaderElectionRate.count())
 
     // message production and consumption should both fail while leader is down
-    try {
-      produceMessage(servers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000)
-      fail("Message produced while leader is down should fail, but it succeeded")
-    } catch {
-      case e: ExecutionException if e.getCause.isInstanceOf[TimeoutException] => // expected
-    }
+    val e = assertThrows(classOf[ExecutionException], () => produceMessage(servers, topic, "third", deliveryTimeoutMs = 1000, requestTimeoutMs = 1000))
+    assertEquals(classOf[TimeoutException], e.getCause.getClass)
 
     assertEquals(List.empty[String], consumeAllMessages(topic, 0))
 
@@ -359,7 +349,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
 
   private def createAdminClient(): Admin = {
     val config = new Properties
-    val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName("PLAINTEXT"))
+    val bootstrapServers = TestUtils.plaintextBootstrapServers(servers)
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
     config.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, "10")
     Admin.create(config)

@@ -17,55 +17,20 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.junit.Test;
 
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 public class ConnectUtilsTest {
-
-    @Test
-    public void testLookupKafkaClusterId() {
-        final Node broker1 = new Node(0, "dummyHost-1", 1234);
-        final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        List<Node> cluster = Arrays.asList(broker1, broker2);
-        MockAdminClient adminClient = new MockAdminClient.Builder().
-            brokers(cluster).build();
-        assertEquals(MockAdminClient.DEFAULT_CLUSTER_ID, ConnectUtils.lookupKafkaClusterId(adminClient));
-    }
-
-    @Test
-    public void testLookupNullKafkaClusterId() {
-        final Node broker1 = new Node(0, "dummyHost-1", 1234);
-        final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        List<Node> cluster = Arrays.asList(broker1, broker2);
-        MockAdminClient adminClient = new MockAdminClient.Builder().
-            brokers(cluster).clusterId(null).build();
-        assertNull(ConnectUtils.lookupKafkaClusterId(adminClient));
-    }
-
-    @Test(expected = ConnectException.class)
-    public void testLookupKafkaClusterIdTimeout() {
-        final Node broker1 = new Node(0, "dummyHost-1", 1234);
-        final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        List<Node> cluster = Arrays.asList(broker1, broker2);
-        MockAdminClient adminClient = new MockAdminClient.Builder().
-            brokers(cluster).build();
-        adminClient.timeoutNextRequest(1);
-
-        ConnectUtils.lookupKafkaClusterId(adminClient);
-    }
 
     @Test
     public void testAddMetricsContextPropertiesDistributed() {
@@ -96,8 +61,77 @@ public class ConnectUtilsTest {
 
         Map<String, Object> prop = new HashMap<>();
         ConnectUtils.addMetricsContextProperties(prop, config, "cluster-1");
-        assertEquals(null, prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_GROUP_ID));
+        assertNull(prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_GROUP_ID));
         assertEquals("cluster-1", prop.get(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
 
     }
+
+    @Test
+    public void testNoOverrideWarning() {
+        Map<String, ? super String> props = new HashMap<>();
+        assertEquals(
+                Optional.empty(),
+                ConnectUtils.ensurePropertyAndGetWarning(props, "key", "value", "because i say so", true)
+        );
+        assertEquals("value", props.get("key"));
+
+        props.clear();
+        assertEquals(
+                Optional.empty(),
+                ConnectUtils.ensurePropertyAndGetWarning(props, "key", "value", "because i say so", false)
+        );
+        assertEquals("value", props.get("key"));
+
+        props.clear();
+        props.put("key", "value");
+        assertEquals(
+                Optional.empty(),
+                ConnectUtils.ensurePropertyAndGetWarning(props, "key", "value", "because i say so", true)
+        );
+        assertEquals("value", props.get("key"));
+
+        props.clear();
+        props.put("key", "VALUE");
+        assertEquals(
+                Optional.empty(),
+                ConnectUtils.ensurePropertyAndGetWarning(props, "key", "value", "because i say so", false)
+        );
+        assertEquals("VALUE", props.get("key"));
+    }
+
+    @Test
+    public void testOverrideWarning() {
+        Map<String, ? super String> props = new HashMap<>();
+        props.put("\u1984", "little brother");
+        String expectedWarning = "The value 'little brother' for the '\u1984' property will be ignored as it cannot be overridden "
+                + "thanks to newly-introduced federal legislation. "
+                + "The value 'big brother' will be used instead.";
+        assertEquals(
+                Optional.of(expectedWarning),
+                ConnectUtils.ensurePropertyAndGetWarning(
+                        props,
+                        "\u1984",
+                        "big brother",
+                        "thanks to newly-introduced federal legislation",
+                        false)
+        );
+        assertEquals(Collections.singletonMap("\u1984", "big brother"), props);
+
+        props.clear();
+        props.put("\u1984", "BIG BROTHER");
+        expectedWarning = "The value 'BIG BROTHER' for the '\u1984' property will be ignored as it cannot be overridden "
+                + "thanks to newly-introduced federal legislation. "
+                + "The value 'big brother' will be used instead.";
+        assertEquals(
+                Optional.of(expectedWarning),
+                ConnectUtils.ensurePropertyAndGetWarning(
+                        props,
+                        "\u1984",
+                        "big brother",
+                        "thanks to newly-introduced federal legislation",
+                        true)
+        );
+        assertEquals(Collections.singletonMap("\u1984", "big brother"), props);
+    }
+
 }

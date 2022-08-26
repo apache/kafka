@@ -78,6 +78,8 @@ public class PageViewUntypedDemo {
 
         final KTable<String, String> userRegions = users.mapValues(record -> record.get("region").textValue());
 
+        final Duration duration24Hours = Duration.ofHours(24);
+
         final KStream<JsonNode, JsonNode> regionCount = views
             .leftJoin(userRegions, (view, region) -> {
                 final ObjectNode jNode = JsonNodeFactory.instance.objectNode();
@@ -88,7 +90,7 @@ public class PageViewUntypedDemo {
             })
             .map((user, viewRegion) -> new KeyValue<>(viewRegion.get("region").textValue(), viewRegion))
             .groupByKey(Grouped.with(Serdes.String(), jsonSerde))
-            .windowedBy(TimeWindows.of(Duration.ofDays(7)).advanceBy(Duration.ofSeconds(1)))
+            .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(7), duration24Hours).advanceBy(Duration.ofSeconds(1)))
             .count()
             .toStream()
             .map((key, value) -> {
