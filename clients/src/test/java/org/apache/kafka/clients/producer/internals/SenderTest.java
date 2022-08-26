@@ -710,7 +710,7 @@ public class SenderTest {
         prepareFindCoordinatorResponse(Errors.NONE, "testNodeNotReady");
         sender.runOnce();
         sender.runOnce();
-        assertNotNull(transactionManager.coordinator(CoordinatorType.TRANSACTION), "Coordinator not found");
+        assertNotNull(transactionManager.coordinator(CoordinatorType.TRANSACTION, null), "Coordinator not found");
 
         client.throttle(node, REQUEST_TIMEOUT + 20);
         prepareFindCoordinatorResponse(Errors.NONE, "Coordinator not found");
