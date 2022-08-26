@@ -1546,6 +1546,11 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
         val endThrottleTimeMs = startThrottleTimeMs + throttleTimeMs
         var remainingThrottleTimeMs = throttleTimeMs
         do {
+          if (remainingThrottleTimeMs == 0) {
+            warn(s"The connection will wait until there's an available connection slot due to current connection count exceeds configured count.")
+          } else {
+            info(s"The connection will be delayed for for ${remainingThrottleTimeMs}ms due to the connection rate exceeds configured rate.")
+          }
           counts.wait(remainingThrottleTimeMs)
           remainingThrottleTimeMs = math.max(endThrottleTimeMs - time.milliseconds, 0)
         } while (remainingThrottleTimeMs > 0 || !connectionSlotAvailable(listenerName))
@@ -1561,12 +1566,15 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   }
 
   private def connectionSlotAvailable(listenerName: ListenerName): Boolean = {
-    if (listenerCounts(listenerName) >= maxListenerConnections(listenerName))
+    if (listenerCounts(listenerName) >= maxListenerConnections(listenerName)) {
+      warn(s"The connection count ${listenerCounts(listenerName)} for listener:$listenerName exceeds max listener connection count ${maxListenerConnections(listenerName)}")
       false
-    else if (protectedListener(listenerName))
+    } else if (protectedListener(listenerName)) {
       true
-    else
-      totalCount < brokerMaxConnections
+    } else if (totalCount >= brokerMaxConnections) {
+      warn(s"The total connection count $totalCount exceeds broker max connection count $brokerMaxConnections")
+      false
+    } else true
   }
 
   private def protectedListener(listenerName: ListenerName): Boolean =
