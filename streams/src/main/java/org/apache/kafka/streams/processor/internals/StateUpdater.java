@@ -188,8 +188,8 @@ public interface StateUpdater {
     /**
      * Returns if the state updater restores active tasks.
      *
-     * The state updater restores active tasks if at least one active task was added with the {@link StateUpdater#add(Task)}
-     * and the active task was not removed from the state updater with one of the following methods:
+     * The state updater restores active tasks if at least one active task was added with {@link StateUpdater#add(Task)},
+     * the task is not paused, and the task was not removed from the state updater with one of the following methods:
      * <ul>
      *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
      *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
