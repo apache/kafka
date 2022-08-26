@@ -50,10 +50,10 @@ import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.easymock.EasyMock.anyBoolean;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doNothing;
@@ -84,22 +84,22 @@ class DefaultStateUpdaterTest {
 
     // need an auto-tick timer to work for draining with timeout
     private final Time time = new MockTime(1L);
-    private final StreamsConfig config = new StreamsConfig(configProps());
+    private final StreamsConfig config = new StreamsConfig(configProps(COMMIT_INTERVAL));
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
-    private final DefaultStateUpdater stateUpdater = new DefaultStateUpdater(config, changelogReader, time);
+    private DefaultStateUpdater stateUpdater = new DefaultStateUpdater(config, changelogReader, time);
 
     @AfterEach
     public void tearDown() {
         stateUpdater.shutdown(Duration.ofMinutes(1));
     }
 
-    private Properties configProps() {
+    private Properties configProps(final int commitInterval) {
         return mkObjectProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
             mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2),
-            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL),
-            mkEntry(producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), COMMIT_INTERVAL)
+            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitInterval),
+            mkEntry(producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), commitInterval)
         ));
     }
 
@@ -146,6 +146,8 @@ class DefaultStateUpdaterTest {
 
     @Test
     public void shouldRemoveUpdatingTasksOnShutdown() throws Exception {
+        stateUpdater.shutdown(Duration.ofMinutes(1));
+        stateUpdater = new DefaultStateUpdater(new StreamsConfig(configProps(Integer.MAX_VALUE)), changelogReader, time);
         final StreamTask activeTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StandbyTask standbyTask = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
@@ -159,6 +161,8 @@ class DefaultStateUpdaterTest {
         stateUpdater.shutdown(Duration.ofMinutes(1));
 
         verifyRemovedTasks(activeTask, standbyTask);
+        verify(activeTask).maybeCheckpoint(true);
+        verify(standbyTask).maybeCheckpoint(true);
     }
 
     @Test

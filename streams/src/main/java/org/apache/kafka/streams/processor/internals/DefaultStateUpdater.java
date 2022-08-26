@@ -105,7 +105,7 @@ public class DefaultStateUpdater implements StateUpdater {
             } catch (final RuntimeException anyOtherException) {
                 handleRuntimeException(anyOtherException);
             } finally {
-                clearInputQueue();
+                removeAddedTasksFromInputQueue();
                 removeUpdatingAndPausedTasks();
                 shutdownGate.countDown();
                 log.info("State updater thread shutdown");
@@ -230,20 +230,15 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
-        private void clearInputQueue() {
-            tasksAndActionsLock.lock();
-            try {
-                tasksAndActions.clear();
-            } finally {
-                tasksAndActionsLock.unlock();
-            }
-        }
-
         private void removeUpdatingAndPausedTasks() {
             changelogReader.clear();
-            updatingTasks.forEach((id, task) -> removedTasks.add(task));
-            updatingTasks.clear();
-            pausedTasks.forEach((id, task) -> removedTasks.add(task));
+            updatingTasks.forEach((id, task) -> {
+                task.maybeCheckpoint(true);
+                removedTasks.add(task);
+            });
+            pausedTasks.forEach((id, task) -> {
+                removedTasks.add(task);
+            });
             pausedTasks.clear();
         }
 
@@ -425,7 +420,6 @@ public class DefaultStateUpdater implements StateUpdater {
 
     @Override
     public void shutdown(final Duration timeout) {
-        removeAddedTasksFromInputQueue();
         if (stateUpdaterThread != null) {
             stateUpdaterThread.isRunning.set(false);
             stateUpdaterThread.interrupt();
@@ -436,6 +430,8 @@ public class DefaultStateUpdater implements StateUpdater {
                 stateUpdaterThread = null;
             } catch (final InterruptedException ignored) {
             }
+        } else {
+            removeAddedTasksFromInputQueue();
         }
     }
 
