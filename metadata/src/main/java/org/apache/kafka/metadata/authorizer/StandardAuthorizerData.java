@@ -206,12 +206,11 @@ public class StandardAuthorizerData {
         try {
             StandardAcl prevAcl = aclsById.putIfAbsent(id, acl);
             if (prevAcl != null) {
-                throw new RuntimeException("An ACL with ID " + id + " already exists.");
+                log.info("An ACL with ID " + id + " already exists.");
             }
             if (!aclsByResource.add(acl)) {
-                aclsById.remove(id);
-                throw new RuntimeException("Unable to add the ACL with ID " + id +
-                    " to aclsByResource");
+                //aclsById.remove(id);
+                log.info("Unable to add the ACL with ID " + id + " to aclsByResource");
             }
             log.trace("Added ACL {}: {}", id, acl);
         } catch (Throwable e) {
