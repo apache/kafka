@@ -113,12 +113,20 @@ public class BootstrapDirectory {
         }
         Path tempPath = Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME + ".tmp");
         Files.deleteIfExists(tempPath);
-        try (BatchFileWriter writer = BatchFileWriter.open(tempPath)) {
-            for (ApiMessageAndVersion message : bootstrapMetadata.records()) {
-                writer.append(message);
+        try {
+            try (BatchFileWriter writer = BatchFileWriter.open(tempPath)) {
+                for (ApiMessageAndVersion message : bootstrapMetadata.records()) {
+                    writer.append(message);
+                }
             }
+
+            Files.move(
+                tempPath,
+                Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME),
+                ATOMIC_MOVE, REPLACE_EXISTING
+            );
+        } finally {
+            Files.deleteIfExists(tempPath);
         }
-        Files.move(tempPath, Paths.get(directoryPath, BINARY_BOOTSTRAP_FILENAME),
-                ATOMIC_MOVE, REPLACE_EXISTING);
     }
 }
