@@ -1346,7 +1346,7 @@ object TestUtils extends Logging {
                    retentionCheckMs = 1000L,
                    maxTransactionTimeoutMs = 5 * 60 * 1000,
                    maxPidExpirationMs = 60 * 60 * 1000,
-                   producerIdExpirationCheckIntervalMs = 10 * 60 * 1000,
+                   producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
                    scheduler = time.scheduler,
                    time = time,
                    brokerTopicStats = new BrokerTopicStats,

@@ -49,7 +49,7 @@ class LogLoaderTest {
   val brokerTopicStats = new BrokerTopicStats
   val maxTransactionTimeoutMs: Int = 5 * 60 * 1000
   val maxProducerIdExpirationMs: Int = 60 * 60 * 1000
-  val producerIdExpirationCheckIntervalMs: Int = 10 * 60 * 1000
+  val producerIdExpirationCheckIntervalMs: Int = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val mockTime = new MockTime()
@@ -90,7 +90,7 @@ class LogLoaderTest {
 
     val maxTransactionTimeoutMs = 5 * 60 * 1000
     val maxProducerIdExpirationMs = 60 * 60 * 1000
-    val producerIdExpirationCheckIntervalMs = 10 * 60 * 1000
+    val producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs
 
     // Create a LogManager with some overridden methods to facilitate interception of clean shutdown
     // flag and to inject an error
@@ -333,7 +333,7 @@ class LogLoaderTest {
     def createLogWithInterceptedReads(recoveryPoint: Long): UnifiedLog = {
       val maxTransactionTimeoutMs = 5 * 60 * 1000
       val maxProducerIdExpirationMs = 60 * 60 * 1000
-      val producerIdExpirationCheckIntervalMs = 10 * 60 * 1000
+      val producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs
       val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
       val logDirFailureChannel = new LogDirFailureChannel(10)
       // Intercept all segment read calls
