@@ -484,7 +484,6 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void convertMessages(ConsumerRecords<byte[], byte[]> msgs) {
-        origOffsets.clear();
         for (ConsumerRecord<byte[], byte[]> msg : msgs) {
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
@@ -589,6 +588,7 @@ class WorkerSinkTask extends WorkerTask {
             recordBatch(messageBatch.size());
             sinkTaskMetricsGroup.recordPut(time.milliseconds() - start);
             currentOffsets.putAll(origOffsets);
+            origOffsets.clear();
             messageBatch.clear();
             // If we had paused all consumer topic partitions to try to redeliver data, then we should resume any that
             // the task had not explicitly paused
@@ -763,6 +763,9 @@ class WorkerSinkTask extends WorkerTask {
                 return;
 
             try {
+                for (TopicPartition partition: partitions) {
+                    origOffsets.remove(partition);
+                }
                 closePartitions(partitions, lost);
                 sinkTaskMetricsGroup.clearOffsets(partitions);
             } catch (RuntimeException e) {
