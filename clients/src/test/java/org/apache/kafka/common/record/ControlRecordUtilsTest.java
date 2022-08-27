@@ -32,7 +32,7 @@ public class ControlRecordUtilsTest {
 
     @Test
     public void testCurrentVersions() {
-        // If any of these asserts fails, please make sure that Kafka supports reading and
+        // If any of these asserts fail, please make sure that Kafka supports reading and
         // writing the latest version for these records.
         assertEquals(
             LeaderChangeMessage.HIGHEST_SUPPORTED_VERSION,
