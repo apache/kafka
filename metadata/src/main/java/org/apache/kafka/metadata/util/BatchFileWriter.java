@@ -42,7 +42,8 @@ import static org.apache.kafka.raft.KafkaRaftClient.MAX_BATCH_SIZE_BYTES;
  * Write an arbitrary set of metadata records into a Kafka metadata log batch format.
  *
  * This is similar to the binary format used for metadata snapshot files, but the log epoch
- * and initial offset are set to zero.
+ * and initial offset are set to zero. This type includes a SnapshotHeaderRecord record in the
+ * first batch and a SnapshotFooterRecord record in the last batch.
  */
 public class BatchFileWriter implements AutoCloseable {
     private final FileChannel channel;

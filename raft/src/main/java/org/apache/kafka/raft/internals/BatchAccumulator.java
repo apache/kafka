@@ -261,7 +261,7 @@ public class BatchAccumulator<T> implements Closeable {
      * Append a {@link LeaderChangeMessage} record to the batch
      *
      * @param LeaderChangeMessage The message to append
-     * @param currentTimestamp The current time
+     * @param currentTimestamp The current time in milliseconds
      * @throws IllegalStateException on failure to allocate a buffer for the record
      */
     public void appendLeaderChangeMessage(
@@ -284,7 +284,7 @@ public class BatchAccumulator<T> implements Closeable {
      * Append a {@link SnapshotHeaderRecord} record to the batch
      *
      * @param snapshotHeaderRecord The record to append
-     * @param currentTimestamp The current time
+     * @param currentTimestamp The current time in milliseconds
      * @throws IllegalStateException on failure to allocate a buffer for the record
      */
     public void appendSnapshotHeaderRecord(
@@ -306,7 +306,7 @@ public class BatchAccumulator<T> implements Closeable {
      * Append a {@link SnapshotFooterRecord} record to the batch
      *
      * @param snapshotFooterRecord The record to append
-     * @param currentTimestamp The current time
+     * @param currentTimestamp The current time in milliseconds
      * @throws IllegalStateException on failure to allocate a buffer for the record
      */
     public void appendSnapshotFooterRecord(
