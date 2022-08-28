@@ -96,7 +96,7 @@ public class LeaderState<T> implements EpochState {
         List<Voter> grantingVoters = convertToVoters(this.grantingVoters());
 
         LeaderChangeMessage leaderChangeMessage = new LeaderChangeMessage()
-            .setVersion(ControlRecordUtils.LEADER_CHANGE_SCHEMA_HIGHEST_VERSION)
+            .setVersion(ControlRecordUtils.LEADER_CHANGE_CURRENT_VERSION)
             .setLeaderId(this.election().leaderId())
             .setVoters(voters)
             .setGrantingVoters(grantingVoters);
