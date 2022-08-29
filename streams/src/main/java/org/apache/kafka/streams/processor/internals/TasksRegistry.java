@@ -55,11 +55,11 @@ public interface TasksRegistry {
 
     void addPendingTaskToInit(final Collection<Task> tasks);
 
-    void addNewActiveTasks(final Collection<Task> newTasks);
+    void addActiveTasks(final Collection<Task> tasks);
 
-    void addNewActiveTask(final Task task);
+    void addActiveTask(final Task task);
 
-    void addNewStandbyTasks(final Collection<Task> newTasks);
+    void addStandbyTasks(final Collection<Task> tasks);
 
     void removeTask(final Task taskToRemove);
 

@@ -52,8 +52,8 @@ public class TasksTest {
         final StandbyTask standbyTask = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_A_1)).build();
         final StreamTask statelessTask = statelessTask(TASK_1_0).build();
 
-        tasks.addNewActiveTasks(mkSet(statefulTask, statelessTask));
-        tasks.addNewStandbyTasks(Collections.singletonList(standbyTask));
+        tasks.addActiveTasks(mkSet(statefulTask, statelessTask));
+        tasks.addStandbyTasks(Collections.singletonList(standbyTask));
 
         assertEquals(statefulTask, tasks.task(statefulTask.id()));
         assertEquals(statelessTask, tasks.task(statelessTask.id()));
