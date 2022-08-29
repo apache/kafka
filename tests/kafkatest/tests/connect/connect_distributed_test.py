@@ -20,7 +20,7 @@ from ducktape.mark import matrix, parametrize
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService, config_property
+from kafkatest.services.kafka import KafkaService, config_property, quorum
 from kafkatest.services.connect import ConnectDistributedService, VerifiableSource, VerifiableSink, ConnectRestError, MockSink, MockSource
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
@@ -74,7 +74,7 @@ class ConnectDistributedTest(Test):
             self.TOPIC: {'partitions': 1, 'replication-factor': 1}
         }
 
-        self.zk = ZookeeperService(test_context, self.num_zk)
+        self.zk = ZookeeperService(test_context, self.num_zk) if quorum.for_test(test_context) == quorum.zk else None
 
         self.key_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.value_converter = "org.apache.kafka.connect.json.JsonConverter"
@@ -93,7 +93,8 @@ class ConnectDistributedTest(Test):
                                             include_filestream_connectors=include_filestream_connectors)
         self.cc.log_level = "DEBUG"
 
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
         self.kafka.start()
 
     def _start_connector(self, config_file):
@@ -159,8 +160,8 @@ class ConnectDistributedTest(Test):
         return self._task_has_state(task_id, status, 'RUNNING')
 
     @cluster(num_nodes=5)
-    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'])
-    def test_restart_failed_connector(self, connect_protocol):
+    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
+    def test_restart_failed_connector(self, connect_protocol, metadata_quorum):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -178,8 +179,8 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see connector transition to the RUNNING state")
 
     @cluster(num_nodes=5)
-    @matrix(connector_type=['source', 'sink'], connect_protocol=['sessioned', 'compatible', 'eager'])
-    def test_restart_failed_task(self, connector_type, connect_protocol):
+    @matrix(connector_type=['source', 'sink'], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
+    def test_restart_failed_task(self, connector_type, connect_protocol, metadata_quorum):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -203,8 +204,8 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see task transition to the RUNNING state")
 
     @cluster(num_nodes=5)
-    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'])
-    def test_restart_connector_and_tasks_failed_connector(self, connect_protocol):
+    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
+    def test_restart_connector_and_tasks_failed_connector(self, connect_protocol, metadata_quorum):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -222,8 +223,8 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see connector transition to the RUNNING state")
 
     @cluster(num_nodes=5)
-    @matrix(connector_type=['source', 'sink'], connect_protocol=['sessioned', 'compatible', 'eager'])
-    def test_restart_connector_and_tasks_failed_task(self, connector_type, connect_protocol):
+    @matrix(connector_type=['source', 'sink'], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
+    def test_restart_connector_and_tasks_failed_task(self, connector_type, connect_protocol, metadata_quorum):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -247,8 +248,8 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see task transition to the RUNNING state")
 
     @cluster(num_nodes=5)
-    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'])
-    def test_pause_and_resume_source(self, connect_protocol):
+    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
+    def test_pause_and_resume_source(self, connect_protocol, metadata_quorum):
         """
         Verify that source connectors stop producing records when paused and begin again after
         being resumed.
@@ -288,8 +289,8 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to produce messages after resuming source connector")
 
     @cluster(num_nodes=5)
-    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'])
-    def test_pause_and_resume_sink(self, connect_protocol):
+    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
+    def test_pause_and_resume_sink(self, connect_protocol, metadata_quorum):
         """
         Verify that sink connectors stop consuming records when paused and begin again after
         being resumed.
@@ -336,8 +337,8 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to consume messages after resuming sink connector")
 
     @cluster(num_nodes=5)
-    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'])
-    def test_pause_state_persistent(self, connect_protocol):
+    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
+    def test_pause_state_persistent(self, connect_protocol, metadata_quorum):
         """
         Verify that paused state is preserved after a cluster restart.
         """
@@ -363,8 +364,8 @@ class ConnectDistributedTest(Test):
                        err_msg="Failed to see connector startup in PAUSED state")
 
     @cluster(num_nodes=6)
-    @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL], connect_protocol=['sessioned', 'compatible', 'eager'])
-    def test_file_source_and_sink(self, security_protocol, connect_protocol):
+    @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
+    def test_file_source_and_sink(self, security_protocol, connect_protocol, metadata_quorum):
         """
         Tests that a basic file connector works across clean rolling bounces. This validates that the connector is
         correctly created, tasks instantiated, and as nodes restart the work is rebalanced across nodes.
@@ -396,8 +397,8 @@ class ConnectDistributedTest(Test):
         wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=150, err_msg="Sink output file never converged to the same state as the input file")
 
     @cluster(num_nodes=6)
-    @matrix(clean=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'])
-    def test_bounce(self, clean, connect_protocol):
+    @matrix(clean=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
+    def test_bounce(self, clean, connect_protocol, metadata_quorum):
         """
         Validates that source and sink tasks that run continuously and produce a predictable sequence of messages
         run correctly and deliver messages exactly once when Kafka Connect workers undergo clean rolling bounces.
@@ -520,8 +521,8 @@ class ConnectDistributedTest(Test):
         assert success, "Found validation errors:\n" + "\n  ".join(errors)
 
     @cluster(num_nodes=6)
-    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'])
-    def test_transformations(self, connect_protocol):
+    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
+    def test_transformations(self, connect_protocol, metadata_quorum):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services(timestamp_type='CreateTime', include_filestream_connectors=True)
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -604,7 +605,8 @@ class ConnectDistributedTest(Test):
     @parametrize(broker_version=str(LATEST_0_10_2), auto_create_topics=False, security_protocol=SecurityConfig.PLAINTEXT, connect_protocol='eager')
     @parametrize(broker_version=str(LATEST_0_10_1), auto_create_topics=False, security_protocol=SecurityConfig.PLAINTEXT, connect_protocol='eager')
     @parametrize(broker_version=str(LATEST_0_10_0), auto_create_topics=True, security_protocol=SecurityConfig.PLAINTEXT, connect_protocol='eager')
-    def test_broker_compatibility(self, broker_version, auto_create_topics, security_protocol, connect_protocol):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_broker_compatibility(self, broker_version, auto_create_topics, security_protocol, connect_protocol, metadata_quorum):
         """
         Verify that Connect will start up with various broker versions with various configurations. 
         When Connect distributed starts up, it either creates internal topics (v0.10.1.0 and after) 
