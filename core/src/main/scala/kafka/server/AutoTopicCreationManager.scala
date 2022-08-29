@@ -33,7 +33,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreateableTopicConfig, CreateableTopicConfigCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestContext, RequestHeader}
+import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestContext}
 
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -202,14 +202,8 @@ class DefaultAutoTopicCreationManager(
             nodeApiVersions.latestUsableVersion(ApiKeys.CREATE_TOPICS)
         }
 
-      // Borrow client information such as client id and correlation id from the original request,
-      // in order to correlate the create request with the original metadata request.
-      val requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS,
-        requestVersion,
-        context.clientId,
-        context.correlationId)
       ForwardingManager.buildEnvelopeRequest(context,
-        createTopicsRequest.build(requestVersion).serializeWithHeader(requestHeader))
+        context.buildRequestEnvelopePayload(createTopicsRequest.build(requestVersion)))
     }.getOrElse(createTopicsRequest)
 
     channelManager.sendRequest(request, requestCompletionHandler)

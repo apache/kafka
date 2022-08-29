@@ -687,7 +687,31 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testSerializeWithHeader() {
+    public void testSerializeResponseWithHeader() {
+        CreateTopicsResponseData.CreatableTopicResultCollection collection =
+            new CreateTopicsResponseData.CreatableTopicResultCollection();
+        collection.add(new CreateTopicsResponseData.CreatableTopicResult()
+            .setTopicConfigErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code())
+            .setNumPartitions(5));
+
+        CreateTopicsResponse createTopicsResponse = new CreateTopicsResponse(
+            new CreateTopicsResponseData()
+                .setThrottleTimeMs(10)
+                .setTopics(collection));
+
+        RequestHeader requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS,
+            ApiKeys.CREATE_TOPICS.latestVersion(), "client", 2);
+        ByteBuffer serializedResponse = createTopicsResponse.serializeWithHeader(
+            requestHeader.toResponseHeader(), requestHeader.apiVersion());
+
+        AbstractResponse parsedRequest = AbstractResponse.parseResponse(
+            serializedResponse, requestHeader);
+
+        assertEquals(createTopicsResponse.data(), parsedRequest.data());
+    }
+
+    @Test
+    public void testSerializeRequestWithHeader() {
         CreatableTopicCollection topicsToCreate = new CreatableTopicCollection(1);
         topicsToCreate.add(new CreatableTopic()
                                .setName("topic")
