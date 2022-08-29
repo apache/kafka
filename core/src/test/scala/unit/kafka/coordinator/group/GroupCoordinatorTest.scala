@@ -124,7 +124,7 @@ class GroupCoordinatorTest {
 
     // add the partition into the owned partition list
     groupPartitionId = groupCoordinator.partitionFor(groupId)
-    groupCoordinator.groupManager.addPartitionOwnership(groupPartitionId)
+    groupCoordinator.groupManager.addOwnedPartition(groupPartitionId)
   }
 
   @AfterEach
@@ -2730,7 +2730,7 @@ class GroupCoordinatorTest {
     val offsetTopicPartitions = List(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId)),
       new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(otherGroupId)))
 
-    groupCoordinator.groupManager.addPartitionOwnership(offsetTopicPartitions(1).partition)
+    groupCoordinator.groupManager.addOwnedPartition(offsetTopicPartitions(1).partition)
     val errors = mutable.ArrayBuffer[Errors]()
     val partitionData = mutable.ArrayBuffer[scala.collection.Map[TopicPartition, OffsetFetchResponse.PartitionData]]()
 

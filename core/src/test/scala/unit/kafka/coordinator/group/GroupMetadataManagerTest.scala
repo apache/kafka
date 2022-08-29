@@ -542,7 +542,7 @@ class GroupMetadataManagerTest {
     // group is not owned
     assertFalse(groupMetadataManager.groupNotExists(groupId))
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
     // group is owned but does not exist yet
     assertTrue(groupMetadataManager.groupNotExists(groupId))
 
@@ -1249,7 +1249,7 @@ class GroupMetadataManagerTest {
     val topicPartition = new TopicPartition("foo", 0)
     val offset = 37
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
@@ -1300,7 +1300,7 @@ class GroupMetadataManagerTest {
     val producerId = 232L
     val producerEpoch = 0.toShort
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
@@ -1349,7 +1349,7 @@ class GroupMetadataManagerTest {
     val producerId = 232L
     val producerEpoch = 0.toShort
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
@@ -1397,7 +1397,7 @@ class GroupMetadataManagerTest {
     val producerId = 232L
     val producerEpoch = 0.toShort
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
@@ -1444,7 +1444,7 @@ class GroupMetadataManagerTest {
     val topicPartition = new TopicPartition("foo", 0)
     val offset = 37
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
@@ -1483,7 +1483,7 @@ class GroupMetadataManagerTest {
     val topicPartition = new TopicPartition("foo", 0)
     val offset = 37
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
@@ -1524,7 +1524,7 @@ class GroupMetadataManagerTest {
     val topicPartitionFailed = new TopicPartition("foo", 1)
     val offset = 37
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
@@ -1577,7 +1577,7 @@ class GroupMetadataManagerTest {
     val topicPartition = new TopicPartition("foo", 0)
     val offset = 37
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
@@ -1612,7 +1612,7 @@ class GroupMetadataManagerTest {
     val topicPartition2 = new TopicPartition("foo", 1)
     val offset = 37
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
@@ -1669,7 +1669,7 @@ class GroupMetadataManagerTest {
     val topicPartition1 = new TopicPartition("foo", 0)
     val topicPartition2 = new TopicPartition("foo", 1)
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
@@ -1712,7 +1712,7 @@ class GroupMetadataManagerTest {
     val topicPartition1 = new TopicPartition("foo", 0)
     val topicPartition2 = new TopicPartition("foo", 1)
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
@@ -1761,7 +1761,7 @@ class GroupMetadataManagerTest {
     val topicPartition2 = new TopicPartition("foo", 1)
     val offset = 37
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
@@ -1827,7 +1827,7 @@ class GroupMetadataManagerTest {
     val topicPartition3 = new TopicPartition(topic, 2)
     val offset = 37
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
@@ -1974,7 +1974,7 @@ class GroupMetadataManagerTest {
     val topicPartition1 = new TopicPartition(topic, 0)
     val offset = 37
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
@@ -2052,7 +2052,7 @@ class GroupMetadataManagerTest {
 
     val offset = 37
 
-    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+    groupMetadataManager.addOwnedPartition(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
