@@ -176,8 +176,10 @@ class FeatureCommandUnitTest {
 
   @Test
   def testdowngradeType(): Unit = {
-    assertEquals(SAFE_DOWNGRADE, FeatureCommand.downgradeType(new Namespace(singletonMap("unsafe", false))))
-    assertEquals(UNSAFE_DOWNGRADE, FeatureCommand.downgradeType(new Namespace(singletonMap("unsafe", true))))
+    assertEquals(SAFE_DOWNGRADE, FeatureCommand.downgradeType(
+      new Namespace(singletonMap("unsafe", java.lang.Boolean.valueOf(false)))))
+    assertEquals(UNSAFE_DOWNGRADE, FeatureCommand.downgradeType(
+      new Namespace(singletonMap("unsafe", java.lang.Boolean.valueOf(true)))))
     assertEquals(SAFE_DOWNGRADE, FeatureCommand.downgradeType(new Namespace(emptyMap())))
   }
 
