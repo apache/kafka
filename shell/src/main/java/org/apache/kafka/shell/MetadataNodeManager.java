@@ -45,7 +45,6 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.queue.EventQueue;
@@ -269,7 +268,7 @@ public final class MetadataNodeManager implements AutoCloseable {
                             "Can't handle ConfigResource.Type " + record.resourceType());
                 }
                 DirectoryNode configDirectory = data.root.mkdirs("configs").
-                    mkdirs(typeString).mkdirs(Utils.isBlank(record.resourceName()) ? "<default>" : record.resourceName());
+                    mkdirs(typeString).mkdirs(record.resourceName().isEmpty() ? "<default>" : record.resourceName());
                 if (record.value() == null) {
                     configDirectory.rmrf(record.name());
                 } else {
