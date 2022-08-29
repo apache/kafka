@@ -138,8 +138,10 @@ class ConnectStandaloneFileTest(Test):
             return False
 
     @cluster(num_nodes=5)
-    @parametrize(error_tolerance=ErrorTolerance.ALL, metadata_quorum=quorum.all_non_upgrade)
-    @parametrize(error_tolerance=ErrorTolerance.NONE, metadata_quorum=quorum.all_non_upgrade)
+    @parametrize(error_tolerance=ErrorTolerance.ALL, metadata_quorum='ZK')
+    @parametrize(error_tolerance=ErrorTolerance.NONE, metadata_quorum='REMOTE_KRAFT')
+    @parametrize(error_tolerance=ErrorTolerance.ALL, metadata_quorum='REMOTE_KRAFT')
+    @parametrize(error_tolerance=ErrorTolerance.NONE, metadata_quorum='ZK')
     def test_skip_and_log_to_dlq(self, error_tolerance, metadata_quorum):
         self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk, topics=self.topics)
 
