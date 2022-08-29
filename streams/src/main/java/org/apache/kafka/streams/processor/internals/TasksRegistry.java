@@ -57,6 +57,8 @@ public interface TasksRegistry {
 
     void addNewActiveTasks(final Collection<Task> newTasks);
 
+    void addNewActiveTask(final Task task);
+
     void addNewStandbyTasks(final Collection<Task> newTasks);
 
     void removeTask(final Task taskToRemove);
