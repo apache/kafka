@@ -127,7 +127,7 @@ class DefaultStateUpdaterTest {
 
     @Test
     public void shouldRemoveTasksFromAndClearInputQueueOnShutdown() throws Exception {
-        stateUpdater.shutdown(Duration.ofMinutes(1));
+        stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
         final StreamTask statelessTask = statelessTask(TASK_0_0).inState(State.RESTORING).build();
         final StreamTask statefulTask = statefulTask(TASK_1_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
         final StandbyTask standbyTask = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
@@ -146,7 +146,7 @@ class DefaultStateUpdaterTest {
 
     @Test
     public void shouldRemoveUpdatingTasksOnShutdown() throws Exception {
-        stateUpdater.shutdown(Duration.ofMinutes(1));
+        stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
         stateUpdater = new DefaultStateUpdater(new StreamsConfig(configProps(Integer.MAX_VALUE)), changelogReader, time);
         final StreamTask activeTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StandbyTask standbyTask = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
@@ -168,7 +168,7 @@ class DefaultStateUpdaterTest {
     @Test
     public void shouldRemovePausedTasksOnShutdown() throws Exception {
         final StreamTask activeTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
-        final StandbyTask standbyTask = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        final StandbyTask standbyTask = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_A_1)).inState(State.RUNNING).build();
         stateUpdater.start();
         stateUpdater.add(activeTask);
         stateUpdater.add(standbyTask);
@@ -190,8 +190,8 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(activeTask);
         stateUpdater.add(standbyTask);
         stateUpdater.pause(standbyTask.id());
-        verifyUpdatingTasks(activeTask);
         verifyPausedTasks(standbyTask);
+        verifyUpdatingTasks(activeTask);
         verifyRemovedTasks();
 
         stateUpdater.shutdown(Duration.ofMinutes(1));
