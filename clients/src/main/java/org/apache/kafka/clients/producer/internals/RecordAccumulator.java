@@ -214,6 +214,43 @@ public class RecordAccumulator {
     }
 
     /**
+     * Check if partition concurrently changed, or we need to complete previously disabled partition change.
+     *
+     * @param topic The topic
+     * @param topicInfo The topic info
+     * @param partitionInfo The built-in partitioner's partition info
+     * @param deque The partition queue
+     * @param nowMs The current time, in milliseconds
+     * @param cluster THe cluster metadata
+     * @return 'true' if partition changed and we need to get new partition info and retry,
+     *         'false' otherwise
+     */
+    private boolean partitionChanged(String topic,
+                                     TopicInfo topicInfo,
+                                     BuiltInPartitioner.StickyPartitionInfo partitionInfo,
+                                     Deque<ProducerBatch> deque, long nowMs,
+                                     Cluster cluster) {
+        if (topicInfo.builtInPartitioner.isPartitionChanged(partitionInfo)) {
+            log.trace("Partition {} for topic {} switched by a concurrent append, retrying",
+                    partitionInfo.partition(), topic);
+            return true;
+        }
+
+        // We might have disabled partition switch if the queue didn't have ready batches.
+        // Check if we've got some ready batches now and can switch.
+        if (queueHasReadyBatches(deque, nowMs)) {
+            topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, 0, cluster, true);
+            if (topicInfo.builtInPartitioner.isPartitionChanged(partitionInfo)) {
+                log.trace("Completed previously disabled switch for topic {} partition {}, retrying",
+                        topic, partitionInfo.partition());
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Add a record to the accumulator, return the append result
      * <p>
      * The append result will contain the future metadata, and flag for whether the appended batch is full or a new batch is created
@@ -275,14 +312,14 @@ public class RecordAccumulator {
                 Deque<ProducerBatch> dq = topicInfo.batches.computeIfAbsent(effectivePartition, k -> new ArrayDeque<>());
                 synchronized (dq) {
                     // After taking the lock, validate that the partition hasn't changed and retry.
-                    if (topicInfo.builtInPartitioner.isPartitionChanged(partitionInfo)) {
-                        log.trace("Partition {} for topic {} switched by a concurrent append, retrying",
-                                partitionInfo.partition(), topic);
+                    if (partitionChanged(topic, topicInfo, partitionInfo, dq, nowMs, cluster))
                         continue;
-                    }
+
                     RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
                     if (appendResult != null) {
-                        topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster);
+                        // If queue is not ready to send we disabled switch (see comments in updatePartitionInfo).
+                        boolean enableSwitch = queueHasReadyBatches(dq, nowMs);
+                        topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
                         return appendResult;
                     }
                 }
@@ -307,16 +344,16 @@ public class RecordAccumulator {
 
                 synchronized (dq) {
                     // After taking the lock, validate that the partition hasn't changed and retry.
-                    if (topicInfo.builtInPartitioner.isPartitionChanged(partitionInfo)) {
-                        log.trace("Partition {} for topic {} switched by a concurrent append, retrying",
-                                partitionInfo.partition(), topic);
+                    if (partitionChanged(topic, topicInfo, partitionInfo, dq, nowMs, cluster))
                         continue;
-                    }
+
                     RecordAppendResult appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks, buffer, nowMs);
                     // Set buffer to null, so that deallocate doesn't return it back to free pool, since it's used in the batch.
                     if (appendResult.newBatchCreated)
                         buffer = null;
-                    topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster);
+                    // If queue is not ready to send we disable switch (see comments in updatePartitionInfo).
+                    boolean enableSwitch = queueHasReadyBatches(dq, nowMs);
+                    topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
                     return appendResult;
                 }
             }
@@ -378,6 +415,16 @@ public class RecordAccumulator {
     }
 
     /**
+     * Check if there are ready batches in the queue, or we sent all batches.
+     */
+    private boolean queueHasReadyBatches(Deque<ProducerBatch> deque, long nowMs) {
+        // Note that we also check if the queue is empty, because that may mean that batches became
+        // ready and we sent them.
+        ProducerBatch last = deque.peekLast();
+        return deque.size() > 1 || last == null || last.isFull() || last.waitedTimeMs(nowMs) >= lingerMs;
+    }
+
+     /**
      *  Try to append to a ProducerBatch.
      *
      *  If it is full, we return null and a new batch is created. We also close the batch for record appends to free up
