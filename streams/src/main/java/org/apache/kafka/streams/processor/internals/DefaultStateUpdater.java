@@ -60,6 +60,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private final ChangelogReader changelogReader;
         private final AtomicBoolean isRunning = new AtomicBoolean(true);
         private final Map<TaskId, Task> updatingTasks = new ConcurrentHashMap<>();
+        private final Map<TaskId, Task> pausedTasks = new ConcurrentHashMap<>();
         private final Logger log;
 
         public StateUpdaterThread(final String name, final ChangelogReader changelogReader) {
@@ -86,6 +87,10 @@ public class DefaultStateUpdater implements StateUpdater {
             return !updatingTasks.isEmpty() && updatingTasks.values().stream().noneMatch(Task::isActive);
         }
 
+        public Collection<Task> getPausedTasks() {
+            return pausedTasks.values();
+        }
+
         @Override
         public void run() {
             log.info("State updater thread started");
@@ -100,7 +105,8 @@ public class DefaultStateUpdater implements StateUpdater {
             } catch (final RuntimeException anyOtherException) {
                 handleRuntimeException(anyOtherException);
             } finally {
-                clear();
+                removeAddedTasksFromInputQueue();
+                removeUpdatingAndPausedTasks();
                 shutdownGate.countDown();
                 log.info("State updater thread shutdown");
             }
@@ -224,18 +230,16 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
-        private void clear() {
-            tasksAndActionsLock.lock();
-            restoredActiveTasksLock.lock();
-            try {
-                tasksAndActions.clear();
-                restoredActiveTasks.clear();
-            } finally {
-                restoredActiveTasksLock.unlock();
-                tasksAndActionsLock.unlock();
-            }
+        private void removeUpdatingAndPausedTasks() {
             changelogReader.clear();
-            updatingTasks.clear();
+            updatingTasks.forEach((id, task) -> {
+                task.maybeCheckpoint(true);
+                removedTasks.add(task);
+            });
+            pausedTasks.forEach((id, task) -> {
+                removedTasks.add(task);
+            });
+            pausedTasks.clear();
         }
 
         private List<TaskAndAction> getTasksAndActions() {
@@ -388,7 +392,6 @@ public class DefaultStateUpdater implements StateUpdater {
     private final Condition restoredActiveTasksCondition = restoredActiveTasksLock.newCondition();
     private final BlockingQueue<ExceptionAndTasks> exceptionsAndFailedTasks = new LinkedBlockingQueue<>();
     private final BlockingQueue<Task> removedTasks = new LinkedBlockingQueue<>();
-    private final Map<TaskId, Task> pausedTasks = new ConcurrentHashMap<>();
 
     private final long commitIntervalMs;
     private long lastCommitMs;
@@ -427,6 +430,23 @@ public class DefaultStateUpdater implements StateUpdater {
                 stateUpdaterThread = null;
             } catch (final InterruptedException ignored) {
             }
+        } else {
+            removeAddedTasksFromInputQueue();
+        }
+    }
+
+    private void removeAddedTasksFromInputQueue() {
+        tasksAndActionsLock.lock();
+        try {
+            TaskAndAction taskAndAction;
+            while ((taskAndAction = tasksAndActions.peek()) != null) {
+                if (taskAndAction.getAction() == Action.ADD) {
+                    removedTasks.add(taskAndAction.getTask());
+                }
+                tasksAndActions.poll();
+            }
+        } finally {
+            tasksAndActionsLock.unlock();
         }
     }
 
@@ -557,7 +577,9 @@ public class DefaultStateUpdater implements StateUpdater {
     }
 
     public Set<Task> getPausedTasks() {
-        return Collections.unmodifiableSet(new HashSet<>(pausedTasks.values()));
+        return stateUpdaterThread != null
+            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.getPausedTasks()))
+            : Collections.emptySet();
     }
 
     @Override
