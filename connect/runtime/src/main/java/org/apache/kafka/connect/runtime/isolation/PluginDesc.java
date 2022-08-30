@@ -103,7 +103,7 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
     }
 
     @Override
-    public int compareTo(PluginDesc other) {
+    public int compareTo(PluginDesc<T> other) {
         int nameComp = name.compareTo(other.name);
         return nameComp != 0 ? nameComp : encodedVersion.compareTo(other.encodedVersion);
     }

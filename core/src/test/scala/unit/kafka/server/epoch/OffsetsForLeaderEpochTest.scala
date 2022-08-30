@@ -17,12 +17,10 @@
 package kafka.server.epoch
 
 import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.log.{Log, LogManager}
+import kafka.log.{UnifiedLog, LogManager}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
-import kafka.server.metadata.CachedConfigRepository
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic}
@@ -31,9 +29,9 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.easymock.EasyMock._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
 
@@ -42,7 +40,6 @@ class OffsetsForLeaderEpochTest {
   private val time = new MockTime
   private val metrics = new Metrics
   private val alterIsrManager = TestUtils.createAlterIsrManager()
-  private val configRepository = new CachedConfigRepository()
   private val tp = new TopicPartition("topic", 1)
   private var replicaManager: ReplicaManager = _
   private var quotaManager: QuotaManagers = _
@@ -60,16 +57,22 @@ class OffsetsForLeaderEpochTest {
     val request = Seq(newOffsetForLeaderTopic(tp, RecordBatch.NO_PARTITION_LEADER_EPOCH, epochRequested))
 
     //Stubs
-    val mockLog: Log = createNiceMock(classOf[Log])
-    val logManager: LogManager = createNiceMock(classOf[LogManager])
-    expect(mockLog.endOffsetForEpoch(epochRequested)).andReturn(Some(offsetAndEpoch))
-    expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
-    replay(mockLog, logManager)
+    val mockLog: UnifiedLog = mock(classOf[UnifiedLog])
+    val logManager: LogManager = mock(classOf[LogManager])
+    when(mockLog.endOffsetForEpoch(epochRequested)).thenReturn(Some(offsetAndEpoch))
+    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
 
     // create a replica manager with 1 partition that has 1 replica
-    replicaManager = new ReplicaManager(config, metrics, time, None, null, logManager, new AtomicBoolean(false),
-      quotaManager, new BrokerTopicStats,
-      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, configRepository)
+    replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = null,
+      logManager = logManager,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterIsrManager)
     val partition = replicaManager.createPartition(tp)
     partition.setLog(mockLog, isFutureLog = false)
     partition.leaderReplicaIdOpt = Some(config.brokerId)
@@ -85,14 +88,20 @@ class OffsetsForLeaderEpochTest {
 
   @Test
   def shouldReturnNoLeaderForPartitionIfThrown(): Unit = {
-    val logManager: LogManager = createNiceMock(classOf[LogManager])
-    expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
-    replay(logManager)
+    val logManager: LogManager = mock(classOf[LogManager])
+    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
 
     //create a replica manager with 1 partition that has 0 replica
-    replicaManager = new ReplicaManager(config, metrics, time, None, null, logManager, new AtomicBoolean(false),
-      quotaManager, new BrokerTopicStats,
-      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, configRepository)
+    replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = null,
+      logManager = logManager,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterIsrManager)
     replicaManager.createPartition(tp)
 
     //Given
@@ -110,14 +119,20 @@ class OffsetsForLeaderEpochTest {
 
   @Test
   def shouldReturnUnknownTopicOrPartitionIfThrown(): Unit = {
-    val logManager: LogManager = createNiceMock(classOf[LogManager])
-    expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
-    replay(logManager)
+    val logManager: LogManager = mock(classOf[LogManager])
+    when(logManager.liveLogDirs).thenReturn(Array.empty[File])
 
     //create a replica manager with 0 partition
-    replicaManager = new ReplicaManager(config, metrics, time, None, null, logManager, new AtomicBoolean(false),
-      quotaManager, new BrokerTopicStats,
-      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, configRepository)
+    replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = null,
+      logManager = logManager,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
+      logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
+      alterPartitionManager = alterIsrManager)
 
     //Given
     val epochRequested: Integer = 5

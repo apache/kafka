@@ -225,12 +225,7 @@ public class TimelineHashSet<T>
 
     @Override
     public void clear() {
-        Iterator<TimelineHashSetEntry<T>> iter =
-            snapshottableIterator(SnapshottableHashTable.LATEST_EPOCH);
-        while (iter.hasNext()) {
-            iter.next();
-            iter.remove();
-        }
+        reset();
     }
 
     @Override

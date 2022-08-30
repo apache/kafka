@@ -19,6 +19,7 @@
   "listeners": ["zkBroker", "broker"],
   "name": "OffsetDeleteRequest",
   "validVersions": "0",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The unique group identifier." },

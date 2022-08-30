@@ -49,12 +49,14 @@ class TestVerifiableProducer(Test):
     @parametrize(producer_version=str(LATEST_0_9))
     @parametrize(producer_version=str(LATEST_0_10_0))
     @parametrize(producer_version=str(LATEST_0_10_1))
+    @matrix(producer_version=[str(DEV_BRANCH)], acks=["0", "1", "-1"], enable_idempotence=[False])
+    @matrix(producer_version=[str(DEV_BRANCH)], acks=["-1"], enable_idempotence=[True])
     @matrix(producer_version=[str(DEV_BRANCH)], security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=quorum.all)
     @cluster(num_nodes=4)
     @matrix(producer_version=[str(DEV_BRANCH)], security_protocol=['SASL_SSL'], sasl_mechanism=['PLAIN', 'GSSAPI'],
             metadata_quorum=quorum.all)
-    def test_simple_run(self, producer_version, security_protocol = 'PLAINTEXT', sasl_mechanism='PLAIN',
-                        metadata_quorum=quorum.zk):
+    def test_simple_run(self, producer_version, acks=None, enable_idempotence=False, security_protocol = 'PLAINTEXT',
+                        sasl_mechanism='PLAIN', metadata_quorum=quorum.zk):
         """
         Test that we can start VerifiableProducer on the current branch snapshot version or against the 0.8.2 jar, and
         verify that we can produce a small number of messages.
@@ -72,6 +74,8 @@ class TestVerifiableProducer(Test):
         self.kafka.start()
 
         node = self.producer.nodes[0]
+        self.producer.enable_idempotence = enable_idempotence
+        self.producer.acks = acks
         node.version = KafkaVersion(producer_version)
         self.producer.start()
         wait_until(lambda: self.producer.num_acked > 5, timeout_sec=15,

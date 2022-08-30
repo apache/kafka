@@ -179,11 +179,12 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 throw new IllegalStateException();
         }
 
-        ClusterConfig.Builder builder = ClusterConfig.clusterBuilder(type, brokers, controllers, autoStart, annot.securityProtocol());
+        ClusterConfig.Builder builder = ClusterConfig.clusterBuilder(type, brokers, controllers, autoStart,
+            annot.securityProtocol(), annot.metadataVersion());
         if (!annot.name().isEmpty()) {
             builder.name(annot.name());
         } else {
-            builder.name(context.getDisplayName());
+            builder.name(context.getRequiredTestMethod().getName());
         }
         if (!annot.listener().isEmpty()) {
             builder.listenerName(annot.listener());

@@ -33,9 +33,9 @@ class ChangeLoggingTimestampedWindowBytesStore extends ChangeLoggingWindowBytesS
     void log(final Bytes key,
              final byte[] valueAndTimestamp) {
         if (valueAndTimestamp != null) {
-            context.logChange(name(), key, rawValue(valueAndTimestamp), timestamp(valueAndTimestamp));
+            context.logChange(name(), key, rawValue(valueAndTimestamp), timestamp(valueAndTimestamp), wrapped().getPosition());
         } else {
-            context.logChange(name(), key, null, context.timestamp());
+            context.logChange(name(), key, null, context.timestamp(), wrapped().getPosition());
         }
     }
 }

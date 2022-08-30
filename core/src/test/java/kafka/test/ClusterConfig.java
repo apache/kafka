@@ -19,8 +19,10 @@ package kafka.test;
 
 import kafka.test.annotation.Type;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -40,6 +42,7 @@ public class ClusterConfig {
     private final SecurityProtocol securityProtocol;
     private final String listenerName;
     private final File trustStoreFile;
+    private final MetadataVersion metadataVersion;
 
     private final Properties serverProperties = new Properties();
     private final Properties producerProperties = new Properties();
@@ -47,9 +50,11 @@ public class ClusterConfig {
     private final Properties adminClientProperties = new Properties();
     private final Properties saslServerProperties = new Properties();
     private final Properties saslClientProperties = new Properties();
+    private final Map<Integer, Properties> perBrokerOverrideProperties = new HashMap<>();
 
     ClusterConfig(Type type, int brokers, int controllers, String name, boolean autoStart,
-                  SecurityProtocol securityProtocol, String listenerName, File trustStoreFile) {
+                  SecurityProtocol securityProtocol, String listenerName, File trustStoreFile,
+                  MetadataVersion metadataVersion) {
         this.type = type;
         this.brokers = brokers;
         this.controllers = controllers;
@@ -58,6 +63,7 @@ public class ClusterConfig {
         this.securityProtocol = securityProtocol;
         this.listenerName = listenerName;
         this.trustStoreFile = trustStoreFile;
+        this.metadataVersion = metadataVersion;
     }
 
     public Type clusterType() {
@@ -116,16 +122,25 @@ public class ClusterConfig {
         return Optional.ofNullable(trustStoreFile);
     }
 
+    public MetadataVersion metadataVersion() {
+        return metadataVersion;
+    }
+
+    public Properties brokerServerProperties(int brokerId) {
+        return perBrokerOverrideProperties.computeIfAbsent(brokerId, __ -> new Properties());
+    }
+
     public Map<String, String> nameTags() {
-        Map<String, String> tags = new LinkedHashMap<>(3);
+        Map<String, String> tags = new LinkedHashMap<>(4);
         name().ifPresent(name -> tags.put("Name", name));
+        tags.put("MetadataVersion", metadataVersion.toString());
         tags.put("Security", securityProtocol.name());
         listenerName().ifPresent(listener -> tags.put("Listener", listener));
         return tags;
     }
 
     public ClusterConfig copyOf() {
-        ClusterConfig copy = new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile);
+        ClusterConfig copy = new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile, metadataVersion);
         copy.serverProperties.putAll(serverProperties);
         copy.producerProperties.putAll(producerProperties);
         copy.consumerProperties.putAll(consumerProperties);
@@ -135,11 +150,12 @@ public class ClusterConfig {
     }
 
     public static Builder defaultClusterBuilder() {
-        return new Builder(Type.ZK, 1, 1, true, SecurityProtocol.PLAINTEXT);
+        return new Builder(Type.ZK, 1, 1, true, SecurityProtocol.PLAINTEXT, MetadataVersion.latest());
     }
 
-    public static Builder clusterBuilder(Type type, int brokers, int controllers, boolean autoStart, SecurityProtocol securityProtocol) {
-        return new Builder(type, brokers, controllers, autoStart, securityProtocol);
+    public static Builder clusterBuilder(Type type, int brokers, int controllers, boolean autoStart,
+                                         SecurityProtocol securityProtocol, MetadataVersion metadataVersion) {
+        return new Builder(type, brokers, controllers, autoStart, securityProtocol, metadataVersion);
     }
 
     public static class Builder {
@@ -151,13 +167,15 @@ public class ClusterConfig {
         private SecurityProtocol securityProtocol;
         private String listenerName;
         private File trustStoreFile;
+        private MetadataVersion metadataVersion;
 
-        Builder(Type type, int brokers, int controllers, boolean autoStart, SecurityProtocol securityProtocol) {
+        Builder(Type type, int brokers, int controllers, boolean autoStart, SecurityProtocol securityProtocol, MetadataVersion metadataVersion) {
             this.type = type;
             this.brokers = brokers;
             this.controllers = controllers;
             this.autoStart = autoStart;
             this.securityProtocol = securityProtocol;
+            this.metadataVersion = metadataVersion;
         }
 
         public Builder type(Type type) {
@@ -200,8 +218,13 @@ public class ClusterConfig {
             return this;
         }
 
+        public Builder metadataVersion(MetadataVersion metadataVersion) {
+            this.metadataVersion = metadataVersion;
+            return this;
+        }
+
         public ClusterConfig build() {
-            return new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile);
+            return new ClusterConfig(type, brokers, controllers, name, autoStart, securityProtocol, listenerName, trustStoreFile, metadataVersion);
         }
     }
 }

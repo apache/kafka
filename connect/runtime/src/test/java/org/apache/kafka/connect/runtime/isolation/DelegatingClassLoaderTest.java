@@ -52,7 +52,7 @@ public class DelegatingClassLoaderTest {
     }
 
     @Test
-    public void testLoadingUnloadedPluginClass() throws ClassNotFoundException {
+    public void testLoadingUnloadedPluginClass() {
         TestPlugins.assertAvailable();
         DelegatingClassLoader classLoader = new DelegatingClassLoader(Collections.emptyList());
         classLoader.initLoaders();
@@ -92,7 +92,7 @@ public class DelegatingClassLoaderTest {
     }
 
     @Test
-    public void testLoadingNoPlugins() throws Exception {
+    public void testLoadingNoPlugins() {
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
             Collections.singletonList(pluginDir.getRoot().getAbsolutePath()));
         classLoader.initLoaders();

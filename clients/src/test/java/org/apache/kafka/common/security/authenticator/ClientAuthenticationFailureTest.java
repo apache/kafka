@@ -116,7 +116,7 @@ public class ClientAuthenticationFailureTest {
         Map<String, Object> props = new HashMap<>(saslClientConfigs);
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
         try (Admin client = Admin.create(props)) {
-            KafkaFuture<Map<String, TopicDescription>> future = client.describeTopics(Collections.singleton("test")).all();
+            KafkaFuture<Map<String, TopicDescription>> future = client.describeTopics(Collections.singleton("test")).allTopicNames();
             TestUtils.assertFutureThrows(future, SaslAuthenticationException.class);
         }
     }

@@ -72,6 +72,10 @@ public class StartAndStopCounter {
         return stopCounter.get();
     }
 
+    public StartsAndStops countsSnapshot() {
+        return new StartsAndStops(starts(), stops());
+    }
+
     /**
      * Obtain a {@link StartAndStopLatch} that can be used to wait until the expected number of restarts
      * has been completed.

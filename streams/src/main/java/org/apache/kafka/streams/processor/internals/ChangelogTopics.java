@@ -42,7 +42,7 @@ public class ChangelogTopics {
     private final Map<TaskId, Set<TopicPartition>> preExistingChangelogPartitionsForTask = new HashMap<>();
     private final Set<TopicPartition> preExistingNonSourceTopicBasedChangelogPartitions = new HashSet<>();
     private final Set<String> sourceTopicBasedChangelogTopics = new HashSet<>();
-    private final Set<TopicPartition> preExsitingSourceTopicBasedChangelogPartitions = new HashSet<>();
+    private final Set<TopicPartition> preExistingSourceTopicBasedChangelogPartitions = new HashSet<>();
     private final Logger log;
 
     public ChangelogTopics(final InternalTopicManager internalTopicManager,
@@ -75,7 +75,7 @@ public class ChangelogTopics {
                 final Set<TopicPartition> changelogTopicPartitions = topicsInfo.stateChangelogTopics
                     .keySet()
                     .stream()
-                    .map(topic -> new TopicPartition(topic, task.partition))
+                    .map(topic -> new TopicPartition(topic, task.partition()))
                     .collect(Collectors.toSet());
                 changelogPartitionsForStatefulTask.put(task, changelogTopicPartitions);
             }
@@ -84,8 +84,8 @@ public class ChangelogTopics {
                 // the expected number of partitions is the max value of TaskId.partition + 1
                 int numPartitions = UNKNOWN;
                 for (final TaskId task : topicGroupTasks) {
-                    if (numPartitions < task.partition + 1) {
-                        numPartitions = task.partition + 1;
+                    if (numPartitions < task.partition() + 1) {
+                        numPartitions = task.partition() + 1;
                     }
                 }
                 topicConfig.setNumberOfPartitions(numPartitions);
@@ -106,7 +106,7 @@ public class ChangelogTopics {
                     if (!sourceTopicBasedChangelogTopics.contains(topicPartition.topic())) {
                         preExistingNonSourceTopicBasedChangelogPartitions.add(topicPartition);
                     } else {
-                        preExsitingSourceTopicBasedChangelogPartitions.add(topicPartition);
+                        preExistingSourceTopicBasedChangelogPartitions.add(topicPartition);
                     }
                 }
             }
@@ -125,7 +125,7 @@ public class ChangelogTopics {
     }
 
     public Set<TopicPartition> preExistingSourceTopicBasedPartitions() {
-        return Collections.unmodifiableSet(preExsitingSourceTopicBasedChangelogPartitions);
+        return Collections.unmodifiableSet(preExistingSourceTopicBasedChangelogPartitions);
     }
 
     public Set<TaskId> statefulTaskIds() {

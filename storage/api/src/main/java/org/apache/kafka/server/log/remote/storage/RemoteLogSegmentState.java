@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
  * <p>
  * <pre>
  * +---------------------+            +----------------------+
- * |COPY_SEGMENT_STARTED |----------> |COPY_SEGMENT_FINISHED |
+ * |COPY_SEGMENT_STARTED |----------&gt; |COPY_SEGMENT_FINISHED |
  * +-------------------+-+            +--+-------------------+
  *                     |                 |
  *                     |                 |

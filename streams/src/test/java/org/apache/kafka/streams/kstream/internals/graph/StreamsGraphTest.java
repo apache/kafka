@@ -53,6 +53,7 @@ import java.util.regex.Pattern;
 import static java.time.Duration.ofMillis;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings("deprecation")
 public class StreamsGraphTest {
 
     private final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");

@@ -23,7 +23,6 @@ import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Collection;
-import java.util.Properties;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,30 +62,29 @@ public class StreamSourceNode<K, V> extends SourceGraphNode<K, V> {
     @Override
     public String toString() {
         return "StreamSourceNode{" +
-               "topicNames=" + topicNames() +
-               ", topicPattern=" + topicPattern() +
+               "topicNames=" + (topicNames().isPresent() ? topicNames().get() : null) +
+               ", topicPattern=" + (topicPattern().isPresent() ? topicPattern().get() : null) +
                ", consumedInternal=" + consumedInternal() +
                "} " + super.toString();
     }
 
     @Override
-    public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
+    public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
 
-        if (topicPattern() != null) {
+        if (topicPattern().isPresent()) {
             topologyBuilder.addSource(consumedInternal().offsetResetPolicy(),
                                       nodeName(),
                                       consumedInternal().timestampExtractor(),
                                       consumedInternal().keyDeserializer(),
                                       consumedInternal().valueDeserializer(),
-                                      topicPattern());
+                                      topicPattern().get());
         } else {
             topologyBuilder.addSource(consumedInternal().offsetResetPolicy(),
                                       nodeName(),
                                       consumedInternal().timestampExtractor(),
                                       consumedInternal().keyDeserializer(),
                                       consumedInternal().valueDeserializer(),
-                                      topicNames().toArray(new String[0]));
-
+                                      topicNames().get().toArray(new String[0]));
         }
     }
 

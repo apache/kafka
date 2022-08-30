@@ -80,6 +80,7 @@ public class DescribeProducersRequest extends AbstractRequest {
                         .setErrorCode(error.code())
                 );
             }
+            response.topics().add(topicResponse);
         }
         return new DescribeProducersResponse(response);
     }

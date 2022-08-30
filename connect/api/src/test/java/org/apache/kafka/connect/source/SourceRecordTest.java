@@ -62,7 +62,7 @@ public class SourceRecordTest {
     }
 
     @Test
-    public void shouldCreateSinkRecordWithEmtpyHeaders() {
+    public void shouldCreateSinkRecordWithEmptyHeaders() {
         assertEquals(SOURCE_PARTITION, record.sourcePartition());
         assertEquals(SOURCE_OFFSET, record.sourceOffset());
         assertEquals(TOPIC_NAME, record.topic());

@@ -19,6 +19,11 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.NoopValueTransformer;
 import org.apache.kafka.test.NoopValueTransformerWithKey;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -30,10 +35,6 @@ import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
 
 import java.util.Random;
@@ -75,21 +76,22 @@ public class AbstractStreamTest {
     public void testShouldBeExtensible() {
         final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
-        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final String topicName = "topic";
 
         final ExtendedKStream<Integer, String> stream = new ExtendedKStream<>(builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String())));
 
         stream.randomFilter().process(supplier);
 
-        final TopologyTestDriver driver = new TopologyTestDriver(builder.build());
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build())) {
 
-        final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
-        for (final int expectedKey : expectedKeys) {
-            inputTopic.pipeInput(expectedKey, "V" + expectedKey);
+            final TestInputTopic<Integer, String> inputTopic = driver.createInputTopic(topicName, new IntegerSerializer(), new StringSerializer());
+            for (final int expectedKey : expectedKeys) {
+                inputTopic.pipeInput(expectedKey, "V" + expectedKey);
+            }
+
+            assertTrue(supplier.theCapturedProcessor().processed().size() <= expectedKeys.length);
         }
-
-        assertTrue(supplier.theCapturedProcessor().processed().size() <= expectedKeys.length);
     }
 
     private static class ExtendedKStream<K, V> extends AbstractStream<K, V> {
@@ -108,7 +110,7 @@ public class AbstractStreamTest {
         }
     }
 
-    private static class ExtendedKStreamDummy<K, V> implements ProcessorSupplier<K, V> {
+    private static class ExtendedKStreamDummy<K, V> implements ProcessorSupplier<K, V, K, V> {
 
         private final Random rand;
 
@@ -117,16 +119,16 @@ public class AbstractStreamTest {
         }
 
         @Override
-        public Processor<K, V> get() {
+        public Processor<K, V, K, V> get() {
             return new ExtendedKStreamDummyProcessor();
         }
 
-        private class ExtendedKStreamDummyProcessor extends AbstractProcessor<K, V> {
+        private class ExtendedKStreamDummyProcessor extends ContextualProcessor<K, V, K, V> {
             @Override
-            public void process(final K key, final V value) {
+            public void process(final Record<K, V> record) {
                 // flip a coin and filter
                 if (rand.nextBoolean()) {
-                    context().forward(key, value);
+                    context().forward(record);
                 }
             }
         }

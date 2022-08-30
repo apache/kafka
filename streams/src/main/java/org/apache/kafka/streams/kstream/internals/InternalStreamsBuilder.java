@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 import java.util.TreeMap;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -51,7 +50,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.PriorityQueue;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
@@ -74,7 +72,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     protected final GraphNode root = new GraphNode(TOPOLOGY_ROOT) {
         @Override
-        public void writeToTopology(final InternalTopologyBuilder topologyBuilder, final Properties props) {
+        public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
             // no-op for root node
         }
     };
@@ -102,7 +100,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     public <K, V> KStream<K, V> stream(final Pattern topicPattern,
                                        final ConsumedInternal<K, V> consumed) {
-        final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
+        final String name = new NamedInternal(consumed.name()).orElseGenerateWithPrefix(this, KStreamImpl.SOURCE_NAME);
         final StreamSourceNode<K, V> streamPatternSourceNode = new StreamSourceNode<>(name, topicPattern, consumed);
 
         addGraphNode(root, streamPatternSourceNode);
@@ -208,8 +206,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                                        final org.apache.kafka.streams.processor.api.ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
         // explicitly disable logging for global stores
         storeBuilder.withLoggingDisabled();
-        final String sourceName = newProcessorName(KStreamImpl.SOURCE_NAME);
-        final String processorName = newProcessorName(KTableImpl.SOURCE_NAME);
+
+        final NamedInternal named = new NamedInternal(consumed.name());
+        final String sourceName = named.suffixWithOrElseGet(TABLE_SOURCE_SUFFIX, this, KStreamImpl.SOURCE_NAME);
+        final String processorName = named.orElseGenerateWithPrefix(this, KTableImpl.SOURCE_NAME);
 
         final GraphNode globalStoreNode = new GlobalStoreNode<>(
             storeBuilder,
@@ -270,13 +270,17 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     // use this method for testing only
     public void buildAndOptimizeTopology() {
-        buildAndOptimizeTopology(null);
+        buildAndOptimizeTopology(false);
     }
 
-    public void buildAndOptimizeTopology(final Properties props) {
+    public void buildAndOptimizeTopology(final boolean optimizeTopology) {
 
         mergeDuplicateSourceNodes();
-        maybePerformOptimizations(props);
+        if (optimizeTopology) {
+            LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
+            optimizeKTableSourceTopics();
+            maybeOptimizeRepartitionOperations();
+        }
 
         final PriorityQueue<GraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, Comparator.comparing(GraphNode::buildPriority));
 
@@ -290,7 +294,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             }
 
             if (streamGraphNode.allParentsWrittenToTopology() && !streamGraphNode.hasWrittenToTopology()) {
-                streamGraphNode.writeToTopology(internalTopologyBuilder, props);
+                streamGraphNode.writeToTopology(internalTopologyBuilder);
                 streamGraphNode.setHasWrittenToTopology(true);
             }
 
@@ -314,43 +318,41 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             if (graphNode instanceof StreamSourceNode) {
                 final StreamSourceNode<?, ?> currentSourceNode = (StreamSourceNode<?, ?>) graphNode;
 
-                if (currentSourceNode.topicPattern() != null) {
-                    if (!patternsToSourceNodes.containsKey(currentSourceNode.topicPattern())) {
-                        patternsToSourceNodes.put(currentSourceNode.topicPattern(), currentSourceNode);
+                if (currentSourceNode.topicPattern().isPresent()) {
+                    final Pattern topicPattern = currentSourceNode.topicPattern().get();
+                    if (!patternsToSourceNodes.containsKey(topicPattern)) {
+                        patternsToSourceNodes.put(topicPattern, currentSourceNode);
                     } else {
-                        final StreamSourceNode<?, ?> mainSourceNode = patternsToSourceNodes.get(currentSourceNode.topicPattern());
+                        final StreamSourceNode<?, ?> mainSourceNode = patternsToSourceNodes.get(topicPattern);
                         mainSourceNode.merge(currentSourceNode);
                         root.removeChild(graphNode);
                     }
                 } else {
-                    for (final String topic : currentSourceNode.topicNames()) {
-                        if (!topicsToSourceNodes.containsKey(topic)) {
-                            topicsToSourceNodes.put(topic, currentSourceNode);
-                        } else {
-                            final StreamSourceNode<?, ?> mainSourceNode = topicsToSourceNodes.get(topic);
-                            // TODO we only merge source nodes if the subscribed topic(s) are an exact match, so it's still not
-                            // possible to subscribe to topicA in one KStream and topicA + topicB in another. We could achieve
-                            // this by splitting these source nodes into one topic per node and routing to the subscribed children
-                            if (!mainSourceNode.topicNames().equals(currentSourceNode.topicNames())) {
-                                LOG.error("Topic {} was found in  subscription for non-equal source nodes {} and {}",
-                                          topic, mainSourceNode, currentSourceNode);
-                                throw new TopologyException("Two source nodes are subscribed to overlapping but not equal input topics");
+                    if (currentSourceNode.topicNames().isPresent()) {
+                        for (final String topic : currentSourceNode.topicNames().get()) {
+                            if (!topicsToSourceNodes.containsKey(topic)) {
+                                topicsToSourceNodes.put(topic, currentSourceNode);
+                            } else {
+                                final StreamSourceNode<?, ?> mainSourceNode = topicsToSourceNodes.get(
+                                    topic);
+                                // TODO we only merge source nodes if the subscribed topic(s) are an exact match, so it's still not
+                                // possible to subscribe to topicA in one KStream and topicA + topicB in another. We could achieve
+                                // this by splitting these source nodes into one topic per node and routing to the subscribed children
+                                if (!mainSourceNode.topicNames()
+                                    .equals(currentSourceNode.topicNames())) {
+                                    LOG.error(
+                                        "Topic {} was found in  subscription for non-equal source nodes {} and {}",
+                                        topic, mainSourceNode, currentSourceNode);
+                                    throw new TopologyException(
+                                        "Two source nodes are subscribed to overlapping but not equal input topics");
+                                }
+                                mainSourceNode.merge(currentSourceNode);
+                                root.removeChild(graphNode);
                             }
-                            mainSourceNode.merge(currentSourceNode);
-                            root.removeChild(graphNode);
                         }
                     }
                 }
             }
-        }
-    }
-
-    private void maybePerformOptimizations(final Properties props) {
-
-        if (props != null && StreamsConfig.OPTIMIZE.equals(props.getProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG))) {
-            LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
-            optimizeKTableSourceTopics();
-            maybeOptimizeRepartitionOperations();
         }
     }
 

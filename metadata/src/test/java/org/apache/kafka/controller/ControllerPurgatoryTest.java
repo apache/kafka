@@ -17,7 +17,7 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import org.junit.jupiter.api.Test;
@@ -55,18 +55,18 @@ public class ControllerPurgatoryTest {
         SampleDeferredEvent event2 = new SampleDeferredEvent();
         SampleDeferredEvent event3 = new SampleDeferredEvent();
         purgatory.add(1, event1);
-        assertEquals(Optional.of(1L), purgatory.highestPendingOffset());
+        assertEquals(OptionalLong.of(1L), purgatory.highestPendingOffset());
         purgatory.add(1, event2);
-        assertEquals(Optional.of(1L), purgatory.highestPendingOffset());
+        assertEquals(OptionalLong.of(1L), purgatory.highestPendingOffset());
         purgatory.add(3, event3);
-        assertEquals(Optional.of(3L), purgatory.highestPendingOffset());
+        assertEquals(OptionalLong.of(3L), purgatory.highestPendingOffset());
         purgatory.completeUpTo(2);
         assertTrue(event1.future.isDone());
         assertTrue(event2.future.isDone());
         assertFalse(event3.future.isDone());
         purgatory.completeUpTo(4);
         assertTrue(event3.future.isDone());
-        assertEquals(Optional.empty(), purgatory.highestPendingOffset());
+        assertEquals(OptionalLong.empty(), purgatory.highestPendingOffset());
     }
 
     @Test

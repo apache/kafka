@@ -67,8 +67,10 @@ public class InmemoryRemoteStorageManager implements RemoteStorageManager {
         try {
             keyToLogData.put(generateKeyForSegment(remoteLogSegmentMetadata),
                     Files.readAllBytes(logSegmentData.logSegment()));
-            keyToLogData.put(generateKeyForIndex(remoteLogSegmentMetadata, IndexType.TRANSACTION),
-                    Files.readAllBytes(logSegmentData.txnIndex()));
+            if (logSegmentData.transactionIndex().isPresent()) {
+                keyToLogData.put(generateKeyForIndex(remoteLogSegmentMetadata, IndexType.TRANSACTION),
+                    Files.readAllBytes(logSegmentData.transactionIndex().get()));
+            }
             keyToLogData.put(generateKeyForIndex(remoteLogSegmentMetadata, IndexType.LEADER_EPOCH),
                     logSegmentData.leaderEpochIndex().array());
             keyToLogData.put(generateKeyForIndex(remoteLogSegmentMetadata, IndexType.PRODUCER_SNAPSHOT),

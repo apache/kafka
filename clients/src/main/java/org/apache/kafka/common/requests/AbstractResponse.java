@@ -223,8 +223,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return EndQuorumEpochResponse.parse(responseBuffer, version);
             case DESCRIBE_QUORUM:
                 return DescribeQuorumResponse.parse(responseBuffer, version);
-            case ALTER_ISR:
-                return AlterIsrResponse.parse(responseBuffer, version);
+            case ALTER_PARTITION:
+                return AlterPartitionResponse.parse(responseBuffer, version);
             case UPDATE_FEATURES:
                 return UpdateFeaturesResponse.parse(responseBuffer, version);
             case ENVELOPE:
@@ -245,6 +245,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return DescribeTransactionsResponse.parse(responseBuffer, version);
             case LIST_TRANSACTIONS:
                 return ListTransactionsResponse.parse(responseBuffer, version);
+            case ALLOCATE_PRODUCER_IDS:
+                return AllocateProducerIdsResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

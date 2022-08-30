@@ -175,17 +175,24 @@ public interface ReplicatedLog extends AutoCloseable {
     void updateHighWatermark(LogOffsetMetadata offsetMetadata);
 
     /**
-     * Updates the log start offset and delete segments if necessary.
+     * Delete all snapshots prior to the given snapshot
      *
      * The replicated log's start offset can be increased and older segments can be deleted when
      * there is a snapshot greater than the current log start offset.
      */
-    boolean deleteBeforeSnapshot(OffsetAndEpoch logStartSnapshotId);
+    boolean deleteBeforeSnapshot(OffsetAndEpoch snapshotId);
 
     /**
      * Flush the current log to disk.
+     *
+     * @param forceFlushActiveSegment Whether to force flush the active segment. Should be `true` during close; otherwise false.
      */
-    void flush();
+    void flush(boolean forceFlushActiveSegment);
+
+    /**
+     * Possibly perform cleaning of snapshots and logs
+     */
+    boolean maybeClean();
 
     /**
      * Get the last offset which has been flushed to disk.
@@ -230,12 +237,36 @@ public interface ReplicatedLog extends AutoCloseable {
      * Create a writable snapshot for the given snapshot id.
      *
      * See {@link RawSnapshotWriter} for details on how to use this object. The caller of
-     * this method is responsible for invoking {@link RawSnapshotWriter#close()}.
+     * this method is responsible for invoking {@link RawSnapshotWriter#close()}. If a
+     * snapshot already exists or it is less than log start offset then return an
+     * {@link Optional#empty()}.
+     *
+     * Snapshots created using this method will be validated against the existing snapshots
+     * and the replicated log.
      *
      * @param snapshotId the end offset and epoch that identifies the snapshot
-     * @return a writable snapshot
+     * @return a writable snapshot if it doesn't already exists and greater than the log start
+     *         offset
+     * @throws IllegalArgumentException if validate is true and end offset is greater than the
+     *         high-watermark
      */
-    RawSnapshotWriter createSnapshot(OffsetAndEpoch snapshotId);
+    Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId);
+
+    /**
+     * Create a writable snapshot for the given snapshot id.
+     *
+     * See {@link RawSnapshotWriter} for details on how to use this object. The caller of
+     * this method is responsible for invoking {@link RawSnapshotWriter#close()}. If a
+     * snapshot already exists then return an {@link Optional#empty()}.
+     *
+     * Snapshots created using this method will not be validated against the existing snapshots
+     * and the replicated log. This is useful when creating snapshot from a trusted source like
+     * the quorum leader.
+     *
+     * @param snapshotId the end offset and epoch that identifies the snapshot
+     * @return a writable snapshot if it doesn't already exists
+     */
+    Optional<RawSnapshotWriter> storeSnapshot(OffsetAndEpoch snapshotId);
 
     /**
      * Opens a readable snapshot for the given snapshot id.
@@ -251,11 +282,19 @@ public interface ReplicatedLog extends AutoCloseable {
     Optional<RawSnapshotReader> readSnapshot(OffsetAndEpoch snapshotId);
 
     /**
-     * Returns the latest snapshot id if one exists.
+     * Returns the latest readable snapshot if one exists.
      *
-     * @return an Optional snapshot id of the latest snashot if one exists, otherwise returns an
-     * empty Optional
+     * @return an Optional with the latest readable snapshot, if one exists, otherwise
+     *         returns an empty Optional
      */
+    Optional<RawSnapshotReader> latestSnapshot();
+
+     /**
+      * Returns the latest snapshot id if one exists.
+      *
+      * @return an Optional snapshot id of the latest snashot if one exists, otherwise returns an
+      *         empty Optional
+      */
     Optional<OffsetAndEpoch> latestSnapshotId();
 
     /**

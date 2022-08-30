@@ -17,7 +17,6 @@
 package kafka.log
 
 import java.io.File
-import java.lang.{Long => JLong}
 import java.util.Map
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 
@@ -36,7 +35,7 @@ import scala.jdk.CollectionConverters._
 class LogSegments(topicPartition: TopicPartition) {
 
   /* the segments of the log with key being LogSegment base offset and value being a LogSegment */
-  private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
+  private val segments: ConcurrentNavigableMap[Long, LogSegment] = new ConcurrentSkipListMap[Long, LogSegment]
 
   /**
    * @return true if the segments are empty, false otherwise.
@@ -157,7 +156,7 @@ class LogSegments(topicPartition: TopicPartition) {
    *         if it exists.
    */
   @threadsafe
-  def floorEntry(offset: Long): Option[Map.Entry[JLong, LogSegment]] = Option(segments.floorEntry(offset))
+  private def floorEntry(offset: Long): Option[Map.Entry[Long, LogSegment]] = Option(segments.floorEntry(offset))
 
   /**
    * @return the log segment with the greatest offset less than or equal to the given offset,
@@ -171,7 +170,7 @@ class LogSegments(topicPartition: TopicPartition) {
    *         if it exists.
    */
   @threadsafe
-  def lowerEntry(offset: Long): Option[Map.Entry[JLong, LogSegment]] = Option(segments.lowerEntry(offset))
+  private def lowerEntry(offset: Long): Option[Map.Entry[Long, LogSegment]] = Option(segments.lowerEntry(offset))
 
   /**
    * @return the log segment with the greatest offset strictly less than the given offset,
@@ -185,7 +184,7 @@ class LogSegments(topicPartition: TopicPartition) {
    *         if it exists.
    */
   @threadsafe
-  def higherEntry(offset: Long): Option[Map.Entry[JLong, LogSegment]] = Option(segments.higherEntry(offset))
+  def higherEntry(offset: Long): Option[Map.Entry[Long, LogSegment]] = Option(segments.higherEntry(offset))
 
   /**
    * @return the log segment with the smallest offset strictly greater than the given offset,
@@ -198,7 +197,7 @@ class LogSegments(topicPartition: TopicPartition) {
    * @return the entry associated with the smallest offset, if it exists.
    */
   @threadsafe
-  def firstEntry: Option[Map.Entry[JLong, LogSegment]] = Option(segments.firstEntry)
+  def firstEntry: Option[Map.Entry[Long, LogSegment]] = Option(segments.firstEntry)
 
   /**
    * @return the log segment associated with the smallest offset, if it exists.
@@ -207,14 +206,63 @@ class LogSegments(topicPartition: TopicPartition) {
   def firstSegment: Option[LogSegment] = firstEntry.map(_.getValue)
 
   /**
+   * @return the base offset of the log segment associated with the smallest offset, if it exists
+   */
+  private[log] def firstSegmentBaseOffset: Option[Long] = firstSegment.map(_.baseOffset)
+
+  /**
    * @return the entry associated with the greatest offset, if it exists.
    */
   @threadsafe
-  def lastEntry: Option[Map.Entry[JLong, LogSegment]] = Option(segments.lastEntry)
+  def lastEntry: Option[Map.Entry[Long, LogSegment]] = Option(segments.lastEntry)
 
   /**
    * @return the log segment with the greatest offset, if it exists.
    */
   @threadsafe
   def lastSegment: Option[LogSegment] = lastEntry.map(_.getValue)
+
+  /**
+   * @return an iterable with log segments ordered from lowest base offset to highest,
+   *         each segment returned has a base offset strictly greater than the provided baseOffset.
+   */
+  def higherSegments(baseOffset: Long): Iterable[LogSegment] = {
+    val view =
+      Option(segments.higherKey(baseOffset)).map {
+        higherOffset => segments.tailMap(higherOffset, true)
+      }.getOrElse(collection.immutable.Map[Long, LogSegment]().asJava)
+    view.values.asScala
+  }
+
+  /**
+   * The active segment that is currently taking appends
+   */
+  def activeSegment = lastSegment.get
+
+  def sizeInBytes: Long = LogSegments.sizeInBytes(values)
+
+  /**
+   * Returns an Iterable containing segments matching the provided predicate.
+   *
+   * @param predicate the predicate to be used for filtering segments.
+   */
+  def filter(predicate: LogSegment => Boolean): Iterable[LogSegment] = values.filter(predicate)
+}
+
+object LogSegments {
+  /**
+   * Calculate a log's size (in bytes) from the provided log segments.
+   *
+   * @param segments The log segments to calculate the size of
+   * @return Sum of the log segments' sizes (in bytes)
+   */
+  def sizeInBytes(segments: Iterable[LogSegment]): Long =
+    segments.map(_.size.toLong).sum
+
+  def getFirstBatchTimestampForSegments(segments: Iterable[LogSegment]): Iterable[Long] = {
+    segments.map {
+      segment =>
+        segment.getFirstBatchTimestamp()
+    }
+  }
 }

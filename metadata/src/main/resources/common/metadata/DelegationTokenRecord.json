@@ -18,6 +18,7 @@
   "type": "metadata",
   "name": "DelegationTokenRecord",
   "validVersions": "0",
+  "flexibleVersions": "0+",
   "fields": [
     { "name": "Owner", "type": "string", "versions": "0+",
       "about": "The delegation token owner." },

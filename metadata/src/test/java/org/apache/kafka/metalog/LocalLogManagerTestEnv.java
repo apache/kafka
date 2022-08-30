@@ -17,9 +17,15 @@
 
 package org.apache.kafka.metalog;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.metalog.LocalLogManager.LeaderChangeBatch;
+import org.apache.kafka.metalog.LocalLogManager.LocalRecordBatch;
 import org.apache.kafka.metalog.LocalLogManager.SharedLogData;
+import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,11 +34,16 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 public class LocalLogManagerTestEnv implements AutoCloseable {
     private static final Logger log =
         LoggerFactory.getLogger(LocalLogManagerTestEnv.class);
+
+    private final String clusterId;
 
     /**
      * The first error we encountered during this test, or the empty string if we have
@@ -55,11 +66,14 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
      */
     private final List<LocalLogManager> logManagers;
 
-    public static LocalLogManagerTestEnv createWithMockListeners(int numManagers) throws Exception {
-        LocalLogManagerTestEnv testEnv = new LocalLogManagerTestEnv(numManagers);
+    public static LocalLogManagerTestEnv createWithMockListeners(
+        int numManagers,
+        Optional<RawSnapshotReader> snapshot
+    ) throws Exception {
+        LocalLogManagerTestEnv testEnv = new LocalLogManagerTestEnv(numManagers, snapshot);
         try {
             for (LocalLogManager logManager : testEnv.logManagers) {
-                logManager.register(new MockMetaLogManagerListener());
+                logManager.register(new MockMetaLogManagerListener(logManager.nodeId().getAsInt()));
             }
         } catch (Exception e) {
             testEnv.close();
@@ -68,9 +82,15 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         return testEnv;
     }
 
-    public LocalLogManagerTestEnv(int numManagers) throws Exception {
+    public LocalLogManagerTestEnv(
+        int numManagers,
+        Optional<RawSnapshotReader> snapshot,
+        Consumer<SharedLogData> dataSetup
+    ) throws Exception {
+        clusterId = Uuid.randomUuid().toString();
         dir = TestUtils.tempDirectory();
-        shared = new SharedLogData();
+        shared = new SharedLogData(snapshot);
+        dataSetup.accept(shared);
         List<LocalLogManager> newLogManagers = new ArrayList<>(numManagers);
         try {
             for (int nodeId = 0; nodeId < numManagers; nodeId++) {
@@ -92,6 +112,32 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         this.logManagers = newLogManagers;
     }
 
+    public LocalLogManagerTestEnv(
+        int numManagers,
+        Optional<RawSnapshotReader> snapshot
+    ) throws Exception {
+        this(numManagers, snapshot, __ -> { });
+    }
+
+    /**
+     * Append some records to the log. This method is meant to be called before the
+     * controllers are started, to simulate a pre-existing metadata log.
+     *
+     * @param records   The records to be appended. Will be added in a single batch.
+     */
+    public void appendInitialRecords(List<ApiMessageAndVersion> records) {
+        int initialLeaderEpoch = 1;
+        shared.append(new LeaderChangeBatch(
+            new LeaderAndEpoch(OptionalInt.empty(), initialLeaderEpoch + 1)));
+        shared.append(new LocalRecordBatch(initialLeaderEpoch + 1, 0, records));
+        shared.append(new LeaderChangeBatch(
+            new LeaderAndEpoch(OptionalInt.of(0), initialLeaderEpoch + 2)));
+    }
+
+    public String clusterId() {
+        return clusterId;
+    }
+
     AtomicReference<String> firstError() {
         return firstError;
     }
@@ -100,16 +146,17 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         return dir;
     }
 
-    MetaLogLeader waitForLeader() throws InterruptedException {
-        AtomicReference<MetaLogLeader> value = new AtomicReference<>(null);
-        TestUtils.retryOnExceptionWithTimeout(3, 20000, () -> {
-            MetaLogLeader result = null;
+    LeaderAndEpoch waitForLeader() throws InterruptedException {
+        AtomicReference<LeaderAndEpoch> value = new AtomicReference<>(null);
+        TestUtils.retryOnExceptionWithTimeout(20000, 3, () -> {
+            LeaderAndEpoch result = null;
             for (LocalLogManager logManager : logManagers) {
-                MetaLogLeader leader = logManager.leader();
-                if (leader.nodeId() == logManager.nodeId()) {
+                LeaderAndEpoch leader = logManager.leaderAndEpoch();
+                int nodeId = logManager.nodeId().getAsInt();
+                if (leader.isLeader(nodeId)) {
                     if (result != null) {
-                        throw new RuntimeException("node " + leader.nodeId() +
-                            " thinks it's the leader, but so does " + result.nodeId());
+                        throw new RuntimeException("node " + nodeId +
+                            " thinks it's the leader, but so does " + result.leaderId());
                     }
                     result = leader;
                 }
@@ -124,6 +171,22 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
 
     public List<LocalLogManager> logManagers() {
         return logManagers;
+    }
+
+    public RawSnapshotReader waitForSnapshot(long committedOffset) throws InterruptedException {
+        return shared.waitForSnapshot(committedOffset);
+    }
+
+    public RawSnapshotReader waitForLatestSnapshot() throws InterruptedException {
+        return shared.waitForLatestSnapshot();
+    }
+
+    public long appendedBytes() {
+        return shared.appendedBytes();
+    }
+
+    public LeaderAndEpoch leaderAndEpoch() {
+        return shared.leaderAndEpoch();
     }
 
     @Override

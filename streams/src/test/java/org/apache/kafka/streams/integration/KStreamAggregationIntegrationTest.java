@@ -60,17 +60,16 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -95,22 +94,23 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SuppressWarnings("unchecked")
-@Category({IntegrationTest.class})
+@SuppressWarnings({"unchecked", "deprecation"})
+@Timeout(600)
+@Tag("integration")
 public class KStreamAggregationIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -129,21 +129,18 @@ public class KStreamAggregationIntegrationTest {
     private Aggregator<String, String, Integer> aggregator;
     private KStream<Integer, String> stream;
 
-    @Rule
-    public TestName testName = new TestName();
-
-    @Before
-    public void before() throws InterruptedException {
+    @BeforeEach
+    public void before(final TestInfo testInfo) throws InterruptedException {
         builder = new StreamsBuilder();
-        createTopics();
+        createTopics(testInfo);
         streamsConfiguration = new Properties();
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
 
@@ -156,7 +153,7 @@ public class KStreamAggregationIntegrationTest {
         aggregator = (aggKey, value, aggregate) -> aggregate + value.length();
     }
 
-    @After
+    @AfterEach
     public void whenShuttingDown() throws IOException {
         if (kafkaStreams != null) {
             kafkaStreams.close();
@@ -165,7 +162,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @Test
-    public void shouldReduce() throws Exception {
+    public void shouldReduce(final TestInfo testInfo) throws Exception {
         produceMessages(mockTime.milliseconds());
         groupedStream
             .reduce(reducer, Materialized.as("reduce-by-key"))
@@ -179,7 +176,8 @@ public class KStreamAggregationIntegrationTest {
         final List<KeyValueTimestamp<String, String>> results = receiveMessages(
             new StringDeserializer(),
             new StringDeserializer(),
-            10);
+            10,
+            testInfo);
 
         results.sort(KStreamAggregationIntegrationTest::compare);
 
@@ -209,8 +207,9 @@ public class KStreamAggregationIntegrationTest {
         return keyComparison;
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void shouldReduceWindowed() throws Exception {
+    public void shouldReduceWindowed(final TestInfo testInfo) throws Exception {
         final long firstBatchTimestamp = mockTime.milliseconds();
         mockTime.sleep(1000);
         produceMessages(firstBatchTimestamp);
@@ -219,6 +218,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(secondBatchTimestamp);
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, 500L);
+        //noinspection deprecation
         groupedStream
                 .windowedBy(TimeWindows.of(ofMillis(500L)))
                 .reduce(reducer)
@@ -231,7 +231,8 @@ public class KStreamAggregationIntegrationTest {
             new TimeWindowedDeserializer<>(),
             new StringDeserializer(),
             String.class,
-            15);
+            15,
+            testInfo);
 
         // read from ConsoleConsumer
         final String resultFromConsoleConsumer = readWindowedKeyedMessagesViaConsoleConsumer(
@@ -284,7 +285,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @Test
-    public void shouldAggregate() throws Exception {
+    public void shouldAggregate(final TestInfo testInfo) throws Exception {
         produceMessages(mockTime.milliseconds());
         groupedStream.aggregate(
             initializer,
@@ -300,7 +301,8 @@ public class KStreamAggregationIntegrationTest {
         final List<KeyValueTimestamp<String, Integer>> results = receiveMessages(
             new StringDeserializer(),
             new IntegerDeserializer(),
-            10);
+            10,
+            testInfo);
 
         results.sort(KStreamAggregationIntegrationTest::compare);
 
@@ -318,8 +320,9 @@ public class KStreamAggregationIntegrationTest {
         )));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void shouldAggregateWindowed() throws Exception {
+    public void shouldAggregateWindowed(final TestInfo testInfo) throws Exception {
         final long firstTimestamp = mockTime.milliseconds();
         mockTime.sleep(1000);
         produceMessages(firstTimestamp);
@@ -328,6 +331,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(secondTimestamp);
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, 500L);
+        //noinspection deprecation
         groupedStream.windowedBy(TimeWindows.of(ofMillis(500L)))
                 .aggregate(
                         initializer,
@@ -343,7 +347,8 @@ public class KStreamAggregationIntegrationTest {
             new TimeWindowedDeserializer<>(new StringDeserializer(), 500L),
             new IntegerDeserializer(),
             String.class,
-            15);
+            15,
+            testInfo);
 
         // read from ConsoleConsumer
         final String resultFromConsoleConsumer = readWindowedKeyedMessagesViaConsoleConsumer(
@@ -395,7 +400,7 @@ public class KStreamAggregationIntegrationTest {
 
     }
 
-    private void shouldCountHelper() throws Exception {
+    private void shouldCountHelper(final TestInfo testInfo) throws Exception {
         startStreams();
 
         produceMessages(mockTime.milliseconds());
@@ -403,7 +408,8 @@ public class KStreamAggregationIntegrationTest {
         final List<KeyValueTimestamp<String, Long>> results = receiveMessages(
             new StringDeserializer(),
             new LongDeserializer(),
-            10);
+            10,
+            testInfo);
         results.sort(KStreamAggregationIntegrationTest::compare);
 
         assertThat(results, is(Arrays.asList(
@@ -421,33 +427,35 @@ public class KStreamAggregationIntegrationTest {
     }
 
     @Test
-    public void shouldCount() throws Exception {
+    public void shouldCount(final TestInfo testInfo) throws Exception {
         produceMessages(mockTime.milliseconds());
 
         groupedStream.count(Materialized.as("count-by-key"))
                 .toStream()
                 .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
-        shouldCountHelper();
+        shouldCountHelper(testInfo);
     }
 
     @Test
-    public void shouldCountWithInternalStore() throws Exception {
+    public void shouldCountWithInternalStore(final TestInfo testInfo) throws Exception {
         produceMessages(mockTime.milliseconds());
 
         groupedStream.count()
                 .toStream()
                 .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
-        shouldCountHelper();
+        shouldCountHelper(testInfo);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void shouldGroupByKey() throws Exception {
+    public void shouldGroupByKey(final TestInfo testInfo) throws Exception {
         final long timestamp = mockTime.milliseconds();
         produceMessages(timestamp);
         produceMessages(timestamp);
 
+        //noinspection deprecation
         stream.groupByKey(Grouped.with(Serdes.Integer(), Serdes.String()))
                 .windowedBy(TimeWindows.of(ofMillis(500L)))
                 .count()
@@ -458,7 +466,8 @@ public class KStreamAggregationIntegrationTest {
         final List<KeyValueTimestamp<String, Long>> results = receiveMessages(
             new StringDeserializer(),
             new LongDeserializer(),
-            10);
+            10,
+            testInfo);
         results.sort(KStreamAggregationIntegrationTest::compare);
 
         final long window = timestamp / 500 * 500;
@@ -476,8 +485,9 @@ public class KStreamAggregationIntegrationTest {
         )));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void shouldReduceSlidingWindows() throws Exception {
+    public void shouldReduceSlidingWindows(final TestInfo testInfo) throws Exception {
         final long firstBatchTimestamp = mockTime.milliseconds();
         final long timeDifference = 500L;
         produceMessages(firstBatchTimestamp);
@@ -487,6 +497,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(thirdBatchTimestamp);
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, timeDifference);
+        //noinspection deprecation
         groupedStream
                 .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(timeDifference), ofMillis(2000L)))
                 .reduce(reducer)
@@ -499,7 +510,8 @@ public class KStreamAggregationIntegrationTest {
                 new TimeWindowedDeserializer<>(new StringDeserializer(), 500L),
                 new StringDeserializer(),
                 String.class,
-                30);
+                30,
+                testInfo);
 
         final String resultFromConsoleConsumer = readWindowedKeyedMessagesViaConsoleConsumer(
                 new TimeWindowedDeserializer<String>(),
@@ -580,8 +592,9 @@ public class KStreamAggregationIntegrationTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
-    public void shouldAggregateSlidingWindows() throws Exception {
+    public void shouldAggregateSlidingWindows(final TestInfo testInfo) throws Exception {
         final long firstBatchTimestamp = mockTime.milliseconds();
         final long timeDifference = 500L;
         produceMessages(firstBatchTimestamp);
@@ -591,6 +604,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(thirdBatchTimestamp);
 
         final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, timeDifference);
+        //noinspection deprecation
         groupedStream.windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(500L), ofMinutes(5)))
                 .aggregate(
                         initializer,
@@ -606,7 +620,8 @@ public class KStreamAggregationIntegrationTest {
                 new TimeWindowedDeserializer<>(),
                 new IntegerDeserializer(),
                 String.class,
-                30);
+                30,
+                testInfo);
 
         // read from ConsoleConsumer
         final String resultFromConsoleConsumer = readWindowedKeyedMessagesViaConsoleConsumer(
@@ -689,6 +704,7 @@ public class KStreamAggregationIntegrationTest {
 
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldCountSessionWindows() throws Exception {
         final long sessionGap = 5 * 60 * 1000L;
@@ -761,6 +777,7 @@ public class KStreamAggregationIntegrationTest {
         final Map<Windowed<String>, KeyValue<Long, Long>> results = new HashMap<>();
         final CountDownLatch latch = new CountDownLatch(13);
 
+        //noinspection deprecation
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
                 .windowedBy(SessionWindows.with(ofMillis(sessionGap)))
@@ -797,6 +814,7 @@ public class KStreamAggregationIntegrationTest {
         assertThat(results.get(new Windowed<>("penny", new SessionWindow(t3, t3))), equalTo(KeyValue.pair(1L, t3)));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldReduceSessionWindows() throws Exception {
         final long sessionGap = 1000L; // something to do with time
@@ -869,6 +887,7 @@ public class KStreamAggregationIntegrationTest {
         final Map<Windowed<String>, KeyValue<String, Long>> results = new HashMap<>();
         final CountDownLatch latch = new CountDownLatch(13);
         final String userSessionsStore = "UserSessionsStore";
+        //noinspection deprecation
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
                 .windowedBy(SessionWindows.with(ofMillis(sessionGap)))
@@ -909,10 +928,11 @@ public class KStreamAggregationIntegrationTest {
         final ReadOnlySessionStore<String, String> sessionStore =
             IntegrationTestUtils.getStore(userSessionsStore, kafkaStreams, QueryableStoreTypes.sessionStore());
 
-        final KeyValueIterator<Windowed<String>, String> bob = sessionStore.fetch("bob");
-        assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t1, t1)), "start")));
-        assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t3, t4)), "pause:resume")));
-        assertFalse(bob.hasNext());
+        try (final KeyValueIterator<Windowed<String>, String> bob = sessionStore.fetch("bob")) {
+            assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t1, t1)), "start")));
+            assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t3, t4)), "pause:resume")));
+            assertFalse(bob.hasNext());
+        }
     }
 
     @Test
@@ -1021,8 +1041,8 @@ public class KStreamAggregationIntegrationTest {
     }
 
 
-    private void createTopics() throws InterruptedException {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+    private void createTopics(final TestInfo testInfo) throws InterruptedException {
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         streamOneInput = "stream-one-" + safeTestName;
         outputTopic = "output-" + safeTestName;
         userSessionsStream = "user-sessions-" + safeTestName;
@@ -1037,19 +1057,21 @@ public class KStreamAggregationIntegrationTest {
 
     private <K, V> List<KeyValueTimestamp<K, V>> receiveMessages(final Deserializer<K> keyDeserializer,
                                                                  final Deserializer<V> valueDeserializer,
-                                                                 final int numMessages)
+                                                                 final int numMessages,
+                                                                 final TestInfo testInfo)
             throws Exception {
 
-        return receiveMessages(keyDeserializer, valueDeserializer, null, numMessages);
+        return receiveMessages(keyDeserializer, valueDeserializer, null, numMessages, testInfo);
     }
 
     private <K, V> List<KeyValueTimestamp<K, V>> receiveMessages(final Deserializer<K> keyDeserializer,
                                                                  final Deserializer<V> valueDeserializer,
                                                                  final Class innerClass,
-                                                                 final int numMessages)
+                                                                 final int numMessages,
+                                                                 final TestInfo testInfo)
             throws Exception {
 
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);
@@ -1071,8 +1093,9 @@ public class KStreamAggregationIntegrationTest {
     private <K, V> List<KeyValueTimestamp<K, V>> receiveMessagesWithTimestamp(final Deserializer<K> keyDeserializer,
                                                                               final Deserializer<V> valueDeserializer,
                                                                               final Class innerClass,
-                                                                              final int numMessages) throws Exception {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+                                                                              final int numMessages,
+                                                                              final TestInfo testInfo) throws Exception {
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);

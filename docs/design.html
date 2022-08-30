@@ -125,6 +125,9 @@
     <p>
     This combination of pagecache and sendfile means that on a Kafka cluster where the consumers are mostly caught up you will see no read activity on the disks whatsoever as they will be serving data entirely from cache.
     <p>
+    TLS/SSL libraries operate at the user space (in-kernel <code>SSL_sendfile</code> is currently not supported by Kafka). Due to this restriction, <code>sendfile</code> is not used when SSL is enabled. For enabling
+    SSL configuration, refer to <code>security.protocol</code> and <code>security.inter.broker.protocol</code>
+    <p>
     For more background on the sendfile and zero-copy support in Java, see this <a href="https://developer.ibm.com/articles/j-zerocopy/">article</a>.
 
     <h4 class="anchor-heading"><a id="design_compression" class="anchor-link"></a><a href="#design_compression">End-to-end Batch Compression</a></h4>
@@ -313,7 +316,7 @@
     replication factor is one.
     <p>
     The unit of replication is the topic partition. Under non-failure conditions, each partition in Kafka has a single leader and zero or more followers. The total number of replicas including the leader constitute the
-    replication factor. All reads and writes go to the leader of the partition. Typically, there are many more partitions than brokers and the leaders are evenly distributed among brokers. The logs on the followers are
+    replication factor. All writes go to the leader of the partition, and reads can go to the leader or the followers of the partition. Typically, there are many more partitions than brokers and the leaders are evenly distributed among brokers. The logs on the followers are
     identical to the leader's log&mdash;all have the same offsets and messages in the same order (though, of course, at any given time the leader may have a few as-yet unreplicated messages at the end of its log).
     <p>
     Followers consume messages from the leader just as a normal Kafka consumer would and apply them to their own log. Having the followers pull from the leader has the nice property of allowing the follower to naturally
@@ -453,15 +456,15 @@
     <p>
     Let's discuss a concrete example of such a stream. Say we have a topic containing user email addresses; every time a user updates their email address we send a message to this topic using their user id as the
     primary key. Now say we send the following messages over some time period for a user with id 123, each message corresponding to a change in email address (messages for other ids are omitted):
-    <pre class="line-numbers"><code class="language-text">       123 => bill@microsoft.com
-                .
-                .
-                .
-        123 => bill@gatesfoundation.org
-                .
-                .
-                .
-        123 => bill@gmail.com</code></pre>
+    <pre class="line-numbers"><code class="language-text">123 => bill@microsoft.com
+        .
+        .
+        .
+123 => bill@gatesfoundation.org
+        .
+        .
+        .
+123 => bill@gmail.com</code></pre>
     Log compaction gives us a more granular retention mechanism so that we are guaranteed to retain at least the last update for each primary key (e.g. <code>bill@gmail.com</code>). By doing this we guarantee that the
     log contains a full snapshot of the final value for every key not just keys that changed recently. This means downstream consumers can restore their own state off this topic without us having to retain a complete
     log of all changes.
@@ -548,7 +551,7 @@
 
     The log cleaner is enabled by default. This will start the pool of cleaner threads.
     To enable log cleaning on a particular topic, add the log-specific property
-    <pre class="language-text"><code> log.cleanup.policy=compact</code></pre>
+    <pre class="language-text"><code>log.cleanup.policy=compact</code></pre>
 
     The <code>log.cleanup.policy</code> property is a broker configuration setting defined
     in the broker's <code>server.properties</code> file; it affects all of the topics
@@ -556,13 +559,13 @@
     <a href="/documentation.html#brokerconfigs">here</a>.
 
     The log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag.
-    <pre class="language-text"><code>  log.cleaner.min.compaction.lag.ms</code></pre>
+    <pre class="language-text"><code>log.cleaner.min.compaction.lag.ms</code></pre>
 
     This can be used to prevent messages newer than a minimum message age from being subject to compaction. If not set, all log segments are eligible for compaction except for the last segment, i.e. the one currently
     being written to. The active segment will not be compacted even if all of its messages are older than the minimum compaction time lag.
 
     The log cleaner can be configured to ensure a maximum delay after which the uncompacted "head" of the log becomes eligible for log compaction.
-    <pre class="language-text"><code> log.cleaner.max.compaction.lag.ms</code></pre>
+    <pre class="language-text"><code>log.cleaner.max.compaction.lag.ms</code></pre>
 
     This can be used to prevent log with low produce rate from remaining ineligible for compaction for an unbounded duration. If not set, logs that do not exceed min.cleanable.dirty.ratio are not compacted.
     Note that this compaction deadline is not a hard guarantee since it is still subjected to the availability of log cleaner threads and the actual compaction time.
@@ -575,11 +578,11 @@
     <p>
     Kafka cluster has the ability to enforce quotas on requests to control the broker resources used by clients. Two types
     of client quotas can be enforced by Kafka brokers for each group of clients sharing a quota:
+    </p>
     <ol>
       <li>Network bandwidth quotas define byte-rate thresholds (since 0.9)</li>
       <li>Request rate quotas define CPU utilization thresholds as a percentage of network and I/O threads (since 0.11)</li>
     </ol>
-    </p>
 
     <h4 class="anchor-heading">
         <a class="anchor-link" id="design_quotasnecessary" href="#design_quotasnecessary"></a>
@@ -610,6 +613,7 @@
     </p>
     <p>
         The order of precedence for quota configuration is:
+    </p>
         <ol>
             <li>/config/users/&lt;user&gt;/clients/&lt;client-id&gt;</li>
             <li>/config/users/&lt;user&gt;/clients/&lt;default&gt;</li>
@@ -620,10 +624,6 @@
             <li>/config/clients/&lt;client-id&gt;</li>
             <li>/config/clients/&lt;default&gt;</li>
         </ol>
-
-        Broker properties (quota.producer.default, quota.consumer.default) can also be used to set defaults of network bandwidth quotas for client-id groups. These properties are being deprecated and will be removed in a later release.
-        Default quotas for client-id can be set in Zookeeper similar to the other quota overrides and defaults.
-    </p>
     <h4 class="anchor-heading"><a id="design_quotasbandwidth" class="anchor-link"></a><a href="#design_quotasbandwidth">Network Bandwidth Quotas</a></h4>
     <p>
         Network bandwidth quotas are defined as the byte rate threshold for each group of clients sharing a quota.

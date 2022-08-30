@@ -14,15 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.snapshot;
 
-import java.util.Iterator;
-import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.server.common.serialization.RecordSerde;
-import org.apache.kafka.raft.internals.RecordsIterator;
+
+import java.util.Iterator;
 
 /**
  * A type for reading an immutable snapshot.
@@ -30,52 +27,38 @@ import org.apache.kafka.raft.internals.RecordsIterator;
  * A snapshot reader can be used to scan through all of the objects T in a snapshot. It
  * is assumed that the content of the snapshot represents all of the objects T for the topic
  * partition from offset 0 up to but not including the end offset in the snapshot id.
+ *
+ * The offsets ({@code baseOffset()} and {@code lastOffset()} stored in {@code Batch<T>}
+ * objects returned by this iterator are independent of the offset of the records in the
+ * log used to generate this batch.
+ *
+ * Use {@code lastContainedLogOffset()} and {@code lastContainedLogEpoch()} to query which
+ * offsets and epoch from the log are included in this snapshot. Both of these values are
+ * inclusive.
  */
-public final class SnapshotReader<T> implements AutoCloseable, Iterator<Batch<T>> {
-    private final OffsetAndEpoch snapshotId;
-    private final RecordsIterator<T> iterator;
-
-    private SnapshotReader(
-        OffsetAndEpoch snapshotId,
-        RecordsIterator<T> iterator
-    ) {
-        this.snapshotId = snapshotId;
-        this.iterator = iterator;
-    }
-
+public interface SnapshotReader<T> extends AutoCloseable, Iterator<Batch<T>> {
     /**
      * Returns the end offset and epoch for the snapshot.
      */
-    public OffsetAndEpoch snapshotId() {
-        return snapshotId;
-    }
+    OffsetAndEpoch snapshotId();
 
-    @Override
-    public boolean hasNext() {
-        return iterator.hasNext();
-    }
+    /**
+     * Returns the last log offset which is represented in the snapshot.
+     */
+    long lastContainedLogOffset();
 
-    @Override
-    public Batch<T> next() {
-        return iterator.next();
-    }
+    /**
+     * Returns the epoch of the last log offset which is represented in the snapshot.
+     */
+    int lastContainedLogEpoch();
+
+    /**
+     * Returns the timestamp of the last log offset which is represented in the snapshot.
+     */
+    long lastContainedLogTimestamp();
 
     /**
      * Closes the snapshot reader.
      */
-    public void close() {
-        iterator.close();
-    }
-
-    public static <T> SnapshotReader<T> of(
-        RawSnapshotReader snapshot,
-        RecordSerde<T> serde,
-        BufferSupplier bufferSupplier,
-        int maxBatchSize
-    ) {
-        return new SnapshotReader<>(
-            snapshot.snapshotId(),
-            new RecordsIterator<>(snapshot.records(), serde, bufferSupplier, maxBatchSize)
-        );
-    }
+    void close();
 }

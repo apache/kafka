@@ -56,8 +56,10 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -90,6 +92,8 @@ import static org.junit.Assert.assertFalse;
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
 public class EosV2UpgradeIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     @Parameterized.Parameters(name = "{0}")
     public static Collection<Boolean[]> data() {
@@ -862,6 +866,7 @@ public class EosV2UpgradeIntegrationTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private KafkaStreams getKafkaStreams(final String appDir,
                                          final String processingGuarantee) {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -875,7 +880,6 @@ public class EosV2UpgradeIntegrationTest {
 
         final KStream<Long, Long> input = builder.stream(MULTI_PARTITION_INPUT_TOPIC);
         input.transform(new TransformerSupplier<Long, Long, KeyValue<Long, Long>>() {
-            @SuppressWarnings("unchecked")
             @Override
             public Transformer<Long, Long, KeyValue<Long, Long>> get() {
                 return new Transformer<Long, Long, KeyValue<Long, Long>>() {
@@ -936,13 +940,14 @@ public class EosV2UpgradeIntegrationTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.CLIENT_ID_CONFIG, appDir);
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
-        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.MAX_VALUE);
+        final long commitInterval = Duration.ofMinutes(1L).toMillis();
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitInterval);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), Duration.ofSeconds(1L).toMillis());
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), (int) Duration.ofSeconds(5L).toMillis());
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), (int) Duration.ofSeconds(5L).minusMillis(1L).toMillis());
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
-        properties.put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), (int) Duration.ofMinutes(1L).toMillis());
+        properties.put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), (int) commitInterval);
         properties.put(StreamsConfig.producerPrefix(ProducerConfig.PARTITIONER_CLASS_CONFIG), KeyPartitioner.class);
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + File.separator + appDir);

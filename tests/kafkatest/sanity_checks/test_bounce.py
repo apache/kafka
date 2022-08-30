@@ -14,7 +14,7 @@
 # limitations under the License.
 
 
-from ducktape.mark import parametrize
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
@@ -29,11 +29,17 @@ class TestBounce(Test):
     def __init__(self, test_context):
         super(TestBounce, self).__init__(test_context)
 
+        quorum_size_arg_name = 'quorum_size'
+        default_quorum_size = 1
+        quorum_size = default_quorum_size if not test_context.injected_args else test_context.injected_args.get(quorum_size_arg_name, default_quorum_size)
+        if quorum_size < 1:
+            raise Exception("Illegal %s value provided for the test: %s" % (quorum_size_arg_name, quorum_size))
         self.topic = "topic"
-        self.zk = ZookeeperService(test_context, num_nodes=1) if quorum.for_test(test_context) == quorum.zk else None
-        self.kafka = KafkaService(test_context, num_nodes=1, zk=self.zk,
+        self.zk = ZookeeperService(test_context, num_nodes=quorum_size) if quorum.for_test(test_context) == quorum.zk else None
+        num_kafka_nodes = quorum_size if quorum.for_test(test_context) == quorum.colocated_kraft else 1
+        self.kafka = KafkaService(test_context, num_nodes=num_kafka_nodes, zk=self.zk,
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}},
-                                  controller_num_nodes_override=3 if quorum.for_test(test_context) == quorum.remote_kraft else 1)
+                                  controller_num_nodes_override=quorum_size)
         self.num_messages = 1000
 
     def create_producer(self):
@@ -44,13 +50,13 @@ class TestBounce(Test):
         if self.zk:
             self.zk.start()
 
+    # ZooKeeper and KRaft, quorum size = 1
+    @cluster(num_nodes=4)
+    @matrix(metadata_quorum=quorum.all, quorum_size=[1])
+    # Remote and Co-located KRaft, quorum size = 3
     @cluster(num_nodes=6)
-    @parametrize(metadata_quorum=quorum.remote_kraft)
-    @cluster(num_nodes=4)
-    @parametrize(metadata_quorum=quorum.colocated_kraft)
-    @cluster(num_nodes=4)
-    @parametrize(metadata_quorum=quorum.zk)
-    def test_simple_run(self, metadata_quorum):
+    @matrix(metadata_quorum=quorum.all_kraft, quorum_size=[3])
+    def test_simple_run(self, metadata_quorum, quorum_size):
         """
         Test that we can start VerifiableProducer on the current branch snapshot version, and
         verify that we can produce a small number of messages both before and after a subsequent roll.

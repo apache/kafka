@@ -49,6 +49,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -69,6 +70,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category({IntegrationTest.class})
 public abstract class AbstractResetIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
+
     static EmbeddedKafkaCluster cluster;
 
     private static MockTime mockTime;
@@ -148,7 +152,7 @@ public abstract class AbstractResetIntegrationTest {
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(STREAMS_CONSUMER_TIMEOUT));
@@ -223,7 +227,7 @@ public abstract class AbstractResetIntegrationTest {
         streams.cleanUp();
 
         final List<String> internalTopics = cluster.getAllTopicsInCluster().stream()
-                .filter(topic -> StreamsResetter.matchesInternalTopicFormat(topic))
+                .filter(StreamsResetter::matchesInternalTopicFormat)
                 .collect(Collectors.toList());
         cleanGlobal(false,
                 "--internal-topics",
@@ -341,6 +345,7 @@ public abstract class AbstractResetIntegrationTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private Topology setupTopologyWithIntermediateTopic(final boolean useRepartitioned,
                                                         final String outputTopic2) {
         final StreamsBuilder builder = new StreamsBuilder();

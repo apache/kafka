@@ -39,14 +39,14 @@ object RequestHandlerHelper {
     // leadership changes
     updatedLeaders.foreach { partition =>
       if (partition.topic == Topic.GROUP_METADATA_TOPIC_NAME)
-        groupCoordinator.onElection(partition.partitionId)
+        groupCoordinator.onElection(partition.partitionId, partition.getLeaderEpoch)
       else if (partition.topic == Topic.TRANSACTION_STATE_TOPIC_NAME)
         txnCoordinator.onElection(partition.partitionId, partition.getLeaderEpoch)
     }
 
     updatedFollowers.foreach { partition =>
       if (partition.topic == Topic.GROUP_METADATA_TOPIC_NAME)
-        groupCoordinator.onResignation(partition.partitionId)
+        groupCoordinator.onResignation(partition.partitionId, Some(partition.getLeaderEpoch))
       else if (partition.topic == Topic.TRANSACTION_STATE_TOPIC_NAME)
         txnCoordinator.onResignation(partition.partitionId, Some(partition.getLeaderEpoch))
     }

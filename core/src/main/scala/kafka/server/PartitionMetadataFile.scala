@@ -24,7 +24,7 @@ import java.util.regex.Pattern
 
 import kafka.utils.Logging
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException}
 import org.apache.kafka.common.utils.Utils
 
 
@@ -44,8 +44,7 @@ object PartitionMetadataFile {
   }
 
   class PartitionMetadataReadBuffer[T](location: String,
-                                       reader: BufferedReader,
-                                       version: Int) extends Logging {
+                                       reader: BufferedReader) extends Logging {
     def read(): PartitionMetadata = {
       def malformedLineException(line: String) =
         new IOException(s"Malformed line in checkpoint file ($location): '$line'")
@@ -90,27 +89,48 @@ class PartitionMetadataFile(val file: File,
   private val tempPath = Paths.get(path.toString + ".tmp")
   private val lock = new Object()
   private val logDir = file.getParentFile.getParent
+  @volatile private var dirtyTopicIdOpt : Option[Uuid] = None
 
-  def write(topicId: Uuid): Unit = {
-    lock synchronized {
-      try {
-        // write to temp file and then swap with the existing file
-        val fileOutputStream = new FileOutputStream(tempPath.toFile)
-        val writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))
-        try {
-          writer.write(PartitionMetadataFileFormatter.toFile(new PartitionMetadata(CurrentVersion,topicId)))
-          writer.flush()
-          fileOutputStream.getFD().sync()
-        } finally {
-          writer.close()
+  /**
+   * Records the topic ID that will be flushed to disk.
+   */
+  def record(topicId: Uuid): Unit = {
+    // Topic IDs should not differ, but we defensively check here to fail earlier in the case that the IDs somehow differ.
+    dirtyTopicIdOpt.foreach { dirtyTopicId =>
+      if (dirtyTopicId != topicId)
+        throw new InconsistentTopicIdException(s"Tried to record topic ID $topicId to file " +
+          s"but had already recorded $dirtyTopicId")
+    }
+    dirtyTopicIdOpt = Some(topicId)
+  }
+
+  def maybeFlush(): Unit = {
+    // We check dirtyTopicId first to avoid having to take the lock unnecessarily in the frequently called log append path
+    dirtyTopicIdOpt.foreach { _ =>
+      // We synchronize on the actual write to disk
+      lock synchronized {
+        dirtyTopicIdOpt.foreach { topicId =>
+          try {
+            // write to temp file and then swap with the existing file
+            val fileOutputStream = new FileOutputStream(tempPath.toFile)
+            val writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))
+            try {
+              writer.write(PartitionMetadataFileFormatter.toFile(new PartitionMetadata(CurrentVersion, topicId)))
+              writer.flush()
+              fileOutputStream.getFD().sync()
+            } finally {
+              writer.close()
+            }
+
+            Utils.atomicMoveWithFallback(tempPath, path)
+          } catch {
+            case e: IOException =>
+              val msg = s"Error while writing to partition metadata file ${file.getAbsolutePath}"
+              logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
+              throw new KafkaStorageException(msg, e)
+          }
+          dirtyTopicIdOpt = None
         }
-
-        Utils.atomicMoveWithFallback(tempPath, path)
-      } catch {
-        case e: IOException =>
-          val msg = s"Error while writing to partition metadata file ${file.getAbsolutePath}"
-          logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e)
-          throw new KafkaStorageException(msg, e)
       }
     }
   }
@@ -120,7 +140,7 @@ class PartitionMetadataFile(val file: File,
       try {
         val reader = Files.newBufferedReader(path)
         try {
-          val partitionBuffer = new PartitionMetadataReadBuffer(file.getAbsolutePath, reader, CurrentVersion)
+          val partitionBuffer = new PartitionMetadataReadBuffer(file.getAbsolutePath, reader)
           partitionBuffer.read()
         } finally {
           reader.close()
@@ -138,7 +158,9 @@ class PartitionMetadataFile(val file: File,
     file.exists()
   }
 
-  def delete(): Boolean = {
-    file.delete()
+  def delete(): Unit = {
+    Files.delete(file.toPath)
   }
+
+  override def toString: String = s"PartitionMetadataFile(path=$path)"
 }

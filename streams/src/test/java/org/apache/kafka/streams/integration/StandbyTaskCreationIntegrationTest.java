@@ -22,13 +22,13 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -41,6 +41,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -50,7 +51,8 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 
 @Category({IntegrationTest.class})
 public class StandbyTaskCreationIntegrationTest {
-
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private static final int NUM_BROKERS = 1;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
@@ -95,6 +97,7 @@ public class StandbyTaskCreationIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotCreateAnyStandByTasksForStateStoreWithLoggingDisabled() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final String stateStoreName = "myTransformState";
@@ -105,7 +108,6 @@ public class StandbyTaskCreationIntegrationTest {
         builder.addStateStore(keyValueStoreBuilder);
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.Integer()))
             .transform(() -> new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
-                @SuppressWarnings("unchecked")
                 @Override
                 public void init(final ProcessorContext context) {}
 
@@ -168,14 +170,14 @@ public class StandbyTaskCreationIntegrationTest {
     private void setStateListenersForVerification(final Predicate<ThreadMetadata> taskCondition) {
         client1.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
-                client1.localThreadsMetadata().stream().allMatch(taskCondition)) {
+                client1.metadataForLocalThreads().stream().allMatch(taskCondition)) {
 
                 client1IsOk = true;
             }
         });
         client2.setStateListener((newState, oldState) -> {
             if (newState == State.RUNNING &&
-                client2.localThreadsMetadata().stream().allMatch(taskCondition)) {
+                client2.metadataForLocalThreads().stream().allMatch(taskCondition)) {
 
                 client2IsOk = true;
             }

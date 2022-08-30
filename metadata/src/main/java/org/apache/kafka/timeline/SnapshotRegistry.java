@@ -105,6 +105,11 @@ public class SnapshotRegistry {
      */
     private final Snapshot head = new Snapshot(Long.MIN_VALUE);
 
+    /**
+     * Collection of all Revertable registered with this registry
+     */
+    private final List<Revertable> revertables = new ArrayList<>();
+
     public SnapshotRegistry(LogContext logContext) {
         this.log = logContext.logger(SnapshotRegistry.class);
     }
@@ -163,7 +168,7 @@ public class SnapshotRegistry {
     public Snapshot getSnapshot(long epoch) {
         Snapshot snapshot = snapshots.get(epoch);
         if (snapshot == null) {
-            throw new RuntimeException("No snapshot for epoch " + epoch + ". Snapshot " +
+            throw new RuntimeException("No in-memory snapshot for epoch " + epoch + ". Snapshot " +
                 "epochs are: " + epochsList().stream().map(e -> e.toString()).
                     collect(Collectors.joining(", ")));
         }
@@ -173,19 +178,23 @@ public class SnapshotRegistry {
     /**
      * Creates a new snapshot at the given epoch.
      *
+     * If {@code epoch} already exists and it is the last snapshot then just return that snapshot.
+     *
      * @param epoch             The epoch to create the snapshot at.  The current epoch
      *                          will be advanced to one past this epoch.
      */
-    public Snapshot createSnapshot(long epoch) {
+    public Snapshot getOrCreateSnapshot(long epoch) {
         Snapshot last = head.prev();
-        if (last.epoch() >= epoch) {
-            throw new RuntimeException("Can't create a new snapshot at epoch " + epoch +
+        if (last.epoch() > epoch) {
+            throw new RuntimeException("Can't create a new in-memory snapshot at epoch " + epoch +
                 " because there is already a snapshot with epoch " + last.epoch());
+        } else if (last.epoch() == epoch) {
+            return last;
         }
         Snapshot snapshot = new Snapshot(epoch);
         last.appendNext(snapshot);
         snapshots.put(epoch, snapshot);
-        log.debug("Creating snapshot {}", epoch);
+        log.debug("Creating in-memory snapshot {}", epoch);
         return snapshot;
     }
 
@@ -200,7 +209,7 @@ public class SnapshotRegistry {
         iterator.next();
         while (iterator.hasNext()) {
             Snapshot snapshot = iterator.next();
-            log.debug("Deleting snapshot {} because we are reverting to {}",
+            log.debug("Deleting in-memory snapshot {} because we are reverting to {}",
                 snapshot.epoch(), targetEpoch);
             iterator.remove();
         }
@@ -243,7 +252,6 @@ public class SnapshotRegistry {
             if (snapshot.epoch() >= targetEpoch) {
                 return;
             }
-            log.debug("Deleting snapshot {}", snapshot.epoch());
             iterator.remove();
         }
     }
@@ -253,5 +261,23 @@ public class SnapshotRegistry {
      */
     public long latestEpoch() {
         return head.prev().epoch();
+    }
+
+    /**
+     * Associate with this registry.
+     */
+    public void register(Revertable revertable) {
+        revertables.add(revertable);
+    }
+
+    /**
+     * Delete all snapshots and resets all of the Revertable object registered.
+     */
+    public void reset() {
+        deleteSnapshotsUpTo(LATEST_EPOCH);
+
+        for (Revertable revertable : revertables) {
+            revertable.reset();
+        }
     }
 }

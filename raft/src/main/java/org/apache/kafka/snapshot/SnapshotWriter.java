@@ -14,16 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.snapshot;
 
-import org.apache.kafka.common.memory.MemoryPool;
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.server.common.serialization.RecordSerde;
-import org.apache.kafka.raft.internals.BatchAccumulator;
-import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
+import org.apache.kafka.common.message.SnapshotFooterRecord;
 
 import java.util.List;
 
@@ -38,61 +32,30 @@ import java.util.List;
  * topic partition from offset 0 up to but not including the end offset in the snapshot
  * id.
  *
- * @see org.apache.kafka.raft.RaftClient#createSnapshot(OffsetAndEpoch)
+ * @see org.apache.kafka.raft.KafkaRaftClient#createSnapshot(long, int, long)
  */
-final public class SnapshotWriter<T> implements AutoCloseable {
-    final private RawSnapshotWriter snapshot;
-    final private BatchAccumulator<T> accumulator;
-    final private Time time;
-
-    /**
-     * Initializes a new instance of the class.
-     *
-     * @param snapshot the low level snapshot writer
-     * @param maxBatchSize the maximum size in byte for a batch
-     * @param memoryPool the memory pool for buffer allocation
-     * @param time the clock implementation
-     * @param compressionType the compression algorithm to use
-     * @param serde the record serialization and deserialization implementation
-     */
-    public SnapshotWriter(
-        RawSnapshotWriter snapshot,
-        int maxBatchSize,
-        MemoryPool memoryPool,
-        Time time,
-        CompressionType compressionType,
-        RecordSerde<T> serde
-    ) {
-        this.snapshot = snapshot;
-        this.time = time;
-
-        this.accumulator = new BatchAccumulator<>(
-            snapshot.snapshotId().epoch,
-            0,
-            Integer.MAX_VALUE,
-            maxBatchSize,
-            memoryPool,
-            time,
-            compressionType,
-            serde
-        );
-    }
-
+public interface SnapshotWriter<T> extends AutoCloseable {
     /**
      * Returns the end offset and epoch for the snapshot.
      */
-    public OffsetAndEpoch snapshotId() {
-        return snapshot.snapshotId();
-    }
+    OffsetAndEpoch snapshotId();
+
+    /**
+     * Returns the last log offset which is represented in the snapshot.
+     */
+    long lastContainedLogOffset();
+
+    /**
+     * Returns the epoch of the last log offset which is represented in the snapshot.
+     */
+    int lastContainedLogEpoch();
 
     /**
      * Returns true if the snapshot has been frozen, otherwise false is returned.
      *
      * Modification to the snapshot are not allowed once it is frozen.
      */
-    public boolean isFrozen() {
-        return snapshot.isFrozen();
-    }
+    boolean isFrozen();
 
     /**
      * Appends a list of values to the snapshot.
@@ -102,49 +65,20 @@ final public class SnapshotWriter<T> implements AutoCloseable {
      * @param records the list of records to append to the snapshot
      * @throws IllegalStateException if append is called when isFrozen is true
      */
-    public void append(List<T> records) {
-        if (snapshot.isFrozen()) {
-            String message = String.format(
-                "Append not supported. Snapshot is already frozen: id = '%s'.",
-                snapshot.snapshotId()
-            );
-
-            throw new IllegalStateException(message);
-        }
-
-        accumulator.append(snapshot.snapshotId().epoch, records);
-
-        if (accumulator.needsDrain(time.milliseconds())) {
-            appendBatches(accumulator.drain());
-        }
-    }
+    void append(List<T> records);
 
     /**
      * Freezes the snapshot by flushing all pending writes and marking it as immutable.
+     *
+     * Also adds a {@link SnapshotFooterRecord} to the end of the snapshot
      */
-    public void freeze() {
-        appendBatches(accumulator.drain());
-        snapshot.freeze();
-        accumulator.close();
-    }
+    void freeze();
 
     /**
      * Closes the snapshot writer.
      *
      * If close is called without first calling freeze the snapshot is aborted.
      */
-    public void close() {
-        snapshot.close();
-        accumulator.close();
-    }
+    void close();
 
-    private void appendBatches(List<CompletedBatch<T>> batches) {
-        try {
-            for (CompletedBatch<T> batch : batches) {
-                snapshot.append(batch.data);
-            }
-        } finally {
-            batches.forEach(CompletedBatch::release);
-        }
-    }
 }

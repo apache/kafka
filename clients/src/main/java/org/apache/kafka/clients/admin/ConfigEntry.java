@@ -61,8 +61,14 @@ public class ConfigEntry {
      * @param isReadOnly whether the config is read-only and cannot be updated
      * @param synonyms Synonym configs in order of precedence
      */
-    ConfigEntry(String name, String value, ConfigSource source, boolean isSensitive, boolean isReadOnly,
-                List<ConfigSynonym> synonyms, ConfigType type, String documentation) {
+    public ConfigEntry(String name,
+            String value,
+            ConfigSource source,
+            boolean isSensitive,
+            boolean isReadOnly,
+            List<ConfigSynonym> synonyms,
+            ConfigType type,
+            String documentation) {
         Objects.requireNonNull(name, "name should not be null");
         this.name = name;
         this.value = value;
@@ -174,11 +180,15 @@ public class ConfigEntry {
         return result;
     }
 
+    /**
+     * Override toString to redact sensitive value.
+     * WARNING, user should be responsible to set the correct "isSensitive" field for each config entry.
+     */
     @Override
     public String toString() {
         return "ConfigEntry(" +
                 "name=" + name +
-                ", value=" + value +
+                ", value=" + (isSensitive ? "Redacted" : value) +
                 ", source=" + source +
                 ", isSensitive=" + isSensitive +
                 ", isReadOnly=" + isReadOnly +

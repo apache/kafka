@@ -33,7 +33,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.integration.MonitorableSourceConnector;
 import org.apache.kafka.connect.json.JsonConverter;
-import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.LogReporter;
@@ -48,6 +48,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
@@ -76,6 +77,7 @@ import org.powermock.modules.junit4.PowerMockRunnerDelegate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
@@ -160,6 +162,8 @@ public class ErrorHandlingTaskTest {
     OffsetStorageReaderImpl offsetReader;
     @Mock
     OffsetStorageWriter offsetWriter;
+    @Mock
+    private ConnectorOffsetBackingStore offsetStore;
 
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
     @SuppressWarnings("unused")
@@ -191,10 +195,6 @@ public class ErrorHandlingTaskTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter.schemas.enable", "false");
-        workerProps.put("internal.value.converter.schemas.enable", "false");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(enableTopicCreation));
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
@@ -243,6 +243,9 @@ public class ErrorHandlingTaskTest {
         EasyMock.expectLastCall();
 
         consumer.close();
+        EasyMock.expectLastCall();
+
+        headerConverter.close();
         EasyMock.expectLastCall();
 
         PowerMock.replayAll();
@@ -382,11 +385,10 @@ public class ErrorHandlingTaskTest {
 
         EasyMock.expect(workerSourceTask.commitOffsets()).andReturn(true);
 
-        offsetWriter.offset(EasyMock.anyObject(), EasyMock.anyObject());
-        EasyMock.expectLastCall().times(2);
+        offsetStore.start();
+        EasyMock.expectLastCall();
         sourceTask.initialize(EasyMock.anyObject());
         EasyMock.expectLastCall();
-
         sourceTask.start(EasyMock.anyObject());
         EasyMock.expectLastCall();
 
@@ -398,6 +400,7 @@ public class ErrorHandlingTaskTest {
         PowerMock.replayAll();
 
         workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.initializeAndStart();
         workerSourceTask.execute();
 
         // two records were consumed from Kafka
@@ -447,11 +450,10 @@ public class ErrorHandlingTaskTest {
 
         EasyMock.expect(workerSourceTask.commitOffsets()).andReturn(true);
 
-        offsetWriter.offset(EasyMock.anyObject(), EasyMock.anyObject());
-        EasyMock.expectLastCall().times(2);
+        offsetStore.start();
+        EasyMock.expectLastCall();
         sourceTask.initialize(EasyMock.anyObject());
         EasyMock.expectLastCall();
-
         sourceTask.start(EasyMock.anyObject());
         EasyMock.expectLastCall();
 
@@ -463,6 +465,7 @@ public class ErrorHandlingTaskTest {
         PowerMock.replayAll();
 
         workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.initializeAndStart();
         workerSourceTask.execute();
 
         // two records were consumed from Kafka
@@ -497,7 +500,7 @@ public class ErrorHandlingTaskTest {
         assertEquals(expected, measured, 0.001d);
     }
 
-    private void expectInitializeTask() throws Exception {
+    private void expectInitializeTask() {
         consumer.subscribe(EasyMock.eq(singletonList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
 
@@ -535,6 +538,19 @@ public class ErrorHandlingTaskTest {
         EasyMock.expectLastCall();
 
         admin.close(EasyMock.anyObject(Duration.class));
+        EasyMock.expectLastCall();
+
+        offsetReader.close();
+        EasyMock.expectLastCall();
+
+        offsetStore.stop();
+        EasyMock.expectLastCall();
+
+        try {
+            headerConverter.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         EasyMock.expectLastCall();
     }
 
@@ -596,7 +612,7 @@ public class ErrorHandlingTaskTest {
             WorkerSourceTask.class, new String[]{"commitOffsets", "isStopping"},
             taskId, sourceTask, statusListener, initialState, converter, converter, headerConverter, sourceTransforms,
             producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
-            offsetReader, offsetWriter, workerConfig,
+            offsetReader, offsetWriter, offsetStore, workerConfig,
             ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator,
             statusBackingStore, (Executor) Runnable::run);
     }

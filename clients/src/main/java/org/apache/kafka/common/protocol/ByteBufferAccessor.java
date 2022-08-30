@@ -133,6 +133,11 @@ public class ByteBufferAccessor implements Readable, Writable {
         return ByteUtils.readVarlong(buf);
     }
 
+    @Override
+    public int remaining() {
+        return buf.remaining();
+    }
+
     public void flip() {
         buf.flip();
     }

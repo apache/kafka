@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import static org.apache.kafka.streams.processor.internals.assignment.ConsumerProtocolUtils.readTaskIdFrom;
+import static org.apache.kafka.streams.processor.internals.assignment.ConsumerProtocolUtils.writeTaskIdTo;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 import org.apache.kafka.streams.errors.TaskAssignmentException;
@@ -168,7 +170,7 @@ public class LegacySubscriptionInfoSerde {
                                    final int version) {
         buf.putInt(taskIds.size());
         for (final TaskId id : taskIds) {
-            id.writeTo(buf, version);
+            writeTaskIdTo(id, buf, version);
         }
     }
 
@@ -233,7 +235,7 @@ public class LegacySubscriptionInfoSerde {
         final Set<TaskId> prevTasks = new HashSet<>();
         final int numPrevTasks = data.getInt();
         for (int i = 0; i < numPrevTasks; i++) {
-            prevTasks.add(TaskId.readFrom(data, version));
+            prevTasks.add(readTaskIdFrom(data, version));
         }
         return prevTasks;
     }

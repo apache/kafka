@@ -18,10 +18,9 @@
 package kafka.admin
 
 import java.time.{Duration, Instant}
-import java.util.Properties
+import java.util.{Collections, Properties}
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.admin._
@@ -146,7 +145,7 @@ object ConsumerGroupCommand extends Logging {
   }
   // Example: CsvUtils().readerFor[CsvRecordWithoutGroup]
   private[admin] case class CsvUtils() {
-    val mapper = new CsvMapper with ScalaObjectMapper
+    val mapper = new CsvMapper
     mapper.registerModule(DefaultScalaModule)
     def readerFor[T <: CsvRecord : ClassTag] = {
       val schema = getSchema[T]
@@ -466,7 +465,7 @@ object ConsumerGroupCommand extends Logging {
         topicWithoutPartitions.asJava,
         withTimeoutMs(new DescribeTopicsOptions))
 
-      val unknownPartitions = describeTopicsResult.values().asScala.flatMap { case (topic, future) =>
+      val unknownPartitions = describeTopicsResult.topicNameValues().asScala.flatMap { case (topic, future) =>
         Try(future.get()) match {
           case Success(description) => description.partitions().asScala.map { partition =>
             new TopicPartition(topic, partition.partition())
@@ -561,27 +560,24 @@ object ConsumerGroupCommand extends Logging {
       val groupOffsets = TreeMap[String, (Option[String], Option[Seq[PartitionAssignmentState]])]() ++ (for ((groupId, consumerGroup) <- consumerGroups) yield {
         val state = consumerGroup.state
         val committedOffsets = getCommittedOffsets(groupId)
+        // The admin client returns `null` as a value to indicate that there is not committed offset for a partition.
+        def getPartitionOffset(tp: TopicPartition): Option[Long] = committedOffsets.get(tp).filter(_ != null).map(_.offset)
         var assignedTopicPartitions = ListBuffer[TopicPartition]()
         val rowsWithConsumer = consumerGroup.members.asScala.filter(!_.assignment.topicPartitions.isEmpty).toSeq
           .sortWith(_.assignment.topicPartitions.size > _.assignment.topicPartitions.size).flatMap { consumerSummary =>
           val topicPartitions = consumerSummary.assignment.topicPartitions.asScala
           assignedTopicPartitions = assignedTopicPartitions ++ topicPartitions
-          val partitionOffsets = consumerSummary.assignment.topicPartitions.asScala
-            .map { topicPartition =>
-              topicPartition -> committedOffsets.get(topicPartition).map(_.offset)
-            }.toMap
           collectConsumerAssignment(groupId, Option(consumerGroup.coordinator), topicPartitions.toList,
-            partitionOffsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
+            getPartitionOffset, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
             Some(s"${consumerSummary.clientId}"))
         }
-
         val unassignedPartitions = committedOffsets.filterNot { case (tp, _) => assignedTopicPartitions.contains(tp) }
         val rowsWithoutConsumer = if (unassignedPartitions.nonEmpty) {
           collectConsumerAssignment(
             groupId,
             Option(consumerGroup.coordinator),
             unassignedPartitions.keySet.toSeq,
-            unassignedPartitions.map { case (tp, offset) => tp -> Some(offset.offset) },
+            getPartitionOffset,
             Some(MISSING_COLUMN_VALUE),
             Some(MISSING_COLUMN_VALUE),
             Some(MISSING_COLUMN_VALUE)).toSeq
@@ -730,7 +726,7 @@ object ConsumerGroupCommand extends Logging {
         val descriptionMap = adminClient.describeTopics(
           topics.asJava,
           withTimeoutMs(new DescribeTopicsOptions)
-        ).all().get.asScala
+        ).allTopicNames().get.asScala
         descriptionMap.flatMap { case (topic, description) =>
           description.partitions().asScala.map { tpInfo =>
             new TopicPartition(topic, tpInfo.partition)
@@ -757,9 +753,9 @@ object ConsumerGroupCommand extends Logging {
 
     private def getCommittedOffsets(groupId: String): Map[TopicPartition, OffsetAndMetadata] = {
       adminClient.listConsumerGroupOffsets(
-        groupId,
-        withTimeoutMs(new ListConsumerGroupOffsetsOptions)
-      ).partitionsToOffsetAndMetadata.get.asScala
+        Collections.singletonMap(groupId, new ListConsumerGroupOffsetsSpec),
+        withTimeoutMs(new ListConsumerGroupOffsetsOptions())
+      ).partitionsToOffsetAndMetadata(groupId).get().asScala
     }
 
     type GroupMetadata = immutable.Map[String, immutable.Map[TopicPartition, OffsetAndMetadata]]
@@ -992,8 +988,8 @@ object ConsumerGroupCommand extends Logging {
     val ResetOffsetsDoc = "Reset offsets of consumer group. Supports one consumer group at the time, and instances should be inactive" + nl +
       "Has 2 execution options: --dry-run (the default) to plan which offsets to reset, and --execute to update the offsets. " +
       "Additionally, the --export option is used to export the results to a CSV format." + nl +
-      "You must choose one of the following reset specifications: --to-datetime, --by-period, --to-earliest, " +
-      "--to-latest, --shift-by, --from-file, --to-current." + nl +
+      "You must choose one of the following reset specifications: --to-datetime, --by-duration, --to-earliest, " +
+      "--to-latest, --shift-by, --from-file, --to-current, --to-offset." + nl +
       "To define the scope use --all-topics or --topic. One scope must be specified unless you use '--from-file'."
     val DryRunDoc = "Only show results without executing changes on Consumer Groups. Supported operations: reset-offsets."
     val ExecuteDoc = "Execute operation. Supported operations: reset-offsets."

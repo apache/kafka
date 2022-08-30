@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.HashSet;
+import java.util.Set;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -56,13 +58,22 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.ContextualFixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.TestRecord;
+import org.apache.kafka.test.MockApiFixedKeyProcessorSupplier;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockMapper;
-import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -102,7 +113,8 @@ import static org.junit.Assert.assertTrue;
 public class KStreamImplTest {
 
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
-    private final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+    private final MockApiProcessorSupplier<String, String, Void, Void> processorSupplier = new MockApiProcessorSupplier<>();
+    private final MockApiFixedKeyProcessorSupplier<String, String, Void> fixedKeyProcessorSupplier = new MockApiFixedKeyProcessorSupplier<>();
     private final TransformerSupplier<String, String, KeyValue<String, String>> transformerSupplier =
         () -> new Transformer<String, String, KeyValue<String, String>>() {
             @Override
@@ -702,6 +714,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("materialized can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnJoin() {
         final NullPointerException exception = assertThrows(
@@ -710,6 +723,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -722,6 +736,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnJoin() {
         final NullPointerException exception = assertThrows(
@@ -730,6 +745,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnJoin() {
         final NullPointerException exception = assertThrows(
@@ -738,6 +754,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -750,6 +767,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -782,6 +800,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("windows can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullStreamJoinedOnJoin() {
         final NullPointerException exception = assertThrows(
@@ -794,6 +813,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnLeftJoin() {
         final NullPointerException exception = assertThrows(
@@ -802,6 +822,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnLeftJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -814,6 +835,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnLeftJoin() {
         final NullPointerException exception = assertThrows(
@@ -822,6 +844,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnLeftJoin() {
         final NullPointerException exception = assertThrows(
@@ -830,6 +853,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnLeftJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -842,6 +866,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnLeftJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -875,6 +900,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("windows can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullStreamJoinedOnLeftJoin() {
         final NullPointerException exception = assertThrows(
@@ -887,6 +913,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnOuterJoin() {
         final NullPointerException exception = assertThrows(
@@ -895,6 +922,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullOtherStreamOnOuterJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -907,6 +935,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("otherStream can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnOuterJoin() {
         final NullPointerException exception = assertThrows(
@@ -915,6 +944,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnOuterJoin() {
         final NullPointerException exception = assertThrows(
@@ -923,6 +953,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerOnOuterJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -935,6 +966,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("joiner can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullValueJoinerWithKeyOnOuterJoinWithStreamJoined() {
         final NullPointerException exception = assertThrows(
@@ -967,6 +999,7 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("windows can't be null"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotAllowNullStreamJoinedOnOuterJoin() {
         final NullPointerException exception = assertThrows(
@@ -1503,12 +1536,13 @@ public class KStreamImplTest {
             inputTopic.pipeInput("a", "v2");
             inputTopic.pipeInput("b", "v1");
         }
-        final List<MockProcessor<String, String>> mockProcessors = processorSupplier.capturedProcessors(2);
+        final List<MockApiProcessor<String, String, Void, Void>> mockProcessors = processorSupplier.capturedProcessors(2);
         assertThat(mockProcessors.get(0).processed(), equalTo(asList(new KeyValueTimestamp<>("a", "v1", 0),
             new KeyValueTimestamp<>("a", "v2", 0))));
         assertThat(mockProcessors.get(1).processed(), equalTo(Collections.singletonList(new KeyValueTimestamp<>("b", "v1", 0))));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreatedWithRetention() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -1525,9 +1559,9 @@ public class KStreamImplTest {
 
         final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
 
-        final SourceNode<?, ?, ?, ?> originalSourceNode = topology.source("topic-1");
+        final SourceNode<?, ?> originalSourceNode = topology.source("topic-1");
 
-        for (final SourceNode<?, ?, ?, ?> sourceNode : topology.sources()) {
+        for (final SourceNode<?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertNull(sourceNode.getTimestampExtractor());
             } else {
@@ -1536,6 +1570,7 @@ public class KStreamImplTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldUseRecordMetadataTimestampExtractorWhenInternalRepartitioningTopicCreated() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -1554,9 +1589,9 @@ public class KStreamImplTest {
 
         final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
 
-        final SourceNode<?, ?, ?, ?> originalSourceNode = topology.source("topic-1");
+        final SourceNode<?, ?> originalSourceNode = topology.source("topic-1");
 
-        for (final SourceNode<?, ?, ?, ?> sourceNode : topology.sources()) {
+        for (final SourceNode<?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertNull(sourceNode.getTimestampExtractor());
             } else {
@@ -1731,6 +1766,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1739,6 +1775,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnTransformWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1747,6 +1784,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnTransformWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1755,6 +1793,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnTransformWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1763,6 +1802,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1771,6 +1811,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1779,6 +1820,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnTransformWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1787,6 +1829,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnTransformWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1795,6 +1838,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1803,6 +1847,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnTransformWithStoreName() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1811,6 +1856,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnFlatTransform() {
         final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -1821,6 +1867,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithStores() {
         final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -1831,6 +1878,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithNamed() {
         final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -1841,6 +1889,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnFlatTransformWithNamedAndStores() {
         final Transformer<String, String, Iterable<KeyValue<String, String>>> transformer = flatTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -1851,6 +1900,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnFlatTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1859,6 +1909,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnFlatTransformWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1867,6 +1918,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnFlatTransformWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1875,6 +1927,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullTransformerSupplierOnFlatTransformWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1883,6 +1936,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnFlatTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1891,6 +1945,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnFlatTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1899,6 +1954,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnFlatTransformWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1907,6 +1963,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnFlatTransformWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1915,6 +1972,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnFlatTransform() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1923,6 +1981,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnFlatTransformWithStoreName() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1931,6 +1990,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnTransformValues() {
         final ValueTransformer<String, String> transformer = valueTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -1941,6 +2001,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadTransformerSupplierOnTransformValuesWithNamed() {
         final ValueTransformer<String, String> transformer = valueTransformerSupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -1951,6 +2012,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnTransformValues() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1959,6 +2021,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadValueTransformerWithKeySupplierOnTransformValues() {
         final ValueTransformerWithKey<String, String, String> transformer = valueTransformerWithKeySupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -1969,6 +2032,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowBadValueTransformerWithKeySupplierOnTransformValuesWithNamed() {
         final ValueTransformerWithKey<String, String, String> transformer = valueTransformerWithKeySupplier.get();
         final IllegalArgumentException exception = assertThrows(
@@ -1979,6 +2043,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnTransformValues() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1987,6 +2052,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnTransformValuesWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -1997,6 +2063,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnTransformValuesWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2007,6 +2074,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnTransformValuesWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2017,6 +2085,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnTransformValuesWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2027,6 +2096,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnTransformValuesWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2038,6 +2108,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnTransformValuesWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2049,6 +2120,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnTransformValuesWithValueTransformerSupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2059,6 +2131,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnTransformValuesWithValueTransformerWithKeySupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2069,6 +2142,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnTransformValuesWithValueTransformerSupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2078,6 +2152,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnTransformValuesWithValueTransformerWithKeySupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2088,6 +2163,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnTransformValuesWithValueTransformerSupplierWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2099,6 +2175,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnTransformValuesWithValueTransformerWithKeySupplierWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2110,6 +2187,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnTransformValuesWithValueTransformerSupplierWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2121,6 +2199,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnTransformValuesWithValueTransformerWithKeySupplierWithName() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2132,6 +2211,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnTransformValuesWithValueTransformerSupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2142,6 +2222,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnTransformValuesWithValueTransformerWithKeySupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2152,6 +2233,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnTransformValuesWithValueTransformerSupplierAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2163,6 +2245,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnTransformValuesWithValueTransformerWithKeySupplierAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2174,6 +2257,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValues() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2182,6 +2266,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnFlatTransformValues() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2190,6 +2275,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValuesWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2200,6 +2286,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnFlatTransformValuesWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2210,6 +2297,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValuesWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2220,6 +2308,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnFlatTransformValuesWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2230,6 +2319,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValuesWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2241,6 +2331,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullValueTransformerWithKeySupplierOnFlatTransformValuesWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2252,6 +2343,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnFlatTransformValuesWithFlatValueSupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2262,6 +2354,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnFlatTransformValuesWithFlatValueWithKeySupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2272,6 +2365,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnFlatTransformValuesWithFlatValueSupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2282,6 +2376,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnFlatTransformValuesWithFlatValueWithKeySupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2292,6 +2387,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnFlatTransformValuesWithFlatValueSupplierAndNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2303,6 +2399,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNamesOnFlatTransformValuesWithFlatValueWithKeySupplierAndNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2314,6 +2411,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnFlatTransformValuesWithFlatValueSupplierAndNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2325,6 +2423,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullStoreNameOnFlatTransformValuesWithFlatValueWithKeySupplierAndNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2336,6 +2435,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnFlatTransformValuesWithFlatValueSupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2346,6 +2446,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnFlatTransformValuesWithFlatValueWithKeySupplier() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2356,6 +2457,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnFlatTransformValuesWithFlatValueSupplierAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2367,6 +2469,7 @@ public class KStreamImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotAllowNullNamedOnFlatTransformValuesWithFlatValueWithKeySupplierAndStore() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
@@ -2381,7 +2484,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcess() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process(null));
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 
@@ -2389,7 +2492,8 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcessWithStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process(null, "storeName"));
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
+                                     "storeName"));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 
@@ -2397,7 +2501,8 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcessWithNamed() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process(null, Named.as("processor")));
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
+                                     Named.as("processor")));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 
@@ -2405,7 +2510,8 @@ public class KStreamImplTest {
     public void shouldNotAllowNullProcessSupplierOnProcessWithNamedAndStores() {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> testStream.process(null, Named.as("processor"), "stateStore"));
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
+                                     Named.as("processor"), "stateStore"));
         assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
     }
 
@@ -2457,6 +2563,88 @@ public class KStreamImplTest {
         assertThat(exception.getMessage(), equalTo("named can't be null"));
     }
 
+    @Test
+    public void shouldNotAllowNullProcessValuesSupplierOnProcess() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processValues((FixedKeyProcessorSupplier<? super String, ? super String, Void>) null));
+        assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullProcessSupplierOnProcessValuesWithStores() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processValues((FixedKeyProcessorSupplier<? super String, ? super String, Void>) null,
+                "storeName"));
+        assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullProcessSupplierOnProcessValuesWithNamed() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
+                Named.as("processor")));
+        assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullProcessSupplierOnProcessValuesWithNamedAndStores() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.process((ProcessorSupplier<? super String, ? super String, Void, Void>) null,
+                Named.as("processor"), "stateStore"));
+        assertThat(exception.getMessage(), equalTo("processorSupplier can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullStoreNamesOnProcessValues() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processValues(fixedKeyProcessorSupplier, (String[]) null));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be a null array"));
+    }
+
+    @Test
+    public void shouldNotAllowNullStoreNameOnProcessValues() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processValues(fixedKeyProcessorSupplier, (String) null));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullStoreNamesOnProcessValuesWithNamed() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processValues(fixedKeyProcessorSupplier, Named.as("processor"), (String[]) null));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be a null array"));
+    }
+
+    @Test
+    public void shouldNotAllowNullStoreNameOnProcessValuesWithNamed() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processValues(fixedKeyProcessorSupplier, Named.as("processor"), (String) null));
+        assertThat(exception.getMessage(), equalTo("stateStoreNames can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullNamedOnProcessValues() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processValues(fixedKeyProcessorSupplier, (Named) null));
+        assertThat(exception.getMessage(), equalTo("named can't be null"));
+    }
+
+    @Test
+    public void shouldNotAllowNullNamedOnProcessValuesWithStores() {
+        final NullPointerException exception = assertThrows(
+            NullPointerException.class,
+            () -> testStream.processValues(fixedKeyProcessorSupplier, (Named) null, "storeName"));
+        assertThat(exception.getMessage(), equalTo("named can't be null"));
+    }
 
     @Test
     public void shouldNotMaterializedKTableFromKStream() {
@@ -2507,6 +2695,308 @@ public class KStreamImplTest {
             outputExpectRecords.add(new TestRecord<>("D", "04", Instant.ofEpochMilli(0L)));
             outputExpectRecords.add(new TestRecord<>("A", "05", Instant.ofEpochMilli(10L)));
             outputExpectRecords.add(new TestRecord<>("A", "06", Instant.ofEpochMilli(8L)));
+
+            assertEquals(outputTopic.readRecordsToList(), outputExpectRecords);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldProcessWithOldProcessorAndState() {
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final String input = "input";
+
+        builder.addStateStore(Stores.keyValueStoreBuilder(
+            Stores.inMemoryKeyValueStore("sum"),
+            Serdes.String(),
+            Serdes.Integer()
+        ));
+
+        builder.stream(input, consumed)
+            .process(() -> new org.apache.kafka.streams.processor.Processor<String, String>() {
+                private KeyValueStore<String, Integer> sumStore;
+
+                @Override
+                public void init(final ProcessorContext context) {
+                    this.sumStore = context.getStateStore("sum");
+                }
+
+                @Override
+                public void process(final String key, final String value) {
+                    final Integer counter = sumStore.get(key);
+                    if (counter == null) {
+                        sumStore.putIfAbsent(key, value.length());
+                    } else {
+                        if (value == null) {
+                            sumStore.delete(key);
+                        } else {
+                            sumStore.put(key, counter + value.length());
+                        }
+                    }
+                }
+
+                @Override
+                public void close() {
+                }
+            }, Named.as("p"), "sum");
+
+        final String topologyDescription = builder.build().describe().toString();
+
+        assertThat(
+            topologyDescription,
+            equalTo("Topologies:\n"
+                + "   Sub-topology: 0\n"
+                + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n"
+                + "      --> p\n"
+                + "    Processor: p (stores: [sum])\n"
+                + "      --> none\n"
+                + "      <-- KSTREAM-SOURCE-0000000000\n\n")
+        );
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(
+                    input,
+                    Serdes.String().serializer(),
+                    Serdes.String().serializer()
+                );
+
+            inputTopic.pipeInput("A", "0", 5L);
+            inputTopic.pipeInput("B", "00", 100L);
+            inputTopic.pipeInput("C", "000", 0L);
+            inputTopic.pipeInput("D", "0000", 0L);
+            inputTopic.pipeInput("A", "00000", 10L);
+            inputTopic.pipeInput("A", "000000", 8L);
+
+            final KeyValueStore<String, Integer> sumStore = driver.getKeyValueStore("sum");
+            assertEquals(12, sumStore.get("A").intValue());
+            assertEquals(2, sumStore.get("B").intValue());
+            assertEquals(3, sumStore.get("C").intValue());
+            assertEquals(4, sumStore.get("D").intValue());
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldBindStateWithOldProcessorSupplier() {
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final String input = "input";
+
+        builder.stream(input, consumed)
+            .process(new org.apache.kafka.streams.processor.ProcessorSupplier<String, String>() {
+
+                @Override
+                public org.apache.kafka.streams.processor.Processor<String, String> get() {
+                    return new org.apache.kafka.streams.processor.Processor<String, String>() {
+                        private KeyValueStore<String, Integer> sumStore;
+
+                        @Override
+                        public void init(final ProcessorContext context) {
+                            this.sumStore = context.getStateStore("sum");
+                        }
+
+                        @Override
+                        public void process(final String key, final String value) {
+                            final Integer counter = sumStore.get(key);
+                            if (counter == null) {
+                                sumStore.putIfAbsent(key, value.length());
+                            } else {
+                                if (value == null) {
+                                    sumStore.delete(key);
+                                } else {
+                                    sumStore.put(key, counter + value.length());
+                                }
+                            }
+                        }
+
+                        @Override
+                        public void close() {
+                        }
+                    };
+                }
+
+                @SuppressWarnings("unchecked")
+                @Override
+                public Set<StoreBuilder<?>> stores() {
+                    final Set<StoreBuilder<?>> stores = new HashSet<>();
+                    stores.add(Stores.keyValueStoreBuilder(
+                        Stores.inMemoryKeyValueStore("sum"),
+                        Serdes.String(),
+                        Serdes.Integer()
+                    ));
+                    return stores;
+                }
+            }, Named.as("p"));
+
+        final String topologyDescription = builder.build().describe().toString();
+
+        assertThat(
+            topologyDescription,
+            equalTo("Topologies:\n"
+                + "   Sub-topology: 0\n"
+                + "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n"
+                + "      --> p\n"
+                + "    Processor: p (stores: [sum])\n"
+                + "      --> none\n"
+                + "      <-- KSTREAM-SOURCE-0000000000\n\n")
+        );
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(
+                    input,
+                    Serdes.String().serializer(),
+                    Serdes.String().serializer()
+                );
+
+            inputTopic.pipeInput("A", "0", 5L);
+            inputTopic.pipeInput("B", "00", 100L);
+            inputTopic.pipeInput("C", "000", 0L);
+            inputTopic.pipeInput("D", "0000", 0L);
+            inputTopic.pipeInput("A", "00000", 10L);
+            inputTopic.pipeInput("A", "000000", 8L);
+
+            final KeyValueStore<String, Integer> sumStore = driver.getKeyValueStore("sum");
+            assertEquals(12, sumStore.get("A").intValue());
+            assertEquals(2, sumStore.get("B").intValue());
+            assertEquals(3, sumStore.get("C").intValue());
+            assertEquals(4, sumStore.get("D").intValue());
+        }
+    }
+
+    @Test
+    public void shouldBindStateWithOldProcessor() {
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final String input = "input";
+        final String output = "output";
+
+        builder.stream(input, consumed)
+            .process(() -> new ContextualProcessor<String, String, String, Integer>() {
+                @Override
+                public void process(final Record<String, String> record) {
+                    context().forward(record.withValue(record.value().length()));
+                }
+            }, Named.as("p"))
+            .to(output, Produced.valueSerde(Serdes.Integer()));
+
+        final String topologyDescription = builder.build().describe().toString();
+
+        assertThat(
+            topologyDescription,
+            equalTo("Topologies:\n" +
+                "   Sub-topology: 0\n" +
+                "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
+                "      --> p\n" +
+                "    Processor: p (stores: [])\n" +
+                "      --> KSTREAM-SINK-0000000001\n" +
+                "      <-- KSTREAM-SOURCE-0000000000\n" +
+                "    Sink: KSTREAM-SINK-0000000001 (topic: output)\n" +
+                "      <-- p\n\n")
+        );
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(
+                    input,
+                    Serdes.String().serializer(),
+                    Serdes.String().serializer()
+                );
+            final TestOutputTopic<String, Integer> outputTopic =
+                driver.createOutputTopic(
+                    output,
+                    Serdes.String().deserializer(),
+                    Serdes.Integer().deserializer()
+                );
+
+            inputTopic.pipeInput("A", "0", 5L);
+            inputTopic.pipeInput("B", "00", 100L);
+            inputTopic.pipeInput("C", "000", 0L);
+            inputTopic.pipeInput("D", "0000", 0L);
+            inputTopic.pipeInput("A", "00000", 10L);
+            inputTopic.pipeInput("A", "000000", 8L);
+
+            final List<TestRecord<String, Integer>> outputExpectRecords = new ArrayList<>();
+            outputExpectRecords.add(new TestRecord<>("A", 1, Instant.ofEpochMilli(5L)));
+            outputExpectRecords.add(new TestRecord<>("B", 2, Instant.ofEpochMilli(100L)));
+            outputExpectRecords.add(new TestRecord<>("C", 3, Instant.ofEpochMilli(0L)));
+            outputExpectRecords.add(new TestRecord<>("D", 4, Instant.ofEpochMilli(0L)));
+            outputExpectRecords.add(new TestRecord<>("A", 5, Instant.ofEpochMilli(10L)));
+            outputExpectRecords.add(new TestRecord<>("A", 6, Instant.ofEpochMilli(8L)));
+
+            assertEquals(outputTopic.readRecordsToList(), outputExpectRecords);
+        }
+    }
+
+    @Test
+    public void shouldProcessValues() {
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final String input = "input";
+        final String output = "output";
+
+        builder.stream(input, consumed)
+               .processValues(() -> new ContextualFixedKeyProcessor<String, String, Integer>() {
+                   @Override
+                   public void process(final FixedKeyRecord<String, String> record) {
+                       context().forward(record.withValue(record.value().length()));
+                   }
+               }, Named.as("fkp"))
+               .to(output, Produced.valueSerde(Serdes.Integer()));
+
+        final String topologyDescription = builder.build().describe().toString();
+
+        assertThat(
+            topologyDescription,
+            equalTo("Topologies:\n" +
+                        "   Sub-topology: 0\n" +
+                        "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
+                        "      --> fkp\n" +
+                        "    Processor: fkp (stores: [])\n" +
+                        "      --> KSTREAM-SINK-0000000001\n" +
+                        "      <-- KSTREAM-SOURCE-0000000000\n" +
+                        "    Sink: KSTREAM-SINK-0000000001 (topic: output)\n" +
+                        "      <-- fkp\n\n")
+        );
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(
+                    input,
+                    Serdes.String().serializer(),
+                    Serdes.String().serializer()
+                );
+            final TestOutputTopic<String, Integer> outputTopic =
+                driver.createOutputTopic(
+                    output,
+                    Serdes.String().deserializer(),
+                    Serdes.Integer().deserializer()
+                );
+
+            inputTopic.pipeInput("A", "0", 5L);
+            inputTopic.pipeInput("B", "00", 100L);
+            inputTopic.pipeInput("C", "000", 0L);
+            inputTopic.pipeInput("D", "0000", 0L);
+            inputTopic.pipeInput("A", "00000", 10L);
+            inputTopic.pipeInput("A", "000000", 8L);
+
+            final List<TestRecord<String, Integer>> outputExpectRecords = new ArrayList<>();
+            outputExpectRecords.add(new TestRecord<>("A", 1, Instant.ofEpochMilli(5L)));
+            outputExpectRecords.add(new TestRecord<>("B", 2, Instant.ofEpochMilli(100L)));
+            outputExpectRecords.add(new TestRecord<>("C", 3, Instant.ofEpochMilli(0L)));
+            outputExpectRecords.add(new TestRecord<>("D", 4, Instant.ofEpochMilli(0L)));
+            outputExpectRecords.add(new TestRecord<>("A", 5, Instant.ofEpochMilli(10L)));
+            outputExpectRecords.add(new TestRecord<>("A", 6, Instant.ofEpochMilli(8L)));
 
             assertEquals(outputTopic.readRecordsToList(), outputExpectRecords);
         }

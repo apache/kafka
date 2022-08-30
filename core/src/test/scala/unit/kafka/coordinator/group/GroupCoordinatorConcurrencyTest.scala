@@ -33,9 +33,9 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.Time
-import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.Mockito.when
 
 import scala.collection._
 import scala.concurrent.duration.Duration
@@ -62,17 +62,15 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   )
 
   var heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat] = _
-  var joinPurgatory: DelayedOperationPurgatory[DelayedJoin] = _
+  var rebalancePurgatory: DelayedOperationPurgatory[DelayedRebalance] = _
   var groupCoordinator: GroupCoordinator = _
 
   @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
-    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
-      .andReturn(Some(numPartitions))
-      .anyTimes()
-    EasyMock.replay(zkClient)
+    when(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
+      .thenReturn(Some(numPartitions))
 
     serverProps.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, ConsumerMinSessionTimeout.toString)
     serverProps.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, ConsumerMaxSessionTimeout.toString)
@@ -81,9 +79,9 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     val config = KafkaConfig.fromProps(serverProps)
 
     heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
-    joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
+    rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
-    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
+    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, timer.time, new Metrics())
     groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
       false)
   }
@@ -150,7 +148,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     if (groupCoordinator != null)
       groupCoordinator.shutdown()
     groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory,
-      joinPurgatory, timer.time, new Metrics())
+      rebalancePurgatory, timer.time, new Metrics())
     groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
       false)
 
@@ -209,9 +207,9 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: JoinGroupCallback): Unit = {
-      groupCoordinator.handleJoinGroup(member.groupId, member.memberId, None, requireKnownMemberId = false, "clientId", "clientHost",
-       DefaultRebalanceTimeout, DefaultSessionTimeout,
-       protocolType, protocols, responseCallback)
+      groupCoordinator.handleJoinGroup(member.groupId, member.memberId, None, requireKnownMemberId = false,
+        supportSkippingAssignment = false, "clientId", "clientHost", DefaultRebalanceTimeout,
+        DefaultSessionTimeout, protocolType, protocols, responseCallback)
       replicaManager.tryCompleteActions()
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
@@ -391,7 +389,7 @@ object GroupCoordinatorConcurrencyTest {
   class Group(val groupId: String, nMembers: Int,
       groupCoordinator: GroupCoordinator, replicaManager: TestReplicaManager) {
     val groupPartitionId = groupCoordinator.partitionFor(groupId)
-    groupCoordinator.groupManager.addPartitionOwnership(groupPartitionId)
+    groupCoordinator.groupManager.addOwnedPartition(groupPartitionId)
     val members = (0 until nMembers).map { i =>
       new GroupMember(this, groupPartitionId, i == 0)
     }

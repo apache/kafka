@@ -48,6 +48,7 @@ public class PluginDescTest {
         pluginLoader = new PluginClassLoader(location, new URL[0], systemLoader);
     }
 
+    @SuppressWarnings("rawtypes")
     @Test
     public void testRegularPluginDesc() {
         PluginDesc<Connector> connectorDesc = new PluginDesc<>(
@@ -75,6 +76,7 @@ public class PluginDescTest {
         assertPluginDesc(transformDesc, Transformation.class, noVersion, pluginLoader.location());
     }
 
+    @SuppressWarnings("rawtypes")
     @Test
     public void testPluginDescWithSystemClassLoader() {
         String location = "classpath";
@@ -129,6 +131,7 @@ public class PluginDescTest {
         assertPluginDesc(converterDesc, Converter.class, nullVersion, location);
     }
 
+    @SuppressWarnings("rawtypes")
     @Test
     public void testPluginDescEquality() {
         PluginDesc<Connector> connectorDescPluginPath = new PluginDesc<>(
@@ -176,6 +179,7 @@ public class PluginDescTest {
         assertNotEquals(transformDescPluginPath, transformDescClasspath);
     }
 
+    @SuppressWarnings("rawtypes")
     @Test
     public void testPluginDescComparison() {
         PluginDesc<Connector> connectorDescPluginPath = new PluginDesc<>(

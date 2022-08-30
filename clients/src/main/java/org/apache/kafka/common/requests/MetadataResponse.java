@@ -91,8 +91,27 @@ public class MetadataResponse extends AbstractResponse {
     public Map<String, Errors> errors() {
         Map<String, Errors> errors = new HashMap<>();
         for (MetadataResponseTopic metadata : data.topics()) {
+            if (metadata.name() == null) {
+                throw new IllegalStateException("Use errorsByTopicId() when managing topic using topic id");
+            }
             if (metadata.errorCode() != Errors.NONE.code())
                 errors.put(metadata.name(), Errors.forCode(metadata.errorCode()));
+        }
+        return errors;
+    }
+
+    /**
+     * Get a map of the topicIds which had metadata errors
+     * @return the map
+     */
+    public Map<Uuid, Errors> errorsByTopicId() {
+        Map<Uuid, Errors> errors = new HashMap<>();
+        for (MetadataResponseTopic metadata : data.topics()) {
+            if (metadata.topicId() == Uuid.ZERO_UUID) {
+                throw new IllegalStateException("Use errors() when managing topic using topic name");
+            }
+            if (metadata.errorCode() != Errors.NONE.code())
+                errors.put(metadata.topicId(), Errors.forCode(metadata.errorCode()));
         }
         return errors;
     }
@@ -123,7 +142,7 @@ public class MetadataResponse extends AbstractResponse {
      * Get a snapshot of the cluster metadata from this response
      * @return the cluster snapshot
      */
-    public Cluster cluster() {
+    public Cluster buildCluster() {
         Set<String> internalTopics = new HashSet<>();
         List<PartitionInfo> partitions = new ArrayList<>();
         Map<String, Uuid> topicIds = new HashMap<>();
@@ -132,7 +151,7 @@ public class MetadataResponse extends AbstractResponse {
             if (metadata.error == Errors.NONE) {
                 if (metadata.isInternal)
                     internalTopics.add(metadata.topic);
-                if (metadata.topicId() != null && metadata.topicId() != Uuid.ZERO_UUID) {
+                if (metadata.topicId() != null && !Uuid.ZERO_UUID.equals(metadata.topicId())) {
                     topicIds.put(metadata.topic, metadata.topicId());
                 }
                 for (PartitionMetadata partitionMetadata : metadata.partitionMetadata) {

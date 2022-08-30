@@ -42,6 +42,14 @@ public class ResultOrError<T> {
         this.result = result;
     }
 
+    public static <T> ResultOrError<T> of(T result) {
+        return new ResultOrError<>(result);
+    }
+
+    public static <T> ResultOrError<T> of(ApiError error) {
+        return new ResultOrError<>(error);
+    }
+
     public boolean isError() {
         return error != null;
     }

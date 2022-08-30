@@ -21,7 +21,11 @@ import org.apache.kafka.common.Uuid;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import static java.util.Collections.emptyMap;
 
 public class BrokerNode implements TestKitNode {
     public static class Builder {
@@ -68,15 +72,25 @@ public class BrokerNode implements TestKitNode {
     private final Uuid incarnationId;
     private final String metadataDirectory;
     private final List<String> logDataDirectories;
+    private final Map<String, String> propertyOverrides;
 
     BrokerNode(int id,
                Uuid incarnationId,
                String metadataDirectory,
                List<String> logDataDirectories) {
+        this(id, incarnationId, metadataDirectory, logDataDirectories, emptyMap());
+    }
+
+    BrokerNode(int id,
+               Uuid incarnationId,
+               String metadataDirectory,
+               List<String> logDataDirectories,
+               Map<String, String> propertyOverrides) {
         this.id = id;
         this.incarnationId = incarnationId;
         this.metadataDirectory = metadataDirectory;
         this.logDataDirectories = new ArrayList<>(logDataDirectories);
+        this.propertyOverrides = new HashMap<>(propertyOverrides);
     }
 
     @Override
@@ -95,5 +109,9 @@ public class BrokerNode implements TestKitNode {
 
     public List<String> logDataDirectories() {
         return logDataDirectories;
+    }
+
+    public Map<String, String> propertyOverrides() {
+        return propertyOverrides;
     }
 }

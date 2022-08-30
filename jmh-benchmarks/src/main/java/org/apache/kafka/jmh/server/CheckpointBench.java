@@ -20,15 +20,17 @@ import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
-import kafka.server.AlterIsrManager;
+import kafka.server.AlterPartitionManager;
+import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
 import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
+import kafka.server.builders.ReplicaManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
-import kafka.server.metadata.CachedConfigRepository;
+import kafka.server.metadata.MockConfigRepository;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.MockTime;
 import kafka.utils.Scheduler;
@@ -37,6 +39,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Level;
@@ -54,7 +57,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import scala.collection.JavaConverters;
@@ -87,8 +89,7 @@ public class CheckpointBench {
     private QuotaFactory.QuotaManagers quotaManagers;
     private LogDirFailureChannel failureChannel;
     private LogManager logManager;
-    private AlterIsrManager alterIsrManager;
-    private final CachedConfigRepository configRepository = new CachedConfigRepository();
+    private AlterPartitionManager alterPartitionManager;
 
 
     @SuppressWarnings("deprecation")
@@ -105,34 +106,31 @@ public class CheckpointBench {
         final List<File> files =
             JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
         this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
-                LogConfig.apply(), new CachedConfigRepository(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
+                LogConfig.apply(), new MockConfigRepository(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
                         1024 * 1024, 32 * 1024 * 1024,
-                        Double.MAX_VALUE, 15 * 1000, true, "MD5"), time);
+                        Double.MAX_VALUE, 15 * 1000, true, "MD5"), time, MetadataVersion.latest(), 4);
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         final MetadataCache metadataCache =
-                MetadataCache.zkMetadataCache(this.brokerProperties.brokerId());
+                MetadataCache.zkMetadataCache(this.brokerProperties.brokerId(), this.brokerProperties.interBrokerProtocolVersion(), BrokerFeatures.createEmpty());
         this.quotaManagers =
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,
                         this.time, "");
 
-        this.alterIsrManager = TestUtils.createAlterIsrManager();
-        this.replicaManager = new ReplicaManager(
-                this.brokerProperties,
-                this.metrics,
-                this.time,
-                Option.empty(),
-                this.scheduler,
-                this.logManager,
-                new AtomicBoolean(false),
-                this.quotaManagers,
-                brokerTopicStats,
-                metadataCache,
-                this.failureChannel,
-                alterIsrManager,
-                configRepository,
-                Option.empty());
+        this.alterPartitionManager = TestUtils.createAlterIsrManager();
+        this.replicaManager = new ReplicaManagerBuilder().
+            setConfig(brokerProperties).
+            setMetrics(metrics).
+            setTime(time).
+            setScheduler(scheduler).
+            setLogManager(logManager).
+            setQuotaManagers(quotaManagers).
+            setBrokerTopicStats(brokerTopicStats).
+            setMetadataCache(metadataCache).
+            setLogDirFailureChannel(failureChannel).
+            setAlterPartitionManager(alterPartitionManager).
+            build();
         replicaManager.startup();
 
         List<TopicPartition> topicPartitions = new ArrayList<>();

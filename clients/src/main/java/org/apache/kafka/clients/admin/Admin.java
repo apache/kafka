@@ -17,21 +17,13 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.time.Duration;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.Set;
-
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -41,6 +33,15 @@ import org.apache.kafka.common.errors.FeatureUpdateFailedException;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
+
+import java.time.Duration;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
 
 /**
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
@@ -81,7 +82,7 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
  *   // Create a compacted topic
  *   CreateTopicsResult result = admin.createTopics(Collections.singleton(
  *     new NewTopic(topicName, partitions, replicationFactor)
- *       .configs(Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)));
+ *       .configs(Collections.singletonMap(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT))));
  *
  *   // Call values() to get the result for a specific topic
  *   KafkaFuture<Void> future = result.values().get(topicName);
@@ -140,7 +141,7 @@ public interface Admin extends AutoCloseable {
      * @return The new KafkaAdminClient.
      */
     static Admin create(Map<String, Object> conf) {
-        return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null);
+        return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null, null);
     }
 
     /**
@@ -200,7 +201,7 @@ public interface Admin extends AutoCloseable {
     CreateTopicsResult createTopics(Collection<NewTopic> newTopics, CreateTopicsOptions options);
 
     /**
-     * This is a convenience method for {@link #deleteTopics(Collection, DeleteTopicsOptions)}
+     * This is a convenience method for {@link #deleteTopics(TopicCollection, DeleteTopicsOptions)}
      * with default options. See the overload for more details.
      * <p>
      * This operation is supported by brokers with version 0.10.1.0 or higher.
@@ -209,6 +210,34 @@ public interface Admin extends AutoCloseable {
      * @return The DeleteTopicsResult.
      */
     default DeleteTopicsResult deleteTopics(Collection<String> topics) {
+        return deleteTopics(TopicCollection.ofTopicNames(topics), new DeleteTopicsOptions());
+    }
+
+    /**
+     * This is a convenience method for {@link #deleteTopics(TopicCollection, DeleteTopicsOptions)}
+     * with default options. See the overload for more details.
+     * <p>
+     * This operation is supported by brokers with version 0.10.1.0 or higher.
+     *
+     * @param topics  The topic names to delete.
+     * @param options The options to use when deleting the topics.
+     * @return The DeleteTopicsResult.
+     */
+    default DeleteTopicsResult deleteTopics(Collection<String> topics, DeleteTopicsOptions options) {
+        return deleteTopics(TopicCollection.ofTopicNames(topics), options);
+    }
+
+    /**
+     * This is a convenience method for {@link #deleteTopics(TopicCollection, DeleteTopicsOptions)}
+     * with default options. See the overload for more details.
+     * <p>
+     * When using topic IDs, this operation is supported by brokers with inter-broker protocol 2.8 or higher.
+     * When using topic names, this operation is supported by brokers with version 0.10.1.0 or higher.
+     *
+     * @param topics The topics to delete.
+     * @return The DeleteTopicsResult.
+     */
+    default DeleteTopicsResult deleteTopics(TopicCollection topics) {
         return deleteTopics(topics, new DeleteTopicsOptions());
     }
 
@@ -226,48 +255,14 @@ public interface Admin extends AutoCloseable {
      * the topics for deletion, but not actually delete them. The futures will
      * return successfully in this case.
      * <p>
-     * This operation is supported by brokers with version 0.10.1.0 or higher.
+     * When using topic IDs, this operation is supported by brokers with inter-broker protocol 2.8 or higher.
+     * When using topic names, this operation is supported by brokers with version 0.10.1.0 or higher.
      *
-     * @param topics  The topic names to delete.
+     * @param topics  The topics to delete.
      * @param options The options to use when deleting the topics.
      * @return The DeleteTopicsResult.
      */
-    DeleteTopicsResult deleteTopics(Collection<String> topics, DeleteTopicsOptions options);
-    
-    /**
-     * This is a convenience method for {@link #deleteTopicsWithIds(Collection, DeleteTopicsOptions)}
-     * with default options. See the overload for more details.
-     * <p>
-     * This operation is supported by brokers with version 2.8.0 or higher.
-     *
-     * @param topics The topic IDs for the topics to delete.
-     * @return The DeleteTopicsWithIdsResult.
-     */
-    default DeleteTopicsWithIdsResult deleteTopicsWithIds(Collection<Uuid> topics) {
-        return deleteTopicsWithIds(topics, new DeleteTopicsOptions());
-    }
-
-    /**
-     * Delete a batch of topics.
-     * <p>
-     * This operation is not transactional so it may succeed for some topics while fail for others.
-     * <p>
-     * It may take several seconds after the {@link DeleteTopicsWithIdsResult} returns
-     * success for all the brokers to become aware that the topics are gone.
-     * During this time, {@link #listTopics()} and {@link #describeTopics(Collection)}
-     * may continue to return information about the deleted topics.
-     * <p>
-     * If delete.topic.enable is false on the brokers, deleteTopicsWithIds will mark
-     * the topics for deletion, but not actually delete them. The futures will
-     * return successfully in this case.
-     * <p>
-     * This operation is supported by brokers with version 2.8.0 or higher.
-     *
-     * @param topics  The topic IDs for the topics to delete.
-     * @param options The options to use when deleting the topics.
-     * @return The DeleteTopicsWithIdsResult.
-     */
-    DeleteTopicsWithIdsResult deleteTopicsWithIds(Collection<Uuid> topics, DeleteTopicsOptions options);
+    DeleteTopicsResult deleteTopics(TopicCollection topics, DeleteTopicsOptions options);
 
     /**
      * List the topics available in the cluster with the default options.
@@ -309,7 +304,33 @@ public interface Admin extends AutoCloseable {
      * @param options    The options to use when describing the topic.
      * @return The DescribeTopicsResult.
      */
-    DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options);
+    default DescribeTopicsResult describeTopics(Collection<String> topicNames, DescribeTopicsOptions options) {
+        return describeTopics(TopicCollection.ofTopicNames(topicNames), options);
+    }
+
+    /**
+     * This is a convenience method for {@link #describeTopics(TopicCollection, DescribeTopicsOptions)}
+     * with default options. See the overload for more details.
+     * <p>
+     * When using topic IDs, this operation is supported by brokers with version 3.1.0 or higher.
+     *
+     * @param topics The topics to describe.
+     * @return The DescribeTopicsResult.
+     */
+    default DescribeTopicsResult describeTopics(TopicCollection topics) {
+        return describeTopics(topics, new DescribeTopicsOptions());
+    }
+
+    /**
+     * Describe some topics in the cluster.
+     *
+     * When using topic IDs, this operation is supported by brokers with version 3.1.0 or higher.
+     *
+     * @param topics  The topics to describe.
+     * @param options The options to use when describing the topics.
+     * @return The DescribeTopicsResult.
+     */
+    DescribeTopicsResult describeTopics(TopicCollection topics, DescribeTopicsOptions options);
 
     /**
      * Get information about the nodes in the cluster, using the default options.
@@ -338,7 +359,7 @@ public interface Admin extends AutoCloseable {
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *
      * @param filter The filter to use.
-     * @return The DeleteAclsResult.
+     * @return The DescribeAclsResult.
      */
     default DescribeAclsResult describeAcls(AclBindingFilter filter) {
         return describeAcls(filter, new DescribeAclsOptions());
@@ -354,7 +375,7 @@ public interface Admin extends AutoCloseable {
      *
      * @param filter  The filter to use.
      * @param options The options to use when listing the ACLs.
-     * @return The DeleteAclsResult.
+     * @return The DescribeAclsResult.
      */
     DescribeAclsResult describeAcls(AclBindingFilter filter, DescribeAclsOptions options);
 
@@ -899,17 +920,49 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when listing the consumer group offsets.
      * @return The ListGroupOffsetsResult
      */
-    ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options);
+    default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
+        @SuppressWarnings("deprecation")
+        ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
+            .topicPartitions(options.topicPartitions());
+
+        // We can use the provided options with the batched API, which uses topic partitions from
+        // the group spec and ignores any topic partitions set in the options.
+        return listConsumerGroupOffsets(Collections.singletonMap(groupId, groupSpec), options);
+    }
 
     /**
      * List the consumer group offsets available in the cluster with the default options.
      * <p>
-     * This is a convenience method for {@link #listConsumerGroupOffsets(String, ListConsumerGroupOffsetsOptions)} with default options.
+     * This is a convenience method for {@link #listConsumerGroupOffsets(Map, ListConsumerGroupOffsetsOptions)}
+     * to list offsets of all partitions of one group with default options.
      *
      * @return The ListGroupOffsetsResult.
      */
     default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId) {
         return listConsumerGroupOffsets(groupId, new ListConsumerGroupOffsetsOptions());
+    }
+
+    /**
+     * List the consumer group offsets available in the cluster for the specified consumer groups.
+     *
+     * @param groupSpecs Map of consumer group ids to a spec that specifies the topic partitions of the group to list offsets for.
+     *
+     * @param options The options to use when listing the consumer group offsets.
+     * @return The ListConsumerGroupOffsetsResult
+     */
+    ListConsumerGroupOffsetsResult listConsumerGroupOffsets(Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, ListConsumerGroupOffsetsOptions options);
+
+    /**
+     * List the consumer group offsets available in the cluster for the specified groups with the default options.
+     * <p>
+     * This is a convenience method for
+     * {@link #listConsumerGroupOffsets(Map, ListConsumerGroupOffsetsOptions)} with default options.
+     *
+     * @param groupSpecs Map of consumer group ids to a spec that specifies the topic partitions of the group to list offsets for.
+     * @return The ListConsumerGroupOffsetsResult.
+     */
+    default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(Map<String, ListConsumerGroupOffsetsSpec> groupSpecs) {
+        return listConsumerGroupOffsets(groupSpecs, new ListConsumerGroupOffsetsOptions());
     }
 
     /**
@@ -1427,6 +1480,35 @@ public interface Admin extends AutoCloseable {
     UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates, UpdateFeaturesOptions options);
 
     /**
+     * Describes the state of the metadata quorum.
+     * <p>
+     * This is a convenience method for {@link #describeMetadataQuorum(DescribeMetadataQuorumOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @return the {@link DescribeMetadataQuorumResult} containing the result
+     */
+    default DescribeMetadataQuorumResult describeMetadataQuorum() {
+        return describeMetadataQuorum(new DescribeMetadataQuorumOptions());
+    }
+
+    /**
+     * Describes the state of the metadata quorum.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@code DescribeMetadataQuorumResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   If the authenticated user didn't have {@code DESCRIBE} access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the controller could list the cluster links.</li>
+     * </ul>
+     *
+     * @param options The {@link DescribeMetadataQuorumOptions} to use when describing the quorum.
+     * @return the {@link DescribeMetadataQuorumResult} containing the result
+     */
+    DescribeMetadataQuorumResult describeMetadataQuorum(DescribeMetadataQuorumOptions options);
+
+    /**
      * Unregister a broker.
      * <p>
      * This operation does not have any effect on partition assignments. It is supported
@@ -1532,6 +1614,51 @@ public interface Admin extends AutoCloseable {
      * @return The result
      */
     AbortTransactionResult abortTransaction(AbortTransactionSpec spec, AbortTransactionOptions options);
+
+    /**
+     * List active transactions in the cluster. See
+     * {@link #listTransactions(ListTransactionsOptions)} for more details.
+     *
+     * @return The result
+     */
+    default ListTransactionsResult listTransactions() {
+        return listTransactions(new ListTransactionsOptions());
+    }
+
+    /**
+     * List active transactions in the cluster. This will query all potential transaction
+     * coordinators in the cluster and collect the state of all transactions. Users
+     * should typically attempt to reduce the size of the result set using
+     * {@link ListTransactionsOptions#filterProducerIds(Collection)} or
+     * {@link ListTransactionsOptions#filterStates(Collection)}
+     *
+     * @param options Options to control the method behavior (including filters)
+     * @return The result
+     */
+    ListTransactionsResult listTransactions(ListTransactionsOptions options);
+
+    /**
+     * Fence out all active producers that use any of the provided transactional IDs, with the default options.
+     * <p>
+     * This is a convenience method for {@link #fenceProducers(Collection, FenceProducersOptions)}
+     * with default options. See the overload for more details.
+     *
+     * @param transactionalIds The IDs of the producers to fence.
+     * @return The FenceProducersResult.
+     */
+    default FenceProducersResult fenceProducers(Collection<String> transactionalIds) {
+        return fenceProducers(transactionalIds, new FenceProducersOptions());
+    }
+
+    /**
+     * Fence out all active producers that use any of the provided transactional IDs.
+     *
+     * @param transactionalIds The IDs of the producers to fence.
+     * @param options          The options to use when fencing the producers.
+     * @return The FenceProducersResult.
+     */
+    FenceProducersResult fenceProducers(Collection<String> transactionalIds,
+                                        FenceProducersOptions options);
 
     /**
      * Get the metrics kept by the adminClient

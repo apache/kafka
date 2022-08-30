@@ -178,4 +178,11 @@ public class TaggedFields extends DocumentedType {
     public String documentation() {
         return "Represents a series of tagged fields.";
     }
+
+    /**
+     * The number of tagged fields
+     */
+    public int numFields() {
+        return this.fields.size();
+    }
 }

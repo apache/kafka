@@ -53,13 +53,13 @@ class StopReplicaRequestTest extends BaseRequestTest {
         .setTopicName(tp0.topic())
         .setPartitionStates(Seq(new StopReplicaPartitionState()
           .setPartitionIndex(tp0.partition())
-          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+          .setLeaderEpoch(LeaderAndIsr.InitialLeaderEpoch + 2)
           .setDeletePartition(true)).asJava),
       new StopReplicaTopicState()
         .setTopicName(tp1.topic())
         .setPartitionStates(Seq(new StopReplicaPartitionState()
           .setPartitionIndex(tp1.partition())
-          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+          .setLeaderEpoch(LeaderAndIsr.InitialLeaderEpoch + 2)
           .setDeletePartition(true)).asJava)
     ).asJava
 

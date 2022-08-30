@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.compress;
 
+import com.github.luben.zstd.BufferPool;
 import com.github.luben.zstd.RecyclingBufferPool;
 import com.github.luben.zstd.ZstdInputStreamNoFinalizer;
 import com.github.luben.zstd.ZstdOutputStreamNoFinalizer;
@@ -47,10 +48,24 @@ public class ZstdFactory {
 
     public static InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
         try {
+            // We use our own BufferSupplier instead of com.github.luben.zstd.RecyclingBufferPool since our
+            // implementation doesn't require locking or soft references.
+            BufferPool bufferPool = new BufferPool() {
+                @Override
+                public ByteBuffer get(int capacity) {
+                    return decompressionBufferSupplier.get(capacity);
+                }
+
+                @Override
+                public void release(ByteBuffer buffer) {
+                    decompressionBufferSupplier.release(buffer);
+                }
+            };
+
             // Set output buffer (uncompressed) to 16 KB (none by default) to ensure reasonable performance
             // in cases where the caller reads a small number of bytes (potentially a single byte).
             return new BufferedInputStream(new ZstdInputStreamNoFinalizer(new ByteBufferInputStream(buffer),
-                RecyclingBufferPool.INSTANCE), 16 * 1024);
+                bufferPool), 16 * 1024);
         } catch (Throwable e) {
             throw new KafkaException(e);
         }

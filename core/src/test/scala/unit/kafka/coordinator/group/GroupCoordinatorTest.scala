@@ -18,9 +18,8 @@
 package kafka.coordinator.group
 
 import java.util.Optional
-
 import kafka.common.OffsetAndMetadata
-import kafka.server.{DelayedOperationPurgatory, HostedPartition, KafkaConfig, ReplicaManager}
+import kafka.server.{DelayedOperationPurgatory, HostedPartition, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils._
 import kafka.utils.timer.MockTimer
 import org.apache.kafka.common.TopicPartition
@@ -28,10 +27,9 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetCommitRequest, OffsetFetchResponse, TransactionResult}
-import org.easymock.{Capture, EasyMock, IAnswer}
+
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
-
 import kafka.cluster.Partition
 import kafka.log.AppendOrigin
 import kafka.zk.KafkaZkClient
@@ -42,6 +40,11 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+import org.mockito.ArgumentMatchers.{any, anyLong, anyShort}
+import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
@@ -68,11 +71,11 @@ class GroupCoordinatorTest {
   val DefaultRebalanceTimeout = 500
   val DefaultSessionTimeout = 500
   val GroupInitialRebalanceDelay = 50
-  var timer: MockTimer = null
-  var groupCoordinator: GroupCoordinator = null
-  var replicaManager: ReplicaManager = null
-  var scheduler: KafkaScheduler = null
-  var zkClient: KafkaZkClient = null
+  var timer: MockTimer = _
+  var groupCoordinator: GroupCoordinator = _
+  var replicaManager: ReplicaManager = _
+  var scheduler: KafkaScheduler = _
+  var zkClient: KafkaZkClient = _
 
   private val groupId = "groupId"
   private val protocolType = "consumer"
@@ -102,32 +105,30 @@ class GroupCoordinatorTest {
     val ret = mutable.Map[String, Map[Int, Seq[Int]]]()
     ret += (Topic.GROUP_METADATA_TOPIC_NAME -> Map(0 -> Seq(1), 1 -> Seq(1)))
 
-    replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
+    replicaManager = mock(classOf[ReplicaManager])
 
-    zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    zkClient = mock(classOf[KafkaZkClient])
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-    EasyMock.expect(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2))
-    EasyMock.replay(zkClient)
+    when(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).thenReturn(Some(2))
 
     timer = new MockTimer
 
     val config = KafkaConfig.fromProps(props)
 
     val heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
-    val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
+    val rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
-    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
+    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, timer.time, new Metrics())
     groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
       enableMetadataExpiration = false)
 
     // add the partition into the owned partition list
     groupPartitionId = groupCoordinator.partitionFor(groupId)
-    groupCoordinator.groupManager.addPartitionOwnership(groupPartitionId)
+    groupCoordinator.groupManager.addOwnedPartition(groupPartitionId)
   }
 
   @AfterEach
   def tearDown(): Unit = {
-    EasyMock.reset(replicaManager)
     if (groupCoordinator != null)
       groupCoordinator.shutdown()
   }
@@ -142,12 +143,12 @@ class GroupCoordinatorTest {
 
     // Dynamic Member JoinGroup
     var joinGroupResponse: Option[JoinGroupResult] = None
-    groupCoordinator.handleJoinGroup(otherGroupId, memberId, None, true, "clientId", "clientHost", 60000, 10000, "consumer",
+    groupCoordinator.handleJoinGroup(otherGroupId, memberId, None, true, true, "clientId", "clientHost", 60000, 10000, "consumer",
       List("range" -> new Array[Byte](0)), result => { joinGroupResponse = Some(result)})
     assertEquals(Some(Errors.COORDINATOR_LOAD_IN_PROGRESS), joinGroupResponse.map(_.error))
 
     // Static Member JoinGroup
-    groupCoordinator.handleJoinGroup(otherGroupId, memberId, Some("groupInstanceId"), false, "clientId", "clientHost", 60000, 10000, "consumer",
+    groupCoordinator.handleJoinGroup(otherGroupId, memberId, Some("groupInstanceId"), false, true, "clientId", "clientHost", 60000, 10000, "consumer",
       List("range" -> new Array[Byte](0)), result => { joinGroupResponse = Some(result)})
     assertEquals(Some(Errors.COORDINATOR_LOAD_IN_PROGRESS), joinGroupResponse.map(_.error))
 
@@ -186,10 +187,10 @@ class GroupCoordinatorTest {
 
     // After loading, we should be able to access the group
     val otherGroupMetadataTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, otherGroupPartitionId)
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getLog(otherGroupMetadataTopicPartition)).andReturn(None)
-    EasyMock.replay(replicaManager)
-    groupCoordinator.groupManager.loadGroupsAndOffsets(otherGroupMetadataTopicPartition, group => {}, 0L)
+    when(replicaManager.getLog(otherGroupMetadataTopicPartition)).thenReturn(None)
+    // Call removeGroupsAndOffsets so that partition removed from loadingPartitions
+    groupCoordinator.groupManager.removeGroupsAndOffsets(otherGroupMetadataTopicPartition, Some(1), group => {})
+    groupCoordinator.groupManager.loadGroupsAndOffsets(otherGroupMetadataTopicPartition, 1, group => {}, 0L)
     assertEquals(Errors.NONE, groupCoordinator.handleDescribeGroup(otherGroupId)._1)
   }
 
@@ -209,7 +210,6 @@ class GroupCoordinatorTest {
     var joinGroupResult = dynamicJoinGroup(otherGroupId, memberId, protocolType, protocols)
     assertEquals(Errors.NOT_COORDINATOR, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     joinGroupResult = staticJoinGroup(otherGroupId, memberId, groupInstanceId, protocolType, protocols)
     assertEquals(Errors.NOT_COORDINATOR, joinGroupResult.error)
   }
@@ -223,7 +223,6 @@ class GroupCoordinatorTest {
       futures += sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, rebalanceTimeout = rebalanceTimeout)
       if (i != 1)
         timer.advanceClock(GroupInitialRebalanceDelay)
-      EasyMock.reset(replicaManager)
     }
     // advance clock beyond rebalanceTimeout
     timer.advanceClock(GroupInitialRebalanceDelay + 1)
@@ -243,7 +242,6 @@ class GroupCoordinatorTest {
 
     // First JoinRequests
     var futures = 1.to(nbMembers).map { _ =>
-      EasyMock.reset(replicaManager)
       sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols,
         None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
     }
@@ -253,7 +251,6 @@ class GroupCoordinatorTest {
 
     // Second JoinRequests
     futures = memberIds.map { memberId =>
-      EasyMock.reset(replicaManager)
       sendJoinGroup(groupId, memberId, protocolType, protocols,
         None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
     }
@@ -272,7 +269,6 @@ class GroupCoordinatorTest {
     // Members which were accepted can rejoin, others are rejected, while
     // completing rebalance
     futures = memberIds.map { memberId =>
-      EasyMock.reset(replicaManager)
       sendJoinGroup(groupId, memberId, protocolType, protocols,
         None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
     }
@@ -290,7 +286,6 @@ class GroupCoordinatorTest {
 
     // JoinRequests
     var futures = 1.to(nbMembers).map { _ =>
-      EasyMock.reset(replicaManager)
       sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols,
         None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
     }
@@ -311,7 +306,6 @@ class GroupCoordinatorTest {
     // completing rebalance
     val memberIds = joinGroupResults.map(_.memberId)
     futures = memberIds.map { memberId =>
-      EasyMock.reset(replicaManager)
       sendJoinGroup(groupId, memberId, protocolType, protocols,
         None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
     }
@@ -329,7 +323,6 @@ class GroupCoordinatorTest {
 
     // JoinRequests
     var futures = instanceIds.map { instanceId =>
-      EasyMock.reset(replicaManager)
       sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols,
         instanceId, DefaultSessionTimeout, DefaultRebalanceTimeout)
     }
@@ -350,7 +343,6 @@ class GroupCoordinatorTest {
     // completing rebalance
     val memberIds = joinGroupResults.map(_.memberId)
     futures = instanceIds.zip(memberIds).map { case (instanceId, memberId) =>
-      EasyMock.reset(replicaManager)
       sendJoinGroup(groupId, memberId, protocolType, protocols,
         instanceId, DefaultSessionTimeout, DefaultRebalanceTimeout)
     }
@@ -368,7 +360,6 @@ class GroupCoordinatorTest {
 
     // First JoinRequests
     var futures = 1.to(nbMembers).map { _ =>
-      EasyMock.reset(replicaManager)
       sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols,
         None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
     }
@@ -378,14 +369,12 @@ class GroupCoordinatorTest {
 
     // Second JoinRequests
     memberIds.map { memberId =>
-      EasyMock.reset(replicaManager)
       sendJoinGroup(groupId, memberId, protocolType, protocols,
         None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
     }
 
     // Members can rejoin while rebalancing
     futures = memberIds.map { memberId =>
-      EasyMock.reset(replicaManager)
       sendJoinGroup(groupId, memberId, protocolType, protocols,
         None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
     }
@@ -417,7 +406,6 @@ class GroupCoordinatorTest {
     groupCoordinator.prepareRebalance(group, "")
 
     val futures = memberIds.map { memberId =>
-      EasyMock.reset(replicaManager)
       sendJoinGroup(groupId, memberId, protocolType, protocols,
         None, GroupMaxSessionTimeout, DefaultRebalanceTimeout)
     }
@@ -457,7 +445,6 @@ class GroupCoordinatorTest {
     var joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     joinGroupResult = staticJoinGroup(groupId, memberId, groupInstanceId, protocolType, protocols)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, joinGroupResult.error)
   }
@@ -487,7 +474,6 @@ class GroupCoordinatorTest {
     val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val otherJoinGroupResult = await(sendJoinGroup(groupId, otherMemberId, "connect", protocols), 1)
     assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, otherJoinGroupResult.error)
   }
@@ -499,7 +485,6 @@ class GroupCoordinatorTest {
     var joinGroupResult = dynamicJoinGroup(groupId, memberId, "", protocols)
     assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     joinGroupResult = staticJoinGroup(groupId, memberId, groupInstanceId, "", protocols)
     assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, joinGroupResult.error)
   }
@@ -526,7 +511,6 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, joinResult.error)
     assertEquals(0, group.allMemberMetadata.count(_.isNew))
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, joinResult.generationId, memberId, Map(memberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
     assertEquals(1, group.size)
@@ -561,7 +545,6 @@ class GroupCoordinatorTest {
     val group = groupOpt.get
     assertEquals(0, group.allMemberMetadata.count(_.isNew))
 
-    EasyMock.reset(replicaManager)
     val responseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, None, sessionTimeout, rebalanceTimeout)
     assertFalse(responseFuture.isCompleted)
 
@@ -594,15 +577,12 @@ class GroupCoordinatorTest {
     assertEquals(firstMemberId, firstJoinResult.leaderId)
     assertEquals(Errors.NONE, firstJoinResult.error)
 
-    EasyMock.reset(replicaManager)
     val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId,
       Map(firstMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, firstSyncResult.error)
 
-    EasyMock.reset(replicaManager)
     val otherJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
 
-    EasyMock.reset(replicaManager)
     val joinFuture = sendJoinGroup(groupId, firstMemberId, protocolType, protocols,
       requireKnownMemberId = false)
 
@@ -627,15 +607,12 @@ class GroupCoordinatorTest {
     assertEquals(firstMemberId, firstJoinResult.leaderId)
     assertEquals(Errors.NONE, firstJoinResult.error)
 
-    EasyMock.reset(replicaManager)
     val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId,
       Map(firstMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, firstSyncResult.error)
 
-    EasyMock.reset(replicaManager)
     val otherJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
 
-    EasyMock.reset(replicaManager)
     val joinFuture = sendJoinGroup(groupId, firstMemberId, protocolType, protocols,
       requireKnownMemberId = false)
 
@@ -646,10 +623,8 @@ class GroupCoordinatorTest {
     val secondGenerationId = joinResult.generationId
     val secondMemberId = otherJoinResult.memberId
 
-    EasyMock.reset(replicaManager)
     sendSyncGroupFollower(groupId, secondGenerationId, secondMemberId)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, secondGenerationId, firstMemberId,
       Map(firstMemberId -> Array.emptyByteArray, secondMemberId -> Array.emptyByteArray))
     assertEquals(Errors.NONE, syncGroupResult.error)
@@ -658,10 +633,8 @@ class GroupCoordinatorTest {
   }
 
   private def verifySessionExpiration(groupId: String): Unit = {
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject()))
-      .andReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE)).anyTimes()
-    EasyMock.replay(replicaManager)
+    when(replicaManager.getMagic(any[TopicPartition]))
+      .thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
 
     timer.advanceClock(DefaultSessionTimeout + 1)
 
@@ -677,7 +650,6 @@ class GroupCoordinatorTest {
 
     val joinGroupFuture = sendJoinGroup(groupId, memberId, protocolType, List(("range", metadata)))
 
-    EasyMock.reset(replicaManager)
     val otherJoinGroupResult = dynamicJoinGroup(groupId, otherMemberId, protocolType, List(("roundrobin", metadata)))
     timer.advanceClock(GroupInitialRebalanceDelay + 1)
 
@@ -694,7 +666,6 @@ class GroupCoordinatorTest {
     val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val otherJoinGroupResult = await(sendJoinGroup(groupId, otherMemberId, protocolType, protocols), 1)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, otherJoinGroupResult.error)
   }
@@ -727,13 +698,11 @@ class GroupCoordinatorTest {
     val memberId = joinGroupResult.memberId
 
     // Sending an inconsistent protocol shall be refused
-    EasyMock.reset(replicaManager)
     responseFuture = sendJoinGroup(groupId, memberId, protocolType, List(), requireKnownMemberId = true)
     joinGroupResult = Await.result(responseFuture, Duration(DefaultRebalanceTimeout + 1, TimeUnit.MILLISECONDS))
     assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, joinGroupResult.error)
 
     // Sending consistent protocol shall be accepted
-    EasyMock.reset(replicaManager)
     responseFuture = sendJoinGroup(groupId, memberId, protocolType, protocols, requireKnownMemberId = true)
     timer.advanceClock(GroupInitialRebalanceDelay + 1)
     joinGroupResult = Await.result(responseFuture, Duration(DefaultRebalanceTimeout + 1, TimeUnit.MILLISECONDS))
@@ -751,7 +720,6 @@ class GroupCoordinatorTest {
     var joinGroupResult = staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, groupInstanceId, protocolType, protocols)
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val unknownMemberId = "unknown_member"
     joinGroupResult = staticJoinGroup(groupId, unknownMemberId, groupInstanceId, protocolType, protocols)
     assertEquals(Errors.FENCED_INSTANCE_ID, joinGroupResult.error)
@@ -766,13 +734,11 @@ class GroupCoordinatorTest {
     timer.advanceClock(1)
     assertTrue(getGroup(groupId).is(PreparingRebalance))
 
-    EasyMock.reset(replicaManager)
     timer.advanceClock(1)
     // Old follower rejoins group will be matching current member.id.
     val oldFollowerJoinGroupFuture =
       sendJoinGroup(groupId, rebalanceResult.followerId, protocolType, protocols, groupInstanceId = Some(followerInstanceId))
 
-    EasyMock.reset(replicaManager)
     timer.advanceClock(1)
     // Duplicate follower joins group with unknown member id will trigger member.id replacement.
     val duplicateFollowerJoinFuture =
@@ -800,7 +766,6 @@ class GroupCoordinatorTest {
     timer.advanceClock(1)
     assertTrue(getGroup(groupId).is(PreparingRebalance))
 
-    EasyMock.reset(replicaManager)
     timer.advanceClock(1)
     // Old follower rejoins group will match current member.id.
     val oldFollowerJoinGroupFuture =
@@ -833,11 +798,9 @@ class GroupCoordinatorTest {
     // Duplicate follower joins group with unknown member id will trigger member.id replacement,
     // and will also trigger a rebalance under CompletingRebalance state; the old follower sync callback
     // will return fenced exception while broker replaces the member identity with the duplicate follower joins.
-    EasyMock.reset(replicaManager)
     val oldFollowerSyncGroupFuture = sendSyncGroupFollower(groupId, oldFollowerJoinGroupResult.generationId,
       oldFollowerJoinGroupResult.memberId, Some(protocolType), Some(protocolName), Some(followerInstanceId))
 
-    EasyMock.reset(replicaManager)
     val duplicateFollowerJoinFuture =
       sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, groupInstanceId = Some(followerInstanceId))
     timer.advanceClock(1)
@@ -870,12 +833,10 @@ class GroupCoordinatorTest {
     timer.advanceClock(1)
     assertTrue(getGroup(groupId).is(PreparingRebalance))
 
-    EasyMock.reset(replicaManager)
     // Duplicate follower joins group will trigger member.id replacement.
     val duplicateFollowerJoinGroupFuture =
       sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, groupInstanceId = Some(followerInstanceId))
 
-    EasyMock.reset(replicaManager)
     timer.advanceClock(1)
     // Old follower rejoins group will fail because member.id already updated.
     val oldFollowerJoinGroupFuture =
@@ -912,7 +873,6 @@ class GroupCoordinatorTest {
     var joinGroupResult = staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, groupInstanceId, protocolType, protocols)
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val assignedMemberId = joinGroupResult.memberId
     // The second join group should return immediately since we are using the same metadata during CompletingRebalance.
     val rejoinResponseFuture = sendJoinGroup(groupId, assignedMemberId, protocolType, protocols, Some(groupInstanceId))
@@ -921,7 +881,6 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, joinGroupResult.error)
     assertTrue(getGroup(groupId).is(CompletingRebalance))
 
-    EasyMock.reset(replicaManager)
     val syncGroupFuture = sendSyncGroupLeader(groupId, joinGroupResult.generationId, assignedMemberId,
       Some(protocolType), Some(protocolName), Some(groupInstanceId), Map(assignedMemberId -> Array[Byte]()))
     timer.advanceClock(1)
@@ -930,35 +889,35 @@ class GroupCoordinatorTest {
     assertTrue(getGroup(groupId).is(Stable))
   }
 
-  @Test
-  def staticMemberRejoinWithLeaderIdAndUnknownMemberId(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def staticMemberRejoinWithLeaderIdAndUnknownMemberId(supportSkippingAssignment: Boolean): Unit = {
     val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
 
     // A static leader rejoin with unknown id will not trigger rebalance, and no assignment will be returned.
     val joinGroupResult = staticJoinGroupWithPersistence(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID,
-      leaderInstanceId, protocolType, protocolSuperset, clockAdvance = 1)
+      leaderInstanceId, protocolType, protocolSuperset, clockAdvance = 1, supportSkippingAssignment = supportSkippingAssignment)
 
     checkJoinGroupResult(joinGroupResult,
       Errors.NONE,
       rebalanceResult.generation, // The group should be at the same generation
-      Set.empty,
+      if (supportSkippingAssignment) Set(leaderInstanceId, followerInstanceId) else Set.empty,
       Stable,
       Some(protocolType),
-      rebalanceResult.leaderId)
+      if (supportSkippingAssignment) joinGroupResult.memberId else rebalanceResult.leaderId,
+      expectedSkipAssignment = supportSkippingAssignment
+    )
 
-    EasyMock.reset(replicaManager)
     val oldLeaderJoinGroupResult = staticJoinGroup(groupId, rebalanceResult.leaderId, leaderInstanceId, protocolType, protocolSuperset, clockAdvance = 1)
     assertEquals(Errors.FENCED_INSTANCE_ID, oldLeaderJoinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     // Old leader will get fenced.
     val oldLeaderSyncGroupResult = syncGroupLeader(groupId, rebalanceResult.generation, rebalanceResult.leaderId,
       Map.empty, None, None, Some(leaderInstanceId))
     assertEquals(Errors.FENCED_INSTANCE_ID, oldLeaderSyncGroupResult.error)
 
     // Calling sync on old leader.id will fail because that leader.id is no longer valid and replaced.
-    EasyMock.reset(replicaManager)
-    val newLeaderSyncGroupResult = syncGroupLeader(groupId, rebalanceResult.generation, joinGroupResult.leaderId, Map.empty)
+    val newLeaderSyncGroupResult = syncGroupLeader(groupId, rebalanceResult.generation, rebalanceResult.leaderId, Map.empty)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, newLeaderSyncGroupResult.error)
   }
 
@@ -1066,13 +1025,11 @@ class GroupCoordinatorTest {
       Stable,
       Some(protocolType))
 
-    EasyMock.reset(replicaManager)
     // Join with old member id will not fail because the member id is not updated because of persistence failure
     assertNotEquals(rebalanceResult.followerId, joinGroupResult.memberId)
     val oldFollowerJoinGroupResult = staticJoinGroup(groupId, rebalanceResult.followerId, followerInstanceId, protocolType, newProtocols, clockAdvance = 1)
     assertEquals(Errors.NONE, oldFollowerJoinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     // Sync with old member id will also not fail because the member id is not updated because of persistence failure
     val syncGroupWithOldMemberIdResult = syncGroupFollower(groupId, rebalanceResult.generation,
       rebalanceResult.followerId, None, None, Some(followerInstanceId))
@@ -1098,19 +1055,16 @@ class GroupCoordinatorTest {
       Stable,
       Some(protocolType))
 
-    EasyMock.reset(replicaManager)
     // Join with old member id will fail because the member id is updated
     assertNotEquals(rebalanceResult.followerId, joinGroupResult.memberId)
     val oldFollowerJoinGroupResult = staticJoinGroup(groupId, rebalanceResult.followerId, followerInstanceId, protocolType, newProtocols, clockAdvance = 1)
     assertEquals(Errors.FENCED_INSTANCE_ID, oldFollowerJoinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     // Sync with old member id will fail because the member id is updated
     val syncGroupWithOldMemberIdResult = syncGroupFollower(groupId, rebalanceResult.generation,
       rebalanceResult.followerId, None, None, Some(followerInstanceId))
     assertEquals(Errors.FENCED_INSTANCE_ID, syncGroupWithOldMemberIdResult.error)
 
-    EasyMock.reset(replicaManager)
     val syncGroupWithNewMemberIdResult = syncGroupFollower(groupId, rebalanceResult.generation,
       joinGroupResult.memberId, None, None, Some(followerInstanceId))
     assertEquals(Errors.NONE, syncGroupWithNewMemberIdResult.error)
@@ -1125,7 +1079,6 @@ class GroupCoordinatorTest {
     val leaderRejoinGroupFuture = sendJoinGroup(groupId, rebalanceResult.leaderId, protocolType,
       protocolSuperset, Some(leaderInstanceId))
     // Rebalance complete immediately after follower rejoin.
-    EasyMock.reset(replicaManager)
     val followerRejoinWithFuture = sendJoinGroup(groupId, rebalanceResult.followerId, protocolType,
       protocolSuperset, Some(followerInstanceId))
 
@@ -1150,7 +1103,6 @@ class GroupCoordinatorTest {
       rebalanceResult.leaderId,
       rebalanceResult.followerId)
 
-    EasyMock.reset(replicaManager)
     // The follower protocol changed from protocolSuperset to general protocols.
     val followerRejoinWithProtocolChangeFuture = sendJoinGroup(groupId, rebalanceResult.followerId,
       protocolType, protocols, Some(followerInstanceId))
@@ -1186,7 +1138,6 @@ class GroupCoordinatorTest {
 
     assertNotEquals(rebalanceResult.followerId, joinGroupResult.memberId)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupFollower(groupId, rebalanceResult.generation, joinGroupResult.memberId)
     assertEquals(Errors.NONE, syncGroupResult.error)
     assertEquals(rebalanceResult.followerAssignment, syncGroupResult.memberAssignment)
@@ -1243,11 +1194,9 @@ class GroupCoordinatorTest {
     val syncGroupResult = syncGroupLeader(groupId, rebalanceResult.generation, rebalanceResult.leaderId, Map.empty)
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val validHeartbeatResult = heartbeat(groupId, rebalanceResult.leaderId, rebalanceResult.generation)
     assertEquals(Errors.NONE, validHeartbeatResult)
 
-    EasyMock.reset(replicaManager)
     val invalidHeartbeatResult = heartbeat(groupId, invalidMemberId, rebalanceResult.generation, Some(leaderInstanceId))
     assertEquals(Errors.FENCED_INSTANCE_ID, invalidHeartbeatResult)
   }
@@ -1259,7 +1208,6 @@ class GroupCoordinatorTest {
     val timeAdvance = 1
     var lastMemberId = initialResult.leaderId
     for (_ <- 1 to 5) {
-      EasyMock.reset(replicaManager)
       val joinGroupResult = staticJoinGroupWithPersistence(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID,
         leaderInstanceId, protocolType, protocols, clockAdvance = timeAdvance)
       assertTrue(joinGroupResult.memberId.startsWith(leaderInstanceId))
@@ -1290,11 +1238,9 @@ class GroupCoordinatorTest {
 
     val tp = new TopicPartition("topic", 0)
     val offset = offsetAndMetadata(0)
-    EasyMock.reset(replicaManager)
     val validOffsetCommitResult = commitOffsets(groupId, rebalanceResult.leaderId, rebalanceResult.generation, Map(tp -> offset))
     assertEquals(Errors.NONE, validOffsetCommitResult(tp))
 
-    EasyMock.reset(replicaManager)
     val invalidOffsetCommitResult = commitOffsets(groupId, invalidMemberId, rebalanceResult.generation,
       Map(tp -> offset), Some(leaderInstanceId))
     assertEquals(Errors.FENCED_INSTANCE_ID, invalidOffsetCommitResult(tp))
@@ -1317,7 +1263,6 @@ class GroupCoordinatorTest {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Empty)
 
-    EasyMock.reset(replicaManager)
 
     // Illegal state exception shall trigger since follower id resides in pending member bucket.
     val expectedException = assertThrows(classOf[IllegalStateException],
@@ -1344,7 +1289,6 @@ class GroupCoordinatorTest {
   def testLeaderRejoinBeforeFinalRebalanceTimeoutWithLongSessionTimeout(): Unit = {
     groupStuckInRebalanceTimeoutDueToNonjoinedStaticMember()
 
-    EasyMock.reset(replicaManager)
     // The static leader should be back now, moving group towards CompletingRebalance
     val leaderRejoinGroupResult = staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, leaderInstanceId, protocolType, protocols)
     checkJoinGroupResult(leaderRejoinGroupResult,
@@ -1381,7 +1325,6 @@ class GroupCoordinatorTest {
     assertEquals(Set(dynamicJoinResult.memberId), getGroup(groupId).allDynamicMembers)
 
     // Send a special leave group request from static follower, moving group towards PreparingRebalance
-    EasyMock.reset(replicaManager)
     val followerLeaveGroupResults = singleLeaveGroup(groupId, rebalanceResult.followerId)
     verifyLeaveGroupResult(followerLeaveGroupResults)
     assertGroupState(groupState = PreparingRebalance)
@@ -1408,7 +1351,6 @@ class GroupCoordinatorTest {
       protocolSuperset, Some(newMemberInstanceId))
     assertGroupState(groupState = PreparingRebalance)
 
-    EasyMock.reset(replicaManager)
     val leaderRejoinGroupResult = staticJoinGroup(groupId, leaderId, leaderInstanceId, protocolType, protocolSuperset, clockAdvance = DefaultRebalanceTimeout + 1)
     checkJoinGroupResult(leaderRejoinGroupResult,
       Errors.NONE,
@@ -1442,7 +1384,6 @@ class GroupCoordinatorTest {
     timer.advanceClock(1)
     assertGroupState(groupState = PreparingRebalance)
 
-    EasyMock.reset(replicaManager)
     val oldFollowerRejoinGroupResult = staticJoinGroup(groupId, initialRebalanceResult.followerId, followerInstanceId, protocolType, protocolSuperset, clockAdvance = DefaultRebalanceTimeout + 1)
     val newMemberJoinGroupResult = Await.result(newMemberJoinGroupFuture, Duration(1, TimeUnit.MILLISECONDS))
 
@@ -1470,7 +1411,6 @@ class GroupCoordinatorTest {
   @Test
   def testJoinGroupProtocolTypeIsNotProvidedWhenAnErrorOccurs(): Unit = {
     // JoinGroup(leader)
-    EasyMock.reset(replicaManager)
     val leaderResponseFuture = sendJoinGroup(groupId, "fake-id", protocolType,
       protocolSuperset, Some(leaderInstanceId), DefaultSessionTimeout)
 
@@ -1483,12 +1423,10 @@ class GroupCoordinatorTest {
   @Test
   def testJoinGroupReturnsTheProtocolType(): Unit = {
     // JoinGroup(leader)
-    EasyMock.reset(replicaManager)
     val leaderResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType,
       protocolSuperset, Some(leaderInstanceId), DefaultSessionTimeout)
 
     // JoinGroup(follower)
-    EasyMock.reset(replicaManager)
     val followerResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType,
       protocolSuperset, Some(followerInstanceId), DefaultSessionTimeout)
 
@@ -1536,12 +1474,10 @@ class GroupCoordinatorTest {
                                                    expectedProtocolType: Option[String],
                                                    expectedProtocolName: Option[String]): Unit = {
     // JoinGroup(leader) with the Protocol Type of the group
-    EasyMock.reset(replicaManager)
     val leaderResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, this.protocolType,
       protocolSuperset, Some(leaderInstanceId), DefaultSessionTimeout)
 
     // JoinGroup(follower) with the Protocol Type of the group
-    EasyMock.reset(replicaManager)
     val followerResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, this.protocolType,
       protocolSuperset, Some(followerInstanceId), DefaultSessionTimeout)
 
@@ -1555,7 +1491,6 @@ class GroupCoordinatorTest {
     val followerId = followerJoinGroupResult.memberId
 
     // SyncGroup with the provided Protocol Type and Name
-    EasyMock.reset(replicaManager)
     val leaderSyncGroupResult = syncGroupLeader(groupId, generationId, leaderId,
       Map(leaderId -> Array.empty), protocolType, protocolName)
     assertEquals(expectedError, leaderSyncGroupResult.error)
@@ -1563,7 +1498,6 @@ class GroupCoordinatorTest {
     assertEquals(expectedProtocolName, leaderSyncGroupResult.protocolName)
 
     // SyncGroup with the provided Protocol Type and Name
-    EasyMock.reset(replicaManager)
     val followerSyncGroupResult = syncGroupFollower(groupId, generationId, followerId,
       protocolType, protocolName)
     assertEquals(expectedError, followerSyncGroupResult.error)
@@ -1587,11 +1521,9 @@ class GroupCoordinatorTest {
   private def staticMembersJoinAndRebalance(leaderInstanceId: String,
                                             followerInstanceId: String,
                                             sessionTimeout: Int = DefaultSessionTimeout): RebalanceResult = {
-    EasyMock.reset(replicaManager)
     val leaderResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType,
       protocolSuperset, Some(leaderInstanceId), sessionTimeout)
 
-    EasyMock.reset(replicaManager)
     val followerResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType,
       protocolSuperset, Some(followerInstanceId), sessionTimeout)
     // The goal for two timer advance is to let first group initial join complete and set newMemberAdded flag to false. Next advance is
@@ -1609,19 +1541,16 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, followerJoinGroupResult.error)
     assertEquals(newGeneration, followerJoinGroupResult.generationId)
 
-    EasyMock.reset(replicaManager)
     val leaderId = leaderJoinGroupResult.memberId
     val leaderSyncGroupResult = syncGroupLeader(groupId, leaderJoinGroupResult.generationId, leaderId, Map(leaderId -> Array[Byte]()))
     assertEquals(Errors.NONE, leaderSyncGroupResult.error)
     assertTrue(getGroup(groupId).is(Stable))
 
-    EasyMock.reset(replicaManager)
     val followerId = followerJoinGroupResult.memberId
     val followerSyncGroupResult = syncGroupFollower(groupId, leaderJoinGroupResult.generationId, followerId)
     assertEquals(Errors.NONE, followerSyncGroupResult.error)
     assertTrue(getGroup(groupId).is(Stable))
 
-    EasyMock.reset(replicaManager)
     new RebalanceResult(newGeneration,
       leaderId,
       leaderSyncGroupResult.memberAssignment,
@@ -1636,7 +1565,8 @@ class GroupCoordinatorTest {
                                    expectedGroupState: GroupState,
                                    expectedProtocolType: Option[String],
                                    expectedLeaderId: String = JoinGroupRequest.UNKNOWN_MEMBER_ID,
-                                   expectedMemberId: String = JoinGroupRequest.UNKNOWN_MEMBER_ID): Unit = {
+                                   expectedMemberId: String = JoinGroupRequest.UNKNOWN_MEMBER_ID,
+                                   expectedSkipAssignment: Boolean = false): Unit = {
     assertEquals(expectedError, joinGroupResult.error)
     assertEquals(expectedGeneration, joinGroupResult.generationId)
     assertEquals(expectedGroupInstanceIds.size, joinGroupResult.members.size)
@@ -1644,6 +1574,7 @@ class GroupCoordinatorTest {
     assertEquals(expectedGroupInstanceIds, resultedGroupInstanceIds)
     assertGroupState(groupState = expectedGroupState)
     assertEquals(expectedProtocolType, joinGroupResult.protocolType)
+    assertEquals(expectedSkipAssignment, joinGroupResult.skipAssignment)
 
     if (!expectedLeaderId.equals(JoinGroupRequest.UNKNOWN_MEMBER_ID)) {
       assertEquals(expectedLeaderId, joinGroupResult.leaderId)
@@ -1666,7 +1597,7 @@ class GroupCoordinatorTest {
   }
 
   @Test
-  def testheartbeatDeadGroup(): Unit = {
+  def testHeartbeatDeadGroup(): Unit = {
     val memberId = "memberId"
 
     val deadGroupId = "deadGroupId"
@@ -1677,7 +1608,7 @@ class GroupCoordinatorTest {
   }
 
   @Test
-  def testheartbeatEmptyGroup(): Unit = {
+  def testHeartbeatEmptyGroup(): Unit = {
     val memberId = "memberId"
 
     val group = new GroupMetadata(groupId, Empty, new MockTime())
@@ -1701,11 +1632,9 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val heartbeatResult = heartbeat(groupId, otherMemberId, 1)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, heartbeatResult)
   }
@@ -1719,7 +1648,6 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val heartbeatResult = heartbeat(groupId, assignedMemberId, 1)
     assertEquals(Errors.NONE, heartbeatResult)
   }
@@ -1733,11 +1661,9 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val heartbeatResult = heartbeat(groupId, assignedMemberId, 2)
     assertEquals(Errors.ILLEGAL_GENERATION, heartbeatResult)
   }
@@ -1752,11 +1678,9 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val heartbeatResult = heartbeat(groupId, assignedConsumerId, 1)
     assertEquals(Errors.NONE, heartbeatResult)
   }
@@ -1771,19 +1695,15 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getPartition(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)))
-      .andReturn(HostedPartition.None)
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
-    EasyMock.replay(replicaManager)
+    when(replicaManager.getPartition(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)))
+      .thenReturn(HostedPartition.None)
+    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
 
     timer.advanceClock(DefaultSessionTimeout + 100)
 
-    EasyMock.reset(replicaManager)
     val heartbeatResult = heartbeat(groupId, assignedConsumerId, 1)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, heartbeatResult)
   }
@@ -1800,19 +1720,16 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
     timer.advanceClock(sessionTimeout / 2)
 
-    EasyMock.reset(replicaManager)
     var heartbeatResult = heartbeat(groupId, assignedConsumerId, 1)
     assertEquals(Errors.NONE, heartbeatResult)
 
     timer.advanceClock(sessionTimeout / 2 + 100)
 
-    EasyMock.reset(replicaManager)
     heartbeatResult = heartbeat(groupId, assignedConsumerId, 1)
     assertEquals(Errors.NONE, heartbeatResult)
   }
@@ -1831,19 +1748,16 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
     timer.advanceClock(sessionTimeout / 2)
 
-    EasyMock.reset(replicaManager)
     val commitOffsetResult = commitOffsets(groupId, assignedMemberId, generationId, Map(tp -> offset))
     assertEquals(Errors.NONE, commitOffsetResult(tp))
 
     timer.advanceClock(sessionTimeout / 2 + 100)
 
-    EasyMock.reset(replicaManager)
     val heartbeatResult = heartbeat(groupId, assignedMemberId, 1)
     assertEquals(Errors.NONE, heartbeatResult)
   }
@@ -1858,24 +1772,20 @@ class GroupCoordinatorTest {
     assertEquals(firstMemberId, firstJoinResult.leaderId)
     assertEquals(Errors.NONE, firstJoinResult.error)
 
-    EasyMock.reset(replicaManager)
     val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, firstSyncResult.error)
 
     // now have a new member join to trigger a rebalance
-    EasyMock.reset(replicaManager)
     val otherJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
 
     timer.advanceClock(500)
 
-    EasyMock.reset(replicaManager)
     var heartbeatResult = heartbeat(groupId, firstMemberId, firstGenerationId)
     assertEquals(Errors.REBALANCE_IN_PROGRESS, heartbeatResult)
 
     // letting the session expire should make the member fall out of the group
     timer.advanceClock(1100)
 
-    EasyMock.reset(replicaManager)
     heartbeatResult = heartbeat(groupId, firstMemberId, firstGenerationId)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, heartbeatResult)
 
@@ -1894,12 +1804,10 @@ class GroupCoordinatorTest {
     assertEquals(firstMemberId, firstJoinResult.leaderId)
     assertEquals(Errors.NONE, firstJoinResult.error)
 
-    EasyMock.reset(replicaManager)
     val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, firstSyncResult.error)
 
     // now have a new member join to trigger a rebalance
-    EasyMock.reset(replicaManager)
     val otherMemberSessionTimeout = DefaultSessionTimeout
     val otherJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
 
@@ -1907,7 +1815,6 @@ class GroupCoordinatorTest {
     var expectedResultList = List(Errors.REBALANCE_IN_PROGRESS, Errors.REBALANCE_IN_PROGRESS)
     for (expectedResult <- expectedResultList) {
       timer.advanceClock(otherMemberSessionTimeout)
-      EasyMock.reset(replicaManager)
       val heartbeatResult = heartbeat(groupId, firstMemberId, firstGenerationId)
       assertEquals(expectedResult, heartbeatResult)
     }
@@ -1917,13 +1824,11 @@ class GroupCoordinatorTest {
     val otherJoinResult = await(otherJoinFuture, otherMemberSessionTimeout+100)
     val otherMemberId = otherJoinResult.memberId
     val otherGenerationId = otherJoinResult.generationId
-    EasyMock.reset(replicaManager)
     val syncResult = syncGroupLeader(groupId, otherGenerationId, otherMemberId, Map(otherMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncResult.error)
 
     // the unjoined static member should be remained in the group before session timeout.
     assertEquals(Errors.NONE, otherJoinResult.error)
-    EasyMock.reset(replicaManager)
     var heartbeatResult = heartbeat(groupId, firstMemberId, firstGenerationId)
     assertEquals(Errors.ILLEGAL_GENERATION, heartbeatResult)
 
@@ -1932,17 +1837,14 @@ class GroupCoordinatorTest {
     // now session timeout the unjoined member. Still keeping the new member.
     for (expectedResult <- expectedResultList) {
       timer.advanceClock(otherMemberSessionTimeout)
-      EasyMock.reset(replicaManager)
       heartbeatResult = heartbeat(groupId, otherMemberId, otherGenerationId)
       assertEquals(expectedResult, heartbeatResult)
     }
 
-    EasyMock.reset(replicaManager)
     val otherRejoinGroupFuture = sendJoinGroup(groupId, otherMemberId, protocolType, protocols)
     val otherReJoinResult = await(otherRejoinGroupFuture, otherMemberSessionTimeout+100)
     assertEquals(Errors.NONE, otherReJoinResult.error)
 
-    EasyMock.reset(replicaManager)
     val otherRejoinGenerationId = otherReJoinResult.generationId
     val reSyncResult = syncGroupLeader(groupId, otherRejoinGenerationId, otherMemberId, Map(otherMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, reSyncResult.error)
@@ -1951,7 +1853,6 @@ class GroupCoordinatorTest {
     // to verify that no new rebalance is triggered unexpectedly
     for ( _ <-  1 to 20) {
       timer.advanceClock(500)
-      EasyMock.reset(replicaManager)
       heartbeatResult = heartbeat(groupId, otherMemberId, otherRejoinGenerationId)
       assertEquals(Errors.NONE, heartbeatResult)
     }
@@ -1967,12 +1868,10 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map())
     assertEquals(Errors.NONE, syncGroupResult.error)
     assertTrue(syncGroupResult.memberAssignment.isEmpty)
 
-    EasyMock.reset(replicaManager)
     val heartbeatResult = heartbeat(groupId, assignedConsumerId, 1)
     assertEquals(Errors.NONE, heartbeatResult)
   }
@@ -2000,12 +1899,10 @@ class GroupCoordinatorTest {
     val generationId = joinGroupResult.generationId
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
     val syncGroupError = syncGroupResult.error
     assertEquals(Errors.NONE, syncGroupError)
 
-    EasyMock.reset(replicaManager)
     val unknownMemberId = "blah"
     val unknownMemberSyncResult = syncGroupFollower(groupId, generationId, unknownMemberId)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, unknownMemberSyncResult.error)
@@ -2020,7 +1917,6 @@ class GroupCoordinatorTest {
     val generationId = joinGroupResult.generationId
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     // send the sync group with an invalid generation
     val syncGroupResult = syncGroupLeader(groupId, generationId+1, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
     assertEquals(Errors.ILLEGAL_GENERATION, syncGroupResult.error)
@@ -2038,14 +1934,11 @@ class GroupCoordinatorTest {
     assertEquals(firstMemberId, firstJoinResult.leaderId)
     assertEquals(Errors.NONE, firstJoinResult.error)
 
-    EasyMock.reset(replicaManager)
     val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, firstSyncResult.error)
 
-    EasyMock.reset(replicaManager)
     val otherJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
 
-    EasyMock.reset(replicaManager)
     val joinFuture = sendJoinGroup(groupId, firstMemberId, protocolType, protocols)
 
     val joinResult = await(joinFuture, DefaultSessionTimeout+100)
@@ -2060,7 +1953,6 @@ class GroupCoordinatorTest {
     val nextGenerationId = joinResult.generationId
 
     // this shouldn't cause a rebalance since protocol information hasn't changed
-    EasyMock.reset(replicaManager)
     val followerJoinResult = await(sendJoinGroup(groupId, otherJoinResult.memberId, protocolType, protocols), 1)
 
     assertEquals(Errors.NONE, followerJoinResult.error)
@@ -2075,14 +1967,12 @@ class GroupCoordinatorTest {
     assertEquals(firstMemberId, firstJoinResult.leaderId)
     assertEquals(Errors.NONE, firstJoinResult.error)
 
-    EasyMock.reset(replicaManager)
     val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, firstSyncResult.error)
 
     // join groups from the leader should force the group to rebalance, which allows the
     // leader to push new assignments when local metadata changes
 
-    EasyMock.reset(replicaManager)
     val secondJoinResult = await(sendJoinGroup(groupId, firstMemberId, protocolType, protocols), 1)
 
     assertEquals(Errors.NONE, secondJoinResult.error)
@@ -2104,7 +1994,6 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, firstJoinResult.error)
 
     // Starting sync group leader
-    EasyMock.reset(replicaManager)
     val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, firstSyncResult.error)
     timer.advanceClock(100)
@@ -2118,15 +2007,12 @@ class GroupCoordinatorTest {
     assertEquals(Stable, group.currentState)
 
     // new member initiates join group
-    EasyMock.reset(replicaManager)
     val secondJoinResult = joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
     assertEquals(Errors.MEMBER_ID_REQUIRED, secondJoinResult.error)
     assertEquals(1, group.numPending)
     assertEquals(Stable, group.currentState)
 
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
-    EasyMock.replay(replicaManager)
+    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
 
     // advance clock to timeout the pending member
     assertEquals(Set(firstMemberId), group.allMembers)
@@ -2134,7 +2020,6 @@ class GroupCoordinatorTest {
     timer.advanceClock(300)
 
     // original (firstMember) member sends heartbeats to prevent session timeouts.
-    EasyMock.reset(replicaManager)
     val heartbeatResult = heartbeat(groupId, firstMemberId, 1)
     assertEquals(Errors.NONE, heartbeatResult)
 
@@ -2159,40 +2044,33 @@ class GroupCoordinatorTest {
     assertGroupState(groupState = CompletingRebalance)
 
     // now the group is stable, with the one member that joined above
-    EasyMock.reset(replicaManager)
     val firstSyncResult = syncGroupLeader(groupId, joinResult1.generationId, joinResult1.memberId, Map(joinResult1.memberId -> Array[Byte]()))
     assertEquals(Errors.NONE, firstSyncResult.error)
     assertGroupState(groupState = Stable)
 
     // start the join for the second member
-    EasyMock.reset(replicaManager)
     val secondJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
 
     // rejoin the first member back into the group
-    EasyMock.reset(replicaManager)
     val firstJoinFuture = sendJoinGroup(groupId, joinResult1.memberId, protocolType, protocols)
     val firstMemberJoinResult = await(firstJoinFuture, DefaultSessionTimeout+100)
     val secondMemberJoinResult = await(secondJoinFuture, DefaultSessionTimeout+100)
     assertGroupState(groupState = CompletingRebalance)
 
     // stabilize the group
-    EasyMock.reset(replicaManager)
     val secondSyncResult = syncGroupLeader(groupId, firstMemberJoinResult.generationId, joinResult1.memberId, Map(joinResult1.memberId -> Array[Byte]()))
     assertEquals(Errors.NONE, secondSyncResult.error)
     assertGroupState(groupState = Stable)
 
     // re-join an existing member, to transition the group to PreparingRebalance state.
-    EasyMock.reset(replicaManager)
     sendJoinGroup(groupId, firstMemberJoinResult.memberId, protocolType, protocols)
     assertGroupState(groupState = PreparingRebalance)
 
     // create a pending member in the group
-    EasyMock.reset(replicaManager)
     val pendingMember = joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, sessionTimeout=100)
     assertEquals(1, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
 
     // re-join the second existing member
-    EasyMock.reset(replicaManager)
     sendJoinGroup(groupId, secondMemberJoinResult.memberId, protocolType, protocols)
     assertGroupState(groupState = PreparingRebalance)
     assertEquals(1, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
@@ -2209,7 +2087,6 @@ class GroupCoordinatorTest {
     val pendingMember = setupGroupWithPendingMember()
 
     // compete join group for the pending member
-    EasyMock.reset(replicaManager)
     val pendingMemberJoinFuture = sendJoinGroup(groupId, pendingMember.memberId, protocolType, protocols)
     await(pendingMemberJoinFuture, DefaultSessionTimeout+100)
 
@@ -2229,9 +2106,7 @@ class GroupCoordinatorTest {
     // Advancing Clock by > 100 (session timeout for third and fourth member)
     // and < 500 (for first and second members). This will force the coordinator to attempt join
     // completion on heartbeat expiration (since we are in PendingRebalance stage).
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
-    EasyMock.replay(replicaManager)
+    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
     timer.advanceClock(120)
 
     assertGroupState(groupState = CompletingRebalance)
@@ -2243,7 +2118,6 @@ class GroupCoordinatorTest {
   def testPendingMembersLeavesGroup(): Unit = {
     val pending = setupGroupWithPendingMember()
 
-    EasyMock.reset(replicaManager)
     val leaveGroupResults = singleLeaveGroup(groupId, pending.memberId)
     verifyLeaveGroupResult(leaveGroupResults)
 
@@ -2251,6 +2125,197 @@ class GroupCoordinatorTest {
     assertEquals(2, group().allMembers.size)
     assertEquals(2, group().allDynamicMembers.size)
     assertEquals(0, group().numPending)
+  }
+
+  private def verifyHeartbeat(
+    joinGroupResult: JoinGroupResult,
+    expectedError: Errors
+  ): Unit = {
+    val heartbeatResult = heartbeat(
+      groupId,
+      joinGroupResult.memberId,
+      joinGroupResult.generationId
+    )
+    assertEquals(expectedError, heartbeatResult)
+  }
+
+  private def joinWithNMembers(nbMembers: Int): Seq[JoinGroupResult] = {
+    val requiredKnownMemberId = true
+
+    // First JoinRequests
+    var futures = 1.to(nbMembers).map { _ =>
+      sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols,
+        None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
+    }
+
+    // Get back the assigned member ids
+    val memberIds = futures.map(await(_, 1).memberId)
+
+    // Second JoinRequests
+    futures = memberIds.map { memberId =>
+      sendJoinGroup(groupId, memberId, protocolType, protocols,
+        None, DefaultSessionTimeout, DefaultRebalanceTimeout, requiredKnownMemberId)
+    }
+
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
+    timer.advanceClock(DefaultRebalanceTimeout + 1)
+
+    futures.map(await(_, 1))
+  }
+
+  @Test
+  def testRebalanceTimesOutWhenSyncRequestIsNotReceived(): Unit = {
+    // This test case ensure that the DelayedSync does kick out all members
+    // if they don't sent a sync request before the rebalance timeout. The
+    // group is in the Stable state in this case.
+    val results = joinWithNMembers(nbMembers = 3)
+    assertEquals(Set(Errors.NONE), results.map(_.error).toSet)
+
+    // Advance time
+    timer.advanceClock(DefaultRebalanceTimeout / 2)
+
+    // Heartbeats to ensure that heartbeating does not interfere with the
+    // delayed sync operation.
+    results.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.NONE)
+    }
+
+    // Advance part the rebalance timeout to trigger the delayed operation.
+    when(replicaManager.getMagic(any[TopicPartition]))
+      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
+
+    timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
+
+    // Heartbeats fail because none of the members have sent the sync request
+    results.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.UNKNOWN_MEMBER_ID)
+    }
+  }
+
+  @Test
+  def testRebalanceTimesOutWhenSyncRequestIsNotReceivedFromFollowers(): Unit = {
+    // This test case ensure that the DelayedSync does kick out the followers
+    // if they don't sent a sync request before the rebalance timeout. The
+    // group is in the Stable state in this case.
+    val results = joinWithNMembers(nbMembers = 3)
+    assertEquals(Set(Errors.NONE), results.map(_.error).toSet)
+
+    // Advance time
+    timer.advanceClock(DefaultRebalanceTimeout / 2)
+
+    // Heartbeats to ensure that heartbeating does not interfere with the
+    // delayed sync operation.
+    results.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.NONE)
+    }
+
+    // Leader sends Sync
+    val assignments = results.map(result => result.memberId -> Array.empty[Byte]).toMap
+    val leaderResult = sendSyncGroupLeader(groupId, results.head.generationId, results.head.memberId,
+      Some(protocolType), Some(protocolName), None, assignments)
+
+    assertEquals(Errors.NONE, await(leaderResult, 1).error)
+
+    // Leader should be able to heartbeart
+    verifyHeartbeat(results.head, Errors.NONE)
+
+    // Advance part the rebalance timeout to trigger the delayed operation.
+    timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
+
+    // Leader should be able to heartbeart
+    verifyHeartbeat(results.head, Errors.REBALANCE_IN_PROGRESS)
+
+    // Followers should have been removed.
+    results.tail.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.UNKNOWN_MEMBER_ID)
+    }
+  }
+
+  @Test
+  def testRebalanceTimesOutWhenSyncRequestIsNotReceivedFromLeaders(): Unit = {
+    // This test case ensure that the DelayedSync does kick out the leader
+    // if it does not sent a sync request before the rebalance timeout. The
+    // group is in the CompletingRebalance state in this case.
+    val results = joinWithNMembers(nbMembers = 3)
+    assertEquals(Set(Errors.NONE), results.map(_.error).toSet)
+
+    // Advance time
+    timer.advanceClock(DefaultRebalanceTimeout / 2)
+
+    // Heartbeats to ensure that heartbeating does not interfere with the
+    // delayed sync operation.
+    results.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.NONE)
+    }
+
+    // Followers send Sync
+    val followerResults = results.tail.map { joinGroupResult =>
+      sendSyncGroupFollower(groupId, joinGroupResult.generationId, joinGroupResult.memberId,
+        Some(protocolType), Some(protocolName), None)
+    }
+
+    // Advance part the rebalance timeout to trigger the delayed operation.
+    timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
+
+    val followerErrors = followerResults.map(await(_, 1).error)
+    assertEquals(Set(Errors.REBALANCE_IN_PROGRESS), followerErrors.toSet)
+
+    // Leader should have been removed.
+    verifyHeartbeat(results.head, Errors.UNKNOWN_MEMBER_ID)
+
+    // Followers should be able to heartbeat.
+    results.tail.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.REBALANCE_IN_PROGRESS)
+    }
+  }
+
+  @Test
+  def testRebalanceDoesNotTimeOutWhenAllSyncAreReceived(): Unit = {
+    // This test case ensure that the DelayedSync does not kick any
+    // members out when they have all sent their sync requests.
+    val results = joinWithNMembers(nbMembers = 3)
+    assertEquals(Set(Errors.NONE), results.map(_.error).toSet)
+
+    // Advance time
+    timer.advanceClock(DefaultRebalanceTimeout / 2)
+
+    // Heartbeats to ensure that heartbeating does not interfere with the
+    // delayed sync operation.
+    results.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.NONE)
+    }
+
+    val assignments = results.map(result => result.memberId -> Array.empty[Byte]).toMap
+    val leaderResult = sendSyncGroupLeader(groupId, results.head.generationId, results.head.memberId,
+      Some(protocolType), Some(protocolName), None, assignments)
+
+    assertEquals(Errors.NONE, await(leaderResult, 1).error)
+
+    // Followers send Sync
+    val followerResults = results.tail.map { joinGroupResult =>
+      sendSyncGroupFollower(groupId, joinGroupResult.generationId, joinGroupResult.memberId,
+        Some(protocolType), Some(protocolName), None)
+    }
+
+    val followerErrors = followerResults.map(await(_, 1).error)
+    assertEquals(Set(Errors.NONE), followerErrors.toSet)
+
+    // Advance past the rebalance timeout to expire the Sync timout. All
+    // members should remain and the group should not rebalance.
+    timer.advanceClock(DefaultRebalanceTimeout / 2 + 1)
+
+    // Followers should be able to heartbeat.
+    results.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.NONE)
+    }
+
+    // Advance a bit more.
+    timer.advanceClock(DefaultRebalanceTimeout / 2)
+
+    // Followers should be able to heartbeat.
+    results.foreach { joinGroupResult =>
+      verifyHeartbeat(joinGroupResult, Errors.NONE)
+    }
   }
 
   private def group(groupId: String = groupId) = {
@@ -2291,14 +2356,11 @@ class GroupCoordinatorTest {
     assertEquals(firstMemberId, firstJoinResult.leaderId)
     assertEquals(Errors.NONE, firstJoinResult.error)
 
-    EasyMock.reset(replicaManager)
     val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, firstSyncResult.error)
 
-    EasyMock.reset(replicaManager)
     val otherJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
 
-    EasyMock.reset(replicaManager)
     val joinFuture = sendJoinGroup(groupId, firstMemberId, protocolType, protocols)
 
     val joinResult = await(joinFuture, DefaultSessionTimeout+100)
@@ -2314,7 +2376,6 @@ class GroupCoordinatorTest {
 
     // with no leader SyncGroup, the follower's request should fail with an error indicating
     // that it should rejoin
-    EasyMock.reset(replicaManager)
     val followerSyncFuture = sendSyncGroupFollower(groupId, nextGenerationId, otherJoinResult.memberId, None, None, None)
 
     timer.advanceClock(DefaultSessionTimeout + 100)
@@ -2335,14 +2396,11 @@ class GroupCoordinatorTest {
     assertEquals(firstMemberId, firstJoinResult.leaderId)
     assertEquals(Errors.NONE, firstJoinResult.error)
 
-    EasyMock.reset(replicaManager)
     val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, firstSyncResult.error)
 
-    EasyMock.reset(replicaManager)
     val otherJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
 
-    EasyMock.reset(replicaManager)
     val joinFuture = sendJoinGroup(groupId, firstMemberId, protocolType, protocols)
 
     val joinResult = await(joinFuture, DefaultSessionTimeout+100)
@@ -2360,13 +2418,11 @@ class GroupCoordinatorTest {
     val followerId = otherJoinResult.memberId
     val followerAssignment = Array[Byte](1)
 
-    EasyMock.reset(replicaManager)
     val leaderSyncResult = syncGroupLeader(groupId, nextGenerationId, leaderId,
       Map(leaderId -> leaderAssignment, followerId -> followerAssignment))
     assertEquals(Errors.NONE, leaderSyncResult.error)
     assertEquals(leaderAssignment, leaderSyncResult.memberAssignment)
 
-    EasyMock.reset(replicaManager)
     val followerSyncResult = syncGroupFollower(groupId, nextGenerationId, otherJoinResult.memberId)
     assertEquals(Errors.NONE, followerSyncResult.error)
     assertEquals(followerAssignment, followerSyncResult.memberAssignment)
@@ -2384,14 +2440,11 @@ class GroupCoordinatorTest {
     assertEquals(firstMemberId, joinGroupResult.leaderId)
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val otherJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
 
-    EasyMock.reset(replicaManager)
     val joinFuture = sendJoinGroup(groupId, firstMemberId, protocolType, protocols)
 
     val joinResult = await(joinFuture, DefaultSessionTimeout+100)
@@ -2409,10 +2462,8 @@ class GroupCoordinatorTest {
     assertEquals(firstMemberId, joinResult.leaderId)
     assertEquals(firstMemberId, otherJoinResult.leaderId)
 
-    EasyMock.reset(replicaManager)
     val followerSyncFuture = sendSyncGroupFollower(groupId, nextGenerationId, followerId, None, None, None)
 
-    EasyMock.reset(replicaManager)
     val leaderSyncResult = syncGroupLeader(groupId, nextGenerationId, leaderId,
       Map(leaderId -> leaderAssignment, followerId -> followerAssignment))
     assertEquals(Errors.NONE, leaderSyncResult.error)
@@ -2456,12 +2507,10 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, joinGroupError)
 
     // and leaves.
-    EasyMock.reset(replicaManager)
     val leaveGroupResults = singleLeaveGroup(groupId, assignedMemberId)
     verifyLeaveGroupResult(leaveGroupResults)
 
     // The simple offset commit should now fail
-    EasyMock.reset(replicaManager)
     val tp = new TopicPartition("topic", 0)
     val offset = offsetAndMetadata(0)
     val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
@@ -2517,13 +2566,11 @@ class GroupCoordinatorTest {
     assertEquals(Empty.toString, summary.state)
 
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
-    val partition: Partition = EasyMock.niceMock(classOf[Partition])
+    val partition: Partition = mock(classOf[Partition])
 
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
-    EasyMock.expect(replicaManager.getPartition(groupTopicPartition)).andStubReturn(HostedPartition.Online(partition))
-    EasyMock.expect(replicaManager.onlinePartition(groupTopicPartition)).andStubReturn(Some(partition))
-    EasyMock.replay(replicaManager, partition)
+    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
+    when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
     val deleteErrors = groupCoordinator.handleDeleteGroups(Set(groupId))
     assertEquals(Errors.NONE, deleteErrors(groupId))
@@ -2683,7 +2730,7 @@ class GroupCoordinatorTest {
     val offsetTopicPartitions = List(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId)),
       new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(otherGroupId)))
 
-    groupCoordinator.groupManager.addPartitionOwnership(offsetTopicPartitions(1).partition)
+    groupCoordinator.groupManager.addOwnedPartition(offsetTopicPartitions(1).partition)
     val errors = mutable.ArrayBuffer[Errors]()
     val partitionData = mutable.ArrayBuffer[scala.collection.Map[TopicPartition, OffsetFetchResponse.PartitionData]]()
 
@@ -2859,7 +2906,6 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val commitOffsetResult = commitOffsets(groupId, assignedMemberId, generationId, Map(tp -> offset))
     assertEquals(Errors.REBALANCE_IN_PROGRESS, commitOffsetResult(tp))
   }
@@ -2875,7 +2921,6 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val commitOffsetResult = commitOffsets(groupId, memberId, generationId, Map(tp -> offset))
     assertEquals(Errors.UNKNOWN_MEMBER_ID, commitOffsetResult(tp))
   }
@@ -2892,7 +2937,6 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val commitOffsetResult = commitOffsets(groupId, assignedMemberId, generationId + 1, Map(tp -> offset))
     assertEquals(Errors.ILLEGAL_GENERATION, commitOffsetResult(tp))
   }
@@ -2930,7 +2974,6 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val invalidIdCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
       Map(tp -> offset), "invalid-member")
     assertEquals(Errors.UNKNOWN_MEMBER_ID, invalidIdCommitOffsetResult (tp))
@@ -2948,7 +2991,6 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, joinGroupError)
 
 
-    EasyMock.reset(replicaManager)
     val assignedConsumerId = joinGroupResult.memberId
     val leaderCommitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch,
       Map(tp -> offset), assignedConsumerId, generationId = joinGroupResult.generationId)
@@ -2966,7 +3008,6 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
 
     val assignedConsumerId = joinGroupResult.memberId
     val initialGenerationId = joinGroupResult.generationId
@@ -2986,7 +3027,6 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
 
     val assignedConsumerId = joinGroupResult.memberId
     val initialGenerationId = joinGroupResult.generationId
@@ -3005,11 +3045,9 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, joinGroupError)
 
     // Then join with a new consumer to trigger a rebalance
-    EasyMock.reset(replicaManager)
     sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
 
     // We should be in the middle of a rebalance, so the heartbeat should return rebalance in progress
-    EasyMock.reset(replicaManager)
     val heartbeatResult = heartbeat(groupId, assignedConsumerId, initialGenerationId)
     assertEquals(Errors.REBALANCE_IN_PROGRESS, heartbeatResult)
   }
@@ -3023,11 +3061,9 @@ class GroupCoordinatorTest {
     assertEquals(1, initialGenerationId)
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, initialGenerationId, memberId, Map(memberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val joinGroupFuture = sendJoinGroup(groupId, memberId, protocolType, protocols)
     val otherJoinGroupResult = await(joinGroupFuture, 1)
 
@@ -3060,7 +3096,6 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val leaveGroupResults = singleLeaveGroup(groupId, otherMemberId)
     verifyLeaveGroupResult(leaveGroupResults, Errors.NONE, List(Errors.UNKNOWN_MEMBER_ID))
   }
@@ -3093,7 +3128,6 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val leaveGroupResults = singleLeaveGroup(groupId, assignedMemberId)
     verifyLeaveGroupResult(leaveGroupResults)
   }
@@ -3103,7 +3137,6 @@ class GroupCoordinatorTest {
     val joinGroupResult = staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, leaderInstanceId, protocolType, protocolSuperset)
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val leaveGroupResults = singleLeaveGroup(groupId, "some_member", Some(leaderInstanceId))
     verifyLeaveGroupResult(leaveGroupResults, Errors.NONE, List(Errors.FENCED_INSTANCE_ID))
   }
@@ -3113,7 +3146,6 @@ class GroupCoordinatorTest {
     val joinGroupResult = staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, leaderInstanceId, protocolType, protocolSuperset)
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     // Having unknown member id will not affect the request processing.
     val leaveGroupResults = singleLeaveGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Some(leaderInstanceId))
     verifyLeaveGroupResult(leaveGroupResults, Errors.NONE, List(Errors.NONE))
@@ -3174,7 +3206,6 @@ class GroupCoordinatorTest {
   def testPendingMemberBatchLeaveGroup(): Unit = {
     val pendingMember = setupGroupWithPendingMember()
 
-    EasyMock.reset(replicaManager)
     val leaveGroupResults = batchLeaveGroup(groupId, List(new MemberIdentity()
       .setGroupInstanceId("unknown-instance"), new MemberIdentity()
       .setMemberId(pendingMember.memberId)))
@@ -3190,7 +3221,6 @@ class GroupCoordinatorTest {
     val generationId = joinGroupResult.generationId
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
@@ -3232,7 +3262,6 @@ class GroupCoordinatorTest {
     assertEquals(0, groups2.size)
 
     // Member syncs
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
@@ -3245,7 +3274,6 @@ class GroupCoordinatorTest {
     assertEquals(0, groups4.size)
 
     // Member leaves
-    EasyMock.reset(replicaManager)
     val leaveGroupResults = singleLeaveGroup(groupId, assignedMemberId)
     verifyLeaveGroupResult(leaveGroupResults)
 
@@ -3260,14 +3288,12 @@ class GroupCoordinatorTest {
 
   @Test
   def testDescribeGroupWrongCoordinator(): Unit = {
-    EasyMock.reset(replicaManager)
     val (error, _) = groupCoordinator.handleDescribeGroup(otherGroupId)
     assertEquals(Errors.NOT_COORDINATOR, error)
   }
 
   @Test
   def testDescribeGroupInactiveGroup(): Unit = {
-    EasyMock.reset(replicaManager)
     val (error, summary) = groupCoordinator.handleDescribeGroup(groupId)
     assertEquals(Errors.NONE, error)
     assertEquals(GroupCoordinator.DeadGroup, summary)
@@ -3281,11 +3307,9 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val (error, summary) = groupCoordinator.handleDescribeGroup(groupId)
     assertEquals(Errors.NONE, error)
     assertEquals(protocolType, summary.protocolType)
@@ -3301,11 +3325,9 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val (error, summary) = groupCoordinator.handleDescribeGroup(groupId)
     assertEquals(Errors.NONE, error)
     assertEquals(protocolType, summary.protocolType)
@@ -3321,7 +3343,6 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val (error, summary) = groupCoordinator.handleDescribeGroup(groupId)
     assertEquals(Errors.NONE, error)
     assertEquals(protocolType, summary.protocolType)
@@ -3359,18 +3380,15 @@ class GroupCoordinatorTest {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
 
-    EasyMock.reset(replicaManager)
     val leaveGroupResults = singleLeaveGroup(groupId, joinGroupResult.memberId)
     verifyLeaveGroupResult(leaveGroupResults)
 
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
-    val partition: Partition = EasyMock.niceMock(classOf[Partition])
+    val partition: Partition = mock(classOf[Partition])
 
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
-    EasyMock.expect(replicaManager.getPartition(groupTopicPartition)).andStubReturn(HostedPartition.Online(partition))
-    EasyMock.expect(replicaManager.onlinePartition(groupTopicPartition)).andStubReturn(Some(partition))
-    EasyMock.replay(replicaManager, partition)
+    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
+    when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
     val result = groupCoordinator.handleDeleteGroups(Set(groupId))
     assert(result.size == 1 && result.contains(groupId) && result.get(groupId).contains(Errors.NONE))
@@ -3385,11 +3403,9 @@ class GroupCoordinatorTest {
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val tp = new TopicPartition("topic", 0)
     val offset = offsetAndMetadata(0)
     val commitOffsetResult = commitOffsets(groupId, assignedMemberId, joinGroupResult.generationId, Map(tp -> offset))
@@ -3399,18 +3415,15 @@ class GroupCoordinatorTest {
     assertEquals(Stable.toString, describeGroupResult._2.state)
     assertEquals(assignedMemberId, describeGroupResult._2.members.head.memberId)
 
-    EasyMock.reset(replicaManager)
     val leaveGroupResults = singleLeaveGroup(groupId, assignedMemberId)
     verifyLeaveGroupResult(leaveGroupResults)
 
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
-    val partition: Partition = EasyMock.niceMock(classOf[Partition])
+    val partition: Partition = mock(classOf[Partition])
 
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
-    EasyMock.expect(replicaManager.getPartition(groupTopicPartition)).andStubReturn(HostedPartition.Online(partition))
-    EasyMock.expect(replicaManager.onlinePartition(groupTopicPartition)).andStubReturn(Some(partition))
-    EasyMock.replay(replicaManager, partition)
+    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
+    when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
     val result = groupCoordinator.handleDeleteGroups(Set(groupId))
     assert(result.size == 1 && result.contains(groupId) && result.get(groupId).contains(Errors.NONE))
@@ -3421,7 +3434,8 @@ class GroupCoordinatorTest {
   @Test
   def testDeleteOffsetOfNonExistingGroup(): Unit = {
     val tp = new TopicPartition("foo", 0)
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp))
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp),
+      RequestLocal.NoCaching)
 
     assertEquals(Errors.GROUP_ID_NOT_FOUND, groupError)
     assertTrue(topics.isEmpty)
@@ -3432,7 +3446,8 @@ class GroupCoordinatorTest {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     dynamicJoinGroup(groupId, memberId, "My Protocol", protocols)
     val tp = new TopicPartition("foo", 0)
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp))
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp),
+      RequestLocal.NoCaching)
 
     assertEquals(Errors.NON_EMPTY_GROUP, groupError)
     assertTrue(topics.isEmpty)
@@ -3446,7 +3461,6 @@ class GroupCoordinatorTest {
     val joinGroupResult = dynamicJoinGroup(groupId, memberId, "My Protocol", protocols)
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, joinGroupResult.leaderId, Map.empty)
     assertEquals(Errors.NONE, syncGroupResult.error)
 
@@ -3454,29 +3468,26 @@ class GroupCoordinatorTest {
     val t2p0 = new TopicPartition("bar", 0)
     val offset = offsetAndMetadata(37)
 
-    EasyMock.reset(replicaManager)
     val validOffsetCommitResult = commitOffsets(groupId, joinGroupResult.memberId, joinGroupResult.generationId,
       Map(t1p0 -> offset, t2p0 -> offset))
     assertEquals(Errors.NONE, validOffsetCommitResult(t1p0))
     assertEquals(Errors.NONE, validOffsetCommitResult(t2p0))
 
     // and leaves.
-    EasyMock.reset(replicaManager)
     val leaveGroupResults = singleLeaveGroup(groupId, joinGroupResult.memberId)
     verifyLeaveGroupResult(leaveGroupResults)
 
     assertTrue(groupCoordinator.groupManager.getGroup(groupId).exists(_.is(Empty)))
 
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
-    val partition: Partition = EasyMock.niceMock(classOf[Partition])
+    val partition: Partition = mock(classOf[Partition])
 
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
-    EasyMock.expect(replicaManager.getPartition(groupTopicPartition)).andStubReturn(HostedPartition.Online(partition))
-    EasyMock.expect(replicaManager.onlinePartition(groupTopicPartition)).andStubReturn(Some(partition))
-    EasyMock.replay(replicaManager, partition)
+    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
+    when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0))
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0),
+      RequestLocal.NoCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(1, topics.size)
@@ -3493,19 +3504,18 @@ class GroupCoordinatorTest {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
     val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, joinGroupResult.leaderId, Map.empty)
     assertEquals(Errors.NONE, syncGroupResult.error)
 
     val tp = new TopicPartition("foo", 0)
     val offset = offsetAndMetadata(37)
 
-    EasyMock.reset(replicaManager)
     val validOffsetCommitResult = commitOffsets(groupId, joinGroupResult.memberId, joinGroupResult.generationId,
       Map(tp -> offset))
     assertEquals(Errors.NONE, validOffsetCommitResult(tp))
 
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp))
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp),
+      RequestLocal.NoCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(1, topics.size)
@@ -3519,7 +3529,8 @@ class GroupCoordinatorTest {
     groupCoordinator.groupManager.addGroup(group)
 
     val tp = new TopicPartition("foo", 0)
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp))
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(tp),
+      RequestLocal.NoCaching)
 
     assertEquals(Errors.GROUP_ID_NOT_FOUND, groupError)
     assertTrue(topics.isEmpty)
@@ -3532,7 +3543,6 @@ class GroupCoordinatorTest {
     val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, joinGroupResult.leaderId, Map.empty)
     assertEquals(Errors.NONE, syncGroupResult.error)
 
@@ -3540,29 +3550,26 @@ class GroupCoordinatorTest {
     val t2p0 = new TopicPartition("bar", 0)
     val offset = offsetAndMetadata(37)
 
-    EasyMock.reset(replicaManager)
     val validOffsetCommitResult = commitOffsets(groupId, joinGroupResult.memberId, joinGroupResult.generationId,
       Map(t1p0 -> offset, t2p0 -> offset))
     assertEquals(Errors.NONE, validOffsetCommitResult(t1p0))
     assertEquals(Errors.NONE, validOffsetCommitResult(t2p0))
 
     // and leaves.
-    EasyMock.reset(replicaManager)
     val leaveGroupResults = singleLeaveGroup(groupId, joinGroupResult.memberId)
     verifyLeaveGroupResult(leaveGroupResults)
 
     assertTrue(groupCoordinator.groupManager.getGroup(groupId).exists(_.is(Empty)))
 
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
-    val partition: Partition = EasyMock.niceMock(classOf[Partition])
+    val partition: Partition = mock(classOf[Partition])
 
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
-    EasyMock.expect(replicaManager.getPartition(groupTopicPartition)).andStubReturn(HostedPartition.Online(partition))
-    EasyMock.expect(replicaManager.onlinePartition(groupTopicPartition)).andStubReturn(Some(partition))
-    EasyMock.replay(replicaManager, partition)
+    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
+    when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0))
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0),
+      RequestLocal.NoCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(1, topics.size)
@@ -3584,7 +3591,6 @@ class GroupCoordinatorTest {
       List(("protocol", ConsumerProtocol.serializeSubscription(subscription).array())))
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    EasyMock.reset(replicaManager)
     val syncGroupResult = syncGroupLeader(groupId, joinGroupResult.generationId, joinGroupResult.leaderId, Map.empty)
     assertEquals(Errors.NONE, syncGroupResult.error)
 
@@ -3592,7 +3598,6 @@ class GroupCoordinatorTest {
     val t2p0 = new TopicPartition("bar", 0)
     val offset = offsetAndMetadata(37)
 
-    EasyMock.reset(replicaManager)
     val validOffsetCommitResult = commitOffsets(groupId, joinGroupResult.memberId, joinGroupResult.generationId,
       Map(t1p0 -> offset, t2p0 -> offset))
     assertEquals(Errors.NONE, validOffsetCommitResult(t1p0))
@@ -3601,15 +3606,14 @@ class GroupCoordinatorTest {
     assertTrue(groupCoordinator.groupManager.getGroup(groupId).exists(_.is(Stable)))
 
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
-    val partition: Partition = EasyMock.niceMock(classOf[Partition])
+    val partition: Partition = mock(classOf[Partition])
 
-    EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
-    EasyMock.expect(replicaManager.getPartition(groupTopicPartition)).andStubReturn(HostedPartition.Online(partition))
-    EasyMock.expect(replicaManager.onlinePartition(groupTopicPartition)).andStubReturn(Some(partition))
-    EasyMock.replay(replicaManager, partition)
+    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.getPartition(groupTopicPartition)).thenReturn(HostedPartition.Online(partition))
+    when(replicaManager.onlinePartition(groupTopicPartition)).thenReturn(Some(partition))
 
-    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0, t2p0))
+    val (groupError, topics) = groupCoordinator.handleDeleteOffsets(groupId, Seq(t1p0, t2p0),
+      RequestLocal.NoCaching)
 
     assertEquals(Errors.NONE, groupError)
     assertEquals(2, topics.size)
@@ -3641,10 +3645,8 @@ class GroupCoordinatorTest {
   def shouldResetRebalanceDelayWhenNewMemberJoinsGroupInInitialRebalance(): Unit = {
     val rebalanceTimeout = GroupInitialRebalanceDelay * 3
     val firstMemberJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, rebalanceTimeout = rebalanceTimeout)
-    EasyMock.reset(replicaManager)
     timer.advanceClock(GroupInitialRebalanceDelay - 1)
     val secondMemberJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, rebalanceTimeout = rebalanceTimeout)
-    EasyMock.reset(replicaManager)
     timer.advanceClock(2)
 
     // advance past initial rebalance delay and make sure that tasks
@@ -3665,13 +3667,10 @@ class GroupCoordinatorTest {
   def shouldDelayRebalanceUptoRebalanceTimeout(): Unit = {
     val rebalanceTimeout = GroupInitialRebalanceDelay * 2
     val firstMemberJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, rebalanceTimeout = rebalanceTimeout)
-    EasyMock.reset(replicaManager)
     val secondMemberJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, rebalanceTimeout = rebalanceTimeout)
     timer.advanceClock(GroupInitialRebalanceDelay + 1)
-    EasyMock.reset(replicaManager)
     val thirdMemberJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, rebalanceTimeout = rebalanceTimeout)
     timer.advanceClock(GroupInitialRebalanceDelay)
-    EasyMock.reset(replicaManager)
 
     verifyDelayedTaskNotCompleted(firstMemberJoinFuture)
     verifyDelayedTaskNotCompleted(secondMemberJoinFuture)
@@ -3758,14 +3757,14 @@ class GroupCoordinatorTest {
                             groupInstanceId: Option[String] = None,
                             sessionTimeout: Int = DefaultSessionTimeout,
                             rebalanceTimeout: Int = DefaultRebalanceTimeout,
-                            requireKnownMemberId: Boolean = false): Future[JoinGroupResult] = {
+                            requireKnownMemberId: Boolean = false,
+                            supportSkippingAssignment: Boolean = true): Future[JoinGroupResult] = {
     val (responseFuture, responseCallback) = setupJoinGroupCallback
 
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
-    EasyMock.replay(replicaManager)
+    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
 
-    groupCoordinator.handleJoinGroup(groupId, memberId, groupInstanceId,
-      requireKnownMemberId, "clientId", "clientHost", rebalanceTimeout, sessionTimeout, protocolType, protocols, responseCallback)
+    groupCoordinator.handleJoinGroup(groupId, memberId, groupInstanceId, requireKnownMemberId, supportSkippingAssignment,
+      "clientId", "clientHost", rebalanceTimeout, sessionTimeout, protocolType, protocols, responseCallback)
     responseFuture
   }
 
@@ -3777,29 +3776,32 @@ class GroupCoordinatorTest {
                                                  sessionTimeout: Int,
                                                  rebalanceTimeout: Int,
                                                  appendRecordError: Errors,
-                                                 requireKnownMemberId: Boolean = false): Future[JoinGroupResult] = {
+                                                 requireKnownMemberId: Boolean = false,
+                                                 supportSkippingAssignment: Boolean): Future[JoinGroupResult] = {
     val (responseFuture, responseCallback) = setupJoinGroupCallback
 
-    val capturedArgument: Capture[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
+    val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
-    EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
-      EasyMock.anyShort(),
-      internalTopicsAllowed = EasyMock.eq(true),
-      origin = EasyMock.eq(AppendOrigin.Coordinator),
-      EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
-      EasyMock.capture(capturedArgument),
-      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
-      EasyMock.anyObject())).andAnswer(new IAnswer[Unit] {
-      override def answer = capturedArgument.getValue.apply(
+    when(replicaManager.appendRecords(anyLong,
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any[Map[TopicPartition, MemoryRecords]],
+      capturedArgument.capture(),
+      any[Option[ReentrantLock]],
+      any(),
+      any()
+    )).thenAnswer(_ => {
+      capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
           new PartitionResponse(appendRecordError, 0L, RecordBatch.NO_TIMESTAMP, 0L)
-        )
-      )})
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
-    EasyMock.replay(replicaManager)
+       )
+      )
+    })
+    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
 
-    groupCoordinator.handleJoinGroup(groupId, memberId, Some(groupInstanceId),
-      requireKnownMemberId, "clientId", "clientHost", rebalanceTimeout, sessionTimeout, protocolType, protocols, responseCallback)
+    groupCoordinator.handleJoinGroup(groupId, memberId, Some(groupInstanceId), requireKnownMemberId, supportSkippingAssignment,
+      "clientId", "clientHost", rebalanceTimeout, sessionTimeout, protocolType, protocols, responseCallback)
     responseFuture
   }
 
@@ -3812,23 +3814,25 @@ class GroupCoordinatorTest {
                                   assignment: Map[String, Array[Byte]]): Future[SyncGroupResult] = {
     val (responseFuture, responseCallback) = setupSyncGroupCallback
 
-    val capturedArgument: Capture[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
+    val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
-    EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
-      EasyMock.anyShort(),
-      internalTopicsAllowed = EasyMock.eq(true),
-      origin = EasyMock.eq(AppendOrigin.Coordinator),
-      EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
-      EasyMock.capture(capturedArgument),
-      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
-      EasyMock.anyObject())).andAnswer(new IAnswer[Unit] {
-      override def answer = capturedArgument.getValue.apply(
-        Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
-          new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)
+    when(replicaManager.appendRecords(anyLong,
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any[Map[TopicPartition, MemoryRecords]],
+      capturedArgument.capture(),
+      any[Option[ReentrantLock]],
+      any(),
+      any())).thenAnswer(_ => {
+        capturedArgument.getValue.apply(
+          Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
+            new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)
+          )
         )
-      )})
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
-    EasyMock.replay(replicaManager)
+      }
+    )
+    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
 
     groupCoordinator.handleSyncGroup(groupId, generation, leaderId, protocolType, protocolName,
       groupInstanceId, assignment, responseCallback)
@@ -3843,7 +3847,6 @@ class GroupCoordinatorTest {
                                     groupInstanceId: Option[String] = None): Future[SyncGroupResult] = {
     val (responseFuture, responseCallback) = setupSyncGroupCallback
 
-    EasyMock.replay(replicaManager)
 
     groupCoordinator.handleSyncGroup(groupId, generation, memberId,
       prototolType, prototolName, groupInstanceId, Map.empty[String, Array[Byte]], responseCallback)
@@ -3866,7 +3869,6 @@ class GroupCoordinatorTest {
       if (joinGroupResult.error != Errors.MEMBER_ID_REQUIRED) {
         return joinGroupResult
       }
-      EasyMock.reset(replicaManager)
       responseFuture = sendJoinGroup(groupId, joinGroupResult.memberId, protocolType, protocols, None, sessionTimeout, rebalanceTimeout, requireKnownMemberId)
     }
     timer.advanceClock(GroupInitialRebalanceDelay + 1)
@@ -3881,8 +3883,10 @@ class GroupCoordinatorTest {
                               protocols: List[(String, Array[Byte])],
                               clockAdvance: Int = GroupInitialRebalanceDelay + 1,
                               sessionTimeout: Int = DefaultSessionTimeout,
-                              rebalanceTimeout: Int = DefaultRebalanceTimeout): JoinGroupResult = {
-    val responseFuture = sendJoinGroup(groupId, memberId, protocolType, protocols, Some(groupInstanceId), sessionTimeout, rebalanceTimeout)
+                              rebalanceTimeout: Int = DefaultRebalanceTimeout,
+                              supportSkippingAssignment: Boolean = true): JoinGroupResult = {
+    val responseFuture = sendJoinGroup(groupId, memberId, protocolType, protocols, Some(groupInstanceId), sessionTimeout, rebalanceTimeout,
+      supportSkippingAssignment = supportSkippingAssignment)
 
     timer.advanceClock(clockAdvance)
     // should only have to wait as long as session timeout, but allow some extra time in case of an unexpected delay
@@ -3897,9 +3901,10 @@ class GroupCoordinatorTest {
                                              clockAdvance: Int,
                                              sessionTimeout: Int = DefaultSessionTimeout,
                                              rebalanceTimeout: Int = DefaultRebalanceTimeout,
-                                             appendRecordError: Errors = Errors.NONE): JoinGroupResult = {
+                                             appendRecordError: Errors = Errors.NONE,
+                                             supportSkippingAssignment: Boolean = true): JoinGroupResult = {
     val responseFuture = sendStaticJoinGroupWithPersistence(groupId, memberId, protocolType, protocols,
-      groupInstanceId, sessionTimeout, rebalanceTimeout, appendRecordError)
+      groupInstanceId, sessionTimeout, rebalanceTimeout, appendRecordError, supportSkippingAssignment = supportSkippingAssignment)
 
     timer.advanceClock(clockAdvance)
     // should only have to wait as long as session timeout, but allow some extra time in case of an unexpected delay
@@ -3937,7 +3942,6 @@ class GroupCoordinatorTest {
                         groupInstanceId: Option[String] = None): HeartbeatCallbackParams = {
     val (responseFuture, responseCallback) = setupHeartbeatCallback
 
-    EasyMock.replay(replicaManager)
 
     groupCoordinator.handleHeartbeat(groupId, consumerId, groupInstanceId, generationId, responseCallback)
     Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
@@ -3954,25 +3958,25 @@ class GroupCoordinatorTest {
                             groupInstanceId: Option[String] = None): CommitOffsetCallbackParams = {
     val (responseFuture, responseCallback) = setupCommitOffsetsCallback
 
-    val capturedArgument: Capture[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
+    val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
-    EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
-      EasyMock.anyShort(),
-      internalTopicsAllowed = EasyMock.eq(true),
-      origin = EasyMock.eq(AppendOrigin.Coordinator),
-      EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
-      EasyMock.capture(capturedArgument),
-      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
-      EasyMock.anyObject())
-    ).andAnswer(new IAnswer[Unit] {
-      override def answer = capturedArgument.getValue.apply(
-          Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
-            new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)
-          )
+    when(replicaManager.appendRecords(anyLong,
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any[Map[TopicPartition, MemoryRecords]],
+      capturedArgument.capture(),
+      any[Option[ReentrantLock]],
+      any(),
+      any())
+    ).thenAnswer(_ => {
+      capturedArgument.getValue.apply(
+        Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
+          new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)
         )
-      })
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
-    EasyMock.replay(replicaManager)
+      )
+    })
+    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
 
     groupCoordinator.handleCommitOffsets(groupId, memberId, groupInstanceId, generationId, offsets, responseCallback)
     Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
@@ -3987,29 +3991,29 @@ class GroupCoordinatorTest {
                                          generationId: Int = JoinGroupRequest.UNKNOWN_GENERATION_ID) = {
     val (responseFuture, responseCallback) = setupCommitOffsetsCallback
 
-    val capturedArgument: Capture[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
+    val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
-    EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
-      EasyMock.anyShort(),
-      internalTopicsAllowed = EasyMock.eq(true),
-      origin = EasyMock.eq(AppendOrigin.Coordinator),
-      EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
-      EasyMock.capture(capturedArgument),
-      EasyMock.anyObject().asInstanceOf[Option[ReentrantLock]],
-      EasyMock.anyObject())
-    ).andAnswer(new IAnswer[Unit] {
-      override def answer = capturedArgument.getValue.apply(
+    when(replicaManager.appendRecords(anyLong,
+      anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.Coordinator),
+      any[Map[TopicPartition, MemoryRecords]],
+      capturedArgument.capture(),
+      any[Option[ReentrantLock]],
+      any(),
+      any())
+    ).thenAnswer(_ => {
+      capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId)) ->
           new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)
         )
-      )})
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V2)).anyTimes()
-    EasyMock.replay(replicaManager)
+      )
+    })
+    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
 
     groupCoordinator.handleTxnCommitOffsets(groupId, producerId, producerEpoch,
       memberId, groupInstanceId, generationId, offsets, responseCallback)
     val result = Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
-    EasyMock.reset(replicaManager)
     result
   }
 
@@ -4027,10 +4031,9 @@ class GroupCoordinatorTest {
                               memberIdentities: List[MemberIdentity]): LeaveGroupResult = {
     val (responseFuture, responseCallback) = setupLeaveGroupCallback
 
-    EasyMock.expect(replicaManager.getPartition(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)))
-      .andReturn(HostedPartition.None)
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
-    EasyMock.replay(replicaManager)
+    when(replicaManager.getPartition(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)))
+      .thenReturn(HostedPartition.None)
+    when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
 
     groupCoordinator.handleLeaveGroup(groupId, memberIdentities, responseCallback)
     Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))

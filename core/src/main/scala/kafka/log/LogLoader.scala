@@ -21,7 +21,7 @@ import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
 
 import kafka.common.LogSegmentOffsetOverflowException
-import kafka.log.Log.{CleanedFileSuffix, DeletedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile, offsetFromFileName}
+import kafka.log.UnifiedLog.{CleanedFileSuffix, DeletedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile}
 import kafka.server.{LogDirFailureChannel, LogOffsetMetadata}
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils.{CoreUtils, Logging, Scheduler}
@@ -29,11 +29,25 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidOffsetException
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.{Seq, Set, mutable}
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
+import scala.collection.{Set, mutable}
 
 case class LoadedLogOffsets(logStartOffset: Long,
                             recoveryPoint: Long,
                             nextOffsetMetadata: LogOffsetMetadata)
+
+object LogLoader extends Logging {
+
+  /**
+   * Clean shutdown file that indicates the broker was cleanly shutdown in 0.8 and higher.
+   * This is used to avoid unnecessary recovery after a clean shutdown. In theory this could be
+   * avoided by passing in the recovery point, however finding the correct position to do this
+   * requires accessing the offset index which may not be safe in an unclean shutdown.
+   * For more information see the discussion in PR#2104
+   */
+  val CleanShutdownFile = ".kafka_cleanshutdown"
+}
+
 
 /**
  * @param dir The directory from which log segments need to be loaded
@@ -49,112 +63,148 @@ case class LoadedLogOffsets(logStartOffset: Long,
  *                 populated
  * @param logStartOffsetCheckpoint The checkpoint of the log start offset
  * @param recoveryPointCheckpoint The checkpoint of the offset at which to begin the recovery
- * @param maxProducerIdExpirationMs The maximum amount of time to wait before a producer id is
- *                                  considered expired
  * @param leaderEpochCache An optional LeaderEpochFileCache instance to be updated during recovery
  * @param producerStateManager The ProducerStateManager instance to be updated during recovery
+ * @param numRemainingSegments The remaining segments to be recovered in this log keyed by recovery thread name
  */
-case class LoadLogParams(dir: File,
-                         topicPartition: TopicPartition,
-                         config: LogConfig,
-                         scheduler: Scheduler,
-                         time: Time,
-                         logDirFailureChannel: LogDirFailureChannel,
-                         hadCleanShutdown: Boolean,
-                         segments: LogSegments,
-                         logStartOffsetCheckpoint: Long,
-                         recoveryPointCheckpoint: Long,
-                         maxProducerIdExpirationMs: Int,
-                         leaderEpochCache: Option[LeaderEpochFileCache],
-                         producerStateManager: ProducerStateManager) {
-  val logIdentifier: String = s"[LogLoader partition=$topicPartition, dir=${dir.getParent}]"
-}
+class LogLoader(
+  dir: File,
+  topicPartition: TopicPartition,
+  config: LogConfig,
+  scheduler: Scheduler,
+  time: Time,
+  logDirFailureChannel: LogDirFailureChannel,
+  hadCleanShutdown: Boolean,
+  segments: LogSegments,
+  logStartOffsetCheckpoint: Long,
+  recoveryPointCheckpoint: Long,
+  leaderEpochCache: Option[LeaderEpochFileCache],
+  producerStateManager: ProducerStateManager,
+  numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]
+) extends Logging {
+  logIdent = s"[LogLoader partition=$topicPartition, dir=${dir.getParent}] "
 
-/**
- * This object is responsible for all activities related with recovery of log segments from disk.
- */
-object LogLoader extends Logging {
   /**
-   * Load the log segments from the log files on disk, and return the components of the loaded log.
+   * Load the log segments from the log files on disk, and returns the components of the loaded log.
    * Additionally, it also suitably updates the provided LeaderEpochFileCache and ProducerStateManager
    * to reflect the contents of the loaded log.
    *
    * In the context of the calling thread, this function does not need to convert IOException to
    * KafkaStorageException because it is only called before all logs are loaded.
    *
-   * @param params The parameters for the log being loaded from disk
-   *
    * @return the offsets of the Log successfully loaded from disk
    *
    * @throws LogSegmentOffsetOverflowException if we encounter a .swap file with messages that
    *                                           overflow index offset
    */
-  def load(params: LoadLogParams): LoadedLogOffsets = {
-    // first do a pass through the files in the log directory and remove any temporary files
+  def load(): LoadedLogOffsets = {
+    // First pass: through the files in the log directory and remove any temporary files
     // and find any interrupted swap operations
-    val swapFiles = removeTempFilesAndCollectSwapFiles(params)
+    val swapFiles = removeTempFilesAndCollectSwapFiles()
 
-    // Now do a second pass and load all the log and index files.
+    // The remaining valid swap files must come from compaction or segment split operation. We can
+    // simply rename them to regular segment files. But, before renaming, we should figure out which
+    // segments are compacted/split and delete these segment files: this is done by calculating
+    // min/maxSwapFileOffset.
+    // We store segments that require renaming in this code block, and do the actual renaming later.
+    var minSwapFileOffset = Long.MaxValue
+    var maxSwapFileOffset = Long.MinValue
+    swapFiles.filter(f => UnifiedLog.isLogFile(new File(CoreUtils.replaceSuffix(f.getPath, SwapFileSuffix, "")))).foreach { f =>
+      val baseOffset = offsetFromFile(f)
+      val segment = LogSegment.open(f.getParentFile,
+        baseOffset = baseOffset,
+        config,
+        time = time,
+        fileSuffix = UnifiedLog.SwapFileSuffix)
+      info(s"Found log file ${f.getPath} from interrupted swap operation, which is recoverable from ${UnifiedLog.SwapFileSuffix} files by renaming.")
+      minSwapFileOffset = Math.min(segment.baseOffset, minSwapFileOffset)
+      maxSwapFileOffset = Math.max(segment.readNextOffset, maxSwapFileOffset)
+    }
+
+    // Second pass: delete segments that are between minSwapFileOffset and maxSwapFileOffset. As
+    // discussed above, these segments were compacted or split but haven't been renamed to .delete
+    // before shutting down the broker.
+    for (file <- dir.listFiles if file.isFile) {
+      try {
+        if (!file.getName.endsWith(SwapFileSuffix)) {
+          val offset = offsetFromFile(file)
+          if (offset >= minSwapFileOffset && offset < maxSwapFileOffset) {
+            info(s"Deleting segment files ${file.getName} that is compacted but has not been deleted yet.")
+            file.delete()
+          }
+        }
+      } catch {
+        // offsetFromFile with files that do not include an offset in the file name
+        case _: StringIndexOutOfBoundsException =>
+        case _: NumberFormatException =>
+      }
+    }
+
+    // Third pass: rename all swap files.
+    for (file <- dir.listFiles if file.isFile) {
+      if (file.getName.endsWith(SwapFileSuffix)) {
+        info(s"Recovering file ${file.getName} by renaming from ${UnifiedLog.SwapFileSuffix} files.")
+        file.renameTo(new File(CoreUtils.replaceSuffix(file.getPath, UnifiedLog.SwapFileSuffix, "")))
+      }
+    }
+
+    // Fourth pass: load all the log and index files.
     // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. When
     // this happens, restart loading segment files from scratch.
-    retryOnOffsetOverflow(params, {
+    retryOnOffsetOverflow(() => {
       // In case we encounter a segment with offset overflow, the retry logic will split it after which we need to retry
       // loading of segments. In that case, we also need to close all segments that could have been left open in previous
       // call to loadSegmentFiles().
-      params.segments.close()
-      params.segments.clear()
-      loadSegmentFiles(params)
+      segments.close()
+      segments.clear()
+      loadSegmentFiles()
     })
 
-    completeSwapOperations(swapFiles, params)
-
     val (newRecoveryPoint: Long, nextOffset: Long) = {
-      if (!params.dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
-        val (newRecoveryPoint, nextOffset) = retryOnOffsetOverflow(params, {
-          recoverLog(params)
-        })
+      if (!dir.getAbsolutePath.endsWith(UnifiedLog.DeleteDirSuffix)) {
+        val (newRecoveryPoint, nextOffset) = retryOnOffsetOverflow(recoverLog)
 
         // reset the index size of the currently active log segment to allow more entries
-        params.segments.lastSegment.get.resizeIndexes(params.config.maxIndexSize)
+        segments.lastSegment.get.resizeIndexes(config.maxIndexSize)
         (newRecoveryPoint, nextOffset)
       } else {
-        if (params.segments.isEmpty) {
-          params.segments.add(
+        if (segments.isEmpty) {
+          segments.add(
             LogSegment.open(
-              dir = params.dir,
+              dir = dir,
               baseOffset = 0,
-              params.config,
-              time = params.time,
-              initFileSize = params.config.initFileSize))
+              config,
+              time = time,
+              initFileSize = config.initFileSize))
         }
         (0L, 0L)
       }
     }
 
-    params.leaderEpochCache.foreach(_.truncateFromEnd(nextOffset))
-    val newLogStartOffset = math.max(params.logStartOffsetCheckpoint, params.segments.firstSegment.get.baseOffset)
+    leaderEpochCache.foreach(_.truncateFromEnd(nextOffset))
+    val newLogStartOffset = math.max(logStartOffsetCheckpoint, segments.firstSegment.get.baseOffset)
     // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
-    params.leaderEpochCache.foreach(_.truncateFromStart(params.logStartOffsetCheckpoint))
+    leaderEpochCache.foreach(_.truncateFromStart(logStartOffsetCheckpoint))
 
     // Any segment loading or recovery code must not use producerStateManager, so that we can build the full state here
     // from scratch.
-    if (!params.producerStateManager.isEmpty)
+    if (!producerStateManager.isEmpty)
       throw new IllegalStateException("Producer state must be empty during log initialization")
 
     // Reload all snapshots into the ProducerStateManager cache, the intermediate ProducerStateManager used
     // during log recovery may have deleted some files without the LogLoader.producerStateManager instance witnessing the
     // deletion.
-    params.producerStateManager.removeStraySnapshots(params.segments.baseOffsets.toSeq)
-    Log.rebuildProducerState(
-      params.producerStateManager,
-      params.segments,
+    producerStateManager.removeStraySnapshots(segments.baseOffsets.toSeq)
+    UnifiedLog.rebuildProducerState(
+      producerStateManager,
+      segments,
       newLogStartOffset,
       nextOffset,
-      params.config.messageFormatVersion.recordVersion,
-      params.time,
-      reloadFromCleanShutdown = params.hadCleanShutdown)
-
-    val activeSegment = params.segments.lastSegment.get
+      config.recordVersion,
+      time,
+      reloadFromCleanShutdown = hadCleanShutdown,
+      logIdent)
+    val activeSegment = segments.lastSegment.get
     LoadedLogOffsets(
       newLogStartOffset,
       newRecoveryPoint,
@@ -166,45 +216,27 @@ object LogLoader extends Logging {
    * in place of existing segment(s). For log splitting, we know that any .swap file whose base offset is higher than
    * the smallest offset .clean file could be part of an incomplete split operation. Such .swap files are also deleted
    * by this method.
-   * @param params The parameters for the log being loaded from disk
-   * @return Set of .swap files that are valid to be swapped in as segment files
+   *
+   * @return Set of .swap files that are valid to be swapped in as segment files and index files
    */
-  private def removeTempFilesAndCollectSwapFiles(params: LoadLogParams): Set[File] = {
-
-    def deleteIndicesIfExist(baseFile: File, suffix: String = ""): Unit = {
-      info(s"${params.logIdentifier} Deleting index files with suffix $suffix for baseFile $baseFile")
-      val offset = offsetFromFile(baseFile)
-      Files.deleteIfExists(Log.offsetIndexFile(params.dir, offset, suffix).toPath)
-      Files.deleteIfExists(Log.timeIndexFile(params.dir, offset, suffix).toPath)
-      Files.deleteIfExists(Log.transactionIndexFile(params.dir, offset, suffix).toPath)
-    }
+  private def removeTempFilesAndCollectSwapFiles(): Set[File] = {
 
     val swapFiles = mutable.Set[File]()
-    val cleanFiles = mutable.Set[File]()
+    val cleanedFiles = mutable.Set[File]()
     var minCleanedFileOffset = Long.MaxValue
 
-    for (file <- params.dir.listFiles if file.isFile) {
+    for (file <- dir.listFiles if file.isFile) {
       if (!file.canRead)
         throw new IOException(s"Could not read file $file")
       val filename = file.getName
       if (filename.endsWith(DeletedFileSuffix)) {
-        debug(s"${params.logIdentifier} Deleting stray temporary file ${file.getAbsolutePath}")
+        debug(s"Deleting stray temporary file ${file.getAbsolutePath}")
         Files.deleteIfExists(file.toPath)
       } else if (filename.endsWith(CleanedFileSuffix)) {
-        minCleanedFileOffset = Math.min(offsetFromFileName(filename), minCleanedFileOffset)
-        cleanFiles += file
+        minCleanedFileOffset = Math.min(offsetFromFile(file), minCleanedFileOffset)
+        cleanedFiles += file
       } else if (filename.endsWith(SwapFileSuffix)) {
-        // we crashed in the middle of a swap operation, to recover:
-        // if a log, delete the index files, complete the swap operation later
-        // if an index just delete the index files, they will be rebuilt
-        val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
-        info(s"${params.logIdentifier} Found file ${file.getAbsolutePath} from interrupted swap operation.")
-        if (Log.isIndexFile(baseFile)) {
-          deleteIndicesIfExist(baseFile)
-        } else if (Log.isLogFile(baseFile)) {
-          deleteIndicesIfExist(baseFile)
-          swapFiles += file
-        }
+        swapFiles += file
       }
     }
 
@@ -213,15 +245,13 @@ object LogLoader extends Logging {
     // for more details about the split operation.
     val (invalidSwapFiles, validSwapFiles) = swapFiles.partition(file => offsetFromFile(file) >= minCleanedFileOffset)
     invalidSwapFiles.foreach { file =>
-      debug(s"${params.logIdentifier} Deleting invalid swap file ${file.getAbsoluteFile} minCleanedFileOffset: $minCleanedFileOffset")
-      val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
-      deleteIndicesIfExist(baseFile, SwapFileSuffix)
+      debug(s"Deleting invalid swap file ${file.getAbsoluteFile} minCleanedFileOffset: $minCleanedFileOffset")
       Files.deleteIfExists(file.toPath)
     }
 
     // Now that we have deleted all .swap files that constitute an incomplete split operation, let's delete all .clean files
-    cleanFiles.foreach { file =>
-      debug(s"${params.logIdentifier} Deleting stray .clean file ${file.getAbsolutePath}")
+    cleanedFiles.foreach { file =>
+      debug(s"Deleting stray .clean file ${file.getAbsolutePath}")
       Files.deleteIfExists(file.toPath)
     }
 
@@ -233,28 +263,28 @@ object LogLoader extends Logging {
    * it during execution. Before every retry, the overflowed segment is split into one or more segments
    * such that there is no offset overflow in any of them.
    *
-   * @param params The parameters for the log being loaded from disk
    * @param fn The function to be executed
    * @return The value returned by the function, if successful
    * @throws Exception whenever the executed function throws any exception other than
    *                   LogSegmentOffsetOverflowException, the same exception is raised to the caller
    */
-  private def retryOnOffsetOverflow[T](params: LoadLogParams, fn: => T): T = {
+  private def retryOnOffsetOverflow[T](fn: () => T): T = {
     while (true) {
       try {
-        return fn
+        return fn()
       } catch {
         case e: LogSegmentOffsetOverflowException =>
-          info(s"${params.logIdentifier} Caught segment overflow error: ${e.getMessage}. Split segment and retry.")
-          Log.splitOverflowedSegment(
+          info(s"Caught segment overflow error: ${e.getMessage}. Split segment and retry.")
+          val result = UnifiedLog.splitOverflowedSegment(
             e.segment,
-            params.segments,
-            params.dir,
-            params.topicPartition,
-            params.config,
-            params.scheduler,
-            params.logDirFailureChannel,
-            params.producerStateManager)
+            segments,
+            dir,
+            topicPartition,
+            config,
+            scheduler,
+            logDirFailureChannel,
+            logIdent)
+          deleteProducerSnapshotsAsync(result.deletedSegments)
       }
     }
     throw new IllegalStateException()
@@ -268,45 +298,45 @@ object LogLoader extends Logging {
    * will be thrown. Note that any segments that were opened before we encountered the exception will remain open and the
    * caller is responsible for closing them appropriately, if needed.
    *
-   * @param params The parameters for the log being loaded from disk
    * @throws LogSegmentOffsetOverflowException if the log directory contains a segment with messages that overflow the index offset
    */
-  private def loadSegmentFiles(params: LoadLogParams): Unit = {
+  private def loadSegmentFiles(): Unit = {
     // load segments in ascending order because transactional data from one segment may depend on the
     // segments that come before it
-    for (file <- params.dir.listFiles.sortBy(_.getName) if file.isFile) {
+    for (file <- dir.listFiles.sortBy(_.getName) if file.isFile) {
       if (isIndexFile(file)) {
         // if it is an index file, make sure it has a corresponding .log file
         val offset = offsetFromFile(file)
-        val logFile = Log.logFile(params.dir, offset)
+        val logFile = UnifiedLog.logFile(dir, offset)
         if (!logFile.exists) {
-          warn(s"${params.logIdentifier} Found an orphaned index file ${file.getAbsolutePath}, with no corresponding log file.")
+          warn(s"Found an orphaned index file ${file.getAbsolutePath}, with no corresponding log file.")
           Files.deleteIfExists(file.toPath)
         }
       } else if (isLogFile(file)) {
         // if it's a log file, load the corresponding log segment
         val baseOffset = offsetFromFile(file)
-        val timeIndexFileNewlyCreated = !Log.timeIndexFile(params.dir, baseOffset).exists()
+        val timeIndexFileNewlyCreated = !UnifiedLog.timeIndexFile(dir, baseOffset).exists()
         val segment = LogSegment.open(
-          dir = params.dir,
+          dir = dir,
           baseOffset = baseOffset,
-          params.config,
-          time = params.time,
+          config,
+          time = time,
           fileAlreadyExists = true)
 
         try segment.sanityCheck(timeIndexFileNewlyCreated)
         catch {
           case _: NoSuchFileException =>
-            error(s"${params.logIdentifier} Could not find offset index file corresponding to log file" +
-              s" ${segment.log.file.getAbsolutePath}, recovering segment and rebuilding index files...")
-            recoverSegment(segment, params)
+            if (hadCleanShutdown || segment.baseOffset < recoveryPointCheckpoint)
+              error(s"Could not find offset index file corresponding to log file" +
+                s" ${segment.log.file.getAbsolutePath}, recovering segment and rebuilding index files...")
+            recoverSegment(segment)
           case e: CorruptIndexException =>
-            warn(s"${params.logIdentifier} Found a corrupted index file corresponding to log file" +
+            warn(s"Found a corrupted index file corresponding to log file" +
               s" ${segment.log.file.getAbsolutePath} due to ${e.getMessage}}, recovering segment and" +
               " rebuilding index files...")
-            recoverSegment(segment, params)
+            recoverSegment(segment)
         }
-        params.segments.add(segment)
+        segments.add(segment)
       }
     }
   }
@@ -315,83 +345,32 @@ object LogLoader extends Logging {
    * Just recovers the given segment, without adding it to the provided params.segments.
    *
    * @param segment Segment to recover
-   * @param params The parameters for the log being loaded from disk
    *
    * @return The number of bytes truncated from the segment
    *
    * @throws LogSegmentOffsetOverflowException if the segment contains messages that cause index offset overflow
    */
-  private def recoverSegment(segment: LogSegment, params: LoadLogParams): Int = {
-    val producerStateManager = new ProducerStateManager(params.topicPartition, params.dir, params.maxProducerIdExpirationMs)
-    Log.rebuildProducerState(
+  private def recoverSegment(segment: LogSegment): Int = {
+    val producerStateManager = new ProducerStateManager(
+      topicPartition,
+      dir,
+      this.producerStateManager.maxTransactionTimeoutMs,
+      this.producerStateManager.maxProducerIdExpirationMs,
+      time)
+    UnifiedLog.rebuildProducerState(
       producerStateManager,
-      params.segments,
-      params.logStartOffsetCheckpoint,
+      segments,
+      logStartOffsetCheckpoint,
       segment.baseOffset,
-      params.config.messageFormatVersion.recordVersion,
-      params.time,
-      reloadFromCleanShutdown = false)
-    val bytesTruncated = segment.recover(producerStateManager, params.leaderEpochCache)
+      config.recordVersion,
+      time,
+      reloadFromCleanShutdown = false,
+      logIdent)
+    val bytesTruncated = segment.recover(producerStateManager, leaderEpochCache)
     // once we have recovered the segment's data, take a snapshot to ensure that we won't
     // need to reload the same segment again while recovering another segment.
     producerStateManager.takeSnapshot()
     bytesTruncated
-  }
-
-  /**
-   * This method completes any interrupted swap operations. In order to be crash-safe, the log files
-   * that are replaced by the swap segment should be renamed to .deleted before the swap file is
-   * restored as the new segment file.
-   *
-   * This method does not need to convert IOException to KafkaStorageException because it is only
-   * called before all logs are loaded.
-   *
-   * @param swapFiles the set of swap
-   * @param params The parameters for the log being loaded from disk
-   *
-   * @throws LogSegmentOffsetOverflowException if the swap file contains messages that cause the log segment offset to
-   *                                           overflow. Note that this is currently a fatal exception as we do not have
-   *                                           a way to deal with it. The exception is propagated all the way up to
-   *                                           KafkaServer#startup which will cause the broker to shut down if we are in
-   *                                           this situation. This is expected to be an extremely rare scenario in practice,
-   *                                           and manual intervention might be required to get out of it.
-   */
-  private def completeSwapOperations(swapFiles: Set[File],
-                                     params: LoadLogParams): Unit = {
-    for (swapFile <- swapFiles) {
-      val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, Log.SwapFileSuffix, ""))
-      val baseOffset = Log.offsetFromFile(logFile)
-      val swapSegment = LogSegment.open(swapFile.getParentFile,
-        baseOffset = baseOffset,
-        params.config,
-        time = params.time,
-        fileSuffix = Log.SwapFileSuffix)
-      info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
-      recoverSegment(swapSegment, params)
-
-      // We create swap files for two cases:
-      // (1) Log cleaning where multiple segments are merged into one, and
-      // (2) Log splitting where one segment is split into multiple.
-      //
-      // Both of these mean that the resultant swap segments be composed of the original set, i.e. the swap segment
-      // must fall within the range of existing segment(s). If we cannot find such a segment, it means the deletion
-      // of that segment was successful. In such an event, we should simply rename the .swap to .log without having to
-      // do a replace with an existing segment.
-      val oldSegments = params.segments.values(swapSegment.baseOffset, swapSegment.readNextOffset).filter { segment =>
-        segment.readNextOffset > swapSegment.baseOffset
-      }
-      Log.replaceSegments(
-        params.segments,
-        Seq(swapSegment),
-        oldSegments.toSeq,
-        isRecoveredSwapFile = true,
-        params.dir,
-        params.topicPartition,
-        params.config,
-        params.scheduler,
-        params.logDirFailureChannel,
-        params.producerStateManager)
-    }
   }
 
   /**
@@ -403,70 +382,80 @@ object LogLoader extends Logging {
    * This method does not need to convert IOException to KafkaStorageException because it is only
    * called before all logs are loaded.
    *
-   * @param params The parameters for the log being loaded from disk
-   *
    * @return a tuple containing (newRecoveryPoint, nextOffset).
    *
    * @throws LogSegmentOffsetOverflowException if we encountered a legacy segment with offset overflow
    */
-  private[log] def recoverLog(params: LoadLogParams): (Long, Long) = {
+  private[log] def recoverLog(): (Long, Long) = {
     /** return the log end offset if valid */
     def deleteSegmentsIfLogStartGreaterThanLogEnd(): Option[Long] = {
-      if (params.segments.nonEmpty) {
-        val logEndOffset = params.segments.lastSegment.get.readNextOffset
-        if (logEndOffset >= params.logStartOffsetCheckpoint)
+      if (segments.nonEmpty) {
+        val logEndOffset = segments.lastSegment.get.readNextOffset
+        if (logEndOffset >= logStartOffsetCheckpoint)
           Some(logEndOffset)
         else {
-          warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ${params.logStartOffsetCheckpoint}. " +
+          warn(s"Deleting all segments because logEndOffset ($logEndOffset) " +
+            s"is smaller than logStartOffset $logStartOffsetCheckpoint. " +
             "This could happen if segment files were deleted from the file system.")
-          removeAndDeleteSegmentsAsync(params.segments.values, params)
-          params.leaderEpochCache.foreach(_.clearAndFlush())
-          params.producerStateManager.truncateFullyAndStartAt(params.logStartOffsetCheckpoint)
+          removeAndDeleteSegmentsAsync(segments.values)
+          leaderEpochCache.foreach(_.clearAndFlush())
+          producerStateManager.truncateFullyAndStartAt(logStartOffsetCheckpoint)
           None
         }
       } else None
     }
 
     // If we have the clean shutdown marker, skip recovery.
-    if (!params.hadCleanShutdown) {
-      val unflushed = params.segments.values(params.recoveryPointCheckpoint, Long.MaxValue).iterator
+    if (!hadCleanShutdown) {
+      val unflushed = segments.values(recoveryPointCheckpoint, Long.MaxValue)
+      val numUnflushed = unflushed.size
+      val unflushedIter = unflushed.iterator
       var truncated = false
+      var numFlushed = 0
+      val threadName = Thread.currentThread().getName
+      numRemainingSegments.put(threadName, numUnflushed)
 
-      while (unflushed.hasNext && !truncated) {
-        val segment = unflushed.next()
-        info(s"${params.logIdentifier} Recovering unflushed segment ${segment.baseOffset}")
+      while (unflushedIter.hasNext && !truncated) {
+        val segment = unflushedIter.next()
+        info(s"Recovering unflushed segment ${segment.baseOffset}. $numFlushed/$numUnflushed recovered for $topicPartition.")
+
         val truncatedBytes =
           try {
-            recoverSegment(segment, params)
+            recoverSegment(segment)
           } catch {
             case _: InvalidOffsetException =>
               val startOffset = segment.baseOffset
-              warn(s"${params.logIdentifier} Found invalid offset during recovery. Deleting the" +
+              warn(s"Found invalid offset during recovery. Deleting the" +
                 s" corrupt segment and creating an empty one with starting offset $startOffset")
               segment.truncateTo(startOffset)
           }
         if (truncatedBytes > 0) {
           // we had an invalid message, delete all remaining log
-          warn(s"${params.logIdentifier} Corruption found in segment ${segment.baseOffset}," +
+          warn(s"Corruption found in segment ${segment.baseOffset}," +
             s" truncating to offset ${segment.readNextOffset}")
-          removeAndDeleteSegmentsAsync(unflushed.toList, params)
+          removeAndDeleteSegmentsAsync(unflushedIter.toList)
           truncated = true
+          // segment is truncated, so set remaining segments to 0
+          numRemainingSegments.put(threadName, 0)
+        } else {
+          numFlushed += 1
+          numRemainingSegments.put(threadName, numUnflushed - numFlushed)
         }
       }
     }
 
     val logEndOffsetOption = deleteSegmentsIfLogStartGreaterThanLogEnd()
 
-    if (params.segments.isEmpty) {
+    if (segments.isEmpty) {
       // no existing segments, create a new mutable segment beginning at logStartOffset
-      params.segments.add(
+      segments.add(
         LogSegment.open(
-          dir = params.dir,
-          baseOffset = params.logStartOffsetCheckpoint,
-          params.config,
-          time = params.time,
-          initFileSize = params.config.initFileSize,
-          preallocate = params.config.preallocate))
+          dir = dir,
+          baseOffset = logStartOffsetCheckpoint,
+          config,
+          time = time,
+          initFileSize = config.initFileSize,
+          preallocate = config.preallocate))
     }
 
     // Update the recovery point if there was a clean shutdown and did not perform any changes to
@@ -475,12 +464,12 @@ object LogLoader extends Logging {
     // the recovery point when the log is flushed. If we advanced the recovery point here, we could
     // skip recovery for unflushed segments if the broker crashed after we checkpoint the recovery
     // point and before we flush the segment.
-    (params.hadCleanShutdown, logEndOffsetOption) match {
+    (hadCleanShutdown, logEndOffsetOption) match {
       case (true, Some(logEndOffset)) =>
         (logEndOffset, logEndOffset)
       case _ =>
-        val logEndOffset = logEndOffsetOption.getOrElse(params.segments.lastSegment.get.readNextOffset)
-        (Math.min(params.recoveryPointCheckpoint, logEndOffset), logEndOffset)
+        val logEndOffset = logEndOffsetOption.getOrElse(segments.lastSegment.get.readNextOffset)
+        (Math.min(recoveryPointCheckpoint, logEndOffset), logEndOffset)
     }
   }
 
@@ -496,30 +485,40 @@ object LogLoader extends Logging {
    * called before all logs are loaded or the immediate caller will catch and handle IOException
    *
    * @param segmentsToDelete The log segments to schedule for deletion
-   * @param params The parameters for the log being loaded from disk
    */
-  private def removeAndDeleteSegmentsAsync(segmentsToDelete: Iterable[LogSegment],
-                                           params: LoadLogParams): Unit = {
+  private def removeAndDeleteSegmentsAsync(segmentsToDelete: Iterable[LogSegment]): Unit = {
     if (segmentsToDelete.nonEmpty) {
-      // As most callers hold an iterator into the `params.segments` collection and
-      // `removeAndDeleteSegmentAsync` mutates it by removing the deleted segment, we should force
-      // materialization of the iterator here, so that results of the iteration remain valid and
-      // deterministic.
+      // Most callers hold an iterator into the `params.segments` collection and
+      // `removeAndDeleteSegmentAsync` mutates it by removing the deleted segment. Therefore,
+      // we should force materialization of the iterator here, so that results of the iteration
+      // remain valid and deterministic. We should also pass only the materialized view of the
+      // iterator to the logic that deletes the segments.
       val toDelete = segmentsToDelete.toList
       info(s"Deleting segments as part of log recovery: ${toDelete.mkString(",")}")
       toDelete.foreach { segment =>
-        params.segments.remove(segment.baseOffset)
+        segments.remove(segment.baseOffset)
       }
-      Log.deleteSegmentFiles(
-        segmentsToDelete,
+      UnifiedLog.deleteSegmentFiles(
+        toDelete,
         asyncDelete = true,
-        deleteProducerStateSnapshots = true,
-        params.dir,
-        params.topicPartition,
-        params.config,
-        params.scheduler,
-        params.logDirFailureChannel,
-        params.producerStateManager)
+        dir,
+        topicPartition,
+        config,
+        scheduler,
+        logDirFailureChannel,
+        logIdent)
+      deleteProducerSnapshotsAsync(segmentsToDelete)
     }
+  }
+
+  private def deleteProducerSnapshotsAsync(segments: Iterable[LogSegment]): Unit = {
+    UnifiedLog.deleteProducerSnapshots(segments,
+      producerStateManager,
+      asyncDelete = true,
+      scheduler,
+      config,
+      logDirFailureChannel,
+      dir.getParent,
+      topicPartition)
   }
 }

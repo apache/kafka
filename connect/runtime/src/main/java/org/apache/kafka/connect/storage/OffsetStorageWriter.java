@@ -114,10 +114,16 @@ public class OffsetStorageWriter {
         if (data.isEmpty())
             return false;
 
-        assert !flushing();
         toFlush = data;
         data = new HashMap<>();
         return true;
+    }
+
+    /**
+     * @return whether there's anything to flush right now.
+     */
+    public synchronized boolean willFlush() {
+        return !data.isEmpty();
     }
 
     /**

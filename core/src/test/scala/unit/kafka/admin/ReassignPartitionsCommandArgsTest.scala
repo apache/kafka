@@ -23,6 +23,8 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
 @Timeout(60)
 class ReassignPartitionsCommandArgsTest {
 
+  val missingBootstrapServerMsg = "Please specify --bootstrap-server"
+
   @BeforeEach
   def setUp(): Unit = {
     Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
@@ -54,27 +56,9 @@ class ReassignPartitionsCommandArgsTest {
   }
 
   @Test
-  def shouldCorrectlyParseValidMinimumLegacyExecuteOptions(): Unit = {
-    val args = Array(
-      "--zookeeper", "localhost:1234",
-      "--execute",
-      "--reassignment-json-file", "myfile.json")
-    ReassignPartitionsCommand.validateAndParseArgs(args)
-  }
-
-  @Test
   def shouldCorrectlyParseValidMinimumVerifyOptions(): Unit = {
     val args = Array(
       "--bootstrap-server", "localhost:1234",
-      "--verify",
-      "--reassignment-json-file", "myfile.json")
-    ReassignPartitionsCommand.validateAndParseArgs(args)
-  }
-
-  @Test
-  def shouldCorrectlyParseValidMinimumLegacyVerifyOptions(): Unit = {
-    val args = Array(
-      "--zookeeper", "localhost:1234",
       "--verify",
       "--reassignment-json-file", "myfile.json")
     ReassignPartitionsCommand.validateAndParseArgs(args)
@@ -177,7 +161,7 @@ class ReassignPartitionsCommandArgsTest {
   def testMissingBootstrapServerArgumentForExecute(): Unit = {
     val args = Array(
       "--execute")
-    shouldFailWith("Please specify --bootstrap-server", args)
+    shouldFailWith(missingBootstrapServerMsg, args)
   }
 
   ///// Test --generate
@@ -230,15 +214,10 @@ class ReassignPartitionsCommandArgsTest {
   }
 
   @Test
-  def testInvalidCommandConfigArgumentForLegacyGenerate(): Unit = {
-    val args = Array(
-      "--zookeeper", "localhost:1234",
-      "--generate",
-      "--broker-list", "101,102",
-      "--topics-to-move-json-file", "myfile.json",
-      "--command-config", "/tmp/command-config.properties"
-    )
-    shouldFailWith("You must specify --bootstrap-server when using \"[command-config]\"", args)
+  def shouldPrintHelpTextIfHelpArg(): Unit = {
+    val args: Array[String]= Array("--help")
+    // note, this is not actually a failed case, it's just we share the same `printUsageAndDie` method when wrong arg received
+    shouldFailWith(ReassignPartitionsCommand.helpText, args)
   }
 
   ///// Test --verify
@@ -291,7 +270,7 @@ class ReassignPartitionsCommandArgsTest {
   def shouldNotAllowCancelWithoutBootstrapServerOption(): Unit = {
     val args = Array(
       "--cancel")
-    shouldFailWith("Please specify --bootstrap-server", args)
+    shouldFailWith(missingBootstrapServerMsg, args)
   }
 
   @Test
@@ -301,14 +280,5 @@ class ReassignPartitionsCommandArgsTest {
       "--bootstrap-server", "localhost:1234",
       "--preserve-throttles")
     shouldFailWith("Missing required argument \"[reassignment-json-file]\"", args)
-  }
-
-  ///// Test --list
-  @Test
-  def shouldNotAllowZooKeeperWithListOption(): Unit = {
-    val args = Array(
-      "--list",
-      "--zookeeper", "localhost:1234")
-    shouldFailWith("Option \"[zookeeper]\" can't be used with action \"[list]\"", args)
   }
 }

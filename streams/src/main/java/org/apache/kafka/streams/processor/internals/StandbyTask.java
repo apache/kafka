@@ -27,6 +27,7 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
+import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.Collections;
@@ -38,10 +39,12 @@ import java.util.Set;
  * A StandbyTask
  */
 public class StandbyTask extends AbstractTask implements Task {
-    private final Sensor closeTaskSensor;
     private final boolean eosEnabled;
-    private final InternalProcessorContext processorContext;
+    private final Sensor closeTaskSensor;
     private final StreamsMetricsImpl streamsMetrics;
+
+    @SuppressWarnings("rawtypes")
+    protected final InternalProcessorContext processorContext;
 
     /**
      * @param id              the ID of this task
@@ -52,10 +55,11 @@ public class StandbyTask extends AbstractTask implements Task {
      * @param stateMgr        the {@link ProcessorStateManager} for this task
      * @param stateDirectory  the {@link StateDirectory} created by the thread
      */
+    @SuppressWarnings("rawtypes")
     StandbyTask(final TaskId id,
                 final Set<TopicPartition> inputPartitions,
                 final ProcessorTopology topology,
-                final StreamsConfig config,
+                final TaskConfig config,
                 final StreamsMetricsImpl streamsMetrics,
                 final ProcessorStateManager stateMgr,
                 final StateDirectory stateDirectory,
@@ -67,7 +71,7 @@ public class StandbyTask extends AbstractTask implements Task {
             stateDirectory,
             stateMgr,
             inputPartitions,
-            config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG),
+            config,
             "standby-task",
             StandbyTask.class
         );
@@ -76,7 +80,7 @@ public class StandbyTask extends AbstractTask implements Task {
         processorContext.transitionToStandby(cache);
 
         closeTaskSensor = ThreadMetrics.closeTaskSensor(Thread.currentThread().getName(), streamsMetrics);
-        eosEnabled = StreamThread.eosEnabled(config);
+        this.eosEnabled = config.eosEnabled;
     }
 
     @Override
@@ -193,7 +197,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
             case RUNNING:
             case SUSPENDED:
-                maybeWriteCheckpoint(enforceCheckpoint);
+                maybeCheckpoint(enforceCheckpoint);
 
                 log.debug("Finalized commit for {} task", state());
 
@@ -219,7 +223,7 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void closeCleanAndRecycleState() {
+    public void prepareRecycle() {
         streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
         if (state() == State.SUSPENDED) {
             stateMgr.recycle();
@@ -230,7 +234,7 @@ public class StandbyTask extends AbstractTask implements Task {
         closeTaskSensor.record();
         transitionTo(State.CLOSED);
 
-        log.info("Closed clean and recycled state");
+        log.info("Closed and recycled state");
     }
 
     private void close(final boolean clean) {
@@ -302,6 +306,7 @@ public class StandbyTask extends AbstractTask implements Task {
         throw new IllegalStateException("Attempted to add records to task " + id() + " for invalid input partition " + partition);
     }
 
+    @SuppressWarnings("rawtypes")
     InternalProcessorContext processorContext() {
         return processorContext;
     }

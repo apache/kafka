@@ -20,4 +20,12 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 @InterfaceStability.Evolving
 public class AbortTransactionOptions extends AbstractOptions<AbortTransactionOptions> {
+
+    @Override
+    public String toString() {
+        return "AbortTransactionOptions(" +
+            "timeoutMs=" + timeoutMs +
+            ')';
+    }
+
 }

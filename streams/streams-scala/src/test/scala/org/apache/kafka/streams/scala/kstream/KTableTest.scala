@@ -36,6 +36,7 @@ import java.time.Duration.ofMillis
 
 import scala.jdk.CollectionConverters._
 
+//noinspection ScalaDeprecation
 class KTableTest extends TestDriver {
 
   @Test
@@ -166,7 +167,7 @@ class KTableTest extends TestDriver {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
-    val window = TimeWindows.of(Duration.ofSeconds(1L))
+    val window = TimeWindows.ofSizeAndGrace(Duration.ofSeconds(1L), Duration.ofHours(24))
     val suppression = JSuppressed.untilTimeLimit[Windowed[String]](Duration.ofSeconds(2L), BufferConfig.unbounded())
 
     val table: KTable[Windowed[String], Long] = builder
@@ -224,7 +225,7 @@ class KTableTest extends TestDriver {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
-    val window = SlidingWindows.withTimeDifferenceAndGrace(ofMillis(1000L), ofMillis(1000L))
+    val window = SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(1000L), ofMillis(1000L))
     val suppression = JSuppressed.untilWindowCloses(BufferConfig.unbounded())
 
     val table: KTable[Windowed[String], Long] = builder
@@ -262,7 +263,7 @@ class KTableTest extends TestDriver {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
-    val window = TimeWindows.of(Duration.ofSeconds(1L)).grace(Duration.ofSeconds(1L))
+    val window = TimeWindows.ofSizeAndGrace(Duration.ofSeconds(1L), Duration.ofSeconds(1L))
     val suppression = JSuppressed.untilWindowCloses(BufferConfig.unbounded())
 
     val table: KTable[Windowed[String], Long] = builder
@@ -321,7 +322,7 @@ class KTableTest extends TestDriver {
     val sourceTopic = "source"
     val sinkTopic = "sink"
     // Very similar to SuppressScenarioTest.shouldSupportFinalResultsForSessionWindows
-    val window = SessionWindows.`with`(Duration.ofMillis(5L)).grace(Duration.ofMillis(10L))
+    val window = SessionWindows.ofInactivityGapAndGrace(Duration.ofMillis(5L), Duration.ofMillis(10L))
     val suppression = JSuppressed.untilWindowCloses(BufferConfig.unbounded())
 
     val table: KTable[Windowed[String], Long] = builder
@@ -494,5 +495,43 @@ class KTableTest extends TestDriver {
     val joinNodeRight = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(7)
     assertTrue(joinNodeLeft.name().contains("my-name"))
     assertTrue(joinNodeRight.name().contains("my-name"))
+  }
+
+  @Test
+  def testMapValuesWithValueMapperWithMaterialized(): Unit = {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val stateStore = "store"
+    val materialized = Materialized.as[String, Long, ByteArrayKeyValueStore](stateStore)
+
+    val table = builder.stream[String, String](sourceTopic).toTable
+    table.mapValues(value => value.length.toLong, materialized)
+
+    val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+
+    testInput.pipeInput("1", "topic1value1")
+    assertEquals(12, testDriver.getKeyValueStore[String, Long](stateStore).get("1"))
+
+    testDriver.close()
+  }
+
+  @Test
+  def testMapValuesWithValueMapperWithKeyAndWithMaterialized(): Unit = {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val stateStore = "store"
+    val materialized = Materialized.as[String, Long, ByteArrayKeyValueStore](stateStore)
+
+    val table = builder.stream[String, String](sourceTopic).toTable
+    table.mapValues((key, value) => key.length + value.length.toLong, materialized)
+
+    val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+
+    testInput.pipeInput("1", "topic1value1")
+    assertEquals(13, testDriver.getKeyValueStore[String, Long](stateStore).get("1"))
+
+    testDriver.close()
   }
 }

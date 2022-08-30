@@ -20,6 +20,7 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -38,6 +39,11 @@ public interface AdminApiLookupStrategy<T> {
      * On the other hand, `FindCoordinator` requests only support lookup of a
      * single key. This can be supported by returning a different scope object
      * for each lookup key.
+     *
+     * Note that if the {@link ApiRequestScope#destinationBrokerId()} maps to
+     * a specific brokerId, then lookup will be skipped. See the use of
+     * {@link StaticBrokerStrategy} in {@link DescribeProducersHandler} for
+     * an example of this usage.
      *
      * @param key the lookup key
      *
@@ -76,13 +82,31 @@ public interface AdminApiLookupStrategy<T> {
     LookupResult<T> handleResponse(Set<T> keys, AbstractResponse response);
 
     class LookupResult<K> {
+        // This is the set of keys that have been completed by the lookup phase itself.
+        // The driver will not attempt lookup or fulfillment for completed keys.
+        public final List<K> completedKeys;
+
+        // This is the set of keys that have been mapped to a specific broker for
+        // fulfillment of the API request.
         public final Map<K, Integer> mappedKeys;
+
+        // This is the set of keys that have encountered a fatal error during the lookup
+        // phase. The driver will not attempt lookup or fulfillment for failed keys.
         public final Map<K, Throwable> failedKeys;
 
         public LookupResult(
             Map<K, Throwable> failedKeys,
             Map<K, Integer> mappedKeys
         ) {
+            this(Collections.emptyList(), failedKeys, mappedKeys);
+        }
+
+        public LookupResult(
+            List<K> completedKeys,
+            Map<K, Throwable> failedKeys,
+            Map<K, Integer> mappedKeys
+        ) {
+            this.completedKeys = Collections.unmodifiableList(completedKeys);
             this.failedKeys = Collections.unmodifiableMap(failedKeys);
             this.mappedKeys = Collections.unmodifiableMap(mappedKeys);
         }

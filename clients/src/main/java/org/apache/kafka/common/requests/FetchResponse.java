@@ -17,6 +17,8 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -33,6 +35,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 
@@ -54,6 +58,10 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
  *     not supported by the fetch request version
  * - {@link Errors#CORRUPT_MESSAGE} If corrupt message encountered, e.g. when the broker scans the log to find
  *     the fetch offset after the index lookup
+ * - {@link Errors#UNKNOWN_TOPIC_ID} If the request contains a topic ID unknown to the broker
+ * - {@link Errors#FETCH_SESSION_TOPIC_ID_ERROR} If the request version supports topic IDs but the session does not or vice versa,
+ *     or a topic ID in the request is inconsistent with a topic ID in the session
+ * - {@link Errors#INCONSISTENT_TOPIC_ID} If a topic ID in the session does not match the topic ID in the log
  * - {@link Errors#UNKNOWN_SERVER_ERROR} For any unexpected errors
  */
 public class FetchResponse extends AbstractResponse {
@@ -71,6 +79,14 @@ public class FetchResponse extends AbstractResponse {
         return data;
     }
 
+    /**
+     * From version 3 or later, the authorized and existing entries in `FetchRequest.fetchData` should be in the same order in `responseData`.
+     * Version 13 introduces topic IDs which can lead to a few new errors. If there is any unknown topic ID in the request, the
+     * response will contain a partition-level UNKNOWN_TOPIC_ID error for that partition.
+     * If a request's topic ID usage is inconsistent with the session, we will return a top level FETCH_SESSION_TOPIC_ID_ERROR error.
+     * We may also return INCONSISTENT_TOPIC_ID error as a partition-level error when a partition in the session has a topic ID
+     * inconsistent with the log.
+     */
     public FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
         this.data = fetchResponseData;
@@ -80,15 +96,27 @@ public class FetchResponse extends AbstractResponse {
         return Errors.forCode(data.errorCode());
     }
 
-    public LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData() {
+    public LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData(Map<Uuid, String> topicNames, short version) {
         if (responseData == null) {
             synchronized (this) {
                 if (responseData == null) {
-                    responseData = new LinkedHashMap<>();
-                    data.responses().forEach(topicResponse ->
+                    // Assigning the lazy-initialized `responseData` in the last step
+                    // to avoid other threads accessing a half-initialized object.
+                    final LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseDataTmp =
+                            new LinkedHashMap<>();
+                    data.responses().forEach(topicResponse -> {
+                        String name;
+                        if (version < 13) {
+                            name = topicResponse.topic();
+                        } else {
+                            name = topicNames.get(topicResponse.topicId());
+                        }
+                        if (name != null) {
                             topicResponse.partitions().forEach(partition ->
-                                    responseData.put(new TopicPartition(topicResponse.topic(), partition.partitionIndex()), partition))
-                    );
+                                responseDataTmp.put(new TopicPartition(name, partition.partitionIndex()), partition));
+                        }
+                    });
+                    responseData = responseDataTmp;
                 }
             }
         }
@@ -119,6 +147,12 @@ public class FetchResponse extends AbstractResponse {
         return new FetchResponse(new FetchResponseData(new ByteBufferAccessor(buffer), version));
     }
 
+    // Fetch versions 13 and above should have topic IDs for all topics.
+    // Fetch versions < 13 should return the empty set.
+    public Set<Uuid> topicIds() {
+        return data.responses().stream().map(FetchResponseData.FetchableTopicResponse::topicId).filter(id -> !id.equals(Uuid.ZERO_UUID)).collect(Collectors.toSet());
+    }
+
     /**
      * Convenience method to find the size of a response.
      *
@@ -127,7 +161,8 @@ public class FetchResponse extends AbstractResponse {
      * @return              The response size in bytes.
      */
     public static int sizeOf(short version,
-                             Iterator<Map.Entry<TopicPartition, FetchResponseData.PartitionData>> partIterator) {
+                             Iterator<Map.Entry<TopicIdPartition,
+                             FetchResponseData.PartitionData>> partIterator) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
         FetchResponseData data = toMessage(Errors.NONE, 0, INVALID_SESSION_ID, partIterator);
@@ -156,6 +191,10 @@ public class FetchResponse extends AbstractResponse {
 
     public static boolean isPreferredReplica(FetchResponseData.PartitionData partitionResponse) {
         return partitionResponse.preferredReadReplica() != INVALID_PREFERRED_REPLICA_ID;
+    }
+
+    public static FetchResponseData.PartitionData partitionResponse(TopicIdPartition topicIdPartition, Errors error) {
+        return partitionResponse(topicIdPartition.topicPartition().partition(), error);
     }
 
     public static FetchResponseData.PartitionData partitionResponse(int partition, Errors error) {
@@ -189,36 +228,49 @@ public class FetchResponse extends AbstractResponse {
         return partition.records() == null ? 0 : partition.records().sizeInBytes();
     }
 
+    // TODO: remove as a part of KAFKA-12410
     public static FetchResponse of(Errors error,
                                    int throttleTimeMs,
                                    int sessionId,
-                                   LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData) {
+                                   LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData) {
         return new FetchResponse(toMessage(error, throttleTimeMs, sessionId, responseData.entrySet().iterator()));
+    }
+
+    private static boolean matchingTopic(FetchResponseData.FetchableTopicResponse previousTopic, TopicIdPartition currentTopic) {
+        if (previousTopic == null)
+            return false;
+        if (!previousTopic.topicId().equals(Uuid.ZERO_UUID))
+            return previousTopic.topicId().equals(currentTopic.topicId());
+        else
+            return previousTopic.topic().equals(currentTopic.topicPartition().topic());
+
     }
 
     private static FetchResponseData toMessage(Errors error,
                                                int throttleTimeMs,
                                                int sessionId,
-                                               Iterator<Map.Entry<TopicPartition, FetchResponseData.PartitionData>> partIterator) {
+                                               Iterator<Map.Entry<TopicIdPartition, FetchResponseData.PartitionData>> partIterator) {
         List<FetchResponseData.FetchableTopicResponse> topicResponseList = new ArrayList<>();
-        partIterator.forEachRemaining(entry -> {
+        while (partIterator.hasNext()) {
+            Map.Entry<TopicIdPartition, FetchResponseData.PartitionData> entry = partIterator.next();
             FetchResponseData.PartitionData partitionData = entry.getValue();
             // Since PartitionData alone doesn't know the partition ID, we set it here
-            partitionData.setPartitionIndex(entry.getKey().partition());
+            partitionData.setPartitionIndex(entry.getKey().topicPartition().partition());
             // We have to keep the order of input topic-partition. Hence, we batch the partitions only if the last
             // batch is in the same topic group.
             FetchResponseData.FetchableTopicResponse previousTopic = topicResponseList.isEmpty() ? null
                 : topicResponseList.get(topicResponseList.size() - 1);
-            if (previousTopic != null && previousTopic.topic().equals(entry.getKey().topic()))
+            if (matchingTopic(previousTopic, entry.getKey()))
                 previousTopic.partitions().add(partitionData);
             else {
                 List<FetchResponseData.PartitionData> partitionResponses = new ArrayList<>();
                 partitionResponses.add(partitionData);
                 topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
-                    .setTopic(entry.getKey().topic())
+                    .setTopic(entry.getKey().topicPartition().topic())
+                    .setTopicId(entry.getKey().topicId())
                     .setPartitions(partitionResponses));
             }
-        });
+        }
 
         return new FetchResponseData()
             .setThrottleTimeMs(throttleTimeMs)

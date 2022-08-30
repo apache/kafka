@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -142,6 +141,12 @@ public interface Task {
      */
     void updateInputPartitions(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> allTopologyNodesToSourceTopics);
 
+    /**
+     * @param enforceCheckpoint if true the task would always execute the checkpoint;
+     *                          otherwise it may skip if the state has not advanced much
+     */
+    void maybeCheckpoint(final boolean enforceCheckpoint);
+
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions);
 
     /**
@@ -150,10 +155,9 @@ public interface Task {
     void revive();
 
     /**
-     * Attempt a clean close but do not close the underlying state
+     * Close the task except the state, so that the states can be later recycled
      */
-    void closeCleanAndRecycleState();
-
+    void prepareRecycle();
 
     // runtime methods (using in RUNNING state)
 
@@ -189,13 +193,12 @@ public interface Task {
     }
 
     /**
-     * @throws TimeoutException if {@code currentWallClockMs > task-timeout-deadline}
+     * @throws StreamsException if {@code currentWallClockMs > task-timeout-deadline}
      */
     void maybeInitTaskTimeoutOrThrow(final long currentWallClockMs,
                                      final Exception cause);
 
     void clearTaskTimeout();
-
 
     // task status inquiry
 
@@ -208,7 +211,7 @@ public interface Task {
     /**
      * @return any changelog partitions associated with this task
      */
-    Collection<TopicPartition> changelogPartitions();
+    Set<TopicPartition> changelogPartitions();
 
     State state();
 
@@ -248,4 +251,5 @@ public interface Task {
      * @return This returns the time the task started idling. If it is not idling it returns empty.
      */
     Optional<Long> timeCurrentIdlingStarted();
+
 }

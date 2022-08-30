@@ -49,11 +49,11 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
   def checkBrokerApiVersionCommandOutput(): Unit = {
     val byteArrayOutputStream = new ByteArrayOutputStream
     val printStream = new PrintStream(byteArrayOutputStream, false, StandardCharsets.UTF_8.name())
-    BrokerApiVersionsCommand.execute(Array("--bootstrap-server", brokerList), printStream)
+    BrokerApiVersionsCommand.execute(Array("--bootstrap-server", bootstrapServers()), printStream)
     val content = new String(byteArrayOutputStream.toByteArray, StandardCharsets.UTF_8)
     val lineIter = content.split("\n").iterator
     assertTrue(lineIter.hasNext)
-    assertEquals(s"$brokerList (id: 0 rack: null) -> (", lineIter.next())
+    assertEquals(s"${bootstrapServers()} (id: 0 rack: null) -> (", lineIter.next())
     val nodeApiVersions = NodeApiVersions.create
     val enabledApis = ApiKeys.zkBrokerApis.asScala
     for (apiKey <- enabledApis) {

@@ -55,19 +55,20 @@ public class LazyDownConversionRecords implements BaseRecords {
         this.firstOffset = firstOffset;
         this.time = Objects.requireNonNull(time);
 
-        // Kafka consumers expect at least one full batch of messages for every topic-partition. To guarantee this, we
-        // need to make sure that we are able to accommodate one full batch of down-converted messages. The way we achieve
-        // this is by having sizeInBytes method factor in the size of the first down-converted batch and return at least
-        // its size.
+        // To make progress, kafka consumers require at least one full record batch per partition, i.e. we need to
+        // ensure we can accommodate one full batch of down-converted messages. We achieve this by having `sizeInBytes`
+        // factor in the size of the first down-converted batch and we return at least that many bytes.
         java.util.Iterator<ConvertedRecords<?>> it = iterator(0);
         if (it.hasNext()) {
             firstConvertedBatch = it.next();
             sizeInBytes = Math.max(records.sizeInBytes(), firstConvertedBatch.records().sizeInBytes());
         } else {
-            // If there are no messages we got after down-conversion, make sure we are able to send at least an overflow
-            // message to the consumer. Typically, the consumer would need to increase the fetch size in such cases.
+            // If there are messages before down-conversion and no messages after down-conversion,
+            // make sure we are able to send at least an overflow message to the consumer so that it can throw
+            // a RecordTooLargeException. Typically, the consumer would need to increase the fetch size in such cases.
+            // If there are no messages before down-conversion, we return an empty record batch.
             firstConvertedBatch = null;
-            sizeInBytes = LazyDownConversionRecordsSend.MIN_OVERFLOW_MESSAGE_LENGTH;
+            sizeInBytes = records.batches().iterator().hasNext() ? LazyDownConversionRecordsSend.MIN_OVERFLOW_MESSAGE_LENGTH : 0;
         }
     }
 

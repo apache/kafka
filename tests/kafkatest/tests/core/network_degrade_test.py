@@ -105,6 +105,13 @@ class NetworkDegradeTest(Test):
         # Run iperf server on zk1, iperf client on zk0
         iperf_server = zk1.account.ssh_capture("iperf -s")
 
+        # Wait until iperf server is listening before starting the client
+        for line in iperf_server:
+          self.logger.debug("iperf server output %s" % line)
+          if "server listening" in line.lower():
+            self.logger.info("iperf server is ready")
+            break
+
         # Capture the measured kbps between the two nodes.
         # [  3]  0.0- 1.0 sec  2952576 KBytes  24187503 Kbits/sec
         r = re.compile(r"^.*\s(?P<rate>[\d.]+)\sKbits/sec$")

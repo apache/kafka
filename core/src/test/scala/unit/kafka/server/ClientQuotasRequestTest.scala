@@ -32,12 +32,14 @@ import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
 
-@ClusterTestDefaults(clusterType = Type.BOTH)
+@ClusterTestDefaults(clusterType = Type.ALL)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
+@Tag("integration")
 class ClientQuotasRequestTest(cluster: ClusterInstance) {
   private val ConsumerByteRateProp = QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG
   private val ProducerByteRateProp = QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG
@@ -292,8 +294,8 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest
   def testAlterClientQuotasBadIp(): Unit = {
-    val invalidHostPatternEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "abc-123").asJava)
-    val unresolvableHostEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "ip").asJava)
+    val invalidHostPatternEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> "not a valid host because it has spaces").asJava)
+    val unresolvableHostEntity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP ->  "RFC2606.invalid").asJava)
     val expectedExceptionMessage = "not a valid IP"
     expectInvalidRequestWithMessage(alterEntityQuotas(invalidHostPatternEntity, Map(IpConnectionRateProp -> Some(50.0)),
       validateOnly = true), expectedExceptionMessage)

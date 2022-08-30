@@ -17,16 +17,22 @@
 
 package org.apache.kafka.controller;
 
-public final class MockControllerMetrics implements ControllerMetrics {
-    private volatile boolean active;
-    private volatile int topics;
-    private volatile int partitions;
+import java.util.concurrent.atomic.AtomicInteger;
 
-    public MockControllerMetrics() {
-        this.active = false;
-        this.topics = 0;
-        this.partitions = 0;
-    }
+public final class MockControllerMetrics implements ControllerMetrics {
+    private volatile boolean active = false;
+    private volatile int fencedBrokers = 0;
+    private volatile int activeBrokers = 0;
+    private volatile int topics = 0;
+    private volatile int partitions = 0;
+    private volatile int offlinePartitions = 0;
+    private volatile int preferredReplicaImbalances = 0;
+    private volatile AtomicInteger metadataErrors = new AtomicInteger(0);
+    private volatile long lastAppliedRecordOffset = 0;
+    private volatile long lastCommittedRecordOffset = 0;
+    private volatile long lastAppliedRecordTimestamp = 0;
+
+    private volatile boolean closed = false;
 
     @Override
     public void setActive(boolean active) {
@@ -49,6 +55,26 @@ public final class MockControllerMetrics implements ControllerMetrics {
     }
 
     @Override
+    public void setFencedBrokerCount(int brokerCount) {
+        this.fencedBrokers = brokerCount;
+    }
+
+    @Override
+    public int fencedBrokerCount() {
+        return this.fencedBrokers;
+    }
+
+    @Override
+    public void setActiveBrokerCount(int brokerCount) {
+        this.activeBrokers = brokerCount;
+    }
+
+    @Override
+    public int activeBrokerCount() {
+        return activeBrokers;
+    }
+
+    @Override
     public void setGlobalTopicsCount(int topicCount) {
         this.topics = topicCount;
     }
@@ -66,5 +92,74 @@ public final class MockControllerMetrics implements ControllerMetrics {
     @Override
     public int globalPartitionCount() {
         return this.partitions;
+    }
+
+    @Override
+    public void setOfflinePartitionCount(int offlinePartitions) {
+        this.offlinePartitions = offlinePartitions;
+    }
+
+    @Override
+    public int offlinePartitionCount() {
+        return this.offlinePartitions;
+    }
+
+    @Override
+    public void setPreferredReplicaImbalanceCount(int replicaImbalances) {
+        this.preferredReplicaImbalances = replicaImbalances;
+    }
+
+    @Override
+    public int preferredReplicaImbalanceCount() {
+        return this.preferredReplicaImbalances;
+    }
+
+    @Override
+    public void incrementMetadataErrorCount() {
+        this.metadataErrors.getAndIncrement();
+    }
+
+    @Override
+    public int metadataErrorCount() {
+        return this.metadataErrors.get();
+    }
+
+    @Override
+    public void setLastAppliedRecordOffset(long offset) {
+        lastAppliedRecordOffset = offset;
+    }
+
+    @Override
+    public long lastAppliedRecordOffset() {
+        return lastAppliedRecordOffset;
+    }
+
+    @Override
+    public void setLastCommittedRecordOffset(long offset) {
+        lastCommittedRecordOffset = offset;
+    }
+
+    @Override
+    public long lastCommittedRecordOffset() {
+        return lastCommittedRecordOffset;
+    }
+
+    @Override
+    public void setLastAppliedRecordTimestamp(long timestamp) {
+        lastAppliedRecordTimestamp = timestamp;
+    }
+
+    @Override
+    public long lastAppliedRecordTimestamp() {
+        return lastAppliedRecordTimestamp;
+    }
+
+    @Override
+    public void close() {
+        closed = true;
+    }
+
+    public boolean isClosed() {
+        return this.closed;
     }
 }

@@ -26,8 +26,10 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -41,6 +43,8 @@ import java.util.List;
 @Category({IntegrationTest.class})
 @RunWith(value = Parameterized.class)
 public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private KTable<Long, String> leftTable;
     private KTable<Long, String> rightTable;
 
@@ -59,11 +63,11 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
     }
 
-    final private TestRecord<Long, String> expectedFinalJoinResult = new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L);
-    final private TestRecord<Long, String> expectedFinalMultiJoinResult = new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L);
-    final private String storeName = appID + "-store";
+    private final TestRecord<Long, String> expectedFinalJoinResult = new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L);
+    private final TestRecord<Long, String> expectedFinalMultiJoinResult = new TestRecord<>(ANY_UNIQUE_KEY, "D-d-d", null,  15L);
+    private final String storeName = appID + "-store";
 
-    private Materialized<Long, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(storeName)
+    private final Materialized<Long, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(storeName)
             .withKeySerde(Serdes.Long())
             .withValueSerde(Serdes.String())
             .withCachingDisabled()

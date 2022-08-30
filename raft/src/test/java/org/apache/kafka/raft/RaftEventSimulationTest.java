@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.raft;
 
+import net.jqwik.api.AfterFailureMode;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
+import net.jqwik.api.Tag;
 import net.jqwik.api.constraints.IntRange;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -37,7 +39,7 @@ import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.SnapshotReader;
-import org.junit.jupiter.api.Tag;
+import org.apache.kafka.snapshot.RecordsSnapshotReader;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -94,7 +96,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 @Tag("integration")
 public class RaftEventSimulationTest {
-    private static final TopicPartition METADATA_PARTITION = new TopicPartition("@metadata", 0);
+    private static final TopicPartition METADATA_PARTITION = new TopicPartition("__cluster_metadata", 0);
     private static final int ELECTION_TIMEOUT_MS = 1000;
     private static final int ELECTION_JITTER_MS = 100;
     private static final int FETCH_TIMEOUT_MS = 3000;
@@ -103,7 +105,7 @@ public class RaftEventSimulationTest {
     private static final int FETCH_MAX_WAIT_MS = 100;
     private static final int LINGER_MS = 0;
 
-    @Property(tries = 100)
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canElectInitialLeader(
         @ForAll int seed,
         @ForAll @IntRange(min = 1, max = 5) int numVoters,
@@ -122,7 +124,7 @@ public class RaftEventSimulationTest {
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(10));
     }
 
-    @Property(tries = 100)
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canElectNewLeaderAfterOldLeaderFailure(
         @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
@@ -162,7 +164,7 @@ public class RaftEventSimulationTest {
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
     }
 
-    @Property(tries = 100)
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canRecoverAfterAllNodesKilled(
         @ForAll int seed,
         @ForAll @IntRange(min = 1, max = 5) int numVoters,
@@ -195,7 +197,7 @@ public class RaftEventSimulationTest {
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(highWatermark + 10));
     }
 
-    @Property(tries = 100)
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canElectNewLeaderAfterOldLeaderPartitionedAway(
         @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
@@ -227,7 +229,7 @@ public class RaftEventSimulationTest {
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, nonPartitionedNodes));
     }
 
-    @Property(tries = 100)
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canMakeProgressIfMajorityIsReachable(
         @ForAll int seed,
         @ForAll @IntRange(min = 0, max = 3) int numObservers
@@ -255,12 +257,20 @@ public class RaftEventSimulationTest {
         router.filter(3, new DropOutboundRequestsFrom(Utils.mkSet(0, 1)));
         router.filter(4, new DropOutboundRequestsFrom(Utils.mkSet(0, 1)));
 
-        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(20));
+        long partitionLogEndOffset = cluster.maxLogEndOffset();
+        scheduler.runUntil(() -> cluster.anyReachedHighWatermark(2 * partitionLogEndOffset));
 
         long minorityHighWatermark = cluster.maxHighWatermarkReached(Utils.mkSet(0, 1));
         long majorityHighWatermark = cluster.maxHighWatermarkReached(Utils.mkSet(2, 3, 4));
 
-        assertTrue(majorityHighWatermark > minorityHighWatermark);
+        assertTrue(
+            majorityHighWatermark > minorityHighWatermark,
+            String.format(
+                "majorityHighWatermark = %s, minorityHighWatermark = %s",
+                majorityHighWatermark,
+                minorityHighWatermark
+            )
+        );
 
         // Now restore the partition and verify everyone catches up
         router.filter(0, new PermitAllTraffic());
@@ -269,10 +279,11 @@ public class RaftEventSimulationTest {
         router.filter(3, new PermitAllTraffic());
         router.filter(4, new PermitAllTraffic());
 
-        scheduler.runUntil(() -> cluster.allReachedHighWatermark(30));
+        long restoredLogEndOffset = cluster.maxLogEndOffset();
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(2 * restoredLogEndOffset));
     }
 
-    @Property(tries = 100)
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canMakeProgressAfterBackToBackLeaderFailures(
         @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
@@ -305,7 +316,7 @@ public class RaftEventSimulationTest {
         scheduler.runUntil(() -> cluster.anyReachedHighWatermark(targetHighWatermark));
     }
 
-    @Property(tries = 100)
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canRecoverFromSingleNodeCommittedDataLoss(
         @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
@@ -352,6 +363,7 @@ public class RaftEventSimulationTest {
         scheduler.addInvariant(new MajorityReachedHighWatermark(cluster));
         scheduler.addInvariant(new SingleLeader(cluster));
         scheduler.addInvariant(new SnapshotAtLogStart(cluster));
+        scheduler.addInvariant(new LeaderNeverLoadSnapshot(cluster));
         scheduler.addValidation(new ConsistentCommittedData(cluster));
         return scheduler;
     }
@@ -497,7 +509,15 @@ public class RaftEventSimulationTest {
 
     private static class PersistentState {
         final MockQuorumStateStore store = new MockQuorumStateStore();
-        final MockLog log = new MockLog(METADATA_PARTITION, Uuid.METADATA_TOPIC_ID);
+        final MockLog log;
+
+        PersistentState(int nodeId) {
+            log = new MockLog(
+                METADATA_PARTITION,
+                Uuid.METADATA_TOPIC_ID,
+                new LogContext(String.format("[Node %s] ", nodeId))
+            );
+        }
     }
 
     private static class Cluster {
@@ -515,11 +535,11 @@ public class RaftEventSimulationTest {
             int nodeId = 0;
             for (; nodeId < numVoters; nodeId++) {
                 voters.add(nodeId);
-                nodes.put(nodeId, new PersistentState());
+                nodes.put(nodeId, new PersistentState(nodeId));
             }
 
             for (; nodeId < numVoters + numObservers; nodeId++) {
-                nodes.put(nodeId, new PersistentState());
+                nodes.put(nodeId, new PersistentState(nodeId));
             }
         }
 
@@ -531,9 +551,21 @@ public class RaftEventSimulationTest {
             return voters.size() / 2 + 1;
         }
 
+        long maxLogEndOffset() {
+            return running
+                .values()
+                .stream()
+                .mapToLong(RaftNode::logEndOffset)
+                .max()
+                .orElse(0L);
+        }
+
         OptionalLong leaderHighWatermark() {
-            Optional<RaftNode> leaderWithMaxEpoch = running.values().stream().filter(node -> node.client.quorum().isLeader())
-                    .max((node1, node2) -> Integer.compare(node2.client.quorum().epoch(), node1.client.quorum().epoch()));
+            Optional<RaftNode> leaderWithMaxEpoch = running
+                .values()
+                .stream()
+                .filter(node -> node.client.quorum().isLeader())
+                .max((node1, node2) -> Integer.compare(node2.client.quorum().epoch(), node1.client.quorum().epoch()));
             if (leaderWithMaxEpoch.isPresent()) {
                 return leaderWithMaxEpoch.get().client.highWatermark();
             } else {
@@ -548,27 +580,27 @@ public class RaftEventSimulationTest {
 
         long maxHighWatermarkReached() {
             return running.values().stream()
-                .map(RaftNode::highWatermark)
-                .max(Long::compareTo)
+                .mapToLong(RaftNode::highWatermark)
+                .max()
                 .orElse(0L);
         }
 
         long maxHighWatermarkReached(Set<Integer> nodeIds) {
             return running.values().stream()
                 .filter(node -> nodeIds.contains(node.nodeId))
-                .map(RaftNode::highWatermark)
-                .max(Long::compareTo)
+                .mapToLong(RaftNode::highWatermark)
+                .max()
                 .orElse(0L);
         }
 
         boolean allReachedHighWatermark(long offset, Set<Integer> nodeIds) {
             return nodeIds.stream()
-                .allMatch(nodeId -> running.get(nodeId).highWatermark() > offset);
+                .allMatch(nodeId -> running.get(nodeId).highWatermark() >= offset);
         }
 
         boolean allReachedHighWatermark(long offset) {
             return running.values().stream()
-                .allMatch(node -> node.highWatermark() > offset);
+                .allMatch(node -> node.highWatermark() >= offset);
         }
 
         boolean hasLeader(int nodeId) {
@@ -673,7 +705,7 @@ public class RaftEventSimulationTest {
 
         void killAndDeletePersistentState(int nodeId) {
             kill(nodeId);
-            nodes.put(nodeId, new PersistentState());
+            nodes.put(nodeId, new PersistentState(nodeId));
         }
 
         private static RaftConfig.AddressSpec nodeAddress(int id) {
@@ -789,9 +821,18 @@ public class RaftEventSimulationTest {
                 .orElse(0L);
         }
 
+        long logEndOffset() {
+            return log.endOffset().offset;
+        }
+
         @Override
         public String toString() {
-            return "Node(id=" + nodeId + ", hw=" + highWatermark() + ")";
+            return String.format(
+                "Node(id=%s, hw=%s, logEndOffset=%s)",
+                nodeId,
+                highWatermark(),
+                logEndOffset()
+            );
         }
     }
 
@@ -1014,6 +1055,23 @@ public class RaftEventSimulationTest {
         }
     }
 
+    private static class LeaderNeverLoadSnapshot implements Invariant {
+        final Cluster cluster;
+
+        private LeaderNeverLoadSnapshot(Cluster cluster) {
+            this.cluster = cluster;
+        }
+
+        @Override
+        public void verify() {
+            for (RaftNode raftNode : cluster.running()) {
+                if (raftNode.counter.isWritable()) {
+                    assertEquals(0, raftNode.counter.handleSnapshotCalls());
+                }
+            }
+        }
+    }
+
     /**
      * Validating the committed data is expensive, so we do this as a {@link Validation}. We depend
      * on the following external invariants:
@@ -1054,7 +1112,7 @@ public class RaftEventSimulationTest {
                 startOffset.set(snapshotId.offset);
 
                 try (SnapshotReader<Integer> snapshot =
-                        SnapshotReader.of(log.readSnapshot(snapshotId).get(), node.intSerde, BufferSupplier.create(), Integer.MAX_VALUE)) {
+                        RecordsSnapshotReader.of(log.readSnapshot(snapshotId).get(), node.intSerde, BufferSupplier.create(), Integer.MAX_VALUE, true)) {
                     // Expect only one batch with only one record
                     assertTrue(snapshot.hasNext());
                     Batch<Integer> batch = snapshot.next();

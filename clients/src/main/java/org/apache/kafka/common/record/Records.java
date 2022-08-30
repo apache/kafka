@@ -78,14 +78,6 @@ public interface Records extends TransferableRecords {
     boolean hasMatchingMagic(byte magic);
 
     /**
-     * Check whether this log buffer has a magic value compatible with a particular value
-     * (i.e. whether all message sets contained in the buffer have a matching or lower magic).
-     * @param magic The magic version to ensure compatibility with
-     * @return true if all batches have compatible magic, false otherwise
-     */
-    boolean hasCompatibleMagic(byte magic);
-
-    /**
      * Convert all batches in this buffer to the format passed as a parameter. Note that this requires
      * deep iteration since all of the deep records must also be converted to the desired format.
      * @param toMagic The magic value to convert to

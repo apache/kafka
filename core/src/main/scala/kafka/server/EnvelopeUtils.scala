@@ -32,7 +32,8 @@ object EnvelopeUtils {
   def handleEnvelopeRequest(
     request: RequestChannel.Request,
     requestChannelMetrics: RequestChannel.Metrics,
-    handler: RequestChannel.Request => Unit): Unit = {
+    handler: RequestChannel.Request => Unit
+  ): Unit = {
     val envelope = request.body[EnvelopeRequest]
     val forwardedPrincipal = parseForwardedPrincipal(request.context, envelope.requestPrincipal)
     val forwardedClientAddress = parseForwardedClientAddress(envelope.clientAddress)
@@ -83,7 +84,7 @@ object EnvelopeUtils {
     requestChannelMetrics: RequestChannel.Metrics
   ): RequestChannel.Request = {
     try {
-      new RequestChannel.Request(
+      val forwardedRequest = new RequestChannel.Request(
         processor = envelope.processor,
         context = forwardedContext,
         startTimeNanos = envelope.startTimeNanos,
@@ -92,6 +93,9 @@ object EnvelopeUtils {
         requestChannelMetrics,
         Some(envelope)
       )
+      // set the dequeue time of forwardedRequest as the value of envelope request
+      forwardedRequest.requestDequeueTimeNanos = envelope.requestDequeueTimeNanos
+      forwardedRequest
     } catch {
       case e: InvalidRequestException =>
         // We use UNSUPPORTED_VERSION if the embedded request cannot be parsed.

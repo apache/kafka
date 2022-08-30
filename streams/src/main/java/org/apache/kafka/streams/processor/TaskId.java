@@ -23,67 +23,92 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Objects;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.MIN_NAMED_TOPOLOGY_VERSION;
+import static org.apache.kafka.streams.processor.internals.assignment.ConsumerProtocolUtils.readTaskIdFrom;
+import static org.apache.kafka.streams.processor.internals.assignment.ConsumerProtocolUtils.writeTaskIdTo;
 
 /**
- * The task ID representation composed as topic group ID plus the assigned partition ID.
+ * The task ID representation composed as subtopology (aka topicGroupId) plus the assigned partition ID.
  */
 public class TaskId implements Comparable<TaskId> {
 
     private static final Logger LOG = LoggerFactory.getLogger(TaskId.class);
 
-    /** The ID of the topic group. */
+    public static final String NAMED_TOPOLOGY_DELIMITER = "__";
+
+    /** The ID of the subtopology, aka topicGroupId. */
+    @Deprecated
     public final int topicGroupId;
     /** The ID of the partition. */
+    @Deprecated
     public final int partition;
+
     /** The namedTopology that this task belongs to, or null if it does not belong to one */
-    protected final String namedTopology;
+    private final String topologyName;
 
     public TaskId(final int topicGroupId, final int partition) {
         this(topicGroupId, partition, null);
     }
 
-    public TaskId(final int topicGroupId, final int partition, final String namedTopology) {
+    public TaskId(final int topicGroupId, final int partition, final String topologyName) {
         this.topicGroupId = topicGroupId;
         this.partition = partition;
-        if (namedTopology != null && namedTopology.length() == 0) {
+        if (topologyName != null && topologyName.length() == 0) {
             LOG.warn("Empty string passed in for task's namedTopology, since NamedTopology name cannot be empty, we "
                          + "assume this task does not belong to a NamedTopology and downgrade this to null");
-            this.namedTopology = null;
+            this.topologyName = null;
         } else {
-            this.namedTopology = namedTopology;
+            this.topologyName = topologyName;
         }
+    }
+
+    public int subtopology() {
+        return topicGroupId;
+    }
+
+    public int partition() {
+        return partition;
+    }
+
+    /**
+     * Experimental feature -- will return null
+     */
+    public String topologyName() {
+        return topologyName;
     }
 
     @Override
     public String toString() {
-        return namedTopology != null ? namedTopology + "_" + topicGroupId + "_" + partition : topicGroupId + "_" + partition;
-    }
-
-    public String toTaskDirString() {
-        return topicGroupId + "_" + partition;
+        return topologyName != null ? topologyName + NAMED_TOPOLOGY_DELIMITER + topicGroupId + "_" + partition : topicGroupId + "_" + partition;
     }
 
     /**
-     *  Parse the task directory name (of the form topicGroupId_partition) and construct the TaskId with the
-     *  optional namedTopology (may be null)
-     *
-     *  @throws TaskIdFormatException if the taskIdStr is not a valid {@link TaskId}
+     * @throws TaskIdFormatException if the taskIdStr is not a valid {@link TaskId}
      */
-    public static TaskId parseTaskDirectoryName(final String taskIdStr, final String namedTopology) {
-        final int index = taskIdStr.indexOf('_');
-        if (index <= 0 || index + 1 >= taskIdStr.length()) {
-            throw new TaskIdFormatException(taskIdStr);
-        }
-
+    public static TaskId parse(final String taskIdStr) {
         try {
-            final int topicGroupId = Integer.parseInt(taskIdStr.substring(0, index));
-            final int partition = Integer.parseInt(taskIdStr.substring(index + 1));
+            final int namedTopologyDelimiterIndex = taskIdStr.indexOf(NAMED_TOPOLOGY_DELIMITER);
+            // If there is no copy of the NamedTopology delimiter, this task has no named topology and only one `_` char
+            if (namedTopologyDelimiterIndex < 0) {
+                final int index = taskIdStr.indexOf('_');
 
-            return new TaskId(topicGroupId, partition, namedTopology);
+                final int topicGroupId = Integer.parseInt(taskIdStr.substring(0, index));
+                final int partition = Integer.parseInt(taskIdStr.substring(index + 1));
+
+                return new TaskId(topicGroupId, partition);
+            } else {
+                final int topicGroupIdIndex = namedTopologyDelimiterIndex + 2;
+                final int subtopologyPartitionDelimiterIndex = taskIdStr.indexOf('_', topicGroupIdIndex);
+
+                final String namedTopology = taskIdStr.substring(0, namedTopologyDelimiterIndex);
+                final int topicGroupId = Integer.parseInt(taskIdStr.substring(topicGroupIdIndex, subtopologyPartitionDelimiterIndex));
+                final int partition = Integer.parseInt(taskIdStr.substring(subtopologyPartitionDelimiterIndex + 1));
+
+                return new TaskId(topicGroupId, partition, namedTopology);
+            }
         } catch (final Exception e) {
             throw new TaskIdFormatException(taskIdStr);
         }
@@ -91,79 +116,36 @@ public class TaskId implements Comparable<TaskId> {
 
     /**
      * @throws IOException if cannot write to output stream
+     * @deprecated since 3.0, for internal use, will be removed
      */
+    @Deprecated
     public void writeTo(final DataOutputStream out, final int version) throws IOException {
-        out.writeInt(topicGroupId);
-        out.writeInt(partition);
-        if (version >= MIN_NAMED_TOPOLOGY_VERSION) {
-            if (namedTopology != null) {
-                out.writeInt(namedTopology.length());
-                out.writeChars(namedTopology);
-            } else {
-                out.writeInt(0);
-            }
-        }
+        writeTaskIdTo(this, out, version);
     }
 
     /**
      * @throws IOException if cannot read from input stream
+     * @deprecated since 3.0, for internal use, will be removed
      */
+    @Deprecated
     public static TaskId readFrom(final DataInputStream in, final int version) throws IOException {
-        final int topicGroupId = in.readInt();
-        final int partition = in.readInt();
-        final String namedTopology;
-        if (version >= MIN_NAMED_TOPOLOGY_VERSION) {
-            final int numNamedTopologyChars = in.readInt();
-            final StringBuilder namedTopologyBuilder = new StringBuilder();
-            for (int i = 0; i < numNamedTopologyChars; ++i) {
-                namedTopologyBuilder.append(in.readChar());
-            }
-            namedTopology = namedTopologyBuilder.toString();
-        } else {
-            namedTopology = null;
-        }
-        return new TaskId(topicGroupId, partition, getNamedTopologyOrElseNull(namedTopology));
-    }
-
-    public void writeTo(final ByteBuffer buf, final int version) {
-        buf.putInt(topicGroupId);
-        buf.putInt(partition);
-        if (version >= MIN_NAMED_TOPOLOGY_VERSION) {
-            if (namedTopology != null) {
-                buf.putInt(namedTopology.length());
-                for (final char c : namedTopology.toCharArray()) {
-                    buf.putChar(c);
-                }
-            } else {
-                buf.putInt(0);
-            }
-        }
-    }
-
-    public static TaskId readFrom(final ByteBuffer buf, final int version) {
-        final int topicGroupId = buf.getInt();
-        final int partition = buf.getInt();
-        final String namedTopology;
-        if (version >= MIN_NAMED_TOPOLOGY_VERSION) {
-            final int numNamedTopologyChars = buf.getInt();
-            final StringBuilder namedTopologyBuilder = new StringBuilder();
-            for (int i = 0; i < numNamedTopologyChars; ++i) {
-                namedTopologyBuilder.append(buf.getChar());
-            }
-            namedTopology = namedTopologyBuilder.toString();
-        } else {
-            namedTopology = null;
-        }
-        return new TaskId(topicGroupId, partition, getNamedTopologyOrElseNull(namedTopology));
+        return readTaskIdFrom(in, version);
     }
 
     /**
-     * @return the namedTopology name, or null if the passed in namedTopology is null or the empty string
+     * @deprecated since 3.0, for internal use, will be removed
      */
-    private static String getNamedTopologyOrElseNull(final String namedTopology) {
-        return (namedTopology == null || namedTopology.length() == 0) ?
-            null :
-            namedTopology;
+    @Deprecated
+    public void writeTo(final ByteBuffer buf, final int version) {
+        writeTaskIdTo(this, buf, version);
+    }
+
+    /**
+     * @deprecated since 3.0, for internal use, will be removed
+     */
+    @Deprecated
+    public static TaskId readFrom(final ByteBuffer buf, final int version) {
+        return readTaskIdFrom(buf, version);
     }
 
     @Override
@@ -180,26 +162,26 @@ public class TaskId implements Comparable<TaskId> {
             return false;
         }
 
-        if (namedTopology != null && taskId.namedTopology != null) {
-            return namedTopology.equals(taskId.namedTopology);
+        if (topologyName != null && taskId.topologyName != null) {
+            return topologyName.equals(taskId.topologyName);
         } else {
-            return namedTopology == null && taskId.namedTopology == null;
+            return topologyName == null && taskId.topologyName == null;
         }
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(topicGroupId, partition, namedTopology);
+        return Objects.hash(topicGroupId, partition, topologyName);
     }
 
     @Override
     public int compareTo(final TaskId other) {
-        if (namedTopology != null && other.namedTopology != null) {
-            final int comparingNamedTopologies = namedTopology.compareTo(other.namedTopology);
+        if (topologyName != null && other.topologyName != null) {
+            final int comparingNamedTopologies = topologyName.compareTo(other.topologyName);
             if (comparingNamedTopologies != 0) {
                 return comparingNamedTopologies;
             }
-        } else if (namedTopology != null || other.namedTopology != null) {
+        } else if (topologyName != null || other.topologyName != null) {
             LOG.error("Tried to compare this = {} with other = {}, but only one had a valid named topology", this, other);
             throw new IllegalStateException("Can't compare a TaskId with a namedTopology to one without");
         }

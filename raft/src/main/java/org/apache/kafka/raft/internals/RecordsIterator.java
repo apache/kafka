@@ -17,6 +17,7 @@
 package org.apache.kafka.raft.internals;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,6 +41,9 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     private final RecordSerde<T> serde;
     private final BufferSupplier bufferSupplier;
     private final int batchSize;
+    // Setting to true will make the RecordsIterator perform a CRC Validation
+    // on the batch header when iterating over them
+    private final boolean doCrcValidation;
 
     private Iterator<MutableRecordBatch> nextBatches = Collections.emptyIterator();
     private Optional<Batch<T>> nextBatch = Optional.empty();
@@ -53,12 +57,14 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
         Records records,
         RecordSerde<T> serde,
         BufferSupplier bufferSupplier,
-        int batchSize
+        int batchSize,
+        boolean doCrcValidation
     ) {
         this.records = records;
         this.serde = serde;
         this.bufferSupplier = bufferSupplier;
         this.batchSize = Math.max(batchSize, Records.HEADER_SIZE_UP_TO_MAGIC);
+        this.doCrcValidation = doCrcValidation;
     }
 
     @Override
@@ -102,7 +108,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
         try {
             fileRecords.readInto(buffer, bytesRead);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to read records into memory", e);
+            throw new UncheckedIOException("Failed to read records into memory", e);
         }
 
         bytesRead += buffer.limit() - start;
@@ -162,7 +168,6 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
 
         if (nextBatches.hasNext()) {
             MutableRecordBatch nextBatch = nextBatches.next();
-
             // Update the buffer position to reflect the read batch
             allocatedBuffer.ifPresent(buffer -> buffer.position(buffer.position() + nextBatch.sizeInBytes()));
 
@@ -179,9 +184,20 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     }
 
     private Batch<T> readBatch(DefaultRecordBatch batch) {
+        if (doCrcValidation) {
+            // Perform a CRC validity check on this batch
+            batch.ensureValid();
+        }
+
         final Batch<T> result;
         if (batch.isControlBatch()) {
-            result = Batch.empty(batch.baseOffset(), batch.partitionLeaderEpoch(), batch.lastOffset());
+            result = Batch.control(
+                batch.baseOffset(),
+                batch.partitionLeaderEpoch(),
+                batch.maxTimestamp(),
+                batch.sizeInBytes(),
+                batch.lastOffset()
+            );
         } else {
             Integer numRecords = batch.countOrNull();
             if (numRecords == null) {
@@ -196,7 +212,13 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
                 }
             }
 
-            result = Batch.of(batch.baseOffset(), batch.partitionLeaderEpoch(), records);
+            result = Batch.data(
+                batch.baseOffset(),
+                batch.partitionLeaderEpoch(),
+                batch.maxTimestamp(),
+                batch.sizeInBytes(),
+                records
+            );
         }
 
         return result;
@@ -227,6 +249,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
             throw new IllegalArgumentException();
         }
 
+        // Read the metadata record body from the file input reader
         T record = serde.read(input, valueSize);
 
         int numHeaders = input.readVarint();

@@ -325,7 +325,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    *
    * @param request client request
    * @param throttleTimeMs Duration in milliseconds for which the channel is to be muted.
-   * @param channelThrottlingCallback Callback for channel throttling
+   * @param throttleCallback Callback for channel throttling
    */
   def throttle(
     request: RequestChannel.Request,
@@ -562,8 +562,18 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       quotaMetricTags.asJava)
   }
 
+  def initiateShutdown(): Unit = {
+    throttledChannelReaper.initiateShutdown()
+    // improve shutdown time by waking up any ShutdownableThread(s) blocked on poll by sending a no-op
+    delayQueue.add(new ThrottledChannel(time, 0, new ThrottleCallback {
+      override def startThrottling(): Unit = {}
+      override def endThrottling(): Unit = {}
+    }))
+  }
+
   def shutdown(): Unit = {
-    throttledChannelReaper.shutdown()
+    initiateShutdown()
+    throttledChannelReaper.awaitShutdown()
   }
 
   class DefaultQuotaCallback extends ClientQuotaCallback {
@@ -583,7 +593,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       if (sanitizedUser != null && clientId != null) {
         val userEntity = Some(UserEntity(sanitizedUser))
         val clientIdEntity = Some(ClientIdEntity(clientId))
-        if (!sanitizedUser.isEmpty && !clientId.isEmpty) {
+        if (sanitizedUser.nonEmpty && clientId.nonEmpty) {
           // /config/users/<user>/clients/<client-id>
           quota = overriddenQuotas.get(KafkaQuotaEntity(userEntity, clientIdEntity))
           if (quota == null) {
@@ -598,14 +608,14 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
             // /config/users/<default>/clients/<default>
             quota = overriddenQuotas.get(DefaultUserClientIdQuotaEntity)
           }
-        } else if (!sanitizedUser.isEmpty) {
+        } else if (sanitizedUser.nonEmpty) {
           // /config/users/<user>
           quota = overriddenQuotas.get(KafkaQuotaEntity(userEntity, None))
           if (quota == null) {
             // /config/users/<default>
             quota = overriddenQuotas.get(DefaultUserQuotaEntity)
           }
-        } else if (!clientId.isEmpty) {
+        } else if (clientId.nonEmpty) {
           // /config/clients/<client-id>
           quota = overriddenQuotas.get(KafkaQuotaEntity(None, clientIdEntity))
           if (quota == null) {
@@ -668,7 +678,6 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                     if (!overriddenQuotas.containsKey(DefaultUserQuotaEntity)) {
                       // 7) /config/clients/<client-id>
                       // 8) /config/clients/<default>
-                      // 9) static client-id quota
                       metricTags = ("", clientId)
                     }
                   }

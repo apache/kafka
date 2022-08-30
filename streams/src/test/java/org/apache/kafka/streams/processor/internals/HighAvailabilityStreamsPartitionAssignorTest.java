@@ -108,6 +108,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
     private Admin adminClient;
     private StreamsConfig streamsConfig = new StreamsConfig(configProps());
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
+    private TopologyMetadata topologyMetadata = new TopologyMetadata(builder, streamsConfig);
     private final StreamsMetadataState streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
     private final Map<String, Subscription> subscriptions = new HashMap<>();
 
@@ -134,6 +135,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         configMap.putAll(props);
 
         streamsConfig = new StreamsConfig(configMap);
+        topologyMetadata = new TopologyMetadata(builder, streamsConfig);
         partitionAssignor.configure(configMap);
         EasyMock.replay(taskManager, adminClient);
 
@@ -147,11 +149,10 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
 
     private void createMockTaskManager(final Map<TaskId, Long> taskOffsetSums) {
         taskManager = EasyMock.createNiceMock(TaskManager.class);
-        expect(taskManager.builder()).andReturn(builder).anyTimes();
+        expect(taskManager.topologyMetadata()).andStubReturn(topologyMetadata);
         expect(taskManager.getTaskOffsetSums()).andReturn(taskOffsetSums).anyTimes();
         expect(taskManager.processId()).andReturn(UUID_1).anyTimes();
-        builder.setApplicationId(APPLICATION_ID);
-        builder.buildTopology();
+        topologyMetadata.buildAndRewriteTopology();
     }
 
     // If you don't care about setting the end offsets for each specific topic partition, the helper method
@@ -327,7 +328,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
     private static SubscriptionInfo getInfo(final UUID processId,
                                             final Set<TaskId> prevTasks) {
         return new SubscriptionInfo(
-            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks), (byte) 0, 0);
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks), (byte) 0, 0, Collections.emptyMap());
     }
 
     // Stub offset sums for when we only care about the prev/standby task sets, not the actual offsets

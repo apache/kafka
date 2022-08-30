@@ -31,6 +31,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -144,7 +145,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final MockInternalProcessorContext context = makeContext();
         buffer.init((StateStoreContext) context, buffer);
         try {
-            buffer.put(0, "asdf", null, getContext(0));
+            buffer.put(0, new Record<>("asdf", null, 0L), getContext(0));
             fail("expected an exception");
         } catch (final NullPointerException expected) {
             // expected
@@ -284,8 +285,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         final ProcessorRecordContext recordContext = getContext(0L);
         context.setRecordContext(recordContext);
-        buffer.put(1L, "A", new Change<>("new-value", "old-value"), recordContext);
-        buffer.put(1L, "B", new Change<>("new-value", null), recordContext);
+        buffer.put(1L, new Record<>("A", new Change<>("new-value", "old-value"), 0L), recordContext);
+        buffer.put(1L, new Record<>("B", new Change<>("new-value", null), 0L), recordContext);
         assertThat(buffer.priorValueForBuffered("A"), is(Maybe.defined(ValueAndTimestamp.make("old-value", -1))));
         assertThat(buffer.priorValueForBuffered("B"), is(Maybe.defined(null)));
     }
@@ -370,7 +371,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders()));
 
         // These serialized formats were captured by running version 2.1 code.
         // They verify that an upgrade from 2.1 will work.
@@ -489,7 +490,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders()));
 
         final RecordHeaders v1FlagHeaders = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 1})});
 
@@ -611,7 +612,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders()));
 
         final RecordHeaders v2FlagHeaders = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 2})});
 
@@ -735,7 +736,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders()));
 
         final RecordHeaders headers = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 2})});
 
@@ -856,7 +857,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders()));
 
         final RecordHeaders headers = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 3})});
 
@@ -977,7 +978,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", new RecordHeaders()));
 
         final RecordHeaders unknownFlagHeaders = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) -1})});
 
@@ -1012,7 +1013,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                   final String value) {
         final ProcessorRecordContext recordContext = getContext(recordTimestamp);
         context.setRecordContext(recordContext);
-        buffer.put(streamTime, key, new Change<>(value, null), recordContext);
+        buffer.put(streamTime, new Record<>(key, new Change<>(value, null), 0L), recordContext);
     }
 
     private static BufferValue getBufferValue(final String value, final long timestamp) {
@@ -1025,7 +1026,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
     }
 
     private static ProcessorRecordContext getContext(final long recordTimestamp) {
-        return new ProcessorRecordContext(recordTimestamp, 0, 0, "topic", null);
+        return new ProcessorRecordContext(recordTimestamp, 0, 0, "topic", new RecordHeaders());
     }
 
 

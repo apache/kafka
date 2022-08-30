@@ -40,8 +40,8 @@ class SessionWindowedCogroupedKStream[K, V](val inner: SessionWindowedCogroupedK
    *         the latest (rolling) aggregate for each key within a window
    * @see `org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream#aggregate`
    */
-  def aggregate(initializer: => V, merger: (K, V, V) => V)(
-    implicit materialized: Materialized[K, V, ByteArraySessionStore]
+  def aggregate(initializer: => V, merger: (K, V, V) => V)(implicit
+    materialized: Materialized[K, V, ByteArraySessionStore]
   ): KTable[Windowed[K], V] =
     new KTable(inner.aggregate((() => initializer).asInitializer, merger.asMerger, materialized))
 
@@ -56,8 +56,8 @@ class SessionWindowedCogroupedKStream[K, V](val inner: SessionWindowedCogroupedK
    *         the latest (rolling) aggregate for each key within a window
    * @see `org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream#aggregate`
    */
-  def aggregate(initializer: => V, merger: (K, V, V) => V, named: Named)(
-    implicit materialized: Materialized[K, V, ByteArraySessionStore]
+  def aggregate(initializer: => V, merger: (K, V, V) => V, named: Named)(implicit
+    materialized: Materialized[K, V, ByteArraySessionStore]
   ): KTable[Windowed[K], V] =
     new KTable(inner.aggregate((() => initializer).asInitializer, merger.asMerger, named, materialized))
 

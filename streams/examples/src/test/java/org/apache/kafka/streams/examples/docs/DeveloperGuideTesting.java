@@ -173,10 +173,11 @@ public class DeveloperGuideTesting {
         }
 
         private void flushStore(final long timestamp) {
-            final KeyValueIterator<String, Long> it = store.all();
-            while (it.hasNext()) {
-                final KeyValue<String, Long> next = it.next();
-                context.forward(new Record<>(next.key, next.value, timestamp));
+            try (final KeyValueIterator<String, Long> it = store.all()) {
+                while (it.hasNext()) {
+                    final KeyValue<String, Long> next = it.next();
+                    context.forward(new Record<>(next.key, next.value, timestamp));
+                }
             }
         }
     }

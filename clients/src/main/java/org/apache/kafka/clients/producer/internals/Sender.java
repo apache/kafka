@@ -352,8 +352,16 @@ public class Sender implements Runnable {
         while (iter.hasNext()) {
             Node node = iter.next();
             if (!this.client.ready(node, now)) {
+                // Update just the readyTimeMs of the latency stats, so that it moves forward
+                // every time the batch is ready (then the difference between readyTimeMs and
+                // drainTimeMs would represent how long data is waiting for the node).
+                this.accumulator.updateNodeLatencyStats(node.id(), now, false);
                 iter.remove();
                 notReadyTimeout = Math.min(notReadyTimeout, this.client.pollDelayMs(node, now));
+            } else {
+                // Update both readyTimeMs and drainTimeMs, this would "reset" the node
+                // latency.
+                this.accumulator.updateNodeLatencyStats(node.id(), now, true);
             }
         }
 
@@ -430,14 +438,6 @@ public class Sender implements Runnable {
                 }
                 accumulator.abortUndrainedBatches(exception);
             }
-        }
-
-        if (transactionManager.isCompleting() && !accumulator.flushInProgress()) {
-            // There may still be requests left which are being retried. Since we do not know whether they had
-            // been successfully appended to the broker log, we must resend them until their final status is clear.
-            // If they had been appended and we did not receive the error, then our sequence number would no longer
-            // be correct which would lead to an OutOfSequenceException.
-            accumulator.beginFlush();
         }
 
         TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequest(accumulator.hasIncomplete());

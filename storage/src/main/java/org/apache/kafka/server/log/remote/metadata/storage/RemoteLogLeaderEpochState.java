@@ -117,8 +117,7 @@ class RemoteLogLeaderEpochState {
         }
     }
 
-    void handleSegmentWithDeleteSegmentStartedState(Long startOffset, RemoteLogSegmentId remoteLogSegmentId,
-                                                    Long leaderEpochEndOffset) {
+    void handleSegmentWithDeleteSegmentStartedState(Long startOffset, RemoteLogSegmentId remoteLogSegmentId) {
         // Remove the offset mappings as this segment is getting deleted.
         offsetToId.remove(startOffset, remoteLogSegmentId);
 
@@ -127,8 +126,7 @@ class RemoteLogLeaderEpochState {
         unreferencedSegmentIds.add(remoteLogSegmentId);
     }
 
-    void handleSegmentWithDeleteSegmentFinishedState(long startOffset, RemoteLogSegmentId remoteLogSegmentId,
-                                                     Long leaderEpochEndOffset) {
+    void handleSegmentWithDeleteSegmentFinishedState(RemoteLogSegmentId remoteLogSegmentId) {
         // It completely removes the tracking of this segment as it is considered as deleted.
         unreferencedSegmentIds.remove(remoteLogSegmentId);
     }
@@ -149,6 +147,14 @@ class RemoteLogLeaderEpochState {
         return entry == null ? null : entry.getValue();
     }
 
+    Collection<RemoteLogSegmentId> unreferencedSegmentIds() {
+        return Collections.unmodifiableCollection(unreferencedSegmentIds);
+    }
+
+    Collection<RemoteLogSegmentId> referencedSegmentIds() {
+        return Collections.unmodifiableCollection(offsetToId.values());
+    }
+
     /**
      * Action interface to act on remote log segment transition for the given {@link RemoteLogLeaderEpochState}.
      */
@@ -158,15 +164,15 @@ class RemoteLogLeaderEpochState {
         /**
          * Performs this operation with the given {@code remoteLogLeaderEpochState}.
          *
+         * @param leaderEpoch               leader epoch value
          * @param remoteLogLeaderEpochState In-memory state of the segments for a leader epoch.
          * @param startOffset               start offset of the segment.
          * @param segmentId                 segment id.
-         * @param leaderEpochEndOffset      end offset for the given leader epoch.
          */
-        void accept(RemoteLogLeaderEpochState remoteLogLeaderEpochState,
-                    Long startOffset,
-                    RemoteLogSegmentId segmentId,
-                    Long leaderEpochEndOffset);
+        void accept(int leaderEpoch,
+                    RemoteLogLeaderEpochState remoteLogLeaderEpochState,
+                    long startOffset,
+                    RemoteLogSegmentId segmentId);
     }
 
 }
