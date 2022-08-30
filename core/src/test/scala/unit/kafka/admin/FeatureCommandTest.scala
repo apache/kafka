@@ -17,94 +17,296 @@
 
 package kafka.admin
 
-import kafka.server.{BaseRequestTest, KafkaConfig, KafkaServer}
-import kafka.utils.TestUtils
-import kafka.utils.TestUtils.waitUntilTrue
-import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import kafka.api.IntegrationTestHarness
+import kafka.server.KafkaConfig
+import kafka.tools.TerseFailure
+import kafka.utils.{TestInfoUtils, TestUtils}
+import net.sourceforge.argparse4j.inf.Namespace
+import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType.{SAFE_DOWNGRADE, UNSAFE_DOWNGRADE}
+import org.apache.kafka.clients.admin.MockAdminClient
 import org.apache.kafka.common.utils.Utils
-import java.util.Properties
-
-import org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV0
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.{IBP_3_3_IV0, IBP_3_3_IV1, IBP_3_3_IV2, IBP_3_3_IV3}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
-class FeatureCommandTest extends BaseRequestTest {
-  override def brokerCount: Int = 3
+import java.io.{ByteArrayOutputStream, PrintStream}
+import java.{lang, util}
+import java.util.Collections.{emptyMap, singletonMap}
+import scala.jdk.CollectionConverters._
 
-  override def brokerPropertyOverrides(props: Properties): Unit = {
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_7_IV0.toString)
+case class FeatureCommandTestEnv(admin: MockAdminClient = null) extends AutoCloseable {
+  val stream = new ByteArrayOutputStream()
+  val out = new PrintStream(stream)
+
+  override def close(): Unit = {
+    Utils.closeAll(stream, out)
+    Utils.closeQuietly(admin, "admin")
   }
 
-  private val defaultSupportedFeatures: Features[SupportedVersionRange] =
-    Features.supportedFeatures(Utils.mkMap(Utils.mkEntry("feature_1", new SupportedVersionRange(1, 3)),
-                                           Utils.mkEntry("feature_2", new SupportedVersionRange(1, 5))))
+  def outputWithoutEpoch(): String = {
+    val lines = stream.toString.split(String.format("%n"))
+    lines.map { line =>
+      val pos = line.indexOf("Epoch: ")
+      if (pos > 0) {
+        line.substring(0, pos)
+      } else {
+        line
+      }
+    }.mkString(String.format("%n"))
+  }
+}
 
-  private def updateSupportedFeatures(features: Features[SupportedVersionRange],
-                                      targetServers: Set[KafkaServer]): Unit = {
-    targetServers.foreach(s => {
-      s.brokerFeatures.setSupportedFeatures(features)
-      s.zkClient.updateBrokerInfo(s.createBrokerInfo)
-    })
+class FeatureCommandTest extends IntegrationTestHarness {
+  override def brokerCount: Int = 1
 
-    // Wait until updates to all BrokerZNode supported features propagate to the controller.
-    val brokerIds = targetServers.map(s => s.config.brokerId)
-    waitUntilTrue(
-      () => servers.exists(s => {
-        if (s.kafkaController.isActive) {
-          s.kafkaController.controllerContext.liveOrShuttingDownBrokers
-            .filter(b => brokerIds.contains(b.id))
-            .forall(b => {
-              b.features.equals(features)
-            })
-        } else {
-          false
-        }
-      }),
-      "Controller did not get broker updates")
+  override protected def metadataVersion: MetadataVersion = IBP_3_3_IV1
+
+  serverConfig.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, metadataVersion.toString)
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testDescribeWithZk(quorum: String): Unit = {
+    TestUtils.resource(FeatureCommandTestEnv()) { env =>
+      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe"), env.out)
+      assertEquals("", env.outputWithoutEpoch())
+    }
   }
 
-  private def updateSupportedFeaturesInAllBrokers(features: Features[SupportedVersionRange]): Unit = {
-    updateSupportedFeatures(features, Set[KafkaServer]() ++ servers)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft"))
+  def testDescribeWithKRaft(quorum: String): Unit = {
+    TestUtils.resource(FeatureCommandTestEnv()) { env =>
+      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe"), env.out)
+      assertEquals(String.format(
+        "Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
+          "SupportedMaxVersion: 3.3-IV3\tFinalizedVersionLevel: 3.3-IV1\t"),
+            env.outputWithoutEpoch())
+    }
   }
 
-  /**
-   * Tests if the FeatureApis#describeFeatures API works as expected when describing features before and
-   * after upgrading features.
-   */
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testUpgradeMetadataVersionWithZk(quorum: String): Unit = {
+    TestUtils.resource(FeatureCommandTestEnv()) { env =>
+      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "upgrade", "--metadata", "3.3-IV2"), env.out)
+      assertEquals("Could not upgrade metadata.version to 6. Could not apply finalized feature " +
+        "update because the provided feature is not supported.", env.outputWithoutEpoch())
+    }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft"))
+  def testUpgradeMetadataVersionWithKraft(quorum: String): Unit = {
+    TestUtils.resource(FeatureCommandTestEnv()) { env =>
+      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "upgrade", "--feature", "metadata.version=5"), env.out)
+      assertEquals("metadata.version was upgraded to 5.", env.outputWithoutEpoch())
+    }
+    TestUtils.resource(FeatureCommandTestEnv()) { env =>
+      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "upgrade", "--metadata", "3.3-IV2"), env.out)
+      assertEquals("metadata.version was upgraded to 6.", env.outputWithoutEpoch())
+    }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testDowngradeMetadataVersionWithZk(quorum: String): Unit = {
+    TestUtils.resource(FeatureCommandTestEnv()) { env =>
+      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "disable", "--feature", "metadata.version"), env.out)
+      assertEquals("Could not disable metadata.version. Can not delete non-existing finalized feature.",
+        env.outputWithoutEpoch())
+    }
+    TestUtils.resource(FeatureCommandTestEnv()) { env =>
+      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "downgrade", "--metadata", "3.3-IV0"), env.out)
+      assertEquals("Could not downgrade metadata.version to 4. Could not apply finalized feature " +
+        "update because the provided feature is not supported.", env.outputWithoutEpoch())
+    }
+    TestUtils.resource(FeatureCommandTestEnv()) { env =>
+      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "downgrade", "--unsafe", "--metadata", "3.3-IV0"), env.out)
+      assertEquals("Could not downgrade metadata.version to 4. Could not apply finalized feature " +
+        "update because the provided feature is not supported.", env.outputWithoutEpoch())
+    }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft"))
+  def testDowngradeMetadataVersionWithKRaft(quorum: String): Unit = {
+    TestUtils.resource(FeatureCommandTestEnv()) { env =>
+      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "disable", "--feature", "metadata.version"), env.out)
+      assertEquals("Could not disable metadata.version. Invalid update version 0 for feature " +
+        "metadata.version. Local controller 1000 only supports versions 1-7", env.outputWithoutEpoch())
+    }
+    TestUtils.resource(FeatureCommandTestEnv()) { env =>
+      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "downgrade", "--metadata", "3.3-IV0"), env.out)
+      assertEquals("Could not downgrade metadata.version to 4. Invalid metadata.version 4. " +
+        "Refusing to perform the requested downgrade because it might delete metadata information. " +
+        "Retry using UNSAFE_DOWNGRADE if you want to force the downgrade to proceed.", env.outputWithoutEpoch())
+    }
+    TestUtils.resource(FeatureCommandTestEnv()) { env =>
+      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "downgrade", "--unsafe", "--metadata", "3.3-IV0"), env.out)
+      assertEquals("metadata.version was downgraded to 4.", env.outputWithoutEpoch())
+    }
+  }
+}
+
+class FeatureCommandUnitTest {
   @Test
-  def testDescribeFeaturesSuccess(): Unit = {
-    updateSupportedFeaturesInAllBrokers(defaultSupportedFeatures)
+  def testLevelToString(): Unit = {
+    assertEquals("5", FeatureCommand.levelToString("foo.bar", 5.toShort))
+    assertEquals("3.3-IV0",
+      FeatureCommand.levelToString(MetadataVersion.FEATURE_NAME, IBP_3_3_IV0.featureLevel()))
+  }
 
-    val initialDescribeOutput = TestUtils.grabConsoleOutput(FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe")))
-    val expectedInitialDescribeOutputs = Seq(
-      "Feature: feature_1\tSupportedMinVersion: 1\tSupportedMaxVersion: 3\tFinalizedVersionLevel: -",
-      "Feature: feature_2\tSupportedMinVersion: 1\tSupportedMaxVersion: 5\tFinalizedVersionLevel: -"
-    )
+  @Test
+  def testMetadataVersionsToString(): Unit = {
+    assertEquals("3.3-IV0, 3.3-IV1, 3.3-IV2, 3.3-IV3",
+      FeatureCommand.metadataVersionsToString(IBP_3_3_IV0, IBP_3_3_IV3))
+  }
 
-    expectedInitialDescribeOutputs.foreach { expectedOutput =>
-      assertTrue(initialDescribeOutput.contains(expectedOutput))
+  @Test
+  def testdowngradeType(): Unit = {
+    assertEquals(SAFE_DOWNGRADE, FeatureCommand.downgradeType(
+      new Namespace(singletonMap("unsafe", java.lang.Boolean.valueOf(false)))))
+    assertEquals(UNSAFE_DOWNGRADE, FeatureCommand.downgradeType(
+      new Namespace(singletonMap("unsafe", java.lang.Boolean.valueOf(true)))))
+    assertEquals(SAFE_DOWNGRADE, FeatureCommand.downgradeType(new Namespace(emptyMap())))
+  }
+
+  @Test
+  def testParseNameAndLevel(): Unit = {
+    assertEquals(("foo.bar", 5.toShort), FeatureCommand.parseNameAndLevel("foo.bar=5"))
+    assertEquals(("quux", 0.toShort), FeatureCommand.parseNameAndLevel(" quux=0"))
+    assertEquals("Can't parse feature=level string baaz: equals sign not found.",
+      assertThrows(classOf[TerseFailure],
+        () => FeatureCommand.parseNameAndLevel("baaz")).getMessage)
+    assertEquals("Can't parse feature=level string w=tf: unable to parse tf as a short.",
+      assertThrows(classOf[TerseFailure],
+        () => FeatureCommand.parseNameAndLevel("w=tf")).getMessage)
+  }
+
+  def buildAdminClient1(): MockAdminClient = {
+    new MockAdminClient.Builder().
+      minSupportedFeatureLevels(Map(
+        MetadataVersion.FEATURE_NAME -> lang.Short.valueOf(IBP_3_3_IV0.featureLevel()),
+        "foo.bar" -> lang.Short.valueOf(0.toShort)
+      ).asJava).
+      featureLevels(Map(
+        MetadataVersion.FEATURE_NAME -> lang.Short.valueOf(IBP_3_3_IV2.featureLevel()),
+        "foo.bar" -> lang.Short.valueOf(5.toShort)
+      ).asJava).
+      maxSupportedFeatureLevels(Map(
+        MetadataVersion.FEATURE_NAME -> lang.Short.valueOf(IBP_3_3_IV3.featureLevel()),
+        "foo.bar" -> lang.Short.valueOf(10.toShort)
+      ).asJava).
+      build()
+  }
+
+  @Test
+  def testHandleDescribe(): Unit = {
+    TestUtils.resource(FeatureCommandTestEnv(buildAdminClient1())) { env =>
+      FeatureCommand.handleDescribe(env.out, env.admin)
+      assertEquals(String.format(
+        "Feature: foo.bar\tSupportedMinVersion: 0\tSupportedMaxVersion: 10\tFinalizedVersionLevel: 5\tEpoch: 123%n" +
+        "Feature: metadata.version\tSupportedMinVersion: 3.3-IV0\tSupportedMaxVersion: 3.3-IV3\tFinalizedVersionLevel: 3.3-IV2\tEpoch: 123%n"),
+        env.stream.toString)
     }
+  }
 
-    FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "upgrade",
-      "--feature", "feature_1", "--version", "3", "--feature", "feature_2", "--version", "5"))
-    val upgradeDescribeOutput = TestUtils.grabConsoleOutput(FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe")))
-    val expectedUpgradeDescribeOutput = Seq(
-      "Feature: feature_1\tSupportedMinVersion: 1\tSupportedMaxVersion: 3\tFinalizedVersionLevel: 3",
-      "Feature: feature_2\tSupportedMinVersion: 1\tSupportedMaxVersion: 5\tFinalizedVersionLevel: 5"
-    )
-    expectedUpgradeDescribeOutput.foreach { expectedOutput =>
-      assertTrue(upgradeDescribeOutput.contains(expectedOutput))
+  @Test
+  def testHandleUpgrade(): Unit = {
+    TestUtils.resource(FeatureCommandTestEnv(buildAdminClient1())) { env =>
+      FeatureCommand.handleUpgrade(env.out, new Namespace(Map(
+        "metadata" -> "3.3-IV1",
+        "feature" -> util.Arrays.asList("foo.bar=6")
+      ).asJava), env.admin)
+      assertEquals(String.format(
+        "foo.bar was upgraded to 6.%n" +
+        "Could not upgrade metadata.version to 5. Can't upgrade to lower version.%n"),
+        env.stream.toString)
     }
+  }
 
-    FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "downgrade",
-      "--feature", "feature_1", "--version", "2", "--feature", "feature_2", "--version", "2"))
-    val downgradeDescribeOutput = TestUtils.grabConsoleOutput(FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe")))
-    val expectedFinalDescribeOutput = Seq(
-      "Feature: feature_1\tSupportedMinVersion: 1\tSupportedMaxVersion: 3\tFinalizedVersionLevel: 2",
-      "Feature: feature_2\tSupportedMinVersion: 1\tSupportedMaxVersion: 5\tFinalizedVersionLevel: 2"
-    )
-    expectedFinalDescribeOutput.foreach { expectedOutput =>
-      assertTrue(downgradeDescribeOutput.contains(expectedOutput))
+  @Test
+  def testHandleUpgradeDryRun(): Unit = {
+    TestUtils.resource(FeatureCommandTestEnv(buildAdminClient1())) { env =>
+      FeatureCommand.handleUpgrade(env.out, new Namespace(Map(
+        "metadata" -> "3.3-IV1",
+        "feature" -> util.Arrays.asList("foo.bar=6"),
+        "dry-run" -> java.lang.Boolean.valueOf(true)
+      ).asJava), env.admin)
+      assertEquals(String.format(
+        "foo.bar can be upgraded to 6.%n" +
+        "Can not upgrade metadata.version to 5. Can't upgrade to lower version.%n"),
+        env.stream.toString)
+    }
+  }
+
+  @Test
+  def testHandleDowngrade(): Unit = {
+    TestUtils.resource(FeatureCommandTestEnv(buildAdminClient1())) { env =>
+      FeatureCommand.handleDowngrade(env.out, new Namespace(Map(
+        "metadata" -> "3.3-IV3",
+        "feature" -> util.Arrays.asList("foo.bar=1")
+      ).asJava), env.admin)
+      assertEquals(String.format(
+        "foo.bar was downgraded to 1.%n" +
+        "Could not downgrade metadata.version to 7. Can't downgrade to newer version.%n"),
+        env.stream.toString)
+    }
+  }
+
+  @Test
+  def testHandleDowngradeDryRun(): Unit = {
+    TestUtils.resource(FeatureCommandTestEnv(buildAdminClient1())) { env =>
+      FeatureCommand.handleDowngrade(env.out, new Namespace(Map(
+        "metadata" -> "3.3-IV3",
+        "feature" -> util.Arrays.asList("foo.bar=1"),
+        "dry-run" -> java.lang.Boolean.valueOf(true)
+      ).asJava), env.admin)
+      assertEquals(String.format(
+        "foo.bar can be downgraded to 1.%n" +
+        "Can not downgrade metadata.version to 7. Can't downgrade to newer version.%n"),
+        env.stream.toString)
+    }
+  }
+
+  @Test
+  def testHandleDisable(): Unit = {
+    TestUtils.resource(FeatureCommandTestEnv(buildAdminClient1())) { env =>
+      FeatureCommand.handleDisable(env.out, new Namespace(Map[String, AnyRef](
+        "feature" -> util.Arrays.asList("foo.bar", "metadata.version", "quux")
+      ).asJava), env.admin)
+      assertEquals(String.format(
+        "foo.bar was disabled.%n" +
+        "Could not disable metadata.version. Can't downgrade below 4%n" +
+        "quux was disabled.%n"),
+        env.stream.toString)
+    }
+  }
+
+  @Test
+  def testHandleDisableDryRun(): Unit = {
+    TestUtils.resource(FeatureCommandTestEnv(buildAdminClient1())) { env =>
+      FeatureCommand.handleDisable(env.out, new Namespace(Map[String, AnyRef](
+        "feature" -> util.Arrays.asList("foo.bar", "metadata.version", "quux"),
+        "dry-run" -> java.lang.Boolean.valueOf(true)
+      ).asJava), env.admin)
+      assertEquals(String.format(
+        "foo.bar can be disabled.%n" +
+        "Can not disable metadata.version. Can't downgrade below 4%n" +
+        "quux can be disabled.%n"),
+        env.stream.toString)
     }
   }
 }
