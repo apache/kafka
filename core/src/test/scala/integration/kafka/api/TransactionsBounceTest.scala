@@ -106,9 +106,9 @@ class TransactionsBounceTest extends IntegrationTestHarness {
     createTopics()
 
     val consumer = createConsumerAndSubscribe(consumerGroup, List(inputTopic))
-    val verifyingConsumer = createConsumerAndSubscribe("randomGroup", List(outputTopic), readCommitted = true)
-    // Because we'll do broker bouncing later, it might impact the rebalancing, wait for rebalancing completed earlier.
-    // And wait for rebalancing before producing records, to avoid consuming records we want to verify later
+    val verifyingConsumer = createConsumerAndSubscribe("verifyGroup", List(outputTopic), readCommitted = true)
+    // Since we'll do broker bouncing later, it might impact the consumer rebalance and cause the consumer verification timeout later
+    // So, wait for rebalance completion earlier before broker bouncing started
     waitForRebalancingCompleted(consumer, expectedConsumerAssignment)
     waitForRebalancingCompleted(verifyingConsumer, expectedVerifyingConsumerAssignment)
 
