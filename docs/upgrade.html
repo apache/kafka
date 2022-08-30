@@ -61,8 +61,27 @@
     </li>
 </ol>
 
+<h4><a id="upgrade_3_3_0" href="#upgrade_3_3_0">Upgrading a KRaft-based cluster to 3.3.0 from any version 3.0.x through 3.2.x</a></h4>
+
+<p><b>If you are upgrading from a version prior to 3.3.0, please see the note below. Once you have changed the metadata.version to the latest version, it will not be possible to downgrade to a version prior to 3.3-IV0.</b></p>
+
+<p><b>For a rolling upgrade:</b></p>
+
+<ol>
+    <li>Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
+        brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
+    </li>
+    <li>Once the cluster's behavior and performance has been verified, bump the metadata.version by running
+        <code>
+        ./bin/kafka-features.sh upgrade --metadata 3.3
+        </code>
+    </li>
+    <li>Note that the cluster metadata version cannot be downgraded to a pre-production 3.0.x, 3.1.x, or 3.2.x version once it has been upgraded. However, it is possible to downgrade to production versions such as 3.3-IV0, 3.3-IV1, etc.</li>
+</ol>
+
 <h5><a id="upgrade_330_notable" href="#upgrade_330_notable">Notable changes in 3.3.0</a></h5>
     <ul>
+        <li>There is now a slightly different upgrade process for KRaft clusters than for ZK-based clusters, as described above.</li>
         <li>Introduced a new API <code>addMetricIfAbsent</code> to <code>Metrics</code> which would create a new Metric if not existing or return the same metric
             if already registered. Note that this behaviour is different from <code>addMetric</code> API which throws an <code>IllegalArgumentException</code> when
             trying to create an already existing metric. (See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-843%3A+Adding+addMetricIfAbsent+method+to+Metrics">KIP-843</a>
@@ -2043,3 +2062,4 @@ Release 0.7 is incompatible with newer releases. Major changes were made to the 
 </script>
 
 <div class="p-upgrade"></div>
+</html>
