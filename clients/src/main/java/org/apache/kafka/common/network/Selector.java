@@ -883,6 +883,9 @@ public class Selector implements Selectable, AutoCloseable {
             key.attach(null);
         }
         this.sensors.connectionClosed.record();
+        if (this.stagedReceives.containsKey(channel)) {
+            this.stagedReceives.get(channel).forEach(NetworkReceive::close);
+        }
         this.stagedReceives.remove(channel);
         this.explicitlyMutedChannels.remove(channel);
         if (notifyDisconnect)

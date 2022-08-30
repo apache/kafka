@@ -1288,6 +1288,9 @@ public class NetworkClient implements KafkaClient {
                 receive.close();
             }
         }
+
+        // Clear the completed receives once they have been added to ClientResponse returned via poll()
+        this.selector.completedReceives().clear();
     }
 
     private void handleApiVersionsResponse(List<ClientResponse> responses,

@@ -408,9 +408,6 @@ public class NetworkClientTest {
         // ApiVersionsRequest is in flight but not sent yet
         assertTrue(client.hasInFlightRequests(node.idString()));
 
-        // ApiVersionsResponse has been received
-        assertEquals(1, selector.completedReceives().size());
-
         // clean up the buffers
         selector.completedSends().clear();
         selector.completedSendBuffers().clear();
@@ -436,7 +433,6 @@ public class NetworkClientTest {
 
         // the ApiVersionsRequest is gone
         assertFalse(client.hasInFlightRequests(node.idString()));
-        assertEquals(1, selector.completedReceives().size());
 
         // the client is ready
         assertTrue(client.isReady(node, time.milliseconds()));
@@ -475,9 +471,6 @@ public class NetworkClientTest {
         // ApiVersionsRequest is in flight but not sent yet
         assertTrue(client.hasInFlightRequests(node.idString()));
 
-        // ApiVersionsResponse has been received
-        assertEquals(1, selector.completedReceives().size());
-
         // clean up the buffers
         selector.completedSends().clear();
         selector.completedSendBuffers().clear();
@@ -503,7 +496,6 @@ public class NetworkClientTest {
 
         // the ApiVersionsRequest is gone
         assertFalse(client.hasInFlightRequests(node.idString()));
-        assertEquals(1, selector.completedReceives().size());
 
         // the client is ready
         assertTrue(client.isReady(node, time.milliseconds()));
