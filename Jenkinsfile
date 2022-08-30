@@ -64,13 +64,13 @@ def job = {
     }
 
     stage("Check compilation compatibility with Scala 2.12") {
-        sh "./gradlew clean assemble spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain " +
+        sh "./retry_zinc ./gradlew clean assemble spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain " +
                  "--no-daemon --stacktrace -PxmlSpotBugsReport=true -PscalaVersion=2.12"
     }
 
 
     stage("Compile and validate") {
-        sh "./gradlew clean assemble publishToMavenLocal spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain " +
+        sh "./retry_zinc ./gradlew clean assemble publishToMavenLocal spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain " +
                 "--no-daemon --stacktrace -PxmlSpotBugsReport=true"
     }
 
