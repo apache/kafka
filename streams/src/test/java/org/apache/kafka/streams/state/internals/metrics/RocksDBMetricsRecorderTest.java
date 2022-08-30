@@ -475,7 +475,7 @@ public class RocksDBMetricsRecorderTest {
 
         verify(statisticsToAdd1, times(17)).getAndResetTickerCount(isA(TickerType.class));
         verify(statisticsToAdd2, times(17)).getAndResetTickerCount(isA(TickerType.class));
-        verify(statisticsToAdd2, times(2)).getHistogramData(isA(HistogramType.class));
+        verify(statisticsToAdd1, times(2)).getHistogramData(isA(HistogramType.class));
         verify(statisticsToAdd2, times(2)).getHistogramData(isA(HistogramType.class));
         verify(bytesWrittenToDatabaseSensor).record(expectedBytesWrittenToDatabaseSensor, now);
         verify(bytesReadFromDatabaseSensor).record(expectedBytesReadFromDatabaseSensor, now);
