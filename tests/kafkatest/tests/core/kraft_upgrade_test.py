@@ -119,3 +119,4 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
     @parametrize(from_kafka_version=str(LATEST_3_2), metadata_quorum=remote_kraft)
     def test_non_colocated_upgrade(self, from_kafka_version, metadata_quorum):
         self.run_upgrade(from_kafka_version)
+

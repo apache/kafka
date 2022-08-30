@@ -1083,6 +1083,7 @@ public class MockAdminClient extends AdminClient {
                             throw new InvalidUpdateVersionException("Can't downgrade to newer version.");
                         }
                         while (next != cur) {
+                            // Simulate a scenario where all the even feature levels unsafe to downgrade from.
                             if (cur % 2 == 0) {
                                 if (entry.getValue().upgradeType() == FeatureUpdate.UpgradeType.SAFE_DOWNGRADE) {
                                     throw new InvalidUpdateVersionException("Unable to perform a safe downgrade.");
