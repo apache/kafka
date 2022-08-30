@@ -84,6 +84,9 @@ public class ConnectMetricsRegistry {
     public final MetricNameTemplate sinkRecordActiveCount;
     public final MetricNameTemplate sinkRecordActiveCountMax;
     public final MetricNameTemplate sinkRecordActiveCountAvg;
+    public final MetricNameTemplate sinkRecordE2ELatencyMax;
+    public final MetricNameTemplate sinkRecordE2ELatencyMin;
+    public final MetricNameTemplate sinkRecordE2ELatencyAvg;
     public final MetricNameTemplate connectorCount;
     public final MetricNameTemplate taskCount;
     public final MetricNameTemplate connectorStartupAttemptsTotal;
@@ -286,6 +289,18 @@ public class ConnectMetricsRegistry {
                                                   "The average number of records that have been read from Kafka but not yet completely "
                                                   + "committed/flushed/acknowledged by the sink task.",
                                                   sinkTaskTags);
+        sinkRecordE2ELatencyMax = createTemplate("sink-record-e2e-latency-max", SINK_TASK_GROUP_NAME,
+                                                 "The maximum end-to-end latency of a record, measuring by comparing the record timestamp with the "
+                                                 + "system time when it has been received by the Sink task",
+                                                 sinkTaskTags);
+        sinkRecordE2ELatencyMin = createTemplate("sink-record-e2e-latency-min", SINK_TASK_GROUP_NAME,
+                                                 "The minimum end-to-end latency of a record, measuring by comparing the record timestamp with the "
+                                                 + "system time when it has been received by the Sink task",
+            sinkTaskTags);
+        sinkRecordE2ELatencyAvg = createTemplate("sink-record-e2e-latency-avg", SINK_TASK_GROUP_NAME,
+                                                 "The average end-to-end latency of a record, measuring by comparing the record timestamp with the "
+                                                 + "system time when it has been received by the Sink task",
+                                                 sinkTaskTags);
 
         /***** Worker level *****/
         Set<String> workerTags = new LinkedHashSet<>(tags);
