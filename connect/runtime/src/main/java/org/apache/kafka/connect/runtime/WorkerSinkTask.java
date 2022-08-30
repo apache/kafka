@@ -486,15 +486,17 @@ class WorkerSinkTask extends WorkerTask {
 
     private void convertMessages(ConsumerRecords<byte[], byte[]> msgs) {
         origOffsets.clear();
-        final long nowMs = time.milliseconds();
+        long start = time.milliseconds();
         for (ConsumerRecord<byte[], byte[]> msg : msgs) {
-            sinkTaskMetricsGroup.recordE2ELatency(nowMs, msg.timestamp());
+            sinkTaskMetricsGroup.recordE2ELatency(start, msg.timestamp());
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
 
             retryWithToleranceOperator.consumerRecord(msg);
 
+            long startConvert = time.milliseconds();
             SinkRecord transRecord = convertAndTransformRecord(msg);
+            sinkTaskMetricsGroup.recordConvert(time.milliseconds() - startConvert);
 
             origOffsets.put(
                     new TopicPartition(msg.topic(), msg.partition()),
@@ -790,6 +792,7 @@ class WorkerSinkTask extends WorkerTask {
         private final Sensor offsetCompletion;
         private final Sensor offsetCompletionSkip;
         private final Sensor putBatchTime;
+        private final Sensor convertTime;
         private final Sensor sinkRecordActiveCount;
         private final Sensor sinkRecordE2ELatency;
         private long activeRecords;
@@ -838,6 +841,10 @@ class WorkerSinkTask extends WorkerTask {
             putBatchTime.add(metricGroup.metricName(registry.sinkRecordPutBatchTimeMax), new Max());
             putBatchTime.add(metricGroup.metricName(registry.sinkRecordPutBatchTimeAvg), new Avg());
 
+            convertTime = metricGroup.sensor("sink-record-convert-time");
+            convertTime.add(metricGroup.metricName(registry.sinkRecordConvertTimeMax), new Max());
+            convertTime.add(metricGroup.metricName(registry.sinkRecordConvertTimeAvg), new Avg());
+
             sinkRecordE2ELatency = metricGroup.sensor("sink-record-e2e-latency");
             sinkRecordE2ELatency.add(metricGroup.metricName(registry.sinkRecordE2ELatencyMax), new Max());
             sinkRecordE2ELatency.add(metricGroup.metricName(registry.sinkRecordE2ELatencyMin), new Min());
@@ -877,6 +884,10 @@ class WorkerSinkTask extends WorkerTask {
 
         void recordPut(long duration) {
             putBatchTime.record(duration);
+        }
+
+        void recordConvert(long duration) {
+            convertTime.record(duration);
         }
 
         void recordPartitionCount(int assignedPartitionCount) {

@@ -384,6 +384,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         final SourceRecordWriteCounter counter =
                 toSend.size() > 0 ? new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup) : null;
         for (final SourceRecord preTransformRecord : toSend) {
+            long start = time.milliseconds();
             retryWithToleranceOperator.sourceRecord(preTransformRecord);
             final SourceRecord record = transformationChain.apply(preTransformRecord);
             final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);
@@ -392,6 +393,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                 recordDropped(preTransformRecord);
                 continue;
             }
+            sourceTaskMetricsGroup.recordConvert(time.milliseconds() - start);
 
             log.trace("{} Appending record to the topic {} with key {}, value {}", this, record.topic(), record.key(), record.value());
             Optional<SubmittedRecords.SubmittedRecord> submittedRecord = prepareToSendRecord(preTransformRecord, producerRecord);
@@ -603,6 +605,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         private final Sensor sourceRecordWrite;
         private final Sensor sourceRecordActiveCount;
         private final Sensor pollTime;
+        private final Sensor convertTime;
         private int activeRecordCount;
 
         public SourceTaskMetricsGroup(ConnectorTaskId id, ConnectMetrics connectMetrics) {
@@ -625,6 +628,10 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
             pollTime.add(metricGroup.metricName(registry.sourceRecordPollBatchTimeMax), new Max());
             pollTime.add(metricGroup.metricName(registry.sourceRecordPollBatchTimeAvg), new Avg());
 
+            convertTime = metricGroup.sensor("source-record-convert-time");
+            convertTime.add(metricGroup.metricName(registry.sourceRecordConvertTimeMax), new Max());
+            convertTime.add(metricGroup.metricName(registry.sourceRecordConvertTimeAvg), new Avg());
+
             sourceRecordActiveCount = metricGroup.sensor("source-record-active-count");
             sourceRecordActiveCount.add(metricGroup.metricName(registry.sourceRecordActiveCount), new Value());
             sourceRecordActiveCount.add(metricGroup.metricName(registry.sourceRecordActiveCountMax), new Max());
@@ -641,6 +648,10 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
             pollTime.record(duration);
             activeRecordCount += batchSize;
             sourceRecordActiveCount.record(activeRecordCount);
+        }
+
+        void recordConvert(long duration) {
+            convertTime.record(duration);
         }
 
         void recordWrite(int recordCount) {
