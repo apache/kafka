@@ -215,7 +215,7 @@ public final class MetadataNodeManager implements AutoCloseable {
     }
 
     private void handleCommitImpl(MetadataRecordType type, ApiMessage message)
-            throws Exception {
+        throws Exception {
         switch (type) {
             case REGISTER_BROKER_RECORD: {
                 DirectoryNode brokersNode = data.root.mkdirs("brokers");
@@ -268,7 +268,7 @@ public final class MetadataNodeManager implements AutoCloseable {
                             "Can't handle ConfigResource.Type " + record.resourceType());
                 }
                 DirectoryNode configDirectory = data.root.mkdirs("configs").
-                    mkdirs(typeString).mkdirs(record.resourceName());
+                    mkdirs(typeString).mkdirs(record.resourceName().isEmpty() ? "<default>" : record.resourceName());
                 if (record.value() == null) {
                     configDirectory.rmrf(record.name());
                 } else {
