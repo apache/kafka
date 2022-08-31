@@ -282,10 +282,6 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     public void buildAndOptimizeTopology(final Properties props) {
         // Vicky: Do we need to verify props?
         final List<String> optimizationConfigs;
-//        final List<String> optimizationConfigs = props == null ?
-//            Arrays.asList(StreamsConfig.NO_OPTIMIZATION) :  Arrays.asList(
-//            props.getProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG).split("\\s*,\\s*"));
-
         if (props == null) {
             optimizationConfigs = new ArrayList<>();
             optimizationConfigs.add(StreamsConfig.NO_OPTIMIZATION);
