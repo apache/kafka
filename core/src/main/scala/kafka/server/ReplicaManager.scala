@@ -1694,8 +1694,10 @@ class ReplicaManager(val config: KafkaConfig,
       val elapsedMs = endMs - startMs
       stateChangeLogger.info(s"Finished LeaderAndIsr request in ${elapsedMs}ms correlationId $correlationId from controller " +
         s"$controllerId for ${requestPartitionStates.size} partitions")
-      stateChangeLogger.info(s"Breakdown time in milliseconds for LeaderAndIsr request with correlationId $correlationId from controller " +
-        s"$controllerId: " + breakdown)
+      if (stateChangeLogger.isTraceEnabled) {
+        stateChangeLogger.trace(s"Breakdown time in milliseconds for LeaderAndIsr request with correlationId $correlationId from controller " +
+          s"$controllerId: " + breakdown)
+      }
       response
     }
   }
