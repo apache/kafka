@@ -71,9 +71,13 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
 object BrokerFeatures extends Logging {
 
   def createDefault(): BrokerFeatures = {
-    new BrokerFeatures(Features.supportedFeatures(
+    new BrokerFeatures(defaultSupportedFeatures())
+  }
+
+  def defaultSupportedFeatures(): Features[SupportedVersionRange] = {
+    Features.supportedFeatures(
       java.util.Collections.singletonMap(MetadataVersion.FEATURE_NAME,
-        new SupportedVersionRange(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(), MetadataVersion.latest().featureLevel()))))
+        new SupportedVersionRange(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(), MetadataVersion.latest().featureLevel())))
   }
 
   def createEmpty(): BrokerFeatures = {
