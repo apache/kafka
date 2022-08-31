@@ -448,6 +448,7 @@ class BrokerServer(
       try {
         metadataListener.startPublishing(metadataPublisher).get()
       } catch {
+        case ee: ExecutionException => throw ee
         case t: Throwable => throw new RuntimeException("Received a fatal error while " +
           "waiting for the broker to catch up with the current cluster metadata.", t)
       }
@@ -472,6 +473,7 @@ class BrokerServer(
       try {
         lifecycleManager.setReadyToUnfence().get()
       } catch {
+        case ee: ExecutionException => throw ee
         case t: Throwable => throw new RuntimeException("Received a fatal error while " +
           "waiting for the broker to be unfenced.", t)
       }
