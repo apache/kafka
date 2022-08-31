@@ -157,10 +157,15 @@ class ConnectRestApiTest(KafkaTest):
         expected_source_task_info = [{
             'id': {'connector': 'local-file-source', 'task': 0},
             'config': {
+                'connector.class': 'org.apache.kafka.connect.file.FileStreamSourceConnector',
                 'task.class': 'org.apache.kafka.connect.file.FileStreamSourceTask',
                 'file': self.INPUT_FILE,
                 'topic': self.TOPIC,
-                'batch.size': self.DEFAULT_BATCH_SIZE
+                'tasks.max': '1',
+                'name': 'local-file-source',
+                'errors.log.include.messages': 'true',
+                'errors.tolerance': 'none',
+                'errors.log.enable': 'true'
             }
         }]
         source_task_info = self.cc.get_connector_tasks("local-file-source")
@@ -168,9 +173,17 @@ class ConnectRestApiTest(KafkaTest):
         expected_sink_task_info = [{
             'id': {'connector': 'local-file-sink', 'task': 0},
             'config': {
+                'connector.class': 'org.apache.kafka.connect.file.FileStreamSinkConnector',
                 'task.class': 'org.apache.kafka.connect.file.FileStreamSinkTask',
                 'file': self.OUTPUT_FILE,
-                'topics': self.TOPIC
+                'topics': self.TOPIC,
+                'key.converter.schemas.enable': 'True',
+                'tasks.max': '1',
+                'name': 'local-file-sink',
+                'value.converter.schemas.enable':'True',
+                'errors.tolerance': 'none',
+                'errors.log.enable': 'true',
+                'errors.log.include.messages': 'true',
             }
         }]
         sink_task_info = self.cc.get_connector_tasks("local-file-sink")
