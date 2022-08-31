@@ -596,7 +596,7 @@ public class TaskManagerTest {
 
         Mockito.verify(task).completeRestoration(noOpResetter);
         Mockito.verify(task).clearTaskTimeout();
-        Mockito.verify(tasks).addNewActiveTask(task);
+        Mockito.verify(tasks).addTask(task);
         verify(consumer);
     }
 
@@ -614,7 +614,7 @@ public class TaskManagerTest {
         taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter);
 
         Mockito.verify(task).maybeInitTaskTimeoutOrThrow(anyLong(), Mockito.eq(timeoutException));
-        Mockito.verify(tasks, never()).addNewActiveTask(task);
+        Mockito.verify(tasks, never()).addTask(task);
         Mockito.verify(task, never()).clearTaskTimeout();
         verify(consumer);
     }
@@ -872,7 +872,7 @@ public class TaskManagerTest {
 
         taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter);
 
-        Mockito.verify(tasks).addNewActiveTask(taskToTransitToRunning);
+        Mockito.verify(tasks).addTask(taskToTransitToRunning);
         Mockito.verify(stateUpdater).add(recycledStandbyTask);
         Mockito.verify(stateUpdater).add(recycledStandbyTask);
         Mockito.verify(taskToCloseClean).closeClean();
@@ -880,6 +880,84 @@ public class TaskManagerTest {
         Mockito.verify(taskToUpdateInputPartitions).updateInputPartitions(Mockito.eq(taskId05Partitions), isNull());
     }
 
+    @Test
+    public void shouldRethrowStreamsExceptionFromStateUpdater() {
+        final StreamTask statefulTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamsException exception = new StreamsException("boom!");
+        final StateUpdater.ExceptionAndTasks exceptionAndTasks = new StateUpdater.ExceptionAndTasks(
+            Collections.singleton(statefulTask),
+            exception
+        );
+        when(stateUpdater.drainExceptionsAndFailedTasks()).thenReturn(Collections.singletonList(exceptionAndTasks));
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+
+        final StreamsException thrown = assertThrows(
+            StreamsException.class,
+            () -> taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter)
+        );
+
+        assertEquals(exception, thrown);
+        assertEquals(statefulTask.id(), thrown.taskId().get());
+    }
+
+    @Test
+    public void shouldRethrowRuntimeExceptionFromStateUpdater() {
+        final StreamTask statefulTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final RuntimeException exception = new RuntimeException("boom!");
+        final StateUpdater.ExceptionAndTasks exceptionAndTasks = new StateUpdater.ExceptionAndTasks(
+            Collections.singleton(statefulTask),
+            exception
+        );
+        when(stateUpdater.drainExceptionsAndFailedTasks()).thenReturn(Collections.singletonList(exceptionAndTasks));
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+
+        final StreamsException thrown = assertThrows(
+            StreamsException.class,
+            () -> taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter)
+        );
+
+        assertEquals(exception, thrown.getCause());
+        assertEquals(statefulTask.id(), thrown.taskId().get());
+    }
+
+    @Test
+    public void shouldRethrowTaskCorruptedExceptionFromStateUpdater() {
+        final StreamTask statefulTask0 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        final StreamTask statefulTask1 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId01Partitions).build();
+        final StateUpdater.ExceptionAndTasks exceptionAndTasks0 = new StateUpdater.ExceptionAndTasks(
+            Collections.singleton(statefulTask0),
+            new TaskCorruptedException(Collections.singleton(taskId00))
+        );
+        final StateUpdater.ExceptionAndTasks exceptionAndTasks1 = new StateUpdater.ExceptionAndTasks(
+            Collections.singleton(statefulTask1),
+            new TaskCorruptedException(Collections.singleton(taskId01))
+        );
+        when(stateUpdater.drainExceptionsAndFailedTasks()).thenReturn(Arrays.asList(exceptionAndTasks0, exceptionAndTasks1));
+
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+
+        final TaskCorruptedException thrown = assertThrows(
+            TaskCorruptedException.class,
+            () -> taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter)
+        );
+
+        assertEquals(mkSet(taskId00, taskId01), thrown.corruptedTasks());
+    }
+
+    @Test
     public void shouldIdempotentlyUpdateSubscriptionFromActiveAssignment() {
         final TopicPartition newTopicPartition = new TopicPartition("topic2", 1);
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(mkEntry(taskId01, mkSet(t1p1, newTopicPartition)));
@@ -1207,7 +1285,7 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.CLOSED));
         assertThat(
             thrown.getMessage(),
-            is("Unexpected failure to close 1 task(s) [[0_0]]. First unexpected exception (for task 0_0) follows.")
+            is("First unexpected error for task 0_0")
         );
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
     }
@@ -1309,7 +1387,7 @@ public class TaskManagerTest {
 
         assertThat(
             thrown.getMessage(),
-            is("Unexpected failure to close 1 task(s) [[0_0]]. First unexpected exception (for task 0_0) follows.")
+            is("First unexpected error for task 0_0")
         );
         assertThat(thrown.getCause(), instanceOf(RuntimeException.class));
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
@@ -3539,8 +3617,7 @@ public class TaskManagerTest {
             () -> taskManager.handleAssignment(emptyMap(), emptyMap())
         );
         // Fatal exception thrown first.
-        assertThat(thrown.getMessage(), equalTo("Unexpected failure to close 2 task(s) [[0_1, 0_2]]. " +
-                                                    "First unexpected exception (for task 0_2) follows."));
+        assertThat(thrown.getMessage(), equalTo("t1 close exception; it means all tasks belonging to this thread should be migrated."));
 
         assertThat(thrown.getCause().getMessage(), equalTo("t2 illegal state exception"));
     }

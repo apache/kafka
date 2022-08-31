@@ -233,7 +233,8 @@ public class TaskManager {
                 final Collection<TopicPartition> corruptedPartitions = task.changelogPartitions();
 
                 // mark corrupted partitions to not be checkpointed, and then close the task as dirty
-                if (markAsCorrupted) {
+                // TODO: this step should be removed as we complete migrating to state updater
+                if (markAsCorrupted && stateUpdater == null) {
                     task.markChangelogAsCorrupted(corruptedPartitions);
                 }
 
@@ -347,6 +348,8 @@ public class TaskManager {
                     if (exception instanceof TaskMigratedException) {
                         throw entry.getValue();
                     } else if (exception instanceof TaskCorruptedException) {
+                        log.warn("Encounter corrupted task" + taskId + ", will group it with other corrupted tasks " +
+                            "and handle together", exception);
                         allTaskCorrupts.corruptedTasks().add(taskId);
                     } else {
                         ((StreamsException) exception).setTaskId(taskId);
@@ -723,7 +726,7 @@ public class TaskManager {
                                               final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         try {
             task.completeRestoration(offsetResetter);
-            tasks.addNewActiveTask(task);
+            tasks.addTask(task);
             mainConsumer.resume(task.inputPartitions());
             task.clearTaskTimeout();
         } catch (final TimeoutException timeoutException) {
