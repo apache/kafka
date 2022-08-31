@@ -1248,6 +1248,37 @@ public class RecordAccumulatorTest {
         }
     }
 
+    @Test
+    public void testBuiltInPartitionerFractionalBatches() throws Exception {
+        // Test how we avoid creating fractional batches with high linger.ms (see
+        // BuiltInPartitioner.updatePartitionInfo).
+        long totalSize = 1024 * 1024;
+        int batchSize = 512;  // note that this is also a "sticky" limit for the partitioner
+        int valSize = 32;
+        RecordAccumulator accum = createTestRecordAccumulator(batchSize, totalSize, CompressionType.NONE, 10);
+        byte[] value = new byte[valSize];
+
+        for (int c = 10; c-- > 0; ) {
+            // Produce about 2/3 of the batch size.
+            for (int recCount = batchSize * 2 / 3 / valSize; recCount-- > 0; ) {
+                accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0, null, value, Record.EMPTY_HEADERS,
+                    null, maxBlockTimeMs, false, time.milliseconds(), cluster);
+            }
+
+            // Advance the time to make the batch ready.
+            time.sleep(10);
+
+            // We should have one batch ready.
+            Set<Node> nodes = accum.ready(cluster, time.milliseconds()).readyNodes;
+            assertEquals(1, nodes.size(), "Should have 1 leader ready");
+            List<ProducerBatch> batches = accum.drain(cluster, nodes, Integer.MAX_VALUE, 0).entrySet().iterator().next().getValue();
+            assertEquals(1, batches.size(), "Should have 1 batch ready");
+            int actualBatchSize = batches.get(0).records().sizeInBytes();
+            assertTrue(actualBatchSize > batchSize / 2, "Batch must be greater than half batch.size");
+            assertTrue(actualBatchSize < batchSize, "Batch must be less than batch.size");
+        }
+    }
+
     private int prepareSplitBatches(RecordAccumulator accum, long seed, int recordSize, int numRecords)
         throws InterruptedException {
         Random random = new Random();
