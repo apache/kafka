@@ -32,7 +32,7 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Utils;
-
+import org.apache.kafka.connect.errors.ConnectException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 import java.util.concurrent.Semaphore;
@@ -94,7 +95,17 @@ public class MirrorSourceTask extends SourceTask {
         consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig());
         offsetProducer = MirrorUtils.newProducer(config.offsetSyncsTopicProducerConfig());
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
-        Map<TopicPartition, Long> topicPartitionOffsets = loadOffsets(taskTopicPartitions);
+        Map<TopicPartition, Long> topicPartitionOffsets;
+        try {
+            topicPartitionOffsets = loadOffsets(taskTopicPartitions);
+        } catch (ConnectException cex) {
+            if (cex.getCause() != null && cex.getCause().getCause() != null && cex.getCause().getCause() instanceof CancellationException) {
+                log.info("Stopping task due to it being cancelled from another thread.");
+                return;
+            } else {
+                throw cex;
+            }
+        }
         consumer.assign(topicPartitionOffsets.keySet());
         log.info("Starting with {} previously uncommitted partitions.", topicPartitionOffsets.entrySet().stream()
             .filter(x -> x.getValue() == 0L).count());
@@ -223,11 +234,11 @@ public class MirrorSourceTask extends SourceTask {
         });
     }
  
-    private Map<TopicPartition, Long> loadOffsets(Set<TopicPartition> topicPartitions) {
+    private Map<TopicPartition, Long> loadOffsets(Set<TopicPartition> topicPartitions) throws ConnectException {
         return topicPartitions.stream().collect(Collectors.toMap(x -> x, this::loadOffset));
     }
 
-    private Long loadOffset(TopicPartition topicPartition) {
+    private Long loadOffset(TopicPartition topicPartition) throws ConnectException {
         Map<String, Object> wrappedPartition = MirrorUtils.wrapPartition(topicPartition, sourceClusterAlias);
         Map<String, Object> wrappedOffset = context.offsetStorageReader().offset(wrappedPartition);
         return MirrorUtils.unwrapOffset(wrappedOffset) + 1;

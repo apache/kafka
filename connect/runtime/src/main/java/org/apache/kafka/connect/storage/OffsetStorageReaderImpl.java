@@ -91,7 +91,7 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
                     throw new ConnectException(
                         "Offset reader is closed. This is likely because the task has already been "
                             + "scheduled to stop but has taken longer than the graceful shutdown "
-                            + "period to do so.");
+                            + "period to do so.", new CancellationException());
                 }
                 offsetReadFuture = backingStore.get(serializedToOriginal.keySet());
                 offsetReadFutures.add(offsetReadFuture);
@@ -103,7 +103,7 @@ public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
                 throw new ConnectException(
                     "Offset reader closed while attempting to read offsets. This is likely because "
                         + "the task was been scheduled to stop but has taken longer than the "
-                        + "graceful shutdown period to do so.");
+                        + "graceful shutdown period to do so.", e);
             } finally {
                 synchronized (offsetReadFutures) {
                     offsetReadFutures.remove(offsetReadFuture);
