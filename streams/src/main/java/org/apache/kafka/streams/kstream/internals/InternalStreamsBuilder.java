@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
 import java.util.TreeMap;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -272,20 +276,39 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     // use this method for testing only
     public void buildAndOptimizeTopology() {
-        buildAndOptimizeTopology(false, false);
+        buildAndOptimizeTopology(null);
     }
 
-    public void buildAndOptimizeTopology(
-        final boolean optimizeTopology, final boolean optimizeSelfJoin) {
+    public void buildAndOptimizeTopology(final Properties props) {
+        // Vicky: Do we need to verify props?
+        final List<String> optimizationConfigs;
+//        final List<String> optimizationConfigs = props == null ?
+//            Arrays.asList(StreamsConfig.NO_OPTIMIZATION) :  Arrays.asList(
+//            props.getProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG).split("\\s*,\\s*"));
+
+        if (props == null) {
+            optimizationConfigs = new ArrayList<>();
+            optimizationConfigs.add(StreamsConfig.NO_OPTIMIZATION);
+        } else {
+            final StreamsConfig config = new StreamsConfig(props);
+            optimizationConfigs = config.getList(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG);
+        }
 
         mergeDuplicateSourceNodes();
-        if (optimizeTopology) {
-            LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
+        if (optimizationConfigs.contains(StreamsConfig.OPTIMIZE)
+            || optimizationConfigs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {
+            LOG.debug("Optimizing the Kafka Streams graph for ktable source nodes");
             optimizeKTableSourceTopics();
+        }
+        if (optimizationConfigs.contains(StreamsConfig.OPTIMIZE)
+            || optimizationConfigs.contains(StreamsConfig.MERGE_REPARTITION_TOPICS)) {
+            LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
             maybeOptimizeRepartitionOperations();
-            if (optimizeSelfJoin) {
-                rewriteSelfJoin(root, new HashSet<>());
-            }
+        }
+        if (optimizationConfigs.contains(StreamsConfig.OPTIMIZE)
+            || optimizationConfigs.contains(StreamsConfig.SELF_JOIN)) {
+            LOG.debug("Optimizing the Kafka Streams graph for self-joins");
+            rewriteSelfJoin(root, new HashSet<>());
         }
 
         final PriorityQueue<GraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, Comparator.comparing(GraphNode::buildPriority));

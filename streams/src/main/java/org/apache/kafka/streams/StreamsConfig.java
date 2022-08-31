@@ -27,6 +27,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigDef.ValidList;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.metrics.Sensor;
@@ -242,6 +243,26 @@ public class StreamsConfig extends AbstractConfig {
      * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"} for enabling topology optimization
      */
     public static final String OPTIMIZE = "all";
+
+    /**
+     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"}
+     * for enabling the specific optimization that reuses source topic as changelog topic
+     * for KTables.
+     */
+    public static final String REUSE_KTABLE_SOURCE_TOPICS = "reuse.ktable.source.topics";
+
+    /**
+     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"}
+     * for enabling the specific optimization that merges duplicated repartition topics.
+     */
+    public static final String MERGE_REPARTITION_TOPICS = "merge.repartition.topics";
+
+    /**
+     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"}
+     * for enabling the optimization that optimizes inner stream-stream joins into self-joins when
+     * both arguments are the same stream.
+     */
+    public static final String SELF_JOIN = "self.join";
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.0.x}.
@@ -661,13 +682,9 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code topology.optimization} */
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
-    private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka Streams if it should optimize the topology, disabled by default";
-
-    public static final String SELF_JOIN_OPTIMIZATION_CONFIG = "self.join.optimization";
-    private static final String SELF_JOIN_OPTIMIZATION_DOC = "A configuration telling Kafka "
-        + "Streams if it should optimize an inner join that is a self-join by removing the "
-        + "extraneous state store. This config is disabled by default.";
-
+    private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka "
+        + "Streams if it should optimize the topology and what optimizations to apply. Disabled "
+        + "by default";
 
     /** {@code window.size.ms} */
     public static final String WINDOW_SIZE_MS_CONFIG = "window.size.ms";
@@ -845,16 +862,12 @@ public class StreamsConfig extends AbstractConfig {
                     Importance.MEDIUM,
                     TASK_TIMEOUT_MS_DOC)
             .define(TOPOLOGY_OPTIMIZATION_CONFIG,
-                    Type.STRING,
+                    Type.LIST,
                     NO_OPTIMIZATION,
-                    in(NO_OPTIMIZATION, OPTIMIZE),
+                    ValidList.in(NO_OPTIMIZATION, OPTIMIZE, REUSE_KTABLE_SOURCE_TOPICS,
+                                 MERGE_REPARTITION_TOPICS, SELF_JOIN),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
-            .define(SELF_JOIN_OPTIMIZATION_CONFIG,
-                    Type.BOOLEAN,
-                    false,
-                    Importance.MEDIUM,
-                    SELF_JOIN_OPTIMIZATION_DOC)
 
             // LOW
 
@@ -1267,6 +1280,7 @@ public class StreamsConfig extends AbstractConfig {
         if (eosEnabled) {
             verifyEOSTransactionTimeoutCompatibility();
         }
+        verifyTopologyOptimizationConfigs();
     }
 
     private void verifyEOSTransactionTimeoutCompatibility() {
@@ -1653,6 +1667,22 @@ public class StreamsConfig extends AbstractConfig {
         props.keySet().removeAll(originalsWithPrefix(PRODUCER_PREFIX, false).keySet());
         props.keySet().removeAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX, false).keySet());
         return props;
+    }
+
+    private void verifyTopologyOptimizationConfigs() {
+        final List<String> configs = getList(TOPOLOGY_OPTIMIZATION_CONFIG);
+
+        // Verify it doesn't contain none or all plus a list of optimizations
+        if (configs.contains(NO_OPTIMIZATION) || configs.contains(OPTIMIZE)) {
+            if (configs.size() > 1) {
+                throw new ConfigException("A topology can either not be optimized with " + NO_OPTIMIZATION + " "
+                                              + "or optimized. If you want to optimize the "
+                                              + "topology, you can choose between all "
+                                              + "optimizations with " + OPTIMIZE + " " + "or "
+                                              + "specific optimizations by specifying a comma "
+                                              + "separated list.");
+            }
+        }
     }
 
     /**

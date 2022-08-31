@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import java.util.ArrayList;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.utils.Bytes;
@@ -69,6 +70,7 @@ public class InternalStreamsBuilderTest {
     private final ConsumedInternal<String, String> consumed = new ConsumedInternal<>();
     private final String storePrefix = "prefix-";
     private final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(Materialized.as("test-store"), builder, storePrefix);
+    private final Properties props = StreamsTestUtils.getStreamsConfig();
 
     @Test
     public void testNewName() {
@@ -376,11 +378,12 @@ public class InternalStreamsBuilderTest {
     @Test
     public void shouldMarkStreamStreamJoinAsSelfJoinSingleStream() {
         // Given:
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final KStream<String, String> stream = builder.stream(Collections.singleton("t1"), consumed);
         stream.join(stream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
 
         // When:
-        builder.buildAndOptimizeTopology(true, true);
+        builder.buildAndOptimizeTopology(props);
 
         // Then:
         final GraphNode join = getNodeByType(builder.root, StreamStreamJoinNode.class, new HashSet<>());
@@ -395,12 +398,13 @@ public class InternalStreamsBuilderTest {
     @Test
     public void shouldMarkStreamStreamJoinAsSelfJoinTwoStreams() {
         // Given:
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
         final KStream<String, String> stream2 = builder.stream(Collections.singleton("t1"), consumed);
         stream1.join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
 
         // When:
-        builder.buildAndOptimizeTopology(true, true);
+        builder.buildAndOptimizeTopology(props);
 
         // Then:
         final GraphNode join = getNodeByType(builder.root, StreamStreamJoinNode.class, new HashSet<>());
@@ -414,6 +418,7 @@ public class InternalStreamsBuilderTest {
     @Test
     public void shouldMarkStreamStreamJoinAsSelfJoin3WayJoin() {
         // Given:
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
         final KStream<String, String> stream2 = builder.stream(Collections.singleton("t1"), consumed);
         final KStream<String, String> stream3 = builder.stream(Collections.singleton("t3"), consumed);
@@ -422,7 +427,7 @@ public class InternalStreamsBuilderTest {
             .join(stream3, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
 
         // When:
-        builder.buildAndOptimizeTopology(true, true);
+        builder.buildAndOptimizeTopology(props);
 
         // Then:
         final List<GraphNode> result = new ArrayList<>();
@@ -438,6 +443,7 @@ public class InternalStreamsBuilderTest {
     @Test
     public void shouldNotMarkStreamStreamJoinAsSelfJoinTwoStreamsWithFilter() {
         // Given:
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
         final KStream<String, String> stream2 = builder.stream(Collections.singleton("t1"), consumed);
         stream1
@@ -445,7 +451,7 @@ public class InternalStreamsBuilderTest {
             .join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
 
         // When:
-        builder.buildAndOptimizeTopology(true, true);
+        builder.buildAndOptimizeTopology(props);
 
         // Then:
         final GraphNode join = getNodeByType(builder.root, StreamStreamJoinNode.class, new HashSet<>());
@@ -459,13 +465,14 @@ public class InternalStreamsBuilderTest {
     @Test
     public void shouldNotMarkStreamStreamJoinAsSelfJoinOneStreamWithMap() {
         // Given:
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
         stream1.mapValues(v -> v);
         final KStream<String, String> stream2 = builder.stream(Collections.singleton("t1"), consumed);
         stream1.join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
 
         // When:
-        builder.buildAndOptimizeTopology(true, true);
+        builder.buildAndOptimizeTopology(props);
 
         // Then:
         final GraphNode join = getNodeByType(builder.root, StreamStreamJoinNode.class, new HashSet<>());
@@ -479,13 +486,14 @@ public class InternalStreamsBuilderTest {
     @Test
     public void shouldNotMarkStreamStreamJoinAsSelfJoinMultipleSources() {
         // Given:
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
         stream1.mapValues(v -> v);
         final KStream<String, String> stream2 = builder.stream(Collections.singleton("t2"), consumed);
         stream1.join(stream2, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
 
         // When:
-        builder.buildAndOptimizeTopology(true, true);
+        builder.buildAndOptimizeTopology(props);
 
         // Then:
         final GraphNode join = getNodeByType(builder.root, StreamStreamJoinNode.class, new HashSet<>());
@@ -497,13 +505,18 @@ public class InternalStreamsBuilderTest {
     }
 
     @Test
-    public void shouldNotOptimizeJoinWhenConfigFalse() {
+    public void shouldNotOptimizeJoinWhenNotInConfig() {
         // Given:
+        final StringBuilder sb = new StringBuilder();
+        sb.append(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS);
+        sb.append(",");
+        sb.append(StreamsConfig.MERGE_REPARTITION_TOPICS);
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, sb.toString());
         final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
         stream1.join(stream1, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
 
         // When:
-        builder.buildAndOptimizeTopology(true, false);
+        builder.buildAndOptimizeTopology(props);
 
         // Then:
         final GraphNode join = getNodeByType(builder.root, StreamStreamJoinNode.class, new HashSet<>());

@@ -1263,6 +1263,36 @@ public class StreamsConfigTest {
         assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 
+    @Test
+    public void shouldThrowExceptionWhenTopologyOptimizationOnAndOff() {
+        final String value = String.join(",", StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION);
+        props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertTrue(exception.getMessage().contains("A topology can either not be optimized with"));
+    }
+
+    @Test
+    public void shouldEnableSelfJoin() {
+        final String value = StreamsConfig.SELF_JOIN;
+        props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
+        final StreamsConfig config = new StreamsConfig(props);
+        assertTrue(config.getList(TOPOLOGY_OPTIMIZATION_CONFIG).contains(StreamsConfig.SELF_JOIN));
+    }
+
+    @Test
+    public void shouldMultipleOptimizations() {
+        final String value = String.join(",",
+                                         StreamsConfig.SELF_JOIN,
+                                         StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS,
+                                         StreamsConfig.MERGE_REPARTITION_TOPICS);
+        props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(3, config.getList(TOPOLOGY_OPTIMIZATION_CONFIG).size());
+        assertTrue(config.getList(TOPOLOGY_OPTIMIZATION_CONFIG).contains(StreamsConfig.SELF_JOIN));
+        assertTrue(config.getList(TOPOLOGY_OPTIMIZATION_CONFIG).contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS));
+        assertTrue(config.getList(TOPOLOGY_OPTIMIZATION_CONFIG).contains(StreamsConfig.MERGE_REPARTITION_TOPICS));
+    }
+
     static class MisconfiguredSerde implements Serde<Object> {
         @Override
         public void configure(final Map<String, ?>  configs, final boolean isKey) {

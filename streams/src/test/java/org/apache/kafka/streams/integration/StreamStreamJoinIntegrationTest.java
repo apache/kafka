@@ -69,7 +69,6 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     public void testSelfJoin() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-selfJoin");
         STREAMS_CONFIG.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        STREAMS_CONFIG.put(StreamsConfig.SELF_JOIN_OPTIMIZATION_CONFIG, "true");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,

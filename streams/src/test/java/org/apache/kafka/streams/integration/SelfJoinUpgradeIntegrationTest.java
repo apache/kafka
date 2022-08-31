@@ -158,7 +158,6 @@ public class SelfJoinUpgradeIntegrationTest {
         joinedNew.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        props.put(StreamsConfig.SELF_JOIN_OPTIMIZATION_CONFIG, "true");
         kafkaStreams = new KafkaStreams(streamsBuilderNew.build(), props);
         kafkaStreams.start();
 
@@ -221,7 +220,6 @@ public class SelfJoinUpgradeIntegrationTest {
         joinedNew.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
 
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        props.put(StreamsConfig.SELF_JOIN_OPTIMIZATION_CONFIG, "true");
         kafkaStreams = new KafkaStreams(streamsBuilderNew.build(), props);
         kafkaStreams.start();
 
@@ -270,8 +268,6 @@ public class SelfJoinUpgradeIntegrationTest {
             outputTopic,
             expected.size(),
             60 * 1000);
-
-        System.out.println("----->" + actual);
 
         assertThat(actual, is(expected));
 
