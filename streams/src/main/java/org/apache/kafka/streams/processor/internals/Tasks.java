@@ -154,16 +154,16 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public void addNewActiveTasks(final Collection<Task> newTasks) {
+    public void addActiveTasks(final Collection<Task> newTasks) {
         if (!newTasks.isEmpty()) {
             for (final Task activeTask : newTasks) {
-                addNewActiveTask(activeTask);
+                addActiveTask(activeTask);
             }
         }
     }
 
     @Override
-    public void addNewActiveTask(final Task task) {
+    public void addActiveTask(final Task task) {
         final TaskId taskId = task.id();
 
         if (activeTasksPerId.containsKey(taskId)) {
@@ -182,7 +182,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public void addNewStandbyTasks(final Collection<Task> newTasks) {
+    public void addStandbyTasks(final Collection<Task> newTasks) {
         if (!newTasks.isEmpty()) {
             for (final Task standbyTask : newTasks) {
                 final TaskId taskId = standbyTask.id();

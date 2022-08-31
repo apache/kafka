@@ -46,6 +46,7 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
+import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTasks;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -596,7 +597,7 @@ public class TaskManagerTest {
 
         Mockito.verify(task).completeRestoration(noOpResetter);
         Mockito.verify(task).clearTaskTimeout();
-        Mockito.verify(tasks).addNewActiveTask(task);
+        Mockito.verify(tasks).addActiveTask(task);
         verify(consumer);
     }
 
@@ -614,7 +615,7 @@ public class TaskManagerTest {
         taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter);
 
         Mockito.verify(task).maybeInitTaskTimeoutOrThrow(anyLong(), Mockito.eq(timeoutException));
-        Mockito.verify(tasks, never()).addNewActiveTask(task);
+        Mockito.verify(tasks, never()).addActiveTask(task);
         Mockito.verify(task, never()).clearTaskTimeout();
         verify(consumer);
     }
@@ -872,7 +873,7 @@ public class TaskManagerTest {
 
         taskManager.tryToCompleteRestoration(time.milliseconds(), noOpResetter);
 
-        Mockito.verify(tasks).addNewActiveTask(taskToTransitToRunning);
+        Mockito.verify(tasks).addActiveTask(taskToTransitToRunning);
         Mockito.verify(stateUpdater).add(recycledStandbyTask);
         Mockito.verify(stateUpdater).add(recycledStandbyTask);
         Mockito.verify(taskToCloseClean).closeClean();
@@ -2697,6 +2698,83 @@ public class TaskManagerTest {
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)
         verify(activeTaskCreator);
+    }
+
+    @Test
+    public void shouldShutDownStateUpdaterAndCloseFailedTasksDirty() {
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final StreamTask failedStatefulTask = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RESTORING).build();
+        final StandbyTask failedStandbyTask = standbyTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RUNNING).build();
+        when(stateUpdater.drainExceptionsAndFailedTasks())
+            .thenReturn(Arrays.asList(
+                new ExceptionAndTasks(mkSet(failedStatefulTask), new RuntimeException()),
+                new ExceptionAndTasks(mkSet(failedStandbyTask), new RuntimeException()))
+            );
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(failedStatefulTask.id());
+        activeTaskCreator.closeThreadProducerIfNeeded();
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        replay(activeTaskCreator);
+
+        taskManager.shutdown(true);
+
+        verify(activeTaskCreator);
+        Mockito.verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        Mockito.verify(failedStatefulTask).prepareCommit();
+        Mockito.verify(failedStatefulTask).suspend();
+        Mockito.verify(failedStatefulTask).closeDirty();
+    }
+
+    @Test
+    public void shouldShutDownStateUpdaterAndAddRestoredTasksToTaskRegistry() {
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final StreamTask statefulTask1 = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RESTORING).build();
+        final StreamTask statefulTask2 = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RESTORING).build();
+        final Set<StreamTask> restoredActiveTasks = mkSet(statefulTask1, statefulTask2);
+        final Set<Task> restoredTasks = restoredActiveTasks.stream().map(t -> (Task) t).collect(Collectors.toSet());
+        when(stateUpdater.drainRestoredActiveTasks(Duration.ZERO)).thenReturn(restoredActiveTasks);
+        when(tasks.activeTasks()).thenReturn(restoredTasks);
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(statefulTask1.id());
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(statefulTask2.id());
+        activeTaskCreator.closeThreadProducerIfNeeded();
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        replay(activeTaskCreator);
+
+        taskManager.shutdown(true);
+
+        verify(activeTaskCreator);
+        Mockito.verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        Mockito.verify(tasks).addActiveTasks(restoredTasks);
+        Mockito.verify(statefulTask1).closeClean();
+        Mockito.verify(statefulTask2).closeClean();
+    }
+
+    @Test
+    public void shouldShutDownStateUpdaterAndAddRemovedTasksToTaskRegistry() {
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final StreamTask removedStatefulTask = statefulTask(taskId01, taskId01ChangelogPartitions)
+            .inState(State.RESTORING).build();
+        final StandbyTask removedStandbyTask = standbyTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.RUNNING).build();
+        when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(removedStandbyTask, removedStatefulTask));
+        when(tasks.activeTasks()).thenReturn(mkSet(removedStatefulTask));
+        when(tasks.allTasks()).thenReturn(mkSet(removedStatefulTask, removedStandbyTask));
+        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(removedStatefulTask.id());
+        activeTaskCreator.closeThreadProducerIfNeeded();
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        replay(activeTaskCreator);
+
+        taskManager.shutdown(true);
+
+        verify(activeTaskCreator);
+        Mockito.verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        Mockito.verify(tasks).addActiveTasks(mkSet(removedStatefulTask));
+        Mockito.verify(tasks).addStandbyTasks(mkSet(removedStandbyTask));
+        Mockito.verify(removedStatefulTask).closeClean();
+        Mockito.verify(removedStandbyTask).closeClean();
     }
 
     @Test

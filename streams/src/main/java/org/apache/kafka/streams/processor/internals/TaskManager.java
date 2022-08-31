@@ -365,8 +365,8 @@ public class TaskManager {
         final Collection<Task> newStandbyTask = standbyTaskCreator.createTasks(standbyTasksToCreate);
 
         if (stateUpdater == null) {
-            tasks.addNewActiveTasks(newActiveTasks);
-            tasks.addNewStandbyTasks(newStandbyTask);
+            tasks.addActiveTasks(newActiveTasks);
+            tasks.addStandbyTasks(newStandbyTask);
         } else {
             tasks.addPendingTaskToInit(newActiveTasks);
             tasks.addPendingTaskToInit(newStandbyTask);
@@ -746,7 +746,7 @@ public class TaskManager {
                                               final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         try {
             task.completeRestoration(offsetResetter);
-            tasks.addNewActiveTask(task);
+            tasks.addActiveTask(task);
             mainConsumer.resume(task.inputPartitions());
             task.clearTaskTimeout();
         } catch (final TimeoutException timeoutException) {
@@ -1143,6 +1143,8 @@ public class TaskManager {
     }
 
     void shutdown(final boolean clean) {
+        shutdownStateUpdater();
+
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
         // TODO: change type to `StreamTask`
@@ -1178,6 +1180,68 @@ public class TaskManager {
         if (fatalException != null) {
             throw fatalException;
         }
+    }
+
+    private void shutdownStateUpdater() {
+        if (stateUpdater != null) {
+            stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
+            closeFailedTasks();
+            addRestoredTasksToTaskRegistry();
+            addRemovedTasksToTaskRegistry();
+        }
+    }
+
+    private void closeFailedTasks() {
+        final Set<Task> tasksToCloseDirty = stateUpdater.drainExceptionsAndFailedTasks().stream()
+            .flatMap(exAndTasks -> exAndTasks.getTasks().stream()).collect(Collectors.toSet());
+
+        for (final Task task : tasksToCloseDirty) {
+            try {
+                // we call this function only to flush the case if necessary
+                // before suspending and closing the topology
+                task.prepareCommit();
+            } catch (final RuntimeException swallow) {
+                log.error("Error flushing caches of dirty task {} ", task.id(), swallow);
+            }
+
+            try {
+                task.suspend();
+            } catch (final RuntimeException swallow) {
+                log.error("Error suspending dirty task {}: {}", task.id(), swallow.getMessage());
+            }
+
+            task.closeDirty();
+
+            try {
+                if (task.isActive()) {
+                    activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+                }
+            } catch (final RuntimeException swallow) {
+                log.error("Error closing dirty task {}: {}", task.id(), swallow.getMessage());
+            }
+        }
+    }
+
+    private void addRestoredTasksToTaskRegistry() {
+        tasks.addActiveTasks(stateUpdater.drainRestoredActiveTasks(Duration.ZERO).stream()
+            .map(t -> (Task) t)
+            .collect(Collectors.toSet())
+        );
+    }
+
+    private void addRemovedTasksToTaskRegistry() {
+        final Set<Task> removedTasks = stateUpdater.drainRemovedTasks();
+        final Set<Task> removedActiveTasks = new HashSet<>();
+        final Iterator<Task> iterator = removedTasks.iterator();
+        while (iterator.hasNext()) {
+            final Task task = iterator.next();
+            if (task.isActive()) {
+                iterator.remove();
+                removedActiveTasks.add(task);
+            }
+        }
+        tasks.addActiveTasks(removedActiveTasks);
+        tasks.addStandbyTasks(removedTasks);
     }
 
     /**

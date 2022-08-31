@@ -236,6 +236,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 task.maybeCheckpoint(true);
                 removedTasks.add(task);
             });
+            updatingTasks.clear();
             pausedTasks.forEach((id, task) -> {
                 removedTasks.add(task);
             });
