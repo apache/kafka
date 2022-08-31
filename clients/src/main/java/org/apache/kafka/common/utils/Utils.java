@@ -463,8 +463,7 @@ public final class Utils {
             throw new ClassNotFoundException(String.format("Unable to access " +
                 "constructor of %s", className), e);
         } catch (InvocationTargetException e) {
-            throw new ClassNotFoundException(String.format("Unable to invoke " +
-                "constructor of %s", className), e);
+            throw new KafkaException(String.format("The constructor of %s threw an exception", className), e.getCause());
         }
     }
 

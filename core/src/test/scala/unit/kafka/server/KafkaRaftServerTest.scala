@@ -18,12 +18,12 @@ package kafka.server
 
 import java.io.File
 import java.nio.file.Files
-import java.util.Properties
+import java.util.{Optional, Properties}
 import kafka.common.{InconsistentBrokerMetadataException, InconsistentNodeIdException}
 import kafka.log.UnifiedLog
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.controller.BootstrapMetadata
+import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
@@ -97,8 +97,8 @@ class KafkaRaftServerTest {
   }
 
   private def writeBootstrapMetadata(logDir: File, metadataVersion: MetadataVersion): Unit = {
-    val bootstrapMetadata = BootstrapMetadata.create(metadataVersion)
-    BootstrapMetadata.write(bootstrapMetadata, logDir.toPath)
+    val bootstrapDirectory = new BootstrapDirectory(logDir.toString(), Optional.empty())
+    bootstrapDirectory.writeBinaryFile(BootstrapMetadata.fromVersion(metadataVersion, "test"))
   }
 
   @Test
@@ -235,14 +235,14 @@ class KafkaRaftServerTest {
     configProperties.put(KafkaConfig.ListenersProp, "PLAINTEXT://127.0.0.1:9092,SSL://127.0.0.1:9093")
     configProperties.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9093")
     configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
-    configProperties.put(KafkaConfig.InterBrokerProtocolVersionProp, "3.2")
+    configProperties.put(KafkaConfig.InterBrokerProtocolVersionProp, "3.3-IV1")
 
     val (loadedMetaProperties, bootstrapMetadata, offlineDirs) =
       invokeLoadMetaProperties(metaProperties, configProperties, None)
 
     assertEquals(metaProperties, loadedMetaProperties)
     assertEquals(Seq.empty, offlineDirs)
-    assertEquals(bootstrapMetadata.metadataVersion(), MetadataVersion.IBP_3_2_IV0)
+    assertEquals(bootstrapMetadata.metadataVersion(), MetadataVersion.IBP_3_3_IV1)
   }
 
   @Test
@@ -262,8 +262,11 @@ class KafkaRaftServerTest {
     configProperties.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
     configProperties.put(KafkaConfig.LogDirProp, logDir.getAbsolutePath)
 
-    val config = KafkaConfig.fromProps(configProperties)
-    assertEquals("Cannot upgrade from KRaft version prior to 3.3 without first setting inter.broker.protocol.version on each broker.",
-      assertThrows(classOf[KafkaException], () => KafkaRaftServer.initializeLogDirs(config)).getMessage)
+    val (loadedMetaProperties, bootstrapMetadata, offlineDirs) =
+      invokeLoadMetaProperties(metaProperties, configProperties, None)
+
+    assertEquals(metaProperties, loadedMetaProperties)
+    assertEquals(Seq.empty, offlineDirs)
+    assertEquals(bootstrapMetadata.metadataVersion(), MetadataVersion.latest())
   }
 }

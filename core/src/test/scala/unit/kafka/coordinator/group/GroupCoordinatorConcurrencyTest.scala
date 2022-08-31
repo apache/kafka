@@ -389,7 +389,7 @@ object GroupCoordinatorConcurrencyTest {
   class Group(val groupId: String, nMembers: Int,
       groupCoordinator: GroupCoordinator, replicaManager: TestReplicaManager) {
     val groupPartitionId = groupCoordinator.partitionFor(groupId)
-    groupCoordinator.groupManager.addPartitionOwnership(groupPartitionId)
+    groupCoordinator.groupManager.addOwnedPartition(groupPartitionId)
     val members = (0 until nMembers).map { i =>
       new GroupMember(this, groupPartitionId, i == 0)
     }

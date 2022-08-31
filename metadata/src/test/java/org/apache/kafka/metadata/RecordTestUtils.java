@@ -78,7 +78,7 @@ public class RecordTestUtils {
                     }
                 }
             } catch (InvocationTargetException e) {
-                throw new RuntimeException(e);
+                throw new RuntimeException(e.getCause());
             } catch (IllegalAccessException e) {
                 throw new RuntimeException(e);
             }

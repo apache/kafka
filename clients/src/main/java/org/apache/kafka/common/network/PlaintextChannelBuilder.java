@@ -60,7 +60,6 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
             return buildChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
                     memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
         } catch (Exception e) {
-            log.warn("Failed to create channel due to ", e);
             throw new KafkaException(e);
         }
     }

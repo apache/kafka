@@ -36,8 +36,8 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{mock, when}
 
 class ProducerStateManagerTest {
-  private var logDir: File = null
-  private var stateManager: ProducerStateManager = null
+  private var logDir: File = _
+  private var stateManager: ProducerStateManager = _
   private val partition = new TopicPartition("test", 0)
   private val producerId = 1L
   private val maxTransactionTimeoutMs = 5 * 60 * 1000

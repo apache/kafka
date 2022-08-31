@@ -140,7 +140,7 @@ public class SnapshottableHashTableTest {
         assertEquals(1, table.snapshottableSize(0));
         assertEquals(3, table.snapshottableSize(1));
         registry.deleteSnapshot(0);
-        assertEquals("No snapshot for epoch 0. Snapshot epochs are: 1",
+        assertEquals("No in-memory snapshot for epoch 0. Snapshot epochs are: 1",
             assertThrows(RuntimeException.class, () ->
                 table.snapshottableSize(0)).getMessage());
         registry.deleteSnapshot(1);

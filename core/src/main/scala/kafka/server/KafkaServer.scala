@@ -101,55 +101,55 @@ class KafkaServer(
 
   @volatile private var _brokerState: BrokerState = BrokerState.NOT_RUNNING
   private var shutdownLatch = new CountDownLatch(1)
-  private var logContext: LogContext = null
+  private var logContext: LogContext = _
 
   private val kafkaMetricsReporters: Seq[KafkaMetricsReporter] =
     KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
-  var kafkaYammerMetrics: KafkaYammerMetrics = null
-  var metrics: Metrics = null
+  var kafkaYammerMetrics: KafkaYammerMetrics = _
+  var metrics: Metrics = _
 
-  @volatile var dataPlaneRequestProcessor: KafkaApis = null
-  var controlPlaneRequestProcessor: KafkaApis = null
+  @volatile var dataPlaneRequestProcessor: KafkaApis = _
+  var controlPlaneRequestProcessor: KafkaApis = _
 
   var authorizer: Option[Authorizer] = None
-  @volatile var socketServer: SocketServer = null
-  var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
-  var controlPlaneRequestHandlerPool: KafkaRequestHandlerPool = null
+  @volatile var socketServer: SocketServer = _
+  var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
+  var controlPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
 
-  var logDirFailureChannel: LogDirFailureChannel = null
-  @volatile private var _logManager: LogManager = null
+  var logDirFailureChannel: LogDirFailureChannel = _
+  @volatile private var _logManager: LogManager = _
 
-  @volatile private var _replicaManager: ReplicaManager = null
-  var adminManager: ZkAdminManager = null
-  var tokenManager: DelegationTokenManager = null
+  @volatile private var _replicaManager: ReplicaManager = _
+  var adminManager: ZkAdminManager = _
+  var tokenManager: DelegationTokenManager = _
 
-  var dynamicConfigHandlers: Map[String, ConfigHandler] = null
-  var dynamicConfigManager: ZkConfigManager = null
-  var credentialProvider: CredentialProvider = null
-  var tokenCache: DelegationTokenCache = null
+  var dynamicConfigHandlers: Map[String, ConfigHandler] = _
+  var dynamicConfigManager: ZkConfigManager = _
+  var credentialProvider: CredentialProvider = _
+  var tokenCache: DelegationTokenCache = _
 
-  @volatile var groupCoordinator: GroupCoordinator = null
+  @volatile var groupCoordinator: GroupCoordinator = _
 
-  var transactionCoordinator: TransactionCoordinator = null
+  var transactionCoordinator: TransactionCoordinator = _
 
-  @volatile private var _kafkaController: KafkaController = null
+  @volatile private var _kafkaController: KafkaController = _
 
   var forwardingManager: Option[ForwardingManager] = None
 
-  var autoTopicCreationManager: AutoTopicCreationManager = null
+  var autoTopicCreationManager: AutoTopicCreationManager = _
 
-  var clientToControllerChannelManager: BrokerToControllerChannelManager = null
+  var clientToControllerChannelManager: BrokerToControllerChannelManager = _
 
-  var alterPartitionManager: AlterPartitionManager = null
+  var alterPartitionManager: AlterPartitionManager = _
 
-  var kafkaScheduler: KafkaScheduler = null
+  var kafkaScheduler: KafkaScheduler = _
 
-  @volatile var metadataCache: ZkMetadataCache = null
-  var quotaManagers: QuotaFactory.QuotaManagers = null
+  @volatile var metadataCache: ZkMetadataCache = _
+  var quotaManagers: QuotaFactory.QuotaManagers = _
 
   val zkClientConfig: ZKClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(config)
-  private var _zkClient: KafkaZkClient = null
-  private var configRepository: ZkConfigRepository = null
+  private var _zkClient: KafkaZkClient = _
+  private var configRepository: ZkConfigRepository = _
 
   val correlationId: AtomicInteger = new AtomicInteger(0)
   val brokerMetaPropsFile = "meta.properties"
@@ -157,10 +157,10 @@ class KafkaServer(
     (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator + brokerMetaPropsFile)))
   }.toMap
 
-  private var _clusterId: String = null
-  @volatile var _brokerTopicStats: BrokerTopicStats = null
+  private var _clusterId: String = _
+  @volatile var _brokerTopicStats: BrokerTopicStats = _
 
-  private var _featureChangeListener: FinalizedFeatureChangeListener = null
+  private var _featureChangeListener: FinalizedFeatureChangeListener = _
 
   val brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty()
 

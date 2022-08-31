@@ -277,6 +277,9 @@
       <allow pkg="org.apache.kafka.controller" />
       <allow pkg="org.apache.kafka.metadata" />
     </subpackage>
+    <subpackage name="bootstrap">
+      <allow pkg="org.apache.kafka.snapshot" />
+    </subpackage>
     <subpackage name="fault">
       <allow pkg="org.apache.kafka.server.fault" />
     </subpackage>
@@ -366,6 +369,7 @@
 
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.common"/>
+    <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="org.apache.kafka.clients.producer" />
     <allow pkg="org.apache.kafka.clients.consumer" />

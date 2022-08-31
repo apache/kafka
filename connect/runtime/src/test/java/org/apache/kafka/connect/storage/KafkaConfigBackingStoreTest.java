@@ -33,9 +33,9 @@ import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.TargetState;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
-import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TestFuture;
@@ -81,7 +81,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({KafkaConfigBackingStore.class, ConnectUtils.class})
+@PrepareForTest({KafkaConfigBackingStore.class, WorkerConfig.class})
 @PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
 public class KafkaConfigBackingStoreTest {
     private static final String TOPIC = "connect-configs";
@@ -190,9 +190,9 @@ public class KafkaConfigBackingStoreTest {
 
     @Before
     public void setUp() {
-        PowerMock.mockStaticPartial(ConnectUtils.class, "lookupKafkaClusterId");
-        EasyMock.expect(ConnectUtils.lookupKafkaClusterId(EasyMock.anyObject())).andReturn("test-cluster").anyTimes();
-        PowerMock.replay(ConnectUtils.class);
+        PowerMock.mockStaticPartial(WorkerConfig.class, "lookupKafkaClusterId");
+        EasyMock.expect(WorkerConfig.lookupKafkaClusterId(EasyMock.anyObject())).andReturn("test-cluster").anyTimes();
+        PowerMock.replay(WorkerConfig.class);
 
         createStore(DEFAULT_DISTRIBUTED_CONFIG, storeLog);
     }
@@ -842,6 +842,9 @@ public class KafkaConfigBackingStoreTest {
         // Task configs for the deleted connector should also be removed from the snapshot
         assertEquals(Collections.emptyList(), configState.allTaskConfigs(CONNECTOR_IDS.get(0)));
         assertEquals(0, configState.taskCount(CONNECTOR_IDS.get(0)));
+        // Ensure that the deleted connector's deferred task updates have been cleaned up
+        // in order to prevent unbounded growth of the map
+        assertEquals(Collections.emptyMap(), configStorage.deferredTaskUpdates);
 
         configStorage.stop();
 

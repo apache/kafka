@@ -31,6 +31,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.snapshot.Snapshots
 
 import scala.jdk.CollectionConverters._
@@ -253,8 +254,12 @@ object DumpLogSegments {
       val startOffset = file.getName.split("\\.")(0).toLong
       println(s"Log starting offset: $startOffset")
     } else if (file.getName.endsWith(Snapshots.SUFFIX)) {
-      val path = Snapshots.parse(file.toPath).get()
-      println(s"Snapshot end offset: ${path.snapshotId.offset}, epoch: ${path.snapshotId.epoch}")
+      if (file.getName == BootstrapDirectory.BINARY_BOOTSTRAP_FILENAME) {
+        println("KRaft bootstrap snapshot")
+      } else {
+        val path = Snapshots.parse(file.toPath).get()
+        println(s"Snapshot end offset: ${path.snapshotId.offset}, epoch: ${path.snapshotId.epoch}")
+      }
     }
     val fileRecords = FileRecords.open(file, false).slice(0, maxBytes)
     try {

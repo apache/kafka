@@ -27,7 +27,6 @@ import kafka.coordinator.group.OffsetConfig
 import kafka.utils.JaasTestUtils.JaasSection
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.utils.Implicits._
-import kafka.server.QuorumTestHarness
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.SslConfigs
@@ -180,7 +179,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
     props.put(s"${prefix}${KafkaConfig.SaslJaasConfigProp}", jaasConfig)
   }
 
-  case class ClientMetadata(val listenerName: ListenerName, val saslMechanism: String, topic: String) {
+  case class ClientMetadata(listenerName: ListenerName, saslMechanism: String, topic: String) {
     override def hashCode: Int = Objects.hash(listenerName, saslMechanism)
     override def equals(obj: Any): Boolean = obj match {
       case other: ClientMetadata => listenerName == other.listenerName && saslMechanism == other.saslMechanism && topic == other.topic

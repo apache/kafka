@@ -404,12 +404,12 @@ subprojects {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
     testsToExclude.addAll([
       // connect tests
-      "**/AbstractHerderTest.*", "**/ConnectorPluginsResourceTest.*",
+      "**/ConnectorPluginsResourceTest.*",
       "**/ConnectorsResourceTest.*", "**/DistributedHerderTest.*", "**/FileOffsetBakingStoreTest.*",
       "**/ErrorHandlingTaskTest.*", "**/KafkaConfigBackingStoreTest.*", "**/KafkaOffsetBackingStoreTest.*",
       "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
       "**/SourceTaskOffsetCommitterTest.*",
-      "**/WorkerTest.*", "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
+      "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
       "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*", "**/ExactlyOnceWorkerSourceTaskTest.*",
       "**/WorkerTaskTest.*",
       // streams tests
@@ -1705,6 +1705,7 @@ project(':tools') {
 
   dependencies {
     implementation project(':clients')
+    implementation project(':server-common')
     implementation project(':log4j-appender')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind

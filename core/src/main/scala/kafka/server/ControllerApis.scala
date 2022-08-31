@@ -68,6 +68,7 @@ class ControllerApis(val requestChannel: RequestChannel,
                      val controllerNodes: Seq[Node],
                      val apiVersionManager: ApiVersionManager) extends ApiRequestHandler with Logging {
 
+  this.logIdent = s"[ControllerApis nodeId=${config.nodeId}] "
   val authHelper = new AuthHelper(authorizer)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   private val aclApis = new AclApis(authHelper, authorizer, requestHelper, "controller", config)

@@ -37,7 +37,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.controller.{BootstrapMetadata, Controller, ControllerMetrics, QuorumController, QuorumFeatures}
+import org.apache.kafka.controller.{Controller, ControllerMetrics, QuorumController, QuorumFeatures}
 import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.raft.RaftConfig.AddressSpec
@@ -45,6 +45,7 @@ import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
@@ -78,18 +79,18 @@ class ControllerServer(
   val awaitShutdownCond = lock.newCondition()
   var status: ProcessStatus = SHUTDOWN
 
-  var linuxIoMetricsCollector: LinuxIoMetricsCollector = null
-  @volatile var authorizer: Option[Authorizer] = null
-  var tokenCache: DelegationTokenCache = null
-  var credentialProvider: CredentialProvider = null
-  var socketServer: SocketServer = null
+  var linuxIoMetricsCollector: LinuxIoMetricsCollector = _
+  @volatile var authorizer: Option[Authorizer] = None
+  var tokenCache: DelegationTokenCache = _
+  var credentialProvider: CredentialProvider = _
+  var socketServer: SocketServer = _
   val socketServerFirstBoundPortFuture = new CompletableFuture[Integer]()
   var createTopicPolicy: Option[CreateTopicPolicy] = None
   var alterConfigPolicy: Option[AlterConfigPolicy] = None
-  var controller: Controller = null
-  var quotaManagers: QuotaManagers = null
-  var controllerApis: ControllerApis = null
-  var controllerApisHandlerPool: KafkaRequestHandlerPool = null
+  var controller: Controller = _
+  var quotaManagers: QuotaManagers = _
+  var controllerApis: ControllerApis = _
+  var controllerApisHandlerPool: KafkaRequestHandlerPool = _
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()

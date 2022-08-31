@@ -393,6 +393,7 @@ public class StreamThread extends Thread {
             logPrefix,
             activeTaskCreator,
             standbyTaskCreator,
+            new Tasks(new LogContext(logPrefix)),
             topologyMetadata,
             adminClient,
             stateDirectory,
@@ -876,8 +877,6 @@ public class StreamThread extends Thread {
 
             // transit to restore active is idempotent so we can call it multiple times
             changelogReader.enforceRestoreActive();
-
-            taskManager.tryHandleExceptionsFromStateUpdater();
 
             if (taskManager.tryToCompleteRestoration(now, partitions -> resetOffsets(partitions, null))) {
                 changelogReader.transitToUpdateStandby();

@@ -104,7 +104,7 @@ public interface Schema {
          */
         STRUCT;
 
-        private String name;
+        private final String name;
 
         Type() {
             this.name = this.name().toLowerCase(Locale.ROOT);

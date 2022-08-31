@@ -458,13 +458,18 @@ public final class RaftClientTestContext {
         List<ReplicaState> observerStates
     ) {
         DescribeQuorumResponseData response = collectDescribeQuorumResponse();
+
+        DescribeQuorumResponseData.PartitionData partitionData = new DescribeQuorumResponseData.PartitionData()
+            .setErrorCode(Errors.NONE.code())
+            .setLeaderId(leaderId)
+            .setLeaderEpoch(leaderEpoch)
+            .setHighWatermark(highWatermark)
+            .setCurrentVoters(voterStates)
+            .setObservers(observerStates);
         DescribeQuorumResponseData expectedResponse = DescribeQuorumResponse.singletonResponse(
             metadataPartition,
-            leaderId,
-            leaderEpoch,
-            highWatermark,
-            voterStates,
-            observerStates);
+            partitionData
+        );
         assertEquals(expectedResponse, response);
     }
 

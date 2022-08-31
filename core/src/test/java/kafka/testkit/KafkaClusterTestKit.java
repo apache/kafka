@@ -35,10 +35,10 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.controller.BootstrapMetadata;
 import org.apache.kafka.controller.Controller;
 import org.apache.kafka.controller.MockControllerMetrics;
 import org.apache.kafka.metadata.MetadataRecordSerde;
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.raft.RaftConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -186,7 +186,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     String threadNamePrefix = String.format("controller%d_", node.id());
                     MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id());
                     TopicPartition metadataPartition = new TopicPartition(KafkaRaftServer.MetadataTopic(), 0);
-                    BootstrapMetadata bootstrapMetadata = BootstrapMetadata.create(nodes.bootstrapMetadataVersion());
+                    BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
+                        fromVersion(nodes.bootstrapMetadataVersion(), "testkit");
                     KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
                         metaProperties, config, new MetadataRecordSerde(), metadataPartition, KafkaRaftServer.MetadataTopicId(),
                         Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix), connectFutureManager.future);
@@ -275,14 +276,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     executorService.shutdownNow();
                     executorService.awaitTermination(5, TimeUnit.MINUTES);
                 }
-                for (ControllerServer controller : controllers.values()) {
-                    controller.shutdown();
-                }
                 for (BrokerServer brokerServer : brokers.values()) {
                     brokerServer.shutdown();
                 }
                 for (KafkaRaftManager<ApiMessageAndVersion> raftManager : raftManagers.values()) {
                     raftManager.shutdown();
+                }
+                for (ControllerServer controller : controllers.values()) {
+                    controller.shutdown();
                 }
                 connectFutureManager.close();
                 if (baseDirectory != null) {
@@ -392,7 +393,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     StorageTool.formatCommand(out,
                             JavaConverters.asScalaBuffer(Collections.singletonList(metadataLogDir)).toSeq(),
                             properties,
-                            MetadataVersion.MINIMUM_KRAFT_VERSION,
+                            MetadataVersion.MINIMUM_BOOTSTRAP_VERSION,
                             false);
                 } finally {
                     for (String line : stream.toString().split(String.format("%n"))) {
@@ -408,11 +409,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
     public void startup() throws ExecutionException, InterruptedException {
         List<Future<?>> futures = new ArrayList<>();
         try {
-            for (ControllerServer controller : controllers.values()) {
-                futures.add(executorService.submit(controller::startup));
-            }
+            // Note the startup order here is chosen to be consistent with
+            // `KafkaRaftServer`. See comments in that class for an explanation.
+
             for (KafkaRaftManager<ApiMessageAndVersion> raftManager : raftManagers.values()) {
                 futures.add(controllerQuorumVotersFutureManager.future.thenRunAsync(raftManager::startup));
+            }
+            for (ControllerServer controller : controllers.values()) {
+                futures.add(executorService.submit(controller::startup));
             }
             for (BrokerServer broker : brokers.values()) {
                 futures.add(executorService.submit(broker::startup));
@@ -513,6 +517,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
         List<Entry<String, Future<?>>> futureEntries = new ArrayList<>();
         try {
             controllerQuorumVotersFutureManager.close();
+
+            // Note the shutdown order here is chosen to be consistent with
+            // `KafkaRaftServer`. See comments in that class for an explanation.
+
             for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
                 int brokerId = entry.getKey();
                 BrokerServer broker = entry.getValue();
@@ -521,19 +529,19 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
             waitForAllFutures(futureEntries);
             futureEntries.clear();
-            for (Entry<Integer, ControllerServer> entry : controllers.entrySet()) {
-                int controllerId = entry.getKey();
-                ControllerServer controller = entry.getValue();
-                futureEntries.add(new SimpleImmutableEntry<>("controller" + controllerId,
-                    executorService.submit(controller::shutdown)));
-            }
-            waitForAllFutures(futureEntries);
-            futureEntries.clear();
             for (Entry<Integer, KafkaRaftManager<ApiMessageAndVersion>> entry : raftManagers.entrySet()) {
                 int raftManagerId = entry.getKey();
                 KafkaRaftManager<ApiMessageAndVersion> raftManager = entry.getValue();
                 futureEntries.add(new SimpleImmutableEntry<>("raftManager" + raftManagerId,
                     executorService.submit(raftManager::shutdown)));
+            }
+            waitForAllFutures(futureEntries);
+            futureEntries.clear();
+            for (Entry<Integer, ControllerServer> entry : controllers.entrySet()) {
+                int controllerId = entry.getKey();
+                ControllerServer controller = entry.getValue();
+                futureEntries.add(new SimpleImmutableEntry<>("controller" + controllerId,
+                    executorService.submit(controller::shutdown)));
             }
             waitForAllFutures(futureEntries);
             futureEntries.clear();

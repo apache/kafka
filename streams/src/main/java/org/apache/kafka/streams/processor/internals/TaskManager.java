@@ -43,6 +43,7 @@ import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -72,7 +73,7 @@ public class TaskManager {
     // by QueryableState
     private final Logger log;
     private final Time time;
-    private final Tasks tasks;
+    private final TasksRegistry tasks;
     private final UUID processId;
     private final String logPrefix;
     private final Admin adminClient;
@@ -102,6 +103,7 @@ public class TaskManager {
                 final String logPrefix,
                 final ActiveTaskCreator activeTaskCreator,
                 final StandbyTaskCreator standbyTaskCreator,
+                final TasksRegistry tasks,
                 final TopologyMetadata topologyMetadata,
                 final Admin adminClient,
                 final StateDirectory stateDirectory,
@@ -121,9 +123,9 @@ public class TaskManager {
         this.log = logContext.logger(getClass());
 
         this.stateUpdater = stateUpdater;
-        this.tasks = new Tasks(logContext);
+        this.tasks = tasks;
         this.taskExecutor = new TaskExecutor(
-            tasks,
+            this.tasks,
             this,
             topologyMetadata.taskExecutionMetadata(),
             logContext
@@ -470,7 +472,7 @@ public class TaskManager {
                 standbyTasksToCreate.remove(taskId);
             } else {
                 stateUpdater.remove(taskId);
-                tasks.addPendingTaskToClose(taskId);
+                tasks.addPendingTaskToCloseClean(taskId);
             }
         }
     }
@@ -574,7 +576,7 @@ public class TaskManager {
 
         // for tasks that cannot be cleanly closed or recycled, close them dirty
         for (final Task task : tasksToCloseDirty) {
-            closeTaskDirty(task);
+            closeTaskDirty(task, true);
         }
 
         return taskCloseExceptions;
@@ -598,9 +600,9 @@ public class TaskManager {
      * @return {@code true} if all tasks are fully restored
      */
     boolean tryToCompleteRestoration(final long now, final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
-        boolean allRunning = true;
-
         if (stateUpdater == null) {
+            boolean allRunning = true;
+
             final List<Task> activeTasks = new LinkedList<>();
             for (final Task task : tasks.allTasks()) {
                 try {
@@ -649,20 +651,90 @@ public class TaskManager {
                     }
                 }
             }
+            if (allRunning) {
+                // we can call resume multiple times since it is idempotent.
+                mainConsumer.resume(mainConsumer.assignment());
+            }
+
+            return allRunning;
         } else {
             addTasksToStateUpdater();
 
+            handleExceptionsFromStateUpdater();
+
             handleRemovedTasksFromStateUpdater();
 
-            // TODO: should add logic for checking and resuming when all active tasks have been restored
+            return handleRestoredTasksFromStateUpdater(now, offsetResetter);
         }
+    }
 
-        if (allRunning) {
-            // we can call resume multiple times since it is idempotent.
-            mainConsumer.resume(mainConsumer.assignment());
+    private void recycleTask(final Task task,
+                             final Set<TopicPartition> inputPartitions,
+                             final Set<Task> tasksToCloseDirty,
+                             final Map<TaskId, RuntimeException> taskExceptions) {
+        Task newTask = null;
+        try {
+            newTask = task.isActive() ?
+                convertActiveToStandby((StreamTask) task, inputPartitions) :
+                convertStandbyToActive((StandbyTask) task, inputPartitions);
+            newTask.initializeIfNeeded();
+            stateUpdater.add(newTask);
+        } catch (final RuntimeException e) {
+            final TaskId taskId = task.id();
+            final String uncleanMessage = String.format("Failed to recycle task %s cleanly. " +
+                "Attempting to close remaining tasks before re-throwing:", taskId);
+            log.error(uncleanMessage, e);
+
+            if (task.state() != State.CLOSED) {
+                tasksToCloseDirty.add(task);
+            }
+            if (newTask != null && newTask.state() != State.CLOSED) {
+                tasksToCloseDirty.add(newTask);
+            }
+
+            taskExceptions.putIfAbsent(taskId, e);
         }
+    }
 
-        return allRunning;
+    private void closeTaskClean(final Task task,
+                                final Set<Task> tasksToCloseDirty,
+                                final Map<TaskId, RuntimeException> taskExceptions) {
+        try {
+            task.suspend();
+            task.closeClean();
+            if (task.isActive()) {
+                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+            }
+        } catch (final RuntimeException e) {
+            final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
+                "Attempting to close remaining tasks before re-throwing:", task.id());
+            log.error(uncleanMessage, e);
+
+            if (task.state() != State.CLOSED) {
+                tasksToCloseDirty.add(task);
+            }
+
+            taskExceptions.putIfAbsent(task.id(), e);
+        }
+    }
+
+    private void transitRestoredTaskToRunning(final Task task,
+                                              final long now,
+                                              final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+        try {
+            task.completeRestoration(offsetResetter);
+            tasks.addNewActiveTask(task);
+            mainConsumer.resume(task.inputPartitions());
+            task.clearTaskTimeout();
+        } catch (final TimeoutException timeoutException) {
+            task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
+            log.debug(
+                String.format(
+                    "Could not complete restoration for %s due to the following exception; will retry",
+                    task.id()),
+                timeoutException
+            );
+        }
     }
 
     private void addTasksToStateUpdater() {
@@ -672,23 +744,21 @@ public class TaskManager {
         }
     }
 
-    public void tryHandleExceptionsFromStateUpdater() {
-        if (stateUpdater != null) {
-            final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
+    public void handleExceptionsFromStateUpdater() {
+        final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
 
-            for (final StateUpdater.ExceptionAndTasks exceptionAndTasks : stateUpdater.drainExceptionsAndFailedTasks()) {
-                final RuntimeException exception = exceptionAndTasks.exception();
-                final Set<Task> failedTasks = exceptionAndTasks.getTasks();
+        for (final StateUpdater.ExceptionAndTasks exceptionAndTasks : stateUpdater.drainExceptionsAndFailedTasks()) {
+            final RuntimeException exception = exceptionAndTasks.exception();
+            final Set<Task> failedTasks = exceptionAndTasks.getTasks();
 
-                for (final Task failedTask : failedTasks) {
-                    // need to add task back to the bookkeeping to be handled by the stream thread
-                    tasks.addTask(failedTask);
-                    taskExceptions.put(failedTask.id(), exception);
-                }
+            for (final Task failedTask : failedTasks) {
+                // need to add task back to the bookkeeping to be handled by the stream thread
+                tasks.addTask(failedTask);
+                taskExceptions.put(failedTask.id(), exception);
             }
-
-            maybeThrowTaskExceptions(taskExceptions);
         }
+
+        maybeThrowTaskExceptions(taskExceptions);
     }
 
     private void handleRemovedTasksFromStateUpdater() {
@@ -696,42 +766,13 @@ public class TaskManager {
         final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
 
         for (final Task task : stateUpdater.drainRemovedTasks()) {
-            final TaskId taskId = task.id();
             Set<TopicPartition> inputPartitions;
             if ((inputPartitions = tasks.removePendingTaskToRecycle(task.id())) != null) {
-                try {
-                    final Task newTask = task.isActive() ?
-                        convertActiveToStandby((StreamTask) task, inputPartitions) :
-                        convertStandbyToActive((StandbyTask) task, inputPartitions);
-                    newTask.initializeIfNeeded();
-                    stateUpdater.add(newTask);
-                } catch (final RuntimeException e) {
-                    final String uncleanMessage = String.format("Failed to recycle task %s cleanly. " +
-                        "Attempting to handle remaining tasks before re-throwing:", taskId);
-                    log.error(uncleanMessage, e);
-
-                    taskExceptions.putIfAbsent(taskId, e);
-                    if (task.state() != State.CLOSED) {
-                        tasksToCloseDirty.add(task);
-                    }
-                }
-            } else if (tasks.removePendingTaskToClose(task.id())) {
-                try {
-                    task.suspend();
-                    task.closeClean();
-                    if (task.isActive()) {
-                        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-                    }
-                } catch (final RuntimeException e) {
-                    final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
-                        "Attempting to handle remaining tasks before re-throwing:", task.id());
-                    log.error(uncleanMessage, e);
-
-                    taskExceptions.putIfAbsent(task.id(), e);
-                    if (task.state() != State.CLOSED) {
-                        tasksToCloseDirty.add(task);
-                    }
-                }
+                recycleTask(task, inputPartitions, tasksToCloseDirty, taskExceptions);
+            } else if (tasks.removePendingTaskToCloseClean(task.id())) {
+                closeTaskClean(task, tasksToCloseDirty, taskExceptions);
+            } else if (tasks.removePendingTaskToCloseDirty(task.id())) {
+                tasksToCloseDirty.add(task);
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
                 stateUpdater.add(task);
@@ -743,10 +784,43 @@ public class TaskManager {
 
         // for tasks that cannot be cleanly closed or recycled, close them dirty
         for (final Task task : tasksToCloseDirty) {
-            closeTaskDirty(task);
+            closeTaskDirty(task, false);
         }
 
         maybeThrowTaskExceptions(taskExceptions);
+    }
+
+    private boolean handleRestoredTasksFromStateUpdater(final long now,
+                                                        final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+        final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
+        final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
+
+        final Duration timeout = Duration.ZERO;
+        for (final Task task : stateUpdater.drainRestoredActiveTasks(timeout)) {
+            Set<TopicPartition> inputPartitions;
+            if ((inputPartitions = tasks.removePendingTaskToRecycle(task.id())) != null) {
+                recycleTask(task, inputPartitions, tasksToCloseDirty, taskExceptions);
+            } else if (tasks.removePendingTaskToCloseClean(task.id())) {
+                closeTaskClean(task, tasksToCloseDirty, taskExceptions);
+            } else if (tasks.removePendingTaskToCloseDirty(task.id())) {
+                tasksToCloseDirty.add(task);
+            } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
+                task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
+                // if the restored task happen to need input partition update, we can transit it to running
+                // right after completing the update as well
+                transitRestoredTaskToRunning(task, now, offsetResetter);
+            } else {
+                transitRestoredTaskToRunning(task, now, offsetResetter);
+            }
+        }
+
+        for (final Task task : tasksToCloseDirty) {
+            closeTaskDirty(task, false);
+        }
+
+        maybeThrowTaskExceptions(taskExceptions);
+
+        return !stateUpdater.restoresActiveTasks();
     }
 
     /**
@@ -777,6 +851,8 @@ public class TaskManager {
                 commitNeededActiveTasks.add(task);
             }
         }
+
+        removeRevokedTasksFromStateUpdater(remainingRevokedPartitions);
 
         if (!remainingRevokedPartitions.isEmpty()) {
             log.debug("The following revoked partitions {} are missing from the current task partitions. It could "
@@ -863,6 +939,20 @@ public class TaskManager {
         }
     }
 
+    private void removeRevokedTasksFromStateUpdater(final Set<TopicPartition> remainingRevokedPartitions) {
+        if (stateUpdater != null) {
+            for (final Task restoringTask : stateUpdater.getTasks()) {
+                if (restoringTask.isActive()) {
+                    if (remainingRevokedPartitions.containsAll(restoringTask.inputPartitions())) {
+                        tasks.addPendingTaskToCloseClean(restoringTask.id());
+                        stateUpdater.remove(restoringTask.id());
+                        remainingRevokedPartitions.removeAll(restoringTask.inputPartitions());
+                    }
+                }
+            }
+        }
+    }
+
     private void prepareCommitAndAddOffsetsToMap(final Set<Task> tasksToPrepare,
                                                  final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsPerTask) {
         for (final Task task : tasksToPrepare) {
@@ -890,17 +980,33 @@ public class TaskManager {
     void handleLostAll() {
         log.debug("Closing lost active tasks as zombies.");
 
+        closeRunningTasksDirty();
+        removeLostActiveTasksFromStateUpdater();
+
+        if (processingMode == EXACTLY_ONCE_V2) {
+            activeTaskCreator.reInitializeThreadProducer();
+        }
+    }
+
+    private void closeRunningTasksDirty() {
         final Set<Task> allTask = tasks.allTasks();
         for (final Task task : allTask) {
             // Even though we've apparently dropped out of the group, we can continue safely to maintain our
             // standby tasks while we rejoin.
             if (task.isActive()) {
-                closeTaskDirty(task);
+                closeTaskDirty(task, true);
             }
         }
+    }
 
-        if (processingMode == EXACTLY_ONCE_V2) {
-            activeTaskCreator.reInitializeThreadProducer();
+    private void removeLostActiveTasksFromStateUpdater() {
+        if (stateUpdater != null) {
+            for (final Task restoringTask : stateUpdater.getTasks()) {
+                if (restoringTask.isActive()) {
+                    tasks.addPendingTaskToCloseDirty(restoringTask.id());
+                    stateUpdater.remove(restoringTask.id());
+                }
+            }
         }
     }
 
@@ -916,7 +1022,7 @@ public class TaskManager {
         // so we consider all tasks that are either owned or on disk. This includes stateless tasks, which should
         // just have an empty changelogOffsets map.
         for (final TaskId id : union(HashSet::new, lockedTaskDirectories, tasks.allTaskIds())) {
-            final Task task = tasks.owned(id) ? tasks.task(id) : null;
+            final Task task = tasks.contains(id) ? tasks.task(id) : null;
             // Closed and uninitialized tasks don't have any offsets so we should read directly from the checkpoint
             if (task != null && task.state() != State.CREATED && task.state() != State.CLOSED) {
                 final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
@@ -958,7 +1064,7 @@ public class TaskManager {
                 final TaskId id = parseTaskDirectoryName(dir.getName(), namedTopology);
                 if (stateDirectory.lock(id)) {
                     lockedTaskDirectories.add(id);
-                    if (!tasks.owned(id)) {
+                    if (!tasks.contains(id)) {
                         log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
                     }
                 }
@@ -991,7 +1097,7 @@ public class TaskManager {
         final Iterator<TaskId> taskIdIterator = lockedTaskDirectories.iterator();
         while (taskIdIterator.hasNext()) {
             final TaskId id = taskIdIterator.next();
-            if (!tasks.owned(id)) {
+            if (!tasks.contains(id)) {
                 stateDirectory.unlock(id);
                 taskIdIterator.remove();
             }
@@ -1026,7 +1132,7 @@ public class TaskManager {
         return offsetSum;
     }
 
-    private void closeTaskDirty(final Task task) {
+    private void closeTaskDirty(final Task task, final boolean removeFromTasksRegistry) {
         try {
             // we call this function only to flush the case if necessary
             // before suspending and closing the topology
@@ -1044,7 +1150,9 @@ public class TaskManager {
         task.closeDirty();
 
         try {
-            tasks.removeTask(task);
+            if (removeFromTasksRegistry) {
+                tasks.removeTask(task);
+            }
 
             if (task.isActive()) {
                 activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
@@ -1111,7 +1219,7 @@ public class TaskManager {
         tasksToCloseDirty.addAll(tryCloseCleanStandbyTasks(standbyTasks, clean, firstException));
 
         for (final Task task : tasksToCloseDirty) {
-            closeTaskDirty(task);
+            closeTaskDirty(task, true);
         }
 
         final RuntimeException exception = firstException.get();
@@ -1564,7 +1672,7 @@ public class TaskManager {
         tasks.addTask(task);
     }
 
-    Tasks tasks() {
+    TasksRegistry tasks() {
         return tasks;
     }
 }
