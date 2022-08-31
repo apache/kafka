@@ -689,7 +689,6 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks();
         verifyPausedTasks();
         verifyExceptionsAndFailedTasks();
-        verify(changelogReader).unregister(task.changelogPartitions());
     }
 
     @Test
@@ -937,7 +936,6 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks();
         verifyPausedTasks();
         verifyExceptionsAndFailedTasks();
-        verify(changelogReader).unregister(task.changelogPartitions());
 
         stateUpdater.pause(task.id());
 
