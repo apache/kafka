@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package integration.kafka.network
+package kafka.network
 
 import kafka.server.{BaseRequestTest, Defaults, KafkaConfig}
 import kafka.utils.TestUtils
