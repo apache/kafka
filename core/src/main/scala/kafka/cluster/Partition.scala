@@ -764,31 +764,39 @@ class Partition(val topicPartition: TopicPartition,
    * This function can be triggered when a replica's LEO has incremented.
    */
   private def maybeExpandIsr(followerReplica: Replica, followerFetchTimeMs: Long): Unit = {
-    val needsIsrUpdate = canAddReplicaToIsr(followerReplica.brokerId) && inReadLock(leaderIsrUpdateLock) {
-      needsExpandIsr(followerReplica)
+    val needsIsrUpdate = canAddReplicaToIsr(followerReplica.brokerId, isUnderMinIsr, "Pre-check") && inReadLock(leaderIsrUpdateLock) {
+      needsExpandIsr(followerReplica, isUnderMinIsr, "Pre-check")
     }
     if (needsIsrUpdate) {
       inWriteLock(leaderIsrUpdateLock) {
         // check if this replica needs to be added to the ISR
-        if (needsExpandIsr(followerReplica)) {
+        if (needsExpandIsr(followerReplica, isUnderMinIsr, "Real-check")) {
           expandIsr(followerReplica.brokerId)
         }
       }
     }
   }
 
-  private def needsExpandIsr(followerReplica: Replica): Boolean = {
-    canAddReplicaToIsr(followerReplica.brokerId) && isFollowerAtHighwatermark(followerReplica)
+  private def needsExpandIsr(followerReplica: Replica, shouldLog: Boolean, logPrefix: String): Boolean = {
+    canAddReplicaToIsr(followerReplica.brokerId, shouldLog, logPrefix) && isFollowerAtHighwatermark(followerReplica, shouldLog, logPrefix)
   }
 
-  private def canAddReplicaToIsr(followerReplicaId: Int): Boolean = {
+  private def canAddReplicaToIsr(followerReplicaId: Int, shouldLog: Boolean, logPrefix: String): Boolean = {
     val current = isrState
+    if (shouldLog) {
+      info(s"$logPrefix current ISRState not in flight:${!current.isInflight}, " +
+        s"current ISR ${current.isr} doesn't have replica $followerReplicaId: ${!current.isr.contains(followerReplicaId)}")
+    }
     !current.isInflight && !current.isr.contains(followerReplicaId)
   }
 
-  private def isFollowerAtHighwatermark(followerReplica: Replica): Boolean = {
+  private def isFollowerAtHighwatermark(followerReplica: Replica, shouldLog: Boolean, logPrefix: String): Boolean = {
     leaderLogIfLocal.exists { leaderLog =>
       val followerEndOffset = followerReplica.logEndOffset
+      if (shouldLog) {
+        info(s"$logPrefix followerEndOffset($followerEndOffset) >= leader log high watermark(${leaderLog.highWatermark}): ${followerEndOffset >= leaderLog.highWatermark} " +
+        s"followerEndOffset >= leaderEpochStartOffsetOpt($leaderEpochStartOffsetOpt): ${leaderEpochStartOffsetOpt.exists(followerEndOffset >= _)}")
+      }
       followerEndOffset >= leaderLog.highWatermark && leaderEpochStartOffsetOpt.exists(followerEndOffset >= _)
     }
   }
