@@ -926,6 +926,7 @@ public class TaskManagerTest {
 
         assertEquals(exception, thrown.getCause());
         assertEquals(statefulTask.id(), thrown.taskId().get());
+        assertEquals("Encounter unexpected fatal error for task 0_0", thrown.getMessage());
     }
 
     @Test
@@ -955,6 +956,7 @@ public class TaskManagerTest {
         );
 
         assertEquals(mkSet(taskId00, taskId01), thrown.corruptedTasks());
+        assertEquals("Tasks [0_1, 0_0] are corrupted and hence needs to be re-initialized", thrown.getMessage());
     }
 
     @Test
@@ -1285,7 +1287,7 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.CLOSED));
         assertThat(
             thrown.getMessage(),
-            is("First unexpected error for task 0_0")
+            is("Encounter unexpected fatal error for task 0_0")
         );
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
     }
@@ -1387,7 +1389,7 @@ public class TaskManagerTest {
 
         assertThat(
             thrown.getMessage(),
-            is("First unexpected error for task 0_0")
+            is("Encounter unexpected fatal error for task 0_0")
         );
         assertThat(thrown.getCause(), instanceOf(RuntimeException.class));
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
@@ -3588,7 +3590,7 @@ public class TaskManagerTest {
         // t1 should always be the first.
         assertThat(
             thrown.getMessage(),
-            equalTo("t1 close exception; it means all tasks belonging to this thread should be migrated.")
+            equalTo("t2 close exception; it means all tasks belonging to this thread should be migrated.")
         );
     }
 
@@ -3617,7 +3619,7 @@ public class TaskManagerTest {
             () -> taskManager.handleAssignment(emptyMap(), emptyMap())
         );
         // Fatal exception thrown first.
-        assertThat(thrown.getMessage(), equalTo("t1 close exception; it means all tasks belonging to this thread should be migrated."));
+        assertThat(thrown.getMessage(), equalTo("Encounter unexpected fatal error for task 0_2"));
 
         assertThat(thrown.getCause().getMessage(), equalTo("t2 illegal state exception"));
     }

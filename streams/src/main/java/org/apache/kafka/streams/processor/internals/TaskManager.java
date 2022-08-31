@@ -329,9 +329,10 @@ public class TaskManager {
         createNewTasks(activeTasksToCreate, standbyTasksToCreate);
     }
 
-    // if at least one of the exception is a task-migrated exception, then directly throw since it indicates all tasks are lost
-    // if at least one of the exception is a streams exception, then directly throw since it should be handled by thread's handler
+    // Wrap and throw the exception in the following order
     // if at least one of the exception is a non-streams exception, then wrap and throw since it should be handled by thread's handler
+    // if at least one of the exception is a streams exception, then directly throw since it should be handled by thread's handler
+    // if at least one of the exception is a task-migrated exception, then directly throw since it indicates all tasks are lost
     // otherwise, all the exceptions are task-corrupted, then merge their tasks and throw a single one
     // TODO: move task-corrupted and task-migrated out of the public errors package since they are internal errors and always be
     //       handled by Streams library itself
@@ -339,31 +340,38 @@ public class TaskManager {
         if (!taskExceptions.isEmpty()) {
             log.error("Get exceptions for the following tasks: {}", taskExceptions);
 
-            final TaskCorruptedException allTaskCorrupts = new TaskCorruptedException(new HashSet<>());
+            final Set<TaskId> aggregatedCorruptedTaskIds = new HashSet<>();
+            StreamsException lastFatal = null;
+            TaskMigratedException lastTaskMigrated = null;
             for (final Map.Entry<TaskId, RuntimeException> entry : taskExceptions.entrySet()) {
                 final TaskId taskId = entry.getKey();
                 final RuntimeException exception = entry.getValue();
 
                 if (exception instanceof StreamsException) {
                     if (exception instanceof TaskMigratedException) {
-                        throw entry.getValue();
+                        lastTaskMigrated = (TaskMigratedException) exception;
                     } else if (exception instanceof TaskCorruptedException) {
                         log.warn("Encounter corrupted task" + taskId + ", will group it with other corrupted tasks " +
                             "and handle together", exception);
-                        allTaskCorrupts.corruptedTasks().add(taskId);
+                        aggregatedCorruptedTaskIds.add(taskId);
                     } else {
                         ((StreamsException) exception).setTaskId(taskId);
-                        throw exception;
-
+                        lastFatal = (StreamsException) exception;
                     }
                 } else if (exception instanceof KafkaException) {
-                    throw new StreamsException(exception, taskId);
+                    lastFatal = new StreamsException(exception, taskId);
                 } else {
-                    throw new StreamsException("First unexpected error for task " + taskId, exception, taskId);
+                    lastFatal = new StreamsException("Encounter unexpected fatal error for task " + taskId, exception, taskId);
                 }
             }
 
-            throw allTaskCorrupts;
+            if (lastFatal != null) {
+                throw lastFatal;
+            } else if (lastTaskMigrated != null) {
+                throw lastTaskMigrated;
+            } else {
+                throw new TaskCorruptedException(aggregatedCorruptedTaskIds);
+            }
         }
     }
 
