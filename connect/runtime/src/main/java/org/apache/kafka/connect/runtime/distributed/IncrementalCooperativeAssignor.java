@@ -292,7 +292,9 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         handleLostAssignments(lostAssignments, newSubmissions, completeWorkerAssignment);
 
-        log.debug("Can leader revoke tasks in this assignment? {} (delay: {})", delay == 0, delay);
+        if (delay > 0) {
+            log.debug("Delaying {}ms for revoking tasks.", delay);
+        }
         // Do not revoke resources for re-assignment while a delayed rebalance is active
         if (delay == 0) {
             Map<String, ConnectorsAndTasks> toExplicitlyRevoke =
@@ -312,12 +314,12 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             // backoff delay to prevent rebalance storms.
             if (revokedInPrevious && !toExplicitlyRevoke.isEmpty()) {
                 numSuccessiveRevokingRebalances++;
-                long processAfter = consecutiveRevokingRebalancesBackoff.backoff(numSuccessiveRevokingRebalances);
-                log.debug("Consecutive revoking rebalances observed. Need to wait for {} ms", processAfter);
-                time.sleep(processAfter); // Is it a good idea to sleep?
+                delay = (int) consecutiveRevokingRebalancesBackoff.backoff(numSuccessiveRevokingRebalances);
+                log.debug("Consecutive revoking rebalances observed. Need to wait for {} ms", delay);
+                scheduledRebalance = time.milliseconds() + delay;
             } else if (!toExplicitlyRevoke.isEmpty()) {
                 // We had a revocation in this round but not in the previous round. Let's store that state.
-                log.trace("Revoking rebalance. Setting the revokedInPrevious flag to true");
+                log.debug("Revoking rebalance. Setting the revokedInPrevious flag to true");
                 revokedInPrevious = true;
             } else if (revokedInPrevious) {
                 // No revocations in this round but the previous round had one. Probably the workers
@@ -328,7 +330,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 revokedInPrevious = false;
             } else {
                 // revokedInPrevious is false and no revocations needed in this round. no-op.
-                log.trace("No revocations in previous and current round.");
+                log.debug("No revocations in previous and current round.");
             }
         } else {
             log.debug("Connector and task to revoke assignments: {}", toRevoke);
@@ -483,7 +485,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     protected void handleLostAssignments(ConnectorsAndTasks lostAssignments,
                                          ConnectorsAndTasks newSubmissions,
                                          List<WorkerLoad> completeWorkerAssignment) {
-        if (lostAssignments.isEmpty()) {
+        // There are no lost assignments and there have been no successive revoking rebalances
+        if (lostAssignments.isEmpty() && numSuccessiveRevokingRebalances == 0) {
             resetDelay();
             return;
         }
@@ -606,18 +609,9 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         Collection<WorkerLoad> existingWorkers = completeWorkerAssignment.stream()
                 .filter(wl -> wl.size() > 0)
                 .collect(Collectors.toList());
-
-        // existingWorkers => workers with load > 0.
-        // if existingWorkers is empty, no workers have any load.
-        int existingWorkersNum = existingWorkers.size(); // count of workers having non-zero load.
+        int existingWorkersNum = existingWorkers.size();
         int totalWorkersNum = completeWorkerAssignment.size();
-        int newWorkersNum = totalWorkersNum - existingWorkersNum; // <total workers - workers with non-0 load>
-        // if existingWorkersNum == 0, no workers have any load i.e all workers are new.
-        // newWorkersNum = 0 when all workers have non-zero load.
-
-        // if newWorkersNum > 0 && existingWorkersNum == 0, then none of the workers have any load.
-        // We don't revoke in that situation i.e we revoke only when newWorkersNum > 0 and there are existing workers with 0 load.
-        // Those workers would get assigned the tasks I guess.
+        int newWorkersNum = totalWorkersNum - existingWorkersNum;
 
         if (log.isDebugEnabled()) {
             completeWorkerAssignment.forEach(wl -> log.debug(
