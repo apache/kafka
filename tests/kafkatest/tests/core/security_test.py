@@ -132,7 +132,7 @@ class SecurityTest(EndToEndTest):
         self.consumer.start()
 
     @cluster(num_nodes=2)
-    @matrix(metadata_quorum=[quorum.zk, quorum.remote_raft])
+    @matrix(metadata_quorum=[quorum.zk])
     def test_quorum_ssl_endpoint_validation_failure(self, metadata_quorum=quorum.zk):
         """
         Test that invalid hostname in ZooKeeper or Raft Controller results in broker inability to start.
