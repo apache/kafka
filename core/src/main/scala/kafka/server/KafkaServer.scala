@@ -183,12 +183,16 @@ class KafkaServer(
 
   private val kafkaActions: KafkaActions = actions
 
+  @volatile private var poisonPill: PoisonPill = null
+
   private def haltIfNotHealthy(): Unit = {
     // This relies on io-thread to receive request from RequestChannel with 300 ms timeout, so that lastDequeueTimeMs
     // will keep increasing even if there is no incoming request
-    if (time.milliseconds - socketServer.dataPlaneRequestChannel.lastDequeueTimeMs > config.requestMaxLocalTimeMs) {
+    val timeSinceLastDequeueInMs = time.milliseconds - socketServer.dataPlaneRequestChannel.lastDequeueTimeMs;
+    poisonPill.recordTimeSinceLastDequeue(timeSinceLastDequeueInMs)
+    if (timeSinceLastDequeueInMs > config.requestMaxLocalTimeMs) {
       fatal(s"It has been more than ${config.requestMaxLocalTimeMs} ms since the last time any io-thread reads from RequestChannel. Shutdown broker now.")
-      PoisonPill.die(config.heapDumpFolder, config.heapDumpTimeout)
+      poisonPill.die(config.heapDumpFolder, config.heapDumpTimeout)
     }
   }
 
@@ -358,6 +362,7 @@ class KafkaServer(
         }
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
 
+        poisonPill = new PoisonPill(metrics)
         healthCheckScheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "kafka-healthcheck-scheduler-")
         healthCheckScheduler.startup()
         healthCheckScheduler.schedule(name = "halt-broker-if-not-healthy",
