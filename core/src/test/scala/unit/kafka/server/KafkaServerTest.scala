@@ -21,7 +21,7 @@ import kafka.api.ApiVersion
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{Disabled, Test}
 
 import java.util.Properties
 
@@ -116,6 +116,7 @@ class KafkaServerTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  @Disabled // LIKAFKA-46520 Disabled since the AlterISR request is not efficient enough for the LI use case
   def testAlterIsrManager(): Unit = {
     val props = TestUtils.createBrokerConfigs(1, zkConnect).head
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, ApiVersion.latestVersion.toString)

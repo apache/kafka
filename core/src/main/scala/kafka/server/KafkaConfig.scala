@@ -322,6 +322,7 @@ object Defaults {
 
   /** Linkedin Internal states */
   val LiCombinedControlRequestEnabled = false
+  val LiAlterIsrEnabled = false
   val LiAsyncFetcherEnabled = false
   val LiNumControllerInitThreads = 1
 }
@@ -436,6 +437,7 @@ object KafkaConfig {
   val PreferredControllerProp = "preferred.controller"
   val LiAsyncFetcherEnableProp = "li.async.fetcher.enable"
   val LiCombinedControlRequestEnableProp = "li.combined.control.request.enable"
+  val LiAlterIsrEnableProp = "li.alter.isr.enable"
   val LiNumControllerInitThreadsProp = "li.num.controller.init.threads"
   val AllowPreferredControllerFallbackProp = "allow.preferred.controller.fallback"
   val UnofficialClientLoggingEnableProp = "unofficial.client.logging.enable"
@@ -771,6 +773,7 @@ object KafkaConfig {
   val PreferredControllerDoc = "Specifies whether the broker is a dedicated controller node. If set to true, the broker is a preferred controller node."
   val LiAsyncFetcherEnableDoc = "Specifies whether the event-based async fetcher should be used."
   val LiCombinedControlRequestEnableDoc = "Specifies whether the controller should use the LiCombinedControlRequest."
+  val LiAlterIsrEnabledDoc = "Specifies whether the brokers should use the AlterISR request to propagate ISR changes to the controller. If set to false, brokers will propagate the updates via Zookeeper."
   val LiNumControllerInitThreadsDoc = "Number of threads (and Zookeeper clients + connections) to be used while recursing the topic-partitions tree in Zookeeper during controller startup/failover."
   // Although AllowPreferredControllerFallback is expected to be configured dynamically at per cluster level, providing a static configuration entry
   // here allows its value to be obtained without holding the dynamic broker configuration lock.
@@ -1209,6 +1212,7 @@ object KafkaConfig {
       .define(PreferredControllerProp, BOOLEAN, Defaults.PreferredController, HIGH, PreferredControllerDoc)
       .define(LiAsyncFetcherEnableProp, BOOLEAN, Defaults.LiAsyncFetcherEnabled, HIGH, LiAsyncFetcherEnableDoc)
       .define(LiCombinedControlRequestEnableProp, BOOLEAN, Defaults.LiCombinedControlRequestEnabled, HIGH, LiCombinedControlRequestEnableDoc)
+      .define(LiAlterIsrEnableProp, BOOLEAN, Defaults.LiAlterIsrEnabled, HIGH, LiAlterIsrEnabledDoc)
       .define(LiNumControllerInitThreadsProp, INT, Defaults.LiNumControllerInitThreads, atLeast(1), LOW, LiNumControllerInitThreadsDoc)
       .define(AllowPreferredControllerFallbackProp, BOOLEAN, Defaults.AllowPreferredControllerFallback, HIGH, AllowPreferredControllerFallbackDoc)
       .define(UnofficialClientLoggingEnableProp, BOOLEAN, Defaults.UnofficialClientLoggingEnable, LOW, UnofficialClientLoggingEnableDoc)
@@ -1717,6 +1721,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   val liAsyncFetcherEnable = getBoolean(KafkaConfig.LiAsyncFetcherEnableProp)
   def liCombinedControlRequestEnable = getBoolean(KafkaConfig.LiCombinedControlRequestEnableProp)
+  def liAlterIsrEnable = getBoolean(KafkaConfig.LiAlterIsrEnableProp)
   def liNumControllerInitThreads = getInt(KafkaConfig.LiNumControllerInitThreadsProp)
 
   def unofficialClientLoggingEnable = getBoolean(KafkaConfig.UnofficialClientLoggingEnableProp)

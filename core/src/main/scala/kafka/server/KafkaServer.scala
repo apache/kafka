@@ -337,7 +337,7 @@ class KafkaServer(
         socketServer.startup(startProcessingRequests = false)
 
         /* start replica manager */
-        alterIsrManager = if (config.interBrokerProtocolVersion.isAlterIsrSupported) {
+        alterIsrManager = if (config.interBrokerProtocolVersion.isAlterIsrSupported && config.liAlterIsrEnable) {
           AlterIsrManager(
             config = config,
             metadataCache = metadataCache,
