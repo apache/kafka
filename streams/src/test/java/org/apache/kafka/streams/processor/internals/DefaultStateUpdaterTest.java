@@ -128,7 +128,6 @@ class DefaultStateUpdaterTest {
 
     @Test
     public void shouldRemoveTasksFromAndClearInputQueueOnShutdown() throws Exception {
-        stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
         final StreamTask statelessTask = statelessTask(TASK_0_0).inState(State.RESTORING).build();
         final StreamTask statefulTask = statefulTask(TASK_1_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
         final StandbyTask standbyTask = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
@@ -689,7 +688,6 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks();
         verifyPausedTasks();
         verifyExceptionsAndFailedTasks();
-        verify(changelogReader).unregister(task.changelogPartitions());
     }
 
     @Test
@@ -937,7 +935,6 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks();
         verifyPausedTasks();
         verifyExceptionsAndFailedTasks();
-        verify(changelogReader).unregister(task.changelogPartitions());
 
         stateUpdater.pause(task.id());
 

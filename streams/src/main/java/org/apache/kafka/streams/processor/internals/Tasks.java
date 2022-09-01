@@ -154,7 +154,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public void addNewActiveTasks(final Collection<Task> newTasks) {
+    public void addActiveTasks(final Collection<Task> newTasks) {
         if (!newTasks.isEmpty()) {
             for (final Task activeTask : newTasks) {
                 addTask(activeTask);
@@ -163,7 +163,7 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public void addNewStandbyTasks(final Collection<Task> newTasks) {
+    public void addStandbyTasks(final Collection<Task> newTasks) {
         if (!newTasks.isEmpty()) {
             for (final Task standbyTask : newTasks) {
                 addTask(standbyTask);

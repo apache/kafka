@@ -246,6 +246,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 task.maybeCheckpoint(true);
                 removedTasks.add(task);
             });
+            updatingTasks.clear();
             pausedTasks.forEach((id, task) -> {
                 removedTasks.add(task);
             });
@@ -286,8 +287,6 @@ public class DefaultStateUpdater implements StateUpdater {
             if (updatingTasks.containsKey(taskId)) {
                 task = updatingTasks.get(taskId);
                 task.maybeCheckpoint(true);
-                final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
-                changelogReader.unregister(changelogPartitions);
                 removedTasks.add(task);
                 updatingTasks.remove(taskId);
                 transitToUpdateStandbysIfOnlyStandbysLeft();
@@ -295,8 +294,6 @@ public class DefaultStateUpdater implements StateUpdater {
                     + " task " + task.id() + " was removed from the updating tasks and added to the removed tasks.");
             } else if (pausedTasks.containsKey(taskId)) {
                 task = pausedTasks.get(taskId);
-                final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
-                changelogReader.unregister(changelogPartitions);
                 removedTasks.add(task);
                 pausedTasks.remove(taskId);
                 log.debug((task.isActive() ? "Active" : "Standby")

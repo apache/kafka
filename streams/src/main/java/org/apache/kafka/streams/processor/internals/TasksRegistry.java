@@ -55,9 +55,9 @@ public interface TasksRegistry {
 
     void addPendingTaskToInit(final Collection<Task> tasks);
 
-    void addNewActiveTasks(final Collection<Task> newTasks);
+    void addActiveTasks(final Collection<Task> tasks);
 
-    void addNewStandbyTasks(final Collection<Task> newTasks);
+    void addStandbyTasks(final Collection<Task> tasks);
 
     void addTask(final Task task);
 
