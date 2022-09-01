@@ -280,32 +280,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     public void buildAndOptimizeTopology(final Properties props) {
-        // Vicky: Do we need to verify props?
-        final List<String> optimizationConfigs;
-        if (props == null) {
-            optimizationConfigs = new ArrayList<>();
-            optimizationConfigs.add(StreamsConfig.NO_OPTIMIZATION);
-        } else {
-            final StreamsConfig config = new StreamsConfig(props);
-            optimizationConfigs = config.getList(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG);
-        }
-
         mergeDuplicateSourceNodes();
-        if (optimizationConfigs.contains(StreamsConfig.OPTIMIZE)
-            || optimizationConfigs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {
-            LOG.debug("Optimizing the Kafka Streams graph for ktable source nodes");
-            optimizeKTableSourceTopics();
-        }
-        if (optimizationConfigs.contains(StreamsConfig.OPTIMIZE)
-            || optimizationConfigs.contains(StreamsConfig.MERGE_REPARTITION_TOPICS)) {
-            LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
-            maybeOptimizeRepartitionOperations();
-        }
-        if (optimizationConfigs.contains(StreamsConfig.OPTIMIZE)
-            || optimizationConfigs.contains(StreamsConfig.SELF_JOIN)) {
-            LOG.debug("Optimizing the Kafka Streams graph for self-joins");
-            rewriteSelfJoin(root, new HashSet<>());
-        }
+        optimizeTopology(props);
 
         final PriorityQueue<GraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, Comparator.comparing(GraphNode::buildPriority));
 
@@ -328,6 +304,38 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             }
         }
         internalTopologyBuilder.validateCopartition();
+    }
+
+    /**
+     * A user can provide either the config OPTIMIZE which means all optimizations rules will be
+     * applied or they can provide a list of optimization rules.
+     * @param props
+     */
+    private void optimizeTopology(final Properties props) {
+        final List<String> optimizationConfigs;
+        if (props == null) {
+            optimizationConfigs = new ArrayList<>();
+            optimizationConfigs.add(StreamsConfig.NO_OPTIMIZATION);
+        } else {
+            // Doing this to verify props
+            final StreamsConfig config = new StreamsConfig(props);
+            optimizationConfigs = config.getList(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG);
+        }
+        if (optimizationConfigs.contains(StreamsConfig.OPTIMIZE)
+            || optimizationConfigs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {
+            LOG.debug("Optimizing the Kafka Streams graph for ktable source nodes");
+            optimizeKTableSourceTopics();
+        }
+        if (optimizationConfigs.contains(StreamsConfig.OPTIMIZE)
+            || optimizationConfigs.contains(StreamsConfig.MERGE_REPARTITION_TOPICS)) {
+            LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
+            maybeOptimizeRepartitionOperations();
+        }
+        if (optimizationConfigs.contains(StreamsConfig.OPTIMIZE)
+            || optimizationConfigs.contains(StreamsConfig.SELF_JOIN)) {
+            LOG.debug("Optimizing the Kafka Streams graph for self-joins");
+            rewriteSelfJoin(root, new HashSet<>());
+        }
     }
 
     private void mergeDuplicateSourceNodes() {
@@ -383,6 +391,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     /**
      * If the join is a self-join, remove the node KStreamJoinWindow corresponding to the
+     * right argument of the join (the other).
      */
     @SuppressWarnings("unchecked")
     private void rewriteSelfJoin(final GraphNode currentNode, final Set<GraphNode> visited) {
@@ -394,7 +403,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             GraphNode left = null, right = null;
             for (final GraphNode child: parent.children()) {
                 if (child instanceof  ProcessorGraphNode
-                    && isStreamJoinWindowNode((ProcessorGraphNode) child)) {
+                    && isStreamJoinWindowNode((ProcessorGraphNode) child)
+                    && child.buildPriority() < currentNode.buildPriority()) {
                     if (left == null) {
                         left = child;
                     } else {
@@ -422,45 +432,46 @@ public class InternalStreamsBuilder implements InternalNameProvider {
      * StreamStreamJoinNode and have smaller build priority.
      */
     private boolean isSelfJoin(final GraphNode streamJoinNode) {
-        final AtomicInteger count = new AtomicInteger();
-        countSourceNodes(count, streamJoinNode, new HashSet<>());
-        if (count.get() > 1) {
+        if (countSourceNodes(streamJoinNode, new HashSet<>()) != 1) {
             return false;
         }
-        if (streamJoinNode.parentNodes().size() > 1) {
+        if (streamJoinNode.parentNodes().size() != 1) {
             return false;
         }
-        for (final GraphNode parent: streamJoinNode.parentNodes()) {
-            for (final GraphNode sibling : parent.children()) {
-                if (sibling instanceof ProcessorGraphNode) {
-                    if (isStreamJoinWindowNode((ProcessorGraphNode) sibling)) {
-                        continue;
-                    }
+        final GraphNode parent = streamJoinNode.parentNodes().stream().findFirst().get();
+        for (final GraphNode sibling : parent.children()) {
+            if (sibling instanceof ProcessorGraphNode) {
+                if (isStreamJoinWindowNode((ProcessorGraphNode) sibling)) {
+                    continue;
                 }
-                if (sibling != streamJoinNode
-                    && sibling.buildPriority() < streamJoinNode.buildPriority()) {
-                    return false;
-                }
+            }
+            if (sibling != streamJoinNode
+                && sibling.buildPriority() < streamJoinNode.buildPriority()) {
+                return false;
             }
         }
         return true;
     }
 
-    private void countSourceNodes(
-        final AtomicInteger count,
-        final GraphNode currentNode,
-        final Set<GraphNode> visited) {
+    private int countSourceNodes(final GraphNode currentNode, final Set<GraphNode> visited) {
+
+        if (currentNode == root) {
+            return 0;
+        }
 
         if (currentNode instanceof StreamSourceNode) {
-            count.incrementAndGet();
+            return 1;
         }
 
-        for (final GraphNode parent: currentNode.parentNodes()) {
+        int count = 0;
+        for (final GraphNode parent : currentNode.parentNodes()) {
             if (!visited.contains(parent)) {
                 visited.add(parent);
-                countSourceNodes(count, parent, visited);
+                count += countSourceNodes(parent, visited);
+
             }
         }
+        return count;
     }
 
     private boolean isStreamJoinWindowNode(final ProcessorGraphNode node) {
