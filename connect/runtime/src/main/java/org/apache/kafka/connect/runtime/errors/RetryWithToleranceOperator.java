@@ -79,6 +79,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     private final Time time;
     private ErrorHandlingMetrics errorHandlingMetrics;
     private final CountDownLatch stopRequestedLatch;
+    private volatile boolean stopping;   // indicates whether the operator has been asked to stop retrying
 
     protected final ProcessingContext context;
 
@@ -96,6 +97,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         this.time = time;
         this.context = context;
         this.stopRequestedLatch = stopRequestedLatch;
+        this.stopping = false;
     }
 
     public synchronized Future<Void> executeFailed(Stage stage, Class<?> executingClass,
@@ -168,22 +170,26 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * @throws Exception rethrow if a non-retriable Exception is thrown by the operation
      */
     protected <V> V execAndRetry(Operation<V> operation) throws Exception {
+        RetriableException lastException = null;
         int attempt = 0;
         long startTime = time.milliseconds();
         long deadline = (errorRetryTimeout >= 0) ? startTime + errorRetryTimeout : Long.MAX_VALUE;
         do {
+            if (stopping) {
+                log.trace("Shutdown has been scheduled. Marking operation as failed.");
+                context.error(new ConnectException(lastException));
+                return null;
+            }
+
             try {
                 attempt++;
                 return operation.call();
             } catch (RetriableException e) {
+                lastException = e;
                 log.trace("Caught a retriable exception while executing {} operation with {}", context.stage(), context.executingClass());
                 errorHandlingMetrics.recordFailure();
-                if (checkRetry(startTime)) {
-                    if (!backoff(attempt, deadline)) {
-                        log.trace("Shutdown has been scheduled. Marking operation as failed.");
-                        context.error(e);
-                        return null;
-                    }
+                if (time.milliseconds() < deadline) {
+                    backoff(attempt, deadline);
                     errorHandlingMetrics.recordRetry();
                 } else {
                     log.trace("Can't retry. start={}, attempt={}, deadline={}", startTime, attempt, deadline);
@@ -257,26 +263,13 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     }
 
     /**
-     * Check whether we can continue retrying or not.
-     * Visible for testing.
-     * @param startTime the time in milliseconds when the retriable operation was first begun
-     * @return true if we can continue retrying; false if the retry timeout has been reached and we can't retry anymore
-     */
-    boolean checkRetry(long startTime) {
-        return errorRetryTimeout < 0 || (time.milliseconds() - startTime) < errorRetryTimeout;
-    }
-
-    /**
      * Do an exponential backoff bounded by {@link #RETRIES_DELAY_MIN_MS} and {@link #errorMaxDelayInMillis}
-     * which can be exited prematurely if {@link #triggerStop()} is called.
+     * which can be exited prematurely if {@link #triggerStop()} is called or if the thread is interrupted.
      * Visible for testing.
      * @param attempt the number indicating which backoff attempt it is (beginning with 1)
      * @param deadline the time in milliseconds until when retries can be attempted
-     * @return true if it is safe to backoff again, false if a stop was requested via
-     *         {@link #triggerStop()} and backoff shouldn't be called again
-     * @throws InterruptedException if the thread is interrupted during the call to {@link CountDownLatch#await(long, TimeUnit)}
      */
-    boolean backoff(int attempt, long deadline) throws InterruptedException {
+    void backoff(int attempt, long deadline) {
         int numRetry = attempt - 1;
         long delay = RETRIES_DELAY_MIN_MS << numRetry;
         if (delay > errorMaxDelayInMillis) {
@@ -286,7 +279,11 @@ public class RetryWithToleranceOperator implements AutoCloseable {
             delay = deadline - time.milliseconds();
         }
         log.debug("Sleeping for up to {} millis", delay);
-        return !stopRequestedLatch.await(delay, TimeUnit.MILLISECONDS);
+        try {
+            stopRequestedLatch.await(delay, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            return;
+        }
     }
 
     public synchronized void metrics(ErrorHandlingMetrics errorHandlingMetrics) {
@@ -355,6 +352,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * {@link #execAndRetry(Operation)}
      */
     public void triggerStop() {
+        stopping = true;
         stopRequestedLatch.countDown();
     }
 

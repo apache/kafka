@@ -202,17 +202,22 @@ public class RetryWithToleranceOperatorTest {
 
     @Test
     public void testExecAndHandleRetriableErrorOnce() throws Exception {
-        execAndHandleRetriableError(6000, 1, Collections.singletonList(300L), new RetriableException("Test"));
+        execAndHandleRetriableError(6000, 1, Collections.singletonList(300L), new RetriableException("Test"), true);
     }
 
     @Test
     public void testExecAndHandleRetriableErrorThrice() throws Exception {
-        execAndHandleRetriableError(6000, 3, Arrays.asList(300L, 600L, 1200L), new RetriableException("Test"));
+        execAndHandleRetriableError(6000, 3, Arrays.asList(300L, 600L, 1200L), new RetriableException("Test"), true);
     }
 
     @Test
     public void testExecAndHandleRetriableErrorWithInfiniteRetries() throws Exception {
-        execAndHandleRetriableError(-1, 8, Arrays.asList(300L, 600L, 1200L, 2400L, 4800L, 9600L, 19200L, 38400L), new RetriableException("Test"));
+        execAndHandleRetriableError(-1, 8, Arrays.asList(300L, 600L, 1200L, 2400L, 4800L, 9600L, 19200L, 38400L), new RetriableException("Test"), true);
+    }
+
+    @Test
+    public void testExecAndHandleRetriableErrorWithMaxRetriesExceeded() throws Exception {
+        execAndHandleRetriableError(6000, 10, Arrays.asList(300L, 600L, 1200L, 2400L, 1500L), new RetriableException("Test"), false);
     }
 
     @Test
@@ -246,21 +251,23 @@ public class RetryWithToleranceOperatorTest {
         });
         EasyMock.expect(exitLatch.await(2400, TimeUnit.MILLISECONDS)).andAnswer(() -> {
             time.sleep(2400);
+            retryWithToleranceOperator.triggerStop();
             return false;
         });
-        EasyMock.expect(exitLatch.await(4800, TimeUnit.MILLISECONDS)).andReturn(true);
-        retryWithToleranceOperator.triggerStop();
+
+        // expect no more calls to exitLatch.await() after retryWithToleranceOperator.triggerStop() is called
+
         exitLatch.countDown();
         EasyMock.expectLastCall().once();
 
         replay(mockOperation, exitLatch);
-
         retryWithToleranceOperator.execAndHandleError(mockOperation, Exception.class);
         assertTrue(retryWithToleranceOperator.failed());
+        assertEquals(4500L, time.milliseconds());
         PowerMock.verifyAll();
     }
 
-    public void execAndHandleRetriableError(long errorRetryTimeout, int numRetriableExceptionsThrown, List<Long> expectedWaits, Exception e) throws Exception {
+    public void execAndHandleRetriableError(long errorRetryTimeout, int numRetriableExceptionsThrown, List<Long> expectedWaits, Exception e, boolean successExpected) throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         CountDownLatch exitLatch = EasyMock.createStrictMock(CountDownLatch.class);
         RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(errorRetryTimeout, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time, new ProcessingContext(), exitLatch);
@@ -269,14 +276,22 @@ public class RetryWithToleranceOperatorTest {
         EasyMock.expect(mockOperation.call()).andThrow(e).times(numRetriableExceptionsThrown);
         EasyMock.expect(mockOperation.call()).andReturn("Success");
         for (Long expectedWait : expectedWaits) {
-            EasyMock.expect(exitLatch.await(expectedWait, TimeUnit.MILLISECONDS)).andReturn(false);
+            EasyMock.expect(exitLatch.await(expectedWait, TimeUnit.MILLISECONDS)).andAnswer(() -> {
+                time.sleep(expectedWait);
+                return false;
+            });
         }
 
         replay(mockOperation, exitLatch);
 
         String result = retryWithToleranceOperator.execAndHandleError(mockOperation, Exception.class);
-        assertFalse(retryWithToleranceOperator.failed());
-        assertEquals("Success", result);
+
+        if (successExpected) {
+            assertFalse(retryWithToleranceOperator.failed());
+            assertEquals("Success", result);
+        } else {
+            assertTrue(retryWithToleranceOperator.failed());
+        }
 
         PowerMock.verifyAll();
     }
@@ -290,7 +305,7 @@ public class RetryWithToleranceOperatorTest {
         EasyMock.expect(mockOperation.call()).andThrow(e).times(numRetriableExceptionsThrown);
         EasyMock.expect(mockOperation.call()).andReturn("Success");
 
-        // expect no call to exitLatch.await(timeout, unit) which is only called during the retry backoff
+        // expect no call to exitLatch.await() which is only called during the retry backoff
 
         replay(mockOperation, exitLatch);
 
@@ -299,45 +314,6 @@ public class RetryWithToleranceOperatorTest {
         assertNull(result);
 
         PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testCheckRetryLimit() {
-        MockTime time = new MockTime(0, 0, 0);
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(500, 100, NONE, time);
-
-        time.setCurrentTimeMs(100);
-        assertTrue(retryWithToleranceOperator.checkRetry(0));
-
-        time.setCurrentTimeMs(200);
-        assertTrue(retryWithToleranceOperator.checkRetry(0));
-
-        time.setCurrentTimeMs(400);
-        assertTrue(retryWithToleranceOperator.checkRetry(0));
-
-        time.setCurrentTimeMs(499);
-        assertTrue(retryWithToleranceOperator.checkRetry(0));
-
-        time.setCurrentTimeMs(501);
-        assertFalse(retryWithToleranceOperator.checkRetry(0));
-
-        time.setCurrentTimeMs(600);
-        assertFalse(retryWithToleranceOperator.checkRetry(0));
-    }
-
-    @Test
-    public void testCheckInfiniteRetry() {
-        MockTime time = new MockTime(0, 0, 0);
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(-1, 100, NONE, time);
-
-        time.setCurrentTimeMs(100);
-        assertTrue(retryWithToleranceOperator.checkRetry(0));
-
-        time.setCurrentTimeMs(1000);
-        assertTrue(retryWithToleranceOperator.checkRetry(0));
-
-        time.setCurrentTimeMs(10000);
-        assertTrue(retryWithToleranceOperator.checkRetry(0));
     }
 
     @Test
