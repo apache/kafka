@@ -610,73 +610,79 @@ public class TaskManager {
      * @throws StreamsException if the store's change log does not contain the partition
      * @return {@code true} if all tasks are fully restored
      */
-    boolean tryToCompleteRestoration(final long now, final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
-        if (stateUpdater == null) {
-            boolean allRunning = true;
+    boolean tryToCompleteRestoration(final long now,
+                                     final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+        boolean allRunning = true;
 
-            final List<Task> activeTasks = new LinkedList<>();
-            for (final Task task : tasks.allTasks()) {
-                try {
-                    task.initializeIfNeeded();
-                    task.clearTaskTimeout();
-                } catch (final LockException lockException) {
-                    // it is possible that if there are multiple threads within the instance that one thread
-                    // trying to grab the task from the other, while the other has not released the lock since
-                    // it did not participate in the rebalance. In this case we can just retry in the next iteration
-                    log.debug("Could not initialize task {} since: {}; will retry", task.id(), lockException.getMessage());
-                    allRunning = false;
-                } catch (final TimeoutException timeoutException) {
-                    task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
-                    allRunning = false;
-                }
+        // transit to restore active is idempotent so we can call it multiple times
+        changelogReader.enforceRestoreActive();
 
-                if (task.isActive()) {
-                    activeTasks.add(task);
-                }
+        final List<Task> activeTasks = new LinkedList<>();
+        for (final Task task : tasks.allTasks()) {
+            try {
+                task.initializeIfNeeded();
+                task.clearTaskTimeout();
+            } catch (final LockException lockException) {
+                // it is possible that if there are multiple threads within the instance that one thread
+                // trying to grab the task from the other, while the other has not released the lock since
+                // it did not participate in the rebalance. In this case we can just retry in the next iteration
+                log.debug("Could not initialize task {} since: {}; will retry", task.id(), lockException.getMessage());
+                allRunning = false;
+            } catch (final TimeoutException timeoutException) {
+                task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
+                allRunning = false;
             }
 
-            if (allRunning && !activeTasks.isEmpty()) {
+            if (task.isActive()) {
+                activeTasks.add(task);
+            }
+        }
 
-                final Set<TopicPartition> restored = changelogReader.completedChangelogs();
+        if (allRunning && !activeTasks.isEmpty()) {
 
-                for (final Task task : activeTasks) {
-                    if (restored.containsAll(task.changelogPartitions())) {
-                        try {
-                            task.completeRestoration(offsetResetter);
-                            task.clearTaskTimeout();
-                        } catch (final TimeoutException timeoutException) {
-                            task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
-                            log.debug(
-                                String.format(
-                                    "Could not complete restoration for %s due to the following exception; will retry",
-                                    task.id()),
-                                timeoutException
-                            );
+            final Set<TopicPartition> restored = changelogReader.completedChangelogs();
 
-                            allRunning = false;
-                        }
-                    } else {
-                        // we found a restoring task that isn't done restoring, which is evidence that
-                        // not all tasks are running
+            for (final Task task : activeTasks) {
+                if (restored.containsAll(task.changelogPartitions())) {
+                    try {
+                        task.completeRestoration(offsetResetter);
+                        task.clearTaskTimeout();
+                    } catch (final TimeoutException timeoutException) {
+                        task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
+                        log.debug(
+                            String.format(
+                                "Could not complete restoration for %s due to the following exception; will retry",
+                                task.id()),
+                            timeoutException
+                        );
+
                         allRunning = false;
                     }
+                } else {
+                    // we found a restoring task that isn't done restoring, which is evidence that
+                    // not all tasks are running
+                    allRunning = false;
                 }
             }
-            if (allRunning) {
-                // we can call resume multiple times since it is idempotent.
-                mainConsumer.resume(mainConsumer.assignment());
-            }
-
-            return allRunning;
-        } else {
-            addTasksToStateUpdater();
-
-            handleExceptionsFromStateUpdater();
-
-            handleRemovedTasksFromStateUpdater();
-
-            return handleRestoredTasksFromStateUpdater(now, offsetResetter);
         }
+        if (allRunning) {
+            // we can call resume multiple times since it is idempotent.
+            mainConsumer.resume(mainConsumer.assignment());
+            changelogReader.transitToUpdateStandby();
+        }
+
+        return allRunning;
+    }
+
+    public boolean checkStateUpdater(final long now,
+                                     final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
+        addTasksToStateUpdater();
+        handleExceptionsFromStateUpdater();
+        handleRemovedTasksFromStateUpdater();
+        if (stateUpdater.restoresActiveTasks()) {
+            handleRestoredTasksFromStateUpdater(now, offsetResetter);
+        }
+        return !stateUpdater.restoresActiveTasks();
     }
 
     private void recycleTask(final Task task,
@@ -685,6 +691,7 @@ public class TaskManager {
                              final Map<TaskId, RuntimeException> taskExceptions) {
         Task newTask = null;
         try {
+            task.suspend();
             newTask = task.isActive() ?
                 convertActiveToStandby((StreamTask) task, inputPartitions) :
                 convertStandbyToActive((StandbyTask) task, inputPartitions);
@@ -817,8 +824,6 @@ public class TaskManager {
                 tasksToCloseDirty.add(task);
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
-                // if the restored task happen to need input partition update, we can transit it to running
-                // right after completing the update as well
                 transitRestoredTaskToRunning(task, now, offsetResetter);
             } else {
                 transitRestoredTaskToRunning(task, now, offsetResetter);
@@ -1224,13 +1229,13 @@ public class TaskManager {
     private void shutdownStateUpdater() {
         if (stateUpdater != null) {
             stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
-            closeFailedTasks();
+            closeFailedTasksFromStateUpdater();
             addRestoredTasksToTaskRegistry();
             addRemovedTasksToTaskRegistry();
         }
     }
 
-    private void closeFailedTasks() {
+    private void closeFailedTasksFromStateUpdater() {
         final Set<Task> tasksToCloseDirty = stateUpdater.drainExceptionsAndFailedTasks().stream()
             .flatMap(exAndTasks -> exAndTasks.getTasks().stream()).collect(Collectors.toSet());
 
