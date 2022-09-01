@@ -131,8 +131,8 @@ class BrokerMetadataListener(
   }
 
   private def shouldSnapshot(): Set[SnapshotReason] = {
-    val metadataVersionHasChanged: Boolean = metadataVersionChanged()
-    val maxBytesHaveExceeded: Boolean = (_bytesSinceLastSnapshot >= maxBytesBetweenSnapshots)
+    val metadataVersionHasChanged = metadataVersionChanged()
+    val maxBytesHaveExceeded = (_bytesSinceLastSnapshot >= maxBytesBetweenSnapshots)
 
     if (maxBytesHaveExceeded && metadataVersionHasChanged) {
       Set(SnapshotReason.MetadataVersionChanged, SnapshotReason.MaxBytesExceeded)

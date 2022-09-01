@@ -29,6 +29,7 @@ trait MetadataSnapshotter {
    *
    * @param lastContainedLogTime  The highest time contained in the snapshot.
    * @param image                 The metadata image to write out.
+   * @param reason                Set of reasons due to which a snapshot is being taken.
    *
    * @return                      True if we will write out a new snapshot; false otherwise.
    */

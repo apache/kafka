@@ -60,7 +60,8 @@ class BrokerMetadataSnapshotter(
       val writer = writerBuilder.build(
         image.highestOffsetAndEpoch().offset,
         image.highestOffsetAndEpoch().epoch,
-        lastContainedLogTime)
+        lastContainedLogTime
+      )
       if (writer.nonEmpty) {
         _currentSnapshotOffset = image.highestOffsetAndEpoch().offset
 
