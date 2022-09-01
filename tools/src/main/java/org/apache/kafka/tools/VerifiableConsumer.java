@@ -199,7 +199,6 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
         printJson(new PartitionsRevoked(partitions));
         consumer.commitSync();
-        
     }
 
     private void printJson(Object data) {
