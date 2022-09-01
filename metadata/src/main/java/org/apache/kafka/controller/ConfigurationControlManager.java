@@ -268,7 +268,7 @@ public class ConfigurationControlManager {
         for (ApiMessageAndVersion recordImplicitlyDeleted : recordsImplicitlyDeleted) {
             ConfigRecord configRecord = (ConfigRecord) recordImplicitlyDeleted.message();
             allConfigs.remove(configRecord.name());
-            // As per KAFKA-14039, do not include implicit deletions caused by using the legacy AlterConfigs API
+            // As per KAFKA-14195, do not include implicit deletions caused by using the legacy AlterConfigs API
             // in the list passed to the policy in order to maintain backwards compatibility
         }
         try {
