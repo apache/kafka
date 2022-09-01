@@ -319,7 +319,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 scheduledRebalance = time.milliseconds() + delay;
             } else if (!toExplicitlyRevoke.isEmpty()) {
                 // We had a revocation in this round but not in the previous round. Let's store that state.
-                log.debug("Revoking rebalance. Setting the revokedInPrevious flag to true");
+                log.debug("Performing allocation-balancing revocation immediately as no revocations took place during the previous rebalance");
                 revokedInPrevious = true;
             } else if (revokedInPrevious) {
                 // No revocations in this round but the previous round had one. Probably the workers
