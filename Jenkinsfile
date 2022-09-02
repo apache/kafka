@@ -96,7 +96,7 @@ pipeline {
   agent none
   
   options {
-    disableConcurrentBuilds(abortPrevious: changeRequest())
+    disableConcurrentBuilds(abortPrevious: isChangeRequest(env)
   }
   
   stages {
