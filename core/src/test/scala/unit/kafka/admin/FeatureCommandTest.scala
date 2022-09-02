@@ -70,7 +70,8 @@ class FeatureCommandTest extends IntegrationTestHarness {
   @ValueSource(strings = Array("zk"))
   def testDescribeWithZk(quorum: String): Unit = {
     TestUtils.resource(FeatureCommandTestEnv()) { env =>
-      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe"), env.out)
+      assertEquals(0, FeatureCommand.mainNoExit(
+        Array("--bootstrap-server", bootstrapServers(), "describe"), env.out))
       assertEquals("", env.outputWithoutEpoch())
     }
   }
@@ -79,7 +80,8 @@ class FeatureCommandTest extends IntegrationTestHarness {
   @ValueSource(strings = Array("kraft"))
   def testDescribeWithKRaft(quorum: String): Unit = {
     TestUtils.resource(FeatureCommandTestEnv()) { env =>
-      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(), "describe"), env.out)
+      assertEquals(0, FeatureCommand.mainNoExit(
+        Array("--bootstrap-server", bootstrapServers(), "describe"), env.out))
       assertEquals(String.format(
         "Feature: metadata.version\tSupportedMinVersion: 3.0-IV1\t" +
           "SupportedMaxVersion: 3.3-IV3\tFinalizedVersionLevel: 3.3-IV1\t"),
@@ -91,8 +93,8 @@ class FeatureCommandTest extends IntegrationTestHarness {
   @ValueSource(strings = Array("zk"))
   def testUpgradeMetadataVersionWithZk(quorum: String): Unit = {
     TestUtils.resource(FeatureCommandTestEnv()) { env =>
-      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
-        "upgrade", "--metadata", "3.3-IV2"), env.out)
+      assertEquals(1, FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "upgrade", "--metadata", "3.3-IV2"), env.out))
       assertEquals("Could not upgrade metadata.version to 6. Could not apply finalized feature " +
         "update because the provided feature is not supported.", env.outputWithoutEpoch())
     }
@@ -102,13 +104,13 @@ class FeatureCommandTest extends IntegrationTestHarness {
   @ValueSource(strings = Array("kraft"))
   def testUpgradeMetadataVersionWithKraft(quorum: String): Unit = {
     TestUtils.resource(FeatureCommandTestEnv()) { env =>
-      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
-        "upgrade", "--feature", "metadata.version=5"), env.out)
+      assertEquals(0, FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "upgrade", "--feature", "metadata.version=5"), env.out))
       assertEquals("metadata.version was upgraded to 5.", env.outputWithoutEpoch())
     }
     TestUtils.resource(FeatureCommandTestEnv()) { env =>
-      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
-        "upgrade", "--metadata", "3.3-IV2"), env.out)
+      assertEquals(0, FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "upgrade", "--metadata", "3.3-IV2"), env.out))
       assertEquals("metadata.version was upgraded to 6.", env.outputWithoutEpoch())
     }
   }
@@ -117,20 +119,20 @@ class FeatureCommandTest extends IntegrationTestHarness {
   @ValueSource(strings = Array("zk"))
   def testDowngradeMetadataVersionWithZk(quorum: String): Unit = {
     TestUtils.resource(FeatureCommandTestEnv()) { env =>
-      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
-        "disable", "--feature", "metadata.version"), env.out)
+      assertEquals(1, FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "disable", "--feature", "metadata.version"), env.out))
       assertEquals("Could not disable metadata.version. Can not delete non-existing finalized feature.",
         env.outputWithoutEpoch())
     }
     TestUtils.resource(FeatureCommandTestEnv()) { env =>
-      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
-        "downgrade", "--metadata", "3.3-IV0"), env.out)
+      assertEquals(1, FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "downgrade", "--metadata", "3.3-IV0"), env.out))
       assertEquals("Could not downgrade metadata.version to 4. Could not apply finalized feature " +
         "update because the provided feature is not supported.", env.outputWithoutEpoch())
     }
     TestUtils.resource(FeatureCommandTestEnv()) { env =>
-      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
-        "downgrade", "--unsafe", "--metadata", "3.3-IV0"), env.out)
+      assertEquals(1, FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "downgrade", "--unsafe", "--metadata", "3.3-IV0"), env.out))
       assertEquals("Could not downgrade metadata.version to 4. Could not apply finalized feature " +
         "update because the provided feature is not supported.", env.outputWithoutEpoch())
     }
@@ -140,21 +142,21 @@ class FeatureCommandTest extends IntegrationTestHarness {
   @ValueSource(strings = Array("kraft"))
   def testDowngradeMetadataVersionWithKRaft(quorum: String): Unit = {
     TestUtils.resource(FeatureCommandTestEnv()) { env =>
-      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
-        "disable", "--feature", "metadata.version"), env.out)
+      assertEquals(1, FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "disable", "--feature", "metadata.version"), env.out))
       assertEquals("Could not disable metadata.version. Invalid update version 0 for feature " +
         "metadata.version. Local controller 1000 only supports versions 1-7", env.outputWithoutEpoch())
     }
     TestUtils.resource(FeatureCommandTestEnv()) { env =>
-      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
-        "downgrade", "--metadata", "3.3-IV0"), env.out)
+      assertEquals(1, FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "downgrade", "--metadata", "3.3-IV0"), env.out))
       assertEquals("Could not downgrade metadata.version to 4. Invalid metadata.version 4. " +
         "Refusing to perform the requested downgrade because it might delete metadata information. " +
         "Retry using UNSAFE_DOWNGRADE if you want to force the downgrade to proceed.", env.outputWithoutEpoch())
     }
     TestUtils.resource(FeatureCommandTestEnv()) { env =>
-      FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
-        "downgrade", "--unsafe", "--metadata", "3.3-IV0"), env.out)
+      assertEquals(0, FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+        "downgrade", "--unsafe", "--metadata", "3.3-IV0"), env.out))
       assertEquals("metadata.version was downgraded to 4.", env.outputWithoutEpoch())
     }
   }
@@ -226,10 +228,12 @@ class FeatureCommandUnitTest {
   @Test
   def testHandleUpgrade(): Unit = {
     TestUtils.resource(FeatureCommandTestEnv(buildAdminClient1())) { env =>
-      FeatureCommand.handleUpgrade(env.out, new Namespace(Map(
-        "metadata" -> "3.3-IV1",
-        "feature" -> util.Arrays.asList("foo.bar=6")
-      ).asJava), env.admin)
+      assertEquals("1 out of 2 operation(s) failed.",
+        assertThrows(classOf[TerseFailure], () =>
+          FeatureCommand.handleUpgrade(env.out, new Namespace(Map(
+            "metadata" -> "3.3-IV1",
+            "feature" -> util.Arrays.asList("foo.bar=6")
+          ).asJava), env.admin)).getMessage)
       assertEquals(String.format(
         "foo.bar was upgraded to 6.%n" +
         "Could not upgrade metadata.version to 5. Can't upgrade to lower version.%n"),
@@ -240,11 +244,13 @@ class FeatureCommandUnitTest {
   @Test
   def testHandleUpgradeDryRun(): Unit = {
     TestUtils.resource(FeatureCommandTestEnv(buildAdminClient1())) { env =>
-      FeatureCommand.handleUpgrade(env.out, new Namespace(Map(
-        "metadata" -> "3.3-IV1",
-        "feature" -> util.Arrays.asList("foo.bar=6"),
-        "dry-run" -> java.lang.Boolean.valueOf(true)
-      ).asJava), env.admin)
+      assertEquals("1 out of 2 operation(s) failed.",
+        assertThrows(classOf[TerseFailure], () =>
+          FeatureCommand.handleUpgrade(env.out, new Namespace(Map(
+            "metadata" -> "3.3-IV1",
+            "feature" -> util.Arrays.asList("foo.bar=6"),
+            "dry-run" -> java.lang.Boolean.valueOf(true)
+          ).asJava), env.admin)).getMessage)
       assertEquals(String.format(
         "foo.bar can be upgraded to 6.%n" +
         "Can not upgrade metadata.version to 5. Can't upgrade to lower version.%n"),
@@ -255,10 +261,12 @@ class FeatureCommandUnitTest {
   @Test
   def testHandleDowngrade(): Unit = {
     TestUtils.resource(FeatureCommandTestEnv(buildAdminClient1())) { env =>
-      FeatureCommand.handleDowngrade(env.out, new Namespace(Map(
-        "metadata" -> "3.3-IV3",
-        "feature" -> util.Arrays.asList("foo.bar=1")
-      ).asJava), env.admin)
+      assertEquals("1 out of 2 operation(s) failed.",
+        assertThrows(classOf[TerseFailure], () =>
+          FeatureCommand.handleDowngrade(env.out, new Namespace(Map(
+            "metadata" -> "3.3-IV3",
+            "feature" -> util.Arrays.asList("foo.bar=1")
+          ).asJava), env.admin)).getMessage)
       assertEquals(String.format(
         "foo.bar was downgraded to 1.%n" +
         "Could not downgrade metadata.version to 7. Can't downgrade to newer version.%n"),
@@ -269,11 +277,13 @@ class FeatureCommandUnitTest {
   @Test
   def testHandleDowngradeDryRun(): Unit = {
     TestUtils.resource(FeatureCommandTestEnv(buildAdminClient1())) { env =>
-      FeatureCommand.handleDowngrade(env.out, new Namespace(Map(
-        "metadata" -> "3.3-IV3",
-        "feature" -> util.Arrays.asList("foo.bar=1"),
-        "dry-run" -> java.lang.Boolean.valueOf(true)
-      ).asJava), env.admin)
+      assertEquals("1 out of 2 operation(s) failed.",
+        assertThrows(classOf[TerseFailure], () =>
+          FeatureCommand.handleDowngrade(env.out, new Namespace(Map(
+            "metadata" -> "3.3-IV3",
+            "feature" -> util.Arrays.asList("foo.bar=1"),
+            "dry-run" -> java.lang.Boolean.valueOf(true)
+          ).asJava), env.admin)).getMessage)
       assertEquals(String.format(
         "foo.bar can be downgraded to 1.%n" +
         "Can not downgrade metadata.version to 7. Can't downgrade to newer version.%n"),
@@ -284,13 +294,15 @@ class FeatureCommandUnitTest {
   @Test
   def testHandleDisable(): Unit = {
     TestUtils.resource(FeatureCommandTestEnv(buildAdminClient1())) { env =>
-      FeatureCommand.handleDisable(env.out, new Namespace(Map[String, AnyRef](
-        "feature" -> util.Arrays.asList("foo.bar", "metadata.version", "quux")
-      ).asJava), env.admin)
+      assertEquals("1 out of 3 operation(s) failed.",
+        assertThrows(classOf[TerseFailure], () =>
+          FeatureCommand.handleDisable(env.out, new Namespace(Map[String, AnyRef](
+            "feature" -> util.Arrays.asList("foo.bar", "metadata.version", "quux")
+          ).asJava), env.admin)).getMessage)
       assertEquals(String.format(
         "foo.bar was disabled.%n" +
-        "Could not disable metadata.version. Can't downgrade below 4%n" +
-        "quux was disabled.%n"),
+          "Could not disable metadata.version. Can't downgrade below 4%n" +
+          "quux was disabled.%n"),
         env.stream.toString)
     }
   }
@@ -298,14 +310,16 @@ class FeatureCommandUnitTest {
   @Test
   def testHandleDisableDryRun(): Unit = {
     TestUtils.resource(FeatureCommandTestEnv(buildAdminClient1())) { env =>
-      FeatureCommand.handleDisable(env.out, new Namespace(Map[String, AnyRef](
-        "feature" -> util.Arrays.asList("foo.bar", "metadata.version", "quux"),
-        "dry-run" -> java.lang.Boolean.valueOf(true)
-      ).asJava), env.admin)
+      assertEquals("1 out of 3 operation(s) failed.",
+        assertThrows(classOf[TerseFailure], () =>
+          FeatureCommand.handleDisable(env.out, new Namespace(Map[String, AnyRef](
+            "feature" -> util.Arrays.asList("foo.bar", "metadata.version", "quux"),
+            "dry-run" -> java.lang.Boolean.valueOf(true)
+          ).asJava), env.admin)).getMessage)
       assertEquals(String.format(
         "foo.bar can be disabled.%n" +
-        "Can not disable metadata.version. Can't downgrade below 4%n" +
-        "quux can be disabled.%n"),
+          "Can not disable metadata.version. Can't downgrade below 4%n" +
+          "quux can be disabled.%n"),
         env.stream.toString)
     }
   }
