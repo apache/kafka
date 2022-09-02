@@ -42,6 +42,8 @@ object FetchSession {
   val NUM_INCREMENTAL_FETCH_PARTITIONS_CACHED = "NumIncrementalFetchPartitionsCached"
   val INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC = "IncrementalFetchSessionEvictionsPerSec"
   val EVICTIONS = "evictions"
+  val INCREMENTAL_FETCH_SESSION_CACHE_MISSES_PER_SEC = "IncrementalFetchSessionCacheMissesPerSec"
+  val CACHE_MISSES = "cacheMisses"
 
   def partitionsToLogString(partitions: util.Collection[TopicPartition], traceEnabled: Boolean): String = {
     if (traceEnabled) {
@@ -564,6 +566,10 @@ class FetchSessionCache(private val maxEntries: Int,
   private[server] val evictionsMeter = newMeter(FetchSession.INCREMENTAL_FETCH_SESSIONS_EVICTIONS_PER_SEC,
     FetchSession.EVICTIONS, TimeUnit.SECONDS, Map.empty)
 
+  removeMetric(FetchSession.INCREMENTAL_FETCH_SESSION_CACHE_MISSES_PER_SEC)
+  val cacheMissesMeter = newMeter(FetchSession.INCREMENTAL_FETCH_SESSION_CACHE_MISSES_PER_SEC,
+    FetchSession.CACHE_MISSES, TimeUnit.SECONDS, Map.empty)
+
   /**
     * Get a session by session ID.
     *
@@ -572,6 +578,13 @@ class FetchSessionCache(private val maxEntries: Int,
     */
   def get(sessionId: Int): Option[FetchSession] = synchronized {
     sessions.get(sessionId)
+  }
+
+  /**
+    * Records the event that the cache did not have a session it might have been expected to have (ie. a cache miss).
+    */
+  def markCacheMiss() = synchronized {
+    cacheMissesMeter.mark();
   }
 
   /**
@@ -767,6 +780,7 @@ class FetchManager(private val time: Time,
         cache.get(reqMetadata.sessionId) match {
           case None => {
             debug(s"Session error for ${reqMetadata.sessionId}: no such session ID found.")
+            cache.markCacheMiss();
             new SessionErrorContext(Errors.FETCH_SESSION_ID_NOT_FOUND, reqMetadata)
           }
           case Some(session) => session.synchronized {
