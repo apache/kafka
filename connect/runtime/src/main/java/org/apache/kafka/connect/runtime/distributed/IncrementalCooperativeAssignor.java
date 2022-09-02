@@ -91,7 +91,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         this.previousGenerationId = -1;
         this.previousMembers = Collections.emptySet();
         this.numSuccessiveRevokingRebalances = 0;
-        this.consecutiveRevokingRebalancesBackoff = new ExponentialBackoff(10, 20, maxDelay, 0.2);
+        this.consecutiveRevokingRebalancesBackoff = new ExponentialBackoff(10, 20, maxDelay, 0);
     }
 
     @Override
@@ -300,26 +300,23 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             Map<String, ConnectorsAndTasks> toExplicitlyRevoke =
                     performTaskRevocation(configured, completeWorkerAssignment);
 
-            toExplicitlyRevoke.forEach(
-                (worker, assignment) -> {
-                    ConnectorsAndTasks existing = toRevoke.computeIfAbsent(
-                        worker,
-                        v -> new ConnectorsAndTasks.Builder().build());
-                    existing.connectors().addAll(assignment.connectors());
-                    existing.tasks().addAll(assignment.tasks());
-                }
-            );
-
             // If this round and the previous round involved revocation, we will do an exponential
             // backoff delay to prevent rebalance storms.
             if (revokedInPrevious && !toExplicitlyRevoke.isEmpty()) {
                 numSuccessiveRevokingRebalances++;
+                log.debug("Consecutive revoking rebalances observed. Computing exponential backoff delay.");
                 delay = (int) consecutiveRevokingRebalancesBackoff.backoff(numSuccessiveRevokingRebalances);
-                log.debug("Consecutive revoking rebalances observed. Need to wait for {} ms", delay);
-                scheduledRebalance = time.milliseconds() + delay;
+                if (delay != 0) {
+                    log.debug("Skipping revocations in the current round with a delay of {}ms", delay);
+                    scheduledRebalance = time.milliseconds() + delay;
+                } else {
+                    log.debug("Revoking the assignments straight-away as the exponential backoff delay is 0ms");
+                    revoke(toRevoke, toExplicitlyRevoke);
+                }
             } else if (!toExplicitlyRevoke.isEmpty()) {
                 // We had a revocation in this round but not in the previous round. Let's store that state.
                 log.debug("Performing allocation-balancing revocation immediately as no revocations took place during the previous rebalance");
+                revoke(toRevoke, toExplicitlyRevoke);
                 revokedInPrevious = true;
             } else if (revokedInPrevious) {
                 // No revocations in this round but the previous round had one. Probably the workers
@@ -367,6 +364,18 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 revokedTasks,
                 diff(connectorAssignments, revokedConnectors),
                 diff(taskAssignments, revokedTasks)
+        );
+    }
+
+    private void revoke(Map<String, ConnectorsAndTasks> toRevoke, Map<String, ConnectorsAndTasks> toExplicitlyRevoke) {
+        toExplicitlyRevoke.forEach(
+                (worker, assignment) -> {
+                    ConnectorsAndTasks existing = toRevoke.computeIfAbsent(
+                            worker,
+                            v -> new ConnectorsAndTasks.Builder().build());
+                    existing.connectors().addAll(assignment.connectors());
+                    existing.tasks().addAll(assignment.tasks());
+                }
         );
     }
 

@@ -130,8 +130,6 @@ public class IncrementalCooperativeAssignorTest {
         assertConnectorAllocations(3);
         assertTaskAllocations(12);
         assertBalancedAndCompleteAllocation();
-        // Flag should not be set
-        assertFalse(assignor.revokedInPrevious);
 
         // Second assignment with a second worker joining and all connectors running on previous worker
         // We should revoke.
@@ -141,8 +139,6 @@ public class IncrementalCooperativeAssignorTest {
         assertWorkers("worker1", "worker2");
         assertConnectorAllocations(0, 2);
         assertTaskAllocations(0, 6);
-        // Flag should still be set
-        assertTrue(assignor.revokedInPrevious);
 
         // Third assignment immediately after revocations, and a third worker joining.
         // This is a successive revoking rebalance. The assignments should be balanced
