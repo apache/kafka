@@ -170,22 +170,14 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * @throws Exception rethrow if a non-retriable Exception is thrown by the operation
      */
     protected <V> V execAndRetry(Operation<V> operation) throws Exception {
-        RetriableException lastException = null;
         int attempt = 0;
         long startTime = time.milliseconds();
         long deadline = (errorRetryTimeout >= 0) ? startTime + errorRetryTimeout : Long.MAX_VALUE;
         do {
-            if (stopping) {
-                log.trace("Shutdown has been scheduled. Marking operation as failed.");
-                context.error(new ConnectException(lastException));
-                return null;
-            }
-
             try {
                 attempt++;
                 return operation.call();
             } catch (RetriableException e) {
-                lastException = e;
                 log.trace("Caught a retriable exception while executing {} operation with {}", context.stage(), context.executingClass());
                 errorHandlingMetrics.recordFailure();
                 if (time.milliseconds() < deadline) {
@@ -193,6 +185,11 @@ public class RetryWithToleranceOperator implements AutoCloseable {
                     errorHandlingMetrics.recordRetry();
                 } else {
                     log.trace("Can't retry. start={}, attempt={}, deadline={}", startTime, attempt, deadline);
+                    context.error(e);
+                    return null;
+                }
+                if (stopping) {
+                    log.trace("Shutdown has been scheduled. Marking operation as failed.");
                     context.error(e);
                     return null;
                 }
