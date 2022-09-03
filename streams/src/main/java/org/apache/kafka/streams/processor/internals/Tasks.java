@@ -157,15 +157,23 @@ class Tasks implements TasksRegistry {
     public void addActiveTasks(final Collection<Task> newTasks) {
         if (!newTasks.isEmpty()) {
             for (final Task activeTask : newTasks) {
-                addActiveTask(activeTask);
+                addTask(activeTask);
             }
         }
     }
 
     @Override
-    public void addActiveTask(final Task task) {
-        final TaskId taskId = task.id();
+    public void addStandbyTasks(final Collection<Task> newTasks) {
+        if (!newTasks.isEmpty()) {
+            for (final Task standbyTask : newTasks) {
+                addTask(standbyTask);
+            }
+        }
+    }
 
+    @Override
+    public void addTask(final Task task) {
+        final TaskId taskId = task.id();
         if (activeTasksPerId.containsKey(taskId)) {
             throw new IllegalStateException("Attempted to create an active task that we already own: " + taskId);
         }
@@ -174,29 +182,14 @@ class Tasks implements TasksRegistry {
             throw new IllegalStateException("Attempted to create an active task while we already own its standby: " + taskId);
         }
 
-        activeTasksPerId.put(task.id(), task);
-        pendingActiveTasksToCreate.remove(task.id());
-        for (final TopicPartition topicPartition : task.inputPartitions()) {
-            activeTasksPerPartition.put(topicPartition, task);
-        }
-    }
-
-    @Override
-    public void addStandbyTasks(final Collection<Task> newTasks) {
-        if (!newTasks.isEmpty()) {
-            for (final Task standbyTask : newTasks) {
-                final TaskId taskId = standbyTask.id();
-
-                if (standbyTasksPerId.containsKey(taskId)) {
-                    throw new IllegalStateException("Attempted to create an standby task that we already own: " + taskId);
-                }
-
-                if (activeTasksPerId.containsKey(taskId)) {
-                    throw new IllegalStateException("Attempted to create an standby task while we already own its active: " + taskId);
-                }
-
-                standbyTasksPerId.put(standbyTask.id(), standbyTask);
+        if (task.isActive()) {
+            activeTasksPerId.put(task.id(), task);
+            pendingActiveTasksToCreate.remove(task.id());
+            for (final TopicPartition topicPartition : task.inputPartitions()) {
+                activeTasksPerPartition.put(topicPartition, task);
             }
+        } else {
+            standbyTasksPerId.put(task.id(), task);
         }
     }
 
@@ -342,15 +335,5 @@ class Tasks implements TasksRegistry {
     @Override
     public boolean contains(final TaskId taskId) {
         return getTask(taskId) != null;
-    }
-
-    // for testing only
-    @Override
-    public void addTask(final Task task) {
-        if (task.isActive()) {
-            activeTasksPerId.put(task.id(), task);
-        } else {
-            standbyTasksPerId.put(task.id(), task);
-        }
     }
 }

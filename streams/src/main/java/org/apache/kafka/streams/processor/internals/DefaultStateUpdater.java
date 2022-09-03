@@ -175,8 +175,18 @@ public class DefaultStateUpdater implements StateUpdater {
                     throw new IllegalStateException("Task " + taskId + " is corrupted but is not updating. " + BUG_ERROR_MESSAGE);
                 }
                 corruptedTasks.add(corruptedTask);
+                removeCheckpointForCorruptedTask(corruptedTask);
             }
             addToExceptionsAndFailedTasksThenRemoveFromUpdatingTasks(new ExceptionAndTasks(corruptedTasks, taskCorruptedException));
+        }
+
+        // TODO: we can let the exception encode the actual corrupted changelog partitions and only
+        //       mark those instead of marking all changelogs
+        private void removeCheckpointForCorruptedTask(final Task task) {
+            task.markChangelogAsCorrupted(task.changelogPartitions());
+
+            // we need to enforce a checkpoint that removes the corrupted partitions
+            task.maybeCheckpoint(true);
         }
 
         private void handleStreamsException(final StreamsException streamsException) {
