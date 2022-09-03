@@ -272,8 +272,9 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         if (delay > errorMaxDelayInMillis) {
             delay = ThreadLocalRandom.current().nextLong(errorMaxDelayInMillis);
         }
-        if (delay + time.milliseconds() > deadline) {
-            delay = deadline - time.milliseconds();
+        long currentTime = time.milliseconds();
+        if (delay + currentTime > deadline) {
+            delay = deadline - currentTime;
         }
         log.debug("Sleeping for up to {} millis", delay);
         try {
