@@ -861,7 +861,7 @@ public class StandaloneHerderTest {
         FutureCallback<Herder.Created<ConnectorInfo>> reconfigureCallback = new FutureCallback<>();
         herder.putConnectorConfig(CONNECTOR_NAME, newConnConfig, true, reconfigureCallback);
         Herder.Created<ConnectorInfo> newConnectorInfo = reconfigureCallback.get(1000L, TimeUnit.SECONDS);
-        ConnectorInfo newConnInfo = new ConnectorInfo(CONNECTOR_NAME, newConnConfig, singletonList(new ConnectorTaskId(CONNECTOR_NAME, 0)),
+        ConnectorInfo newConnInfo = new ConnectorInfo(CONNECTOR_NAME, newConnConfig, Arrays.asList(new ConnectorTaskId(CONNECTOR_NAME, 0)),
             ConnectorType.SOURCE);
         assertEquals(newConnInfo, newConnectorInfo.result());
 
