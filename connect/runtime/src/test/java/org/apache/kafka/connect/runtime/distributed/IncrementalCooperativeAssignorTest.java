@@ -50,7 +50,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
 import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -120,10 +119,10 @@ public class IncrementalCooperativeAssignorTest {
     }
 
     @Test
-    public void testAssignmentsWhenWorkerJoinsAfterRevocations() throws InterruptedException {
+    public void testAssignmentsWhenWorkersJoinAfterRevocations()  {
 
-        // First assignment with 1 worker and 2 connectors configured but not yet assigned
         addNewConnector("connector3", 4);
+        // First assignment with 1 worker and 2 connectors configured but not yet assigned
         performStandardRebalance();
         assertDelay(0);
         assertWorkers("worker1");
@@ -135,36 +134,28 @@ public class IncrementalCooperativeAssignorTest {
         // We should revoke.
         addNewEmptyWorkers("worker2");
         performStandardRebalance();
-        assertDelay(0);
         assertWorkers("worker1", "worker2");
         assertConnectorAllocations(0, 2);
         assertTaskAllocations(0, 6);
 
         // Third assignment immediately after revocations, and a third worker joining.
-        // This is a successive revoking rebalance. The assignments should be balanced
-        // at the end of this round but this should be the start of an exponential backoff
-        // for any successive rebalance delays.
+        // This is a successive revoking rebalance. We should not perform any revocations
+        // in this round
         addNewEmptyWorkers("worker3");
         performStandardRebalance();
         assertTrue(assignor.delay > 0);
         assertWorkers("worker1", "worker2", "worker3");
-        assertConnectorAllocations(0, 1, 1);
-        assertTaskAllocations(3, 3, 4);
-        assertBalancedAllocation();
-        // Flag should still be set
-        assertTrue(assignor.revokedInPrevious);
+        assertConnectorAllocations(0, 1, 2);
+        assertTaskAllocations(3, 3, 6);
 
-        // Fourth assignment after revocations, and a fourth worker joining
+        // Fourth assignment and a fourth worker joining
         // Since the worker is joining immediately and within the rebalance delay
         // there should not be any revoking rebalance
         addNewEmptyWorkers("worker4");
         performStandardRebalance();
-        assertTrue(assignor.delay > 0);
         assertWorkers("worker1", "worker2", "worker3", "worker4");
-        assertConnectorAllocations(0, 1, 1, 1);
-        assertTaskAllocations(2, 3, 3, 4);
-        // Flag should still be set
-        assertTrue(assignor.revokedInPrevious);
+        assertConnectorAllocations(0, 0, 1, 2);
+        assertTaskAllocations(0, 3, 3, 6);
 
         // Add new worker immediately. Since a scheduled rebalance is in progress,
         // There should still not be be any revocations
@@ -172,34 +163,105 @@ public class IncrementalCooperativeAssignorTest {
         performStandardRebalance();
         assertTrue(assignor.delay > 0);
         assertWorkers("worker1", "worker2", "worker3", "worker4", "worker5");
-        assertConnectorAllocations(0, 0, 1, 1, 1);
-        assertTaskAllocations(0, 2, 3, 3, 4);
-        // Flag should still be set
-        assertTrue(assignor.revokedInPrevious);
+        assertConnectorAllocations(0, 0, 0, 1, 2);
+        assertTaskAllocations(0, 0, 3, 3, 6);
 
         // Add new worker but this time after crossing the delay.
         // There would be revocations allowed
         time.sleep(assignor.delay);
         addNewEmptyWorkers("worker6");
         performStandardRebalance();
-        assertTrue(assignor.delay > 0);
+        assertDelay(0);
         assertWorkers("worker1", "worker2", "worker3", "worker4", "worker5", "worker6");
-        assertConnectorAllocations(0, 0, 0, 1, 1, 1);
-        assertTaskAllocations(0, 0, 2, 2, 2, 2);
-        // Flag should be set
-        assertTrue(assignor.revokedInPrevious);
+        assertConnectorAllocations(0, 0, 0, 0, 1, 1);
+        assertTaskAllocations(0, 0, 0, 2, 2, 2);
 
-        // Another rebalance after crossing the scheduled rebalance delay. This is
-        // just to assert that we would get balanced and complete assignments.
-        // Rebalance clock should be reset as well
-        time.sleep(assignor.delay);
+        // Follow up rebalance since there were revocations
         performStandardRebalance();
         assertWorkers("worker1", "worker2", "worker3", "worker4", "worker5", "worker6");
         assertConnectorAllocations(0, 0, 0, 1, 1, 1);
         assertTaskAllocations(2, 2, 2, 2, 2, 2);
-        assertFalse(assignor.revokedInPrevious);
+        assertBalancedAndCompleteAllocation();
+    }
+
+    @Test
+    public void testImmediateRevocationsWhenMaxDelayIs0()  {
+
+        // Customize assignor for this test case
+        rebalanceDelay = 0;
+        initAssignor();
+
+        addNewConnector("connector3", 4);
+        // First assignment with 1 worker and 2 connectors configured but not yet assigned
+        performStandardRebalance();
+        assertDelay(0);
+        assertWorkers("worker1");
+        assertConnectorAllocations(3);
+        assertTaskAllocations(12);
         assertBalancedAndCompleteAllocation();
 
+        // Second assignment with a second worker joining and all connectors running on previous worker
+        // We should revoke.
+        addNewEmptyWorkers("worker2");
+        performStandardRebalance();
+        assertWorkers("worker1", "worker2");
+        assertConnectorAllocations(0, 2);
+        assertTaskAllocations(0, 6);
+
+        // Third assignment immediately after revocations, and a third worker joining.
+        // This is a successive revoking rebalance but we should still revoke as rebalance delay is 0
+        addNewEmptyWorkers("worker3");
+        performStandardRebalance();
+        assertDelay(0);
+        assertWorkers("worker1", "worker2", "worker3");
+        assertConnectorAllocations(0, 1, 1);
+        assertTaskAllocations(3, 3, 4);
+
+        // Follow up rebalance post revocations
+        performStandardRebalance();
+        assertWorkers("worker1", "worker2", "worker3");
+        assertConnectorAllocations(1, 1, 1);
+        assertTaskAllocations(4, 4, 4);
+        assertBalancedAndCompleteAllocation();
+    }
+
+    @Test
+    public void testSuccessiveRevocationsWhenMaxDelayIsEqualToExpBackOffInitialInterval() {
+
+        rebalanceDelay = 1;
+        initAssignor();
+
+        addNewConnector("connector3", 4);
+        // First assignment with 1 worker and 2 connectors configured but not yet assigned
+        performStandardRebalance();
+        assertDelay(0);
+        assertWorkers("worker1");
+        assertConnectorAllocations(3);
+        assertTaskAllocations(12);
+        assertBalancedAndCompleteAllocation();
+
+        // Second assignment with a second worker joining and all connectors running on previous worker
+        // We should revoke.
+        addNewEmptyWorkers("worker2");
+        performStandardRebalance();
+        assertWorkers("worker1", "worker2");
+        assertConnectorAllocations(0, 2);
+        assertTaskAllocations(0, 6);
+
+        // Third assignment immediately after revocations, and a third worker joining.
+        // This is a successive revoking rebalance. We shouldn't revoke as maxDelay is 1 ms
+        addNewEmptyWorkers("worker3");
+        performStandardRebalance();
+        assertDelay(1);
+        assertWorkers("worker1", "worker2", "worker3");
+        assertConnectorAllocations(0, 1, 2);
+        assertTaskAllocations(3, 3, 6);
+
+        // Follow up rebalance post revocations. No revocations should have happened
+        performStandardRebalance();
+        assertWorkers("worker1", "worker2", "worker3");
+        assertConnectorAllocations(0, 1, 2);
+        assertTaskAllocations(3, 3, 6);
     }
 
     @Test
@@ -433,18 +495,24 @@ public class IncrementalCooperativeAssignorTest {
 
         // Third assignment happens with members returning the same assignments (memberConfigs)
         // as the first time. Since this is a consecutive revoking rebalance, delay should be non-zero
+        // but no revoking rebalances
         performStandardRebalance();
         assertTrue(assignor.delay > 0);
+        assertConnectorAllocations(0, 1, 1);
+        assertTaskAllocations(0, 4, 4);
+
+        // Wait for delay ms before triggering another rebalance
+        time.sleep(assignor.delay);
+        // Fourth assignment after revocations.
+        performStandardRebalance();
+        assertDelay(0);
         assertConnectorAllocations(0, 1, 1);
         assertTaskAllocations(0, 3, 3);
 
-        // Fourth assignment after revocations. Since this is an immediate rebalance, the delay
-        // set due to successive revoking rebalances would still be active.
+        // Follow up rebalance due to revocations
         performStandardRebalance();
-        assertTrue(assignor.delay > 0);
         assertConnectorAllocations(0, 1, 1);
         assertTaskAllocations(2, 3, 3);
-        assertBalancedAndCompleteAllocation();
     }
 
     @Test
@@ -475,15 +543,20 @@ public class IncrementalCooperativeAssignorTest {
 
         // Third assignment happens with members returning the same assignments (memberConfigs)
         // as the first time. Since this is a consecutive revoking rebalance, there should be delay
+        // not leading to revocations.
         performRebalanceWithMismatchedGeneration();
         assertTrue(assignor.delay > 0);
         assertConnectorAllocations(0, 1, 1);
-        assertTaskAllocations(0, 3, 3);
+        assertTaskAllocations(0, 4, 4);
 
+        // Wait for delay to get revoking rebalances
+        time.sleep(assignor.delay);
         // Fourth assignment after revocations
         performStandardRebalance();
-        // There's still an active rebalanced delay
-        assertTrue(assignor.delay > 0);
+        assertConnectorAllocations(0, 1, 1);
+        assertTaskAllocations(0, 3, 3);
+
+        performStandardRebalance();
         assertConnectorAllocations(0, 1, 1);
         assertTaskAllocations(2, 3, 3);
         assertBalancedAndCompleteAllocation();

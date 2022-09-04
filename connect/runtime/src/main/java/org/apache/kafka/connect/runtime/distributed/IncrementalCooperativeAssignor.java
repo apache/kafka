@@ -66,8 +66,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     private final int maxDelay;
     private ConnectorsAndTasks previousAssignment;
     private final ConnectorsAndTasks previousRevocation;
-    // visible for testing
-    boolean revokedInPrevious;
+    private boolean revokedInPrevious;
     protected final Set<String> candidateWorkersForReassignment;
     protected long scheduledRebalance;
     protected int delay;
@@ -91,7 +90,10 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         this.previousGenerationId = -1;
         this.previousMembers = Collections.emptySet();
         this.numSuccessiveRevokingRebalances = 0;
-        this.consecutiveRevokingRebalancesBackoff = new ExponentialBackoff(10, 20, maxDelay, 0);
+        // By default, initial interval is 1. The only corner case is when the user has set maxDelay to 0
+        // in which case, the exponential backoff delay should be 0. We just set the initialInterval parameter here
+        // but it won't be used to compute delays.
+        this.consecutiveRevokingRebalancesBackoff = new ExponentialBackoff(maxDelay == 0 ? 0 : 1, 30, maxDelay, 0);
     }
 
     @Override
@@ -292,25 +294,24 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         handleLostAssignments(lostAssignments, newSubmissions, completeWorkerAssignment);
 
-        if (delay > 0) {
-            log.debug("Delaying {}ms for revoking tasks.", delay);
-        }
         // Do not revoke resources for re-assignment while a delayed rebalance is active
         if (delay == 0) {
             Map<String, ConnectorsAndTasks> toExplicitlyRevoke =
                     performTaskRevocation(configured, completeWorkerAssignment);
 
-            // If this round and the previous round involved revocation, we will do an exponential
-            // backoff delay to prevent rebalance storms.
+            // If this round and the previous round involved revocation, we will calculate a delay for
+            // the next round when revoking rebalance would be allowed. Note that delay could be 0, in which
+            // case we would always revoke.
             if (revokedInPrevious && !toExplicitlyRevoke.isEmpty()) {
                 numSuccessiveRevokingRebalances++;
-                log.debug("Consecutive revoking rebalances observed. Computing exponential backoff delay.");
-                delay = (int) consecutiveRevokingRebalancesBackoff.backoff(numSuccessiveRevokingRebalances);
+                log.debug("Consecutive revoking rebalances observed. Computing delay and next scheduled rebalance.");
+                delay = (maxDelay == 0) ? 0 : (int) consecutiveRevokingRebalancesBackoff.backoff(numSuccessiveRevokingRebalances);
                 if (delay != 0) {
-                    log.debug("Skipping revocations in the current round with a delay of {}ms", delay);
                     scheduledRebalance = time.milliseconds() + delay;
+                    log.debug("Skipping revocations in the current round with a delay of {}ms. Next scheduled rebalance:{}",
+                            delay, scheduledRebalance);
                 } else {
-                    log.debug("Revoking the assignments straight-away as the exponential backoff delay is 0ms");
+                    log.debug("Revoking assignments as scheduled.rebalance.max.delay.ms is set to 0");
                     revoke(toRevoke, toExplicitlyRevoke);
                 }
             } else if (!toExplicitlyRevoke.isEmpty()) {
@@ -326,11 +327,11 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 numSuccessiveRevokingRebalances = 0;
                 revokedInPrevious = false;
             } else {
-                // revokedInPrevious is false and no revocations needed in this round. no-op.
+                // no-op
                 log.debug("No revocations in previous and current round.");
             }
         } else {
-            log.debug("Connector and task to revoke assignments: {}", toRevoke);
+            log.debug("Delayed rebalance is active. Delaying {}ms before revoking connectors and tasks: {}", delay, toRevoke);
         }
 
         assignConnectors(completeWorkerAssignment, newSubmissions.connectors());
@@ -554,6 +555,9 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 newSubmissions.tasks().addAll(lostAssignments.tasks());
             }
             resetDelay();
+            // Resetting the flag as now we can permit successive revoking rebalances.
+            // since we have gone through the full rebalance delay
+            revokedInPrevious = false;
         } else {
             candidateWorkersForReassignment
                     .addAll(candidateWorkersForReassignment(completeWorkerAssignment));
