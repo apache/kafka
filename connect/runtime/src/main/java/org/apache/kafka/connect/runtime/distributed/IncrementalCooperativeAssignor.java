@@ -91,8 +91,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         this.previousMembers = Collections.emptySet();
         this.numSuccessiveRevokingRebalances = 0;
         // By default, initial interval is 1. The only corner case is when the user has set maxDelay to 0
-        // in which case, the exponential backoff delay should be 0. We just set the initialInterval parameter here
-        // but it won't be used to compute delays.
+        // in which case, the exponential backoff delay should be 0 which would return the backoff delay to be 0 always
         this.consecutiveRevokingRebalancesBackoff = new ExponentialBackoff(maxDelay == 0 ? 0 : 1, 30, maxDelay, 0);
     }
 
@@ -305,7 +304,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             if (revokedInPrevious && !toExplicitlyRevoke.isEmpty()) {
                 numSuccessiveRevokingRebalances++;
                 log.debug("Consecutive revoking rebalances observed. Computing delay and next scheduled rebalance.");
-                delay = (maxDelay == 0) ? 0 : (int) consecutiveRevokingRebalancesBackoff.backoff(numSuccessiveRevokingRebalances);
+                delay = (int) consecutiveRevokingRebalancesBackoff.backoff(numSuccessiveRevokingRebalances);
                 if (delay != 0) {
                     scheduledRebalance = time.milliseconds() + delay;
                     log.debug("Skipping revocations in the current round with a delay of {}ms. Next scheduled rebalance:{}",
