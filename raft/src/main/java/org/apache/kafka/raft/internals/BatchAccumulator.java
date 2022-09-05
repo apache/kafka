@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.CompressionType;
@@ -24,6 +23,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
+import org.apache.kafka.raft.errors.RaftBatchTooLargeException;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import org.apache.kafka.common.message.LeaderChangeMessage;
@@ -101,7 +101,7 @@ public class BatchAccumulator<T> implements Closeable {
      *              will be thrown
      * @param records the list of records to include in the batches
      * @return the expected offset of the last record
-     * @throws RecordBatchTooLargeException if the size of one record T is greater than the maximum
+     * @throws RaftBatchTooLargeException if the size of one record T is greater than the maximum
      *         batch size; if this exception is throw some of the elements in records may have
      *         been committed
      * @throws NotLeaderException if the epoch is less than the leader epoch
@@ -121,7 +121,7 @@ public class BatchAccumulator<T> implements Closeable {
      *              will be thrown
      * @param records the list of records to include in a batch
      * @return the expected offset of the last record
-     * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
+     * @throws RaftBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
      * @throws NotLeaderException if the epoch is less than the leader epoch
@@ -190,7 +190,7 @@ public class BatchAccumulator<T> implements Closeable {
         if (currentBatch != null) {
             OptionalInt bytesNeeded = currentBatch.bytesNeeded(records, serializationCache);
             if (bytesNeeded.isPresent() && bytesNeeded.getAsInt() > maxBatchSize) {
-                throw new RecordBatchTooLargeException(
+                throw new RaftBatchTooLargeException(
                     String.format(
                         "The total record(s) size of %d exceeds the maximum allowed batch size of %d",
                         bytesNeeded.getAsInt(),
