@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
@@ -271,9 +272,11 @@ public class RecordAccumulator {
                 // Now that we know the effective partition, let the caller know.
                 setPartition(callbacks, effectivePartition);
 
+                // boolean to check if a new Deque<ProducerBatch> will get created for this partition.
+                boolean noDqForPartition = !topicInfo.batches.containsKey(effectivePartition);
+
                 // check if we have an in-progress batch
                 Deque<ProducerBatch> dq = topicInfo.batches.computeIfAbsent(effectivePartition, k -> new ArrayDeque<>());
-                RecordAppendResult appendResult;
                 synchronized (dq) {
                     // After taking the lock, validate that the partition hasn't changed and retry.
                     if (topicInfo.builtInPartitioner.isPartitionChanged(partitionInfo)) {
@@ -281,17 +284,19 @@ public class RecordAccumulator {
                                 partitionInfo.partition(), topic);
                         continue;
                     }
-                    appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
-                    if (appendResult != null && !appendResult.newBatchCreated) {
+                    RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
+                    if (appendResult != null) {
                         topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster);
                         return appendResult;
                     }
                 }
 
-                // either 1. current topicPartition producerBatch is full - return and prepare for another batch/partition.
-                // 2. no producerBatch existed for this topicPartition, create a new producerBatch.
-                if (appendResult == null && abortOnNewBatch) {
-                    // existing batch is full, return a result that will cause another call to append.
+                // noDqForPartition is true either when 1. partition was encountered for first time so no Deque existed previously.
+                // 2. DQ was removed due to - all batches were cleared due to expiration or sender cleared batches after draining.
+                // if so, abort and look to call partitioner -> onNewBatch and select other partition.
+                // This prevents a single partition getting re-selected after recent drain.
+                if (abortOnNewBatch && noDqForPartition) {
+                    // existing batch is full or no batch exists, return a result that will cause another call to append.
                     return new RecordAppendResult(null, false, false, true, 0);
                 }
 
@@ -315,7 +320,7 @@ public class RecordAccumulator {
                                 partitionInfo.partition(), topic);
                         continue;
                     }
-                    appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks, buffer, nowMs);
+                    RecordAppendResult appendResult = appendNewBatch(topic, effectivePartition, dq, timestamp, key, value, headers, callbacks, buffer, nowMs);
                     // Set buffer to null, so that deallocate doesn't return it back to free pool, since it's used in the batch.
                     if (appendResult.newBatchCreated)
                         buffer = null;
@@ -356,7 +361,7 @@ public class RecordAccumulator {
         assert partition != RecordMetadata.UNKNOWN_PARTITION;
 
         RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
-        if (appendResult != null && !appendResult.newBatchCreated) {
+        if (appendResult != null) {
             // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
             return appendResult;
         }
@@ -397,15 +402,13 @@ public class RecordAccumulator {
             int initialBytes = last.estimatedSizeInBytes();
             FutureRecordMetadata future = last.tryAppend(timestamp, key, value, headers, callback, nowMs);
             if (future == null) {
-                // producerBatch doesn't have anymore room, return then try to create a new batch.
                 last.closeForRecordAppends();
-                return null;
             } else {
                 int appendedBytes = last.estimatedSizeInBytes() - initialBytes;
                 return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false, false, appendedBytes);
             }
         }
-        return new RecordAppendResult(null, false, true, false, 0);
+        return null;
     }
 
     private boolean isMuted(TopicPartition tp) {
@@ -432,19 +435,26 @@ public class RecordAccumulator {
      */
     public List<ProducerBatch> expiredBatches(long now) {
         List<ProducerBatch> expiredBatches = new ArrayList<>();
-        for (TopicInfo topicInfo : topicInfoMap.values()) {
-            for (Deque<ProducerBatch> deque : topicInfo.batches.values()) {
+        for (Entry<String, TopicInfo> entryTopicInfo : topicInfoMap.entrySet()) {
+            TopicInfo topicInfo = entryTopicInfo.getValue();
+            for (Entry<Integer, Deque<ProducerBatch>> entry : topicInfo.batches.entrySet()) {
                 // expire the batches in the order of sending
+                Deque<ProducerBatch> deque = entry.getValue();
                 synchronized (deque) {
-                    while (!deque.isEmpty()) {
-                        ProducerBatch batch = deque.getFirst();
-                        if (batch.hasReachedDeliveryTimeout(deliveryTimeoutMs, now)) {
-                            deque.poll();
-                            batch.abortRecordAppends();
-                            expiredBatches.add(batch);
-                        } else {
-                            maybeUpdateNextBatchExpiryTime(batch);
-                            break;
+                    if (!deque.isEmpty()) {
+                        while (!deque.isEmpty()) {
+                            ProducerBatch batch = deque.getFirst();
+                            if (batch.hasReachedDeliveryTimeout(deliveryTimeoutMs, now)) {
+                                deque.poll();
+                                batch.abortRecordAppends();
+                                expiredBatches.add(batch);
+                            } else {
+                                maybeUpdateNextBatchExpiryTime(batch);
+                                break;
+                            }
+                        }
+                        if (deque.isEmpty()) {
+                            clearDeque(new TopicPartition(entryTopicInfo.getKey(), entry.getKey()));
                         }
                     }
                 }
@@ -809,8 +819,10 @@ public class RecordAccumulator {
             synchronized (deque) {
                 // invariant: !isMuted(tp,now) && deque != null
                 ProducerBatch first = deque.peekFirst();
-                if (first == null)
+                if (first == null) {
+                    clearDeque(tp);
                     continue;
+                }
 
                 // first != null
                 boolean backoff = first.attempts() > 0 && first.waitedTimeMs(now) < retryBackoffMs;
@@ -942,6 +954,13 @@ public class RecordAccumulator {
         if (topicInfo == null)
             return null;
         return topicInfo.batches.get(tp.partition());
+    }
+
+    /* Visible for testing */
+    public void clearDeque(TopicPartition tp) {
+        TopicInfo topicInfo = topicInfoMap.get(tp.topic());
+        if (topicInfo != null)
+            topicInfo.batches.remove(tp.partition());
     }
 
     /**

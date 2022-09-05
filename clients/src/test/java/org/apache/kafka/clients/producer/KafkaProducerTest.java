@@ -160,6 +160,16 @@ public class KafkaProducerTest {
                     new PartitionInfo(topic, 2, null, null, null)),
             Collections.emptySet(),
             Collections.emptySet());
+    private final Cluster fourPartitionCluster = new Cluster(
+            "dummy",
+            nodes,
+            Arrays.asList(
+                    new PartitionInfo(topic, 0, null, null, null),
+                    new PartitionInfo(topic, 1, null, null, null),
+                    new PartitionInfo(topic, 2, null, null, null),
+                    new PartitionInfo(topic, 3, null, null, null)),
+            Collections.emptySet(),
+            Collections.emptySet());
     private TestInfo testInfo;
 
     private static final int DEFAULT_METADATA_IDLE_MS = 5 * 60 * 1000;
@@ -2050,15 +2060,24 @@ public class KafkaProducerTest {
         RoundRobinPartitioner roundRobinPartitioner = new RoundRobinPartitioner();
         ProducerMetadata metadata = mock(ProducerMetadata.class);
         configs.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, RoundRobinPartitioner.class.getName());
-        when(metadata.fetch()).thenReturn(threePartitionCluster);
+        when(metadata.fetch()).thenReturn(fourPartitionCluster);
         KafkaProducer<String, String> producer = producerWithOverrideNewPartitioner(configs, metadata, roundRobinPartitioner);
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
+        // the first time, skip partition-0, send to partition-1.
+        producer.send(record);
+        // skip partition-2, send to partition-3.
         producer.send(record);
 
-        // calling partition() again should result 1. This shows producer.send() invoked partitioner.partition() only once.
+        // calling partition() again should result 0. The next partition we get is partition-0
         int newPartitionCount = roundRobinPartitioner.partition(topic, null,
-            null, null, null, threePartitionCluster);
-        assertEquals(1, newPartitionCount);
+            null, null, null, fourPartitionCluster);
+        assertEquals(0, newPartitionCount);
+
+        producer.send(record);
+        // calling partition() again should result 1. The next partition we get is partition-2
+        newPartitionCount = roundRobinPartitioner.partition(topic, null,
+            null, null, null, fourPartitionCluster);
+        assertEquals(2, newPartitionCount);
         producer.close(Duration.ofMillis(0));
     }
 

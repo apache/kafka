@@ -1249,12 +1249,48 @@ public class RecordAccumulatorTest {
     }
 
     @Test
-    public void testFirstRecordCreatesProducerBatchIfNoneExists() throws InterruptedException {
+    public void testProducerBatchIsNotCreatedIfNoDequeExists() throws InterruptedException {
         RecordAccumulator accum = createTestRecordAccumulator(DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
             10L * DefaultRecordBatch.RECORD_BATCH_OVERHEAD, CompressionType.NONE, 10);
+        Deque<ProducerBatch> partitionBatches = accum.getDeque(tp1);
+        assertEquals(null, partitionBatches);
+
+        // accum.append should skip the partition when a partition is encountered the first time.
+        accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, true, time.milliseconds(), cluster);
+        partitionBatches = accum.getDeque(tp1);
+        assertEquals(0, partitionBatches.size());
+
         // accum.append should create a new ProducerBatch if none exists even when abortOnNewBatch is true
         accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, true, time.milliseconds(), cluster);
+        partitionBatches = accum.getDeque(tp1);
+        assertEquals(1, partitionBatches.size());
+    }
+
+    @Test
+    public void testProducerBatchIsNotCreatedIfNoDequeExistsAfterExpire() throws InterruptedException {
+        long createdTimeMs = System.currentTimeMillis();
+        int deliveryTimeoutMs = 10;
+        RecordAccumulator accum = createTestRecordAccumulator(deliveryTimeoutMs, DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
+            10L * DefaultRecordBatch.RECORD_BATCH_OVERHEAD, CompressionType.NONE, 10);
+        // accum.append should skip the partition when a partition is encountered the first time.
+        accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, true, time.milliseconds(), cluster);
         Deque<ProducerBatch> partitionBatches = accum.getDeque(tp1);
+        assertEquals(0, partitionBatches.size());
+
+        // accum.append should create a new ProducerBatch if none exists even when abortOnNewBatch is true and deque existed
+        accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, true, time.milliseconds(), cluster);
+        partitionBatches = accum.getDeque(tp1);
+        assertEquals(1, partitionBatches.size());
+
+        accum.expiredBatches(createdTimeMs + deliveryTimeoutMs + 10);
+        // accum.append should skip the partition when a partition is encountered the first time after batch is expired.
+        accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, true, time.milliseconds(), cluster);
+        partitionBatches = accum.getDeque(tp1);
+        assertEquals(0, partitionBatches.size());
+
+        // accum.append should create a new ProducerBatch if none exists even when abortOnNewBatch is true and deque existed
+        accum.append(topic, partition1, 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs, true, time.milliseconds(), cluster);
+        partitionBatches = accum.getDeque(tp1);
         assertEquals(1, partitionBatches.size());
     }
 
