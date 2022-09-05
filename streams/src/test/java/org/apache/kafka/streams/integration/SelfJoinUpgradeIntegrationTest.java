@@ -57,7 +57,6 @@ import org.junit.rules.TestName;
 
 @Category({IntegrationTest.class})
 public class SelfJoinUpgradeIntegrationTest {
-    private static final String STORE_NAME = "store";
     public static final String INPUT_TOPIC = "selfjoin-input";
     public static final String OUTPUT_TOPIC = "selfjoin-output";
     private String inputTopic;
@@ -197,7 +196,7 @@ public class SelfJoinUpgradeIntegrationTest {
 
         final long currentTime = CLUSTER.time.milliseconds();
         processKeyValueAndVerifyCount("1", "A", currentTime + 42L, asList(
-            new KeyValueTimestamp<String, String>("1", "AA", currentTime + 42L)));
+            new KeyValueTimestamp("1", "AA", currentTime + 42L)));
 
         processKeyValueAndVerifyCount("1", "B", currentTime + 43L, asList(
             new KeyValueTimestamp("1", "BA", currentTime + 43L),

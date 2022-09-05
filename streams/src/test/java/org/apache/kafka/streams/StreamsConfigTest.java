@@ -1012,7 +1012,8 @@ public class StreamsConfigTest {
     @Test
     public void shouldSpecifyNoOptimizationWhenNotExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "none";
-        final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
+        final String actualOptimizedConifig =
+            streamsConfig.getList(TOPOLOGY_OPTIMIZATION_CONFIG).get(0);
         assertEquals("Optimization should be \"none\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
 
@@ -1021,7 +1022,7 @@ public class StreamsConfigTest {
         final String expectedOptimizeConfig = "all";
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "all");
         final StreamsConfig config = new StreamsConfig(props);
-        final String actualOptimizedConifig = config.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
+        final String actualOptimizedConifig = config.getList(TOPOLOGY_OPTIMIZATION_CONFIG).get(0);
         assertEquals("Optimization should be \"all\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
 

@@ -1280,7 +1280,7 @@ public class StreamsConfig extends AbstractConfig {
         if (eosEnabled) {
             verifyEOSTransactionTimeoutCompatibility();
         }
-        verifyTopologyOptimizationConfigs();
+        verifyTopologyOptimizationConfigs(getList(TOPOLOGY_OPTIMIZATION_CONFIG));
     }
 
     private void verifyEOSTransactionTimeoutCompatibility() {
@@ -1669,9 +1669,7 @@ public class StreamsConfig extends AbstractConfig {
         return props;
     }
 
-    private void verifyTopologyOptimizationConfigs() {
-        final List<String> configs = getList(TOPOLOGY_OPTIMIZATION_CONFIG);
-
+    public static void verifyTopologyOptimizationConfigs(final List<String> configs) {
         // Verify it doesn't contain none or all plus a list of optimizations
         if (configs.contains(NO_OPTIMIZATION) || configs.contains(OPTIMIZE)) {
             if (configs.size() > 1) {

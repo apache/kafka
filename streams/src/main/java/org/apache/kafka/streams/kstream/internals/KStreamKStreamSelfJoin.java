@@ -22,12 +22,10 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
-import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -65,7 +63,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
         return new KStreamKStreamSelfJoinProcessor();
     }
 
-    private class KStreamKStreamSelfJoinProcessor extends ContextualProcessor<K, V1, K, VOut> {
+    private class KStreamKStreamSelfJoinProcessor extends StreamStreamJoinProcessor<K, V1, K, VOut> {
         private WindowStore<K, V2> windowStore;
         private Sensor droppedRecordsSensor;
 
@@ -81,27 +79,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
         @SuppressWarnings("unchecked")
         @Override
         public void process(final Record<K, V1> record) {
-            // Copied from inner join:
-            // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
-            //
-            // we also ignore the record if value is null, because in a key-value data model a null-value indicates
-            // an empty message (ie, there is nothing to be joined) -- this contrast SQL NULL semantics
-            // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
-            // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
-            if (record.key() == null || record.value() == null) {
-                if (context().recordMetadata().isPresent()) {
-                    final RecordMetadata recordMetadata = context().recordMetadata().get();
-                    LOG.warn(
-                        "Skipping record due to null key or value. "
-                            + "topic=[{}] partition=[{}] offset=[{}]",
-                        recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
-                    );
-                } else {
-                    LOG.warn(
-                        "Skipping record due to null key or value. Topic, partition, and offset not known."
-                    );
-                }
-                droppedRecordsSensor.record();
+            if (skipRecord(record, LOG, droppedRecordsSensor)) {
                 return;
             }
 

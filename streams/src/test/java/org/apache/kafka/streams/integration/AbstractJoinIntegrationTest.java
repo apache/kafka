@@ -220,8 +220,6 @@ public abstract class AbstractJoinIntegrationTest {
             final TestInputTopic<Long, String> left = driver.createInputTopic(INPUT_TOPIC_LEFT, new LongSerializer(), new StringSerializer());
             final TestOutputTopic<Long, String> outputTopic = driver.createOutputTopic(OUTPUT_TOPIC, new LongDeserializer(), new StringDeserializer());
 
-            TestRecord<Long, String> expectedFinalResult = null;
-
             final long firstTimestamp = time.milliseconds();
             long eventTimestamp = firstTimestamp;
             final Iterator<List<TestRecord<Long, String>>> resultIterator = expectedResult.iterator();
@@ -237,7 +235,6 @@ public abstract class AbstractJoinIntegrationTest {
 
                     final List<TestRecord<Long, String>> output = outputTopic.readRecordsToList();
                     assertThat(output, equalTo(updatedExpected));
-                    expectedFinalResult = updatedExpected.get(expected.size() - 1);
                 }
             }
         }
