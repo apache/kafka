@@ -397,7 +397,8 @@ public class StreamThread extends Thread {
             new Tasks(new LogContext(logPrefix)),
             topologyMetadata,
             adminClient,
-            stateDirectory, maybeCreateAndStartStateUpdater(config, changelogReader, time)
+            stateDirectory,
+            maybeCreateAndStartStateUpdater(config, changelogReader, time)
         );
         referenceContainer.taskManager = taskManager;
 
@@ -771,7 +772,8 @@ public class StreamThread extends Thread {
         long totalCommitLatency = 0L;
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
-        if (state == State.RUNNING || stateUpdaterEnabled) {
+        if (state == State.RUNNING
+            || (stateUpdaterEnabled && isRunning())) {
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
              *  1. If it is time to punctuate, do it;
