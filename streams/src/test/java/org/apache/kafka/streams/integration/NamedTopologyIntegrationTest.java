@@ -924,8 +924,10 @@ public class NamedTopologyIntegrationTest {
                                                             .collect(Collectors.toList())),
             is(true));
 
-        // then verify that only this topology's one store appears
-        assertThat(metadata.stateStoreNames(), equalTo(singleton("store-" + topologyName)));
+        // then verify that only this topology's one store appears if the host has partitions assigned
+        if (!metadata.topicPartitions().isEmpty()) {
+            assertThat(metadata.stateStoreNames(), equalTo(singleton("store-" + topologyName)));
+        }
 
         // finally make sure the standby fields are empty since they are not enabled for this test
         assertThat(metadata.standbyTopicPartitions().isEmpty(), is(true));
