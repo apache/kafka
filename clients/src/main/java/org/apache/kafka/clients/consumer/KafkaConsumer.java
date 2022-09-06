@@ -1282,8 +1282,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         long pollTimeout = coordinator == null ? timer.remainingMs() :
                 Math.min(coordinator.timeToNextPoll(timer.currentTimeMs()), timer.remainingMs());
 
-        if(coordinator.isRebalancing()) {
-            log.debug("Rebalancing in progress: An in-flight async commit needs to finish before issuing more fetches");
+        if(coordinator.isCommittingOffsetAsync()) {
+            log.debug("Rebalancing in progress: Waiting for the in-flight offset to be committed");
             return Fetch.empty();
         }
 

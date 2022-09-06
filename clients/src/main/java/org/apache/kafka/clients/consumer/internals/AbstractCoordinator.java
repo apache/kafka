@@ -71,6 +71,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
+import java.lang.reflect.Member;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -115,7 +116,9 @@ public abstract class AbstractCoordinator implements Closeable {
 
     protected enum MemberState {
         UNJOINED,             // the client is not part of a group
-        INITIATING_REBALANCE,   // the clinet has initiated rebalance, but hasn't started to join group
+        INITIATED_ASYNC_COMMIT,   // the clinet has initiated rebalance, but hasn't started to join group
+        INITIATED_PARTITION_REVOKE,
+        PARTITION_REVOKED,
         PREPARING_REBALANCE,  // the client has sent the join group request, but have not received response
         COMPLETING_REBALANCE, // the client has received join group response, but have not received assignment
         STABLE;               // the client has joined and is sending heartbeats
@@ -230,6 +233,17 @@ public abstract class AbstractCoordinator implements Closeable {
      * not trigger it even if it tries to force leaving group upon heartbeat session expiration)
      */
     protected void onLeavePrepare() {}
+
+
+    /**
+     * New stuff...
+     * @param timer
+     * @param generation
+     * @param memberId
+     */
+    protected void onPartitionRevocation(Timer timer, int generation, String memberId) {
+        timer.update();
+    }
 
     /**
      * Visible for testing.
@@ -427,13 +441,17 @@ public abstract class AbstractCoordinator implements Closeable {
                 // need to set the flag before calling onJoinPrepare since the user callback may throw
                 // exception, in which case upon retry we should not retry onJoinPrepare either.
                 needsJoinPrepare = false;
-                state = MemberState.INITIATING_REBALANCE;
+                state = MemberState.INITIATED_ASYNC_COMMIT;
                 // return false when onJoinPrepare is waiting for committing offset
                 if (!onJoinPrepare(timer, generation.generationId, generation.memberId)) {
                     needsJoinPrepare = true;
                     //should not initiateJoinGroup if needsJoinPrepare still is true
                     return false;
                 }
+
+                state = MemberState.INITIATED_PARTITION_REVOKE;
+                onPartitionRevocation(timer, generation.generationId, generation.memberId);
+                state = MemberState.PARTITION_REVOKED;
             }
 
             final RequestFuture<ByteBuffer> future = initiateJoinGroup();
@@ -1096,10 +1114,8 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    public final boolean isRebalancing() {
-        return state == MemberState.INITIATING_REBALANCE ||
-                state == MemberState.PREPARING_REBALANCE ||
-                state == MemberState.COMPLETING_REBALANCE;
+    public final boolean isCommittingOffsetAsync() {
+        return state == MemberState.INITIATED_ASYNC_COMMIT;
     }
 
     /**

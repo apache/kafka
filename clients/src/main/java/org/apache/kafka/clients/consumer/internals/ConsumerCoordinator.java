@@ -799,21 +799,27 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         }
 
+        return true;
+    }
+
+    @Override
+    protected void onPartitionRevocation(Timer timer, int generation, String memberId) {
         // the generation / member-id can possibly be reset by the heartbeat thread
         // upon getting errors or heartbeat timeouts; in this case whatever is previously
         // owned partitions would be lost, we should trigger the callback and cleanup the assignment;
         // otherwise we can proceed normally and revoke the partitions depending on the protocol,
         // and in that case we should only change the assignment AFTER the revoke callback is triggered
         // so that users can still access the previously owned partitions to commit offsets etc.
+
         Exception exception = null;
         final SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(COMPARATOR);
         if (generation == Generation.NO_GENERATION.generationId ||
-            memberId.equals(Generation.NO_GENERATION.memberId)) {
+                memberId.equals(Generation.NO_GENERATION.memberId)) {
             revokedPartitions.addAll(subscriptions.assignedPartitions());
 
             if (!revokedPartitions.isEmpty()) {
                 log.info("Giving away all assigned partitions as lost since generation/memberID has been reset," +
-                    "indicating that consumer is in old state or no longer part of the group");
+                        "indicating that consumer is in old state or no longer part of the group");
                 exception = invokePartitionsLost(revokedPartitions);
 
                 subscriptions.assignFromSubscribed(Collections.emptySet());
@@ -833,8 +839,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     // only revoke those partitions that are not in the subscription any more.
                     Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
                     revokedPartitions.addAll(ownedPartitions.stream()
-                        .filter(tp -> !subscriptions.subscription().contains(tp.topic()))
-                        .collect(Collectors.toSet()));
+                            .filter(tp -> !subscriptions.subscription().contains(tp.topic()))
+                            .collect(Collectors.toSet()));
 
                     if (!revokedPartitions.isEmpty()) {
                         exception = invokePartitionsRevoked(revokedPartitions);
@@ -847,16 +853,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         }
 
+        if (exception != null) {
+            throw new KafkaException("User rebalance callback throws an error", exception);
+        }
+
+
         isLeader = false;
         subscriptions.resetGroupSubscription();
         joinPrepareTimer = null;
         autoCommitOffsetRequestFuture = null;
         timer.update();
-
-        if (exception != null) {
-            throw new KafkaException("User rebalance callback throws an error", exception);
-        }
-        return true;
     }
 
     @Override
