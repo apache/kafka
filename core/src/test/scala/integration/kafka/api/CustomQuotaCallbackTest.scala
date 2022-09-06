@@ -14,7 +14,6 @@
 
 package kafka.api
 
-import java.io.File
 import java.{lang, util}
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}

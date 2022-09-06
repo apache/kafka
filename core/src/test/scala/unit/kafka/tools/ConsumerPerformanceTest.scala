@@ -17,7 +17,7 @@
 
 package kafka.tools
 
-import java.io.{ByteArrayOutputStream, File, PrintWriter}
+import java.io.{ByteArrayOutputStream, PrintWriter}
 import java.text.SimpleDateFormat
 import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
