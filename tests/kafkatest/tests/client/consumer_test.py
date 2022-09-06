@@ -315,7 +315,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
                        )
 
     @cluster(num_nodes=7)
-    @matrix(clean_shutdown=[True], enable_autocommit=[True, False], metadata_quorum=quorum.all_non_upgrade)
+    @matrix(clean_shutdown=[True], enable_autocommit=[True], metadata_quorum=quorum.all_non_upgrade)
     def test_consumer_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.zk):
         partition = TopicPartition(self.TOPIC, 0)
 

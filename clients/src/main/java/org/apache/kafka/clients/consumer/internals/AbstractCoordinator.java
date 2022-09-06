@@ -71,7 +71,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
-import java.lang.reflect.Member;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -444,14 +443,17 @@ public abstract class AbstractCoordinator implements Closeable {
                 state = MemberState.INITIATED_ASYNC_COMMIT;
                 // return false when onJoinPrepare is waiting for committing offset
                 if (!onJoinPrepare(timer, generation.generationId, generation.memberId)) {
+                    log.debug("Rebalance State: {}", state);
                     needsJoinPrepare = true;
                     //should not initiateJoinGroup if needsJoinPrepare still is true
                     return false;
                 }
 
                 state = MemberState.INITIATED_PARTITION_REVOKE;
+                log.debug("Rebalance State: {}", state);
                 onPartitionRevocation(timer, generation.generationId, generation.memberId);
                 state = MemberState.PARTITION_REVOKED;
+                log.debug("Rebalance State: {}", state);
             }
 
             final RequestFuture<ByteBuffer> future = initiateJoinGroup();
