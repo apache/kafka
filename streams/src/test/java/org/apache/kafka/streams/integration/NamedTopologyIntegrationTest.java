@@ -422,6 +422,8 @@ public class NamedTopologyIntegrationTest {
                 TOPOLOGY_1,
                 streams.allStreamsClientsMetadataForTopology(TOPOLOGY_1),
                 streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_1));
+            assertThat(streams.allStreamsClientsMetadataForTopology(TOPOLOGY_2).size(), equalTo(2));
+            assertThat(streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_2).size(), equalTo(2));
             verifyMetadataForTopology(
                 TOPOLOGY_2,
                 streams.allStreamsClientsMetadataForTopology(TOPOLOGY_2),
