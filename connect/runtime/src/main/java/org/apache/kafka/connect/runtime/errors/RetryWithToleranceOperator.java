@@ -274,7 +274,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         }
         long currentTime = time.milliseconds();
         if (delay + currentTime > deadline) {
-            delay = deadline - currentTime;
+            delay = Math.max(0, deadline - currentTime);
         }
         log.debug("Sleeping for up to {} millis", delay);
         try {
