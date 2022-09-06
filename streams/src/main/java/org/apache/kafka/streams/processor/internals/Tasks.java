@@ -53,6 +53,7 @@ class Tasks implements TasksRegistry {
     private final Map<TaskId, Set<TopicPartition>> pendingActiveTasksToCreate = new HashMap<>();
     private final Map<TaskId, Set<TopicPartition>> pendingStandbyTasksToCreate = new HashMap<>();
     private final Map<TaskId, Set<TopicPartition>> pendingTasksToRecycle = new HashMap<>();
+    private final Set<TaskId> pendingActiveTasksToSuspend = new HashSet<>();
     private final Map<TaskId, Set<TopicPartition>> pendingTasksToUpdateInputPartitions = new HashMap<>();
     private final Set<Task> pendingTasksToInit = new HashSet<>();
     private final Set<TaskId> pendingTasksToCloseClean = new HashSet<>();
@@ -151,6 +152,16 @@ class Tasks implements TasksRegistry {
     @Override
     public void addPendingTaskToInit(final Collection<Task> tasks) {
         pendingTasksToInit.addAll(tasks);
+    }
+
+    @Override
+    public boolean removePendingActiveTaskToSuspend(final TaskId taskId) {
+        return pendingActiveTasksToSuspend.remove(taskId);
+    }
+
+    @Override
+    public void addPendingActiveTaskToSuspend(final TaskId taskId) {
+        pendingActiveTasksToSuspend.add(taskId);
     }
 
     @Override

@@ -55,6 +55,10 @@ public interface TasksRegistry {
 
     void addPendingTaskToInit(final Collection<Task> tasks);
 
+    boolean removePendingActiveTaskToSuspend(final TaskId taskId);
+
+    void addPendingActiveTaskToSuspend(final TaskId taskId);
+
     void addActiveTasks(final Collection<Task> tasks);
 
     void addStandbyTasks(final Collection<Task> tasks);
