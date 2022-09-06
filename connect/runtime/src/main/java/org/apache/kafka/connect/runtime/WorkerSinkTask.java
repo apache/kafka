@@ -484,7 +484,10 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void convertMessages(ConsumerRecords<byte[], byte[]> msgs) {
-        origOffsets.clear();
+        //fix KAFKA-9941
+        if (messageBatch.isEmpty()) {
+            origOffsets.clear();
+        }
         for (ConsumerRecord<byte[], byte[]> msg : msgs) {
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
