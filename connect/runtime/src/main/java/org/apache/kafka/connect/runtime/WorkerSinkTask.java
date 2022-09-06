@@ -29,7 +29,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Time;
@@ -488,7 +487,7 @@ class WorkerSinkTask extends WorkerTask {
         origOffsets.clear();
         long start = time.milliseconds();
         for (ConsumerRecord<byte[], byte[]> msg : msgs) {
-            sinkTaskMetricsGroup.recordE2ELatency(start, msg.timestamp());
+            sinkTaskMetricsGroup.recordLatency(start, msg.timestamp());
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
 
@@ -794,7 +793,7 @@ class WorkerSinkTask extends WorkerTask {
         private final Sensor putBatchTime;
         private final Sensor convertTime;
         private final Sensor sinkRecordActiveCount;
-        private final Sensor sinkRecordE2ELatency;
+        private final Sensor sinkRecordLatency;
         private long activeRecords;
         private Map<TopicPartition, OffsetAndMetadata> consumedOffsets = new HashMap<>();
         private Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
@@ -842,13 +841,12 @@ class WorkerSinkTask extends WorkerTask {
             putBatchTime.add(metricGroup.metricName(registry.sinkRecordPutBatchTimeAvg), new Avg());
 
             convertTime = metricGroup.sensor("sink-record-convert-time");
-            convertTime.add(metricGroup.metricName(registry.sinkRecordConvertTimeMax), new Max());
-            convertTime.add(metricGroup.metricName(registry.sinkRecordConvertTimeAvg), new Avg());
+            convertTime.add(metricGroup.metricName(registry.sinkRecordConvertTransformTimeMax), new Max());
+            convertTime.add(metricGroup.metricName(registry.sinkRecordConvertTransformTimeAvg), new Avg());
 
-            sinkRecordE2ELatency = metricGroup.sensor("sink-record-e2e-latency");
-            sinkRecordE2ELatency.add(metricGroup.metricName(registry.sinkRecordE2ELatencyMax), new Max());
-            sinkRecordE2ELatency.add(metricGroup.metricName(registry.sinkRecordE2ELatencyMin), new Min());
-            sinkRecordE2ELatency.add(metricGroup.metricName(registry.sinkRecordE2ELatencyAvg), new Avg());
+            sinkRecordLatency = metricGroup.sensor("sink-record-e2e-latency");
+            sinkRecordLatency.add(metricGroup.metricName(registry.sinkRecordLatencyMax), new Max());
+            sinkRecordLatency.add(metricGroup.metricName(registry.sinkRecordLatencyAvg), new Avg());
         }
 
         void computeSinkRecordLag() {
@@ -898,8 +896,8 @@ class WorkerSinkTask extends WorkerTask {
             offsetSeqNum.record(seqNum);
         }
 
-        void recordE2ELatency(long nowMs, long recordTsMs) {
-            sinkRecordE2ELatency.record(nowMs - recordTsMs, nowMs);
+        void recordLatency(long nowMs, long recordTsMs) {
+            sinkRecordLatency.record(nowMs - recordTsMs, nowMs);
         }
 
         void recordConsumedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {

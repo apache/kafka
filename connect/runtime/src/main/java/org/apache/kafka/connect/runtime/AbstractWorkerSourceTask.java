@@ -388,12 +388,12 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
             retryWithToleranceOperator.sourceRecord(preTransformRecord);
             final SourceRecord record = transformationChain.apply(preTransformRecord);
             final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);
+            sourceTaskMetricsGroup.recordConvert(time.milliseconds() - start);
             if (producerRecord == null || retryWithToleranceOperator.failed()) {
                 counter.skipRecord();
                 recordDropped(preTransformRecord);
                 continue;
             }
-            sourceTaskMetricsGroup.recordConvert(time.milliseconds() - start);
 
             log.trace("{} Appending record to the topic {} with key {}, value {}", this, record.topic(), record.key(), record.value());
             Optional<SubmittedRecords.SubmittedRecord> submittedRecord = prepareToSendRecord(preTransformRecord, producerRecord);
