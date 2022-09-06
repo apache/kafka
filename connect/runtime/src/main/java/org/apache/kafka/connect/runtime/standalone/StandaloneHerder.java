@@ -294,7 +294,12 @@ public class StandaloneHerder extends AbstractHerder {
 
         worker.stopAndAwaitConnector(connName);
 
-        startConnector(connName, (error, result) -> cb.onCompletion(error, null));
+        startConnector(connName, (error, targetState) -> {
+            if (targetState == TargetState.STARTED) {
+                requestTaskReconfiguration(connName);
+            }
+            cb.onCompletion(error, null);
+        });
     }
 
     @Override
