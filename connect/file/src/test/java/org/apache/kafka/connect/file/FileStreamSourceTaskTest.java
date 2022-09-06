@@ -65,8 +65,8 @@ public class FileStreamSourceTaskTest {
     }
 
     @AfterEach
-    public void teardown() {
-        tempFile.delete();
+    public void teardown() throws IOException {
+        Files.deleteIfExists(tempFile.toPath());
     }
 
     @Test

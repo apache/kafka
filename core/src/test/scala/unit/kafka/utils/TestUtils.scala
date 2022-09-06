@@ -150,6 +150,11 @@ object TestUtils extends Logging {
   def tempFile(): File = JTestUtils.tempFile()
 
   /**
+   * Create a temporary file with particular suffix and prefix
+   */
+  def tempFile(prefix: String, suffix: String): File = JTestUtils.tempFile(prefix, suffix)
+
+  /**
    * Create a temporary file and return an open file channel for this file
    */
   def tempChannel(): FileChannel =

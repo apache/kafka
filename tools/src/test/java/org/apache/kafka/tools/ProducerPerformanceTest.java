@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -55,8 +56,7 @@ public class ProducerPerformanceTest {
     ProducerPerformance producerPerformanceSpy;
 
     private File createTempFile(String contents) throws IOException {
-        File file = File.createTempFile("ProducerPerformanceTest", ".tmp");
-        file.deleteOnExit();
+        File file = TestUtils.tempFile("ProducerPerformanceTest", ".tmp");
         Files.write(file.toPath(), contents.getBytes());
         return file;
     }

@@ -46,7 +46,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   override protected def listenerName = new ListenerName("CLIENT")
   override protected def interBrokerListenerName: ListenerName = new ListenerName("BROKER")
 
-  override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
   override val brokerCount: Int = 2
 
   private val kafkaServerSaslMechanisms = Seq("SCRAM-SHA-256")

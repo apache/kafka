@@ -18,7 +18,6 @@
 
 package kafka.server
 
-import java.io.File
 import java.util.{Collections, Objects, Properties}
 import java.util.concurrent.TimeUnit
 
@@ -52,7 +51,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
 
   import MultipleListenersWithSameSecurityProtocolBaseTest._
 
-  private val trustStoreFile = File.createTempFile("truststore", ".jks")
+  private val trustStoreFile = TestUtils.tempFile("truststore", ".jks")
   private val servers = new ArrayBuffer[KafkaServer]
   private val producers = mutable.Map[ClientMetadata, KafkaProducer[Array[Byte], Array[Byte]]]()
   private val consumers = mutable.Map[ClientMetadata, KafkaConsumer[Array[Byte], Array[Byte]]]()

@@ -384,7 +384,7 @@ public abstract class SslFactoryTest {
     }
 
     private void verifyKeystoreVerifiableUsingTruststore(boolean usePem, String tlsProtocol) throws Exception {
-        File trustStoreFile1 = usePem ? null : File.createTempFile("truststore1", ".jks");
+        File trustStoreFile1 = usePem ? null : TestUtils.tempFile("truststore1", ".jks");
         Map<String, Object> sslConfig1 = sslConfigsBuilder(Mode.SERVER)
                 .createNewTrustStore(trustStoreFile1)
                 .usePem(usePem)
@@ -392,7 +392,7 @@ public abstract class SslFactoryTest {
         SslFactory sslFactory = new SslFactory(Mode.SERVER, null, true);
         sslFactory.configure(sslConfig1);
 
-        File trustStoreFile2 = usePem ? null : File.createTempFile("truststore2", ".jks");
+        File trustStoreFile2 = usePem ? null : TestUtils.tempFile("truststore2", ".jks");
         Map<String, Object> sslConfig2 = sslConfigsBuilder(Mode.SERVER)
                 .createNewTrustStore(trustStoreFile2)
                 .usePem(usePem)
