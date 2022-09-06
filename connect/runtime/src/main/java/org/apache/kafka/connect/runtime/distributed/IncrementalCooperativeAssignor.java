@@ -310,7 +310,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     log.debug("Skipping revocations in the current round with a delay of {}ms. Next scheduled rebalance:{}",
                             delay, scheduledRebalance);
                 } else {
-                    log.debug("Revoking assignments as scheduled.rebalance.max.delay.ms is set to 0");
+                    log.debug("Revoking assignments immediately since scheduled.rebalance.max.delay.ms is set to 0");
                     revoke(toRevoke, toExplicitlyRevoke);
                 }
             } else if (!toExplicitlyRevoke.isEmpty()) {

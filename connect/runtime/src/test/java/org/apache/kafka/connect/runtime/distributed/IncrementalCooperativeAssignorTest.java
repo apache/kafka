@@ -122,7 +122,7 @@ public class IncrementalCooperativeAssignorTest {
     public void testAssignmentsWhenWorkersJoinAfterRevocations()  {
 
         addNewConnector("connector3", 4);
-        // First assignment with 1 worker and 2 connectors configured but not yet assigned
+        // First assignment with 1 worker and 3 connectors configured but not yet assigned
         performStandardRebalance();
         assertDelay(0);
         assertWorkers("worker1");
@@ -192,7 +192,7 @@ public class IncrementalCooperativeAssignorTest {
         initAssignor();
 
         addNewConnector("connector3", 4);
-        // First assignment with 1 worker and 2 connectors configured but not yet assigned
+        // First assignment with 1 worker and 3 connectors configured but not yet assigned
         performStandardRebalance();
         assertDelay(0);
         assertWorkers("worker1");
@@ -232,7 +232,7 @@ public class IncrementalCooperativeAssignorTest {
         initAssignor();
 
         addNewConnector("connector3", 4);
-        // First assignment with 1 worker and 2 connectors configured but not yet assigned
+        // First assignment with 1 worker and 3 connectors configured but not yet assigned
         performStandardRebalance();
         assertDelay(0);
         assertWorkers("worker1");
@@ -1005,7 +1005,7 @@ public class IncrementalCooperativeAssignorTest {
         assertTaskAllocations(4, 4);
         assertBalancedAndCompleteAllocation();
 
-        // Fifth rebalance should not change assignments
+        // Fourth rebalance should not change assignments
         performStandardRebalance();
         assertDelay(0);
         assertEmptyAssignment();
@@ -1039,7 +1039,7 @@ public class IncrementalCooperativeAssignorTest {
         assertTaskAllocations(2, 2);
         assertBalancedAndCompleteAllocation();
 
-        // Fifth rebalance should not change assignments
+        // Fourth rebalance should not change assignments
         performStandardRebalance();
         assertDelay(0);
         assertEmptyAssignment();
