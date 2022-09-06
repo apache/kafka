@@ -53,7 +53,7 @@ class BrokerMetadataListenerTest {
       maxBytesBetweenSnapshots = maxBytesBetweenSnapshots,
       snapshotter = snapshotter,
       brokerMetrics = metrics,
-      metadataLoadingFaultHandler = metadataLoadingFaultHandler
+      _metadataLoadingFaultHandler = metadataLoadingFaultHandler
     )
   }
 

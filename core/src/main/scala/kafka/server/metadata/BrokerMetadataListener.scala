@@ -28,6 +28,8 @@ import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.snapshot.SnapshotReader
 
+import java.util.concurrent.atomic.AtomicBoolean
+
 
 object BrokerMetadataListener {
   val MetadataBatchProcessingTimeUs = "MetadataBatchProcessingTimeUs"
@@ -41,8 +43,19 @@ class BrokerMetadataListener(
   val maxBytesBetweenSnapshots: Long,
   val snapshotter: Option[MetadataSnapshotter],
   brokerMetrics: BrokerServerMetrics,
-  metadataLoadingFaultHandler: FaultHandler
+  _metadataLoadingFaultHandler: FaultHandler
 ) extends RaftClient.Listener[ApiMessageAndVersion] with KafkaMetricsGroup {
+
+  private val metadataFaultOccurred = new AtomicBoolean(false)
+  private val metadataLoadingFaultHandler: FaultHandler = new FaultHandler() {
+    override def handleFault(failureMessage: String, cause: Throwable): RuntimeException = {
+      if (metadataFaultOccurred.compareAndSet(false, true)) {
+        error("Disabling metadata snapshots until this broker is restarted.")
+      }
+      _metadataLoadingFaultHandler.handleFault(failureMessage, cause)
+    }
+  }
+
   private val logContext = new LogContext(s"[BrokerMetadataListener id=$brokerId] ")
   private val log = logContext.logger(classOf[BrokerMetadataListener])
   logIdent = logContext.logPrefix()
@@ -147,7 +160,9 @@ class BrokerMetadataListener(
 
   private def maybeStartSnapshot(): Unit = {
     snapshotter.foreach { snapshotter =>
-      if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply())) {
+      if (metadataFaultOccurred.get()) {
+        trace("Not starting metadata snapshot since we previously had an error")
+      } else if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply())) {
         _bytesSinceLastSnapshot = 0L
       }
     }
