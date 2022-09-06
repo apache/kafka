@@ -115,6 +115,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     protected enum MemberState {
         UNJOINED,             // the client is not part of a group
+        INITIATING_REBALANCE,   // the clinet has initiated rebalance, but hasn't started to join group
         PREPARING_REBALANCE,  // the client has sent the join group request, but have not received response
         COMPLETING_REBALANCE, // the client has received join group response, but have not received assignment
         STABLE;               // the client has joined and is sending heartbeats
@@ -426,6 +427,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 // need to set the flag before calling onJoinPrepare since the user callback may throw
                 // exception, in which case upon retry we should not retry onJoinPrepare either.
                 needsJoinPrepare = false;
+                state = MemberState.INITIATING_REBALANCE;
                 // return false when onJoinPrepare is waiting for committing offset
                 if (!onJoinPrepare(timer, generation.generationId, generation.memberId)) {
                     needsJoinPrepare = true;
@@ -1092,6 +1094,12 @@ public abstract class AbstractCoordinator implements Closeable {
                             client.pendingRequestCount(coordinator));
             }
         }
+    }
+
+    public final boolean isRebalancing() {
+        return state == MemberState.INITIATING_REBALANCE ||
+                state == MemberState.PREPARING_REBALANCE ||
+                state == MemberState.COMPLETING_REBALANCE;
     }
 
     /**

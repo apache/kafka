@@ -1282,6 +1282,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         long pollTimeout = coordinator == null ? timer.remainingMs() :
                 Math.min(coordinator.timeToNextPoll(timer.currentTimeMs()), timer.remainingMs());
 
+        if(coordinator.isRebalancing()) {
+            log.debug("Rebalancing in progress: An in-flight async commit needs to finish before issuing more fetches");
+            return Fetch.empty();
+        }
+
         // if data is available already, return it immediately
         final Fetch<K, V> fetch = fetcher.collectFetch();
         if (!fetch.isEmpty()) {
