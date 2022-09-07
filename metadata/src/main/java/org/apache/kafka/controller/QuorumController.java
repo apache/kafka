@@ -895,21 +895,21 @@ public final class QuorumController implements Controller {
                 // The appender callback will create an in-memory snapshot for each batch,
                 // since we might need to revert to any of them. We will only return the final
                 // offset of the last batch, however.
-                int i = 0, numBatches = 0;
+                int startIndex = 0, numBatches = 0;
                 while (true) {
                     numBatches++;
-                    int j = i + maxRecordsPerBatch;
-                    if (j > records.size()) {
-                        long offset = appender.apply(records.subList(i, records.size()));
+                    int endIndex = startIndex + maxRecordsPerBatch;
+                    if (endIndex > records.size()) {
+                        long offset = appender.apply(records.subList(startIndex, records.size()));
                         if (log.isTraceEnabled()) {
                             log.trace("Appended {} record(s) in {} batch(es), ending with offset {}.",
                                     records.size(), numBatches, offset);
                         }
                         return offset;
                     } else {
-                        appender.apply(records.subList(i, j));
+                        appender.apply(records.subList(startIndex, endIndex));
                     }
-                    i += maxRecordsPerBatch;
+                    startIndex += maxRecordsPerBatch;
                 }
             }
         } catch (ApiException e) {
