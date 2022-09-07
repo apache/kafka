@@ -256,12 +256,6 @@ public class IncrementalCooperativeAssignorTest {
         assertWorkers("worker1", "worker2", "worker3");
         assertConnectorAllocations(0, 1, 2);
         assertTaskAllocations(3, 3, 6);
-
-        // Follow up rebalance post revocations. No revocations should have happened
-        performStandardRebalance();
-        assertWorkers("worker1", "worker2", "worker3");
-        assertConnectorAllocations(0, 1, 2);
-        assertTaskAllocations(3, 3, 6);
     }
 
     @Test
