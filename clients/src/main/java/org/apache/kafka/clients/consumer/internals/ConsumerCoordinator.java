@@ -756,17 +756,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             joinPrepareTimer.update();
         }
 
-        // TODO: See KAFKA-14196 for more detail, we pause the partition from consumption to prevent duplicated
-        //  data returned by the consumer poll loop.  Without pausing the partitions, the consumer will move forward
-        //  returning the data w/o committing them.  And the progress will be lost once the partition is revoked.
-        Set<TopicPartition> partitions = subscriptionState().assignedPartitions();
-        log.debug("Pausing partitions {} before onJoinPrepare", partitions);
-        partitions.stream().forEach(tp -> subscriptionState().pause(tp));
-
         // async commit offsets prior to rebalance if auto-commit enabled
         // and there is no in-flight offset commit request
-        if (autoCommitEnabled && autoCommitOffsetRequestFuture == null) {
-            autoCommitOffsetRequestFuture = maybeAutoCommitOffsetsAsync();
+        if (autoCommitEnabled) {
+            pausePartitions();
+            autoCommitOffsetRequestFuture = autoCommitOffsetRequestFuture == null ?
+                    maybeAutoCommitOffsetsAsync() :
+                    autoCommitOffsetRequestFuture;
         }
 
         // wait for commit offset response before timer expired
@@ -864,6 +860,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             throw new KafkaException("User rebalance callback throws an error", exception);
         }
         return true;
+    }
+
+    private void pausePartitions() {
+        // TODO: See KAFKA-14196 for more detail, we pause the partition from consumption to prevent duplicated
+        //  data returned by the consumer poll loop.  Without pausing the partitions, the consumer will move forward
+        //  returning the data w/o committing them.  And the progress will be lost once the partition is revoked.
+        //  This only applies to autocommits, as we expect user to handle the offsets menually during the partition
+        //  revocation.
+
+        Set<TopicPartition> partitions = subscriptionState().assignedPartitions();
+        log.debug("Pausing partitions {} before onJoinPrepare", partitions);
+        partitions.stream().forEach(tp -> subscriptionState().pause(tp));
     }
 
     @Override
