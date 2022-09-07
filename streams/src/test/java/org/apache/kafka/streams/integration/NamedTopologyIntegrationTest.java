@@ -61,6 +61,7 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -418,6 +419,8 @@ public class NamedTopologyIntegrationTest {
                 streams.streamsMetadataForStore(topology2Store, TOPOLOGY_2),
                 streams2.streamsMetadataForStore(topology2Store, TOPOLOGY_2));
 
+            assertThat(streams.allStreamsClientsMetadataForTopology(TOPOLOGY_1).size(), equalTo(2));
+            assertThat(streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_1).size(), equalTo(2));
             verifyMetadataForTopology(
                 TOPOLOGY_1,
                 streams.allStreamsClientsMetadataForTopology(TOPOLOGY_1),
@@ -929,6 +932,8 @@ public class NamedTopologyIntegrationTest {
         // then verify that only this topology's one store appears if the host has partitions assigned
         if (!metadata.topicPartitions().isEmpty()) {
             assertThat(metadata.stateStoreNames(), equalTo(singleton("store-" + topologyName)));
+        } else {
+            assertThat(metadata.stateStoreNames().isEmpty(), is(true));
         }
 
         // finally make sure the standby fields are empty since they are not enabled for this test
