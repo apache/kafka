@@ -78,20 +78,22 @@ object FeatureCommand {
       }
       props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, namespace.getString("bootstrap_server"))
       val admin = Admin.create(props)
-
-      command match {
-        case "describe" => handleDescribe(out, admin)
-        case "upgrade" => handleUpgrade(out, namespace, admin)
-        case "downgrade" => handleDowngrade(out, namespace, admin)
-        case "disable" => handleDisable(out, namespace, admin)
+      try {
+        command match {
+          case "describe" => handleDescribe(out, admin)
+          case "upgrade" => handleUpgrade(out, namespace, admin)
+          case "downgrade" => handleDowngrade(out, namespace, admin)
+          case "disable" => handleDisable(out, namespace, admin)
+        }
+      } finally {
+        admin.close()
       }
-      admin.close()
       0
     } catch {
       case _: HelpScreenException =>
         0
       case e: ArgumentParserException =>
-        System.err.println(e.getMessage)
+        System.err.println(s"Command line error: ${e.getMessage}. Type --help for help.")
         1
       case e: TerseFailure =>
         System.err.println(e.getMessage)
@@ -288,6 +290,7 @@ object FeatureCommand {
         case t: Throwable => feature -> Some(t)
       }
     }
+    var numFailures = 0
     errors.keySet.toList.sorted.foreach { feature =>
       val maybeThrowable = errors(feature)
       val level = updates.get(feature).maxVersionLevel()
@@ -303,6 +306,7 @@ object FeatureCommand {
           s"${op} ${feature} to ${level}"
         }
         out.println(s"${helper} ${suffix}. ${maybeThrowable.get.getMessage}")
+        numFailures = numFailures + 1
       } else {
         val verb = if (dryRun) {
           "can be"
@@ -316,6 +320,9 @@ object FeatureCommand {
         }
         out.println(s"${feature} ${verb} ${obj}")
       }
+    }
+    if (numFailures > 0) {
+      throw new TerseFailure(s"${numFailures} out of ${updates.size} operation(s) failed.")
     }
   }
 }
