@@ -174,6 +174,10 @@ public class MirrorSourceTask extends SourceTask {
             if (stopping) {
                 return;
             }
+            if (metadata == null) {
+                log.debug("No RecordMetadata -- can't sync offsets for {}.", record.topic());
+                return;
+            }
             if (!metadata.hasOffset()) {
                 log.error("RecordMetadata has no offset -- can't sync offsets for {}.", record.topic());
                 return;
