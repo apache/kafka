@@ -316,8 +316,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
     @cluster(num_nodes=7)
     @matrix(assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
-                                 "org.apache.kafka.clients.consumer.CooperativeStickyAssignor"], clean_shutdown=[True], enable_autocommit=[True, False], metadata_quorum=quorum.all_non_upgrade)
-    def test_consumer_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.zk, assignment_strategy):
+                                 "org.apache.kafka.clients.consumer.StickyAssignor"], clean_shutdown=[True], enable_autocommit=[True, False], metadata_quorum=quorum.all_non_upgrade)
+    def test_consumer_failure(self,  assignment_strategy, clean_shutdown, enable_autocommit, metadata_quorum=quorum.zk):
         partition = TopicPartition(self.TOPIC, 0)
 
         consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit, assignment_strategy=assignment_strategy)
