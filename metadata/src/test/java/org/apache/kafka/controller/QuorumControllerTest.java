@@ -39,6 +39,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
@@ -47,6 +48,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.RequestHeaderData;
+import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -109,6 +111,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static java.util.function.Function.identity;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
@@ -129,6 +133,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(value = 40)
 public class QuorumControllerTest {
+    private final static Logger log = LoggerFactory.getLogger(QuorumControllerTest.class);
+
     static final BootstrapMetadata SIMPLE_BOOTSTRAP = BootstrapMetadata.
             fromVersion(MetadataVersion.IBP_3_3_IV3, "test-provided bootstrap");
 
@@ -1372,5 +1378,45 @@ public class QuorumControllerTest {
                 }, "Failed to see expected config change from bootstrap metadata");
             }
         }
+    }
+
+    static class TestAppender implements Function<List<ApiMessageAndVersion>, Long>  {
+        private long offset = 0;
+
+        @Override
+        public Long apply(List<ApiMessageAndVersion> apiMessageAndVersions) {
+            for (ApiMessageAndVersion apiMessageAndVersion : apiMessageAndVersions) {
+                BrokerRegistrationChangeRecord record =
+                        (BrokerRegistrationChangeRecord) apiMessageAndVersion.message();
+                assertEquals((int) offset, record.brokerId());
+                offset++;
+            }
+            return offset;
+        }
+    }
+
+    private static ApiMessageAndVersion rec(int i) {
+        return new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().setBrokerId(i),
+                (short) 0);
+    }
+
+    @Test
+    public void testAppendRecords() {
+        TestAppender appender = new TestAppender();
+        assertEquals(5, QuorumController.appendRecords(log,
+            ControllerResult.of(Arrays.asList(rec(0), rec(1), rec(2), rec(3), rec(4)), null),
+            2,
+            appender));
+    }
+
+    @Test
+    public void testAppendRecordsAtomically() {
+        TestAppender appender = new TestAppender();
+        assertEquals("Attempted to atomically commit 5 records, but maxRecordsPerBatch is 2",
+            assertThrows(IllegalStateException.class, () ->
+                QuorumController.appendRecords(log,
+                        ControllerResult.atomicOf(Arrays.asList(rec(0), rec(1), rec(2), rec(3), rec(4)), null),
+                        2,
+                        appender)).getMessage());
     }
 }
