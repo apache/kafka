@@ -29,15 +29,10 @@ def isChangeRequest(env) {
   env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
 }
 
-def retryFlagsString(env) {
-    if (isChangeRequest(env)) " -PmaxTestRetries=1 -PmaxTestRetryFailures=5"
-    else ""
-}
-
 def doTest(env, target = "unitTest integrationTest") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
       --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
-      -PignoreFailures=true -PmaxParallelForks=2""" + retryFlagsString(env)
+      -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
   junit '**/build/test-results/**/TEST-*.xml'
 }
 
