@@ -325,7 +325,7 @@ class BrokerMetadataListener(
     try {
       _image = _delta.apply()
     } catch {
-      case t: Throwable => metadataLoadingFaultHandler.handleFault(s"Error applying metadata delta $delta", t)
+      case t: Throwable => throw metadataLoadingFaultHandler.handleFault(s"Error applying metadata delta $delta", t)
     }
 
     _delta = new MetadataDelta(_image)
