@@ -202,7 +202,7 @@ If needed, you can specify the Scala version with `-PscalaVersion=2.13`.
     ./gradlew testJar
 
 ### Determining how transitive dependencies are added ###
-    ./gradlew core:dependencies --configuration runtime
+    ./gradlew allDeps
 
 ### Determining if any dependencies could be updated ###
     ./gradlew dependencyUpdates
