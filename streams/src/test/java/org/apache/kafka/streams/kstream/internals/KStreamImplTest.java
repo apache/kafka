@@ -1695,6 +1695,28 @@ public class KStreamImplTest {
     }
 
     @Test
+    public void shouldMergeSameStreams() {
+        final String topic1 = "topic-1";
+
+        final KStream<String, String> source = builder.stream(topic1);
+        final KStream<String, String> merged = source.merge(source);
+
+        merged.process(processorSupplier);
+
+        System.out.println(builder.build().describe());
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic1 =
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+
+            inputTopic1.pipeInput("A", "aa", 1L);
+        }
+
+        assertEquals(asList(new KeyValueTimestamp<>("A", "aa", 1),
+                            new KeyValueTimestamp<>("A", "aa", 1)),
+                processorSupplier.theCapturedProcessor().processed());
+    }
+
+    @Test
     public void shouldProcessFromSourceThatMatchPattern() {
         final KStream<String, String> pattern2Source = builder.stream(Pattern.compile("topic-\\d"));
 

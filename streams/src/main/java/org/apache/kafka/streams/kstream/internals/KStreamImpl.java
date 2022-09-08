@@ -532,29 +532,36 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                 final KStream<K, V> stream,
                                 final NamedInternal named) {
         final KStreamImpl<K, V> streamImpl = (KStreamImpl<K, V>) stream;
-        final boolean requireRepartitioning = streamImpl.repartitionRequired || repartitionRequired;
-        final String name = named.orElseGenerateWithPrefix(builder, MERGE_NAME);
-        final Set<String> allSubTopologySourceNodes = new HashSet<>();
-        allSubTopologySourceNodes.addAll(subTopologySourceNodes);
-        allSubTopologySourceNodes.addAll(streamImpl.subTopologySourceNodes);
+        if (graphNode.equals(streamImpl.graphNode)) {
+            // We hide the current node through this processor node.
+            // Parent nodes are collected in a Set.
+            // The merge node would otherwise only have a single parent in this case.
+            return process(new KStreamPassThrough<>()).merge(stream, named);
+        } else {
+            final boolean requireRepartitioning = streamImpl.repartitionRequired || repartitionRequired;
+            final String name = named.orElseGenerateWithPrefix(builder, MERGE_NAME);
+            final Set<String> allSubTopologySourceNodes = new HashSet<>();
+            allSubTopologySourceNodes.addAll(subTopologySourceNodes);
+            allSubTopologySourceNodes.addAll(streamImpl.subTopologySourceNodes);
 
-        final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
-            new ProcessorParameters<>(new PassThrough<>(), name);
-        final ProcessorGraphNode<? super K, ? super V> mergeNode =
-            new ProcessorGraphNode<>(name, processorParameters);
-        mergeNode.setMergeNode(true);
+            final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
+                new ProcessorParameters<>(new PassThrough<>(), name);
+            final ProcessorGraphNode<? super K, ? super V> mergeNode =
+                new ProcessorGraphNode<>(name, processorParameters);
+            mergeNode.setMergeNode(true);
 
-        builder.addGraphNode(Arrays.asList(graphNode, streamImpl.graphNode), mergeNode);
+            builder.addGraphNode(Arrays.asList(graphNode, streamImpl.graphNode), mergeNode);
 
-        // drop the serde as we cannot safely use either one to represent both streams
-        return new KStreamImpl<>(
-            name,
-            null,
-            null,
-            allSubTopologySourceNodes,
-            requireRepartitioning,
-            mergeNode,
-            builder);
+            // drop the serde as we cannot safely use either one to represent both streams
+            return new KStreamImpl<>(
+                name,
+                null,
+                null,
+                allSubTopologySourceNodes,
+                requireRepartitioning,
+                mergeNode,
+                builder);
+        }
     }
 
     @Deprecated
