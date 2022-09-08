@@ -756,10 +756,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             joinPrepareTimer.update();
         }
 
+        final SortedSet<TopicPartition> partitionsToRevoke = getPartitionsToRevoke(protocol, generation, memberId);
+
         // async commit offsets prior to rebalance if auto-commit enabled
         // and there is no in-flight offset commit request
         if (autoCommitEnabled) {
-            pausePartitions();
+            pausePartitions(partitionsToRevoke);
             autoCommitOffsetRequestFuture = autoCommitOffsetRequestFuture == null ?
                     maybeAutoCommitOffsetsAsync() :
                     autoCommitOffsetRequestFuture;
@@ -802,53 +804,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         }
 
-        // the generation / member-id can possibly be reset by the heartbeat thread
-        // upon getting errors or heartbeat timeouts; in this case whatever is previously
-        // owned partitions would be lost, we should trigger the callback and cleanup the assignment;
-        // otherwise we can proceed normally and revoke the partitions depending on the protocol,
-        // and in that case we should only change the assignment AFTER the revoke callback is triggered
-        // so that users can still access the previously owned partitions to commit offsets etc.
-        Exception exception = null;
-        final SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(COMPARATOR);
-        if (generation == Generation.NO_GENERATION.generationId ||
-            memberId.equals(Generation.NO_GENERATION.memberId)) {
-            revokedPartitions.addAll(subscriptions.assignedPartitions());
-
-            if (!revokedPartitions.isEmpty()) {
-                log.info("Giving away all assigned partitions as lost since generation/memberID has been reset," +
-                    "indicating that consumer is in old state or no longer part of the group");
-                exception = invokePartitionsLost(revokedPartitions);
-
-                subscriptions.assignFromSubscribed(Collections.emptySet());
-            }
-        } else {
-            switch (protocol) {
-                case EAGER:
-                    // revoke all partitions
-                    revokedPartitions.addAll(subscriptions.assignedPartitions());
-                    exception = invokePartitionsRevoked(revokedPartitions);
-
-                    subscriptions.assignFromSubscribed(Collections.emptySet());
-
-                    break;
-
-                case COOPERATIVE:
-                    // only revoke those partitions that are not in the subscription any more.
-                    Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-                    revokedPartitions.addAll(ownedPartitions.stream()
-                        .filter(tp -> !subscriptions.subscription().contains(tp.topic()))
-                        .collect(Collectors.toSet()));
-
-                    if (!revokedPartitions.isEmpty()) {
-                        exception = invokePartitionsRevoked(revokedPartitions);
-
-                        ownedPartitions.removeAll(revokedPartitions);
-                        subscriptions.assignFromSubscribed(ownedPartitions);
-                    }
-
-                    break;
-            }
-        }
+        Optional<Exception> exception = revokePartitions(partitionsToRevoke, generation, memberId);
 
         isLeader = false;
         subscriptions.resetGroupSubscription();
@@ -856,22 +812,87 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         autoCommitOffsetRequestFuture = null;
         timer.update();
 
-        if (exception != null) {
-            throw new KafkaException("User rebalance callback throws an error", exception);
+        if (exception.isPresent()) {
+            throw new KafkaException("User rebalance callback throws an error", exception.get());
         }
         return true;
     }
 
-    private void pausePartitions() {
-        // TODO: See KAFKA-14196 for more detail, we pause the partition from consumption to prevent duplicated
+    private SortedSet<TopicPartition> getPartitionsToRevoke(RebalanceProtocol protocol, int generation, String memberId) {
+        SortedSet<TopicPartition> partitions = new TreeSet<>(COMPARATOR);
+        if (generation == Generation.NO_GENERATION.generationId ||
+                memberId.equals(Generation.NO_GENERATION.memberId)) {
+            partitions.addAll(subscriptions.assignedPartitions());
+            return partitions;
+        }
+
+        // Revoke all partitions
+        if (protocol == RebalanceProtocol.EAGER) {
+            partitions.addAll(subscriptions.assignedPartitions());
+            return partitions;
+        }
+
+        // only revoke those partitions that are not in the subscription any more.
+        if (protocol == RebalanceProtocol.COOPERATIVE) {
+            Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+            partitions.addAll(ownedPartitions.stream()
+                    .filter(tp -> !subscriptions.subscription().contains(tp.topic()))
+                    .collect(Collectors.toSet()));
+            return partitions;
+        }
+
+        log.debug("Invalid protocol: {}. No partition will be revoked.", protocol);
+        return partitions;
+    }
+
+    private void pausePartitions(Set<TopicPartition> partitions) {
+        // KAFKA-14196 for more detail, we pause the partition from consumption to prevent duplicated
         //  data returned by the consumer poll loop.  Without pausing the partitions, the consumer will move forward
         //  returning the data w/o committing them.  And the progress will be lost once the partition is revoked.
         //  This only applies to autocommits, as we expect user to handle the offsets menually during the partition
         //  revocation.
 
-        Set<TopicPartition> partitions = subscriptionState().assignedPartitions();
         log.debug("Pausing partitions {} before onJoinPrepare", partitions);
-        partitions.stream().forEach(tp -> subscriptionState().pause(tp));
+        partitions.forEach(tp -> subscriptionState().pause(tp));
+    }
+
+    private Optional<Exception> revokePartitions(SortedSet<TopicPartition> partitions, int generation, String memberId) {
+
+        // the generation / member-id can possibly be reset by the heartbeat thread
+        // upon getting errors or heartbeat timeouts; in this case whatever is previously
+        // owned partitions would be lost, we should trigger the callback and cleanup the assignment;
+        // otherwise we can proceed normally and revoke the partitions depending on the protocol,
+        // and in that case we should only change the assignment AFTER the revoke callback is triggered
+        // so that users can still access the previously owned partitions to commit offsets etc.
+        Optional<Exception> exception = Optional.empty();
+        if (generation == Generation.NO_GENERATION.generationId ||
+                memberId.equals(Generation.NO_GENERATION.memberId)) {
+            if (!partitions.isEmpty()) {
+                log.info("Giving away all assigned partitions as lost since generation/memberID has been reset," +
+                        "indicating that consumer is in old state or no longer part of the group");
+                exception = Optional.ofNullable(invokePartitionsLost(partitions));
+                subscriptions.assignFromSubscribed(Collections.emptySet());
+            }
+        } else {
+            switch (protocol) {
+                case EAGER:
+                    exception = Optional.ofNullable(invokePartitionsRevoked(partitions));
+                    subscriptions.assignFromSubscribed(Collections.emptySet());
+
+                    break;
+
+                case COOPERATIVE:
+                    Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+                    if (!partitions.isEmpty()) {
+                        exception = Optional.ofNullable(invokePartitionsRevoked(partitions));
+                        ownedPartitions.removeAll(partitions);
+                        subscriptions.assignFromSubscribed(ownedPartitions);
+                    }
+                    break;
+            }
+        }
+
+        return exception;
     }
 
     @Override
