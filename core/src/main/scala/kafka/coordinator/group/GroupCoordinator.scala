@@ -982,11 +982,10 @@ class GroupCoordinator(val brokerId: Int,
   ): Option[Errors] = {
     if (group.is(Dead)) {
       Some(Errors.COORDINATOR_NOT_AVAILABLE)
-    } else if (!isTransactional && generationId < 0 && group.is(Empty)) {
+    } else if (generationId < 0 && group.is(Empty)) {
       // When the generation id is -1, the request comes from either the admin client
       // or a consumer which does not use the group management facility. In this case,
-      // the request can commit offsets if the group is empty. This does not apply to
-      // transactional offset commits.
+      // the request can commit offsets if the group is empty.
       None
     } else if (generationId >= 0 || memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID || groupInstanceId.isDefined) {
       validateCurrentMember(
