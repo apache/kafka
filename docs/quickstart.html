@@ -59,7 +59,6 @@ $ cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
         </p>
 
         <pre class="line-numbers"><code class="language-bash"># Start the ZooKeeper service
-# Note: Soon, ZooKeeper will no longer be required by Apache Kafka.
 $ bin/zookeeper-server-start.sh config/zookeeper.properties</code></pre>
 
         <p>
@@ -81,7 +80,7 @@ $ bin/kafka-server-start.sh config/server.properties</code></pre>
             Generate a Cluster UUID
         </p>
 
-        <pre class="line-numbers"><code class="language-bash">$ KAFKA_CLUSTER_ID = $(bin/kafka-storege.sh random-uuid)</code></pre>
+        <pre class="line-numbers"><code class="language-bash">$ KAFKA_CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"</code></pre>
 
         <p>
             Format Log Directories
@@ -342,7 +341,7 @@ wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.L
             along the way, run the command:
         </p>
 
-        <pre class="line-numbers"><code class="language-bash">$ rm -rf /tmp/kafka-logs /tmp/zookeeper</code></pre>
+        <pre class="line-numbers"><code class="language-bash">$ rm -rf /tmp/kafka-logs /tmp/zookeeper /tmp/kraft-combined-logs</code></pre>
 
     </div>
 
