@@ -347,34 +347,12 @@ public class RetryWithToleranceOperatorTest {
         retryWithToleranceOperator.backoff(3, 5000);
         retryWithToleranceOperator.backoff(4, 5000);
         retryWithToleranceOperator.backoff(5, 5000);
+        // Simulate a small delay between calculating the deadline, and backing off
+        time.sleep(1);
+        // We may try to begin backing off after the deadline has already passed; make sure
+        // that we don't wait with a negative timeout
         retryWithToleranceOperator.backoff(6, 5000);
 
-        PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testBackoffMinDurationZero() throws Exception {
-        MockTime time = new MockTime(10, 0, 0);
-        CountDownLatch exitLatch = PowerMock.createStrictMock(CountDownLatch.class);
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(335, 5000, NONE, time, new ProcessingContext(), exitLatch);
-        retryWithToleranceOperator.metrics(errorHandlingMetrics);
-
-        EasyMock.expect(mockOperation.call()).andThrow(new RetriableException("Test")).anyTimes();
-        EasyMock.expect(exitLatch.await(300, TimeUnit.MILLISECONDS)).andAnswer(() -> {
-            time.sleep(300);
-            return false;
-        });
-        // Due to the auto tick setup on the MockTime instance, each call to time.milliseconds() will
-        // advance the clock by 10ms. The error retry timeout is configured to 335 ms so that after
-        // the first retry which backs off for 300 ms, just enough time will pass between the
-        // deadline check (when the current time in milliseconds will be 330) and the second backoff call
-        // so that in the backoff method, the current time (now 345) will have exceeded the deadline.
-        // This will cause the backoff delay to be 0ms (min possible delay since it shouldn't be negative)
-        EasyMock.expect(exitLatch.await(0, TimeUnit.MILLISECONDS)).andReturn(false);
-        replay(mockOperation, exitLatch);
-
-        retryWithToleranceOperator.execAndRetry(mockOperation);
-        assertTrue(retryWithToleranceOperator.failed());
         PowerMock.verifyAll();
     }
 
