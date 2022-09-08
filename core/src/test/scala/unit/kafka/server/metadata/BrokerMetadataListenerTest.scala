@@ -313,7 +313,7 @@ class BrokerMetadataListenerTest {
   }
 
   @Test
-  def testNoShapshotAfterError(): Unit = {
+  def testNoSnapshotAfterError(): Unit = {
     val snapshotter = new MockMetadataSnapshotter()
     val faultHandler = new MockFaultHandler("metadata loading")
 

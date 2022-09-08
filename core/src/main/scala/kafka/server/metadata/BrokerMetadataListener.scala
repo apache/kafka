@@ -324,20 +324,21 @@ class BrokerMetadataListener(
     val delta = _delta
     try {
       _image = _delta.apply()
-      _delta = new MetadataDelta(_image)
-      if (isDebugEnabled) {
-        debug(s"Publishing new metadata delta $delta at offset ${_image.highestOffsetAndEpoch().offset}.")
-      }
-
-      // This publish call is done with its own try-catch and fault handler
-      publisher.publish(delta, _image)
-
-      // Update the metrics since the publisher handled the lastest image
-      brokerMetrics.lastAppliedRecordOffset.set(_highestOffset)
-      brokerMetrics.lastAppliedRecordTimestamp.set(_highestTimestamp)
     } catch {
       case t: Throwable => metadataLoadingFaultHandler.handleFault(s"Error applying metadata delta $delta", t)
     }
+
+    _delta = new MetadataDelta(_image)
+    if (isDebugEnabled) {
+      debug(s"Publishing new metadata delta $delta at offset ${_image.highestOffsetAndEpoch().offset}.")
+    }
+
+    // This publish call is done with its own try-catch and fault handler
+    publisher.publish(delta, _image)
+
+    // Update the metrics since the publisher handled the lastest image
+    brokerMetrics.lastAppliedRecordOffset.set(_highestOffset)
+    brokerMetrics.lastAppliedRecordTimestamp.set(_highestTimestamp)
   }
 
   override def handleLeaderChange(leaderAndEpoch: LeaderAndEpoch): Unit = {
