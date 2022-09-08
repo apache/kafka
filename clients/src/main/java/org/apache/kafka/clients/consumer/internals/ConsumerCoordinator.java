@@ -1272,8 +1272,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         final Generation generation;
+        final String groupInstanceId;
         if (subscriptions.hasAutoAssignedPartitions()) {
             generation = generationIfStable();
+            groupInstanceId = rebalanceConfig.groupInstanceId.orElse(null);
             // if the generation is null, we are not part of an active group (and we expect to be).
             // the only thing we can do is fail the commit and let the user rejoin the group in poll().
             if (generation == null) {
@@ -1293,6 +1295,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         } else {
             generation = Generation.NO_GENERATION;
+            groupInstanceId = null;
         }
 
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
@@ -1300,7 +1303,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         .setGroupId(this.rebalanceConfig.groupId)
                         .setGenerationId(generation.generationId)
                         .setMemberId(generation.memberId)
-                        .setGroupInstanceId(rebalanceConfig.groupInstanceId.orElse(null))
+                        .setGroupInstanceId(groupInstanceId)
                         .setTopics(new ArrayList<>(requestTopicDataMap.values()))
         );
 
