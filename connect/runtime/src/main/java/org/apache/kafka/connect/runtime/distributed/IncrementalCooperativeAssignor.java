@@ -53,11 +53,10 @@ import static org.apache.kafka.connect.util.ConnectUtils.transformValues;
 
 /**
  * An assignor that computes a distribution of connectors and tasks according to the incremental
- * cooperative strategy for rebalancing. {@see
- * https://cwiki.apache.org/confluence/display/KAFKA/KIP-415%3A+Incremental+Cooperative
- * +Rebalancing+in+Kafka+Connect} for a description of the assignment policy.
+ * cooperative strategy for rebalancing. Note that this class is NOT thread-safe.
+ * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-415%3A+Incremental+Cooperative+Rebalancing+in+Kafka+Connect">
+ * KIP-415 for a description of the assignment policy. </a>
  *
- * Note that this class is NOT thread-safe.
  */
 public class IncrementalCooperativeAssignor implements ConnectAssignor {
     private final Logger log;
@@ -143,7 +142,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     /**
      * Performs task assignment based on the incremental cooperative connect protocol.
      * Read more on the design and implementation in:
-     * {@see https://cwiki.apache.org/confluence/display/KAFKA/KIP-415%3A+Incremental+Cooperative+Rebalancing+in+Kafka+Connect}
+     * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-415%3A+Incremental+Cooperative+Rebalancing+in+Kafka+Connect">
+     * KIP-415</a>
      *
      * @param leaderId the ID of the group leader
      * @param maxOffset the latest known offset of the configuration topic
