@@ -119,6 +119,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -147,6 +148,8 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
  * the controller can fully initialize.
  */
 public final class QuorumController implements Controller {
+    private final static int MAX_RECORDS_PER_BATCH = 10000;
+
     /**
      * A builder class which creates the QuorumController.
      */
@@ -175,6 +178,7 @@ public final class QuorumController implements Controller {
         private Optional<ClusterMetadataAuthorizer> authorizer = Optional.empty();
         private Map<String, Object> staticConfig = Collections.emptyMap();
         private BootstrapMetadata bootstrapMetadata = null;
+        private int maxRecordsPerBatch = MAX_RECORDS_PER_BATCH;
 
         public Builder(int nodeId, String clusterId) {
             this.nodeId = nodeId;
@@ -270,6 +274,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setMaxRecordsPerBatch(int maxRecordsPerBatch) {
+            this.maxRecordsPerBatch = maxRecordsPerBatch;
+            return this;
+        }
+
         public Builder setCreateTopicPolicy(Optional<CreateTopicPolicy> createTopicPolicy) {
             this.createTopicPolicy = createTopicPolicy;
             return this;
@@ -347,7 +356,8 @@ public final class QuorumController implements Controller {
                     configurationValidator,
                     authorizer,
                     staticConfig,
-                    bootstrapMetadata
+                    bootstrapMetadata,
+                    maxRecordsPerBatch
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -776,37 +786,38 @@ public final class QuorumController implements Controller {
                         "reaches offset {}", this, resultAndOffset.offset());
                 }
             } else {
-                // Start by trying to apply the record to our in-memory state. This should always
-                // succeed; if it does not, that's a fatal error. It is important to do this before
-                // scheduling the record for Raft replication.
-                int i = 1;
-                for (ApiMessageAndVersion message : result.records()) {
-                    try {
-                        replay(message.message(), Optional.empty(), writeOffset + result.records().size());
-                    } catch (Throwable e) {
-                        String failureMessage = String.format("Unable to apply %s record, which was " +
-                            "%d of %d record(s) in the batch following last writeOffset %d.",
-                            message.message().getClass().getSimpleName(), i, result.records().size(),
-                            writeOffset);
-                        throw fatalFaultHandler.handleFault(failureMessage, e);
-                    }
-                    i++;
-                }
+                // Pass the records to the Raft layer. This will start the process of committing
+                // them to the log.
+                long offset = appendRecords(log, result, maxRecordsPerBatch,
+                    new Function<List<ApiMessageAndVersion>, Long>() {
+                        private long prevEndOffset = writeOffset;
 
-                // If the operation returned a batch of records, and those records could be applied,
-                // they need to be written before we can return our result to the user.  Here, we
-                // hand off the batch of records to the raft client.  They will be written out
-                // asynchronously.
-                final long offset;
-                if (result.isAtomic()) {
-                    offset = raftClient.scheduleAtomicAppend(controllerEpoch, result.records());
-                } else {
-                    offset = raftClient.scheduleAppend(controllerEpoch, result.records());
-                }
+                        @Override
+                        public Long apply(List<ApiMessageAndVersion> records) {
+                            // Start by trying to apply the record to our in-memory state. This should always
+                            // succeed; if it does not, that's a fatal error. It is important to do this before
+                            // scheduling the record for Raft replication.
+                            int i = 1;
+                            for (ApiMessageAndVersion message : records) {
+                                try {
+                                    replay(message.message(), Optional.empty(), prevEndOffset + records.size());
+                                } catch (Throwable e) {
+                                    String failureMessage = String.format("Unable to apply %s record, which was " +
+                                            "%d of %d record(s) in the batch following last write offset %d.",
+                                            message.message().getClass().getSimpleName(), i, records.size(),
+                                            prevEndOffset);
+                                    throw fatalFaultHandler.handleFault(failureMessage, e);
+                                }
+                                i++;
+                            }
+                            prevEndOffset = raftClient.scheduleAtomicAppend(controllerEpoch, records);
+                            snapshotRegistry.getOrCreateSnapshot(prevEndOffset);
+                            return prevEndOffset;
+                        }
+                    });
                 op.processBatchEndOffset(offset);
                 updateWriteOffset(offset);
                 resultAndOffset = ControllerResultAndOffset.of(offset, result);
-                snapshotRegistry.getOrCreateSnapshot(offset);
 
                 log.debug("Read-write operation {} will be completed when the log " +
                     "reaches offset {}.", this, resultAndOffset.offset());
@@ -841,6 +852,72 @@ public final class QuorumController implements Controller {
         @Override
         public String toString() {
             return name + "(" + System.identityHashCode(this) + ")";
+        }
+    }
+
+    /**
+     * Append records to the Raft log. They will be written out asynchronously.
+     *
+     * @param log                   The log4j logger.
+     * @param result                The controller result we are writing out.
+     * @param maxRecordsPerBatch    The maximum number of records to allow in a batch.
+     * @param appender              The callback to invoke for each batch. The arguments are last
+     *                              write offset, record list, and the return result is the new
+     *                              last write offset.
+     * @return                      The final offset that was returned from the Raft layer.
+     */
+    static long appendRecords(
+        Logger log,
+        ControllerResult<?> result,
+        int maxRecordsPerBatch,
+        Function<List<ApiMessageAndVersion>, Long> appender
+    ) {
+        try {
+            List<ApiMessageAndVersion> records = result.records();
+            if (result.isAtomic()) {
+                // If the result must be written out atomically, check that it is not too large.
+                // In general, we create atomic batches when it is important to commit "all, or
+                // nothing". They are limited in size and must only be used when the batch size
+                // is bounded.
+                if (records.size() > maxRecordsPerBatch) {
+                    throw new IllegalStateException("Attempted to atomically commit " +
+                            records.size() + " records, but maxRecordsPerBatch is " +
+                            maxRecordsPerBatch);
+                }
+                long offset = appender.apply(records);
+                if (log.isTraceEnabled()) {
+                    log.trace("Atomically appended {} record(s) ending with offset {}.",
+                            records.size(), offset);
+                }
+                return offset;
+            } else {
+                // If the result is non-atomic, then split it into as many batches as needed.
+                // The appender callback will create an in-memory snapshot for each batch,
+                // since we might need to revert to any of them. We will only return the final
+                // offset of the last batch, however.
+                int startIndex = 0, numBatches = 0;
+                while (true) {
+                    numBatches++;
+                    int endIndex = startIndex + maxRecordsPerBatch;
+                    if (endIndex > records.size()) {
+                        long offset = appender.apply(records.subList(startIndex, records.size()));
+                        if (log.isTraceEnabled()) {
+                            log.trace("Appended {} record(s) in {} batch(es), ending with offset {}.",
+                                    records.size(), numBatches, offset);
+                        }
+                        return offset;
+                    } else {
+                        appender.apply(records.subList(startIndex, endIndex));
+                    }
+                    startIndex += maxRecordsPerBatch;
+                }
+            }
+        } catch (ApiException e) {
+            // If the Raft client throws a subclass of ApiException, we need to convert it into a
+            // RuntimeException so that it will be handled as the unexpected exception that it is.
+            // ApiExceptions are reserved for expected errors such as incorrect uses of controller
+            // APIs, permission errors, NotControllerException, etc. etc.
+            throw new RuntimeException(e);
         }
     }
 
@@ -1148,19 +1225,12 @@ public final class QuorumController implements Controller {
             controllerMetrics.setActive(false);
             purgatory.failAll(newNotControllerException());
 
-            if (snapshotRegistry.hasSnapshot(lastCommittedOffset)) {
-                snapshotRegistry.revertToSnapshot(lastCommittedOffset);
-                authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
-            } else {
-                log.info("Unable to find last committed offset {} in snapshot registry; resetting " +
-                         "to empty state.", lastCommittedOffset);
-                resetToEmptyState();
-                authorizer.ifPresent(a -> a.loadSnapshot(Collections.emptyMap()));
-                needToCompleteAuthorizerLoad = authorizer.isPresent();
-                raftClient.unregister(metaLogListener);
-                metaLogListener = new QuorumMetaLogListener();
-                raftClient.register(metaLogListener);
+            if (!snapshotRegistry.hasSnapshot(lastCommittedOffset)) {
+                throw new RuntimeException("Unable to find last committed offset " +
+                        lastCommittedEpoch + " in snapshot registry.");
             }
+            snapshotRegistry.revertToSnapshot(lastCommittedOffset);
+            authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
             newBytesSinceLastSnapshot = 0L;
             updateWriteOffset(-1);
             clusterControl.deactivate();
@@ -1625,6 +1695,11 @@ public final class QuorumController implements Controller {
      */
     private final BootstrapMetadata bootstrapMetadata;
 
+    /**
+     * The maximum number of records per batch to allow.
+     */
+    private final int maxRecordsPerBatch;
+
     private QuorumController(
         FaultHandler fatalFaultHandler,
         FaultHandler metadataFaultHandler,
@@ -1649,7 +1724,8 @@ public final class QuorumController implements Controller {
         ConfigurationValidator configurationValidator,
         Optional<ClusterMetadataAuthorizer> authorizer,
         Map<String, Object> staticConfig,
-        BootstrapMetadata bootstrapMetadata
+        BootstrapMetadata bootstrapMetadata,
+        int maxRecordsPerBatch
     ) {
         this.fatalFaultHandler = fatalFaultHandler;
         this.metadataFaultHandler = metadataFaultHandler;
@@ -1719,6 +1795,7 @@ public final class QuorumController implements Controller {
                 build();
         this.raftClient = raftClient;
         this.bootstrapMetadata = bootstrapMetadata;
+        this.maxRecordsPerBatch = maxRecordsPerBatch;
         this.metaLogListener = new QuorumMetaLogListener();
         this.curClaimEpoch = -1;
         this.needToCompleteAuthorizerLoad = authorizer.isPresent();

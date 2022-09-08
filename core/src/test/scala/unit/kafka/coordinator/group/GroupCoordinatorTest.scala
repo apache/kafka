@@ -1263,7 +1263,6 @@ class GroupCoordinatorTest {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Empty)
 
-
     // Illegal state exception shall trigger since follower id resides in pending member bucket.
     val expectedException = assertThrows(classOf[IllegalStateException],
       () => staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1))
@@ -2939,6 +2938,29 @@ class GroupCoordinatorTest {
 
     val commitOffsetResult = commitOffsets(groupId, assignedMemberId, generationId + 1, Map(tp -> offset))
     assertEquals(Errors.ILLEGAL_GENERATION, commitOffsetResult(tp))
+  }
+
+  @Test
+  def testManualCommitOffsetShouldNotValidateMemberIdAndInstanceId(): Unit = {
+    val tp = new TopicPartition("topic", 0)
+
+    var commitOffsetResult = commitOffsets(
+      groupId,
+      JoinGroupRequest.UNKNOWN_MEMBER_ID,
+      -1,
+      Map(tp -> offsetAndMetadata(0)),
+      Some("instance-id")
+    )
+    assertEquals(Errors.NONE, commitOffsetResult(tp))
+
+    commitOffsetResult = commitOffsets(
+      groupId,
+      "unknown",
+      -1,
+      Map(tp -> offsetAndMetadata(0)),
+      None
+    )
+    assertEquals(Errors.NONE, commitOffsetResult(tp))
   }
 
   @Test
