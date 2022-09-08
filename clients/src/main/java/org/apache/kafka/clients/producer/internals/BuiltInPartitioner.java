@@ -191,8 +191,9 @@ public class BuiltInPartitioner {
         int producedBytes = partitionInfo.producedBytes.addAndGet(appendedBytes);
 
         // We're trying to switch partition once we produce stickyBatchSize bytes to a partition
-        // but with high linger.ms setting this could lead to switching partition while batch is not
-        // ready to be sent, thus resulting in fractional batches.  Consider the following example:
+        // but doing so may hinder batching because partition switch may happen while batch isn't
+        // ready to send.  This situation is especially likely with high linger.ms setting.
+        // Consider the following example:
         //   linger.ms=500, producer produces 12KB in 500ms, batch.size=16KB
         //     - first batch collects 12KB in 500ms, gets sent
         //     - second batch collects 4KB, then we switch partition, so 4KB gets eventually sent
@@ -209,6 +210,8 @@ public class BuiltInPartitioner {
         // unready batch after the batch that disabled partition switch becomes ready).
         // As a result, with high latency.ms setting we end up switching partitions after producing
         // between stickyBatchSize and stickyBatchSize * 2 bytes, to better align with batch boundary.
+        if (producedBytes >= stickyBatchSize * 2)
+            log.trace("Exceeded {} bytes, produced {} bytes, enable is {}", stickyBatchSize * 2, producedBytes, enableSwitch);
         if (producedBytes >= stickyBatchSize && enableSwitch || producedBytes >= stickyBatchSize * 2) {
             // We've produced enough to this partition, switch to next.
             StickyPartitionInfo newPartitionInfo = new StickyPartitionInfo(nextPartition(cluster));

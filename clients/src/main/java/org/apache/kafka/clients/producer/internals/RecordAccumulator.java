@@ -236,9 +236,9 @@ public class RecordAccumulator {
             return true;
         }
 
-        // We might have disabled partition switch if the queue didn't have ready batches.
-        // Check if we've got some ready batches now and can switch.
-        if (queueHasReadyBatches(deque, nowMs)) {
+        // We might have disabled partition switch if the queue had incomplete batches.
+        // Check if all batches are full now and switch .
+        if (allBatchesFull(deque)) {
             topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, 0, cluster, true);
             if (topicInfo.builtInPartitioner.isPartitionChanged(partitionInfo)) {
                 log.trace("Completed previously disabled switch for topic {} partition {}, retrying",
@@ -317,8 +317,8 @@ public class RecordAccumulator {
 
                     RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callbacks, dq, nowMs);
                     if (appendResult != null) {
-                        // If queue is not ready to send we disabled switch (see comments in updatePartitionInfo).
-                        boolean enableSwitch = queueHasReadyBatches(dq, nowMs);
+                        // If queue has incomplete batches we disable switch (see comments in updatePartitionInfo).
+                        boolean enableSwitch = allBatchesFull(dq);
                         topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
                         return appendResult;
                     }
@@ -351,8 +351,8 @@ public class RecordAccumulator {
                     // Set buffer to null, so that deallocate doesn't return it back to free pool, since it's used in the batch.
                     if (appendResult.newBatchCreated)
                         buffer = null;
-                    // If queue is not ready to send we disable switch (see comments in updatePartitionInfo).
-                    boolean enableSwitch = queueHasReadyBatches(dq, nowMs);
+                    // If queue has incomplete batches we disable switch (see comments in updatePartitionInfo).
+                    boolean enableSwitch = allBatchesFull(dq);
                     topicInfo.builtInPartitioner.updatePartitionInfo(partitionInfo, appendResult.appendedBytes, cluster, enableSwitch);
                     return appendResult;
                 }
@@ -415,13 +415,12 @@ public class RecordAccumulator {
     }
 
     /**
-     * Check if there are ready batches in the queue, or we sent all batches.
+     * Check if all batches in the queue are full.
      */
-    private boolean queueHasReadyBatches(Deque<ProducerBatch> deque, long nowMs) {
-        // Note that we also check if the queue is empty, because that may mean that batches became
-        // ready and we sent them.
+    private boolean allBatchesFull(Deque<ProducerBatch> deque) {
+        // Only the last batch may be incomplete, so we just check that.
         ProducerBatch last = deque.peekLast();
-        return deque.size() > 1 || last == null || last.isFull() || last.waitedTimeMs(nowMs) >= lingerMs;
+        return last == null || last.isFull();
     }
 
      /**

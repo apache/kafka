@@ -1137,23 +1137,26 @@ public class RecordAccumulatorTest {
             assertEquals(partition1, partition.get());
             assertEquals(2, mockRandom.get());
 
-            // Produce large record, we should switch to next partition.
+            // Produce large record, we switched to next partition by previous produce, but
+            // for this produce the switch would be disabled because of incomplete batch.
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
             assertEquals(partition2, partition.get());
-            assertEquals(3, mockRandom.get());
+            assertEquals(2, mockRandom.get());
 
-            // Produce large record, we should switch to next partition.
+            // Produce large record, we should switch to next partition as we complete
+            // previous batch and exceeded sticky limit.
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
             assertEquals(partition3, partition.get());
-            assertEquals(4, mockRandom.get());
+            assertEquals(3, mockRandom.get());
 
-            // Produce large record, we should switch to first partition again.
+            // Produce large record, we should switch to next partition as we complete
+            // previous batch and exceeded sticky limit.
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
             assertEquals(partition1, partition.get());
-            assertEquals(5, mockRandom.get());
+            assertEquals(4, mockRandom.get());
         } finally {
             BuiltInPartitioner.mockRandom = null;
         }
