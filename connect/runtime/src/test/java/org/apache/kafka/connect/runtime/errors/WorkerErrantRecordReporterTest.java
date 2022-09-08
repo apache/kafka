@@ -17,11 +17,14 @@
 
 package org.apache.kafka.connect.runtime.errors;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
+import org.apache.kafka.connect.runtime.InternalSinkRecord;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
@@ -33,37 +36,27 @@ import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class WorkerErrantRecordReporterTest {
 
     private WorkerErrantRecordReporter reporter;
-
-    @Mock
     private RetryWithToleranceOperator retryWithToleranceOperator;
 
-    @Mock
-    private Converter converter;
-
-    @Mock
-    private HeaderConverter headerConverter;
-
-    @Mock
-    private SinkRecord record;
-
-    @Before
-    public void setup() {
-        reporter = new WorkerErrantRecordReporter(
-            retryWithToleranceOperator,
-            converter,
-            converter,
-            headerConverter
-        );
-    }
+    @Mock private Converter converter;
+    @Mock private HeaderConverter headerConverter;
+    @Mock private InternalSinkRecord record;
+    @Mock private ErrorReporter errorReporter;
 
     @Test
     public void testGetFutures() {
+        initializeReporter(true);
         Collection<TopicPartition> topicPartitions = new ArrayList<>();
         assertTrue(reporter.futures.isEmpty());
         for (int i = 0; i < 4; i++) {
@@ -74,5 +67,42 @@ public class WorkerErrantRecordReporterTest {
         assertFalse(reporter.futures.isEmpty());
         reporter.awaitFutures(topicPartitions);
         assertTrue(reporter.futures.isEmpty());
+    }
+
+    @Test
+    public void testReport() {
+        initializeReporter(true);
+        when(errorReporter.report(any())).thenReturn(CompletableFuture.completedFuture(null));
+        @SuppressWarnings("unchecked") ConsumerRecord<byte[], byte[]> consumerRecord = mock(ConsumerRecord.class);
+        when(record.originalRecord()).thenReturn(consumerRecord);
+        reporter.report(record, new Throwable());
+        verify(errorReporter).report(any());
+    }
+
+    @Test
+    public void testReportNoToleratedErrors() {
+        initializeReporter(false);
+        when(errorReporter.report(any())).thenReturn(CompletableFuture.completedFuture(null));
+        @SuppressWarnings("unchecked") ConsumerRecord<byte[], byte[]> consumerRecord = mock(ConsumerRecord.class);
+        when(record.originalRecord()).thenReturn(consumerRecord);
+        assertThrows(ConnectException.class, () -> reporter.report(record, new Throwable()));
+        verify(errorReporter).report(any());
+    }
+
+    private void initializeReporter(boolean errorsTolerated) {
+        retryWithToleranceOperator = new RetryWithToleranceOperator(
+                5000,
+                ConnectorConfig.ERRORS_RETRY_MAX_DELAY_DEFAULT,
+                errorsTolerated ? ToleranceType.ALL : ToleranceType.NONE,
+                Time.SYSTEM
+        );
+        retryWithToleranceOperator.reporters(Collections.singletonList(errorReporter));
+        retryWithToleranceOperator.metrics(mock(ErrorHandlingMetrics.class));
+        reporter = new WorkerErrantRecordReporter(
+                retryWithToleranceOperator,
+                converter,
+                converter,
+                headerConverter
+        );
     }
 }
