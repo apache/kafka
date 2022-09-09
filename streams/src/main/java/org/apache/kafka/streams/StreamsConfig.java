@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import java.util.Arrays;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -27,7 +28,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.config.ConfigDef.ValidList;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.metrics.Sensor;
@@ -683,8 +683,8 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code topology.optimization} */
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka "
-        + "Streams if it should optimize the topology and what optimizations to apply. Disabled "
-        + "by default";
+        + "Streams if it should optimize the topology and what optimizations to apply in a comma "
+        + "separated list. Disabled by default";
 
     /** {@code window.size.ms} */
     public static final String WINDOW_SIZE_MS_CONFIG = "window.size.ms";
@@ -862,10 +862,9 @@ public class StreamsConfig extends AbstractConfig {
                     Importance.MEDIUM,
                     TASK_TIMEOUT_MS_DOC)
             .define(TOPOLOGY_OPTIMIZATION_CONFIG,
-                    Type.LIST,
+                    Type.STRING,
                     NO_OPTIMIZATION,
-                    ValidList.in(NO_OPTIMIZATION, OPTIMIZE, REUSE_KTABLE_SOURCE_TOPICS,
-                                 MERGE_REPARTITION_TOPICS, SELF_JOIN),
+                    (name, value) -> verifyTopologyOptimizationConfigs((String) value),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
 
@@ -1280,7 +1279,7 @@ public class StreamsConfig extends AbstractConfig {
         if (eosEnabled) {
             verifyEOSTransactionTimeoutCompatibility();
         }
-        verifyTopologyOptimizationConfigs(getList(TOPOLOGY_OPTIMIZATION_CONFIG));
+        verifyTopologyOptimizationConfigs(getString(TOPOLOGY_OPTIMIZATION_CONFIG));
     }
 
     private void verifyEOSTransactionTimeoutCompatibility() {
@@ -1669,7 +1668,10 @@ public class StreamsConfig extends AbstractConfig {
         return props;
     }
 
-    public static void verifyTopologyOptimizationConfigs(final List<String> configs) {
+    public static List<String> verifyTopologyOptimizationConfigs(final String config) {
+        final List<String> acceptableConfigs = Arrays.asList(
+            OPTIMIZE, NO_OPTIMIZATION, REUSE_KTABLE_SOURCE_TOPICS, MERGE_REPARTITION_TOPICS, SELF_JOIN);
+        final List<String> configs = Arrays.asList(config.split("\\s*,\\s*"));
         // Verify it doesn't contain none or all plus a list of optimizations
         if (configs.contains(NO_OPTIMIZATION) || configs.contains(OPTIMIZE)) {
             if (configs.size() > 1) {
@@ -1681,6 +1683,12 @@ public class StreamsConfig extends AbstractConfig {
                                               + "separated list.");
             }
         }
+        for (final String conf: configs) {
+            if (!acceptableConfigs.contains(conf)) {
+                throw new ConfigException("Unrecognized config. String must be in " + acceptableConfigs);
+            }
+        }
+        return configs;
     }
 
     /**

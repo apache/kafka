@@ -311,16 +311,14 @@ public class InternalStreamsBuilder implements InternalNameProvider {
      * A user can provide either the config OPTIMIZE which means all optimizations rules will be
      * applied or they can provide a list of optimization rules.
      */
-    @SuppressWarnings("unchecked")
     private void optimizeTopology(final Properties props) {
         final List<String> optimizationConfigs;
-        if (props == null || !props.contains(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG)) {
+        if (props == null || !props.containsKey(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG)) {
             optimizationConfigs = new ArrayList<>();
             optimizationConfigs.add(StreamsConfig.NO_OPTIMIZATION);
         } else {
-            optimizationConfigs =
-                (List<String>) props.get(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG);
-            StreamsConfig.verifyTopologyOptimizationConfigs(optimizationConfigs);
+            optimizationConfigs = StreamsConfig.verifyTopologyOptimizationConfigs(
+                (String) props.get(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG));
         }
         if (optimizationConfigs.contains(StreamsConfig.OPTIMIZE)
             || optimizationConfigs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {

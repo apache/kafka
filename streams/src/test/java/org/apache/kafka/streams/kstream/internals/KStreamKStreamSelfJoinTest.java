@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
 
 import java.util.List;
 import java.util.Properties;
@@ -181,4 +182,160 @@ public class KStreamKStreamSelfJoinTest {
             processor.checkAndClearProcessResult(expected.toArray(new KeyValueTimestamp[0]));
         }
     }
+
+    @Test
+    public void shouldMatchInnerJoinWithSelfJoinDifferentBeforeAfterWindows() {
+        // Given:
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        final StreamsBuilder builder1 = new StreamsBuilder();
+        final StreamsBuilder builder2 = new StreamsBuilder();
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier1 =
+            new MockApiProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier2 =
+            new MockApiProcessorSupplier<>();
+        final ValueJoiner<String, String, String> valueJoiner = (v, v2) -> v + v2;
+        final KStream<String, String> stream1 = builder1.stream(
+            topic1, Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> stream2 = builder1.stream(
+            topic1, Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> stream3 = builder2.stream(
+            topic2, Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> stream4 = builder2.stream(
+            topic2, Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> selfJoin = stream1.join(
+            stream2,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(11), ofSeconds(10)),
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
+        );
+        selfJoin.process(supplier1);
+
+        final KStream<String, String> innerJoin = stream3.join(
+            stream4,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceAndGrace(ofSeconds(11), ofSeconds(10)),
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
+        );
+        innerJoin.process(supplier2);
+        final List<KeyValueTimestamp<String, String>> expected;
+
+        final Topology topology2 =  builder2.build();
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology2)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer());
+            final MockApiProcessor<String, String, Void, Void> processor =
+                supplier2.theCapturedProcessor();
+            inputTopic.pipeInput("A", "1", 0L);
+            inputTopic.pipeInput("A", "2", 11000L);
+            inputTopic.pipeInput("B", "1", 12000L);
+            inputTopic.pipeInput("A", "3", 13000L);
+            inputTopic.pipeInput("A", "4", 15000L);
+            inputTopic.pipeInput("C", "1", 16000L);
+            inputTopic.pipeInput("D", "1", 17000L);
+            inputTopic.pipeInput("A", "5", 30000L);
+            expected = processor.processed();
+        }
+
+        // When:
+        final Topology topology1 =  builder1.build(props);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology1, props)) {
+
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
+            final MockApiProcessor<String, String, Void, Void> processor =
+                supplier1.theCapturedProcessor();
+            inputTopic.pipeInput("A", "1", 0L);
+            inputTopic.pipeInput("A", "2", 11000L);
+            inputTopic.pipeInput("B", "1", 12000L);
+            inputTopic.pipeInput("A", "3", 13000L);
+            inputTopic.pipeInput("A", "4", 15000L);
+            inputTopic.pipeInput("C", "1", 16000L);
+            inputTopic.pipeInput("D", "1", 17000L);
+            inputTopic.pipeInput("A", "5", 30000L);
+
+            // Then:
+            processor.checkAndClearProcessResult(expected.toArray(new KeyValueTimestamp[0]));
+        }
+    }
+
+    @Test
+    public void shouldMatchInnerJoinWithSelfJoinOutOfOrderMessages() {
+        // Given:
+        props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
+        final StreamsBuilder builder1 = new StreamsBuilder();
+        final StreamsBuilder builder2 = new StreamsBuilder();
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier1 =
+            new MockApiProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, String, Void, Void> supplier2 =
+            new MockApiProcessorSupplier<>();
+        final ValueJoiner<String, String, String> valueJoiner = (v, v2) -> v + v2;
+        final KStream<String, String> stream1 = builder1.stream(
+            topic1, Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> stream2 = builder1.stream(
+            topic1, Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> stream3 = builder2.stream(
+            topic2, Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> stream4 = builder2.stream(
+            topic2, Consumed.with(Serdes.String(), Serdes.String()));
+        final KStream<String, String> selfJoin = stream1.join(
+            stream2,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofSeconds(10)),
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
+        );
+        selfJoin.process(supplier1);
+
+        final KStream<String, String> innerJoin = stream3.join(
+            stream4,
+            valueJoiner,
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofSeconds(10)),
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
+        );
+        innerJoin.process(supplier2);
+        final List<KeyValueTimestamp<String, String>> expected;
+
+        final Topology topology2 =  builder2.build();
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology2)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer());
+            final MockApiProcessor<String, String, Void, Void> processor =
+                supplier2.theCapturedProcessor();
+
+            inputTopic.pipeInput("A", "1", 0L);
+            inputTopic.pipeInput("A", "2", 9999);
+            inputTopic.pipeInput("B", "1", 11000L);
+            inputTopic.pipeInput("A", "3", 13000L);
+            inputTopic.pipeInput("A", "4", 15000L);
+            inputTopic.pipeInput("C", "1", 16000L);
+            inputTopic.pipeInput("D", "1", 17000L);
+            inputTopic.pipeInput("A", "5", 30000L);
+            inputTopic.pipeInput("A", "5", 6000);
+            expected = processor.processed();
+        }
+
+        // When:
+        final Topology topology1 =  builder1.build(props);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology1, props)) {
+
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
+            final MockApiProcessor<String, String, Void, Void> processor =
+                supplier1.theCapturedProcessor();
+            inputTopic.pipeInput("A", "1", 0L);
+            inputTopic.pipeInput("A", "2", 9999);
+            inputTopic.pipeInput("B", "1", 11000L);
+            inputTopic.pipeInput("A", "3", 13000L);
+            inputTopic.pipeInput("A", "4", 15000L);
+            inputTopic.pipeInput("C", "1", 16000L);
+            inputTopic.pipeInput("D", "1", 17000L);
+            inputTopic.pipeInput("A", "5", 30000L);
+            inputTopic.pipeInput("A", "5", 6000);
+
+            // Then:
+            processor.checkAndClearProcessResult(expected.toArray(new KeyValueTimestamp[0]));
+        }
+    }
+
 }

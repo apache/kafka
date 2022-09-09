@@ -616,9 +616,7 @@ public class InternalStreamsBuilderTest {
     @Test
     public void shouldOptimizeJoinWhenInConfig() {
         // Given:
-        final StringBuilder sb = new StringBuilder();
-        sb.append(StreamsConfig.SELF_JOIN);
-        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, sb.toString());
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.SELF_JOIN);
         final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
         stream1.join(stream1, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
 
@@ -637,11 +635,10 @@ public class InternalStreamsBuilderTest {
     @Test
     public void shouldNotOptimizeJoinWhenNotInConfig() {
         // Given:
-        final StringBuilder sb = new StringBuilder();
-        sb.append(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS);
-        sb.append(",");
-        sb.append(StreamsConfig.MERGE_REPARTITION_TOPICS);
-        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, sb.toString());
+        final String value = String.join(",",
+                                         StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS,
+                                         StreamsConfig.MERGE_REPARTITION_TOPICS);
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, value);
         final KStream<String, String> stream1 = builder.stream(Collections.singleton("t1"), consumed);
         stream1.join(stream1, MockValueJoiner.TOSTRING_JOINER, JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)));
 

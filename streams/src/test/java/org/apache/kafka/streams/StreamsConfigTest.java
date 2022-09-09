@@ -1012,8 +1012,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldSpecifyNoOptimizationWhenNotExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "none";
-        final String actualOptimizedConifig =
-            streamsConfig.getList(TOPOLOGY_OPTIMIZATION_CONFIG).get(0);
+        final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
         assertEquals("Optimization should be \"none\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
 
@@ -1022,7 +1021,7 @@ public class StreamsConfigTest {
         final String expectedOptimizeConfig = "all";
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "all");
         final StreamsConfig config = new StreamsConfig(props);
-        final String actualOptimizedConifig = config.getList(TOPOLOGY_OPTIMIZATION_CONFIG).get(0);
+        final String actualOptimizedConifig = config.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
         assertEquals("Optimization should be \"all\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
 
@@ -1277,7 +1276,7 @@ public class StreamsConfigTest {
         final String value = StreamsConfig.SELF_JOIN;
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
         final StreamsConfig config = new StreamsConfig(props);
-        assertTrue(config.getList(TOPOLOGY_OPTIMIZATION_CONFIG).contains(StreamsConfig.SELF_JOIN));
+        assertEquals(config.getString(TOPOLOGY_OPTIMIZATION_CONFIG), StreamsConfig.SELF_JOIN);
     }
 
     @Test
@@ -1288,10 +1287,11 @@ public class StreamsConfigTest {
                                          StreamsConfig.MERGE_REPARTITION_TOPICS);
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(3, config.getList(TOPOLOGY_OPTIMIZATION_CONFIG).size());
-        assertTrue(config.getList(TOPOLOGY_OPTIMIZATION_CONFIG).contains(StreamsConfig.SELF_JOIN));
-        assertTrue(config.getList(TOPOLOGY_OPTIMIZATION_CONFIG).contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS));
-        assertTrue(config.getList(TOPOLOGY_OPTIMIZATION_CONFIG).contains(StreamsConfig.MERGE_REPARTITION_TOPICS));
+        final List<String> configs = Arrays.asList(config.getString(TOPOLOGY_OPTIMIZATION_CONFIG).split(","));
+        assertEquals(3, configs.size());
+        assertTrue(configs.contains(StreamsConfig.SELF_JOIN));
+        assertTrue(configs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS));
+        assertTrue(configs.contains(StreamsConfig.MERGE_REPARTITION_TOPICS));
     }
 
     static class MisconfiguredSerde implements Serde<Object> {
