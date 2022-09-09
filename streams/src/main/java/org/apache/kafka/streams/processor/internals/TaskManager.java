@@ -457,11 +457,11 @@ public class TaskManager {
         }
         if (task.state() == State.SUSPENDED) {
             task.resume();
-            handleReAssignedRevokedActiveTask(task);
+            moveTaskFromTasksRegistryToStateUpdater(task);
         }
     }
 
-    private void handleReAssignedRevokedActiveTask(final Task task) {
+    private void moveTaskFromTasksRegistryToStateUpdater(final Task task) {
         tasks.removeTask(task);
         stateUpdater.add(task);
     }
