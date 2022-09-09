@@ -296,7 +296,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         // Do not revoke resources for re-assignment while a delayed rebalance is active
         if (delay == 0) {
             Map<String, ConnectorsAndTasks> toExplicitlyRevoke =
-                    performTaskRevocation(configured, completeWorkerAssignment);
+                    performTaskRevocation(activeAssignments, currentWorkerAssignment);
 
             // If this round and the previous round involved revocation, we will calculate a delay for
             // the next round when revoking rebalance would be allowed. Note that delay could be 0, in which
