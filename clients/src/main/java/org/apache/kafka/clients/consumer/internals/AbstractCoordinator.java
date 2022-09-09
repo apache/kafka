@@ -249,7 +249,14 @@ public abstract class AbstractCoordinator implements Closeable {
                 throw fatalException;
             }
             final RequestFuture<Void> future = lookupCoordinator();
-            client.poll(future, timer);
+
+            // if we do not want to block on discovering coordinator at all,
+            // then we should not try to poll in a loop, and should not throw wake-up exception either
+            if (timer.timeoutMs() == 0L) {
+                client.poll(timer, future, true);
+            } else {
+                client.poll(future, timer);
+            }
 
             if (!future.isDone()) {
                 // ran out of time

@@ -273,6 +273,39 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
+    public void testNoWakeupWhenNonBlockingDiscoverCoordinator() {
+        setupCoordinator();
+
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+
+        consumerClient.wakeup();
+
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+
+        // a follow-up poll should still throw
+        try {
+            coordinator.joinGroupIfNeeded(mockTime.timer(0));
+            fail("Should have woken up from joinGroupIfNeeded()");
+        } catch (WakeupException ignored) {
+        }
+    }
+
+    @Test
+    public void testWakeupWhenBlockingDiscoverCoordinator() throws Exception {
+        setupCoordinator();
+
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+
+        consumerClient.wakeup();
+
+        try {
+            coordinator.ensureCoordinatorReady(mockTime.timer(1));
+            fail("Should have woken up from ensureCoordinatorReady()");
+        } catch (WakeupException ignored) {
+        }
+    }
+
+    @Test
     public void testTimeoutAndRetryJoinGroupIfNeeded() throws Exception {
         setupCoordinator();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
