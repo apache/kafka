@@ -2562,8 +2562,9 @@ project(':connect:runtime') {
     implementation libs.jettyClient
     implementation libs.reflections
     implementation libs.mavenArtifact
-    implementation libs.swaggerJaxrs2
     implementation libs.swaggerAnnotations
+
+    compileOnly libs.swaggerJaxrs2
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
@@ -2652,7 +2653,8 @@ project(':connect:runtime') {
   }
 
   task genConnectOpenAPIDocs(type: io.swagger.v3.plugins.gradle.tasks.ResolveTask, dependsOn: setVersionInOpenAPISpec) {
-    classpath = sourceSets.main.runtimeClasspath
+    classpath = sourceSets.main.compileClasspath + sourceSets.main.runtimeClasspath
+
     buildClasspath = classpath
     outputFileName = 'connect_rest'
     outputFormat = 'YAML'
