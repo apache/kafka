@@ -267,6 +267,10 @@ public enum ApiKeys {
         return apisForListener(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
+    public static EnumSet<ApiKeys> kraftBrokerApis() {
+        return apisForListener(ApiMessageType.ListenerType.BROKER);
+    }
+
     public static EnumSet<ApiKeys> controllerApis() {
         return apisForListener(ApiMessageType.ListenerType.CONTROLLER);
     }
