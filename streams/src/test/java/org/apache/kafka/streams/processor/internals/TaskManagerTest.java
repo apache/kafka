@@ -294,7 +294,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldPrepareActiveTaskInStateUpdaterToBeClosedCleanly() {
+    public void shouldRemoveUnusedActiveTaskFromStateUpdater() {
         final StreamTask activeTaskToClose = statefulTask(taskId03, taskId03ChangelogPartitions)
             .inState(State.RESTORING)
             .withInputPartitions(taskId03Partitions).build();
@@ -313,7 +313,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldPrepareStandbyTaskInStateUpdaterToBeClosedCleanly() {
+    public void shouldRemoveUnusedStandbyTaskFromStateUpdater() {
         final StandbyTask standbyTaskToClose = standbyTask(taskId02, taskId02ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId02Partitions).build();
@@ -332,7 +332,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldPrepareActiveTaskInStateUpdaterToUpdateInputPartitions() {
+    public void shouldUpdateInputPartitionOfActiveTaskInStateUpdater() {
         final StreamTask activeTaskToUpdateInputPartitions = statefulTask(taskId03, taskId03ChangelogPartitions)
             .inState(State.RESTORING)
             .withInputPartitions(taskId03Partitions).build();
@@ -375,7 +375,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldPrepareReAssignedRevokedActiveTaskInStateUpdaterForUpdatingInputPartitions() {
+    public void shouldUpdateInputPartitionsOfReAssignedRevokedActiveTaskInStateUpdater() {
         final StreamTask reAssignedRevokedActiveTask = statefulTask(taskId03, taskId03ChangelogPartitions)
             .inState(State.RESTORING)
             .withInputPartitions(taskId03Partitions).build();
@@ -383,7 +383,6 @@ public class TaskManagerTest {
         final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(stateUpdater.getTasks()).thenReturn(mkSet(reAssignedRevokedActiveTask));
-        when(tasks.removePendingActiveTaskToSuspend(reAssignedRevokedActiveTask.id())).thenReturn(true);
         expect(activeTaskCreator.createTasks(consumer, Collections.emptyMap())).andReturn(emptySet());
         expect(standbyTaskCreator.createTasks(Collections.emptyMap())).andReturn(emptySet());
         replay(activeTaskCreator, standbyTaskCreator);
@@ -395,17 +394,17 @@ public class TaskManagerTest {
 
         verify(activeTaskCreator, standbyTaskCreator);
         Mockito.verify(tasks).addPendingTaskToUpdateInputPartitions(reAssignedRevokedActiveTask.id(), newInputPartitions);
+        Mockito.verify(tasks).removePendingActiveTaskToSuspend(reAssignedRevokedActiveTask.id());
     }
 
     @Test
-    public void shouldPrepareReAssignedRevokedActiveTaskInStateUpdaterForRestoration() {
+    public void shouldRemoveReAssignedRevokedActiveTaskInStateUpdaterFromPendingTaskToSuspend() {
         final StreamTask reAssignedRevokedActiveTask = statefulTask(taskId03, taskId03ChangelogPartitions)
             .inState(State.RESTORING)
             .withInputPartitions(taskId03Partitions).build();
         final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(stateUpdater.getTasks()).thenReturn(mkSet(reAssignedRevokedActiveTask));
-        when(tasks.removePendingActiveTaskToSuspend(reAssignedRevokedActiveTask.id())).thenReturn(true);
         expect(activeTaskCreator.createTasks(consumer, Collections.emptyMap())).andReturn(emptySet());
         expect(standbyTaskCreator.createTasks(Collections.emptyMap())).andReturn(emptySet());
         replay(activeTaskCreator, standbyTaskCreator);
@@ -416,11 +415,11 @@ public class TaskManagerTest {
         );
 
         verify(activeTaskCreator, standbyTaskCreator);
-        Mockito.verify(stateUpdater).add(reAssignedRevokedActiveTask);
+        Mockito.verify(tasks).removePendingActiveTaskToSuspend(reAssignedRevokedActiveTask.id());
     }
 
     @Test
-    public void shouldPrepareStandbyTaskInStateUpdaterToUpdateInputPartitions() {
+    public void shouldNeverUpdateInputPartitionsOfStandbyTaskInStateUpdater() {
         final StandbyTask standbyTaskToUpdateInputPartitions = standbyTask(taskId02, taskId02ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId02Partitions).build();
@@ -438,8 +437,9 @@ public class TaskManagerTest {
         );
 
         verify(activeTaskCreator, standbyTaskCreator);
-        Mockito.verify(stateUpdater).remove(standbyTaskToUpdateInputPartitions.id());
-        Mockito.verify(tasks).addPendingTaskToUpdateInputPartitions(standbyTaskToUpdateInputPartitions.id(), newInputPartitions);
+        Mockito.verify(stateUpdater, never()).remove(standbyTaskToUpdateInputPartitions.id());
+        Mockito.verify(tasks, never())
+            .addPendingTaskToUpdateInputPartitions(standbyTaskToUpdateInputPartitions.id(), newInputPartitions);
     }
 
     @Test
@@ -646,7 +646,6 @@ public class TaskManagerTest {
 
         verify(activeTaskCreator, standbyTaskCreator);
         Mockito.verify(activeTaskToUpdateInputPartitions).updateInputPartitions(Mockito.eq(newInputPartitions), any());
-        Mockito.verify(activeTaskToUpdateInputPartitions).resume();
     }
 
     @Test
@@ -667,17 +666,12 @@ public class TaskManagerTest {
         );
 
         verify(activeTaskCreator, standbyTaskCreator);
-        Mockito.verify(activeTaskToResume).resume();
     }
 
     @Test
     public void shouldResumeActiveSuspendedTaskInTasksRegistryAndAddToStateUpdater() {
         final StreamTask activeTaskToResume = statefulTask(taskId03, taskId03ChangelogPartitions)
-            // The task is actually in SUSPENDED when it is found in the tasks registry, but then when
-            // resumed it changes to RESTORING.
-            // The SUSPENDED state is never checked outside the task, but in the task manager the task needs to be
-            // in RESTORING to be added to the state updater
-            .inState(State.RESTORING)
+            .inState(State.SUSPENDED)
             .withInputPartitions(taskId03Partitions).build();
         final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
@@ -931,7 +925,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldRemoveStatefulTaskWithRevokedInputPartitionsFromStateUpdaterOnRevocation() {
+    public void shouldAddActiveTaskWithRevokedInputPartitionsInStateUpdaterToPendingTasksToSuspend() {
         final StreamTask task = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RESTORING)
             .withInputPartitions(taskId00Partitions).build();
@@ -942,10 +936,10 @@ public class TaskManagerTest {
         taskManager.handleRevocation(task.inputPartitions());
 
         Mockito.verify(tasks).addPendingActiveTaskToSuspend(task.id());
-        Mockito.verify(stateUpdater).remove(task.id());
+        Mockito.verify(stateUpdater, never()).remove(task.id());
     }
 
-    public void shouldRemoveMultipleStatefulTaskWithRevokedInputPartitionsFromStateUpdaterOnRevocation() {
+    public void shouldAddMultipleActiveTasksWithRevokedInputPartitionsInStateUpdaterToPendingTasksToSuspend() {
         final StreamTask task1 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RESTORING)
             .withInputPartitions(taskId00Partitions).build();
@@ -959,12 +953,10 @@ public class TaskManagerTest {
 
         Mockito.verify(tasks).addPendingActiveTaskToSuspend(task1.id());
         Mockito.verify(tasks).addPendingActiveTaskToSuspend(task2.id());
-        Mockito.verify(stateUpdater).remove(task1.id());
-        Mockito.verify(stateUpdater).remove(task2.id());
     }
 
     @Test
-    public void shouldNotRemoveStatefulTaskWithoutRevokedInputPartitionsFromStateUpdaterOnRevocation() {
+    public void shouldNotAddActiveTaskWithoutRevokedInputPartitionsInStateUpdaterToPendingTasksToSuspend() {
         final StreamTask task = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RESTORING)
             .withInputPartitions(taskId00Partitions).build();
@@ -978,7 +970,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldNotRemoveStandbyTaskFromStateUpdaterOnRevocation() {
+    public void shouldNotRevokeStandbyTaskInStateUpdaterOnRevocation() {
         final StandbyTask task = standbyTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RESTORING)
             .withInputPartitions(taskId00Partitions).build();
