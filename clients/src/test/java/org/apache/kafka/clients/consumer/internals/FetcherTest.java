@@ -273,6 +273,30 @@ public class FetcherTest {
     }
 
     @Test
+    public void testUnconsumableFetches() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+        fetchedRecords();
+        assertEquals(4L, subscriptions.position(tp0).offset); // this is the next fetching position
+
+        // mark partition unfetchable
+        subscriptions.markUnconsumable(tp0);
+        assertEquals(0, fetcher.sendFetches());
+        consumerClient.poll(time.timer(0));
+        assertFalse(fetcher.hasCompletedFetches());
+        fetchedRecords();
+        assertEquals(4L, subscriptions.position(tp0).offset);
+    }
+
+    @Test
     public void testFetchWithNoTopicId() {
         // Should work and default to using old request type.
         buildFetcher();
@@ -2281,6 +2305,34 @@ public class FetcherTest {
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
         assertEquals(5, subscriptions.position(tp0).offset);
+    }
+
+    @Test
+    public void testUnconsumablePartition() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 100);
+        subscriptions.seek(tp0, 100);
+        subscriptions.seek(tp0, 100);
+        assertEquals(100, subscriptions.position(tp0).offset);
+
+        assertTrue(subscriptions.isFetchable(tp0)); // because tp is paused
+
+        subscriptions.markUnconsumable(tp0);
+
+        //fetcher.resetOffsetsIfNeeded();
+
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertFalse(subscriptions.isFetchable(tp0));
+        assertTrue(subscriptions.hasValidPosition(tp0));
+        assertEquals(100, subscriptions.position(tp0).offset);
+        subscriptions.seek(tp0, 100);
+        assertEquals(100, subscriptions.position(tp0).offset);
+
+        subscriptions.unsubscribe();
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 100);
+        assertEquals(100, subscriptions.position(tp0).offset);
     }
 
     @Test

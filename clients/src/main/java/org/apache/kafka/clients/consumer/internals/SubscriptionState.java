@@ -738,6 +738,10 @@ public class SubscriptionState {
         assignedState(tp).pause();
     }
 
+    public synchronized void markUnconsumable(TopicPartition tp) {
+        assignedState(tp).markUnconsumable();
+    }
+
     public synchronized void resume(TopicPartition tp) {
         assignedState(tp).resume();
     }
@@ -769,6 +773,7 @@ public class SubscriptionState {
         private Long logStartOffset; // the log start offset
         private Long lastStableOffset;
         private boolean paused;  // whether this partition has been paused by the user
+        private boolean consumable;
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
         private Long nextRetryTimeMs;
         private Integer preferredReadReplica;
@@ -777,6 +782,7 @@ public class SubscriptionState {
         
         TopicPartitionState() {
             this.paused = false;
+            this.consumable = true;
             this.endOffsetRequested = false;
             this.fetchState = FetchStates.INITIALIZING;
             this.position = null;
@@ -935,6 +941,9 @@ public class SubscriptionState {
             return paused;
         }
 
+        private boolean isConsumable() {
+            return consumable;
+        }
         private void seekValidated(FetchPosition position) {
             transitionState(FetchStates.FETCHING, () -> {
                 this.position = position;
@@ -966,12 +975,16 @@ public class SubscriptionState {
             this.paused = true;
         }
 
+        private void markUnconsumable() {
+            this.consumable = false;
+        }
+
         private void resume() {
             this.paused = false;
         }
 
         private boolean isFetchable() {
-            return !paused && hasValidPosition();
+            return !paused && consumable && hasValidPosition();
         }
 
         private void highWatermark(Long highWatermark) {
