@@ -761,7 +761,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // async commit offsets prior to rebalance if auto-commit enabled
         // and there is no in-flight offset commit request
         if (autoCommitEnabled) {
-            pausePartitions(partitionsToRevoke);
+            markPartitionsUnconsumable(subscriptions.assignedPartitions());
             autoCommitOffsetRequestFuture = autoCommitOffsetRequestFuture == null ?
                     maybeAutoCommitOffsetsAsync() :
                     autoCommitOffsetRequestFuture;
@@ -893,6 +893,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         return exception;
+    }
+
+    private void markPartitionsUnconsumable(final Set<TopicPartition> assignedPartitions) {
+        log.debug("Marking assigned partition unconsumable: {}", assignedPartitions);
+        assignedPartitions.forEach(subscriptions::markUnconsumable);
     }
 
     @Override

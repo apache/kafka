@@ -257,6 +257,15 @@ public class SubscriptionStateTest {
     }
 
     @Test
+    public void testMarkingPartitionUnconsumable() {
+        state.assignFromUser(singleton(tp0));
+        state.seek(tp0, 100);
+        assertTrue(state.isFetchable(tp0));
+        state.markUnconsumable(tp0);
+        assertFalse(state.isFetchable(tp0));
+    }
+
+    @Test
     public void invalidPositionUpdate() {
         state.subscribe(singleton(topic), rebalanceListener);
         assertTrue(state.checkAssignmentMatchedSubscription(singleton(tp0)));
