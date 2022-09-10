@@ -273,7 +273,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testUnconsumableFetches() {
+    public void testFetchingPendingPartitions() {
         buildFetcher();
 
         assignFromUser(singleton(tp0));
@@ -288,7 +288,7 @@ public class FetcherTest {
         assertEquals(4L, subscriptions.position(tp0).offset); // this is the next fetching position
 
         // mark partition unfetchable
-        subscriptions.markUnconsumable(tp0);
+        subscriptions.markPendingRevocation(singleton(tp0));
         assertEquals(0, fetcher.sendFetches());
         consumerClient.poll(time.timer(0));
         assertFalse(fetcher.hasCompletedFetches());
@@ -2308,7 +2308,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testUnconsumablePartition() {
+    public void testPendingRevacationPartitionFetching() {
         buildFetcher();
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 100);
@@ -2318,21 +2318,24 @@ public class FetcherTest {
 
         assertTrue(subscriptions.isFetchable(tp0)); // because tp is paused
 
-        subscriptions.markUnconsumable(tp0);
+        subscriptions.markPendingRevocation(singleton(tp0));
+        fetcher.resetOffsetsIfNeeded();
 
-        //fetcher.resetOffsetsIfNeeded();
-
+        // once a partition is marked pending, it should not be fetchable
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertFalse(subscriptions.isFetchable(tp0));
         assertTrue(subscriptions.hasValidPosition(tp0));
         assertEquals(100, subscriptions.position(tp0).offset);
+
         subscriptions.seek(tp0, 100);
         assertEquals(100, subscriptions.position(tp0).offset);
 
+        // reassignment should enable fetching of the same partition
         subscriptions.unsubscribe();
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 100);
         assertEquals(100, subscriptions.position(tp0).offset);
+        assertTrue(subscriptions.isFetchable(tp0));
     }
 
     @Test

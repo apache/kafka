@@ -257,11 +257,11 @@ public class SubscriptionStateTest {
     }
 
     @Test
-    public void testMarkingPartitionUnconsumable() {
+    public void testMarkingPartitionPending() {
         state.assignFromUser(singleton(tp0));
         state.seek(tp0, 100);
         assertTrue(state.isFetchable(tp0));
-        state.markUnconsumable(tp0);
+        state.markPendingRevocation(singleton(tp0));
         assertFalse(state.isFetchable(tp0));
     }
 
