@@ -173,7 +173,8 @@ class ConnectStandaloneFileTest(Test):
         self.sink = ConnectStandaloneService(self.test_context, self.kafka, [self.OUTPUT_FILE, self.OFFSETS_FILE],
                                              include_filestream_connectors=True)
 
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
         self.kafka.start()
 
         self.override_key_converter = "org.apache.kafka.connect.storage.StringConverter"
