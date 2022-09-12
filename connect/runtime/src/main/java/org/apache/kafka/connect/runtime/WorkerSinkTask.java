@@ -634,7 +634,6 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void openPartitions(Collection<TopicPartition> partitions) {
-        updatePartitionCount();
         task.open(partitions);
     }
 
@@ -655,7 +654,6 @@ class WorkerSinkTask extends WorkerTask {
             }
             currentOffsets.keySet().removeAll(topicPartitions);
         }
-        updatePartitionCount();
         lastCommittedOffsets.keySet().removeAll(topicPartitions);
     }
 
@@ -721,7 +719,7 @@ class WorkerSinkTask extends WorkerTask {
                 else if (!context.pausedPartitions().isEmpty())
                     consumer.pause(context.pausedPartitions());
             }
-
+            updatePartitionCount();
             if (partitions.isEmpty()) {
                 return;
             }
