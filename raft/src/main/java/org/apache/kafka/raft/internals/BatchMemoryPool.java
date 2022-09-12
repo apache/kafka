@@ -24,7 +24,10 @@ import java.util.Deque;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Simple memory pool which maintains a limited number of fixed-size buffers.
+ * Simple memory pool that tries to maintain a limited number of fixed-size buffers.
+ *
+ * This type implements an unbounded memory pool. When releasing byte buffers they will get pooled
+ * up to the maximum retained number of batches.
  */
 public class BatchMemoryPool implements MemoryPool {
     private final ReentrantLock lock;
@@ -34,6 +37,15 @@ public class BatchMemoryPool implements MemoryPool {
 
     private int numAllocatedBatches = 0;
 
+    /**
+     * Construct a memory pool.
+     *
+     * The byte buffers are always of batchSize size. The memory pool is unbounded but it will retain
+     * up to maxRetainedBatches byte buffers for reuse.
+     *
+     * @param maxRetainedBatches maximum number of byte buffers to pool for reuse
+     * @param batchSize the size of each byte buffer
+     */
     public BatchMemoryPool(int maxRetainedBatches, int batchSize) {
         this.maxRetainedBatches = maxRetainedBatches;
         this.batchSize = batchSize;
@@ -41,6 +53,15 @@ public class BatchMemoryPool implements MemoryPool {
         this.lock = new ReentrantLock();
     }
 
+    /**
+     * Allocate a byte buffer in this pool.
+     *
+     * This method should always succeed and never return null. The sizeBytes parameter must be less than
+     * the batchSize used in the constructor.
+     *
+     * @param sizeBytes is not used to determine the size of the byte buffer
+     * @throws IllegalArgumentException if sizeBytes is greater than batchSize
+     */
     @Override
     public ByteBuffer tryAllocate(int sizeBytes) {
         if (sizeBytes > batchSize) {
@@ -63,6 +84,12 @@ public class BatchMemoryPool implements MemoryPool {
         }
     }
 
+    /**
+     * Release a previously allocated byte buffer.
+     *
+     * The byte buffer is pooled if the number of pooled byte buffer is less than the maxRetainedBatches in
+     * the constructor. Otherwise, the byte buffer is return to the JVM for garbage collection.
+     */
     @Override
     public void release(ByteBuffer previouslyAllocated) {
         lock.lock();
