@@ -27,7 +27,7 @@ import org.apache.kafka.common.{Endpoint, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.{BrokerRegistration, RecordTestUtils, VersionRange}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
-import org.apache.kafka.server.fault.MockFaultHandler
+import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -45,6 +45,7 @@ class BrokerMetadataListenerTest {
     metrics: BrokerServerMetrics = BrokerServerMetrics(new Metrics()),
     snapshotter: Option[MetadataSnapshotter] = None,
     maxBytesBetweenSnapshots: Long = 1000000L,
+    faultHandler: FaultHandler = metadataLoadingFaultHandler
   ): BrokerMetadataListener = {
     new BrokerMetadataListener(
       brokerId = 0,
@@ -53,7 +54,7 @@ class BrokerMetadataListenerTest {
       maxBytesBetweenSnapshots = maxBytesBetweenSnapshots,
       snapshotter = snapshotter,
       brokerMetrics = metrics,
-      metadataLoadingFaultHandler = metadataLoadingFaultHandler
+      _metadataLoadingFaultHandler = faultHandler
     )
   }
 
@@ -168,6 +169,7 @@ class BrokerMetadataListenerTest {
   }
 
   private val FOO_ID = Uuid.fromString("jj1G9utnTuCegi_gpnRgYw")
+  private val BAR_ID = Uuid.fromString("SzN5j0LvSEaRIJHrxfMAlg")
 
   private def generateManyRecords(listener: BrokerMetadataListener,
                                   endOffset: Long): Unit = {
@@ -189,6 +191,27 @@ class BrokerMetadataListenerTest {
         )
       )
     }
+    listener.getImageRecords().get()
+  }
+
+  private def generateBadRecords(listener: BrokerMetadataListener,
+                                endOffset: Long): Unit = {
+    listener.handleCommit(
+      RecordTestUtils.mockBatchReader(
+        endOffset,
+        0,
+        util.Arrays.asList(
+          new ApiMessageAndVersion(new PartitionChangeRecord().
+            setPartitionId(0).
+            setTopicId(BAR_ID).
+            setRemovingReplicas(Collections.singletonList(1)), 0.toShort),
+          new ApiMessageAndVersion(new PartitionChangeRecord().
+            setPartitionId(0).
+            setTopicId(BAR_ID).
+            setRemovingReplicas(Collections.emptyList()), 0.toShort)
+        )
+      )
+    )
     listener.getImageRecords().get()
   }
 
@@ -287,6 +310,39 @@ class BrokerMetadataListenerTest {
     // Waiting for the metadata version update to get processed
     listener.getImageRecords().get()
     assertEquals(endOffset, snapshotter.activeSnapshotOffset, "We should generate snapshot on feature update")
+  }
+
+  @Test
+  def testNoSnapshotAfterError(): Unit = {
+    val snapshotter = new MockMetadataSnapshotter()
+    val faultHandler = new MockFaultHandler("metadata loading")
+
+    val listener = newBrokerMetadataListener(
+      snapshotter = Some(snapshotter),
+      maxBytesBetweenSnapshots = 1000L,
+      faultHandler = faultHandler)
+    try {
+      val brokerIds = 0 to 3
+
+      registerBrokers(listener, brokerIds, endOffset = 100L)
+      createTopicWithOnePartition(listener, replicas = brokerIds, endOffset = 200L)
+      listener.getImageRecords().get()
+      assertEquals(200L, listener.highestMetadataOffset)
+      assertEquals(-1L, snapshotter.prevCommittedOffset)
+      assertEquals(-1L, snapshotter.activeSnapshotOffset)
+
+      // Append invalid records that will normally trigger a snapshot
+      generateBadRecords(listener, 1000L)
+      assertEquals(-1L, snapshotter.prevCommittedOffset)
+      assertEquals(-1L, snapshotter.activeSnapshotOffset)
+
+      // Generate some records that will not throw an error, verify still no snapshots
+      generateManyRecords(listener, 2000L)
+      assertEquals(-1L, snapshotter.prevCommittedOffset)
+      assertEquals(-1L, snapshotter.activeSnapshotOffset)
+    } finally {
+      listener.close()
+    }
   }
 
   private def registerBrokers(
