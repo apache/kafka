@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -343,10 +345,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(100));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[2])), serializeValue(500));
-        assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
+        checkSegmentDirs(Collections.singleton(segments.segmentName(0)), segmentDirs());
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(1000));
-        assertEquals(Utils.mkSet(segments.segmentName(0), segments.segmentName(1)), segmentDirs());
+        checkSegmentDirs(Utils.mkSet(segments.segmentName(0), segments.segmentName(1)), segmentDirs());
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 1500));
 
@@ -369,10 +371,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
-        assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
+        checkSegmentDirs(Collections.singleton(segments.segmentName(0)), segmentDirs());
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
-        assertEquals(
+        checkSegmentDirs(
             Utils.mkSet(
                 segments.segmentName(0),
                 segments.segmentName(1)
@@ -399,10 +401,10 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
-        assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
+        checkSegmentDirs(Collections.singleton(segments.segmentName(0)), segmentDirs());
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
-        assertEquals(
+        checkSegmentDirs(
             Utils.mkSet(
                 segments.segmentName(0),
                 segments.segmentName(1)
@@ -901,5 +903,17 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             }
         }
         return results;
+    }
+
+    private void checkSegmentDirs(final Set<String> expectedSegments, final Set<String> actualSegments) {
+        final Set<String> expected;
+        if (txnMechanism == RocksDBTransactionalMechanism.SECONDARY_STORE) {
+            expected = expectedSegments.stream()
+                .flatMap(segment -> Stream.of(segment, segment + ".tmp"))
+                .collect(Collectors.toSet());
+        } else {
+            expected = expectedSegments;
+        }
+        assertEquals(expected, actualSegments);
     }
 }
