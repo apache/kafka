@@ -819,6 +819,8 @@ class KafkaApisTest {
       any[ThrottleCallback](),
       ArgumentMatchers.eq(expectedThrottleTimeMs)
     )
+
+    assertEquals(expectedThrottleTimeMs, responseData.throttleTimeMs)
   }
 
   @Test
