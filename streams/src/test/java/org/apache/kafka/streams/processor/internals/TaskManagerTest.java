@@ -267,7 +267,6 @@ public class TaskManagerTest {
         );
 
         verify(activeTaskCreator, standbyTaskCreator);
-        Mockito.verify(tasks).removePendingActiveTaskToSuspend(activeTaskToRecycle.id());
         Mockito.verify(tasks).addPendingTaskToRecycle(activeTaskToRecycle.id(), activeTaskToRecycle.inputPartitions());
     }
 
@@ -372,29 +371,6 @@ public class TaskManagerTest {
         );
 
         verify(activeTaskCreator, standbyTaskCreator);
-    }
-
-    @Test
-    public void shouldUpdateInputPartitionsOfReAssignedRevokedActiveTaskInStateUpdater() {
-        final StreamTask reAssignedRevokedActiveTask = statefulTask(taskId03, taskId03ChangelogPartitions)
-            .inState(State.RESTORING)
-            .withInputPartitions(taskId03Partitions).build();
-        final Set<TopicPartition> newInputPartitions = taskId02Partitions;
-        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
-        when(stateUpdater.getTasks()).thenReturn(mkSet(reAssignedRevokedActiveTask));
-        expect(activeTaskCreator.createTasks(consumer, Collections.emptyMap())).andReturn(emptySet());
-        expect(standbyTaskCreator.createTasks(Collections.emptyMap())).andReturn(emptySet());
-        replay(activeTaskCreator, standbyTaskCreator);
-
-        taskManager.handleAssignment(
-            mkMap(mkEntry(reAssignedRevokedActiveTask.id(), newInputPartitions)),
-            Collections.emptyMap()
-        );
-
-        verify(activeTaskCreator, standbyTaskCreator);
-        Mockito.verify(tasks).addPendingTaskToUpdateInputPartitions(reAssignedRevokedActiveTask.id(), newInputPartitions);
-        Mockito.verify(tasks).removePendingActiveTaskToSuspend(reAssignedRevokedActiveTask.id());
     }
 
     @Test

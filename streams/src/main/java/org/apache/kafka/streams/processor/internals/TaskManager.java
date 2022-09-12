@@ -470,11 +470,10 @@ public class TaskManager {
                                            final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
         for (final Task task : stateUpdater.getTasks()) {
             final TaskId taskId = task.id();
-            tasks.removePendingActiveTaskToSuspend(taskId);
             if (activeTasksToCreate.containsKey(taskId)) {
                 final Set<TopicPartition> inputPartitions = activeTasksToCreate.get(taskId);
                 if (task.isActive()) {
-                    maybeUpdateInputPartitionsOfReAssignedActiveTask(task, inputPartitions);
+                    updateInputPartitionsOrRemoveTaskFromTasksToSuspend(task, inputPartitions);
                 } else {
                     removeTaskToRecycleFromStateUpdater(taskId, inputPartitions);
                 }
@@ -490,12 +489,14 @@ public class TaskManager {
         }
     }
 
-    private void maybeUpdateInputPartitionsOfReAssignedActiveTask(final Task task,
-                                                                  final Set<TopicPartition> inputPartitions) {
+    private void updateInputPartitionsOrRemoveTaskFromTasksToSuspend(final Task task,
+                                                                     final Set<TopicPartition> inputPartitions) {
+        final TaskId taskId = task.id();
         if (!task.inputPartitions().equals(inputPartitions)) {
-            final TaskId taskId = task.id();
             stateUpdater.remove(taskId);
             tasks.addPendingTaskToUpdateInputPartitions(taskId, inputPartitions);
+        } else {
+            tasks.removePendingActiveTaskToSuspend(taskId);
         }
     }
 
