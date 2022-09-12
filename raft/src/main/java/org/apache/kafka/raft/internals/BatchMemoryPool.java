@@ -29,15 +29,15 @@ import java.util.concurrent.locks.ReentrantLock;
 public class BatchMemoryPool implements MemoryPool {
     private final ReentrantLock lock;
     private final Deque<ByteBuffer> free;
-    private final int maxBatches;
+    private final int maxRetainedBatches;
     private final int batchSize;
 
     private int numAllocatedBatches = 0;
 
-    public BatchMemoryPool(int maxBatches, int batchSize) {
-        this.maxBatches = maxBatches;
+    public BatchMemoryPool(int maxRetainedBatches, int batchSize) {
+        this.maxRetainedBatches = maxRetainedBatches;
         this.batchSize = batchSize;
-        this.free = new ArrayDeque<>(maxBatches);
+        this.free = new ArrayDeque<>(maxRetainedBatches);
         this.lock = new ReentrantLock();
     }
 
@@ -76,7 +76,7 @@ public class BatchMemoryPool implements MemoryPool {
 
             // Free the buffer if the number of pooled buffers is already the maximum number of batches.
             // Otherwise return the buffer to the memory pool.
-            if (free.size() >= maxBatches) {
+            if (free.size() >= maxRetainedBatches) {
                 numAllocatedBatches--;
             } else {
                 free.offer(previouslyAllocated);
@@ -98,7 +98,7 @@ public class BatchMemoryPool implements MemoryPool {
 
     @Override
     public long availableMemory() {
-        return Integer.MAX_VALUE;
+        return Long.MAX_VALUE;
     }
 
     @Override

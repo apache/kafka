@@ -33,32 +33,29 @@ class BatchMemoryPoolTest {
     @Test
     public void testAllocateAndRelease() {
         int batchSize = 1024;
-        int maxBatches = 1;
+        int maxRetainedBatches = 1;
         Set<ByteBuffer> released = Collections.newSetFromMap(new IdentityHashMap<>());
 
-        BatchMemoryPool pool = new BatchMemoryPool(maxBatches, batchSize);
-        assertEquals(Integer.MAX_VALUE, pool.availableMemory());
+        BatchMemoryPool pool = new BatchMemoryPool(maxRetainedBatches, batchSize);
+        assertEquals(Long.MAX_VALUE, pool.availableMemory());
         assertFalse(pool.isOutOfMemory());
 
         ByteBuffer buffer1 = pool.tryAllocate(batchSize);
         assertNotNull(buffer1);
         assertEquals(0, buffer1.position());
         assertEquals(batchSize, buffer1.limit());
-        assertEquals(Integer.MAX_VALUE, pool.availableMemory());
+        assertEquals(Long.MAX_VALUE, pool.availableMemory());
         assertFalse(pool.isOutOfMemory());
 
         // Test that allocation works even after maximum batches are allocated 
         ByteBuffer buffer2 = pool.tryAllocate(batchSize);
         assertNotNull(buffer2);
-        // The size of the pool can exceed maxBatches * batchSize
+        // The size of the pool can exceed maxRetainedBatches * batchSize
         assertEquals(2 * batchSize, pool.size());
-        touch(buffer2);
-        release(buffer2, pool, released);
+        release(update(buffer2), pool, released);
 
-
-        touch(buffer1);
-        release(buffer1, pool, released);
-        assertEquals(maxBatches * batchSize, pool.size());
+        release(update(buffer1), pool, released);
+        assertEquals(maxRetainedBatches * batchSize, pool.size());
 
         ByteBuffer reallocated = pool.tryAllocate(batchSize);
         assertTrue(released.contains(reallocated));
@@ -69,11 +66,11 @@ class BatchMemoryPoolTest {
     @Test
     public void testMultipleAllocations() {
         int batchSize = 1024;
-        int maxBatches = 3;
+        int maxRetainedBatches = 3;
         Set<ByteBuffer> released = Collections.newSetFromMap(new IdentityHashMap<>());
 
-        BatchMemoryPool pool = new BatchMemoryPool(maxBatches, batchSize);
-        assertEquals(Integer.MAX_VALUE, pool.availableMemory());
+        BatchMemoryPool pool = new BatchMemoryPool(maxRetainedBatches, batchSize);
+        assertEquals(Long.MAX_VALUE, pool.availableMemory());
 
         ByteBuffer batch1 = pool.tryAllocate(batchSize);
         assertNotNull(batch1);
@@ -87,7 +84,7 @@ class BatchMemoryPoolTest {
         // Test that allocation works even after maximum batches are allocated 
         ByteBuffer batch4 = pool.tryAllocate(batchSize);
         assertNotNull(batch4);
-        // The sie of the pool can exceed maxBatches * batchSize
+        // The size of the pool can exceed maxRetainedBatches * batchSize
         assertEquals(4 * batchSize, pool.size());
         release(batch4, pool, released);
 
@@ -106,29 +103,29 @@ class BatchMemoryPoolTest {
         // Release all previously allocated buffers
         release(batch5, pool, released);
         release(batch6, pool, released);
-        assertEquals(maxBatches * batchSize, pool.size());
+        assertEquals(maxRetainedBatches * batchSize, pool.size());
     }
 
     @Test
     public void testOversizeAllocation() {
         int batchSize = 1024;
-        int maxBatches = 3;
+        int maxRetainedBatches = 3;
 
-        BatchMemoryPool pool = new BatchMemoryPool(maxBatches, batchSize);
+        BatchMemoryPool pool = new BatchMemoryPool(maxRetainedBatches, batchSize);
         assertThrows(IllegalArgumentException.class, () -> pool.tryAllocate(batchSize + 1));
     }
 
     @Test
     public void testReleaseBufferNotMatchingBatchSize() {
         int batchSize = 1024;
-        int maxBatches = 3;
+        int maxRetainedBatches = 3;
 
-        BatchMemoryPool pool = new BatchMemoryPool(maxBatches, batchSize);
+        BatchMemoryPool pool = new BatchMemoryPool(maxRetainedBatches, batchSize);
         ByteBuffer buffer = ByteBuffer.allocate(1023);
         assertThrows(IllegalArgumentException.class, () -> pool.release(buffer));
     }
 
-    private ByteBuffer touch(ByteBuffer buffer) {
+    private ByteBuffer update(ByteBuffer buffer) {
         buffer.position(512);
         buffer.limit(724);
 
