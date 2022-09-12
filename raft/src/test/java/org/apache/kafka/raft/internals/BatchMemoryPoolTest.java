@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.junit.jupiter.api.Test;
-
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,36 +34,46 @@ class BatchMemoryPoolTest {
     public void testAllocateAndRelease() {
         int batchSize = 1024;
         int maxBatches = 1;
+        Set<ByteBuffer> released = Collections.newSetFromMap(new IdentityHashMap<>());
 
         BatchMemoryPool pool = new BatchMemoryPool(maxBatches, batchSize);
-        assertEquals(batchSize, pool.availableMemory());
+        assertEquals(Integer.MAX_VALUE, pool.availableMemory());
         assertFalse(pool.isOutOfMemory());
 
-        ByteBuffer allocated = pool.tryAllocate(batchSize);
-        assertNotNull(allocated);
-        assertEquals(0, allocated.position());
-        assertEquals(batchSize, allocated.limit());
-        assertEquals(0, pool.availableMemory());
-        assertTrue(pool.isOutOfMemory());
-        assertNull(pool.tryAllocate(batchSize));
+        ByteBuffer buffer1 = pool.tryAllocate(batchSize);
+        assertNotNull(buffer1);
+        assertEquals(0, buffer1.position());
+        assertEquals(batchSize, buffer1.limit());
+        assertEquals(Integer.MAX_VALUE, pool.availableMemory());
+        assertFalse(pool.isOutOfMemory());
 
-        allocated.position(512);
-        allocated.limit(724);
+        // Test that allocation works even after maximum batches are allocated 
+        ByteBuffer buffer2 = pool.tryAllocate(batchSize);
+        assertNotNull(buffer2);
+        // The size of the pool can exceed maxBatches * batchSize
+        assertEquals(2 * batchSize, pool.size());
+        touch(buffer2);
+        release(buffer2, pool, released);
 
-        pool.release(allocated);
+
+        touch(buffer1);
+        release(buffer1, pool, released);
+        assertEquals(maxBatches * batchSize, pool.size());
+
         ByteBuffer reallocated = pool.tryAllocate(batchSize);
-        assertSame(allocated, reallocated);
-        assertEquals(0, allocated.position());
-        assertEquals(batchSize, allocated.limit());
+        assertTrue(released.contains(reallocated));
+        assertEquals(0, reallocated.position());
+        assertEquals(batchSize, reallocated.limit());
     }
 
     @Test
     public void testMultipleAllocations() {
         int batchSize = 1024;
         int maxBatches = 3;
+        Set<ByteBuffer> released = Collections.newSetFromMap(new IdentityHashMap<>());
 
         BatchMemoryPool pool = new BatchMemoryPool(maxBatches, batchSize);
-        assertEquals(batchSize * maxBatches, pool.availableMemory());
+        assertEquals(Integer.MAX_VALUE, pool.availableMemory());
 
         ByteBuffer batch1 = pool.tryAllocate(batchSize);
         assertNotNull(batch1);
@@ -74,15 +84,29 @@ class BatchMemoryPoolTest {
         ByteBuffer batch3 = pool.tryAllocate(batchSize);
         assertNotNull(batch3);
 
-        assertNull(pool.tryAllocate(batchSize));
+        // Test that allocation works even after maximum batches are allocated 
+        ByteBuffer batch4 = pool.tryAllocate(batchSize);
+        assertNotNull(batch4);
+        // The sie of the pool can exceed maxBatches * batchSize
+        assertEquals(4 * batchSize, pool.size());
+        release(batch4, pool, released);
 
-        pool.release(batch2);
-        assertSame(batch2, pool.tryAllocate(batchSize));
+        release(batch2, pool, released);
+        ByteBuffer batch5 = pool.tryAllocate(batchSize);
+        assertTrue(released.contains(batch5));
+        released.remove(batch5);
 
-        pool.release(batch1);
-        pool.release(batch3);
-        ByteBuffer buffer = pool.tryAllocate(batchSize);
-        assertTrue(buffer == batch1 || buffer == batch3);
+        release(batch1, pool, released);
+        release(batch3, pool, released);
+
+        ByteBuffer batch6 = pool.tryAllocate(batchSize);
+        assertTrue(released.contains(batch6));
+        released.remove(batch6);
+
+        // Release all previously allocated buffers
+        release(batch5, pool, released);
+        release(batch6, pool, released);
+        assertEquals(maxBatches * batchSize, pool.size());
     }
 
     @Test
@@ -104,4 +128,15 @@ class BatchMemoryPoolTest {
         assertThrows(IllegalArgumentException.class, () -> pool.release(buffer));
     }
 
+    private ByteBuffer touch(ByteBuffer buffer) {
+        buffer.position(512);
+        buffer.limit(724);
+
+        return buffer;
+    }
+
+    private void release(ByteBuffer buffer, BatchMemoryPool pool, Set<ByteBuffer> released) {
+        pool.release(buffer);
+        released.add(buffer);
+    }
 }

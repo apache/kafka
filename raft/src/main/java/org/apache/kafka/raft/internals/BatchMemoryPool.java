@@ -51,10 +51,12 @@ public class BatchMemoryPool implements MemoryPool {
         lock.lock();
         try {
             ByteBuffer buffer = free.poll();
-            if (buffer == null && numAllocatedBatches < maxBatches) {
+            // Always allocation a new buffer if there are no free buffers
+            if (buffer == null) {
                 buffer = ByteBuffer.allocate(batchSize);
                 numAllocatedBatches += 1;
             }
+
             return buffer;
         } finally {
             lock.unlock();
@@ -72,7 +74,13 @@ public class BatchMemoryPool implements MemoryPool {
                     + previouslyAllocated.limit());
             }
 
-            free.offer(previouslyAllocated);
+            // Free the buffer if the number of pooled buffers is already the maximum number of batches.
+            // Otherwise return the buffer to the memory pool.
+            if (free.size() >= maxBatches) {
+                numAllocatedBatches--;
+            } else {
+                free.offer(previouslyAllocated);
+            }
         } finally {
             lock.unlock();
         }
@@ -90,18 +98,12 @@ public class BatchMemoryPool implements MemoryPool {
 
     @Override
     public long availableMemory() {
-        lock.lock();
-        try {
-            int freeBatches = free.size() + (maxBatches - numAllocatedBatches);
-            return freeBatches * (long) batchSize;
-        } finally {
-            lock.unlock();
-        }
+        return Integer.MAX_VALUE;
     }
 
     @Override
     public boolean isOutOfMemory() {
-        return availableMemory() == 0;
+        return false;
     }
 
 }
