@@ -1376,7 +1376,7 @@ $ bin/kafka-acls.sh \
   <h4 class="anchor-heading"><a id="replace_disk" class="anchor-link"></a><a href="#replace_disk">Replace KRaft Controller Disk</a></h4>
   <p>When Kafka is configured to use KRaft, the controllers store the cluster metadata in the directory specified in <code>metadata.log.dir</code> -- or the first log directory, if <code>metadata.log.dir</code> is not configured. See the documentation for <code>metadata.log.dir</code> for details.</p>
 
-  <p>If the data in the cluster metdata directory is lost either because of hardware failure or the hardware needs to be replace, care should be taken when provisioning the new controller node. The new controller node should not be formatted and started until the majority of the controllers have all of the committed data. To determine if the majority of the controllers have the committed data, run the <code>kafka-metadata-quorum.sh</code> tool to describe the replication status:
+  <p>If the data in the cluster metdata directory is lost either because of hardware failure or the hardware needs to be replaced, care should be taken when provisioning the new controller node. The new controller node should not be formatted and started until the majority of the controllers have all of the committed data. To determine if the majority of the controllers have the committed data, run the <code>kafka-metadata-quorum.sh</code> tool to describe the replication status:</p>
 
   <pre class="line-numbers"><code class="language-bash"> &gt; bin/kafka-metadata-quorum.sh --bootstrap-server broker_host:port describe --replication
  NodeId  LogEndOffset    Lag     LastFetchTimestamp      LastCaughtUpTimestamp   Status
@@ -1384,7 +1384,7 @@ $ bin/kafka-acls.sh \
  ...     ...             ...     ...                     ...                     ...
   </code></pre>
 
-  Check and wait until the <code>Lag</code> is small for the majority of the controllers. Check and wait until the <code>LastFetchTimestamp</code> and <code>LastCaughtUpTimestamp</code> are close to each other for the majority of the controllers. At this point it is safer to format the controller's metadata log directory. This can be done by running the <code>kafka-storage.sh</code> command.
+  <p>Check and wait until the <code>Lag</code> is small for a majority of the controllers. If the leader's end offset is not increasing, you can wait until the lag is 0 for a majority; otherwise, you can pick the latest leader end offset and wait until all replicas have reached it. Check and wait until the <code>LastFetchTimestamp</code> and <code>LastCaughtUpTimestamp</code> are close to each other for the majority of the controllers. At this point it is safer to format the controller's metadata log directory. This can be done by running the <code>kafka-storage.sh</code> command.</p>
 
   <pre class="line-numbers"><code class="language-bash"> &gt; bin/kafka-storage.sh format --cluster-id uuid --config server_properties</code></pre>
 
