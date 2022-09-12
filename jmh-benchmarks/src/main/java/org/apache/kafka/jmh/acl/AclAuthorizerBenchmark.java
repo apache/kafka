@@ -219,6 +219,7 @@ public class AclAuthorizerBenchmark {
                         StandardAcl acl = StandardAcl.fromAclBinding(new AclBinding(entryMap.getKey(), aclEntry.ace()));
                         ((StandardAuthorizer) authorizer).addAcl(Uuid.randomUuid(), acl);
                     }
+                    ((StandardAuthorizer) authorizer).completeInitialLoad();
                     break;
             }
         }

@@ -36,6 +36,7 @@ import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -535,14 +536,15 @@ public class StandardAuthorizerData {
     }
 
     class AclIterable implements Iterable<AclBinding> {
-        private final List<AclBinding> aclBindingList;
+        private final List<AclBinding> aclBindingList = new ArrayList<>();
 
         AclIterable(AclBindingFilter filter) {
-            this.aclBindingList = aclsByResource
-                .stream()
-                .map(StandardAcl::toBinding)
-                .filter(filter::matches)
-                .collect(Collectors.toList());
+            aclsByResource.forEach(acl -> {
+                AclBinding aclBinding = acl.toBinding();
+                if (filter.matches(aclBinding)) {
+                    aclBindingList.add(aclBinding);
+                }
+            });
         }
 
         @Override
