@@ -59,7 +59,7 @@ public class ControlledShutdownResponse extends AbstractResponse {
     }
 
     @Override
-    public void setThrottleTimeMs(int throttleTimeMs) {
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
         // Not supported by the response schema
     }
 

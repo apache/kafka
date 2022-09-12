@@ -85,7 +85,7 @@ public class MetadataResponse extends AbstractResponse {
     }
 
     @Override
-    public void setThrottleTimeMs(int throttleTimeMs) {
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 

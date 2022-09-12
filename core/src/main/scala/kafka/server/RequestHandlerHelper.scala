@@ -101,7 +101,7 @@ class RequestHandlerHelper(
     val requestThrottleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
     val appliedThrottleTimeMs = math.max(controllerThrottleTimeMs, requestThrottleTimeMs)
     throttle(quotas.request, request, appliedThrottleTimeMs)
-    response.setThrottleTimeMs(appliedThrottleTimeMs)
+    response.maybeSetThrottleTimeMs(appliedThrottleTimeMs)
     requestChannel.sendResponse(request, response, None)
   }
 
