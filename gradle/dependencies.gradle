@@ -111,7 +111,10 @@ versions += [
   reload4j: "1.2.19",
   rocksDB: "6.29.4.1",
   scalaCollectionCompat: "2.6.0",
-  scalafmt: "2.7.5",
+  // When updating the scalafmt version please also update the version field in checkstyle/.scalafmt.conf. scalafmt now
+  // has the version field as mandatory in its configuration, see
+  // https://github.com/scalameta/scalafmt/releases/tag/v3.1.0.
+  scalafmt: "3.5.9",
   scalaJava8Compat : "1.0.2",
   scoverage: "1.4.11",
   slf4j: "1.7.36",

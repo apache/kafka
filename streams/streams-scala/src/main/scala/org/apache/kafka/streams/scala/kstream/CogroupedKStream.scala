@@ -18,11 +18,11 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.streams.kstream.{
+  CogroupedKStream => CogroupedKStreamJ,
   SessionWindows,
   SlidingWindows,
   Window,
-  Windows,
-  CogroupedKStream => CogroupedKStreamJ
+  Windows
 }
 import org.apache.kafka.streams.scala.FunctionsCompatConversions.{AggregatorFromFunction, InitializerFromFunction}
 

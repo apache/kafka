@@ -18,7 +18,7 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.common.utils.Bytes
-import org.apache.kafka.streams.kstream.{TableJoined, ValueJoiner, ValueTransformerWithKeySupplier, KTable => KTableJ}
+import org.apache.kafka.streams.kstream.{KTable => KTableJ, TableJoined, ValueJoiner, ValueTransformerWithKeySupplier}
 import org.apache.kafka.streams.scala.FunctionsCompatConversions.{
   FunctionFromFunction,
   KeyValueMapperFromFunction,
