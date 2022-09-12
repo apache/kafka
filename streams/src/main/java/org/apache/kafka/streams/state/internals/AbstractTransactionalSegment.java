@@ -23,20 +23,28 @@ import java.util.Objects;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
 
-public abstract class AbstractTransactionalSegment extends AbstractTransactionalStore implements Segment {
+public abstract class AbstractTransactionalSegment extends AbstractTransactionalStore<Segment> implements Segment {
+    final KeyValueSegment tmpStore;
     final Segment mainStore;
     private final String name;
 
-    AbstractTransactionalSegment(final KeyValueSegment tmpStore,
-                                 final Segment mainStore) {
-        super(tmpStore);
-        this.mainStore = mainStore;
+    AbstractTransactionalSegment(final String segmentName,
+                                 final String windowName,
+                                 final long segmentId,
+                                 final RocksDBMetricsRecorder metricsRecorder) {
+        this.mainStore = createMainStore(segmentName, windowName, segmentId, metricsRecorder);
+        this.tmpStore = createTmpStore(segmentName, windowName, segmentId, metricsRecorder);
         this.name = PREFIX + mainStore.name();
     }
+
+    abstract Segment createMainStore(final String segmentName,
+                                     final String windowName,
+                                     final long segmentId,
+                                     final RocksDBMetricsRecorder metricsRecorder);
 
     public abstract void openDB(final Map<String, Object> configs, final File stateDir);
 
@@ -79,8 +87,13 @@ public abstract class AbstractTransactionalSegment extends AbstractTransactional
     }
 
     @Override
-    KeyValueStore<Bytes, byte[]> mainStore() {
+    public Segment mainStore() {
         return mainStore;
+    }
+
+    @Override
+    public KeyValueSegment tmpStore() {
+        return tmpStore;
     }
 
     @Override

@@ -43,32 +43,32 @@ class KeyValueSegments extends AbstractSegments<Segment> {
             return segments.get(segmentId);
         }
 
-        final KeyValueSegment newSegment =
-            new KeyValueSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
-        final Segment returnSegment;
+        final Segment segment;
         if (txnMechanism == RocksDBTransactionalMechanism.SECONDARY_STORE) {
-            final KeyValueSegment tmpSegment = new KeyValueSegment(segmentName(segmentId) + ".tmp",
-                                                                   name,
-                                                                   segmentId,
-                                                                   metricsRecorder);
-            returnSegment = new TransactionalKeyValueSegment(tmpSegment, newSegment);
+            segment = new TransactionalKeyValueSegment(segmentName(segmentId),
+                                                       name,
+                                                       segmentId,
+                                                       metricsRecorder);
         } else if (txnMechanism == null) {
-            returnSegment = newSegment;
+            segment = new KeyValueSegment(segmentName(segmentId),
+                                         name,
+                                         segmentId,
+                                         metricsRecorder);
         } else {
             throw new IllegalStateException("Unknown transactional mechanism: " + txnMechanism);
         }
 
-        if (segments.put(segmentId, returnSegment) != null) {
+        if (segments.put(segmentId, segment) != null) {
             throw new IllegalStateException("KeyValueSegment already exists. Possible concurrent access.");
         }
 
         if (txnMechanism == RocksDBTransactionalMechanism.SECONDARY_STORE) {
-            ((TransactionalKeyValueSegment) returnSegment).openDB(context.appConfigs(), context.stateDir());
+            ((TransactionalKeyValueSegment) segment).openDB(context.appConfigs(), context.stateDir());
         } else {
-            newSegment.openDB(context.appConfigs(), context.stateDir());
+            ((KeyValueSegment) segment).openDB(context.appConfigs(), context.stateDir());
         }
 
-        return returnSegment;
+        return segment;
     }
 
     @Override

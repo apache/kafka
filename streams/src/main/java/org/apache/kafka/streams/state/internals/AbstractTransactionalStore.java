@@ -32,26 +32,34 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
-public abstract class AbstractTransactionalStore implements KeyValueStore<Bytes, byte[]> {
+public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, byte[]>> implements KeyValueStore<Bytes, byte[]> {
     private static final byte MODIFICATION = 0x1;
     private static final byte DELETION = 0x2;
     private static final byte[] DELETION_VAL = {DELETION};
 
     static final String PREFIX = "transactional-";
+    static final String TMP_SUFFIX = ".tmp";
 
     private final Set<MergeKeyValueIterator> openIterators = Collections.synchronizedSet(new HashSet<>());
-
-    final KeyValueSegment tmpStore;
 
     Map<String, Object> configs;
     File stateDir;
 
-    abstract KeyValueStore<Bytes, byte[]> mainStore();
-
-    AbstractTransactionalStore(final KeyValueSegment tmpStore) {
-        this.tmpStore = tmpStore;
+    KeyValueSegment createTmpStore(final String segmentName,
+                                           final String windowName,
+                                           final long segmentId,
+                                           final RocksDBMetricsRecorder metricsRecorder) {
+        return new KeyValueSegment(segmentName + TMP_SUFFIX,
+                                    windowName,
+                                    segmentId,
+                                    metricsRecorder);
     }
+
+    public abstract T mainStore();
+
+    public abstract KeyValueSegment tmpStore();
 
     @Deprecated
     @Override
@@ -74,7 +82,7 @@ public abstract class AbstractTransactionalStore implements KeyValueStore<Bytes,
     void doInit(final Map<String, Object> configs, final File stateDir) {
         this.configs = configs;
         this.stateDir = stateDir;
-        tmpStore.openDB(configs, stateDir);
+        truncateTmpStore();
     }
 
     @Override
@@ -87,13 +95,13 @@ public abstract class AbstractTransactionalStore implements KeyValueStore<Bytes,
             iterator.close();
         }
 
-        tmpStore.close();
+        tmpStore().close();
         mainStore().close();
     }
 
     @Override
     public void commit(final Long changelogOffset) {
-        tmpStore.commit(changelogOffset);
+        tmpStore().commit(changelogOffset);
         doCommit();
     }
 
@@ -105,9 +113,9 @@ public abstract class AbstractTransactionalStore implements KeyValueStore<Bytes,
 
     private void truncateTmpStore() {
         try {
-            tmpStore.close();
-            tmpStore.destroy();
-            tmpStore.openDB(configs, stateDir);
+            tmpStore().close();
+            tmpStore().destroy();
+            tmpStore().openDB(configs, stateDir);
         } catch (final IOException e) {
             throw new RuntimeException(e);
         }
@@ -120,19 +128,19 @@ public abstract class AbstractTransactionalStore implements KeyValueStore<Bytes,
 
     @Override
     public boolean isOpen() {
-        return tmpStore.isOpen() && mainStore().isOpen();
+        return tmpStore().isOpen() && mainStore().isOpen();
     }
 
     @Override
     public void put(final Bytes key, final byte[] value) {
-        tmpStore.put(key, toUncommittedValue(value));
+        tmpStore().put(key, toUncommittedValue(value));
     }
 
     @Override
     public byte[] putIfAbsent(final Bytes key, final byte[] value) {
         final byte[] prev = get(key);
         if (prev == null) {
-            tmpStore.put(key, toUncommittedValue(value));
+            tmpStore().put(key, toUncommittedValue(value));
         }
         return prev;
     }
@@ -143,19 +151,19 @@ public abstract class AbstractTransactionalStore implements KeyValueStore<Bytes,
             .stream()
             .map(e -> new KeyValue<>(e.key, toUncommittedValue(e.value)))
             .collect(Collectors.toList());
-        tmpStore.putAll(tmpEntries);
+        tmpStore().putAll(tmpEntries);
     }
 
     @Override
     public byte[] delete(final Bytes key) {
         final byte[] value = get(key);
-        tmpStore.put(key, DELETION_VAL);
+        tmpStore().put(key, DELETION_VAL);
         return value;
     }
 
     @Override
     public byte[] get(final Bytes key) {
-        final byte[] tmpValue = tmpStore.get(key);
+        final byte[] tmpValue = tmpStore().get(key);
         final byte[] mainValue = mainStore().get(key);
         if (tmpValue == null) {
             return mainValue;
@@ -169,7 +177,7 @@ public abstract class AbstractTransactionalStore implements KeyValueStore<Bytes,
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
         final MergeKeyValueIterator iterator = new MergeKeyValueIterator(
-            tmpStore.range(from, to), mainStore().range(from, to), openIterators);
+            tmpStore().range(from, to), mainStore().range(from, to), openIterators);
         openIterators.add(iterator);
         return iterator;
     }
@@ -177,7 +185,7 @@ public abstract class AbstractTransactionalStore implements KeyValueStore<Bytes,
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
         final MergeKeyValueIterator iterator = new MergeKeyValueIterator(
-            tmpStore.reverseRange(from, to),
+            tmpStore().reverseRange(from, to),
             mainStore().reverseRange(from, to),
             true,
             openIterators);
@@ -188,7 +196,7 @@ public abstract class AbstractTransactionalStore implements KeyValueStore<Bytes,
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
         final MergeKeyValueIterator iterator = new MergeKeyValueIterator(
-            tmpStore.all(), mainStore().all(), openIterators);
+            tmpStore().all(), mainStore().all(), openIterators);
         openIterators.add(iterator);
         return iterator;
     }
@@ -196,7 +204,7 @@ public abstract class AbstractTransactionalStore implements KeyValueStore<Bytes,
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseAll() {
         final MergeKeyValueIterator iterator = new MergeKeyValueIterator(
-            tmpStore.reverseAll(), mainStore().reverseAll(), true, openIterators);
+            tmpStore().reverseAll(), mainStore().reverseAll(), true, openIterators);
         openIterators.add(iterator);
         return iterator;
     }
@@ -204,14 +212,14 @@ public abstract class AbstractTransactionalStore implements KeyValueStore<Bytes,
     @Override
     public long approximateNumEntries() {
         try {
-            return Math.addExact(tmpStore.approximateNumEntries(), mainStore().approximateNumEntries());
+            return Math.addExact(tmpStore().approximateNumEntries(), mainStore().approximateNumEntries());
         } catch (final ArithmeticException e) {
             return Long.MAX_VALUE;
         }
     }
 
     private void doCommit() {
-        try (final KeyValueIterator<Bytes, byte[]> it = tmpStore.all()) {
+        try (final KeyValueIterator<Bytes, byte[]> it = tmpStore().all()) {
             while (it.hasNext()) {
                 final KeyValue<Bytes, byte[]> kv = it.next();
                 mainStore().put(kv.key, fromUncommittedValue(kv.value));

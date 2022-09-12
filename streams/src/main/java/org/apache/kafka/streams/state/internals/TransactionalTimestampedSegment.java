@@ -19,11 +19,20 @@ package org.apache.kafka.streams.state.internals;
 import java.io.File;
 import java.util.Map;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 public class TransactionalTimestampedSegment extends AbstractTransactionalSegment {
-    TransactionalTimestampedSegment(final KeyValueSegment tmpStore,
-                                    final TimestampedSegment mainStore) {
-        super(tmpStore, mainStore);
+    TransactionalTimestampedSegment(final String segmentName,
+                                    final String windowName,
+                                    final long segmentId,
+                                    final RocksDBMetricsRecorder metricsRecorder) {
+        super(segmentName, windowName, segmentId, metricsRecorder);
+    }
+
+    @Override
+    Segment createMainStore(final String segmentName, final String windowName, final long segmentId,
+        final RocksDBMetricsRecorder metricsRecorder) {
+        return new TimestampedSegment(segmentName, windowName, segmentId, metricsRecorder);
     }
 
     @Override

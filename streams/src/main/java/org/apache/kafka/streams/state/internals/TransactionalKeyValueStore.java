@@ -18,25 +18,35 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
-public class TransactionalKeyValueStore extends AbstractTransactionalStore {
+public class TransactionalKeyValueStore extends AbstractTransactionalStore<KeyValueStore<Bytes, byte[]>> {
     private final String name;
-    private final KeyValueStore<Bytes, byte[]> mainStore;
 
-    TransactionalKeyValueStore(final KeyValueSegment tmpStore,
-                               final KeyValueStore<Bytes, byte[]> mainStore) {
-        super(tmpStore);
-        this.mainStore = mainStore;
+    final KeyValueSegment tmpStore;
+    final KeyValueStore<Bytes, byte[]> mainStore;
+
+    TransactionalKeyValueStore(final KeyValueStore<Bytes, byte[]> mainStore, final String metricsScope) {
         this.name = PREFIX + mainStore.name();
-    }
-
-    @Override
-    public String name() {
-        return name;
+        this.mainStore = mainStore;
+        this.tmpStore = createTmpStore(mainStore.name(),
+                                       mainStore.name(),
+                                      0,
+                                       new RocksDBMetricsRecorder(metricsScope, mainStore.name()));
     }
 
     @Override
     public KeyValueStore<Bytes, byte[]> mainStore() {
         return mainStore;
+    }
+
+    @Override
+    public KeyValueSegment tmpStore() {
+        return tmpStore;
+    }
+
+    @Override
+    public String name() {
+        return name;
     }
 }

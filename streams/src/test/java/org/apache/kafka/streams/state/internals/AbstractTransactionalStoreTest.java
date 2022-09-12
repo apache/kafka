@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -37,11 +38,11 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-public abstract class AbstractTransactionalStoreTest {
+public abstract class AbstractTransactionalStoreTest<T extends KeyValueStore<Bytes, byte[]>> {
     // TODO: close tests
     // TODO: reverseAll tests
     InternalMockProcessorContext<Object, Object> context;
-    AbstractTransactionalStore txnStore;
+    AbstractTransactionalStore<T> txnStore;
 
     final Bytes key1 = Bytes.wrap("key1".getBytes());
     final byte[] val1 = "val1".getBytes();
@@ -295,7 +296,7 @@ public abstract class AbstractTransactionalStoreTest {
         txnStore.put(key2, val2);
         txnStore.close();
 
-        final AbstractTransactionalStore txnStore2 = getTxnStore();
+        final AbstractTransactionalStore<T> txnStore2 = getTxnStore();
         final boolean recovered = txnStore2.recover(1L);
         assertTrue(recovered);
 
@@ -345,5 +346,5 @@ public abstract class AbstractTransactionalStoreTest {
             mock(RocksDBMetricsRecorder.class));
     }
 
-    abstract AbstractTransactionalStore getTxnStore();
+    abstract AbstractTransactionalStore<T> getTxnStore();
 }

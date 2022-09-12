@@ -24,8 +24,7 @@ public class TransactionalKeyValueStoreTest extends AbstractTransactionalStoreTe
     @Override
     TransactionalKeyValueStore getTxnStore() {
         final TransactionalKeyValueStore txnStore = new TransactionalKeyValueStore(
-            getTmpStore(),
-            Stores.inMemoryKeyValueStore("main").get());
+            Stores.inMemoryKeyValueStore("main").get(), "test");
         txnStore.init((StateStoreContext) context, txnStore);
         return txnStore;
     }

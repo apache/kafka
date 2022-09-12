@@ -38,37 +38,31 @@ class TimestampedSegments extends AbstractSegments<Segment> {
 
     @Override
     public Segment getOrCreateSegment(final long segmentId,
-                                                 final ProcessorContext context) {
+                                      final ProcessorContext context) {
         if (segments.containsKey(segmentId)) {
             return segments.get(segmentId);
-        } else {
-            final TimestampedSegment newSegment =
-                new TimestampedSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
-            final Segment returnSegment;
-            if (txnMechanism == RocksDBTransactionalMechanism.SECONDARY_STORE) {
-                final KeyValueSegment tmpSegment = new KeyValueSegment(segmentName(segmentId) + ".tmp",
-                                                                        name,
-                                                                        segmentId,
-                                                                        metricsRecorder);
-                returnSegment = new TransactionalTimestampedSegment(tmpSegment, newSegment);
-            } else if (txnMechanism == null) {
-                returnSegment = newSegment;
-            } else {
-                throw new IllegalStateException("Unsupported transactional mechanism: " + txnMechanism);
-            }
-
-            if (segments.put(segmentId, returnSegment) != null) {
-                throw new IllegalStateException("TimestampedSegment already exists. Possible concurrent access.");
-            }
-
-            if (txnMechanism == RocksDBTransactionalMechanism.SECONDARY_STORE) {
-                ((TransactionalTimestampedSegment) returnSegment).openDB(context.appConfigs(), context.stateDir());
-            } else {
-                newSegment.openDB(context.appConfigs(), context.stateDir());
-            }
-
-            return returnSegment;
         }
+
+        final Segment segment;
+        if (txnMechanism == RocksDBTransactionalMechanism.SECONDARY_STORE) {
+            segment = new TransactionalTimestampedSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
+        } else if (txnMechanism == null) {
+            segment = new TimestampedSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
+        } else {
+            throw new IllegalStateException("Unsupported transactional mechanism: " + txnMechanism);
+        }
+
+        if (segments.put(segmentId, segment) != null) {
+            throw new IllegalStateException("TimestampedSegment already exists. Possible concurrent access.");
+        }
+
+        if (txnMechanism == RocksDBTransactionalMechanism.SECONDARY_STORE) {
+            ((TransactionalTimestampedSegment) segment).openDB(context.appConfigs(), context.stateDir());
+        } else {
+            ((TimestampedSegment) segment).openDB(context.appConfigs(), context.stateDir());
+        }
+
+        return segment;
     }
 
     @Override

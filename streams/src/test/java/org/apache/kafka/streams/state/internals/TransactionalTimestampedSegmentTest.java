@@ -20,13 +20,12 @@ import static org.easymock.EasyMock.mock;
 
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
-public class TransactionalTimestampedSegmentTest extends AbstractTransactionalStoreTest {
+public class TransactionalTimestampedSegmentTest extends AbstractTransactionalStoreTest<Segment> {
 
     @Override
-    AbstractTransactionalStore getTxnStore() {
+    AbstractTransactionalStore<Segment> getTxnStore() {
         final TransactionalTimestampedSegment txnStore = new TransactionalTimestampedSegment(
-            getTmpStore(),
-            new TimestampedSegment("main", "window0", 0, mock(RocksDBMetricsRecorder.class))
+            "main", "window0", 0, mock(RocksDBMetricsRecorder.class)
         );
         txnStore.openDB(context.appConfigs(), context.stateDir());
         return txnStore;
