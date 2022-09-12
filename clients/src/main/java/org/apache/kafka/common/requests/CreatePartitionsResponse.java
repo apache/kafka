@@ -62,4 +62,9 @@ public class CreatePartitionsResponse extends AbstractResponse {
     public int throttleTimeMs() {
         return data.throttleTimeMs();
     }
+
+    @Override
+    public void setThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
 }

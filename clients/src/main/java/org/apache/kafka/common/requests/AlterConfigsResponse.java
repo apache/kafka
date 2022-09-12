@@ -56,6 +56,11 @@ public class AlterConfigsResponse extends AbstractResponse {
     }
 
     @Override
+    public void setThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public AlterConfigsResponseData data() {
         return data;
     }

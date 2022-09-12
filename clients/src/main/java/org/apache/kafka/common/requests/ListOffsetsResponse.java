@@ -65,6 +65,11 @@ public class ListOffsetsResponse extends AbstractResponse {
     }
 
     @Override
+    public void setThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public ListOffsetsResponseData data() {
         return data;
     }

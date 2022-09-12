@@ -71,6 +71,11 @@ public class StopReplicaResponse extends AbstractResponse {
     }
 
     @Override
+    public void setThrottleTimeMs(int throttleTimeMs) {
+        // Not supported by the response schema
+    }
+
+    @Override
     public StopReplicaResponseData data() {
         return data;
     }

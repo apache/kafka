@@ -51,6 +51,11 @@ public class DeleteTopicsResponse extends AbstractResponse {
     }
 
     @Override
+    public void setThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public DeleteTopicsResponseData data() {
         return data;
     }

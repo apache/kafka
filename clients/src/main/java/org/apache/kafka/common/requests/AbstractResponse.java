@@ -268,6 +268,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
 
     public abstract int throttleTimeMs();
 
+    public abstract void setThrottleTimeMs(int throttleTimeMs);
+
     public String toString() {
         return data().toString();
     }

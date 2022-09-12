@@ -62,6 +62,11 @@ final public class FetchSnapshotResponse extends AbstractResponse {
     }
 
     @Override
+    public void setThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public FetchSnapshotResponseData data() {
         return data;
     }

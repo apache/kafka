@@ -53,6 +53,11 @@ public class DescribeClusterResponse extends AbstractResponse {
     }
 
     @Override
+    public void setThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public DescribeClusterResponseData data() {
         return data;
     }

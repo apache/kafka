@@ -57,6 +57,11 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
     }
 
     @Override
+    public void setThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public AddOffsetsToTxnResponseData data() {
         return data;
     }

@@ -59,4 +59,9 @@ public class ListTransactionsResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    @Override
+    public void setThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
 }

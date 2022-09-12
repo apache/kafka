@@ -58,6 +58,11 @@ public class ControlledShutdownResponse extends AbstractResponse {
         return DEFAULT_THROTTLE_TIME;
     }
 
+    @Override
+    public void setThrottleTimeMs(int throttleTimeMs) {
+        // Not supported by the response schema
+    }
+
     public static ControlledShutdownResponse parse(ByteBuffer buffer, short version) {
         return new ControlledShutdownResponse(new ControlledShutdownResponseData(new ByteBufferAccessor(buffer), version));
     }
