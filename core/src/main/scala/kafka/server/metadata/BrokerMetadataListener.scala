@@ -49,6 +49,9 @@ class BrokerMetadataListener(
   private val metadataFaultOccurred = new AtomicBoolean(false)
   private val metadataLoadingFaultHandler: FaultHandler = new FaultHandler() {
     override def handleFault(failureMessage: String, cause: Throwable): RuntimeException = {
+      // If the broker has any kind of error handling metadata records or publishing a new image
+      // we will disable taking new snapshots in order to preserve the local metadata log. Once we
+      // encounter a metadata processing error, the broker will be in an undetermined state.
       if (metadataFaultOccurred.compareAndSet(false, true)) {
         error("Disabling metadata snapshots until this broker is restarted.")
       }
@@ -325,7 +328,10 @@ class BrokerMetadataListener(
     try {
       _image = _delta.apply()
     } catch {
-      case t: Throwable => throw metadataLoadingFaultHandler.handleFault(s"Error applying metadata delta $delta", t)
+      case t: Throwable =>
+        // If we cannot apply the delta, this publish event will throw and we will not publish a new image.
+        // The broker will continue applying metadata records and attempt to publish again.
+        throw metadataLoadingFaultHandler.handleFault(s"Error applying metadata delta $delta", t)
     }
 
     _delta = new MetadataDelta(_image)
