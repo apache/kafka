@@ -20,7 +20,9 @@ package org.apache.kafka.jmh.acl;
 import kafka.security.authorizer.AclAuthorizer;
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls;
 import kafka.security.authorizer.AclEntry;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
@@ -34,7 +36,10 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.metadata.authorizer.StandardAcl;
+import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.server.authorizer.Action;
+import org.apache.kafka.server.authorizer.Authorizer;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -50,6 +55,7 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import scala.collection.JavaConverters;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -61,6 +67,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -69,6 +76,22 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class AclAuthorizerBenchmark {
+
+    public enum AuthorizerType {
+        ACL(AclAuthorizer::new),
+        KRAFT(StandardAuthorizer::new);
+
+        private Supplier<Authorizer> supplier;
+
+        AuthorizerType(Supplier<Authorizer> supplier) {
+            this.supplier = supplier;
+        }
+
+        Authorizer newAuthorizer() {
+            return supplier.get();
+        }
+    }
+
     @Param({"10000", "50000", "200000"})
     private int resourceCount;
     //no. of. rules per resource
@@ -78,10 +101,13 @@ public class AclAuthorizerBenchmark {
     @Param({"0", "20", "50", "90", "99", "99.9", "99.99", "100"})
     private double denyPercentage;
 
+    @Param({"ACL", "KRAFT"})
+    private AuthorizerType authorizerType;
+
     private final int hostPreCount = 1000;
     private final String resourceNamePrefix = "foo-bar35_resource-";
-    private final AclAuthorizer aclAuthorizer = new AclAuthorizer();
     private final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
+    private Authorizer authorizer;
     private List<Action> actions = new ArrayList<>();
     private RequestContext authorizeContext;
     private RequestContext authorizeByResourceTypeContext;
@@ -94,6 +120,7 @@ public class AclAuthorizerBenchmark {
 
     @Setup(Level.Trial)
     public void setup() throws Exception {
+        authorizer = authorizerType.newAuthorizer();
         prepareAclCache();
         prepareAclToUpdate();
         // By adding `-95` to the resource name prefix, we cause the `TreeMap.from/to` call to return
@@ -177,9 +204,23 @@ public class AclAuthorizerBenchmark {
             }
         }
 
+        setupAcls(aclEntries);
+    }
+
+    private void setupAcls(Map<ResourcePattern, Set<AclEntry>> aclEntries) {
         for (Map.Entry<ResourcePattern, Set<AclEntry>> entryMap : aclEntries.entrySet()) {
-            aclAuthorizer.updateCache(entryMap.getKey(),
-                new VersionedAcls(JavaConverters.asScalaSetConverter(entryMap.getValue()).asScala().toSet(), 1));
+            switch (authorizerType) {
+                case ACL:
+                    ((AclAuthorizer) authorizer).updateCache(entryMap.getKey(),
+                        new VersionedAcls(JavaConverters.asScalaSetConverter(entryMap.getValue()).asScala().toSet(), 1));
+                    break;
+                case KRAFT:
+                    for (AclEntry aclEntry : entryMap.getValue()) {
+                        StandardAcl acl = StandardAcl.fromAclBinding(new AclBinding(entryMap.getKey(), aclEntry.ace()));
+                        ((StandardAuthorizer) authorizer).addAcl(Uuid.randomUuid(), acl);
+                    }
+                    break;
+            }
         }
     }
 
@@ -207,30 +248,31 @@ public class AclAuthorizerBenchmark {
     }
 
     @TearDown(Level.Trial)
-    public void tearDown() {
-        aclAuthorizer.close();
+    public void tearDown() throws IOException {
+        authorizer.close();
     }
 
     @Benchmark
     public void testAclsIterator() {
-        aclAuthorizer.acls(AclBindingFilter.ANY);
+        authorizer.acls(AclBindingFilter.ANY);
     }
 
     @Benchmark
     public void testAuthorizer() {
-        aclAuthorizer.authorize(authorizeContext, actions);
+        authorizer.authorize(authorizeContext, actions);
     }
 
     @Benchmark
     public void testAuthorizeByResourceType() {
-        aclAuthorizer.authorizeByResourceType(authorizeByResourceTypeContext, AclOperation.READ, ResourceType.TOPIC);
+        authorizer.authorizeByResourceType(authorizeByResourceTypeContext, AclOperation.READ, ResourceType.TOPIC);
     }
 
     @Benchmark
     public void testUpdateCache() {
-        AclAuthorizer aclAuthorizer = new AclAuthorizer();
-        for (Map.Entry<ResourcePattern, VersionedAcls> e : aclToUpdate.entrySet()) {
-            aclAuthorizer.updateCache(e.getKey(), e.getValue());
+        if (authorizerType == AuthorizerType.ACL) {
+            for (Map.Entry<ResourcePattern, VersionedAcls> e : aclToUpdate.entrySet()) {
+                ((AclAuthorizer) authorizer).updateCache(e.getKey(), e.getValue());
+            }
         }
     }
 }
