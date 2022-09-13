@@ -28,7 +28,7 @@ public class RocksDBSegmentedBytesStoreTest extends AbstractRocksDBSegmentedByte
             retention,
             segmentInterval,
             schema,
-            null
+            txnMechanism
         );
     }
 
