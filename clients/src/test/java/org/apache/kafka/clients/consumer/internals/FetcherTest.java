@@ -273,6 +273,21 @@ public class FetcherTest {
     }
 
     @Test
+    public void testInflightFetchOnPendingPartitions() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, fetcher.sendFetches());
+        subscriptions.markPendingRevocation(singleton(tp0));
+
+        client.prepareResponse(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertNull(fetchedRecords().get(tp0));
+    }
+
+    @Test
     public void testFetchingPendingPartitions() {
         buildFetcher();
 
@@ -2308,7 +2323,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testPendingRevacationPartitionFetching() {
+    public void testFetchingPendingPartitionsBeforeAndAfterSubscriptionReset() {
         buildFetcher();
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 100);

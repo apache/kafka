@@ -263,6 +263,7 @@ public class SubscriptionStateTest {
         assertTrue(state.isFetchable(tp0));
         state.markPendingRevocation(singleton(tp0));
         assertFalse(state.isFetchable(tp0));
+        assertFalse(state.isPaused(tp0));
     }
 
     @Test
