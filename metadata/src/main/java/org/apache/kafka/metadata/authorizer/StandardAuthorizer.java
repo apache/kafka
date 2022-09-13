@@ -67,32 +67,25 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
      */
     private volatile StandardAuthorizerData data = StandardAuthorizerData.createEmpty();
 
-    private void inWriteLock(Runnable function) {
+    @Override
+    public void setAclMutator(AclMutator aclMutator) {
         lock.writeLock().lock();
         try {
-            function.run();
+            this.data = data.copyWithNewAclMutator(aclMutator);
         } finally {
             lock.writeLock().unlock();
         }
     }
 
-    private <T> T inReadLock(Supplier<T> function) {
+    @Override
+    public AclMutator aclMutatorOrException() {
+        AclMutator aclMutator;
         lock.readLock().lock();
         try {
-            return function.get();
+            aclMutator = data.aclMutator;
         } finally {
             lock.readLock().unlock();
         }
-    }
-
-    @Override
-    public void setAclMutator(AclMutator aclMutator) {
-        inWriteLock(() -> this.data = data.copyWithNewAclMutator(aclMutator));
-    }
-
-    @Override
-    public AclMutator aclMutatorOrException() {
-        AclMutator aclMutator = inReadLock(() -> data.aclMutator);
         if (aclMutator == null) {
             throw new NotControllerException("The current node is not the active controller.");
         }
@@ -101,7 +94,12 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
 
     @Override
     public void completeInitialLoad() {
-        inWriteLock(() -> data = data.copyWithNewLoadingComplete(true));
+        lock.writeLock().lock();
+        try {
+            data = data.copyWithNewLoadingComplete(true);
+        } finally {
+            lock.writeLock().unlock();
+        }
         data.log.info("Completed initial ACL load process.");
         initialLoadFuture.complete(null);
     }
@@ -119,17 +117,32 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
 
     @Override
     public void addAcl(Uuid id, StandardAcl acl) {
-        inWriteLock(() -> data.addAcl(id, acl));
+        lock.writeLock().lock();
+        try {
+            data.addAcl(id, acl);
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     @Override
     public void removeAcl(Uuid id) {
-        inWriteLock(() -> data.removeAcl(id));
+        lock.writeLock().lock();
+        try {
+            data.removeAcl(id);
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     @Override
     public void loadSnapshot(Map<Uuid, StandardAcl> acls) {
-        inWriteLock(() -> data = data.copyWithNewAcls(acls.entrySet()));
+        lock.writeLock().lock();
+        try {
+            data = data.copyWithNewAcls(acls.entrySet());
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     @Override
@@ -151,24 +164,37 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     public List<AuthorizationResult> authorize(
             AuthorizableRequestContext requestContext,
             List<Action> actions) {
-        return inReadLock(() -> {
-            List<AuthorizationResult> results = new ArrayList<>(actions.size());
+        List<AuthorizationResult> results = new ArrayList<>(actions.size());
+        lock.readLock().lock();
+        try {
             for (Action action : actions) {
                 AuthorizationResult result = data.authorize(requestContext, action);
                 results.add(result);
             }
-            return results;
-        });
+        } finally {
+            lock.readLock().unlock();
+        }
+        return results;
     }
 
     @Override
     public Iterable<AclBinding> acls(AclBindingFilter filter) {
-        return inReadLock(() -> data.acls(filter));
+        lock.readLock().lock();
+        try {
+            return data.acls(filter);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     @Override
     public int aclCount() {
-        return inReadLock(() -> data.aclCount());
+        lock.readLock().lock();
+        try {
+            return data.aclCount();
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     @Override
@@ -188,20 +214,32 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
         } catch (Exception e) {
             nodeId = -1;
         }
-        final int finalNodeId = nodeId;
-        inWriteLock(() -> {
-            this.data = data.copyWithNewConfig(finalNodeId, superUsers, defaultResult);
-            this.data.log.info("set super.users={}, default result={}", String.join(",", superUsers), defaultResult);
-        });
+        lock.writeLock().lock();
+        try {
+            data = data.copyWithNewConfig(nodeId, superUsers, defaultResult);
+        } finally {
+            lock.writeLock().unlock();
+        }
+        this.data.log.info("set super.users={}, default result={}", String.join(",", superUsers), defaultResult);
     }
 
     // VisibleForTesting
     Set<String> superUsers()  {
-        return inReadLock(() -> new HashSet<>(data.superUsers()));
+        lock.readLock().lock();
+        try {
+            return new HashSet<>(data.superUsers());
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     AuthorizationResult defaultResult() {
-        return inReadLock(() -> data.defaultResult());
+        lock.readLock().lock();
+        try {
+            return data.defaultResult();
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     static Set<String> getConfiguredSuperUsers(Map<String, ?> configs) {

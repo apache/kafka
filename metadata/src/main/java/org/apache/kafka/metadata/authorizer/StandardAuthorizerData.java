@@ -531,25 +531,14 @@ public class StandardAuthorizerData {
     }
 
     Iterable<AclBinding> acls(AclBindingFilter filter) {
-        return new AclIterable(filter);
-    }
-
-    class AclIterable implements Iterable<AclBinding> {
-        private final List<AclBinding> aclBindingList = new ArrayList<>();
-
-        AclIterable(AclBindingFilter filter) {
-            aclsByResource.forEach(acl -> {
-                AclBinding aclBinding = acl.toBinding();
-                if (filter.matches(aclBinding)) {
-                    aclBindingList.add(aclBinding);
-                }
-            });
-        }
-
-        @Override
-        public Iterator<AclBinding> iterator() {
-            return aclBindingList.iterator();
-        }
+        List<AclBinding> aclBindingList = new ArrayList<>();
+        aclsByResource.forEach(acl -> {
+            AclBinding aclBinding = acl.toBinding();
+            if (filter.matches(aclBinding)) {
+                aclBindingList.add(aclBinding);
+            }
+        });
+        return aclBindingList;
     }
 
     private interface MatchingRule {
