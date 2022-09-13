@@ -1052,7 +1052,7 @@ public final class QuorumController implements Controller {
                     );
                     snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
                     newBytesSinceLastSnapshot = 0L;
-                    authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
+                    authorizer.ifPresent(a -> a.loadAclSnapshot(aclControlManager.idToAcl()));
                 } finally {
                     reader.close();
                 }
@@ -1231,7 +1231,7 @@ public final class QuorumController implements Controller {
                         lastCommittedEpoch + " in snapshot registry.");
             }
             snapshotRegistry.revertToSnapshot(lastCommittedOffset);
-            authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
+            authorizer.ifPresent(a -> a.loadAclSnapshot(aclControlManager.idToAcl()));
             newBytesSinceLastSnapshot = 0L;
             updateWriteOffset(-1);
             clusterControl.deactivate();

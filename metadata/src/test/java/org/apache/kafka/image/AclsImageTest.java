@@ -31,7 +31,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.metadata.authorizer.StandardAclWithIdTest.TEST_ACLS;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTestConstants.ALL;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTestConstants.withIds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
@@ -44,6 +45,8 @@ public class AclsImageTest {
     final static AclsDelta DELTA1;
 
     final static AclsImage IMAGE2;
+
+    final static List<StandardAclWithId> TEST_ACLS = withIds(ALL);
 
     static {
         Map<Uuid, StandardAcl> map = new HashMap<>();

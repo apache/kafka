@@ -190,7 +190,8 @@ public class AclControlManager {
         existingAcls.add(aclWithId.acl());
         if (!snapshotId.isPresent()) {
             authorizer.ifPresent(a -> {
-                a.addAcl(aclWithId.id(), aclWithId.acl());
+                a.applyAclChanges(Collections.singletonMap(
+                    aclWithId.id(), Optional.of(aclWithId.acl())));
             });
         }
     }
@@ -208,7 +209,8 @@ public class AclControlManager {
         }
         if (!snapshotId.isPresent()) {
             authorizer.ifPresent(a -> {
-                a.removeAcl(record.id());
+                a.applyAclChanges(Collections.singletonMap(
+                        record.id(), Optional.empty()));
             });
         }
     }

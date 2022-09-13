@@ -21,8 +21,10 @@ import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
@@ -36,6 +38,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -96,18 +99,13 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     }
 
     @Override
-    public void addAcl(Uuid id, StandardAcl acl) {
-        data.addAcl(id, acl);
+    public synchronized void loadAclSnapshot(Map<Uuid, StandardAcl> acls) {
+        data = data.copyWithAclSnapshot(acls);
     }
 
     @Override
-    public void removeAcl(Uuid id) {
-        data.removeAcl(id);
-    }
-
-    @Override
-    public synchronized void loadSnapshot(Map<Uuid, StandardAcl> acls) {
-        data = data.copyWithNewAcls(acls.entrySet());
+    public synchronized void applyAclChanges(Map<Uuid, Optional<StandardAcl>> aclChanges) {
+        data = data.copyWithAclChanges(aclChanges);
     }
 
     @Override
@@ -136,6 +134,15 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
             results.add(result);
         }
         return results;
+    }
+
+    @Override
+    public AuthorizationResult authorizeByResourceType(
+        AuthorizableRequestContext requestContext,
+        AclOperation op,
+        ResourceType resourceType
+    ) {
+        return data.authorizeByResourceType(requestContext, op, resourceType);
     }
 
     @Override

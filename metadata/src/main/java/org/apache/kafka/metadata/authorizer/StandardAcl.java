@@ -23,6 +23,7 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.resource.PatternType;
+import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -33,7 +34,7 @@ import java.util.Objects;
 /**
  * A Kafka ACLs which is identified by a UUID and stored in the metadata log.
  */
-final public class StandardAcl implements Comparable<StandardAcl> {
+final public class StandardAcl {
     public static StandardAcl fromRecord(AccessControlEntryRecord record) {
         return new StandardAcl(
             ResourceType.fromCode(record.resourceType()),
@@ -128,6 +129,23 @@ final public class StandardAcl implements Comparable<StandardAcl> {
         return new AclBinding(resourcePattern, accessControlEntry);
     }
 
+    public Resource resource() {
+        return new Resource(resourceType, resourceName);
+    }
+
+    boolean isWildcard() {
+        return patternType == PatternType.LITERAL &&
+            resourceName.equals(StandardAuthorizerConstants.WILDCARD);
+    }
+
+    boolean isWildcardOrPrefix() {
+        return patternType == PatternType.PREFIXED || isWildcard();
+    }
+
+    String resourceNameForPrefixNode() {
+        return isWildcard() ? StandardAuthorizerConstants.EMPTY_STRING : resourceName;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (o == null || !o.getClass().equals(StandardAcl.class)) return false;
@@ -152,29 +170,6 @@ final public class StandardAcl implements Comparable<StandardAcl> {
             host,
             operation,
             permissionType);
-    }
-
-    /**
-     * Compare two StandardAcl objects. See {@link StandardAuthorizerData#authorize} for an
-     * explanation of why we want this particular sort order.
-     */
-    @Override
-    public int compareTo(StandardAcl other) {
-        int result;
-        result = resourceType.compareTo(other.resourceType);
-        if (result != 0) return result;
-        result = other.resourceName.compareTo(resourceName); // REVERSE sort by resource name.
-        if (result != 0) return result;
-        result = patternType.compareTo(other.patternType);
-        if (result != 0) return result;
-        result = operation.compareTo(other.operation);
-        if (result != 0) return result;
-        result = principal.compareTo(other.principal);
-        if (result != 0) return result;
-        result = host.compareTo(other.host);
-        if (result != 0) return result;
-        result = permissionType.compareTo(other.permissionType);
-        return result;
     }
 
     @Override

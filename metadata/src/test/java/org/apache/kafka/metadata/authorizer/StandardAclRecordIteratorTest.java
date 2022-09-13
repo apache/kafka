@@ -22,9 +22,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.NoSuchElementException;
 
-import static org.apache.kafka.metadata.authorizer.StandardAclWithIdTest.TEST_ACLS;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTestConstants.ALL;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTestConstants.withIds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -35,28 +37,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class StandardAclRecordIteratorTest {
     @Test
     public void testIteration() {
+        List<StandardAclWithId> allList = withIds(ALL);
         StandardAclRecordIterator iterator =
-            new StandardAclRecordIterator(TEST_ACLS.iterator(), 2);
+            new StandardAclRecordIterator(allList.iterator(), 2);
         assertTrue(iterator.hasNext());
         assertEquals(Arrays.asList(
-            new ApiMessageAndVersion(TEST_ACLS.get(0).toRecord(), (short) 0),
-            new ApiMessageAndVersion(TEST_ACLS.get(1).toRecord(), (short) 0)),
+            new ApiMessageAndVersion(allList.get(0).toRecord(), (short) 0),
+            new ApiMessageAndVersion(allList.get(1).toRecord(), (short) 0)),
             iterator.next());
         assertEquals(Arrays.asList(
-            new ApiMessageAndVersion(TEST_ACLS.get(2).toRecord(), (short) 0),
-            new ApiMessageAndVersion(TEST_ACLS.get(3).toRecord(), (short) 0)),
+            new ApiMessageAndVersion(allList.get(2).toRecord(), (short) 0),
+            new ApiMessageAndVersion(allList.get(3).toRecord(), (short) 0)),
             iterator.next());
         assertTrue(iterator.hasNext());
         assertEquals(Arrays.asList(
-            new ApiMessageAndVersion(TEST_ACLS.get(4).toRecord(), (short) 0)),
+            new ApiMessageAndVersion(allList.get(4).toRecord(), (short) 0)),
             iterator.next());
         assertFalse(iterator.hasNext());
     }
 
     @Test
     public void testNoSuchElementException() {
+        List<StandardAclWithId> allList = withIds(ALL);
         StandardAclRecordIterator iterator =
-            new StandardAclRecordIterator(TEST_ACLS.iterator(), 2);
+            new StandardAclRecordIterator(allList.iterator(), 2);
         iterator.next();
         iterator.next();
         iterator.next();

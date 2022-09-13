@@ -54,8 +54,8 @@ import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 import static org.apache.kafka.common.resource.PatternType.LITERAL;
 import static org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
-import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.WILDCARD;
-import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.WILDCARD_PRINCIPAL;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerConstants.WILDCARD;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerConstants.WILDCARD_PRINCIPAL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
@@ -117,17 +117,12 @@ public class ClusterMetadataAuthorizerTest {
         }
 
         @Override
-        public void loadSnapshot(Map<Uuid, StandardAcl> acls) {
+        public void loadAclSnapshot(Map<Uuid, StandardAcl> acls) {
             // do nothing
         }
 
         @Override
-        public void addAcl(Uuid id, StandardAcl acl) {
-            // do nothing
-        }
-
-        @Override
-        public void removeAcl(Uuid id) {
+        public void applyAclChanges(Map<Uuid, Optional<StandardAcl>> aclChanges) {
             // do nothing
         }
 

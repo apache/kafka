@@ -38,9 +38,6 @@ import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.authorizer.AclMutator;
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
-import org.apache.kafka.metadata.authorizer.StandardAclTest;
-import org.apache.kafka.metadata.authorizer.StandardAclWithId;
-import org.apache.kafka.metadata.authorizer.StandardAclWithIdTest;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.authorizer.Action;
@@ -70,7 +67,11 @@ import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 import static org.apache.kafka.common.resource.PatternType.LITERAL;
 import static org.apache.kafka.common.resource.PatternType.MATCH;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
-import static org.apache.kafka.metadata.authorizer.StandardAclWithIdTest.TEST_ACLS;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTestConstants.WILDCARD_ACLS;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTestConstants.idForAcl;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTestConstants.withId;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTestConstants.withIds;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTestConstants.ALL;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -159,17 +160,12 @@ public class AclControlManagerTest {
         }
 
         @Override
-        public void loadSnapshot(Map<Uuid, StandardAcl> acls) {
+        public void loadAclSnapshot(Map<Uuid, StandardAcl> acls) {
             this.acls = new HashMap<>(acls);
         }
 
         @Override
-        public void addAcl(Uuid id, StandardAcl acl) {
-            // do nothing
-        }
-
-        @Override
-        public void removeAcl(Uuid id) {
+        public void applyAclChanges(Map<Uuid, Optional<StandardAcl>> aclChanges) {
             // do nothing
         }
 
@@ -207,11 +203,11 @@ public class AclControlManagerTest {
 
         // Load TEST_ACLS into the AclControlManager.
         Set<ApiMessageAndVersion> loadedAcls = new HashSet<>();
-        for (StandardAclWithId acl : TEST_ACLS) {
+        withIds(ALL).forEach(acl -> {
             AccessControlEntryRecord record = acl.toRecord();
             assertTrue(loadedAcls.add(new ApiMessageAndVersion(record, (short) 0)));
             manager.replay(acl.toRecord(), Optional.empty());
-        }
+        });
 
         // Verify that the ACLs stored in the AclControlManager match the ones we expect.
         Set<ApiMessageAndVersion> foundAcls = new HashSet<>();
@@ -225,14 +221,14 @@ public class AclControlManagerTest {
 
         // Once we complete the snapshot load, the ACLs should be reflected in the authorizer.
         MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
-        authorizer.loadSnapshot(manager.idToAcl());
-        assertEquals(new HashSet<>(StandardAclTest.TEST_ACLS), new HashSet<>(authorizer.acls.values()));
+        authorizer.loadAclSnapshot(manager.idToAcl());
+        assertEquals(new HashSet<>(ALL), new HashSet<>(authorizer.acls.values()));
 
         // Test reverting to an empty state and then completing the snapshot load without
         // setting an authorizer. This simulates the case where the user didn't configure
         // a cluster metadata authorizer.
         snapshotRegistry.revertToSnapshot(0);
-        authorizer.loadSnapshot(manager.idToAcl());
+        authorizer.loadAclSnapshot(manager.idToAcl());
         assertFalse(manager.iterator(Long.MAX_VALUE).hasNext());
     }
 
@@ -241,12 +237,13 @@ public class AclControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         AclControlManager manager = new AclControlManager(snapshotRegistry, Optional.empty());
         MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
-        authorizer.loadSnapshot(manager.idToAcl());
-        manager.replay(StandardAclWithIdTest.TEST_ACLS.get(0).toRecord(), Optional.empty());
-        assertEquals(new ApiMessageAndVersion(TEST_ACLS.get(0).toRecord(), (short) 0),
+        authorizer.loadAclSnapshot(manager.idToAcl());
+
+        manager.replay(withId(WILDCARD_ACLS.get(0)).toRecord(), Optional.empty());
+        assertEquals(new ApiMessageAndVersion(withId(WILDCARD_ACLS.get(0)).toRecord(), (short) 0),
             manager.iterator(Long.MAX_VALUE).next().get(0));
         manager.replay(new RemoveAccessControlEntryRecord().
-            setId(TEST_ACLS.get(0).id()), Optional.empty());
+            setId(idForAcl(WILDCARD_ACLS.get(0))), Optional.empty());
         assertFalse(manager.iterator(Long.MAX_VALUE).hasNext());
     }
 
@@ -255,11 +252,11 @@ public class AclControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         AclControlManager manager = new AclControlManager(snapshotRegistry, Optional.empty());
         MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
-        authorizer.loadSnapshot(manager.idToAcl());
+        authorizer.loadAclSnapshot(manager.idToAcl());
 
         List<AclBinding> toCreate = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
-            toCreate.add(TEST_ACLS.get(i).toBinding());
+            toCreate.add(ALL.get(i).toBinding());
         }
         toCreate.add(new AclBinding(
             new ResourcePattern(TOPIC, "*", PatternType.UNKNOWN),
@@ -302,8 +299,8 @@ public class AclControlManagerTest {
             deleted.add(result.aclBinding());
         }
         assertEquals(new HashSet<>(Arrays.asList(
-            TEST_ACLS.get(0).toBinding(),
-                TEST_ACLS.get(2).toBinding())), deleted);
+            ALL.get(0).toBinding(),
+                ALL.get(2).toBinding())), deleted);
         assertEquals(InvalidRequestException.class,
             deleteResult.response().get(1).exception().get().getClass());
         RecordTestUtils.replayAll(manager, deleteResult.records());
@@ -312,7 +309,7 @@ public class AclControlManagerTest {
         assertTrue(iterator.hasNext());
         List<ApiMessageAndVersion> list = iterator.next();
         assertEquals(1, list.size());
-        assertEquals(TEST_ACLS.get(1).toBinding(), StandardAcl.fromRecord(
+        assertEquals(ALL.get(1).toBinding(), StandardAcl.fromRecord(
             (AccessControlEntryRecord) list.get(0).message()).toBinding());
         assertFalse(iterator.hasNext());
     }
@@ -322,7 +319,7 @@ public class AclControlManagerTest {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         AclControlManager manager = new AclControlManager(snapshotRegistry, Optional.empty());
         MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
-        authorizer.loadSnapshot(manager.idToAcl());
+        authorizer.loadAclSnapshot(manager.idToAcl());
 
         AclBinding aclBinding = new AclBinding(new ResourcePattern(TOPIC, "topic-1", LITERAL),
                 new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));

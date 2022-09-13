@@ -285,24 +285,17 @@ class BrokerMetadataPublisher(
           case Some(authorizer: ClusterMetadataAuthorizer) => if (aclsDelta.isSnapshotDelta) {
             try {
               // If the delta resulted from a snapshot load, we want to apply the new changes
-              // all at once using ClusterMetadataAuthorizer#loadSnapshot. If this is the
+              // all at once using ClusterMetadataAuthorizer#loadAclSnapshot. If this is the
               // first snapshot load, it will also complete the futures returned by
               // Authorizer#start (which we wait for before processing RPCs).
-              authorizer.loadSnapshot(newImage.acls().acls())
+              authorizer.loadAclSnapshot(newImage.acls().acls())
             } catch {
               case t: Throwable => metadataPublishingFaultHandler.handleFault("Error loading " +
                 s"authorizer snapshot in ${deltaName}", t)
             }
           } else {
             try {
-              // Because the changes map is a LinkedHashMap, the deltas will be returned in
-              // the order they were performed.
-              aclsDelta.changes().entrySet().forEach(e =>
-                if (e.getValue.isPresent) {
-                  authorizer.addAcl(e.getKey, e.getValue.get())
-                } else {
-                  authorizer.removeAcl(e.getKey)
-                })
+              authorizer.applyAclChanges(aclsDelta.changes())
             } catch {
               case t: Throwable => metadataPublishingFaultHandler.handleFault("Error loading " +
                 s"authorizer changes in ${deltaName}", t)

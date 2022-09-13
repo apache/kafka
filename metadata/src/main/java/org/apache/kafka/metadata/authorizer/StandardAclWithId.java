@@ -18,7 +18,6 @@
 package org.apache.kafka.metadata.authorizer;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 
 import java.util.Objects;
@@ -59,10 +58,6 @@ final public class StandardAclWithId {
             setHost(acl.host()).
             setOperation(acl.operation().code()).
             setPermissionType(acl.permissionType().code());
-    }
-
-    public AclBinding toBinding() {
-        return acl.toBinding();
     }
 
     @Override

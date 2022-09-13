@@ -32,6 +32,7 @@ import org.apache.kafka.server.authorizer.Authorizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -73,17 +74,15 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
      * The authorizer will also wait for this initial snapshot load to complete when
      * coming up.
      */
-    void loadSnapshot(Map<Uuid, StandardAcl> acls);
+    void loadAclSnapshot(Map<Uuid, StandardAcl> acls);
 
     /**
-     * Add a new ACL. Any ACL with the same ID will be replaced.
+     * Add or remove ACLs.
+     *
+     * @param aclChanges        A map of UUIDs to ACLs that are upserted or removed. If an existing
+     *                          ACL appears in this map, it will be changed to the provided version.
      */
-    void addAcl(Uuid id, StandardAcl acl);
-
-    /**
-     * Remove the ACL with the given ID.
-     */
-    void removeAcl(Uuid id);
+    void applyAclChanges(Map<Uuid, Optional<StandardAcl>> aclChanges);
 
     /**
      * Create ACLs. This function must be called on the active controller, or else

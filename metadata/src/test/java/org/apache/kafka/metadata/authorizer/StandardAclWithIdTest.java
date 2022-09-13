@@ -22,49 +22,54 @@ import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTestConstants.ALL;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTestConstants.WILDCARD_ACLS;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerTestConstants.withIds;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 
 @Timeout(value = 40)
 public class StandardAclWithIdTest {
-    public final static List<StandardAclWithId> TEST_ACLS = new ArrayList<>();
-
-    static {
-        TEST_ACLS.add(new StandardAclWithId(Uuid.fromString("QZDDv-R7SyaPgetDPGd0Mw"),
-            StandardAclTest.TEST_ACLS.get(0)));
-        TEST_ACLS.add(new StandardAclWithId(Uuid.fromString("SdDjEdlbRmy2__WFKe3RMg"),
-            StandardAclTest.TEST_ACLS.get(1)));
-        TEST_ACLS.add(new StandardAclWithId(Uuid.fromString("wQzt5gkSTwuQNXZF5gIw7A"),
-            StandardAclTest.TEST_ACLS.get(2)));
-        TEST_ACLS.add(new StandardAclWithId(Uuid.fromString("ab_5xjJXSbS1o5jGfhgQXg"),
-            StandardAclTest.TEST_ACLS.get(3)));
-        TEST_ACLS.add(new StandardAclWithId(Uuid.fromString("wP_cCK0LTEGSX9oDRInJHQ"),
-            StandardAclTest.TEST_ACLS.get(4)));
-    }
-
     @Test
     public void testToRecordRoundTrips() {
-        for (StandardAclWithId acl : TEST_ACLS) {
+        withIds(ALL).forEach(acl -> {
             AccessControlEntryRecord record = acl.toRecord();
             StandardAclWithId acl2 = StandardAclWithId.fromRecord(record);
             assertEquals(acl2, acl);
-        }
+        });
     }
 
     @Test
     public void testEquals() {
-        for (int i = 0; i != TEST_ACLS.size(); i++) {
-            for (int j = 0; j != TEST_ACLS.size(); j++) {
-                if (i == j) {
-                    assertEquals(TEST_ACLS.get(i), TEST_ACLS.get(j));
+        List<StandardAclWithId> allWithId = withIds(ALL);
+        allWithId.forEach(acl1 -> {
+            allWithId.forEach(acl2 -> {
+                if (acl1 == acl2) {
+                    assertEquals(acl1, acl2);
                 } else {
-                    assertNotEquals(TEST_ACLS.get(i), TEST_ACLS.get(j));
+                    assertNotEquals(acl1, acl2);
                 }
-            }
-        }
+            });
+        });
+    }
+
+    static final List<Uuid> TEST_UUIDS = Arrays.asList(
+        Uuid.fromString("QZDDv-R7SyaPgetDPGd0Mw"),
+        Uuid.fromString("SdDjEdlbRmy2__WFKe3RMg"));
+
+    @Test
+    public void testNotEqualsIfIdIsDifferent() {
+        assertNotEquals(new StandardAclWithId(TEST_UUIDS.get(0), WILDCARD_ACLS.get(0)),
+            new StandardAclWithId(TEST_UUIDS.get(1), WILDCARD_ACLS.get(0)));
+    }
+
+    @Test
+    public void testNotEqualsIfAclIsDifferent() {
+        assertNotEquals(new StandardAclWithId(TEST_UUIDS.get(0), WILDCARD_ACLS.get(0)),
+                new StandardAclWithId(TEST_UUIDS.get(0), WILDCARD_ACLS.get(1)));
     }
 }

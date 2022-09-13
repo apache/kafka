@@ -55,16 +55,14 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.CompletionStage;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.acl.AclOperation.ALL;
-import static org.apache.kafka.common.acl.AclOperation.ALTER;
 import static org.apache.kafka.common.acl.AclOperation.ALTER_CONFIGS;
-import static org.apache.kafka.common.acl.AclOperation.CREATE;
-import static org.apache.kafka.common.acl.AclOperation.DELETE;
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE_CONFIGS;
 import static org.apache.kafka.common.acl.AclOperation.READ;
@@ -80,9 +78,8 @@ import static org.apache.kafka.metadata.authorizer.StandardAuthorizer.ALLOW_EVER
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizer.SUPER_USERS_CONFIG;
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizer.getConfiguredSuperUsers;
 import static org.apache.kafka.metadata.authorizer.StandardAuthorizer.getDefaultResult;
-import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.WILDCARD;
-import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.WILDCARD_PRINCIPAL;
-import static org.apache.kafka.metadata.authorizer.StandardAuthorizerData.findResult;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerConstants.WILDCARD;
+import static org.apache.kafka.metadata.authorizer.StandardAuthorizerConstants.WILDCARD_PRINCIPAL;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.ALLOWED;
 import static org.apache.kafka.server.authorizer.AuthorizationResult.DENIED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -210,51 +207,6 @@ public class StandardAuthorizerTest {
         return new StandardAclWithId(new Uuid(acl.hashCode(), acl.hashCode()), acl);
     }
 
-    @Test
-    public void testFindResultImplication() throws Exception {
-        // These permissions all imply DESCRIBE.
-        for (AclOperation op : asList(DESCRIBE, READ, WRITE, DELETE, ALTER)) {
-            assertEquals(ALLOWED, findResult(newAction(DESCRIBE, TOPIC, "foo_bar"),
-                new MockAuthorizableRequestContext.Builder().
-                    setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
-                newFooAcl(op, ALLOW)));
-        }
-        // CREATE does not imply DESCRIBE
-        assertEquals(null, findResult(newAction(DESCRIBE, TOPIC, "foo_bar"),
-            new MockAuthorizableRequestContext.Builder().
-                setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
-            newFooAcl(CREATE, ALLOW)));
-        // Deny ACLs don't do "implication".
-        for (AclOperation op : asList(READ, WRITE, DELETE, ALTER)) {
-            assertEquals(null, findResult(newAction(DESCRIBE, TOPIC, "foo_bar"),
-                new MockAuthorizableRequestContext.Builder().
-                    setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
-                newFooAcl(op, DENY)));
-        }
-        // Exact match
-        assertEquals(DENIED, findResult(newAction(DESCRIBE, TOPIC, "foo_bar"),
-            new MockAuthorizableRequestContext.Builder().
-                setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
-            newFooAcl(DESCRIBE, DENY)));
-        // These permissions all imply DESCRIBE_CONFIGS.
-        for (AclOperation op : asList(DESCRIBE_CONFIGS, ALTER_CONFIGS)) {
-            assertEquals(ALLOWED, findResult(newAction(DESCRIBE_CONFIGS, TOPIC, "foo_bar"),
-                new MockAuthorizableRequestContext.Builder().
-                    setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
-                newFooAcl(op, ALLOW)));
-        }
-        // Deny ACLs don't do "implication".
-        assertEquals(null, findResult(newAction(DESCRIBE_CONFIGS, TOPIC, "foo_bar"),
-            new MockAuthorizableRequestContext.Builder().
-                setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
-            newFooAcl(ALTER_CONFIGS, DENY)));
-        // Exact match
-        assertEquals(DENIED, findResult(newAction(ALTER_CONFIGS, TOPIC, "foo_bar"),
-            new MockAuthorizableRequestContext.Builder().
-                setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
-            newFooAcl(ALTER_CONFIGS, DENY)));
-    }
-
     static StandardAcl newBarAcl(AclOperation op, AclPermissionType permission) {
         return new StandardAcl(
             GROUP,
@@ -266,32 +218,40 @@ public class StandardAuthorizerTest {
             permission);
     }
 
-    @Test
-    public void testFindResultPrincipalMatching() throws Exception {
-        assertEquals(ALLOWED, findResult(newAction(READ, TOPIC, "foo_bar"),
-            new MockAuthorizableRequestContext.Builder().
-                setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
-            newFooAcl(READ, ALLOW)));
-        // Principal does not match.
-        assertEquals(null, findResult(newAction(READ, TOPIC, "foo_bar"),
-            new MockAuthorizableRequestContext.Builder().
-                setPrincipal(new KafkaPrincipal(USER_TYPE, "alice")).build(),
-            newFooAcl(READ, ALLOW)));
-        // Wildcard principal matches anything.
-        assertEquals(DENIED, findResult(newAction(READ, GROUP, "bar"),
-            new MockAuthorizableRequestContext.Builder().
-                setPrincipal(new KafkaPrincipal(USER_TYPE, "alice")).build(),
-            newBarAcl(READ, DENY)));
+    private static void assertContains(Iterable<AclBinding> iterable, StandardAcl... acls) {
+        HashSet<AclBinding> aclsToFind = new HashSet<>();
+        for (StandardAcl acl : acls) {
+            aclsToFind.add(acl.toBinding());
+        }
+        HashSet<AclBinding> originalAclsToFind = new HashSet<>(aclsToFind);
+        for (Iterator<AclBinding> iterator = iterable.iterator(); iterator.hasNext(); ) {
+            AclBinding acl = iterator.next();
+            assertTrue(aclsToFind.remove(acl), "Encountered unexpected ACL " + acl +
+                    ". Expected ACLs were: " + originalAclsToFind);
+
+        }
+        assertEquals(Collections.emptySet(), aclsToFind, "Unable to find ACL(s)");
     }
 
-    private static void assertContains(Iterable<AclBinding> iterable, StandardAcl... acls) {
-        Iterator<AclBinding> iterator = iterable.iterator();
-        for (int i = 0; iterator.hasNext(); i++) {
-            AclBinding acl = iterator.next();
-            assertTrue(i < acls.length, "Only expected " + i + " element(s)");
-            assertEquals(acls[i].toBinding(), acl, "Unexpected element " + i);
-        }
-        assertFalse(iterator.hasNext(), "Expected only " + acls.length + " element(s)");
+    private static void addAclsWithIds(
+        StandardAuthorizer authorizer,
+        List<StandardAclWithId> acls
+    ) {
+        Map<Uuid, Optional<StandardAcl>> aclChanges = new HashMap<>();
+        acls.forEach(a -> aclChanges.put(a.id(), Optional.of(a.acl())));
+        authorizer.applyAclChanges(aclChanges);
+    }
+
+    private static void addAcls(
+        StandardAuthorizer authorizer,
+        List<StandardAcl> acls
+    ) {
+        Map<Uuid, Optional<StandardAcl>> aclChanges = new HashMap<>();
+        acls.forEach(acl -> {
+            StandardAclWithId aclWithId = withId(acl);
+            aclChanges.put(aclWithId.id(), Optional.of(aclWithId.acl()));
+        });
+        authorizer.applyAclChanges(aclChanges);
     }
 
     @Test
@@ -303,11 +263,11 @@ public class StandardAuthorizerTest {
         List<StandardAclWithId> barAcls = asList(
             withId(newBarAcl(DESCRIBE_CONFIGS, DENY)),
             withId(newBarAcl(ALTER_CONFIGS, DENY)));
-        fooAcls.forEach(a -> authorizer.addAcl(a.id(), a.acl()));
-        barAcls.forEach(a -> authorizer.addAcl(a.id(), a.acl()));
+        addAclsWithIds(authorizer, fooAcls);
+        addAclsWithIds(authorizer, barAcls);
         assertContains(authorizer.acls(AclBindingFilter.ANY),
             fooAcls.get(0).acl(), fooAcls.get(1).acl(), barAcls.get(0).acl(), barAcls.get(1).acl());
-        authorizer.removeAcl(fooAcls.get(1).id());
+        authorizer.applyAclChanges(Collections.singletonMap(fooAcls.get(1).id(), Optional.empty()));
         assertContains(authorizer.acls(AclBindingFilter.ANY),
             fooAcls.get(0).acl(), barAcls.get(0).acl(), barAcls.get(1).acl());
         assertContains(authorizer.acls(new AclBindingFilter(new ResourcePatternFilter(
@@ -324,8 +284,8 @@ public class StandardAuthorizerTest {
         List<StandardAclWithId> barAcls = asList(
             withId(newBarAcl(DESCRIBE_CONFIGS, ALLOW)),
             withId(newBarAcl(ALTER_CONFIGS, ALLOW)));
-        fooAcls.forEach(a -> authorizer.addAcl(a.id(), a.acl()));
-        barAcls.forEach(a -> authorizer.addAcl(a.id(), a.acl()));
+        addAclsWithIds(authorizer, fooAcls);
+        addAclsWithIds(authorizer, barAcls);
         assertEquals(singletonList(ALLOWED),
             authorizer.authorize(new MockAuthorizableRequestContext.Builder().
                 setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
@@ -337,6 +297,30 @@ public class StandardAuthorizerTest {
     }
 
     @Test
+    public void testAuthorizeByResourceTYpe() throws Exception {
+        List<StandardAcl> acls = Arrays.asList(
+                new StandardAcl(GROUP, "foo", LITERAL, "User:*", "*", ALL, DENY),
+                new StandardAcl(GROUP, "foo", PREFIXED, "User:bob", "*", DESCRIBE, ALLOW),
+                new StandardAcl(TOPIC, "bar", PREFIXED, "User:alice", "*", READ, ALLOW),
+                new StandardAcl(TOPIC, "foo", LITERAL, "User:fred", "*", ALL, DENY)
+        );
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+        addAcls(authorizer, acls);
+        assertEquals(DENIED, authorizer.authorizeByResourceType(
+            new MockAuthorizableRequestContext.Builder().
+                setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
+                    READ, GROUP));
+        assertEquals(ALLOWED, authorizer.authorizeByResourceType(
+            new MockAuthorizableRequestContext.Builder().
+                setPrincipal(new KafkaPrincipal(USER_TYPE, "alice")).build(),
+                    READ, TOPIC));
+        assertEquals(DENIED, authorizer.authorizeByResourceType(
+            new MockAuthorizableRequestContext.Builder().
+                setPrincipal(new KafkaPrincipal(USER_TYPE, "jane")).build(),
+                    READ, TOPIC));
+    }
+
+    @Test
     public void testDenyPrecedenceWithOperationAll() throws Exception {
         StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
         List<StandardAcl> acls = Arrays.asList(
@@ -345,10 +329,7 @@ public class StandardAuthorizerTest {
             new StandardAcl(TOPIC, "foo", LITERAL, "User:*", "*", ALL, DENY),
             new StandardAcl(TOPIC, "foo", PREFIXED, "User:*", "*", DESCRIBE, ALLOW)
         );
-        acls.forEach(acl -> {
-            StandardAclWithId aclWithId = withId(acl);
-            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
-        });
+        addAcls(authorizer, acls);
         assertEquals(Arrays.asList(DENIED, DENIED, DENIED, ALLOWED), authorizer.authorize(
             newRequestContext("alice"),
             Arrays.asList(
@@ -374,10 +355,7 @@ public class StandardAuthorizerTest {
             new StandardAcl(TOPIC, "bar", PREFIXED, "User:alice", "*", ALL, ALLOW),
             new StandardAcl(TOPIC, "baz", LITERAL, "User:bob", "*", ALL, ALLOW)
         );
-        acls.forEach(acl -> {
-            StandardAclWithId aclWithId = withId(acl);
-            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
-        });
+        addAcls(authorizer, acls);
         assertEquals(Arrays.asList(ALLOWED, ALLOWED, DENIED), authorizer.authorize(
             newRequestContext("alice"),
             Arrays.asList(
@@ -418,12 +396,7 @@ public class StandardAuthorizerTest {
             new StandardAcl(TOPIC, "bar", LITERAL, "User:bob", host2.getHostAddress(), READ, ALLOW),
             new StandardAcl(TOPIC, "bar", LITERAL, "User:*", InetAddress.getLocalHost().getHostAddress(), DESCRIBE, ALLOW)
         );
-
-        acls.forEach(acl -> {
-            StandardAclWithId aclWithId = withId(acl);
-            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
-        });
-
+        addAcls(authorizer, acls);
         List<Action> actions = Arrays.asList(
             newAction(READ, TOPIC, "foo"),
             newAction(READ, TOPIC, "bar"),
@@ -468,10 +441,7 @@ public class StandardAuthorizerTest {
             new StandardAcl(GROUP, "*", LITERAL, "User:bob", "*", WRITE, ALLOW),
             new StandardAcl(GROUP, "wheel", LITERAL, "User:*", "*", WRITE, DENY)
         );
-        acls.forEach(acl -> {
-            StandardAclWithId aclWithId = withId(acl);
-            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
-        });
+        addAcls(authorizer, acls);
     }
 
     @Test
