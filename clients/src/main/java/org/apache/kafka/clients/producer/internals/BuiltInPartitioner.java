@@ -210,8 +210,11 @@ public class BuiltInPartitioner {
         // unready batch after the batch that disabled partition switch becomes ready).
         // As a result, with high latency.ms setting we end up switching partitions after producing
         // between stickyBatchSize and stickyBatchSize * 2 bytes, to better align with batch boundary.
-        if (producedBytes >= stickyBatchSize * 2)
-            log.trace("Exceeded {} bytes, produced {} bytes, enable is {}", stickyBatchSize * 2, producedBytes, enableSwitch);
+        if (producedBytes >= stickyBatchSize * 2) {
+            log.trace("Produced {} bytes, exceeding twice the batch size of {} bytes, with switching set to {}",
+                producedBytes, stickyBatchSize, enableSwitch);
+        }
+
         if (producedBytes >= stickyBatchSize && enableSwitch || producedBytes >= stickyBatchSize * 2) {
             // We've produced enough to this partition, switch to next.
             StickyPartitionInfo newPartitionInfo = new StickyPartitionInfo(nextPartition(cluster));
