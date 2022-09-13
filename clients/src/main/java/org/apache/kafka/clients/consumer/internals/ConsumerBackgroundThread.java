@@ -64,12 +64,10 @@ public class ConsumerBackgroundThread<K,V> extends KafkaThread implements AutoCl
     @Override
     public void run() {
         try {
-            while (!closed) {
-            }
+            // main loop
         } catch(Exception e) {
-            log.warn("exception caught.", e);
+            // Handle Exceptions
         }
-
     }
 
     @Override
