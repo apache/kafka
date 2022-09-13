@@ -114,12 +114,10 @@ public class SuppressionDurabilityIntegrationTest {
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
     private static final long COMMIT_INTERVAL = 100L;
 
-    @SuppressWarnings("deprecation")
     @Parameterized.Parameters(name = "{0}")
     public static Collection<String[]> data() {
         return Arrays.asList(new String[][] {
             {StreamsConfig.AT_LEAST_ONCE},
-            {StreamsConfig.EXACTLY_ONCE},
             {StreamsConfig.EXACTLY_ONCE_V2}
         });
     }

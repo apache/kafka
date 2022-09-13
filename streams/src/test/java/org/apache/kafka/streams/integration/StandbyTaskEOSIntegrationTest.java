@@ -49,13 +49,10 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -72,7 +69,6 @@ import static org.junit.Assert.assertTrue;
  * An integration test to verify the conversion of a dirty-closed EOS
  * task towards a standby task is safe across restarts of the application.
  */
-@RunWith(Parameterized.class)
 @Category(IntegrationTest.class)
 public class StandbyTaskEOSIntegrationTest {
     @Rule
@@ -81,17 +77,7 @@ public class StandbyTaskEOSIntegrationTest {
     private final static int KEY_0 = 0;
     private final static int KEY_1 = 1;
 
-    @SuppressWarnings("deprecation")
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<String[]> data() {
-        return asList(new String[][] {
-            {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_V2}
-        });
-    }
-
-    @Parameterized.Parameter
-    public String eosConfig;
+    public String eosConfig = StreamsConfig.EXACTLY_ONCE_V2;
 
     private final AtomicBoolean skipRecord = new AtomicBoolean(false);
 

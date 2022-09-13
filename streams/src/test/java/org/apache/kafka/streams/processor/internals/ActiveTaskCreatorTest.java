@@ -58,7 +58,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.closeTo;
-import static org.hamcrest.core.IsNot.not;
 import static org.junit.Assert.assertThrows;
 import static java.util.Collections.emptySet;
 
@@ -110,16 +109,6 @@ public class ActiveTaskCreatorTest {
     }
 
     @Test
-    public void shouldNoOpCloseTaskProducerIfEosDisabled() {
-        createTasks();
-
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 1));
-
-        assertThat(mockClientSupplier.producers.get(0).closed(), is(false));
-    }
-
-    @Test
     public void shouldReturnBlockedTimeWhenThreadProducer() {
         final double blockedTime = 123.0;
         createTasks();
@@ -130,18 +119,6 @@ public class ActiveTaskCreatorTest {
     }
 
     // error handling
-
-    @Test
-    public void shouldFailOnStreamsProducerPerTaskIfEosDisabled() {
-        createTasks();
-
-        final IllegalStateException thrown = assertThrows(
-            IllegalStateException.class,
-            () -> activeTaskCreator.streamsProducerForTask(null)
-        );
-
-        assertThat(thrown.getMessage(), is("Expected EXACTLY_ONCE to be enabled, but the processing mode was AT_LEAST_ONCE"));
-    }
 
     @Test
     public void shouldFailOnGetThreadProducerIfEosDisabled() {
@@ -168,155 +145,6 @@ public class ActiveTaskCreatorTest {
         assertThat(thrown.getMessage(), is("Thread producer encounter error trying to close."));
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
     }
-
-
-
-    // eos-alpha test
-
-    // functional test
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldReturnStreamsProducerPerTaskIfEosAlphaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-
-        shouldReturnStreamsProducerPerTask();
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldConstructProducerMetricsWithEosAlphaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-
-        shouldConstructProducerMetricsPerTask();
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldConstructClientIdWithEosAlphaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-        createTasks();
-
-        final Set<String> clientIds = activeTaskCreator.producerClientIds();
-
-        assertThat(clientIds, is(mkSet("clientId-StreamThread-0-0_0-producer", "clientId-StreamThread-0-0_1-producer")));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldNoOpCloseThreadProducerIfEosAlphaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-        createTasks();
-
-        activeTaskCreator.closeThreadProducerIfNeeded();
-
-        assertThat(mockClientSupplier.producers.get(0).closed(), is(false));
-        assertThat(mockClientSupplier.producers.get(1).closed(), is(false));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldCloseTaskProducersIfEosAlphaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-        createTasks();
-
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 1));
-        // should no-op unknown task
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 2));
-
-        assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
-        assertThat(mockClientSupplier.producers.get(1).closed(), is(true));
-
-        // should not throw because producer should be removed
-        mockClientSupplier.producers.get(0).closeException = new RuntimeException("KABOOM!");
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldReturnBlockedTimeWhenTaskProducers() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-        createTasks();
-        double total = 0.0;
-        double blocked = 1.0;
-        for (final MockProducer<?, ?> producer : mockClientSupplier.producers) {
-            addMetric(producer, "flush-time-ns-total", blocked);
-            total += blocked;
-            blocked += 1.0;
-        }
-
-        assertThat(activeTaskCreator.totalProducerBlockedTime(), closeTo(total, 0.01));
-    }
-
-    // error handling
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldFailForUnknownTaskOnStreamsProducerPerTaskIfEosAlphaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        createTasks();
-
-        {
-            final IllegalStateException thrown = assertThrows(
-                IllegalStateException.class,
-                () -> activeTaskCreator.streamsProducerForTask(null)
-            );
-
-            assertThat(thrown.getMessage(), is("Unknown TaskId: null"));
-        }
-        {
-            final IllegalStateException thrown = assertThrows(
-                IllegalStateException.class,
-                () -> activeTaskCreator.streamsProducerForTask(new TaskId(0, 2))
-            );
-
-            assertThat(thrown.getMessage(), is("Unknown TaskId: 0_2"));
-        }
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldFailOnGetThreadProducerIfEosAlphaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        createTasks();
-
-        final IllegalStateException thrown = assertThrows(
-            IllegalStateException.class,
-            activeTaskCreator::threadProducer
-        );
-
-        assertThat(thrown.getMessage(), is("Expected EXACTLY_ONCE_V2 to be enabled, but the processing mode was EXACTLY_ONCE_ALPHA"));
-    }
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldThrowStreamsExceptionOnErrorCloseTaskProducerIfEosAlphaEnabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-        createTasks();
-        mockClientSupplier.producers.get(0).closeException = new RuntimeException("KABOOM!");
-
-        final StreamsException thrown = assertThrows(
-            StreamsException.class,
-            () -> activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0))
-        );
-
-        assertThat(thrown.getMessage(), is("[0_0] task producer encounter error trying to close."));
-        assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
-
-        // should not throw again because producer should be removed
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
-    }
-
 
     // eos-v2 test
 
@@ -365,35 +193,7 @@ public class ActiveTaskCreatorTest {
         assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
     }
 
-    @Test
-    public void shouldNoOpCloseTaskProducerIfEosV2Enabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        createTasks();
-
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 0));
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(new TaskId(0, 1));
-
-        assertThat(mockClientSupplier.producers.get(0).closed(), is(false));
-    }
-
     // error handling
-
-    @Test
-    public void shouldFailOnStreamsProducerPerTaskIfEosV2Enabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        createTasks();
-
-        final IllegalStateException thrown = assertThrows(
-            IllegalStateException.class,
-            () -> activeTaskCreator.streamsProducerForTask(null)
-        );
-
-        assertThat(thrown.getMessage(), is("Expected EXACTLY_ONCE to be enabled, but the processing mode was EXACTLY_ONCE_V2"));
-    }
 
     @Test
     public void shouldThrowStreamsExceptionOnErrorCloseThreadProducerIfEosV2Enabled() {
@@ -409,44 +209,6 @@ public class ActiveTaskCreatorTest {
 
         assertThat(thrown.getMessage(), is("Thread producer encounter error trying to close."));
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
-    }
-
-    private void shouldReturnStreamsProducerPerTask() {
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        createTasks();
-
-        final StreamsProducer streamsProducer1 = activeTaskCreator.streamsProducerForTask(new TaskId(0, 0));
-        final StreamsProducer streamsProducer2 = activeTaskCreator.streamsProducerForTask(new TaskId(0, 1));
-
-        assertThat(streamsProducer1, not(is(streamsProducer2)));
-    }
-
-    private void shouldConstructProducerMetricsPerTask() {
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        createTasks();
-
-        final MetricName testMetricName1 = new MetricName("test_metric_1", "", "", new HashMap<>());
-        final Metric testMetric1 = new KafkaMetric(
-            new Object(),
-            testMetricName1,
-            (Measurable) (config, now) -> 0,
-            null,
-            new MockTime());
-        mockClientSupplier.producers.get(0).setMockMetrics(testMetricName1, testMetric1);
-        final MetricName testMetricName2 = new MetricName("test_metric_2", "", "", new HashMap<>());
-        final Metric testMetric2 = new KafkaMetric(
-            new Object(),
-            testMetricName2,
-            (Measurable) (config, now) -> 0,
-            null,
-            new MockTime());
-        mockClientSupplier.producers.get(0).setMockMetrics(testMetricName2, testMetric2);
-
-        final Map<MetricName, Metric> producerMetrics = activeTaskCreator.producerMetrics();
-
-        assertThat(producerMetrics, is(mkMap(mkEntry(testMetricName1, testMetric1), mkEntry(testMetricName2, testMetric2))));
     }
 
     private void shouldConstructThreadProducerMetric() {

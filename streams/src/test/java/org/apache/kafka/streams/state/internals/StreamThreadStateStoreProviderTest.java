@@ -424,7 +424,6 @@ public class StreamThreadStateStoreProviderTest {
                 streamsConfig,
                 "threadId",
                 clientSupplier,
-                new TaskId(0, 0),
                 UUID.randomUUID(),
                 logContext,
                 Time.SYSTEM

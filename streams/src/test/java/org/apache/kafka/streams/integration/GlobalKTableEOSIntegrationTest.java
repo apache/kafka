@@ -56,12 +56,9 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -71,7 +68,6 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-@RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
 public class GlobalKTableEOSIntegrationTest {
     @Rule
@@ -98,17 +94,7 @@ public class GlobalKTableEOSIntegrationTest {
         CLUSTER.stop();
     }
 
-    @SuppressWarnings("deprecation")
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<String[]> data() {
-        return Arrays.asList(new String[][] {
-            {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_V2}
-        });
-    }
-
-    @Parameterized.Parameter
-    public String eosConfig;
+    public String eosConfig = StreamsConfig.EXACTLY_ONCE_V2;
 
     private final MockTime mockTime = CLUSTER.time;
     private final KeyValueMapper<String, Long, Long> keyMapper = (key, value) -> value;

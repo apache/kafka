@@ -129,8 +129,7 @@ import static org.apache.kafka.common.config.ConfigDef.parseType;
  * </ul>
  *
  * If {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} is set to {@link #EXACTLY_ONCE_V2 "exactly_once_v2"},
- * {@link #EXACTLY_ONCE "exactly_once"} (deprecated), or {@link #EXACTLY_ONCE_BETA "exactly_once_beta"} (deprecated), Kafka Streams does not
- * allow users to overwrite the following properties (Streams setting shown in parentheses):
+ * Kafka Streams does not allow users to overwrite the following properties (Streams setting shown in parentheses):
  * <ul>
  *   <li>{@link ConsumerConfig#ISOLATION_LEVEL_CONFIG "isolation.level"} (read_committed) - Consumers will always read committed data only</li>
  *   <li>{@link ProducerConfig#ENABLE_IDEMPOTENCE_CONFIG "enable.idempotence"} (true) - Producer will always have idempotency enabled</li>
@@ -358,30 +357,20 @@ public class StreamsConfig extends AbstractConfig {
     public static final String AT_LEAST_ONCE = "at_least_once";
 
     /**
-     * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
-     * <p>
-     * Enabling exactly-once processing semantics requires broker version 0.11.0 or higher.
-     * If you enable this feature Kafka Streams will use more resources (like broker connections)
-     * compared to {@link #AT_LEAST_ONCE "at_least_once"} and {@link #EXACTLY_ONCE_V2 "exactly_once_v2"}.
+     * Former config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"}
      *
-     * @deprecated Since 3.0.0, will be removed in 4.0. Use {@link #EXACTLY_ONCE_V2 "exactly_once_v2"} instead.
+     * This option was removed in 4.0.0 and is only used to throw an instructive exception.
      */
-    @SuppressWarnings("WeakerAccess")
     @Deprecated
-    public static final String EXACTLY_ONCE = "exactly_once";
+    static final String EXACTLY_ONCE = "exactly_once";
 
     /**
-     * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
-     * <p>
-     * Enabling exactly-once (beta) requires broker version 2.5 or higher.
-     * If you enable this feature Kafka Streams will use fewer resources (like broker connections)
-     * compared to the {@link #EXACTLY_ONCE} (deprecated) case.
+     * Former config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"}
      *
-     * @deprecated Since 3.0.0, will be removed in 4.0. Use {@link #EXACTLY_ONCE_V2 "exactly_once_v2"} instead.
+     * This option was removed in 4.0.0 and is only used to throw an instructive exception.
      */
-    @SuppressWarnings("WeakerAccess")
     @Deprecated
-    public static final String EXACTLY_ONCE_BETA = "exactly_once_beta";
+    static final String EXACTLY_ONCE_BETA = "exactly_once_beta";
 
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
@@ -443,7 +432,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final String COMMIT_INTERVAL_MS_DOC = "The frequency in milliseconds with which to commit processing progress." +
         " For at-least-once processing, committing means to save the position (ie, offsets) of the processor." +
         " For exactly-once processing, it means to commit the transaction which includes to save the position and to make the committed data in the output topic visible to consumers with isolation level read_committed." +
-        " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE_V2 + "</code>, <code>" + EXACTLY_ONCE + "</code>,the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
+        " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE_V2 + "</code>, the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
         " otherwise the default value is <code>" + DEFAULT_COMMIT_INTERVAL_MS + "</code>.";
 
     /** {@code repartition.purge.interval.ms} */
@@ -584,8 +573,6 @@ public class StreamsConfig extends AbstractConfig {
     private static final String PROCESSING_GUARANTEE_DOC = "The processing guarantee that should be used. " +
         "Possible values are <code>" + AT_LEAST_ONCE + "</code> (default) " +
         "and <code>" + EXACTLY_ONCE_V2 + "</code> (requires brokers version 2.5 or higher). " +
-        "Deprecated options are <code>" + EXACTLY_ONCE + "</code> (requires brokers version 0.11.0 or higher) " +
-        "and <code>" + EXACTLY_ONCE_BETA + "</code> (requires brokers version 2.5 or higher). " +
         "Note that exactly-once processing requires a cluster of at least three brokers by default what is the " +
         "recommended setting for production; for development you can change this, by adjusting broker setting " +
         "<code>transaction.state.log.replication.factor</code> and <code>transaction.state.log.min.isr</code>.";
@@ -816,7 +803,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(PROCESSING_GUARANTEE_CONFIG,
                     Type.STRING,
                     AT_LEAST_ONCE,
-                    in(AT_LEAST_ONCE, EXACTLY_ONCE, EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2),
+                    (name, value) -> validateProcessingConfiguration((String) value),
                     Importance.MEDIUM,
                     PROCESSING_GUARANTEE_DOC)
             .define(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
@@ -1247,17 +1234,6 @@ public class StreamsConfig extends AbstractConfig {
         super(CONFIG, props, doLog);
         eosEnabled = StreamsConfigUtils.eosEnabled(this);
 
-        final String processingModeConfig = getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG);
-        if (processingModeConfig.equals(EXACTLY_ONCE)) {
-            log.warn("Configuration parameter `{}` is deprecated and will be removed in the 4.0.0 release. " +
-                         "Please use `{}` instead. Note that this requires broker version 2.5+ so you should prepare "
-                         + "to upgrade your brokers if necessary.", EXACTLY_ONCE, EXACTLY_ONCE_V2);
-        }
-        if (processingModeConfig.equals(EXACTLY_ONCE_BETA)) {
-            log.warn("Configuration parameter `{}` is deprecated and will be removed in the 4.0.0 release. " +
-                         "Please use `{}` instead.", EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2);
-        }
-
         if (props.containsKey(RETRIES_CONFIG)) {
             log.warn("Configuration parameter `{}` is deprecated and will be removed in the 4.0.0 release.", RETRIES_CONFIG);
         }
@@ -1329,6 +1305,20 @@ public class StreamsConfig extends AbstractConfig {
                                           "Tag value exceeds maximum length of " + MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH + ".");
             }
         });
+    }
+
+    private static void validateProcessingConfiguration(final String processingModeConfig) {
+        if (processingModeConfig.equals(EXACTLY_ONCE)) {
+            throw new ConfigException(String.format("Configuration parameter `%s` was removed in the 4.0.0 release. " +
+                "Please use `%s` instead. Note that this requires broker version 2.5+ so you should prepare "
+                + "to upgrade your brokers if necessary.", EXACTLY_ONCE, EXACTLY_ONCE_V2));
+        }
+        if (processingModeConfig.equals(EXACTLY_ONCE_BETA)) {
+            throw new ConfigException(String.format("Configuration parameter `%s` was removed in the 4.0.0 release. " +
+                "Please use `%s` instead. Note that this requires broker version 2.5+ so you should prepare "
+                + "to upgrade your brokers if necessary.", EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2));
+        }
+        in(AT_LEAST_ONCE, EXACTLY_ONCE_V2).ensureValid(PROCESSING_GUARANTEE_CONFIG, processingModeConfig);
     }
 
     private Map<String, Object> getCommonConsumerConfigs() {
@@ -1579,11 +1569,6 @@ public class StreamsConfig extends AbstractConfig {
         final Map<String, Object> props = new HashMap<>(eosEnabled ? PRODUCER_EOS_OVERRIDES : PRODUCER_DEFAULT_OVERRIDES);
         props.putAll(getClientCustomProps());
         props.putAll(clientProvidedProps);
-
-        // When using EOS alpha, stream should auto-downgrade the transactional commit protocol to be compatible with older brokers.
-        if (StreamsConfigUtils.processingMode(this) == StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA) {
-            props.put("internal.auto.downgrade.txn.commit", true);
-        }
 
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix

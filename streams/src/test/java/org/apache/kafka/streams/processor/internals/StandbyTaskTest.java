@@ -504,37 +504,6 @@ public class StandbyTaskTest {
         assertEquals(Task.State.CLOSED, task.state());
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDeleteStateDirOnTaskCreatedAndEosAlphaUncleanClose() {
-        stateManager.close();
-        EasyMock.expectLastCall();
-
-        EasyMock.expect(stateManager.baseDir()).andReturn(baseDir);
-
-        EasyMock.replay(stateManager);
-
-        final MetricName metricName = setupCloseTaskMetric();
-
-        config = new StreamsConfig(mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, applicationId),
-            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE)
-        )));
-
-        task = createStandbyTask();
-        task.suspend();
-
-        task.closeDirty();
-
-        final double expectedCloseTaskMetric = 1.0;
-        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
-
-        EasyMock.verify(stateManager);
-
-        assertEquals(Task.State.CLOSED, task.state());
-    }
-
     @Test
     public void shouldDeleteStateDirOnTaskCreatedAndEosV2UncleanClose() {
         stateManager.close();
