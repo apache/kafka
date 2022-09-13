@@ -48,6 +48,11 @@ public class HeartbeatResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
     public Errors error() {
         return Errors.forCode(data.errorCode());
     }

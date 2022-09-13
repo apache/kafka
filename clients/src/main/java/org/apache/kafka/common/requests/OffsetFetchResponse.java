@@ -245,6 +245,11 @@ public class OffsetFetchResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
     public boolean hasError() {
         return error != Errors.NONE;
     }

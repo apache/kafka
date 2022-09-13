@@ -95,10 +95,13 @@ class RequestHandlerHelper(
 
   def sendForwardedResponse(request: RequestChannel.Request,
                             response: AbstractResponse): Unit = {
-    // For forwarded requests, we take the throttle time from the broker that
-    // the request was forwarded to
-    val throttleTimeMs = response.throttleTimeMs()
-    throttle(quotas.request, request, throttleTimeMs)
+    // For requests forwarded to the controller, we take the maximum of the local
+    // request throttle and the throttle sent by the controller in the response.
+    val controllerThrottleTimeMs = response.throttleTimeMs()
+    val requestThrottleTimeMs = maybeRecordAndGetThrottleTimeMs(request)
+    val appliedThrottleTimeMs = math.max(controllerThrottleTimeMs, requestThrottleTimeMs)
+    throttle(quotas.request, request, appliedThrottleTimeMs)
+    response.maybeSetThrottleTimeMs(appliedThrottleTimeMs)
     requestChannel.sendResponse(request, response, None)
   }
 
