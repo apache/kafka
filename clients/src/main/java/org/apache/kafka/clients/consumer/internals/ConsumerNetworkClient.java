@@ -222,7 +222,7 @@ public class ConsumerNetworkClient implements Closeable {
      * @param disableWakeup true if we should not check for wakeups, false otherwise
      *
      * @return true if the future is done, false otherwise
-     * @throws WakeupException if {@link #wakeup()} is called from another thread
+     * @throws WakeupException if {@link #wakeup()} is called from another thread and `disableWakeup` is false
      * @throws InterruptException if the calling thread is interrupted
      */
     public boolean poll(RequestFuture<?> future, Timer timer, boolean disableWakeup) {
