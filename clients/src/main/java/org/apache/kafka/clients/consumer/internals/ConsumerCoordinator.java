@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.time.Duration;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.clients.GroupRebalanceConfig;
@@ -489,8 +488,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private boolean coordinatorUnknownAndUnready(Timer timer) {
+    private boolean coordinatorUnknownAndUnreadySync(Timer timer) {
         return coordinatorUnknown() && !ensureCoordinatorReady(timer);
+    }
+
+    private boolean coordinatorUnknownAndUnreadyAsync() {
+        return coordinatorUnknown() && !ensureCoordinatorReadyAsync();
     }
 
     /**
@@ -518,7 +521,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // Always update the heartbeat last poll time so that the heartbeat thread does not leave the
             // group proactively due to application inactivity even if (say) the coordinator cannot be found.
             pollHeartbeat(timer.currentTimeMs());
-            if (coordinatorUnknownAndUnready(timer)) {
+            if (coordinatorUnknownAndUnreadySync(timer)) {
                 return false;
             }
 
@@ -1069,7 +1072,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (offsets.isEmpty()) {
             // No need to check coordinator if offsets is empty since commit of empty offsets is completed locally.
             future = doCommitOffsetsAsync(offsets, callback);
-        } else if (!coordinatorUnknownAndUnready(time.timer(Duration.ZERO))) {
+        } else if (!coordinatorUnknownAndUnreadyAsync()) {
             // we need to make sure coordinator is ready before committing, since
             // this is for async committing we do not try to block, but just try once to
             // clear the previous discover-coordinator future, resend, or get responses;
@@ -1158,7 +1161,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return true;
 
         do {
-            if (coordinatorUnknownAndUnready(timer)) {
+            if (coordinatorUnknownAndUnreadySync(timer)) {
                 return false;
             }
 
