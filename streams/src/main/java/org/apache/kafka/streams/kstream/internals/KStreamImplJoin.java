@@ -185,7 +185,6 @@ class KStreamImplJoin {
             thisWindowStore.name(),
             internalWindows,
             joiner,
-            AbstractStream.reverseJoinerWithKey(joiner),
             sharedTimeTracker
         );
 

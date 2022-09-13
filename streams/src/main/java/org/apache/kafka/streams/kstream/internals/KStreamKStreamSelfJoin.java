@@ -42,7 +42,6 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
     private final long joinOtherBeforeMs;
     private final long joinOtherAfterMs;
     private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joinerThis;
-    private final ValueJoinerWithKey<? super K, ? super V2, ? super V1, ? extends VOut> joinerOther;
 
     private final TimeTracker sharedTimeTracker;
 
@@ -50,7 +49,6 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
         final String windowName,
         final JoinWindowsInternal windows,
         final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joinerThis,
-        final ValueJoinerWithKey<? super K, ? super V2, ? super V1, ? extends VOut> joinerOther,
         final TimeTracker sharedTimeTracker) {
 
         this.windowName = windowName;
@@ -59,7 +57,6 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
         this.joinOtherBeforeMs = windows.afterMs;
         this.joinOtherAfterMs = windows.beforeMs;
         this.joinerThis = joinerThis;
-        this.joinerOther = joinerOther;
         this.sharedTimeTracker = sharedTimeTracker;
     }
 
@@ -92,20 +89,17 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
             long timeFrom = Math.max(0L, inputRecordTimestamp - joinThisBeforeMs);
             long timeTo = Math.max(0L, inputRecordTimestamp + joinThisAfterMs);
             boolean emittedJoinWithSelf = false;
-
+            final Record selfRecord = record
+                .withValue(joinerThis.apply(record.key(), record.value(), (V2) record.value()))
+                .withTimestamp(inputRecordTimestamp);
             sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
 
             // Join current record with other
-            System.out.println("----> Window store fetch, timeFrom=" + timeFrom + " timeTo=" + timeTo);
             try (final WindowStoreIterator<V2> iter = windowStore.fetch(
                 record.key(), timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     final KeyValue<Long, V2> otherRecord = iter.next();
                     final long otherRecordTimestamp = otherRecord.key;
-
-                    System.out.println("----> Join this with other. Result = " + record.withValue(
-                        joinerThis.apply(record.key(), record.value(), otherRecord.value))
-                        .withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
 
                     // Join this with other
                     context().forward(
@@ -117,11 +111,8 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
 
             // Needs to be in a different loop to ensure correct ordering of records where
             // correct ordering means it matches the output of an inner join.
-
-            // Join other with current record
             timeFrom = Math.max(0L, inputRecordTimestamp - joinOtherBeforeMs);
             timeTo = Math.max(0L, inputRecordTimestamp + joinOtherAfterMs);
-            System.out.println("----> Window store fetch, timeFrom=" + timeFrom + " timeTo=" + timeTo);
             try (final WindowStoreIterator<V2> iter2 = windowStore.fetch(
                 record.key(), timeFrom, timeTo)) {
                 while (iter2.hasNext()) {
@@ -130,42 +121,23 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
                     final long maxRecordTimestamp = Math.max(inputRecordTimestamp, otherRecordTimestamp);
 
                     // This is needed so that output records follow timestamp order
+                    // Join this with self
                     if (inputRecordTimestamp < maxRecordTimestamp && !emittedJoinWithSelf) {
                         emittedJoinWithSelf = true;
-                        System.out.println("----> Self timeFrom=" + timeFrom + " timeTo=" + timeTo);
-                        System.out.println("----> Join this with self. Result = " + record.withValue(
-                                joinerThis.apply(record.key(), record.value(), (V2) record.value()))
-                            .withTimestamp(inputRecordTimestamp));
-
-                        context().forward(
-                            record.withValue(joinerThis.apply(
-                                    record.key(), record.value(), (V2) record.value()))
-                                .withTimestamp(inputRecordTimestamp));
+                        context().forward(selfRecord);
                     }
 
-                    System.out.println("----> Join other with this. Result = " + record.withValue(
-                        joinerThis.apply(record.key(), (V1) otherRecord.value, (V2) record.value()))
-                        .withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
-
+                    // Join other with current record
                     context().forward(
-                        record.withValue(joinerThis.apply(
-                                record.key(), (V1) otherRecord.value, (V2) record.value()))
-                            .withTimestamp(Math.max(inputRecordTimestamp,
-                                                    otherRecordTimestamp)));
+                        record
+                            .withValue(joinerThis.apply(record.key(), (V1) otherRecord.value, (V2) record.value()))
+                            .withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
                 }
             }
 
-            // Join current with itself
+            // Join this with self
             if (!emittedJoinWithSelf) {
-                System.out.println("----> Self timeFrom=" + timeFrom + " timeTo=" + timeTo);
-                System.out.println("----> Join this with self. Result = " + record.withValue(
-                        joinerThis.apply(record.key(), record.value(), (V2) record.value()))
-                    .withTimestamp(inputRecordTimestamp));
-
-                context().forward(
-                    record.withValue(joinerThis.apply(
-                            record.key(), record.value(), (V2) record.value()))
-                        .withTimestamp(inputRecordTimestamp));
+                context().forward(selfRecord);
             }
         }
     }
