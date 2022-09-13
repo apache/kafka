@@ -104,7 +104,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
-            "--bootstrap-servers", cluster.bootstrapServers(),
+            "--bootstrap-server", cluster.bootstrapServers(),
             "--input-topics", NON_EXISTING_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
@@ -128,7 +128,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
-            "--bootstrap-servers", cluster.bootstrapServers(),
+            "--bootstrap-server", cluster.bootstrapServers(),
             "--input-topics", NON_EXISTING_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
@@ -144,7 +144,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
-            "--bootstrap-servers", cluster.bootstrapServers(),
+            "--bootstrap-server", cluster.bootstrapServers(),
             "--intermediate-topics", NON_EXISTING_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
@@ -160,7 +160,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
-            "--bootstrap-servers", cluster.bootstrapServers(),
+            "--bootstrap-server", cluster.bootstrapServers(),
             "--internal-topics", NON_EXISTING_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
@@ -176,7 +176,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
-            "--bootstrap-servers", cluster.bootstrapServers(),
+            "--bootstrap-server", cluster.bootstrapServers(),
             "--internal-topics", INPUT_TOPIC
         };
         final Properties cleanUpConfig = new Properties();

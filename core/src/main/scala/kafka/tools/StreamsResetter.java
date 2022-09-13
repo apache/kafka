@@ -91,6 +91,7 @@ public class StreamsResetter {
     private static final int EXIT_CODE_SUCCESS = 0;
     private static final int EXIT_CODE_ERROR = 1;
 
+    private static OptionSpec<String> bootstrapServersOption;
     private static OptionSpec<String> bootstrapServerOption;
     private static OptionSpec<String> applicationIdOption;
     private static OptionSpec<String> inputTopicsOption;
@@ -155,7 +156,10 @@ public class StreamsResetter {
             if (options.has(commandConfigOption)) {
                 properties.putAll(Utils.loadProps(options.valueOf(commandConfigOption)));
             }
-            properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
+
+            properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.has(bootstrapServerOption)
+                ? options.valueOf(bootstrapServerOption)
+                : options.valueOf(bootstrapServersOption));
 
             adminClient = Admin.create(properties);
             maybeDeleteActiveConsumers(groupId, adminClient);
@@ -213,8 +217,12 @@ public class StreamsResetter {
             .ofType(String.class)
             .describedAs("id")
             .required();
-        bootstrapServerOption = optionParser.accepts("bootstrap-servers", "Comma-separated list of broker urls with format: HOST1:PORT1,HOST2:PORT2")
-            .withRequiredArg()
+        bootstrapServerOption = optionParser.accepts("bootstrap-server", "The server(s) to use for bootstrapping.")
+            .withOptionalArg()
+            .ofType(String.class)
+            .describedAs("Server(s) to use for bootstrapping");
+        bootstrapServersOption = optionParser.accepts("bootstrap-servers", "DEPRECATED: Comma-separated list of broker urls with format: HOST1:PORT1,HOST2:PORT2")
+            .withOptionalArg()
             .ofType(String.class)
             .defaultsTo("localhost:9092")
             .describedAs("urls");
@@ -273,6 +281,9 @@ public class StreamsResetter {
             }
             if (options.has(versionOption)) {
                 CommandLineUtils.printVersionAndDie();
+            }
+            if (options.has(bootstrapServerOption) && options.has(bootstrapServersOption)) {
+                CommandLineUtils.printUsageAndDie(optionParser, "Please specify only one of bootstrap-server, bootstrap-servers");
             }
         } catch (final OptionException e) {
             CommandLineUtils.printUsageAndDie(optionParser, e.getMessage());
