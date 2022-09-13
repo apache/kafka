@@ -759,6 +759,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // async commit offsets prior to rebalance if auto-commit enabled
         // and there is no in-flight offset commit request
         if (autoCommitEnabled && autoCommitOffsetRequestFuture == null) {
+            maybeMarkPartitionsPendingRevocation();
             autoCommitOffsetRequestFuture = maybeAutoCommitOffsetsAsync();
         }
 
@@ -857,6 +858,22 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             throw new KafkaException("User rebalance callback throws an error", exception);
         }
         return true;
+    }
+
+    private void maybeMarkPartitionsPendingRevocation() {
+        if (protocol != RebalanceProtocol.EAGER) {
+            return;
+        }
+
+        // When asynchronously committing offsets prior to the revocation of a set of partitions, there will be a
+        // window of time between when the offset commit is sent and when it returns and revocation completes. It is
+        // possible for pending fetches for these partitions to return during this time, which means the application's
+        // position may get ahead of the committed position prior to revocation. This can cause duplicate consumption.
+        // To prevent this, we mark the partitions as "pending revocation," which stops the Fetcher from sending new
+        // fetches or returning data from previous fetches to the user.
+        Set<TopicPartition> partitions = subscriptions.assignedPartitions();
+        log.debug("Marking assigned partitions pending for revocation: {}", partitions);
+        subscriptions.markPendingRevocation(partitions);
     }
 
     @Override
