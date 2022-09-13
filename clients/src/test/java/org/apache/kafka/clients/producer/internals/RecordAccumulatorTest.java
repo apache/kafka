@@ -1105,7 +1105,7 @@ public class RecordAccumulatorTest {
             BuiltInPartitioner.mockRandom = () -> mockRandom.getAndAdd(1);
 
             long totalSize = 1024 * 1024;
-            int batchSize = 128;  // note that this is also a "sticky" limit for the partitioner
+            int batchSize = 1024;  // note that this is also a "sticky" limit for the partitioner
             RecordAccumulator accum = createTestRecordAccumulator(batchSize, totalSize, CompressionType.NONE, 0);
 
             // Set up callbacks so that we know what partition is chosen.
@@ -1129,13 +1129,13 @@ public class RecordAccumulatorTest {
             assertEquals(1, mockRandom.get());
 
             // Produce large record, we should exceed "sticky" limit, but produce to this partition
-            // as we switch after the "sticky" limit is exceeded.  The partition is switched after
-            // we produce.
+            // as we try to switch after the "sticky" limit is exceeded.  The switch is disabled
+            // because of incomplete batch.
             byte[] largeValue = new byte[batchSize];
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
             assertEquals(partition1, partition.get());
-            assertEquals(2, mockRandom.get());
+            assertEquals(1, mockRandom.get());
 
             // Produce large record, we switched to next partition by previous produce, but
             // for this produce the switch would be disabled because of incomplete batch.
