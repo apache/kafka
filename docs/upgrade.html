@@ -61,11 +61,6 @@
     </li>
 </ol>
 
-<p>Note that upgrading client to 3.3.0 would introduce a new Sticky Partitioner, described in
-   <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-794%3A+Strictly+Uniform+Sticky+Partitioner">KIP-794</a>.
-   It is used for messages without keys when <code>partitioner.class</code> is not specified. The old default partitioning logic could be
-   restored by setting <code>partitioner.class=org.apache.kafka.clients.producer.internals.DefaultPartitioner</code></p>
-
 <h4><a id="upgrade_3_3_0" href="#upgrade_3_3_0">Upgrading a KRaft-based cluster to 3.3.0 from any version 3.0.x through 3.2.x</a></h4>
 
 <p><b>If you are upgrading from a version prior to 3.3.0, please see the note below. Once you have changed the metadata.version to the latest version, it will not be possible to downgrade to a version prior to 3.3-IV0.</b></p>
@@ -91,6 +86,11 @@
             if already registered. Note that this behaviour is different from <code>addMetric</code> API which throws an <code>IllegalArgumentException</code> when
             trying to create an already existing metric. (See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-843%3A+Adding+addMetricIfAbsent+method+to+Metrics">KIP-843</a>
             for more details).
+        </li>
+        <li>The partitioner used by default for records with no keys has been improved to avoid pathological behavior when one or more brokers are slow.
+            The new logic may affect the batching behavior, which can be tuned using the <code>batch.size</code> and/or <code>linger.ms</code> configuration settings.
+            The previous behavior can be restored by setting <code>partitioner.class=org.apache.kafka.clients.producer.internals.DefaultPartitioner</code>.
+            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-794%3A+Strictly+Uniform+Sticky+Partitioner">KIP-794</a> for more details.
         </li>
     </ul>
 
