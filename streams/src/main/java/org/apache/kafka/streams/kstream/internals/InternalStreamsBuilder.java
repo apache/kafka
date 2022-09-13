@@ -331,7 +331,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             maybeOptimizeRepartitionOperations();
         }
         if (optimizationConfigs.contains(StreamsConfig.OPTIMIZE)
-            || optimizationConfigs.contains(StreamsConfig.SELF_JOIN)) {
+            || optimizationConfigs.contains(StreamsConfig.SINGLE_STORE_SELF_JOIN)) {
             LOG.debug("Optimizing the Kafka Streams graph for self-joins");
             rewriteSelfJoin(root, new IdentityHashMap<>());
         }
@@ -389,26 +389,30 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     }
 
     /**
-     * The self-join rewriting can be applied if rhe StreamStreamJoinNode has a single parent.
+     * The self-join rewriting can be applied if the StreamStreamJoinNode has a single parent.
      * If the join is a self-join, remove the node KStreamJoinWindow corresponding to the
-     * right argument of the join (the "other").
+     * right argument of the join (the "other"). The join node may have multiple siblings but for
+     * this rewriting we only care about the ThisKStreamJoinWindow and the OtherKStreamJoinWindow.
+     * We iterate over all the siblings to identify these two nodes so that we can remove the
+     * latter.
      */
     @SuppressWarnings("unchecked")
     private void rewriteSelfJoin(
         final GraphNode currentNode, final Map<GraphNode, Boolean> visited) {
         visited.put(currentNode, true);
         if (currentNode instanceof StreamStreamJoinNode && currentNode.parentNodes().size() == 1) {
-            ((StreamStreamJoinNode) currentNode).setSelfJoin();
+            final StreamStreamJoinNode joinNode = (StreamStreamJoinNode) currentNode;
+            joinNode.setSelfJoin();
             // Remove JoinOtherWindowed node
-            final GraphNode parent = currentNode.parentNodes().stream().findFirst().get();
+            final GraphNode parent = joinNode.parentNodes().stream().findFirst().get();
             GraphNode left = null, right = null;
             for (final GraphNode child: parent.children()) {
                 if (child instanceof  ProcessorGraphNode
                     && isStreamJoinWindowNode((ProcessorGraphNode) child)
-                    && child.buildPriority() < currentNode.buildPriority()) {
-                    if (left == null) {
+                    && child.buildPriority() < joinNode.buildPriority()) {
+                    if (child.nodeName().equals(joinNode.getThisWindowedStreamProcessorParameters().processorName())) {
                         left = child;
-                    } else {
+                    } else if (child.nodeName().equals(joinNode.getOtherWindowedStreamProcessorParameters().processorName())) {
                         right = child;
                     }
                 }

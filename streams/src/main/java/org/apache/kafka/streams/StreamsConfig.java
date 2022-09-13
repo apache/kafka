@@ -262,7 +262,7 @@ public class StreamsConfig extends AbstractConfig {
      * for enabling the optimization that optimizes inner stream-stream joins into self-joins when
      * both arguments are the same stream.
      */
-    public static final String SELF_JOIN = "self.join";
+    public static final String SINGLE_STORE_SELF_JOIN = "single.store.self.join";
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.0.x}.
@@ -1670,7 +1670,8 @@ public class StreamsConfig extends AbstractConfig {
 
     public static List<String> verifyTopologyOptimizationConfigs(final String config) {
         final List<String> acceptableConfigs = Arrays.asList(
-            OPTIMIZE, NO_OPTIMIZATION, REUSE_KTABLE_SOURCE_TOPICS, MERGE_REPARTITION_TOPICS, SELF_JOIN);
+            OPTIMIZE, NO_OPTIMIZATION, REUSE_KTABLE_SOURCE_TOPICS, MERGE_REPARTITION_TOPICS,
+            SINGLE_STORE_SELF_JOIN);
         final List<String> configs = Arrays.asList(config.split("\\s*,\\s*"));
         // Verify it doesn't contain none or all plus a list of optimizations
         if (configs.contains(NO_OPTIMIZATION) || configs.contains(OPTIMIZE)) {
