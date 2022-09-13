@@ -22,7 +22,6 @@ import org.apache.kafka.common.config.ConfigDef.ValidString;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
@@ -320,11 +319,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     List<MetricsReporter> metricsReporters() {
-        List<MetricsReporter> reporters = getConfiguredInstances(
-                CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
-        JmxReporter jmxReporter = new JmxReporter();
-        jmxReporter.configure(this.originals());
-        reporters.add(jmxReporter);
+        List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(this);
         MetricsContext metricsContext = new KafkaMetricsContext("kafka.connect.mirror");
 
         for (MetricsReporter reporter : reporters) {
@@ -478,6 +473,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
         }
     }
 
+    @SuppressWarnings("deprecation")
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = ConnectorConfig.configDef()
             .define(
                     ENABLED,
@@ -720,6 +716,13 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     in(Utils.enumOptions(SecurityProtocol.class)),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .define(
+                    CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG,
+                    ConfigDef.Type.BOOLEAN,
+                    true,
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC
+            )
             .withClientSslSupport()
             .withClientSaslSupport();
 }

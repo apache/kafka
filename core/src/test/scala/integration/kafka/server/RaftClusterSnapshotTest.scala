@@ -78,14 +78,15 @@ class RaftClusterSnapshotTest {
             raftManager.replicatedLog.latestSnapshot.get(),
             new MetadataRecordSerde(),
             BufferSupplier.create(),
-            1
+            1,
+            true
           )
         ) { snapshot =>
           // Check that the snapshot is non-empty
-          assertTrue(snapshot.hasNext())
+          assertTrue(snapshot.hasNext)
 
           // Check that we can read the entire snapshot
-          while (snapshot.hasNext()) {
+          while (snapshot.hasNext) {
             val batch = snapshot.next()
             assertTrue(batch.sizeInBytes > 0)
             assertNotEquals(Collections.emptyList(), batch.records())

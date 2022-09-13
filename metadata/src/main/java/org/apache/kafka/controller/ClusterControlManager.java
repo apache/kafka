@@ -60,6 +60,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -218,6 +219,14 @@ public class ClusterControlManager {
     private final TimelineHashMap<Integer, BrokerRegistration> brokerRegistrations;
 
     /**
+     * Save the offset of each broker registration record, we will only unfence a
+     * broker when its high watermark has reached its broker registration record,
+     * this is not necessarily the exact offset of each broker registration record
+     * but should not be smaller than it.
+     */
+    private final TimelineHashMap<Integer, Long> registerBrokerRecordOffsets;
+
+    /**
      * A reference to the controller's metrics registry.
      */
     private final ControllerMetrics controllerMetrics;
@@ -255,6 +264,7 @@ public class ClusterControlManager {
         this.sessionTimeoutNs = sessionTimeoutNs;
         this.replicaPlacer = replicaPlacer;
         this.brokerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.registerBrokerRecordOffsets = new TimelineHashMap<>(snapshotRegistry, 0);
         this.heartbeatManager = null;
         this.readyBrokersFuture = Optional.empty();
         this.controllerMetrics = metrics;
@@ -343,19 +353,16 @@ public class ClusterControlManager {
                 setSecurityProtocol(listener.securityProtocol()));
         }
         for (BrokerRegistrationRequestData.Feature feature : request.features()) {
-            Optional<Short> finalized = finalizedFeatures.get(feature.name());
-            if (finalized.isPresent()) {
-                if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized.get())) {
-                    throw new UnsupportedVersionException("Unable to register because " +
-                            "the broker has an unsupported version of " + feature.name());
-                }
-            } else {
-                log.warn("Broker registered with feature {} that is unknown to the controller", feature.name());
-            }
-            record.features().add(new BrokerFeature().
-                setName(feature.name()).
-                setMinSupportedVersion(feature.minSupportedVersion()).
-                setMaxSupportedVersion(feature.maxSupportedVersion()));
+            record.features().add(processRegistrationFeature(brokerId, finalizedFeatures, feature));
+        }
+        if (request.features().find(MetadataVersion.FEATURE_NAME) == null) {
+            // Brokers that don't send a supported metadata.version range are assumed to only
+            // support the original metadata.version.
+            record.features().add(processRegistrationFeature(brokerId, finalizedFeatures,
+                    new BrokerRegistrationRequestData.Feature().
+                            setName(MetadataVersion.FEATURE_NAME).
+                            setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                            setMaxSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel())));
         }
 
         heartbeatManager.register(brokerId, record.fenced());
@@ -366,7 +373,38 @@ public class ClusterControlManager {
         return ControllerResult.atomicOf(records, new BrokerRegistrationReply(brokerEpoch));
     }
 
-    public void replay(RegisterBrokerRecord record) {
+    BrokerFeature processRegistrationFeature(
+        int brokerId,
+        FinalizedControllerFeatures finalizedFeatures,
+        BrokerRegistrationRequestData.Feature feature
+    ) {
+        Optional<Short> finalized = finalizedFeatures.get(feature.name());
+        if (finalized.isPresent()) {
+            if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized.get())) {
+                throw new UnsupportedVersionException("Unable to register because the broker " +
+                    "does not support version " + finalized.get() + " of " + feature.name() +
+                        ". It wants a version between " + feature.minSupportedVersion() + " and " +
+                        feature.maxSupportedVersion() + ", inclusive.");
+            }
+        } else {
+            log.warn("Broker {} registered with feature {} that is unknown to the controller",
+                    brokerId, feature.name());
+        }
+        return new BrokerFeature().
+                setName(feature.name()).
+                setMinSupportedVersion(feature.minSupportedVersion()).
+                setMaxSupportedVersion(feature.maxSupportedVersion());
+    }
+
+    public OptionalLong registerBrokerRecordOffset(int brokerId) {
+        if (registerBrokerRecordOffsets.containsKey(brokerId)) {
+            return OptionalLong.of(registerBrokerRecordOffsets.get(brokerId));
+        }
+        return OptionalLong.empty();
+    }
+
+    public void replay(RegisterBrokerRecord record, long offset) {
+        registerBrokerRecordOffsets.put(record.brokerId(), offset);
         int brokerId = record.brokerId();
         List<Endpoint> listeners = new ArrayList<>();
         for (BrokerEndpoint endpoint : record.endPoints()) {
@@ -401,14 +439,15 @@ public class ClusterControlManager {
     }
 
     public void replay(UnregisterBrokerRecord record) {
+        registerBrokerRecordOffsets.remove(record.brokerId());
         int brokerId = record.brokerId();
         BrokerRegistration registration = brokerRegistrations.get(brokerId);
         if (registration == null) {
             throw new RuntimeException(String.format("Unable to replay %s: no broker " +
-                "registration found for that id", record.toString()));
+                "registration found for that id", record));
         } else if (registration.epoch() != record.brokerEpoch()) {
             throw new RuntimeException(String.format("Unable to replay %s: no broker " +
-                "registration with that epoch found", record.toString()));
+                "registration with that epoch found", record));
         } else {
             if (heartbeatManager != null) heartbeatManager.remove(brokerId);
             brokerRegistrations.remove(brokerId);
@@ -422,7 +461,7 @@ public class ClusterControlManager {
             record,
             record.id(),
             record.epoch(),
-            BrokerRegistrationFencingChange.UNFENCE.asBoolean(),
+            BrokerRegistrationFencingChange.FENCE.asBoolean(),
             BrokerRegistrationInControlledShutdownChange.NONE.asBoolean()
         );
     }
@@ -432,7 +471,7 @@ public class ClusterControlManager {
             record,
             record.id(),
             record.epoch(),
-            BrokerRegistrationFencingChange.FENCE.asBoolean(),
+            BrokerRegistrationFencingChange.UNFENCE.asBoolean(),
             BrokerRegistrationInControlledShutdownChange.NONE.asBoolean()
         );
     }

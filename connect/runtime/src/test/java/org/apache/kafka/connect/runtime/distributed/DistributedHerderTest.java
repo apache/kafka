@@ -66,7 +66,6 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
-import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
@@ -96,6 +95,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -105,6 +105,7 @@ import java.util.stream.IntStream;
 
 import static java.util.Collections.singletonList;
 import static javax.ws.rs.core.Response.Status.FORBIDDEN;
+import static javax.ws.rs.core.Response.Status.SERVICE_UNAVAILABLE;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUIRED;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
@@ -125,7 +126,7 @@ import static org.junit.Assert.fail;
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({DistributedHerder.class, Plugins.class, RestClient.class})
 @PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
-public class DistributedHerderTest extends ThreadedTest {
+public class DistributedHerderTest {
     private static final Map<String, String> HERDER_CONFIG = new HashMap<>();
     static {
         HERDER_CONFIG.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
@@ -220,6 +221,7 @@ public class DistributedHerderTest extends ThreadedTest {
     private ConfigBackingStore.UpdateListener configUpdateListener;
     private WorkerRebalanceListener rebalanceListener;
     private ExecutorService herderExecutor;
+    private Future<?> herderFuture;
 
     private SinkConnectorConfig conn1SinkConfig;
     private SinkConnectorConfig conn1SinkConfigUpdated;
@@ -2773,13 +2775,43 @@ public class DistributedHerderTest extends ThreadedTest {
         EasyMock.expect(signature.keyAlgorithm()).andReturn("HmacSHA256").anyTimes();
         EasyMock.expect(signature.isValid(EasyMock.anyObject())).andReturn(false).anyTimes();
 
-        PowerMock.replayAll(taskConfigCb, signature);
+        SessionKey sessionKey = EasyMock.mock(SessionKey.class);
+        SecretKey secretKey = EasyMock.niceMock(SecretKey.class);
+        EasyMock.expect(sessionKey.key()).andReturn(secretKey);
+        EasyMock.expect(sessionKey.creationTimestamp()).andReturn(time.milliseconds());
+
+        PowerMock.replayAll(taskConfigCb, signature, sessionKey, secretKey);
+
+        // Read a new session key from the config topic
+        configUpdateListener.onSessionKeyUpdate(sessionKey);
 
         herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
 
         PowerMock.verifyAll();
         assertTrue(errorCapture.getValue() instanceof ConnectRestException);
         assertEquals(FORBIDDEN.getStatusCode(), ((ConnectRestException) errorCapture.getValue()).statusCode());
+    }
+
+    @Test
+    public void putTaskConfigsWorkerStillStarting() {
+        Callback<Void> taskConfigCb = EasyMock.mock(Callback.class);
+        Capture<Throwable> errorCapture = Capture.newInstance();
+        taskConfigCb.onCompletion(capture(errorCapture), EasyMock.eq(null));
+        EasyMock.expectLastCall().once();
+
+        EasyMock.expect(member.currentProtocolVersion()).andReturn(CONNECT_PROTOCOL_V2).anyTimes();
+
+        InternalRequestSignature signature = EasyMock.mock(InternalRequestSignature.class);
+        EasyMock.expect(signature.keyAlgorithm()).andReturn("HmacSHA256").anyTimes();
+        EasyMock.expect(signature.isValid(EasyMock.anyObject())).andReturn(true).anyTimes();
+
+        PowerMock.replayAll(taskConfigCb, signature);
+
+        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
+
+        PowerMock.verifyAll();
+        assertTrue(errorCapture.getValue() instanceof ConnectRestException);
+        assertEquals(SERVICE_UNAVAILABLE.getStatusCode(), ((ConnectRestException) errorCapture.getValue()).statusCode());
     }
 
     @Test
@@ -2794,7 +2826,15 @@ public class DistributedHerderTest extends ThreadedTest {
         EasyMock.expect(signature.keyAlgorithm()).andReturn("HmacSHA256").anyTimes();
         EasyMock.expect(signature.isValid(EasyMock.anyObject())).andReturn(true).anyTimes();
 
-        PowerMock.replayAll(taskConfigCb, signature);
+        SessionKey sessionKey = EasyMock.mock(SessionKey.class);
+        SecretKey secretKey = EasyMock.niceMock(SecretKey.class);
+        EasyMock.expect(sessionKey.key()).andReturn(secretKey);
+        EasyMock.expect(sessionKey.creationTimestamp()).andReturn(time.milliseconds());
+
+        PowerMock.replayAll(taskConfigCb, signature, sessionKey, secretKey);
+
+        // Read a new session key from the config topic
+        configUpdateListener.onSessionKeyUpdate(sessionKey);
 
         herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
 
@@ -2893,7 +2933,15 @@ public class DistributedHerderTest extends ThreadedTest {
         EasyMock.expect(signature.keyAlgorithm()).andReturn("HmacSHA256").anyTimes();
         EasyMock.expect(signature.isValid(EasyMock.anyObject())).andReturn(false).anyTimes();
 
-        PowerMock.replayAll(taskConfigCb, signature);
+        SessionKey sessionKey = EasyMock.mock(SessionKey.class);
+        SecretKey secretKey = EasyMock.niceMock(SecretKey.class);
+        EasyMock.expect(sessionKey.key()).andReturn(secretKey);
+        EasyMock.expect(sessionKey.creationTimestamp()).andReturn(time.milliseconds());
+
+        PowerMock.replayAll(taskConfigCb, signature, sessionKey, secretKey);
+
+        // Read a new session key from the config topic
+        configUpdateListener.onSessionKeyUpdate(sessionKey);
 
         herder.fenceZombieSourceTasks(CONN1, taskConfigCb, signature);
 
@@ -3654,13 +3702,14 @@ public class DistributedHerderTest extends ThreadedTest {
 
     private void startBackgroundHerder() {
         herderExecutor = Executors.newSingleThreadExecutor();
-        herderExecutor.submit(herder);
+        herderFuture = herderExecutor.submit(herder);
     }
 
     private void stopBackgroundHerder() throws Exception {
         herder.stop();
         herderExecutor.shutdown();
-        herderExecutor.awaitTermination(10, TimeUnit.SECONDS);
+        assertTrue("herder thread did not finish in time", herderExecutor.awaitTermination(10, TimeUnit.SECONDS));
+        herderFuture.get();
     }
 
     private void expectHerderStartup() {

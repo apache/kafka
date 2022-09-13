@@ -211,8 +211,23 @@ public class ConsumerNetworkClient implements Closeable {
      * @throws InterruptException if the calling thread is interrupted
      */
     public boolean poll(RequestFuture<?> future, Timer timer) {
+        return poll(future, timer, false);
+    }
+
+    /**
+     * Block until the provided request future request has finished or the timeout has expired.
+     *
+     * @param future The request future to wait for
+     * @param timer Timer bounding how long this method can block
+     * @param disableWakeup true if we should not check for wakeups, false otherwise
+     *
+     * @return true if the future is done, false otherwise
+     * @throws WakeupException if {@link #wakeup()} is called from another thread and `disableWakeup` is false
+     * @throws InterruptException if the calling thread is interrupted
+     */
+    public boolean poll(RequestFuture<?> future, Timer timer, boolean disableWakeup) {
         do {
-            poll(timer, future);
+            poll(timer, future, disableWakeup);
         } while (!future.isDone() && timer.notExpired());
         return future.isDone();
     }

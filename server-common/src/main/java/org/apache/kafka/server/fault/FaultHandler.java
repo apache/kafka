@@ -14,29 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.util;
 
-import org.junit.After;
-import org.junit.Before;
+package org.apache.kafka.server.fault;
+
 
 /**
- * Base class for tests that use threads. It sets up uncaught exception handlers for all known
- * thread classes and checks for errors at the end of the test so that failures in background
- * threads will cause the test to fail.
+ * Handle a server fault.
  */
-public class ThreadedTest {
-
-    protected TestBackgroundThreadExceptionHandler backgroundThreadExceptionHandler;
-
-    @Before
-    public void setup() {
-        backgroundThreadExceptionHandler = new TestBackgroundThreadExceptionHandler();
-        ShutdownableThread.funcaughtExceptionHandler = backgroundThreadExceptionHandler;
+public interface FaultHandler {
+    /**
+     * Handle a fault.
+     *
+     * @param failureMessage        The failure message to log.
+     *
+     * @return                      The fault exception.
+     */
+    default RuntimeException handleFault(String failureMessage) {
+        return handleFault(failureMessage, null);
     }
 
-    @After
-    public void teardown() {
-        backgroundThreadExceptionHandler.verifyNoExceptions();
-        ShutdownableThread.funcaughtExceptionHandler = null;
-    }
+    /**
+     * Handle a fault.
+     *
+     * @param failureMessage        The failure message to log.
+     * @param cause                 The exception that caused the problem, or null.
+     *
+     * @return                      The fault exception.
+     */
+    RuntimeException handleFault(String failureMessage, Throwable cause);
 }

@@ -89,6 +89,7 @@ trait KafkaBroker extends KafkaMetricsGroup {
   def shutdown(): Unit
   def brokerTopicStats: BrokerTopicStats
   def credentialProvider: CredentialProvider
+  def clientToControllerChannelManager: BrokerToControllerChannelManager
 
   // For backwards compatibility, we need to keep older metrics tied
   // to their original name when this class was named `KafkaServer`

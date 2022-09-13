@@ -38,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,8 +53,7 @@ public class JaasContextTest {
 
     @BeforeEach
     public void setUp() throws IOException {
-        jaasConfigFile = File.createTempFile("jaas", ".conf");
-        jaasConfigFile.deleteOnExit();
+        jaasConfigFile = TestUtils.tempFile("jaas", ".conf");
         System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasConfigFile.toString());
         Configuration.setConfiguration(null);
     }

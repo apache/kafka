@@ -348,6 +348,9 @@ public class WorkerSinkTaskTest {
         transformationChain.close();
         PowerMock.expectLastCall();
 
+        headerConverter.close();
+        PowerMock.expectLastCall();
+
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);

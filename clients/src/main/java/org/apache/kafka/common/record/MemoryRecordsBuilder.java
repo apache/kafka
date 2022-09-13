@@ -609,18 +609,27 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         if (partitionLeaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH) {
             throw new IllegalArgumentException("Partition leader epoch must be valid, but get " + partitionLeaderEpoch);
         }
-        appendControlRecord(timestamp, ControlRecordType.LEADER_CHANGE,
-                MessageUtil.toByteBuffer(leaderChangeMessage, ControlRecordUtils.LEADER_CHANGE_SCHEMA_HIGHEST_VERSION));
+        appendControlRecord(
+            timestamp,
+            ControlRecordType.LEADER_CHANGE,
+            MessageUtil.toByteBuffer(leaderChangeMessage, ControlRecordUtils.LEADER_CHANGE_CURRENT_VERSION)
+        );
     }
 
     public void appendSnapshotHeaderMessage(long timestamp, SnapshotHeaderRecord snapshotHeaderRecord) {
-        appendControlRecord(timestamp, ControlRecordType.SNAPSHOT_HEADER,
-            MessageUtil.toByteBuffer(snapshotHeaderRecord, ControlRecordUtils.SNAPSHOT_HEADER_HIGHEST_VERSION));
+        appendControlRecord(
+            timestamp,
+            ControlRecordType.SNAPSHOT_HEADER,
+            MessageUtil.toByteBuffer(snapshotHeaderRecord, ControlRecordUtils.SNAPSHOT_HEADER_CURRENT_VERSION)
+        );
     }
 
     public void appendSnapshotFooterMessage(long timestamp, SnapshotFooterRecord snapshotHeaderRecord) {
-        appendControlRecord(timestamp, ControlRecordType.SNAPSHOT_FOOTER,
-            MessageUtil.toByteBuffer(snapshotHeaderRecord, ControlRecordUtils.SNAPSHOT_FOOTER_HIGHEST_VERSION));
+        appendControlRecord(
+            timestamp,
+            ControlRecordType.SNAPSHOT_FOOTER,
+            MessageUtil.toByteBuffer(snapshotHeaderRecord, ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION)
+        );
     }
 
     /**

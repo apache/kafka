@@ -17,9 +17,9 @@
 
 package kafka.tools
 
-import java.io.{ByteArrayOutputStream, File, PrintWriter}
+import java.io.{ByteArrayOutputStream, PrintWriter}
 import java.text.SimpleDateFormat
-import kafka.utils.Exit
+import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
@@ -113,8 +113,7 @@ class ConsumerPerformanceTest {
 
   @Test
   def testClientIdOverride(): Unit = {
-    val consumerConfigFile = File.createTempFile("test_consumer_config",".conf")
-    consumerConfigFile.deleteOnExit()
+    val consumerConfigFile = TestUtils.tempFile("test_consumer_config",".conf")
     new PrintWriter(consumerConfigFile.getPath) { write("client.id=consumer-1"); close() }
 
     //Given

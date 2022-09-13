@@ -266,7 +266,19 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         return apiKey;
     }
 
+    /**
+     * Get the throttle time in milliseconds. If the response schema does not
+     * support this field, then 0 will be returned.
+     */
     public abstract int throttleTimeMs();
+
+    /**
+     * Set the throttle time in the response if the schema supports it. Otherwise,
+     * this is a no-op.
+     *
+     * @param throttleTimeMs The throttle time in milliseconds
+     */
+    public abstract void maybeSetThrottleTimeMs(int throttleTimeMs);
 
     public String toString() {
         return data().toString();

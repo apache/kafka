@@ -17,18 +17,12 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Optional;
-
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
@@ -46,6 +40,7 @@ import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.placement.ClusterDescriber;
 import org.apache.kafka.metadata.placement.PlacementSpec;
 import org.apache.kafka.metadata.placement.UsableBroker;
@@ -57,6 +52,13 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Optional;
 
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -96,7 +98,7 @@ public class ClusterControlManagerTest {
             setPort((short) 9092).
             setName("PLAINTEXT").
             setHost("example.com"));
-        clusterControl.replay(brokerRecord);
+        clusterControl.replay(brokerRecord, 100L);
         clusterControl.checkBrokerEpoch(1, 100);
         assertThrows(StaleBrokerEpochException.class,
             () -> clusterControl.checkBrokerEpoch(1, 101));
@@ -111,7 +113,7 @@ public class ClusterControlManagerTest {
             clusterControl.replay(unfenceBrokerRecord);
         } else {
             BrokerRegistrationChangeRecord changeRecord =
-                    new BrokerRegistrationChangeRecord().setBrokerId(1).setBrokerEpoch(100).setFenced((byte) -1);
+                    new BrokerRegistrationChangeRecord().setBrokerId(1).setBrokerEpoch(100).setFenced(BrokerRegistrationFencingChange.UNFENCE.value());
             clusterControl.replay(changeRecord);
         }
         assertFalse(clusterControl.unfenced(0));
@@ -123,7 +125,7 @@ public class ClusterControlManagerTest {
             clusterControl.replay(fenceBrokerRecord);
         } else {
             BrokerRegistrationChangeRecord changeRecord =
-                    new BrokerRegistrationChangeRecord().setBrokerId(1).setBrokerEpoch(100).setFenced((byte) 1);
+                    new BrokerRegistrationChangeRecord().setBrokerId(1).setBrokerEpoch(100).setFenced(BrokerRegistrationFencingChange.FENCE.value());
             clusterControl.replay(changeRecord);
         }
         assertFalse(clusterControl.unfenced(0));
@@ -165,19 +167,20 @@ public class ClusterControlManagerTest {
             setPort((short) 9092).
             setName("PLAINTEXT").
             setHost("example.com"));
-        clusterControl.replay(brokerRecord);
+        clusterControl.replay(brokerRecord, 100L);
 
         assertFalse(clusterControl.unfenced(0));
         assertTrue(clusterControl.inControlledShutdown(0));
 
         brokerRecord.setInControlledShutdown(false);
-        clusterControl.replay(brokerRecord);
+        clusterControl.replay(brokerRecord, 100L);
 
         assertFalse(clusterControl.unfenced(0));
         assertFalse(clusterControl.inControlledShutdown(0));
+        assertEquals(100L, clusterControl.registerBrokerRecordOffset(brokerRecord.brokerId()).getAsLong());
 
         brokerRecord.setFenced(false);
-        clusterControl.replay(brokerRecord);
+        clusterControl.replay(brokerRecord, 100L);
 
         assertTrue(clusterControl.unfenced(0));
         assertFalse(clusterControl.inControlledShutdown(0));
@@ -217,7 +220,7 @@ public class ClusterControlManagerTest {
             setPort((short) 9092).
             setName("PLAINTEXT").
             setHost("example.com"));
-        clusterControl.replay(brokerRecord);
+        clusterControl.replay(brokerRecord, 100L);
 
         assertTrue(clusterControl.unfenced(0));
         assertFalse(clusterControl.inControlledShutdown(0));
@@ -234,7 +237,7 @@ public class ClusterControlManagerTest {
         registrationChangeRecord = new BrokerRegistrationChangeRecord()
             .setBrokerId(0)
             .setBrokerEpoch(100)
-            .setFenced(BrokerRegistrationFencingChange.FENCE.value());
+            .setFenced(BrokerRegistrationFencingChange.UNFENCE.value());
         clusterControl.replay(registrationChangeRecord);
 
         assertTrue(clusterControl.unfenced(0));
@@ -309,6 +312,11 @@ public class ClusterControlManagerTest {
                 setRack(null).
                 setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")).
                 setFenced(true).
+                setFeatures(new RegisterBrokerRecord.BrokerFeatureCollection(Arrays.asList(
+                    new RegisterBrokerRecord.BrokerFeature().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setMinSupportedVersion((short) 1).
+                        setMaxSupportedVersion((short) 1)).iterator())).
                 setInControlledShutdown(false), expectedVersion)),
             result.records());
     }
@@ -341,17 +349,19 @@ public class ClusterControlManagerTest {
             setFeatureControlManager(featureControl).
             build();
         clusterControl.activate();
-        clusterControl.replay(brokerRecord);
+        clusterControl.replay(brokerRecord, 100L);
         assertEquals(new BrokerRegistration(1, 100,
                 Uuid.fromString("fPZv1VBsRFmnlRvmGcOW9w"), Collections.singletonMap("PLAINTEXT",
                 new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "example.com", 9092)),
                 Collections.emptyMap(), Optional.of("arack"), true, false),
             clusterControl.brokerRegistrations().get(1));
+        assertEquals(100L, clusterControl.registerBrokerRecordOffset(brokerRecord.brokerId()).getAsLong());
         UnregisterBrokerRecord unregisterRecord = new UnregisterBrokerRecord().
             setBrokerId(1).
             setBrokerEpoch(100);
         clusterControl.replay(unregisterRecord);
         assertFalse(clusterControl.brokerRegistrations().containsKey(1));
+        assertFalse(clusterControl.registerBrokerRecordOffset(brokerRecord.brokerId()).isPresent());
     }
 
     @ParameterizedTest
@@ -382,7 +392,7 @@ public class ClusterControlManagerTest {
                 setPort((short) 9092).
                 setName("PLAINTEXT").
                 setHost("example.com"));
-            clusterControl.replay(brokerRecord);
+            clusterControl.replay(brokerRecord, 100L);
             UnfenceBrokerRecord unfenceRecord =
                 new UnfenceBrokerRecord().setId(i).setEpoch(100);
             clusterControl.replay(unfenceRecord);
@@ -442,7 +452,7 @@ public class ClusterControlManagerTest {
                 setPort((short) 9092 + i).
                 setName("PLAINTEXT").
                 setHost("example.com"));
-            clusterControl.replay(brokerRecord);
+            clusterControl.replay(brokerRecord, 100L);
         }
         for (int i = 0; i < 2; i++) {
             UnfenceBrokerRecord unfenceBrokerRecord =
@@ -484,5 +494,57 @@ public class ClusterControlManagerTest {
                         setHost("example.com")).iterator())).
                 setFenced(true), expectedVersion))),
                 clusterControl.iterator(Long.MAX_VALUE));
+    }
+
+
+    @Test
+    public void testRegistrationWithUnsupportedMetadataVersion() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        FeatureControlManager featureControl = new FeatureControlManager.Builder().
+                setSnapshotRegistry(snapshotRegistry).
+                setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+                        Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.of(
+                                MetadataVersion.IBP_3_1_IV0.featureLevel(),
+                                MetadataVersion.IBP_3_3_IV0.featureLevel())),
+                        Collections.singletonList(0))).
+                setMetadataVersion(MetadataVersion.IBP_3_3_IV0).
+                build();
+        ClusterControlManager clusterControl = new ClusterControlManager.Builder().
+                setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+                setTime(new MockTime(0, 0, 0)).
+                setSnapshotRegistry(snapshotRegistry).
+                setControllerMetrics(new MockControllerMetrics()).
+                setFeatureControlManager(featureControl).
+                build();
+        clusterControl.activate();
+
+        assertEquals("Unable to register because the broker does not support version 4 of " +
+            "metadata.version. It wants a version between 1 and 1, inclusive.",
+            assertThrows(UnsupportedVersionException.class,
+                () -> clusterControl.registerBroker(
+                    new BrokerRegistrationRequestData().
+                        setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+                        setBrokerId(0).
+                        setRack(null).
+                        setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
+                    123L,
+                    featureControl.finalizedFeatures(Long.MAX_VALUE))).getMessage());
+
+        assertEquals("Unable to register because the broker does not support version 4 of " +
+            "metadata.version. It wants a version between 7 and 7, inclusive.",
+            assertThrows(UnsupportedVersionException.class,
+                () -> clusterControl.registerBroker(
+                    new BrokerRegistrationRequestData().
+                        setClusterId("fPZv1VBsRFmnlRvmGcOW9w").
+                        setBrokerId(0).
+                        setRack(null).
+                        setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
+                                Collections.singleton(new BrokerRegistrationRequestData.Feature().
+                                    setName(MetadataVersion.FEATURE_NAME).
+                                    setMinSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel()).
+                                    setMaxSupportedVersion(MetadataVersion.IBP_3_3_IV3.featureLevel())).iterator())).
+                        setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
+                    123L,
+                    featureControl.finalizedFeatures(Long.MAX_VALUE))).getMessage());
     }
 }

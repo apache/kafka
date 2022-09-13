@@ -47,8 +47,8 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   // reduce test execution time
   val enableControlledShutdown = true
 
-  var configProps1: Properties = null
-  var configProps2: Properties = null
+  var configProps1: Properties = _
+  var configProps2: Properties = _
 
   var configs: Seq[KafkaConfig] = Seq.empty[KafkaConfig]
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]

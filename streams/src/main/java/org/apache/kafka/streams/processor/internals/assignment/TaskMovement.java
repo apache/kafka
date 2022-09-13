@@ -107,7 +107,8 @@ final class TaskMovement {
 
         final int movementsNeeded = taskMovements.size();
 
-        for (final TaskMovement movement : taskMovements) {
+        while (!taskMovements.isEmpty()) {
+            final TaskMovement movement = taskMovements.poll();
             // Attempt to find a caught up standby, otherwise find any caught up client, failing that use the most
             // caught up client.
             final boolean moved = tryToSwapStandbyAndActiveOnCaughtUpClient(clientStates, caughtUpClientsByTaskLoad, movement) ||
@@ -157,7 +158,8 @@ final class TaskMovement {
 
         int movementsNeeded = 0;
 
-        for (final TaskMovement movement : taskMovements) {
+        while (!taskMovements.isEmpty()) {
+            final TaskMovement movement = taskMovements.poll();
             final Function<UUID, Boolean> eligibleClientPredicate =
                     clientId -> !clientStates.get(clientId).hasAssignedTask(movement.task);
             UUID sourceClient = caughtUpClientsByTaskLoad.poll(

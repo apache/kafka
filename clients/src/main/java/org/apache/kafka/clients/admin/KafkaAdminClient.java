@@ -153,7 +153,6 @@ import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
-import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -354,7 +353,7 @@ public class KafkaAdminClient extends AdminClient {
     /**
      * The metrics for this KafkaAdminClient.
      */
-    private final Metrics metrics;
+    final Metrics metrics;
 
     /**
      * The network client to use.
@@ -451,6 +450,10 @@ public class KafkaAdminClient extends AdminClient {
         return "adminclient-" + ADMIN_CLIENT_ID_SEQUENCE.getAndIncrement();
     }
 
+    String getClientId() {
+        return clientId;
+    }
+
     /**
      * Get the deadline for a particular call.
      *
@@ -506,17 +509,12 @@ public class KafkaAdminClient extends AdminClient {
                     config.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
                     config.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG));
             metadataManager.update(Cluster.bootstrap(addresses), time.milliseconds());
-            List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                MetricsReporter.class,
-                Collections.singletonMap(AdminClientConfig.CLIENT_ID_CONFIG, clientId));
+            List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(AdminClientConfig.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(config.getLong(AdminClientConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                 .recordLevel(Sensor.RecordingLevel.forName(config.getString(AdminClientConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                 .tags(metricTags);
-            JmxReporter jmxReporter = new JmxReporter();
-            jmxReporter.configure(config.originals());
-            reporters.add(jmxReporter);
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
@@ -3344,7 +3342,7 @@ public class KafkaAdminClient extends AdminClient {
                         ListGroupsRequest.Builder createRequest(int timeoutMs) {
                             List<String> states = options.states()
                                     .stream()
-                                    .map(s -> s.toString())
+                                    .map(ConsumerGroupState::toString)
                                     .collect(Collectors.toList());
                             return new ListGroupsRequest.Builder(new ListGroupsRequestData().setStatesFilter(states));
                         }
@@ -4357,10 +4355,21 @@ public class KafkaAdminClient extends AdminClient {
             }
 
             private QuorumInfo createQuorumResult(final DescribeQuorumResponseData.PartitionData partition) {
+                List<QuorumInfo.ReplicaState> voters = partition.currentVoters().stream()
+                    .map(this::translateReplicaState)
+                    .collect(Collectors.toList());
+
+                List<QuorumInfo.ReplicaState> observers = partition.observers().stream()
+                    .map(this::translateReplicaState)
+                    .collect(Collectors.toList());
+
                 return new QuorumInfo(
-                        partition.leaderId(),
-                        partition.currentVoters().stream().map(v -> translateReplicaState(v)).collect(Collectors.toList()),
-                        partition.observers().stream().map(o -> translateReplicaState(o)).collect(Collectors.toList()));
+                    partition.leaderId(),
+                    partition.leaderEpoch(),
+                    partition.highWatermark(),
+                    voters,
+                    observers
+                );
             }
 
             @Override

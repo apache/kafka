@@ -35,7 +35,7 @@ import org.junit.jupiter.params.provider.ValueSource
 import scala.jdk.CollectionConverters._
 
 class FetchRequestDownConversionConfigTest extends BaseRequestTest {
-  private var producer: KafkaProducer[String, String] = null
+  private var producer: KafkaProducer[String, String] = _
   override def brokerCount: Int = 2
 
   @BeforeEach

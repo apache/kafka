@@ -17,7 +17,14 @@
 
 package org.apache.kafka.controller;
 
-import static java.util.concurrent.TimeUnit.NANOSECONDS;
+import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.controller.QuorumController.Builder;
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
+import org.apache.kafka.metalog.LocalLogManagerTestEnv;
+import org.apache.kafka.raft.LeaderAndEpoch;
+import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.fault.MockFaultHandler;
+import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,27 +36,20 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.controller.QuorumController.Builder;
-import org.apache.kafka.metalog.LocalLogManagerTestEnv;
-import org.apache.kafka.raft.LeaderAndEpoch;
-import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.test.TestUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 public class QuorumControllerTestEnv implements AutoCloseable {
-    private static final Logger log =
-        LoggerFactory.getLogger(QuorumControllerTestEnv.class);
-
     private final List<QuorumController> controllers;
     private final LocalLogManagerTestEnv logEnv;
+    private final MockFaultHandler fatalFaultHandler = new MockFaultHandler("fatalFaultHandler");
+    private final MockFaultHandler metadataFaultHandler = new MockFaultHandler("metadataFaultHandler");
 
     public QuorumControllerTestEnv(
         LocalLogManagerTestEnv logEnv,
         Consumer<QuorumController.Builder> builderConsumer
     ) throws Exception {
-        this(logEnv, builderConsumer, OptionalLong.empty(), OptionalLong.empty(), BootstrapMetadata.create(MetadataVersion.latest()));
+        this(logEnv, builderConsumer, OptionalLong.empty(), OptionalLong.empty(),
+                BootstrapMetadata.fromVersion(MetadataVersion.latest(), "test-provided version"));
     }
 
     public QuorumControllerTestEnv(
@@ -59,7 +59,8 @@ public class QuorumControllerTestEnv implements AutoCloseable {
             OptionalLong leaderImbalanceCheckIntervalNs,
             MetadataVersion metadataVersion
     ) throws Exception {
-        this(logEnv, builderConsumer, sessionTimeoutMillis, leaderImbalanceCheckIntervalNs, BootstrapMetadata.create(metadataVersion));
+        this(logEnv, builderConsumer, sessionTimeoutMillis, leaderImbalanceCheckIntervalNs,
+                BootstrapMetadata.fromVersion(metadataVersion, "test-provided version"));
     }
 
     public QuorumControllerTestEnv(
@@ -84,6 +85,8 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 sessionTimeoutMillis.ifPresent(timeout -> {
                     builder.setSessionTimeoutNs(NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS));
                 });
+                builder.setFatalFaultHandler(fatalFaultHandler);
+                builder.setMetadataFaultHandler(metadataFaultHandler);
                 builderConsumer.accept(builder);
                 this.controllers.add(builder.build());
             }
@@ -117,6 +120,14 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         return controllers;
     }
 
+    public MockFaultHandler fatalFaultHandler() {
+        return fatalFaultHandler;
+    }
+
+    public MockFaultHandler metadataFaultHandler() {
+        return metadataFaultHandler;
+    }
+
     @Override
     public void close() throws InterruptedException {
         for (QuorumController controller : controllers) {
@@ -125,5 +136,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         for (QuorumController controller : controllers) {
             controller.close();
         }
+        fatalFaultHandler.maybeRethrowFirstException();
+        metadataFaultHandler.maybeRethrowFirstException();
     }
 }

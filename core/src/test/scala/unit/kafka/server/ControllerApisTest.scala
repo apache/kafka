@@ -48,9 +48,9 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.{ElectionType, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
-import org.apache.kafka.controller.{Controller, ControllerRequestContext}
+import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, ProducerIdsBlock}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -61,8 +61,9 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 
 import java.net.InetAddress
 import java.util
-import java.util.Collections.singletonList
+import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
+import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Properties}
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -875,6 +876,78 @@ class ControllerApisTest {
     assertEquals(Errors.NOT_CONTROLLER, Errors.forCode(response.data.errorCode))
   }
 
+  @Test
+  def testDeleteTopicsReturnsNotController(): Unit = {
+    val topicId = Uuid.randomUuid()
+    val topicName = "foo"
+    val controller = mock(classOf[Controller])
+    val controllerApis = createControllerApis(None, controller)
+
+    val findNamesFuture = CompletableFuture.completedFuture(
+      singletonMap(topicId, new ResultOrError(topicName))
+    )
+    when(controller.findTopicNames(
+      any[ControllerRequestContext],
+      ArgumentMatchers.eq(singleton(topicId))
+    )).thenReturn(findNamesFuture)
+
+    val findIdsFuture = CompletableFuture.completedFuture(
+      Collections.emptyMap[String, ResultOrError[Uuid]]()
+    )
+    when(controller.findTopicIds(
+      any[ControllerRequestContext],
+      ArgumentMatchers.eq(Collections.emptySet())
+    )).thenReturn(findIdsFuture)
+
+    val deleteFuture = new CompletableFuture[util.Map[Uuid, ApiError]]()
+    deleteFuture.completeExceptionally(new NotControllerException("Controller has moved"))
+    when(controller.deleteTopics(
+      any[ControllerRequestContext],
+      ArgumentMatchers.eq(singleton(topicId))
+    )).thenReturn(deleteFuture)
+
+    val request = new DeleteTopicsRequest.Builder(
+      new DeleteTopicsRequestData().setTopics(singletonList(
+        new DeleteTopicState().setTopicId(topicId)
+      ))
+    ).build()
+
+    val response = handleRequest[DeleteTopicsResponse](request, controllerApis)
+    val topicIdResponse = response.data.responses.asScala.find(_.topicId == topicId).get
+    assertEquals(Errors.NOT_CONTROLLER, Errors.forCode(topicIdResponse.errorCode))
+  }
+
+  @Test
+  def testAllocateProducerIdsReturnsNotController(): Unit = {
+    val controller = mock(classOf[Controller])
+    val controllerApis = createControllerApis(None, controller)
+
+    // We construct the future here to mimic the logic in `QuorumController.allocateProducerIds`.
+    // When an exception is raised on the original future, the `thenApply` future is also completed
+    // exceptionally, but the underlying cause is wrapped in a `CompletionException`.
+    val future = new CompletableFuture[ProducerIdsBlock]
+    val thenApplyFuture = future.thenApply[AllocateProducerIdsResponseData] { result =>
+      new AllocateProducerIdsResponseData()
+        .setProducerIdStart(result.firstProducerId())
+        .setProducerIdLen(result.size())
+    }
+    future.completeExceptionally(new NotControllerException("Controller has moved"))
+
+    val request = new AllocateProducerIdsRequest.Builder(
+      new AllocateProducerIdsRequestData()
+        .setBrokerId(4)
+        .setBrokerEpoch(93234)
+    ).build()
+
+    when(controller.allocateProducerIds(
+      any[ControllerRequestContext],
+      ArgumentMatchers.eq(request.data)
+    )).thenReturn(thenApplyFuture)
+
+    val response = handleRequest[AllocateProducerIdsResponse](request, controllerApis)
+    assertEquals(Errors.NOT_CONTROLLER, response.error)
+  }
+
   private def handleRequest[T <: AbstractResponse](
     request: AbstractRequest,
     controllerApis: ControllerApis
@@ -900,6 +973,35 @@ class ControllerApisTest {
         throw new ClassCastException(s"Expected response with type ${classTag.runtimeClass}, " +
           s"but found ${response.getClass}")
     }
+  }
+
+  @Test
+  def testCompletableFutureExceptions(): Unit = {
+    // This test simulates an error in a completable future as we return from the controller. We need to ensure
+    // that any exception throw in the completion phase is properly captured and translated to an error response.
+    val request = buildRequest(new FetchRequest(new FetchRequestData(), 12))
+    val response = new FetchResponseData()
+    val responseFuture = new CompletableFuture[ApiMessage]()
+    val errorResponseFuture = new AtomicReference[AbstractResponse]()
+    when(raftManager.handleRequest(any(), any(), any())).thenReturn(responseFuture)
+    when(requestChannel.sendResponse(any(), any(), any())).thenAnswer { _ =>
+      // Simulate an encoding failure in the initial fetch response
+      throw new UnsupportedVersionException("Something went wrong")
+    }.thenAnswer { invocation =>
+      val resp = invocation.getArgument(1, classOf[AbstractResponse])
+      errorResponseFuture.set(resp)
+    }
+
+    // Calling handle does not block since we do not call get() in ControllerApis
+    createControllerApis(None,
+      new MockController.Builder().build()).handle(request, null)
+
+    // When we complete this future, the completion stages will fire (including the error handler in ControllerApis#request)
+    responseFuture.complete(response)
+
+    // Now we should get an error response with UNSUPPORTED_VERSION
+    val errorResponse = errorResponseFuture.get()
+    assertEquals(1, errorResponse.errorCounts().getOrDefault(Errors.UNSUPPORTED_VERSION, 0))
   }
 
   @AfterEach

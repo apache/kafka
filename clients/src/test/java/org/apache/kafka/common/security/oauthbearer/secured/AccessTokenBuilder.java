@@ -22,6 +22,9 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.jose4j.jwk.PublicJsonWebKey;
@@ -39,7 +42,7 @@ public class AccessTokenBuilder {
 
     private String subject = "jdoe";
 
-    private final String subjectClaimName = ReservedClaimNames.SUBJECT;
+    private String subjectClaimName = ReservedClaimNames.SUBJECT;
 
     private Object scope = "engineering";
 
@@ -50,6 +53,8 @@ public class AccessTokenBuilder {
     private Long expirationSeconds;
 
     private PublicJsonWebKey jwk;
+
+    private final Map<String, String> customClaims = new HashMap<>();
 
     public AccessTokenBuilder() {
         this(new MockTime());
@@ -85,6 +90,11 @@ public class AccessTokenBuilder {
 
     public String subjectClaimName() {
         return subjectClaimName;
+    }
+
+    public AccessTokenBuilder subjectClaimName(String subjectClaimName) {
+        this.subjectClaimName = subjectClaimName;
+        return this;
     }
 
     public Object scope() {
@@ -133,6 +143,14 @@ public class AccessTokenBuilder {
         return this;
     }
 
+    public AccessTokenBuilder addCustomClaim(String name, String value) {
+        String validatedName = ClaimValidationUtils.validateClaimNameOverride("claim name", name);
+        String validatedValue = ClaimValidationUtils.validateClaimNameOverride(validatedName, value);
+
+        customClaims.put(validatedName, validatedValue);
+        return this;
+    }
+
     @SuppressWarnings("unchecked")
     public String build() throws JoseException, IOException {
         ObjectNode node = objectMapper.createObjectNode();
@@ -161,6 +179,10 @@ public class AccessTokenBuilder {
 
         if (expirationSeconds != null)
             node.put(ReservedClaimNames.EXPIRATION_TIME, expirationSeconds);
+
+        for (Map.Entry<String, String> claim : customClaims.entrySet()) {
+            node.put(claim.getKey(), claim.getValue());
+        }
 
         String json = objectMapper.writeValueAsString(node);
 

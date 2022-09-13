@@ -95,9 +95,37 @@ public interface StateUpdater {
     void remove(final TaskId taskId);
 
     /**
+     * Pause a task (active or standby) from restoring in the state updater.
+     *
+     * This method does not block until the task is paused.
+     *
+     * Restored tasks, removed tasks and failed tasks are not paused so this action would be an no-op for them.
+     * Stateless tasks will never be paused since they are immediately added to the
+     * restored active tasks.
+     *
+     * @param taskId ID of the task to remove
+     */
+    void pause(final TaskId taskId);
+
+    /**
+     * Resume restoring a task (active or standby) in the state updater.
+     *
+     * This method does not block until the task is paused.
+     *
+     * Restored tasks, removed tasks and failed tasks are not resumed so this action would be an no-op for them.
+     * Stateless tasks will never be resumed since they are immediately added to the
+     * restored active tasks.
+     *
+     * @param taskId ID of the task to remove
+     */
+    void resume(final TaskId taskId);
+
+    /**
      * Drains the restored active tasks from the state updater.
      *
      * The returned active tasks are removed from the state updater.
+     *
+     * With a timeout of zero the method tries to drain the restored active tasks at least once.
      *
      * @param timeout duration how long the calling thread should wait for restored active tasks
      *
@@ -156,6 +184,21 @@ public interface StateUpdater {
      * @return set of all tasks managed by the state updater
      */
     Set<StreamTask> getActiveTasks();
+
+    /**
+     * Returns if the state updater restores active tasks.
+     *
+     * The state updater restores active tasks if at least one active task was added with {@link StateUpdater#add(Task)},
+     * the task is not paused, and the task was not removed from the state updater with one of the following methods:
+     * <ul>
+     *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
+     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
+     *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
+     * </ul>
+     *
+     * @return {@code true} if the state updater restores active tasks, {@code false} otherwise
+     */
+    boolean restoresActiveTasks();
 
     /**
      * Gets standby tasks that are managed by the state updater.

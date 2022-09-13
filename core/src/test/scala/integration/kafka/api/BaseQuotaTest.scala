@@ -385,9 +385,9 @@ abstract class QuotaTestClients(topic: String,
         s"ClientId $producerClientId of user $userPrincipal must have producer quota")
       assertEquals(Quota.upperBound(consumerQuota.toDouble), overrideConsumerQuota,
         s"ClientId $consumerClientId of user $userPrincipal must have consumer quota")
-      assertEquals(Quota.upperBound(requestQuota.toDouble), overrideProducerRequestQuota,
+      assertEquals(Quota.upperBound(requestQuota), overrideProducerRequestQuota,
         s"ClientId $producerClientId of user $userPrincipal must have request quota")
-      assertEquals(Quota.upperBound(requestQuota.toDouble), overrideConsumerRequestQuota,
+      assertEquals(Quota.upperBound(requestQuota), overrideConsumerRequestQuota,
         s"ClientId $consumerClientId of user $userPrincipal must have request quota")
     }
   }

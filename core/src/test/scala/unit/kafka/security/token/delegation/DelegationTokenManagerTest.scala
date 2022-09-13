@@ -55,8 +55,8 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
   val secretKey = "secretKey"
   val maxLifeTimeMsDefault = Defaults.DelegationTokenMaxLifeTimeMsDefault
   val renewTimeMsDefault = Defaults.DelegationTokenExpiryTimeMsDefault
-  var tokenCache: DelegationTokenCache = null
-  var props: Properties = null
+  var tokenCache: DelegationTokenCache = _
+  var props: Properties = _
 
   var createTokenResult: CreateTokenResult = _
   var error: Errors = Errors.NONE

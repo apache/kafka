@@ -40,7 +40,7 @@ import scala.jdk.CollectionConverters._
 @Timeout(300)
 class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
-  var cluster: ReassignPartitionsTestCluster = null
+  var cluster: ReassignPartitionsTestCluster = _
 
   @AfterEach
   override def tearDown(): Unit = {
@@ -618,9 +618,9 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
     var servers = new mutable.ArrayBuffer[KafkaBroker]
 
-    var brokerList: String = null
+    var brokerList: String = _
 
-    var adminClient: Admin = null
+    var adminClient: Admin = _
 
     def setup(): Unit = {
       createServers()
@@ -643,7 +643,7 @@ class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         case (topicName, parts) =>
           val partMap = new HashMap[Integer, List[Integer]]()
           parts.zipWithIndex.foreach {
-            case (part, index) => partMap.put(index, part.map(Integer.valueOf(_)).asJava)
+            case (part, index) => partMap.put(index, part.map(Integer.valueOf).asJava)
           }
           new NewTopic(topicName, partMap)
       }.toList.asJava).all().get()

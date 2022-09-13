@@ -1373,6 +1373,27 @@ $ bin/kafka-acls.sh \
     <li>delalloc: Delayed allocation means that the filesystem avoid allocating any blocks until the physical write occurs. This allows ext4 to allocate a large extent instead of smaller pages and helps ensure the data is written sequentially. This feature is great for throughput. It does seem to involve some locking in the filesystem which adds a bit of latency variance.
   </ul>
 
+  <h4 class="anchor-heading"><a id="replace_disk" class="anchor-link"></a><a href="#replace_disk">Replace KRaft Controller Disk</a></h4>
+  <p>When Kafka is configured to use KRaft, the controllers store the cluster metadata in the directory specified in <code>metadata.log.dir</code> -- or the first log directory, if <code>metadata.log.dir</code> is not configured. See the documentation for <code>metadata.log.dir</code> for details.</p>
+
+  <p>If the data in the cluster metdata directory is lost either because of hardware failure or the hardware needs to be replaced, care should be taken when provisioning the new controller node. The new controller node should not be formatted and started until the majority of the controllers have all of the committed data. To determine if the majority of the controllers have the committed data, run the <code>kafka-metadata-quorum.sh</code> tool to describe the replication status:</p>
+
+  <pre class="line-numbers"><code class="language-bash"> &gt; bin/kafka-metadata-quorum.sh --bootstrap-server broker_host:port describe --replication
+ NodeId  LogEndOffset    Lag     LastFetchTimestamp      LastCaughtUpTimestamp   Status
+ 1       25806           0       1662500992757           1662500992757           Leader
+ ...     ...             ...     ...                     ...                     ...
+  </code></pre>
+
+  <p>Check and wait until the <code>Lag</code> is small for a majority of the controllers. If the leader's end offset is not increasing, you can wait until the lag is 0 for a majority; otherwise, you can pick the latest leader end offset and wait until all replicas have reached it. Check and wait until the <code>LastFetchTimestamp</code> and <code>LastCaughtUpTimestamp</code> are close to each other for the majority of the controllers. At this point it is safer to format the controller's metadata log directory. This can be done by running the <code>kafka-storage.sh</code> command.</p>
+
+  <pre class="line-numbers"><code class="language-bash"> &gt; bin/kafka-storage.sh format --cluster-id uuid --config server_properties</code></pre>
+
+  <p>It is possible for the <code>bin/kafka-storage.sh format<code> command above to fail with a message like <code>Log directory ... is already formatted<code>. This can happend when combined mode is used and only the metadata log directory was lost but not the others. In that case and only in that case, can you run the <code>kafka-storage.sh format</code> command with the <code>--ignore-formatted</code> option.</p>
+
+  <p>Start the KRaft controller after formatting the log directories.</p>
+
+  <pre class="line-numbers"><code class="language-bash"> &gt; /bin/kafka-server-start.sh server_properties</code></pre>
+
   <h3 class="anchor-heading"><a id="monitoring" class="anchor-link"></a><a href="#monitoring">6.8 Monitoring</a></h3>
 
   Kafka uses Yammer Metrics for metrics reporting in the server. The Java clients use Kafka Metrics, a built-in metrics registry that minimizes transitive dependencies pulled into client applications. Both expose metrics via JMX and can be configured to report stats using pluggable stats reporters to hook up to your monitoring system.

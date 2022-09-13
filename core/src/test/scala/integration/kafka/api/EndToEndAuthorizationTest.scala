@@ -18,7 +18,6 @@
 package kafka.api
 
 import com.yammer.metrics.core.Gauge
-import java.io.File
 import java.util.{Collections, Properties}
 import java.util.concurrent.ExecutionException
 
@@ -83,7 +82,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   val part = 0
   val tp = new TopicPartition(topic, part)
 
-  override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
   protected def authorizerClass: Class[_] = classOf[AclAuthorizer]
 
   val topicResource = new ResourcePattern(TOPIC, topic, LITERAL)

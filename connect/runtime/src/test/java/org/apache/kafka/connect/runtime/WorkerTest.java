@@ -59,11 +59,9 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
-import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.ParameterizedTest;
-import org.apache.kafka.connect.util.ThreadedTest;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.junit.After;
 import org.junit.Before;
@@ -141,7 +139,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @RunWith(Parameterized.class)
-public class WorkerTest extends ThreadedTest {
+public class WorkerTest {
 
     private static final String CONNECTOR_ID = "test-connector";
     private static final ConnectorTaskId TASK_ID = new ConnectorTaskId("job", 0);
@@ -202,7 +200,7 @@ public class WorkerTest extends ThreadedTest {
     private final boolean enableTopicCreation;
 
     private MockedStatic<Plugins> pluginsMockedStatic;
-    private MockedStatic<ConnectUtils> connectUtilsMockedStatic;
+    private MockedStatic<WorkerConfig> workerConfigMockedStatic;
     private MockedConstruction<WorkerSourceTask> sourceTaskMockedConstruction;
     private MockitoSession mockitoSession;
 
@@ -217,8 +215,6 @@ public class WorkerTest extends ThreadedTest {
 
     @Before
     public void setup() {
-        super.setup();
-
         // Use strict mode to detect unused mocks
         mockitoSession = Mockito.mockitoSession()
                                 .initMocks(this)
@@ -266,8 +262,8 @@ public class WorkerTest extends ThreadedTest {
         pluginsMockedStatic = mockStatic(Plugins.class);
 
         // pass through things that aren't explicitly mocked out
-        connectUtilsMockedStatic = mockStatic(ConnectUtils.class, new CallsRealMethods());
-        connectUtilsMockedStatic.when(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class))).thenReturn(CLUSTER_ID);
+        workerConfigMockedStatic = mockStatic(WorkerConfig.class, new CallsRealMethods());
+        workerConfigMockedStatic.when(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class))).thenReturn(CLUSTER_ID);
 
         // Make calls to new WorkerSourceTask() return a mock to avoid the source task trying to connect to a broker.
         sourceTaskMockedConstruction = mockConstructionWithAnswer(WorkerSourceTask.class, invocation -> {
@@ -292,7 +288,7 @@ public class WorkerTest extends ThreadedTest {
         // Ideal would be to use try-with-resources in an individual test, but it introduced a rather large level of
         // indentation of most test bodies, hence sticking with setup() / teardown()
         pluginsMockedStatic.close();
-        connectUtilsMockedStatic.close();
+        workerConfigMockedStatic.close();
         sourceTaskMockedConstruction.close();
 
         mockitoSession.finishMocking();
@@ -312,7 +308,7 @@ public class WorkerTest extends ThreadedTest {
 
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
-        connectUtilsMockedStatic.when(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)))
+        workerConfigMockedStatic.when(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)))
                                 .thenReturn(CLUSTER_ID);
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
@@ -362,7 +358,7 @@ public class WorkerTest extends ThreadedTest {
 
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), times(2));
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
-        connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)));
+        workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)));
 
         verify(sourceConnector).stop();
         verify(connectorStatusListener).onShutdown(CONNECTOR_ID);
@@ -390,7 +386,7 @@ public class WorkerTest extends ThreadedTest {
         when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
         when(delegatingLoader.connectorLoader(nonConnectorClass)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(delegatingLoader);
-        connectUtilsMockedStatic.when(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)))
+        workerConfigMockedStatic.when(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)))
                                 .thenReturn("test-cluster");
 
         when(plugins.newConnector(anyString())).thenThrow(exception);
@@ -425,7 +421,7 @@ public class WorkerTest extends ThreadedTest {
         verify(plugins).newConnector(anyString());
         verify(connectorStatusListener).onFailure(eq(CONNECTOR_ID), any(ConnectException.class));
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
-        connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)));
+        workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)));
     }
 
     @Test
@@ -440,7 +436,7 @@ public class WorkerTest extends ThreadedTest {
 
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
         pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
-        connectUtilsMockedStatic.when(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)))
+        workerConfigMockedStatic.when(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)))
                                 .thenReturn("test-cluster");
 
         connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorAlias);
@@ -482,7 +478,7 @@ public class WorkerTest extends ThreadedTest {
 
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), times(2));
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
-        connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)));
+        workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)));
     }
 
     @Test
@@ -532,7 +528,7 @@ public class WorkerTest extends ThreadedTest {
         verify(ctx).close();
 
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
-        connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)));
+        workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)));
     }
 
     @Test
@@ -679,7 +675,7 @@ public class WorkerTest extends ThreadedTest {
 
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), times(2));
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
-        connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)));
+        workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)));
     }
 
     @Test
@@ -737,7 +733,7 @@ public class WorkerTest extends ThreadedTest {
 
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), times(2));
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
-        connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)));
+        workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)));
     }
 
     @Test
@@ -809,7 +805,7 @@ public class WorkerTest extends ThreadedTest {
 
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), times(2));
         pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
-        connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(any(WorkerConfig.class)));
+        workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)));
     }
 
     @Test
@@ -921,7 +917,7 @@ public class WorkerTest extends ThreadedTest {
         mockInternalConverters();
         mockFileConfigProvider();
 
-        connectUtilsMockedStatic.when(() -> ConnectUtils.lookupKafkaClusterId(any())).thenReturn(CLUSTER_ID);
+        workerConfigMockedStatic.when(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class))).thenReturn(CLUSTER_ID);
 
         worker = new Worker(WORKER_ID,
             new MockTime(),
@@ -938,7 +934,7 @@ public class WorkerTest extends ThreadedTest {
         assertEquals(1L, (long) metricGroup.taskCounter("c2").metricValue(0L));
         assertEquals(0L, (long) metricGroup.taskCounter("fakeConnector").metricValue(0L));
 
-        connectUtilsMockedStatic.verify(() -> ConnectUtils.lookupKafkaClusterId(any()));
+        workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)));
     }
 
     @Test
@@ -1253,7 +1249,7 @@ public class WorkerTest extends ThreadedTest {
         Map<String, String> props = new HashMap<>(workerProps);
         props.put("admin.client.id", "testid");
         props.put("admin.metadata.max.age.ms", "5000");
-        props.put("producer.bootstrap.servers", "cbeauho.com");
+        props.put("producer.bootstrap.servers", "localhost:1234");
         props.put("consumer.bootstrap.servers", "localhost:4761");
         WorkerConfig configWithOverrides = new StandaloneConfig(props);
 
@@ -1922,7 +1918,6 @@ public class WorkerTest extends ThreadedTest {
 
 
     private void verifyStorage() {
-        verify(offsetBackingStore).configure(any(WorkerConfig.class));
         verify(offsetBackingStore).start();
         verify(herder).statusBackingStore();
         verify(offsetBackingStore).stop();

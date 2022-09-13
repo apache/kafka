@@ -78,9 +78,9 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         }
 
         SnapshotHeaderRecord headerRecord = new SnapshotHeaderRecord()
-            .setVersion(ControlRecordUtils.SNAPSHOT_HEADER_HIGHEST_VERSION)
+            .setVersion(ControlRecordUtils.SNAPSHOT_HEADER_CURRENT_VERSION)
             .setLastContainedLogTimestamp(lastContainedLogTimestamp);
-        accumulator.appendSnapshotHeaderMessage(headerRecord, time.milliseconds());
+        accumulator.appendSnapshotHeaderRecord(headerRecord, time.milliseconds());
         accumulator.forceDrain();
     }
 
@@ -91,8 +91,8 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
      */
     private void finalizeSnapshotWithFooter() {
         SnapshotFooterRecord footerRecord = new SnapshotFooterRecord()
-            .setVersion(ControlRecordUtils.SNAPSHOT_FOOTER_HIGHEST_VERSION);
-        accumulator.appendSnapshotFooterMessage(footerRecord, time.milliseconds());
+            .setVersion(ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION);
+        accumulator.appendSnapshotFooterRecord(footerRecord, time.milliseconds());
         accumulator.forceDrain();
     }
 

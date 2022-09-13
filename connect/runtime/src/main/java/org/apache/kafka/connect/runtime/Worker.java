@@ -153,7 +153,7 @@ public class Worker {
             ExecutorService executorService,
             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy
     ) {
-        this.kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
+        this.kafkaClusterId = config.kafkaClusterId();
         this.metrics = new ConnectMetrics(workerId, config, time, kafkaClusterId);
         this.executor = executorService;
         this.workerId = workerId;
@@ -168,7 +168,6 @@ public class Worker {
         this.internalValueConverter = plugins.newInternalConverter(false, JsonConverter.class.getName(), internalConverterConfig);
 
         this.globalOffsetBackingStore = globalOffsetBackingStore;
-        this.globalOffsetBackingStore.configure(config);
 
         this.workerConfigTransformer = initConfigTransformer();
 
@@ -756,6 +755,19 @@ public class Worker {
                                                               ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                                                               String clusterId) {
         Map<String, Object> result = baseProducerConfigs(id.connector(), "connector-producer-" + id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy, clusterId);
+        // The base producer properties forcibly disable idempotence; remove it from those properties
+        // if not explicitly requested by the user
+        boolean connectorProducerIdempotenceConfigured = connConfig.originals().containsKey(
+                ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG
+        );
+        if (!connectorProducerIdempotenceConfigured) {
+            boolean workerProducerIdempotenceConfigured = config.originals().containsKey(
+                    "producer." + ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG
+            );
+            if (!workerProducerIdempotenceConfigured) {
+                result.remove(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
+            }
+        }
         ConnectUtils.ensureProperty(
                 result, ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true",
                 "for connectors when exactly-once source support is enabled",

@@ -250,4 +250,19 @@ public class MaskFieldTest {
     public void testEmptyStringReplacementValue() {
         assertThrows(ConfigException.class, () -> checkReplacementSchemaless("short", ""), "String must be non-empty");
     }
+
+    @Test
+    public void testNullListAndMapReplacementsAreMutable() {
+        final List<String> maskFields = Arrays.asList("array", "map");
+        final Struct updatedValue = (Struct) transform(maskFields, null).apply(record(SCHEMA, VALUES_WITH_SCHEMA)).value();
+        @SuppressWarnings("unchecked") List<Integer> actualList = (List<Integer>) updatedValue.get("array");
+        assertEquals(Collections.emptyList(), actualList);
+        actualList.add(0);
+        assertEquals(Collections.singletonList(0), actualList);
+
+        @SuppressWarnings("unchecked") Map<String, String> actualMap = (Map<String, String>) updatedValue.get("map");
+        assertEquals(Collections.emptyMap(), actualMap);
+        actualMap.put("k", "v");
+        assertEquals(Collections.singletonMap("k", "v"), actualMap);
+    }
 }

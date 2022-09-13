@@ -1732,9 +1732,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                                     throw ConnectUtils.maybeWrap(cause, "Failed to perform round of zombie fencing");
                                 }
                             },
-                            () -> {
-                                verifyTaskGenerationAndOwnership(taskId, taskGeneration);
-                            }
+                            () -> verifyTaskGenerationAndOwnership(taskId, taskGeneration)
                     );
                 } else {
                     return worker.startSourceTask(
@@ -1941,8 +1939,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    // Currently unused, but will be invoked by exactly-once source tasks after they have successfully
-    // initialized their transactional producer
+    // Invoked by exactly-once worker source tasks after they have successfully initialized their transactional
+    // producer to ensure that it is still safe to bring up the task
     private void verifyTaskGenerationAndOwnership(ConnectorTaskId id, int initialTaskGen) {
         log.debug("Reading to end of config topic to ensure it is still safe to bring up source task {} with exactly-once support", id);
         if (!refreshConfigSnapshot(Long.MAX_VALUE)) {
@@ -2404,13 +2402,16 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         requestSignature.keyAlgorithm(),
                         keySignatureVerificationAlgorithms
                 ));
-            } else {
-                if (!requestSignature.isValid(sessionKey)) {
-                    requestValidationError = new ConnectRestException(
-                            Response.Status.FORBIDDEN,
-                            "Internal request contained invalid signature."
-                    );
-                }
+            } else if (sessionKey == null) {
+                requestValidationError = new ConnectRestException(
+                        Response.Status.SERVICE_UNAVAILABLE,
+                        "This worker is still starting up and has not been able to read a session key from the config topic yet"
+                );
+            } else if (!requestSignature.isValid(sessionKey)) {
+                requestValidationError = new ConnectRestException(
+                        Response.Status.FORBIDDEN,
+                        "Internal request contained invalid signature."
+                );
             }
             if (requestValidationError != null) {
                 callback.onCompletion(requestValidationError, null);

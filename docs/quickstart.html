@@ -47,11 +47,18 @@ $ cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
         </p>
 
         <p>
+            Apache Kafka can be started using ZooKeeper or KRaft. To get started with either configuration follow one the sections below but not both.
+        </p>
+
+        <h5>
+            Kafka with ZooKeeper
+        </h5>
+
+        <p>
             Run the following commands in order to start all services in the correct order:
         </p>
 
         <pre class="line-numbers"><code class="language-bash"># Start the ZooKeeper service
-# Note: Soon, ZooKeeper will no longer be required by Apache Kafka.
 $ bin/zookeeper-server-start.sh config/zookeeper.properties</code></pre>
 
         <p>
@@ -63,6 +70,32 @@ $ bin/kafka-server-start.sh config/server.properties</code></pre>
 
         <p>
             Once all services have successfully launched, you will have a basic Kafka environment running and ready to use.
+        </p>
+
+        <h5>
+            Kafka with KRaft
+        </h5>
+
+        <p>
+            Generate a Cluster UUID
+        </p>
+
+        <pre class="line-numbers"><code class="language-bash">$ KAFKA_CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"</code></pre>
+
+        <p>
+            Format Log Directories
+        </p>
+
+        <pre class="line-numbers"><code class="language-bash">$ bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/server.properties</code></pre>
+
+        <p>
+            Start the Kafka Server
+        </p>
+
+        <pre class="line-numbers"><code class="language-bash">$ bin/kafka-server-start.sh config/kraft/server.properties</code></pre>
+
+        <p>
+            Once the Kafka server has successfully launched, you will have a basic Kafka environment running and ready to use.
         </p>
     </div>
 
@@ -175,7 +208,7 @@ This is my second event</code></pre>
         <p>
             First, make sure to add <code class="language-bash">connect-file-{{fullDotVersion}}.jar</code> to the <code>plugin.path</code> property in the Connect worker's configuration.
             For the purpose of this quickstart we'll use a relative path and consider the connectors' package as an uber jar, which works when the quickstart commands are run from the installation directory.
-            However, it's worth noting that for production deployments using absolute paths is always preferable. See <a href="#connectconfigs_plugin.path">plugin.path</a> for a detailed description of how to set this config.
+            However, it's worth noting that for production deployments using absolute paths is always preferable. See <a href="/documentation/#connectconfigs_plugin.path">plugin.path</a> for a detailed description of how to set this config.
         </p>
 
         <p>
@@ -278,7 +311,7 @@ wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.L
 
         <p>
             The <a href="/documentation/streams/quickstart">Kafka Streams demo</a>
-            and the <a href="/documentation/streams/tutorial">app development tutorial</a>
+            and the <a href="/{{version}}/documentation/streams/tutorial">app development tutorial</a>
             demonstrate how to code and run such a streaming application from start to finish.
         </p>
 
@@ -303,7 +336,7 @@ wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.L
                 Stop the Kafka broker with <code>Ctrl-C</code>.
             </li>
             <li>
-                Lastly, stop the ZooKeeper server with <code>Ctrl-C</code>.
+                Lastly, if the Kafka with ZooKeeper section was followed, stop the ZooKeeper server with <code>Ctrl-C</code>.
             </li>
         </ol>
 
@@ -312,7 +345,7 @@ wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.L
             along the way, run the command:
         </p>
 
-        <pre class="line-numbers"><code class="language-bash">$ rm -rf /tmp/kafka-logs /tmp/zookeeper</code></pre>
+        <pre class="line-numbers"><code class="language-bash">$ rm -rf /tmp/kafka-logs /tmp/zookeeper /tmp/kraft-combined-logs</code></pre>
 
     </div>
 

@@ -257,8 +257,7 @@ public final class MetadataDelta {
     }
 
     public void replay(RemoveTopicRecord record) {
-        getOrCreateTopicsDelta().replay(record);
-        String topicName = topicsDelta.replay(record);
+        String topicName = getOrCreateTopicsDelta().replay(record);
         getOrCreateConfigsDelta().replay(record, topicName);
     }
 

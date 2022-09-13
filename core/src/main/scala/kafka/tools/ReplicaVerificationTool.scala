@@ -277,7 +277,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: collection.Map[To
   @volatile private var lastReportTime = Time.SYSTEM.milliseconds
   private var maxLag: Long = -1L
   private var offsetWithMaxLag: Long = -1L
-  private var maxLagTopicAndPartition: TopicPartition = null
+  private var maxLagTopicAndPartition: TopicPartition = _
   initialize()
 
   def createNewFetcherBarrier(): Unit = {
