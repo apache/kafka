@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.ArrayList;
 import java.util.IdentityHashMap;
-import java.util.List;
 import java.util.Properties;
 import java.util.TreeMap;
 import org.apache.kafka.common.serialization.Serde;
@@ -312,26 +310,22 @@ public class InternalStreamsBuilder implements InternalNameProvider {
      * applied or they can provide a list of optimization rules.
      */
     private void optimizeTopology(final Properties props) {
-        final List<String> optimizationConfigs;
+        final Set<String> optimizationConfigs;
         if (props == null || !props.containsKey(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG)) {
-            optimizationConfigs = new ArrayList<>();
-            optimizationConfigs.add(StreamsConfig.NO_OPTIMIZATION);
+            optimizationConfigs = Collections.emptySet();
         } else {
             optimizationConfigs = StreamsConfig.verifyTopologyOptimizationConfigs(
                 (String) props.get(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG));
         }
-        if (optimizationConfigs.contains(StreamsConfig.OPTIMIZE)
-            || optimizationConfigs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {
+        if (optimizationConfigs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {
             LOG.debug("Optimizing the Kafka Streams graph for ktable source nodes");
             optimizeKTableSourceTopics();
         }
-        if (optimizationConfigs.contains(StreamsConfig.OPTIMIZE)
-            || optimizationConfigs.contains(StreamsConfig.MERGE_REPARTITION_TOPICS)) {
+        if (optimizationConfigs.contains(StreamsConfig.MERGE_REPARTITION_TOPICS)) {
             LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
             maybeOptimizeRepartitionOperations();
         }
-        if (optimizationConfigs.contains(StreamsConfig.OPTIMIZE)
-            || optimizationConfigs.contains(StreamsConfig.SINGLE_STORE_SELF_JOIN)) {
+        if (optimizationConfigs.contains(StreamsConfig.SINGLE_STORE_SELF_JOIN)) {
             LOG.debug("Optimizing the Kafka Streams graph for self-joins");
             rewriteSelfJoin(root, new IdentityHashMap<>());
         }

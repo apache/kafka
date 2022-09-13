@@ -22,6 +22,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
@@ -67,7 +68,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
         return new KStreamKStreamSelfJoinProcessor();
     }
 
-    private class KStreamKStreamSelfJoinProcessor extends StreamStreamJoinProcessor<K, V1, K, VOut> {
+    private class KStreamKStreamSelfJoinProcessor extends ContextualProcessor<K, V1, K, VOut> {
         private WindowStore<K, V2> windowStore;
         private Sensor droppedRecordsSensor;
 
@@ -83,8 +84,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
         @SuppressWarnings("unchecked")
         @Override
         public void process(final Record<K, V1> record) {
-            System.out.println("---> Processing record: " + record);
-            if (skipRecord(record, LOG, droppedRecordsSensor)) {
+            if (StreamStreamJoinUtil.skipRecord(record, LOG, droppedRecordsSensor, context())) {
                 return;
             }
 
@@ -94,7 +94,6 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
             boolean emittedJoinWithSelf = false;
 
             sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
-            System.out.println("----> Window store fetch, timeFrom=" + timeFrom + " timeTo=" + timeTo);
 
             // Join current record with other
             System.out.println("----> Window store fetch, timeFrom=" + timeFrom + " timeTo=" + timeTo);
@@ -130,6 +129,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
                     final long otherRecordTimestamp = otherRecord.key;
                     final long maxRecordTimestamp = Math.max(inputRecordTimestamp, otherRecordTimestamp);
 
+                    // This is needed so that output records follow timestamp order
                     if (inputRecordTimestamp < maxRecordTimestamp && !emittedJoinWithSelf) {
                         emittedJoinWithSelf = true;
                         System.out.println("----> Self timeFrom=" + timeFrom + " timeTo=" + timeTo);

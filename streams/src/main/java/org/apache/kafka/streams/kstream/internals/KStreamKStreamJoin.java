@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTracker;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
@@ -89,7 +90,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
         return new KStreamKStreamJoinProcessor();
     }
 
-    private class KStreamKStreamJoinProcessor extends StreamStreamJoinProcessor<K, V1, K, VOut> {
+    private class KStreamKStreamJoinProcessor extends ContextualProcessor<K, V1, K, VOut> {
         private WindowStore<K, V2> otherWindowStore;
         private Sensor droppedRecordsSensor;
         private Optional<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> outerJoinStore = Optional.empty();
@@ -120,8 +121,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
         @SuppressWarnings("unchecked")
         @Override
         public void process(final Record<K, V1> record) {
-            System.out.println("---> IsLeft: " + isLeftSide + ".Processing record: " + record);
-            if (skipRecord(record, LOG, droppedRecordsSensor)) {
+            if (StreamStreamJoinUtil.skipRecord(record, LOG, droppedRecordsSensor, context())) {
                 return;
             }
 
@@ -137,9 +137,6 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             if (inputRecordTimestamp == sharedTimeTracker.streamTime) {
                 outerJoinStore.ifPresent(store -> emitNonJoinedOuterRecords(store, record));
             }
-            System.out.println("----> IsLeft: " + isLeftSide + ".Window store fetch, timeFrom=" + timeFrom +
-                                   " timeTo"
-                                   + "=" + timeTo);
             try (final WindowStoreIterator<V2> iter = otherWindowStore.fetch(record.key(), timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
@@ -154,11 +151,6 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                         // is only cleaned up by stream time, so this is okay for at-least-once.
                         store.putIfAbsent(TimestampedKeyAndJoinSide.make(!isLeftSide, record.key(), otherRecordTimestamp), null);
                     });
-
-                    System.out.println("----> IsLeft: " + isLeftSide + ".Join this with other. Result = "
-                        + record.withValue(joiner.apply(record.key(), record.value(), otherRecord.value))
-                        .withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
-
 
                     context().forward(
                         record.withValue(joiner.apply(record.key(), record.value(), otherRecord.value))

@@ -129,6 +129,7 @@ public class SelfJoinUpgradeIntegrationTest {
 
 
         final Properties props = props();
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION);
         kafkaStreams = new KafkaStreams(streamsBuilderOld.build(), props);
         kafkaStreams.start();
 
@@ -145,19 +146,8 @@ public class SelfJoinUpgradeIntegrationTest {
         kafkaStreams.close();
         kafkaStreams = null;
 
-        final StreamsBuilder streamsBuilderNew = new StreamsBuilder();
-
-        final KStream<String, String> leftNew = streamsBuilderNew.stream(
-            inputTopic, Consumed.with(Serdes.String(), Serdes.String()));
-        final KStream<String, String> joinedNew = leftNew.join(
-            leftNew,
-            valueJoiner,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMinutes(100))
-        );
-        joinedNew.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
-
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        kafkaStreams = new KafkaStreams(streamsBuilderNew.build(), props);
+        kafkaStreams = new KafkaStreams(streamsBuilderOld.build(), props);
         kafkaStreams.start();
 
         final long currentTimeNew = CLUSTER.time.milliseconds();
@@ -207,19 +197,8 @@ public class SelfJoinUpgradeIntegrationTest {
         kafkaStreams.close();
         kafkaStreams = null;
 
-        final StreamsBuilder streamsBuilderNew = new StreamsBuilder();
-
-        final KStream<String, String> leftNew = streamsBuilderNew.stream(
-            inputTopic, Consumed.with(Serdes.String(), Serdes.String()));
-        final KStream<String, String> joinedNew = leftNew.join(
-            leftNew,
-            valueJoiner,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMinutes(100))
-        );
-        joinedNew.to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
-
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
-        kafkaStreams = new KafkaStreams(streamsBuilderNew.build(), props);
+        kafkaStreams = new KafkaStreams(streamsBuilderOld.build(), props);
         kafkaStreams.start();
 
         final long currentTimeNew = CLUSTER.time.milliseconds();

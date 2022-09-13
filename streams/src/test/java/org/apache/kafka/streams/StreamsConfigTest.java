@@ -1272,6 +1272,33 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldThrowExceptionWhenTopologyOptimizationOffAndSet() {
+        final String value = String.join(",", StreamsConfig.NO_OPTIMIZATION, StreamsConfig.SINGLE_STORE_SELF_JOIN);
+        props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertTrue(exception.getMessage().contains("A topology can either not be optimized with"));
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenOptimizationDoesNotExist() {
+        final String value = String.join(",",
+                                         StreamsConfig.SINGLE_STORE_SELF_JOIN,
+                                         "topology.optimization.does.not.exist",
+                                         StreamsConfig.MERGE_REPARTITION_TOPICS);
+        props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertTrue(exception.getMessage().contains("Unrecognized config."));
+    }
+
+    @Test
+    public void shouldThrowExceptionWhenTopologyOptimizationDoesNotExist() {
+        final String value = String.join(",", "topology.optimization.does.not.exist");
+        props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
+        final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertTrue(exception.getMessage().contains("Unrecognized config."));
+    }
+
+    @Test
     public void shouldEnableSelfJoin() {
         final String value = StreamsConfig.SINGLE_STORE_SELF_JOIN;
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
@@ -1280,7 +1307,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldMultipleOptimizations() {
+    public void shouldAllowMultipleOptimizations() {
         final String value = String.join(",",
                                          StreamsConfig.SINGLE_STORE_SELF_JOIN,
                                          StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS,

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -234,6 +235,15 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String CLIENT_TAG_PREFIX = "client.tag.";
 
+    /** {@code topology.optimization} */
+    public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
+    private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka "
+        + "Streams if it should optimize the topology and what optimizations to apply. "
+        + "Acceptable values are: \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
+        + "or a comma separated list of specific optimizations: "
+        + "(\"+REUSE_KTABLE_SOURCE_TOPICS+\", \"+MERGE_REPARTITION_TOPICS+\", or \"+SELF_JOIN+\"). "
+        + "Disabled by default.";
+
     /**
      * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"} for disabling topology optimization
      */
@@ -249,20 +259,24 @@ public class StreamsConfig extends AbstractConfig {
      * for enabling the specific optimization that reuses source topic as changelog topic
      * for KTables.
      */
-    public static final String REUSE_KTABLE_SOURCE_TOPICS = "reuse.ktable.source.topics";
+    public static final String REUSE_KTABLE_SOURCE_TOPICS = "topology.optimization.reuse.ktable.source.topics";
 
     /**
      * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"}
      * for enabling the specific optimization that merges duplicated repartition topics.
      */
-    public static final String MERGE_REPARTITION_TOPICS = "merge.repartition.topics";
+    public static final String MERGE_REPARTITION_TOPICS = "topology.optimization.merge.repartition.topics";
 
     /**
      * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"}
      * for enabling the optimization that optimizes inner stream-stream joins into self-joins when
      * both arguments are the same stream.
      */
-    public static final String SINGLE_STORE_SELF_JOIN = "single.store.self.join";
+    public static final String SINGLE_STORE_SELF_JOIN = "topology.optimization.single.store.self.join";
+
+    private static final List<String> TOPOLOGY_OPTIMIZATION_CONFIGS = Arrays.asList(
+        OPTIMIZE, NO_OPTIMIZATION, REUSE_KTABLE_SOURCE_TOPICS, MERGE_REPARTITION_TOPICS,
+        SINGLE_STORE_SELF_JOIN);
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.0.x}.
@@ -680,11 +694,6 @@ public class StreamsConfig extends AbstractConfig {
         "For a timeout of 0ms, a task would raise an error for the first internal error. " +
         "For any timeout larger than 0ms, a task will retry at least once before an error is raised.";
 
-    /** {@code topology.optimization} */
-    public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
-    private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka "
-        + "Streams if it should optimize the topology and what optimizations to apply in a comma "
-        + "separated list. Disabled by default";
 
     /** {@code window.size.ms} */
     public static final String WINDOW_SIZE_MS_CONFIG = "window.size.ms";
@@ -1668,11 +1677,9 @@ public class StreamsConfig extends AbstractConfig {
         return props;
     }
 
-    public static List<String> verifyTopologyOptimizationConfigs(final String config) {
-        final List<String> acceptableConfigs = Arrays.asList(
-            OPTIMIZE, NO_OPTIMIZATION, REUSE_KTABLE_SOURCE_TOPICS, MERGE_REPARTITION_TOPICS,
-            SINGLE_STORE_SELF_JOIN);
+    public static Set<String> verifyTopologyOptimizationConfigs(final String config) {
         final List<String> configs = Arrays.asList(config.split("\\s*,\\s*"));
+        final Set<String> verifiedConfigs = new HashSet<>();
         // Verify it doesn't contain none or all plus a list of optimizations
         if (configs.contains(NO_OPTIMIZATION) || configs.contains(OPTIMIZE)) {
             if (configs.size() > 1) {
@@ -1685,11 +1692,18 @@ public class StreamsConfig extends AbstractConfig {
             }
         }
         for (final String conf: configs) {
-            if (!acceptableConfigs.contains(conf)) {
-                throw new ConfigException("Unrecognized config. String must be in " + acceptableConfigs);
+            if (!TOPOLOGY_OPTIMIZATION_CONFIGS.contains(conf)) {
+                throw new ConfigException("Unrecognized config. String must be in " + TOPOLOGY_OPTIMIZATION_CONFIGS);
             }
         }
-        return configs;
+        if (configs.contains(OPTIMIZE)) {
+            verifiedConfigs.add(REUSE_KTABLE_SOURCE_TOPICS);
+            verifiedConfigs.add(MERGE_REPARTITION_TOPICS);
+            verifiedConfigs.add(SINGLE_STORE_SELF_JOIN);
+        } else if (!configs.contains(NO_OPTIMIZATION)) {
+            verifiedConfigs.addAll(configs);
+        }
+        return verifiedConfigs;
     }
 
     /**
