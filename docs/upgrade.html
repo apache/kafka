@@ -81,6 +81,11 @@
 
 <h5><a id="upgrade_330_notable" href="#upgrade_330_notable">Notable changes in 3.3.0</a></h5>
     <ul>
+        <li>The partitioner used by default for records with no keys has been improved to avoid pathological behavior when one or more brokers are slow.
+            The new logic may affect the batching behavior, which can be tuned using the <code>batch.size</code> and/or <code>linger.ms</code> configuration settings.
+            The previous behavior can be restored by setting <code>partitioner.class=org.apache.kafka.clients.producer.internals.DefaultPartitioner</code>.
+            See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-794%3A+Strictly+Uniform+Sticky+Partitioner">KIP-794</a> for more details.
+        </li>
         <li>There is now a slightly different upgrade process for KRaft clusters than for ZK-based clusters, as described above.</li>
         <li>Introduced a new API <code>addMetricIfAbsent</code> to <code>Metrics</code> which would create a new Metric if not existing or return the same metric
             if already registered. Note that this behaviour is different from <code>addMetric</code> API which throws an <code>IllegalArgumentException</code> when
