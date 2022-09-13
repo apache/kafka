@@ -298,4 +298,9 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     public boolean hasIndex() {
         return indexKeySchema.isPresent();
     }
+
+    @Override
+    public boolean transactional() {
+        return segments.txnMechanism != null;
+    }
 }

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -1047,10 +1049,16 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(100));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[2])), serializeValue(500));
-        assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
+        checkSegmentDirs(bytesStore.transactional(), Collections.singleton(segments.segmentName(0)), segmentDirs());
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(1000));
-        assertEquals(Utils.mkSet(segments.segmentName(0), segments.segmentName(1)), segmentDirs());
+        checkSegmentDirs(
+            bytesStore.transactional(),
+            Utils.mkSet(
+                segments.segmentName(0),
+                segments.segmentName(1)),
+            segmentDirs()
+        );
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 1500));
 
@@ -1074,10 +1082,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         final String keyB = "b";
 
         bytesStore.put(serializeKey(new Windowed<>(keyA, windows[0])), serializeValue(50L));
-        assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
+        checkSegmentDirs(bytesStore.transactional(), Collections.singleton(segments.segmentName(0)), segmentDirs());
 
         bytesStore.put(serializeKey(new Windowed<>(keyB, windows[3])), serializeValue(100L));
-        assertEquals(
+        checkSegmentDirs(
+            bytesStore.transactional(),
             Utils.mkSet(
                 segments.segmentName(0),
                 segments.segmentName(1)
@@ -1105,10 +1114,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         final String keyB = "b";
 
         bytesStore.put(serializeKey(new Windowed<>(keyA, windows[0])), serializeValue(50L));
-        assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
+        checkSegmentDirs(bytesStore.transactional(), Collections.singleton(segments.segmentName(0)), segmentDirs());
 
         bytesStore.put(serializeKey(new Windowed<>(keyB, windows[3])), serializeValue(100L));
-        assertEquals(
+        checkSegmentDirs(
+            bytesStore.transactional(),
             Utils.mkSet(
                 segments.segmentName(0),
                 segments.segmentName(1)
@@ -1135,10 +1145,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
-        assertEquals(Collections.singleton(segments.segmentName(0)), segmentDirs());
+        checkSegmentDirs(bytesStore.transactional(), Collections.singleton(segments.segmentName(0)), segmentDirs());
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
-        assertEquals(
+        checkSegmentDirs(
+            bytesStore.transactional(),
             Utils.mkSet(
                 segments.segmentName(0),
                 segments.segmentName(1)
@@ -1665,5 +1676,19 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
             }
         }
         return results;
+    }
+
+    private void checkSegmentDirs(final boolean isTransactional,
+                                  final Set<String> expectedSegments,
+                                  final Set<String> actualSegments) {
+        final Set<String> expected;
+        if (isTransactional) {
+            expected = expectedSegments.stream()
+                .flatMap(segment -> Stream.of(segment, segment + AbstractTransactionalStore.TMP_SUFFIX))
+                .collect(Collectors.toSet());
+        } else {
+            expected = expectedSegments;
+        }
+        assertEquals(expected, actualSegments);
     }
 }
