@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.TaskStatus.Listener;
 import org.apache.kafka.connect.runtime.WorkerTask.TaskMetricsGroup;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
@@ -37,16 +38,11 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.CALLS_REAL_METHODS;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.withSettings;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class WorkerTaskTest {
@@ -78,25 +74,13 @@ public class WorkerTaskTest {
     public void standardStartup() {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
-        WorkerTask workerTask = mock(WorkerTask.class, withSettings()
-                .useConstructor(taskId, statusListener, TargetState.STARTED, loader, metrics,
-                        retryWithToleranceOperator, Time.SYSTEM, statusBackingStore)
-                .defaultAnswer(CALLS_REAL_METHODS));
-
-        doNothing().when(workerTask).initialize(any(TaskConfig.class));
-        doNothing().when(workerTask).initializeAndStart();
-        doNothing().when(workerTask).execute();
-        doNothing().when(workerTask).close();
+        WorkerTask workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics,
+                retryWithToleranceOperator, Time.SYSTEM, statusBackingStore);
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.run();
         workerTask.stop();
         workerTask.awaitStop(1000L);
-
-        verify(workerTask).initialize(eq(TASK_CONFIG));
-        verify(workerTask).initializeAndStart();
-        verify(workerTask).execute();
-        verify(workerTask).close();
 
         verify(statusListener).onStartup(eq(taskId));
         verify(statusListener).onShutdown(eq(taskId));
@@ -106,13 +90,19 @@ public class WorkerTaskTest {
     public void stopBeforeStarting() {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
-        WorkerTask workerTask = mock(WorkerTask.class, withSettings()
-                .useConstructor(taskId, statusListener, TargetState.STARTED, loader, metrics,
-                        retryWithToleranceOperator, Time.SYSTEM, statusBackingStore)
-                .defaultAnswer(CALLS_REAL_METHODS));
+        WorkerTask workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics,
+                retryWithToleranceOperator, Time.SYSTEM, statusBackingStore) {
 
-        doNothing().when(workerTask).initialize(any(TaskConfig.class));
-        doNothing().when(workerTask).close();
+            @Override
+            public void initializeAndStart() {
+                fail("This method is expected to not be invoked");
+            }
+
+            @Override
+            public void execute() {
+                fail("This method is expected to not be invoked");
+            }
+        };
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.stop();
@@ -120,37 +110,32 @@ public class WorkerTaskTest {
 
         // now run should not do anything
         workerTask.run();
-
-        verify(workerTask).initialize(eq(TASK_CONFIG));
-        verify(workerTask).close();
-        verify(workerTask, never()).initializeAndStart();
-        verify(workerTask, never()).execute();
     }
 
     @Test
     public void cancelBeforeStopping() throws Exception {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
-
-        WorkerTask workerTask = mock(WorkerTask.class, withSettings()
-                .useConstructor(taskId, statusListener, TargetState.STARTED, loader, metrics,
-                        retryWithToleranceOperator, Time.SYSTEM, statusBackingStore)
-                .defaultAnswer(CALLS_REAL_METHODS));
-
         final CountDownLatch stopped = new CountDownLatch(1);
 
-        doNothing().when(workerTask).initialize(any(TaskConfig.class));
+        WorkerTask workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics,
+                retryWithToleranceOperator, Time.SYSTEM, statusBackingStore) {
 
-        // Trigger task shutdown immediately after start. The task will block in it's execute() method
-        // until the stopped latch is counted down (i.e. it doesn't actually stop after stop is triggered).
-        doAnswer(i -> {
-            workerTask.stop();
-            return null;
-        }).when(workerTask).initializeAndStart();
+            @Override
+            public void execute() {
+                try {
+                    stopped.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
 
-        doAnswer(i -> {
-            stopped.await();
-            return null;
-        }).when(workerTask).execute();
+            // Trigger task shutdown immediately after start. The task will block in it's execute() method
+            // until the stopped latch is counted down (i.e. it doesn't actually stop after stop is triggered).
+            @Override
+            public void initializeAndStart() {
+                stop();
+            }
+        };
 
         workerTask.initialize(TASK_CONFIG);
         Thread t = new Thread(workerTask);
@@ -159,11 +144,6 @@ public class WorkerTaskTest {
         workerTask.cancel();
         stopped.countDown();
         t.join();
-
-        verify(workerTask).initialize(eq(TASK_CONFIG));
-        verify(workerTask).initializeAndStart();
-        verify(workerTask).execute();
-        verify(workerTask).close();
 
         verify(statusListener).onStartup(eq(taskId));
         // there should be no call to onShutdown()
@@ -241,6 +221,31 @@ public class WorkerTaskTest {
     }
 
     private static abstract class TestSinkTask extends SinkTask {
+    }
+
+    private static class TestWorkerTask extends WorkerTask {
+
+        public TestWorkerTask(ConnectorTaskId id, Listener statusListener, TargetState initialState, ClassLoader loader,
+                              ConnectMetrics connectMetrics, RetryWithToleranceOperator retryWithToleranceOperator, Time time,
+                              StatusBackingStore statusBackingStore) {
+            super(id, statusListener, initialState, loader, connectMetrics, retryWithToleranceOperator, time, statusBackingStore);
+        }
+
+        @Override
+        public void initialize(TaskConfig taskConfig) {
+        }
+
+        @Override
+        protected void initializeAndStart() {
+        }
+
+        @Override
+        protected void execute() {
+        }
+
+        @Override
+        protected void close() {
+        }
     }
 
     protected void assertFailedMetric(TaskMetricsGroup metricsGroup) {
