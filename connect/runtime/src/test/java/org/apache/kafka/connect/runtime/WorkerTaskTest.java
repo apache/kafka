@@ -39,10 +39,9 @@ import java.util.concurrent.CountDownLatch;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class WorkerTaskTest {
@@ -55,7 +54,7 @@ public class WorkerTaskTest {
 
     @Mock private TaskStatus.Listener statusListener;
     @Mock private ClassLoader loader;
-    @Mock StatusBackingStore statusBackingStore;
+    @Mock private StatusBackingStore statusBackingStore;
     private ConnectMetrics metrics;
     private RetryWithToleranceOperator retryWithToleranceOperator;
 
@@ -82,8 +81,8 @@ public class WorkerTaskTest {
         workerTask.stop();
         workerTask.awaitStop(1000L);
 
-        verify(statusListener).onStartup(eq(taskId));
-        verify(statusListener).onShutdown(eq(taskId));
+        verify(statusListener).onStartup(taskId);
+        verify(statusListener).onShutdown(taskId);
     }
 
     @Test
@@ -125,11 +124,11 @@ public class WorkerTaskTest {
                 try {
                     stopped.await();
                 } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
+                    fail("Unexpected interrupt");
                 }
             }
 
-            // Trigger task shutdown immediately after start. The task will block in it's execute() method
+            // Trigger task shutdown immediately after start. The task will block in its execute() method
             // until the stopped latch is counted down (i.e. it doesn't actually stop after stop is triggered).
             @Override
             public void initializeAndStart() {
@@ -145,9 +144,9 @@ public class WorkerTaskTest {
         stopped.countDown();
         t.join();
 
-        verify(statusListener).onStartup(eq(taskId));
-        // there should be no call to onShutdown()
-        verify(statusListener, never()).onShutdown(eq(taskId));
+        verify(statusListener).onStartup(taskId);
+        // there should be no other status updates, including shutdown
+        verifyNoMoreInteractions(statusListener);
     }
 
     @Test

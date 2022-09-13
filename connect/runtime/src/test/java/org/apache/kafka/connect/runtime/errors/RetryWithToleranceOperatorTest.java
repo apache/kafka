@@ -73,7 +73,6 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -244,7 +243,7 @@ public class RetryWithToleranceOperatorTest {
         });
 
         for (Long expectedWait : expectedWaits) {
-            when(exitLatch.await(eq(expectedWait), eq(TimeUnit.MILLISECONDS))).thenAnswer(i -> {
+            when(exitLatch.await(expectedWait, TimeUnit.MILLISECONDS)).thenAnswer(i -> {
                 time.sleep(expectedWait);
                 return false;
             });
@@ -289,19 +288,19 @@ public class RetryWithToleranceOperatorTest {
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
         when(mockOperation.call()).thenThrow(new RetriableException("test"));
 
-        when(exitLatch.await(eq(300L), eq(TimeUnit.MILLISECONDS))).thenAnswer(i -> {
+        when(exitLatch.await(300L, TimeUnit.MILLISECONDS)).thenAnswer(i -> {
             time.sleep(300);
             return false;
         });
-        when(exitLatch.await(eq(600L), eq(TimeUnit.MILLISECONDS))).thenAnswer(i -> {
+        when(exitLatch.await(600L, TimeUnit.MILLISECONDS)).thenAnswer(i -> {
             time.sleep(600);
             return false;
         });
-        when(exitLatch.await(eq(1200L), eq(TimeUnit.MILLISECONDS))).thenAnswer(i -> {
+        when(exitLatch.await(1200L, TimeUnit.MILLISECONDS)).thenAnswer(i -> {
             time.sleep(1200);
             return false;
         });
-        when(exitLatch.await(eq(2400L), eq(TimeUnit.MILLISECONDS))).thenAnswer(i -> {
+        when(exitLatch.await(2400L, TimeUnit.MILLISECONDS)).thenAnswer(i -> {
             time.sleep(2400);
             retryWithToleranceOperator.triggerStop();
             return false;
