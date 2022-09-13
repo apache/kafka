@@ -2327,11 +2327,9 @@ public class FetcherTest {
         buildFetcher();
         assignFromUser(singleton(tp0));
         subscriptions.seek(tp0, 100);
-        subscriptions.seek(tp0, 100);
-        subscriptions.seek(tp0, 100);
         assertEquals(100, subscriptions.position(tp0).offset);
 
-        assertTrue(subscriptions.isFetchable(tp0)); // because tp is paused
+        assertTrue(subscriptions.isFetchable(tp0));
 
         subscriptions.markPendingRevocation(singleton(tp0));
         fetcher.resetOffsetsIfNeeded();
