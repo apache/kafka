@@ -92,6 +92,7 @@ class ReplicaManagerTest {
 
   @BeforeEach
   def setUp(): Unit = {
+    // test
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     config = KafkaConfig.fromProps(props)
     alterPartitionManager = mock(classOf[AlterPartitionManager])
