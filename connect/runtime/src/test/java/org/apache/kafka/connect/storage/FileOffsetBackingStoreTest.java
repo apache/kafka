@@ -25,6 +25,7 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -68,8 +69,8 @@ public class FileOffsetBackingStoreTest {
     }
 
     @After
-    public void teardown() {
-        tempFile.delete();
+    public void teardown() throws IOException {
+        Files.deleteIfExists(tempFile.toPath());
     }
 
     @Test

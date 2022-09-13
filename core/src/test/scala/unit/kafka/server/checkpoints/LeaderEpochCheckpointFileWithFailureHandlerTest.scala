@@ -16,10 +16,8 @@
   */
 package kafka.server.checkpoints
 
-import java.io.File
-
 import kafka.server.epoch.EpochEntry
-import kafka.utils.Logging
+import kafka.utils.{Logging, TestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -27,8 +25,7 @@ class LeaderEpochCheckpointFileWithFailureHandlerTest extends Logging {
 
   @Test
   def shouldPersistAndOverwriteAndReloadFile(): Unit ={
-    val file = File.createTempFile("temp-checkpoint-file", System.nanoTime().toString)
-    file.deleteOnExit()
+    val file = TestUtils.tempFile("temp-checkpoint-file", System.nanoTime().toString)
 
     val checkpoint = new LeaderEpochCheckpointFile(file)
 
@@ -53,8 +50,7 @@ class LeaderEpochCheckpointFileWithFailureHandlerTest extends Logging {
 
   @Test
   def shouldRetainValuesEvenIfCheckpointIsRecreated(): Unit ={
-    val file = File.createTempFile("temp-checkpoint-file", System.nanoTime().toString)
-    file.deleteOnExit()
+    val file = TestUtils.tempFile("temp-checkpoint-file", System.nanoTime().toString)
 
     //Given a file with data in
     val checkpoint = new LeaderEpochCheckpointFile(file)

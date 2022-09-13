@@ -27,6 +27,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.test.IntegrationTest;
 
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -236,7 +237,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
 
         // RESET
-        final File resetFile = File.createTempFile("reset", ".csv");
+        final File resetFile = TestUtils.tempFile("reset", ".csv");
         try (final BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
             writer.write(INPUT_TOPIC + ",0,1");
         }
@@ -277,7 +278,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
 
         // RESET
-        final File resetFile = File.createTempFile("reset", ".csv");
+        final File resetFile = TestUtils.tempFile("reset", ".csv");
         try (final BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
             writer.write(INPUT_TOPIC + ",0,1");
         }
@@ -322,7 +323,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
 
         // RESET
-        final File resetFile = File.createTempFile("reset", ".csv");
+        final File resetFile = TestUtils.tempFile("reset", ".csv");
         try (final BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
             writer.write(INPUT_TOPIC + ",0,1");
         }
