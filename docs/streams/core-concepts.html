@@ -295,8 +295,9 @@
         which requires broker version 2.5.0 or newer.
         This implementation is more efficient, because it reduces client and broker resource utilization, like client threads and used network connections, 
         and it enables higher throughput and improved scalability.
-        As of the 3.0.0 release, the first version of exactly-once has been deprecated. Users are encouraged to use exactly-once v2 for
-        exactly-once processing from now on, and prepare by upgrading their brokers if necessary.
+        As of the 3.0.0 release, the first version of exactly-once has been deprecated, and with the 4.0.0 release,
+        it has been removed from Kafka Streams. Users who want to use exactly-once processing with Kafka streams 4.0.0
+        or newer, upgrade to broker version 2.5.0 or newer.
         For more information on how this is done inside the brokers and Kafka Streams, see 
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-447%3A+Producer+scalability+for+exactly+once+semantics">KIP-447</a>.<br />
 
