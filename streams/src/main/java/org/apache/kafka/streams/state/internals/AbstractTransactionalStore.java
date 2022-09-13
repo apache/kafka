@@ -83,7 +83,7 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
     void doInit(final Map<String, Object> configs, final File stateDir) {
         this.configs = configs;
         this.stateDir = stateDir;
-        truncateTmpStore();
+        tmpStore().openDB(configs, stateDir);
     }
 
     @Override

@@ -27,12 +27,19 @@ public class TransactionalKeyValueStore extends AbstractTransactionalStore<KeyVa
     final KeyValueStore<Bytes, byte[]> mainStore;
 
     TransactionalKeyValueStore(final KeyValueStore<Bytes, byte[]> mainStore, final String metricsScope) {
+        this(mainStore, new RocksDBMetricsRecorder(metricsScope, mainStore.name()));
+    }
+
+    //VisibleForTesting
+    TransactionalKeyValueStore(final KeyValueStore<Bytes, byte[]> mainStore,
+                               final RocksDBMetricsRecorder metricsRecorder) {
         this.name = PREFIX + mainStore.name();
         this.mainStore = mainStore;
         this.tmpStore = createTmpStore(mainStore.name(),
-                                       mainStore.name(),
-                                      0,
-                                       new RocksDBMetricsRecorder(metricsScope, mainStore.name()));
+            mainStore.name(),
+            0,
+            metricsRecorder
+        );
     }
 
     @Override
@@ -49,4 +56,6 @@ public class TransactionalKeyValueStore extends AbstractTransactionalStore<KeyVa
     public String name() {
         return name;
     }
+
+
 }

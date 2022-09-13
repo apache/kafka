@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.easymock.EasyMock.mock;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
@@ -29,8 +29,9 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -39,11 +40,8 @@ import org.junit.Before;
 import org.junit.Test;
 
 public abstract class AbstractTransactionalStoreTest<T extends KeyValueStore<Bytes, byte[]>> {
-    // TODO: close tests
-    // TODO: reverseAll tests
     InternalMockProcessorContext<Object, Object> context;
     AbstractTransactionalStore<T> txnStore;
-
     final Bytes key1 = Bytes.wrap("key1".getBytes());
     final byte[] val1 = "val1".getBytes();
     final Bytes key2 = Bytes.wrap("key2".getBytes());
@@ -57,7 +55,11 @@ public abstract class AbstractTransactionalStoreTest<T extends KeyValueStore<Byt
             Serdes.String(),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig())
         );
-        txnStore = getTxnStore();
+        try {
+            txnStore = getTxnStore();
+        } catch (final Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @After
@@ -147,6 +149,58 @@ public abstract class AbstractTransactionalStoreTest<T extends KeyValueStore<Byt
         expected.add(new KeyValue<>(key1, val2));
         expected.add(new KeyValue<>(key2, val2));
         final List<KeyValue<Bytes, byte[]>> actual = Utils.toList(txnStore.all());
+        assertEquals(expected.size(), actual.size());
+        for (int i = 0; i < expected.size(); i++) {
+            assertEquals(expected.get(i).key, actual.get(i).key);
+            assertArrayEquals(expected.get(i).value, actual.get(i).value);
+        }
+    }
+
+    @Test
+    public void testReverseAllUncommitted() {
+        txnStore.put(key1, val1);
+        txnStore.put(key2, val2);
+
+        final List<KeyValue<Bytes, byte[]>> expected = new ArrayList<>();
+        expected.add(new KeyValue<>(key2, val2));
+        expected.add(new KeyValue<>(key1, val1));
+        final List<KeyValue<Bytes, byte[]>> actual = Utils.toList(txnStore.reverseAll());
+        assertEquals(expected.size(), actual.size());
+        for (int i = 0; i < expected.size(); i++) {
+            assertEquals(expected.get(i).key, actual.get(i).key);
+            assertArrayEquals(expected.get(i).value, actual.get(i).value);
+        }
+    }
+
+    @Test
+    public void testReverseAllCommitted() {
+        txnStore.put(key1, val1);
+        txnStore.put(key2, val2);
+        txnStore.commit(1L);
+
+        final List<KeyValue<Bytes, byte[]>> expected = new ArrayList<>();
+        expected.add(new KeyValue<>(key2, val2));
+        expected.add(new KeyValue<>(key1, val1));
+        final List<KeyValue<Bytes, byte[]>> actual = Utils.toList(txnStore.reverseAll());
+
+        assertEquals(expected.size(), actual.size());
+        for (int i = 0; i < expected.size(); i++) {
+            assertEquals(expected.get(i).key, actual.get(i).key);
+            assertArrayEquals(expected.get(i).value, actual.get(i).value);
+        }
+    }
+
+    @Test
+    public void testReverseAllUncommittedShadowsCommitted() {
+        txnStore.put(key1, val1);
+        txnStore.put(key2, val2);
+        txnStore.commit(1L);
+        txnStore.put(key1, val2);
+
+        final List<KeyValue<Bytes, byte[]>> expected = new ArrayList<>();
+        expected.add(new KeyValue<>(key2, val2));
+        expected.add(new KeyValue<>(key1, val2));
+        final List<KeyValue<Bytes, byte[]>> actual = Utils.toList(txnStore.reverseAll());
         assertEquals(expected.size(), actual.size());
         for (int i = 0; i < expected.size(); i++) {
             assertEquals(expected.get(i).key, actual.get(i).key);
@@ -339,11 +393,20 @@ public abstract class AbstractTransactionalStoreTest<T extends KeyValueStore<Byt
         assertEquals(0, Utils.toList(txnStore.all()).size());
     }
 
-    KeyValueSegment getTmpStore() {
-        return new KeyValueSegment("tmp.0",
-            "window",
-            0,
-            mock(RocksDBMetricsRecorder.class));
+    @Test
+    public void testStateStoreCloseClosesOpenIterators() {
+        txnStore.put(key1, val1);
+        txnStore.commit(1L);
+        txnStore.put(key2, val2);
+
+        final KeyValueIterator<Bytes, byte[]> all = txnStore.all();
+        assertTrue(all.hasNext());
+        txnStore.close();
+        assertThrows(
+            "RocksDB iterator for store main.tmp has close",
+            InvalidStateStoreException.class,
+            all::hasNext
+        );
     }
 
     abstract AbstractTransactionalStore<T> getTxnStore();
