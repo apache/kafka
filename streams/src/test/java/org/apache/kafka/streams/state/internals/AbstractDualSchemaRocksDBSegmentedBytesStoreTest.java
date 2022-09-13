@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -84,6 +82,7 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
+import static org.apache.kafka.streams.state.internals.utils.TransactionalStateStores.checkSegmentDirs;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
@@ -1678,17 +1677,4 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         return results;
     }
 
-    private void checkSegmentDirs(final boolean isTransactional,
-                                  final Set<String> expectedSegments,
-                                  final Set<String> actualSegments) {
-        final Set<String> expected;
-        if (isTransactional) {
-            expected = expectedSegments.stream()
-                .flatMap(segment -> Stream.of(segment, segment + AbstractTransactionalStore.TMP_SUFFIX))
-                .collect(Collectors.toSet());
-        } else {
-            expected = expectedSegments;
-        }
-        assertEquals(expected, actualSegments);
-    }
 }

@@ -364,4 +364,9 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     public Position getPosition() {
         return position;
     }
+
+    @Override
+    public boolean transactional() {
+        return segments.txnMechanism != null;
+    }
 }

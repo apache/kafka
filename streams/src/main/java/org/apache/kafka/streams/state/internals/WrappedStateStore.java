@@ -132,4 +132,9 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
     public S wrapped() {
         return wrapped;
     }
+
+    @Override
+    public boolean transactional() {
+        return wrapped.transactional();
+    }
 }

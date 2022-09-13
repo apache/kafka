@@ -40,7 +40,8 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
     private static final byte[] DELETION_VAL = {DELETION};
 
     static final String PREFIX = "transactional-";
-    static final String TMP_SUFFIX = ".tmp";
+    //VisibleForTesting
+    public static final String TMP_SUFFIX = ".tmp";
 
     private final Set<MergeKeyValueIterator> openIterators = Collections.synchronizedSet(new HashSet<>());
 

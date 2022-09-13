@@ -24,8 +24,6 @@ import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
 
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
@@ -50,6 +48,7 @@ import static java.util.Arrays.asList;
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.state.internals.utils.TransactionalStateStores.checkSegmentDirs;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -171,13 +170,20 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
         final long startTime = SEGMENT_INTERVAL * 2;
         final long increment = SEGMENT_INTERVAL / 2;
         windowStore.put(0, "zero", startTime);
-        checkSegmentDirs(Utils.mkSet(segments.segmentName(2)), segmentDirs(baseDir));
+        checkSegmentDirs(
+            windowStore.transactional(),
+            Utils.mkSet(segments.segmentName(2)), segmentDirs(baseDir)
+        );
 
         windowStore.put(1, "one", startTime + increment);
-        checkSegmentDirs(Utils.mkSet(segments.segmentName(2)), segmentDirs(baseDir));
+        checkSegmentDirs(
+            windowStore.transactional(),
+            Utils.mkSet(segments.segmentName(2)), segmentDirs(baseDir)
+        );
 
         windowStore.put(2, "two", startTime + increment * 2);
         checkSegmentDirs(
+            windowStore.transactional(),
             Utils.mkSet(
                 segments.segmentName(2),
                 segments.segmentName(3)
@@ -187,6 +193,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
         windowStore.put(4, "four", startTime + increment * 4);
         checkSegmentDirs(
+            windowStore.transactional(),
             Utils.mkSet(
                 segments.segmentName(2),
                 segments.segmentName(3),
@@ -197,6 +204,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
         windowStore.put(5, "five", startTime + increment * 5);
         checkSegmentDirs(
+            windowStore.transactional(),
             Utils.mkSet(
                 segments.segmentName(2),
                 segments.segmentName(3),
@@ -244,6 +252,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
         windowStore.put(6, "six", startTime + increment * 6);
         checkSegmentDirs(
+            windowStore.transactional(),
             Utils.mkSet(
                 segments.segmentName(3),
                 segments.segmentName(4),
@@ -297,6 +306,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
         windowStore.put(7, "seven", startTime + increment * 7);
         checkSegmentDirs(
+            windowStore.transactional(),
             Utils.mkSet(
                 segments.segmentName(3),
                 segments.segmentName(4),
@@ -356,6 +366,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
         windowStore.put(8, "eight", startTime + increment * 8);
         checkSegmentDirs(
+            windowStore.transactional(),
             Utils.mkSet(
                 segments.segmentName(4),
                 segments.segmentName(5),
@@ -422,6 +433,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
         // check segment directories
         windowStore.commit(null);
         checkSegmentDirs(
+            windowStore.transactional(),
             Utils.mkSet(
                 segments.segmentName(4),
                 segments.segmentName(5),
@@ -440,14 +452,21 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
         context.setTime(0L);
         windowStore.put(0, "v", 0);
-        checkSegmentDirs(Utils.mkSet(segments.segmentName(0L)), segmentDirs(baseDir));
+        checkSegmentDirs(
+            windowStore.transactional(),
+            Utils.mkSet(segments.segmentName(0L)), segmentDirs(baseDir)
+        );
 
         windowStore.put(0, "v", SEGMENT_INTERVAL - 1);
         windowStore.put(0, "v", SEGMENT_INTERVAL - 1);
-        checkSegmentDirs(Utils.mkSet(segments.segmentName(0L)), segmentDirs(baseDir));
+        checkSegmentDirs(
+            windowStore.transactional(),
+            Utils.mkSet(segments.segmentName(0L)), segmentDirs(baseDir)
+        );
 
         windowStore.put(0, "v", SEGMENT_INTERVAL);
         checkSegmentDirs(
+            windowStore.transactional(),
             Utils.mkSet(segments.segmentName(0L), segments.segmentName(1L)),
             segmentDirs(baseDir)
         );
@@ -464,6 +483,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
         assertEquals(4, fetchedCount);
 
         checkSegmentDirs(
+            windowStore.transactional(),
             Utils.mkSet(segments.segmentName(0L), segments.segmentName(1L)),
             segmentDirs(baseDir)
         );
@@ -479,6 +499,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
         assertEquals(2, fetchedCount);
 
         checkSegmentDirs(
+            windowStore.transactional(),
             Utils.mkSet(segments.segmentName(1L), segments.segmentName(3L)),
             segmentDirs(baseDir)
         );
@@ -493,6 +514,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
         }
         assertEquals(1, fetchedCount);
         checkSegmentDirs(
+            windowStore.transactional(),
             Utils.mkSet(segments.segmentName(3L), segments.segmentName(5L)),
             segmentDirs(baseDir)
         );
@@ -527,7 +549,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
         final List<String> actual = Utils.toList(segmentDirs(baseDir).iterator());
         actual.sort(String::compareTo);
 
-        checkSegmentDirs(expected, actual);
+        checkSegmentDirs(windowStore.transactional(), expected, actual);
 
         try (final WindowStoreIterator iter = windowStore.fetch(0, ofEpochMilli(0L), ofEpochMilli(1000000L))) {
             while (iter.hasNext()) {
@@ -536,6 +558,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
         }
 
         checkSegmentDirs(
+            windowStore.transactional(),
             Utils.mkSet(
                 segments.segmentName(4L),
                 segments.segmentName(5L),
@@ -693,6 +716,7 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
         // check segment directories
         windowStore.commit(null);
         checkSegmentDirs(
+            windowStore.transactional(),
             Utils.mkSet(
                 segments.segmentName(4L),
                 segments.segmentName(5L),
@@ -726,29 +750,4 @@ public class RocksDBWindowStoreTest extends AbstractWindowBytesStoreTest {
 
         return new HashSet<>(asList(requireNonNull(windowDir.list())));
     }
-
-    private void checkSegmentDirs(final Set<String> expectedSegments, final Set<String> actualSegments) {
-        final Set<String> expected;
-        if (txnMechanism == RocksDBTransactionalMechanism.SECONDARY_STORE) {
-            expected = expectedSegments.stream()
-                .flatMap(segment -> Stream.of(segment, segment + ".tmp"))
-                .collect(Collectors.toSet());
-        } else {
-            expected = expectedSegments;
-        }
-        assertEquals(expected, actualSegments);
-    }
-
-    private void checkSegmentDirs(final List<String> expectedSegments, final List<String> actualSegments) {
-        final List<String> expected;
-        if (txnMechanism == RocksDBTransactionalMechanism.SECONDARY_STORE) {
-            expected = expectedSegments.stream()
-                .flatMap(segment -> Stream.of(segment, segment + ".tmp"))
-                .collect(Collectors.toList());
-        } else {
-            expected = expectedSegments;
-        }
-        assertEquals(expected, actualSegments);
-    }
-
 }

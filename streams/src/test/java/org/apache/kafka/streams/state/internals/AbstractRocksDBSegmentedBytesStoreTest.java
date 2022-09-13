@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -82,6 +80,7 @@ import java.util.SimpleTimeZone;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
+import static org.apache.kafka.streams.state.internals.utils.TransactionalStateStores.checkSegmentDirs;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
@@ -345,10 +344,16 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(100));
         bytesStore.put(serializeKey(new Windowed<>(key, windows[2])), serializeValue(500));
-        checkSegmentDirs(Collections.singleton(segments.segmentName(0)), segmentDirs());
+        checkSegmentDirs(
+            bytesStore.transactional(),
+            Collections.singleton(segments.segmentName(0)), segmentDirs()
+        );
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(1000));
-        checkSegmentDirs(Utils.mkSet(segments.segmentName(0), segments.segmentName(1)), segmentDirs());
+        checkSegmentDirs(
+            bytesStore.transactional(),
+            Utils.mkSet(segments.segmentName(0), segments.segmentName(1)), segmentDirs()
+        );
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0, 1500));
 
@@ -371,10 +376,14 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
-        checkSegmentDirs(Collections.singleton(segments.segmentName(0)), segmentDirs());
+        checkSegmentDirs(
+            bytesStore.transactional(),
+            Collections.singleton(segments.segmentName(0)), segmentDirs()
+        );
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
         checkSegmentDirs(
+            bytesStore.transactional(),
             Utils.mkSet(
                 segments.segmentName(0),
                 segments.segmentName(1)
@@ -401,10 +410,14 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
-        checkSegmentDirs(Collections.singleton(segments.segmentName(0)), segmentDirs());
+        checkSegmentDirs(
+            bytesStore.transactional(),
+            Collections.singleton(segments.segmentName(0)), segmentDirs()
+        );
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[3])), serializeValue(100L));
         checkSegmentDirs(
+            bytesStore.transactional(),
             Utils.mkSet(
                 segments.segmentName(0),
                 segments.segmentName(1)
@@ -903,17 +916,5 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             }
         }
         return results;
-    }
-
-    private void checkSegmentDirs(final Set<String> expectedSegments, final Set<String> actualSegments) {
-        final Set<String> expected;
-        if (txnMechanism == RocksDBTransactionalMechanism.SECONDARY_STORE) {
-            expected = expectedSegments.stream()
-                .flatMap(segment -> Stream.of(segment, segment + ".tmp"))
-                .collect(Collectors.toSet());
-        } else {
-            expected = expectedSegments;
-        }
-        assertEquals(expected, actualSegments);
     }
 }
