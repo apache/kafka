@@ -25,6 +25,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Endpoint, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
+import org.apache.kafka.metadata.util.SnapshotReason
 import org.apache.kafka.metadata.{BrokerRegistration, RecordTestUtils, VersionRange}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
@@ -137,7 +138,7 @@ class BrokerMetadataListenerTest {
     var prevCommittedEpoch = -1
     var prevLastContainedLogTime = -1L
 
-    override def maybeStartSnapshot(lastContainedLogTime: Long, newImage: MetadataImage): Boolean = {
+    override def maybeStartSnapshot(lastContainedLogTime: Long, newImage: MetadataImage, reason: Set[SnapshotReason]): Boolean = {
       try {
         if (activeSnapshotOffset == -1L) {
           assertTrue(prevCommittedOffset <= newImage.highestOffsetAndEpoch().offset)

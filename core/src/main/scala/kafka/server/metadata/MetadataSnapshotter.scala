@@ -17,6 +17,7 @@
 package kafka.server.metadata
 
 import org.apache.kafka.image.MetadataImage
+import org.apache.kafka.metadata.util.SnapshotReason
 
 
 /**
@@ -28,8 +29,9 @@ trait MetadataSnapshotter {
    *
    * @param lastContainedLogTime  The highest time contained in the snapshot.
    * @param image                 The metadata image to write out.
+   * @param reason                Set of reasons due to which a snapshot is being taken.
    *
    * @return                      True if we will write out a new snapshot; false otherwise.
    */
-  def maybeStartSnapshot(lastContainedLogTime: Long, image: MetadataImage): Boolean
+  def maybeStartSnapshot(lastContainedLogTime: Long, image: MetadataImage, reason: Set[SnapshotReason]): Boolean
 }
