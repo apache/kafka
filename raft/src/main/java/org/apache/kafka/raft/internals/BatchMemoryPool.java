@@ -24,23 +24,44 @@ import java.util.Deque;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Simple memory pool which maintains a limited number of fixed-size buffers.
+ * Simple memory pool that tries to maintain a limited number of fixed-size buffers.
+ *
+ * This type implements an unbounded memory pool. When releasing byte buffers they will get pooled
+ * up to the maximum retained number of batches.
  */
 public class BatchMemoryPool implements MemoryPool {
     private final ReentrantLock lock;
     private final Deque<ByteBuffer> free;
-    private final int maxBatches;
+    private final int maxRetainedBatches;
     private final int batchSize;
 
     private int numAllocatedBatches = 0;
 
-    public BatchMemoryPool(int maxBatches, int batchSize) {
-        this.maxBatches = maxBatches;
+    /**
+     * Construct a memory pool.
+     *
+     * The byte buffers are always of batchSize size. The memory pool is unbounded but it will retain
+     * up to maxRetainedBatches byte buffers for reuse.
+     *
+     * @param maxRetainedBatches maximum number of byte buffers to pool for reuse
+     * @param batchSize the size of each byte buffer
+     */
+    public BatchMemoryPool(int maxRetainedBatches, int batchSize) {
+        this.maxRetainedBatches = maxRetainedBatches;
         this.batchSize = batchSize;
-        this.free = new ArrayDeque<>(maxBatches);
+        this.free = new ArrayDeque<>(maxRetainedBatches);
         this.lock = new ReentrantLock();
     }
 
+    /**
+     * Allocate a byte buffer in this pool.
+     *
+     * This method should always succeed and never return null. The sizeBytes parameter must be less than
+     * the batchSize used in the constructor.
+     *
+     * @param sizeBytes is not used to determine the size of the byte buffer
+     * @throws IllegalArgumentException if sizeBytes is greater than batchSize
+     */
     @Override
     public ByteBuffer tryAllocate(int sizeBytes) {
         if (sizeBytes > batchSize) {
@@ -51,16 +72,24 @@ public class BatchMemoryPool implements MemoryPool {
         lock.lock();
         try {
             ByteBuffer buffer = free.poll();
-            if (buffer == null && numAllocatedBatches < maxBatches) {
+            // Always allocation a new buffer if there are no free buffers
+            if (buffer == null) {
                 buffer = ByteBuffer.allocate(batchSize);
                 numAllocatedBatches += 1;
             }
+
             return buffer;
         } finally {
             lock.unlock();
         }
     }
 
+    /**
+     * Release a previously allocated byte buffer.
+     *
+     * The byte buffer is pooled if the number of pooled byte buffer is less than the maxRetainedBatches in
+     * the constructor. Otherwise, the byte buffer is return to the JVM for garbage collection.
+     */
     @Override
     public void release(ByteBuffer previouslyAllocated) {
         lock.lock();
@@ -72,7 +101,13 @@ public class BatchMemoryPool implements MemoryPool {
                     + previouslyAllocated.limit());
             }
 
-            free.offer(previouslyAllocated);
+            // Free the buffer if the number of pooled buffers is already the maximum number of batches.
+            // Otherwise return the buffer to the memory pool.
+            if (free.size() >= maxRetainedBatches) {
+                numAllocatedBatches--;
+            } else {
+                free.offer(previouslyAllocated);
+            }
         } finally {
             lock.unlock();
         }
@@ -90,18 +125,12 @@ public class BatchMemoryPool implements MemoryPool {
 
     @Override
     public long availableMemory() {
-        lock.lock();
-        try {
-            int freeBatches = free.size() + (maxBatches - numAllocatedBatches);
-            return freeBatches * (long) batchSize;
-        } finally {
-            lock.unlock();
-        }
+        return Long.MAX_VALUE;
     }
 
     @Override
     public boolean isOutOfMemory() {
-        return availableMemory() == 0;
+        return false;
     }
 
 }
