@@ -355,7 +355,7 @@ class LogLoader(
       topicPartition,
       dir,
       this.producerStateManager.maxTransactionTimeoutMs,
-      this.producerStateManager.maxProducerIdExpirationMs,
+      this.producerStateManager.producerStateManagerConfig,
       time)
     UnifiedLog.rebuildProducerState(
       producerStateManager,

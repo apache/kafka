@@ -17,24 +17,26 @@
 
 package kafka.api
 
-import java.util.{Collections, Properties}
+import java.util
+import java.util.{Collections, List, Map, Properties}
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.{consumeRecords, createAdminClient}
-import org.apache.kafka.clients.admin.{Admin, ProducerState}
+import org.apache.kafka.clients.admin.{Admin,AlterConfigOp, ConfigEntry, ProducerState}
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidPidMappingException, TransactionalIdNotFoundException}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+import org.opentest4j.AssertionFailedError
 
-import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
 class ProducerIdExpirationTest extends KafkaServerTestHarness {
@@ -42,6 +44,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
   val numPartitions = 1
   val replicationFactor = 3
   val tp0 = new TopicPartition(topic1, 0)
+  val configResource = new ConfigResource(ConfigResource.Type.BROKER, "")
 
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
   var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = _
@@ -138,7 +141,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     producer.commitTransaction()
 
     // Check we can still consume the transaction.
-    consumer.subscribe(List(topic1).asJava)
+    consumer.subscribe(Collections.singletonList(topic1))
 
     val records = consumeRecords(consumer, 2)
     records.foreach { record =>
@@ -146,10 +149,58 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     }
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDynamicProducerIdExpirationMs(quorum: String): Unit = {
+    producer = TestUtils.createProducer(bootstrapServers(), enableIdempotence = true)
+
+    // Send records to populate producer state cache.
+    producer.send(new ProducerRecord(topic1, 0, null, "key".getBytes, "value".getBytes))
+    producer.flush()
+
+    // Ensure producer IDs are added.
+    ensureConsistentKRaftMetadata()
+    assertEquals(1, producerState.size)
+
+    // Wait for the producer ID to expire.
+    TestUtils.waitUntilTrue(() => producerState.isEmpty, "Producer ID did not expire.")
+
+    // Update the producer ID expiration ms to a very high value.
+    admin.incrementalAlterConfigs(producerIdExpirationConfig("100000"))
+
+    brokers.foreach(broker => TestUtils.waitUntilTrue(() => broker.logManager.producerStateManagerConfig.producerIdExpirationMs == 100000, "Configuration was not updated."))
+
+    // Send more records to send producer ID back to brokers.
+    producer.send(new ProducerRecord(topic1, 0, null, "key".getBytes, "value".getBytes))
+    producer.flush()
+
+    // Producer IDs should repopulate.
+    assertEquals(1, producerState.size)
+
+    // Ensure producer ID does not expire within 4 seconds.
+    assertThrows(classOf[AssertionFailedError], () =>
+      TestUtils.waitUntilTrue(() => producerState.isEmpty, "Producer ID did not expire.", 4000)
+    )
+
+    // Update the expiration time to a low value again.
+    admin.incrementalAlterConfigs(producerIdExpirationConfig("100"))
+
+    brokers.foreach(broker => TestUtils.waitUntilTrue(() => broker.logManager.producerStateManagerConfig.producerIdExpirationMs == 100, "Configuration was not updated."))
+
+    // Ensure producer ID expires quickly again.
+    TestUtils.waitUntilTrue(() => producerState.isEmpty, "Producer ID did not expire.")
+  }
+
   private def producerState: List[ProducerState] = {
     val describeResult = admin.describeProducers(Collections.singletonList(tp0))
     val activeProducers = describeResult.partitionResult(tp0).get().activeProducers
-    activeProducers.asScala.toList
+    activeProducers
+  }
+
+  private def producerIdExpirationConfig(configValue: String): Map[ConfigResource, util.Collection[AlterConfigOp]] = {
+    val producerIdCfg = new ConfigEntry(KafkaConfig.ProducerIdExpirationMsProp, configValue)
+    val configs = Collections.singletonList(new AlterConfigOp(producerIdCfg, AlterConfigOp.OpType.SET))
+    Collections.singletonMap(configResource, configs)
   }
 
   private def waitUntilTransactionalStateExpires(): Unit = {
