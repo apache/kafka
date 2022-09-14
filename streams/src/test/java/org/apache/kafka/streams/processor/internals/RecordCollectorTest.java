@@ -56,17 +56,16 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockClientSupplier;
 
-import java.util.UUID;
+import java.util.*;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -127,6 +126,52 @@ public class RecordCollectorTest {
     private final StreamPartitioner<String, Object> streamPartitioner =
         (topic, key, value, numPartitions) -> Integer.parseInt(key) % numPartitions;
 
+    static class EvenPartitioner implements StreamPartitioner<String, Object> {
+
+        @Override
+        @Deprecated
+        public Integer partition(String topic, String key, Object value, int numPartitions) {
+            return null;
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(String topic, String key, Object value, int numPartitions) {
+            final Set<Integer> partitions = new HashSet<>();
+            for (int i = 0; i < numPartitions; i += 2) {
+                partitions.add(i);
+            }
+            return Optional.of(partitions);
+        }
+    }
+
+    static class BroadcastingPartitioner implements StreamPartitioner<String, Object> {
+
+        @Override
+        @Deprecated
+        public Integer partition(String topic, String key, Object value, int numPartitions) {
+            return null;
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(String topic, String key, Object value, int numPartitions) {
+            return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
+        }
+    }
+
+    static class DroppingPartitioner implements StreamPartitioner<String, Object> {
+
+        @Override
+        @Deprecated
+        public Integer partition(String topic, String key, Object value, int numPartitions) {
+            return null;
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(String topic, String key, Object value, int numPartitions) {
+            return Optional.of(Collections.emptySet());
+        }
+    }
+
     private MockProducer<byte[], byte[]> mockProducer;
     private StreamsProducer streamsProducer;
     private ProcessorTopology topology;
@@ -148,6 +193,9 @@ public class RecordCollectorTest {
             Time.SYSTEM
         );
         mockProducer = clientSupplier.producers.get(0);
+    }
+
+    private void initCollector(StreamPartitioner<String, Object> streamPartitioner) {
         final SinkNode<?, ?> sinkNode = new SinkNode<>(
             sinkNodeName,
             new StaticTopicNameExtractor<>(topic),
@@ -180,6 +228,7 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldRecordRecordsAndBytesProduced() {
+        initCollector(streamPartitioner);
         final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
 
         final String threadId = Thread.currentThread().getName();
@@ -237,6 +286,7 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldSendToSpecificPartition() {
+        initCollector(streamPartitioner);
         final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
 
         collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, null, context);
@@ -267,6 +317,7 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldSendWithPartitioner() {
+        initCollector(streamPartitioner);
         final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
 
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, streamPartitioner);
@@ -292,7 +343,106 @@ public class RecordCollectorTest {
     }
 
     @Test
+    public void shouldSendOnlyToEvenPartitions() {
+
+        final EvenPartitioner evenPartitioner = new EvenPartitioner();
+        initCollector(evenPartitioner);
+        final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, null, evenPartitioner);
+
+        final Map<TopicPartition, Long> offsets = collector.offsets();
+
+        assertEquals(8L, (long) offsets.get(new TopicPartition(topic, 0)));
+        assertFalse(offsets.containsKey(new TopicPartition(topic, 1)));
+        assertEquals(8L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(18, mockProducer.history().size());
+
+        // returned offsets should not be modified
+        final TopicPartition topicPartition = new TopicPartition(topic, 0);
+        assertThrows(UnsupportedOperationException.class, () -> offsets.put(topicPartition, 50L));
+    }
+
+    @Test
+    public void shouldBroadcastToAllPartitions() {
+
+        final BroadcastingPartitioner broadcastingPartitioner = new BroadcastingPartitioner();
+        initCollector(broadcastingPartitioner);
+        final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, null, broadcastingPartitioner);
+
+        final Map<TopicPartition, Long> offsets = collector.offsets();
+
+        assertEquals(8L, (long) offsets.get(new TopicPartition(topic, 0)));
+        assertEquals(8L, (long) offsets.get(new TopicPartition(topic, 1)));
+        assertEquals(8L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(27, mockProducer.history().size());
+
+        // returned offsets should not be modified
+        final TopicPartition topicPartition = new TopicPartition(topic, 0);
+        assertThrows(UnsupportedOperationException.class, () -> offsets.put(topicPartition, 50L));
+    }
+
+    @Test
+    public void shouldDropAllRecords() {
+
+        final DroppingPartitioner droppingPartitioner = new DroppingPartitioner();
+        initCollector(droppingPartitioner);
+
+        final String threadId = Thread.currentThread().getName();
+        final String processorNodeId = sinkNodeName;
+        final String topic = "topic";
+
+        final Metric recordsDropped = streamsMetrics.metrics().get(
+                new MetricName("records-dropped-total",
+                        TOPIC_LEVEL_GROUP,
+                        "The total number of records dropped",
+                        streamsMetrics.topicLevelTagMap(threadId, taskId.toString(), processorNodeId, topic))
+        );
+
+        final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
+        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
+        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
+        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
+        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
+        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
+        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
+        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
+        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, null, droppingPartitioner);
+
+        final Map<TopicPartition, Long> offsets = collector.offsets();
+        assertTrue(offsets.isEmpty());
+
+        assertEquals(0, mockProducer.history().size());
+        assertThat(recordsDropped.metricValue(), equalTo(9L));
+
+        // returned offsets should not be modified
+        final TopicPartition topicPartition = new TopicPartition(topic, 0);
+        assertThrows(UnsupportedOperationException.class, () -> offsets.put(topicPartition, 50L));
+    }
+
+    @Test
     public void shouldSendWithNoPartition() {
+        initCollector(streamPartitioner);
         final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
 
         collector.send(topic, "3", "0", headers, null, null, stringSerializer, stringSerializer, null, context);
@@ -316,6 +466,7 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldUpdateOffsetsUponCompletion() {
+        initCollector(streamPartitioner);
         Map<TopicPartition, Long> offsets = collector.offsets();
 
         collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, null, context);
@@ -334,6 +485,7 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldPassThroughRecordHeaderToSerializer() {
+        initCollector(streamPartitioner);
         final CustomStringSerializer keySerializer = new CustomStringSerializer();
         final CustomStringSerializer valueSerializer = new CustomStringSerializer();
         keySerializer.configure(Collections.emptyMap(), true);
@@ -351,6 +503,7 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldForwardFlushToStreamsProducer() {
+        initCollector(streamPartitioner);
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
         expect(streamsProducer.eosEnabled()).andReturn(false);
         streamsProducer.flush();
@@ -376,6 +529,7 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldForwardFlushToStreamsProducerEosEnabled() {
+        initCollector(streamPartitioner);
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
         expect(streamsProducer.eosEnabled()).andReturn(true);
         streamsProducer.flush();
@@ -400,6 +554,7 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldNotAbortTxOnCloseCleanIfEosEnabled() {
+        initCollector(streamPartitioner);
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
         expect(streamsProducer.eosEnabled()).andReturn(true);
         
@@ -423,6 +578,7 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldAbortTxOnCloseDirtyIfEosEnabled() {
+        initCollector(streamPartitioner);
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
         expect(streamsProducer.eosEnabled()).andReturn(true);
         streamsProducer.abortTransaction();
@@ -448,6 +604,7 @@ public class RecordCollectorTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldThrowInformativeStreamsExceptionOnKeyClassCastException() {
+        initCollector(streamPartitioner);
         final StreamsException expected = assertThrows(
             StreamsException.class,
             () -> this.collector.send(
@@ -476,6 +633,7 @@ public class RecordCollectorTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldThrowInformativeStreamsExceptionOnKeyAndNullValueClassCastException() {
+        initCollector(streamPartitioner);
         final StreamsException expected = assertThrows(
             StreamsException.class,
             () -> this.collector.send(
@@ -504,6 +662,7 @@ public class RecordCollectorTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldThrowInformativeStreamsExceptionOnValueClassCastException() {
+        initCollector(streamPartitioner);
         final StreamsException expected = assertThrows(
             StreamsException.class,
             () -> this.collector.send(
@@ -532,6 +691,7 @@ public class RecordCollectorTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldThrowInformativeStreamsExceptionOnValueAndNullKeyClassCastException() {
+        initCollector(streamPartitioner);
         final StreamsException expected = assertThrows(
             StreamsException.class,
             () -> this.collector.send(
