@@ -69,13 +69,14 @@ public class MirrorSourceTask extends SourceTask {
 
     // for testing
     MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorMetrics metrics, String sourceClusterAlias,
-                     ReplicationPolicy replicationPolicy, long maxOffsetLag) {
+                     ReplicationPolicy replicationPolicy, long maxOffsetLag, KafkaProducer<byte[], byte[]> producer) {
         this.consumer = consumer;
         this.metrics = metrics;
         this.sourceClusterAlias = sourceClusterAlias;
         this.replicationPolicy = replicationPolicy;
         this.maxOffsetLag = maxOffsetLag;
         consumerAccess = new Semaphore(1);
+        this.offsetProducer = producer;
     }
 
     @Override
@@ -174,7 +175,7 @@ public class MirrorSourceTask extends SourceTask {
             return;
         }
         if (metadata == null) {
-            log.debug("No RecordMetadata -- can't sync offsets for {}.", record.topic());
+            log.debug("No RecordMetadata (source record was probably filtered out during transformation) -- can't sync offsets for {}.", record.topic());
             return;
         }
         if (!metadata.hasOffset()) {
