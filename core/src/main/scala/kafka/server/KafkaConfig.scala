@@ -325,6 +325,7 @@ object Defaults {
   val LiAlterIsrEnabled = false
   val LiAsyncFetcherEnabled = false
   val LiNumControllerInitThreads = 1
+  val LiLogCleanerFineGrainedLockEnabled = true
 }
 
 object KafkaConfig {
@@ -439,6 +440,7 @@ object KafkaConfig {
   val LiCombinedControlRequestEnableProp = "li.combined.control.request.enable"
   val LiAlterIsrEnableProp = "li.alter.isr.enable"
   val LiNumControllerInitThreadsProp = "li.num.controller.init.threads"
+  val LiLogCleanerFineGrainedLockEnableProp = "li.log.cleaner.fine.grained.lock.enable"
   val AllowPreferredControllerFallbackProp = "allow.preferred.controller.fallback"
   val UnofficialClientLoggingEnableProp = "unofficial.client.logging.enable"
   val UnofficialClientCacheTtlProp = "unofficial.client.cache.ttl"
@@ -775,6 +777,7 @@ object KafkaConfig {
   val LiCombinedControlRequestEnableDoc = "Specifies whether the controller should use the LiCombinedControlRequest."
   val LiAlterIsrEnabledDoc = "Specifies whether the brokers should use the AlterISR request to propagate ISR changes to the controller. If set to false, brokers will propagate the updates via Zookeeper."
   val LiNumControllerInitThreadsDoc = "Number of threads (and Zookeeper clients + connections) to be used while recursing the topic-partitions tree in Zookeeper during controller startup/failover."
+  val LiLogCleanerFineGrainedLockEnableDoc = "Specifies whether the log cleaner should use fine grained locks when calculating the filthiest log to clean"
   // Although AllowPreferredControllerFallback is expected to be configured dynamically at per cluster level, providing a static configuration entry
   // here allows its value to be obtained without holding the dynamic broker configuration lock.
   val AllowPreferredControllerFallbackDoc = "Specifies whether a non-preferred controller node (broker) is allowed to become the controller." +
@@ -1214,6 +1217,7 @@ object KafkaConfig {
       .define(LiCombinedControlRequestEnableProp, BOOLEAN, Defaults.LiCombinedControlRequestEnabled, HIGH, LiCombinedControlRequestEnableDoc)
       .define(LiAlterIsrEnableProp, BOOLEAN, Defaults.LiAlterIsrEnabled, HIGH, LiAlterIsrEnabledDoc)
       .define(LiNumControllerInitThreadsProp, INT, Defaults.LiNumControllerInitThreads, atLeast(1), LOW, LiNumControllerInitThreadsDoc)
+      .define(LiLogCleanerFineGrainedLockEnableProp, BOOLEAN, Defaults.LiLogCleanerFineGrainedLockEnabled, LOW, LiLogCleanerFineGrainedLockEnableDoc)
       .define(AllowPreferredControllerFallbackProp, BOOLEAN, Defaults.AllowPreferredControllerFallback, HIGH, AllowPreferredControllerFallbackDoc)
       .define(UnofficialClientLoggingEnableProp, BOOLEAN, Defaults.UnofficialClientLoggingEnable, LOW, UnofficialClientLoggingEnableDoc)
       .define(UnofficialClientCacheTtlProp, LONG, Defaults.UnofficialClientCacheTtl, LOW, UnofficialClientCacheTtlDoc)
@@ -1723,6 +1727,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   def liCombinedControlRequestEnable = getBoolean(KafkaConfig.LiCombinedControlRequestEnableProp)
   def liAlterIsrEnable = getBoolean(KafkaConfig.LiAlterIsrEnableProp)
   def liNumControllerInitThreads = getInt(KafkaConfig.LiNumControllerInitThreadsProp)
+  def liLogCleanerFineGrainedLockEnable = getBoolean(KafkaConfig.LiLogCleanerFineGrainedLockEnableProp)
 
   def unofficialClientLoggingEnable = getBoolean(KafkaConfig.UnofficialClientLoggingEnableProp)
   def unofficialClientCacheTtl = getLong(KafkaConfig.UnofficialClientCacheTtlProp)

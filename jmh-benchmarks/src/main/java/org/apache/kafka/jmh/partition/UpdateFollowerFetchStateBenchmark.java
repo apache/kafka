@@ -92,7 +92,7 @@ public class UpdateFollowerFetchStateBenchmark {
                 JavaConverters.asScalaIteratorConverter(new ArrayList<File>().iterator()).asScala().toSeq(),
                 new MockConfigRepository(),
                 logConfig,
-                new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5"),
+                new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5", true),
                 1,
                 1000L,
                 10000L,

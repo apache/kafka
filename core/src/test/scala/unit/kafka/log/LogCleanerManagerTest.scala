@@ -54,7 +54,7 @@ class LogCleanerManagerTest extends Logging {
 
   class LogCleanerManagerMock(logDirs: Seq[File],
                               logs: Pool[TopicPartition, Log],
-                              logDirFailureChannel: LogDirFailureChannel) extends LogCleanerManager(logDirs, logs, logDirFailureChannel, 0L) {
+                              logDirFailureChannel: LogDirFailureChannel) extends LogCleanerManager(logDirs, logs, logDirFailureChannel, 0L, true) {
     override def allCleanerCheckpoints: Map[TopicPartition, Long] = {
       cleanerCheckpoints.toMap
     }
@@ -755,7 +755,7 @@ class LogCleanerManagerTest extends Logging {
   private def createCleanerManager(log: Log): LogCleanerManager = {
     val logs = new Pool[TopicPartition, Log]()
     logs.put(topicPartition, log)
-    new LogCleanerManager(Seq(logDir, logDir2), logs, null, 0L)
+    new LogCleanerManager(Seq(logDir, logDir2), logs, null, 0L, true)
   }
 
   private def createCleanerManagerMock(pool: Pool[TopicPartition, Log]): LogCleanerManagerMock = {

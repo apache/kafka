@@ -120,7 +120,7 @@ public class PartitionCreationBench {
         CleanerConfig cleanerConfig = CleanerConfig.apply(1,
                 4 * 1024 * 1024L, 0.9d,
                 1024 * 1024, 32 * 1024 * 1024,
-                Double.MAX_VALUE, 15 * 1000, true, "MD5");
+                Double.MAX_VALUE, 15 * 1000, true, "MD5", true);
 
         ConfigRepository configRepository = new MockConfigRepository();
         this.logManager = new LogManager(JavaConverters.asScalaIteratorConverter(files.iterator()).asScala().toSeq(),

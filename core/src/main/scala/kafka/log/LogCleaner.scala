@@ -101,7 +101,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   @volatile private var config = initialConfig
 
   /* for managing the state of partitions being cleaned. package-private to allow access in tests */
-  private[log] val cleanerManager = new LogCleanerManager(logDirs, logs, logDirFailureChannel, retentionCheckMs)
+  private[log] val cleanerManager = new LogCleanerManager(logDirs, logs, logDirFailureChannel, retentionCheckMs, config.fineGrainedLockEnable)
 
   /* a throttle used to limit the I/O of all the cleaner threads to a user-specified maximum rate */
   private val throttler = new Throttler(desiredRatePerSec = config.maxIoBytesPerSecond,
@@ -450,7 +450,8 @@ object LogCleaner {
       maxMessageSize = config.messageMaxBytes,
       maxIoBytesPerSecond = config.logCleanerIoMaxBytesPerSecond,
       backOffMs = config.logCleanerBackoffMs,
-      enableCleaner = config.logCleanerEnable)
+      enableCleaner = config.logCleanerEnable,
+      fineGrainedLockEnable = config.liLogCleanerFineGrainedLockEnable)
 
   }
 

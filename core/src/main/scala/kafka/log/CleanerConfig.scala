@@ -28,6 +28,7 @@ package kafka.log
  * @param backOffMs The amount of time to wait before rechecking if no logs are eligible for cleaning
  * @param enableCleaner Allows completely disabling the log cleaner
  * @param hashAlgorithm The hash algorithm to use in key comparison.
+ * @param fineGrainedLockEnable Whether the fine grained lock for calculating filthiest log is enabled
  */
 case class CleanerConfig(numThreads: Int = 1,
                          dedupeBufferSize: Long = 4*1024*1024L,
@@ -37,5 +38,6 @@ case class CleanerConfig(numThreads: Int = 1,
                          maxIoBytesPerSecond: Double = Double.MaxValue,
                          backOffMs: Long = 15 * 1000,
                          enableCleaner: Boolean = true,
-                         hashAlgorithm: String = "MD5") {
+                         hashAlgorithm: String = "MD5",
+                         fineGrainedLockEnable: Boolean = true) {
 }
