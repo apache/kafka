@@ -585,8 +585,8 @@ public class StreamsConfigTest {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(
-                consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
-                equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT))
+            consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
+            equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT))
         );
     }
 
@@ -627,8 +627,8 @@ public class StreamsConfigTest {
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
 
         assertThat(
-                consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
-                equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT))
+            consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
+            equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT))
         );
         assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
         assertThat(producerConfigs.get(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG), equalTo(Integer.MAX_VALUE));

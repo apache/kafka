@@ -66,8 +66,6 @@ public class EOSUncleanShutdownIntegrationTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);
 
-    public String eosConfig = StreamsConfig.EXACTLY_ONCE_V2;
-
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
     @BeforeClass
@@ -99,7 +97,7 @@ public class EOSUncleanShutdownIntegrationTest {
     public void shouldWorkWithUncleanShutdownWipeOutStateStore() throws InterruptedException {
         final String appId = "shouldWorkWithUncleanShutdownWipeOutStateStore";
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
-        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
 
         final String input = "input-topic";
         cleanStateBeforeTest(CLUSTER, input);
