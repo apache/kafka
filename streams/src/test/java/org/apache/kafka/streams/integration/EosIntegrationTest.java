@@ -149,17 +149,26 @@ public class EosIntegrationTest {
     private String stateTmpDir;
 
     @SuppressWarnings("deprecation")
-    @Parameters(name = "{0}")
-    public static Collection<String[]> data() {
-        return Arrays.asList(new String[][]{
-                {StreamsConfig.AT_LEAST_ONCE},
-                {StreamsConfig.EXACTLY_ONCE},
-                {StreamsConfig.EXACTLY_ONCE_V2}
-        });
+    @Parameters(name = "{0} {1}")
+    public static Collection<Object[]> data() {
+        final List<String> eosConfigs = Arrays.asList(
+            StreamsConfig.AT_LEAST_ONCE,
+            StreamsConfig.EXACTLY_ONCE,
+            StreamsConfig.EXACTLY_ONCE_V2
+        );
+        final List<Object[]> data = new ArrayList<>(eosConfigs.size() * 2);
+        for (final String eosConfig : eosConfigs) {
+            data.add(new Object[] {eosConfig, false});
+            data.add(new Object[] {eosConfig, true});
+        }
+        return data;
     }
 
     @Parameter
     public String eosConfig;
+
+    @Parameter(1)
+    public boolean stateStoreTransactional;
 
     @Before
     public void createTopics() throws Exception {
@@ -238,6 +247,8 @@ public class EosIntegrationTest {
                                    final String outputTopic,
                                    final boolean inputTopicTransactional,
                                    final String eosConfig) throws Exception {
+        if (stateStoreTransactional) return;  // this is a stateless test, no reason to run it with txn state stores
+
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, Long> input = builder.stream(inputTopic);
         KStream<Long, Long> output = input;
@@ -321,6 +332,8 @@ public class EosIntegrationTest {
 
     @Test
     public void shouldBeAbleToPerformMultipleTransactions() throws Exception {
+        if (stateStoreTransactional) return;  // this is a stateless test, no reason to run it with txn state stores
+
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(SINGLE_PARTITION_INPUT_TOPIC).to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
@@ -369,6 +382,7 @@ public class EosIntegrationTest {
     @Test
     public void shouldNotViolateEosIfOneTaskFails() throws Exception {
         if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
+        if (stateStoreTransactional) return;  // this is a stateless test, no reason to run it with txn state stores
 
         // this test writes 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to copy all 40 records into the output topic
@@ -590,6 +604,7 @@ public class EosIntegrationTest {
     @Test
     public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances() throws Exception {
         if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
+        if (stateStoreTransactional) return;  // this is a stateless test, no reason to run it with txn state stores
 
         // this test writes 10 + 5 + 5 + 10 records per partition (running with 2 partitions)
         // the app is supposed to copy all 60 records into the output topic
@@ -943,6 +958,9 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         properties.put(StreamsConfig.STATE_DIR_CONFIG, stateTmpDir + appDir);
         properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, dummyHostName + ":2142");
+        if (stateStoreTransactional) {
+            properties.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.TXN_ROCKS_DB);
+        }
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,

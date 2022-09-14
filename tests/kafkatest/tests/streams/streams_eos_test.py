@@ -40,20 +40,22 @@ class StreamsEosTest(KafkaTest):
 
     @cluster(num_nodes=9)
     @matrix(processing_guarantee=["exactly_once", "exactly_once_v2"],
+            default_dsl_store=["rocksDB", "txn_rocksDB"],
             metadata_quorum=[quorum.remote_kraft])
-    def test_rebalance_simple(self, processing_guarantee, metadata_quorum):
-        self.run_rebalance(StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                           StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                           StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+    def test_rebalance_simple(self, processing_guarantee, default_dsl_store, metadata_quorum):
+        self.run_rebalance(StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, default_dsl_store),
+                           StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, default_dsl_store),
+                           StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, default_dsl_store),
                            StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
 
     @cluster(num_nodes=9)
     @matrix(processing_guarantee=["exactly_once", "exactly_once_v2"],
+            default_dsl_store=["rocksDB", "txn_rocksDB"],
             metadata_quorum=[quorum.remote_kraft])
-    def test_rebalance_complex(self, processing_guarantee, metadata_quorum):
-        self.run_rebalance(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+    def test_rebalance_complex(self, processing_guarantee, default_dsl_store, metadata_quorum):
+        self.run_rebalance(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, default_dsl_store),
+                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, default_dsl_store),
+                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, default_dsl_store),
                            StreamsComplexEosTestVerifyRunnerService(self.test_context, self.kafka))
 
     def run_rebalance(self, processor1, processor2, processor3, verifier):
@@ -84,20 +86,22 @@ class StreamsEosTest(KafkaTest):
 
     @cluster(num_nodes=9)
     @matrix(processing_guarantee=["exactly_once", "exactly_once_v2"],
+            default_dsl_store=["rocksDB", "txn_rocksDB"],
             metadata_quorum=[quorum.remote_kraft])
-    def test_failure_and_recovery(self, processing_guarantee, metadata_quorum):
-        self.run_failure_and_recovery(StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+    def test_failure_and_recovery(self, processing_guarantee, default_dsl_store, metadata_quorum):
+        self.run_failure_and_recovery(StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, default_dsl_store),
+                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, default_dsl_store),
+                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, default_dsl_store),
                                       StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
 
     @cluster(num_nodes=9)
     @matrix(processing_guarantee=["exactly_once", "exactly_once_v2"],
+            default_dsl_store=["rocksDB", "txn_rocksDB"],
             metadata_quorum=[quorum.remote_kraft])
-    def test_failure_and_recovery_complex(self, processing_guarantee, metadata_quorum):
-        self.run_failure_and_recovery(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+    def test_failure_and_recovery_complex(self, processing_guarantee, default_dsl_store, metadata_quorum):
+        self.run_failure_and_recovery(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, default_dsl_store),
+                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, default_dsl_store),
+                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee, default_dsl_store),
                                       StreamsComplexEosTestVerifyRunnerService(self.test_context, self.kafka))
 
     def run_failure_and_recovery(self, processor1, processor2, processor3, verifier):

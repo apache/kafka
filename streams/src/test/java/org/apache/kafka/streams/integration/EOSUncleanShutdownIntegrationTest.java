@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.integration;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes;
@@ -73,15 +75,24 @@ public class EOSUncleanShutdownIntegrationTest {
 
     @SuppressWarnings("deprecation")
     @Parameterized.Parameters(name = "{0}")
-    public static Collection<String[]> data() {
-        return Arrays.asList(new String[][] {
-            {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_V2}
-        });
+    public static Collection<Object[]> data() {
+        final List<String> eosConfigs = Arrays.asList(
+            StreamsConfig.EXACTLY_ONCE,
+            StreamsConfig.EXACTLY_ONCE_V2
+        );
+        final List<Object[]> data = new ArrayList<>(eosConfigs.size() * 2);
+        for (final String eosConfig : eosConfigs) {
+            //data.add(new Object[] {eosConfig, false});
+            data.add(new Object[] {eosConfig, true});
+        }
+        return data;
     }
 
     @Parameterized.Parameter
     public String eosConfig;
+
+    @Parameterized.Parameter(1)
+    public boolean stateStoreTransactional;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
@@ -115,6 +126,9 @@ public class EOSUncleanShutdownIntegrationTest {
         final String appId = "shouldWorkWithUncleanShutdownWipeOutStateStore";
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        if (stateStoreTransactional) {
+            STREAMS_CONFIG.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.TXN_ROCKS_DB);
+        }
 
         final String input = "input-topic";
         cleanStateBeforeTest(CLUSTER, input);
