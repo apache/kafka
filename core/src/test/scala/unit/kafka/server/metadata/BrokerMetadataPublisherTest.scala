@@ -207,6 +207,10 @@ class BrokerMetadataPublisherTest {
       cluster.waitForReadyBrokers()
       val broker = cluster.brokers().values().iterator().next()
       val publisher = newMockPublisher(broker)
+      // Since the we've initialize managers during cluster#startup above,
+      // we don't want the mock publisher to create them again to cause resource leak after cluster closed
+      publisher._firstPublish = false
+
       val numTimesReloadCalled = new AtomicInteger(0)
       Mockito.when(publisher.reloadUpdatedFilesWithoutConfigChange(any[Properties]())).
         thenAnswer(new Answer[Unit]() {
