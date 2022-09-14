@@ -364,6 +364,8 @@ public class StreamThread extends Thread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
+        final boolean stateUpdaterEnabled =
+            InternalConfig.getBoolean(config.originals(), InternalConfig.STATE_UPDATER_ENABLED, false);
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
             topologyMetadata,
             config,
@@ -375,8 +377,8 @@ public class StreamThread extends Thread {
             clientSupplier,
             threadId,
             processId,
-            log
-        );
+            log,
+            stateUpdaterEnabled);
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
             topologyMetadata,
             config,
@@ -384,8 +386,8 @@ public class StreamThread extends Thread {
             stateDirectory,
             changelogReader,
             threadId,
-            log
-        );
+            log,
+            stateUpdaterEnabled);
 
         final TaskManager taskManager = new TaskManager(
             time,
@@ -398,7 +400,7 @@ public class StreamThread extends Thread {
             topologyMetadata,
             adminClient,
             stateDirectory,
-            maybeCreateAndStartStateUpdater(config, changelogReader, time)
+            maybeCreateAndStartStateUpdater(stateUpdaterEnabled, config, changelogReader, time, clientId, threadIdx)
         );
         referenceContainer.taskManager = taskManager;
 
@@ -441,13 +443,15 @@ public class StreamThread extends Thread {
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
 
-    private static StateUpdater maybeCreateAndStartStateUpdater(final StreamsConfig streamsConfig,
+    private static StateUpdater maybeCreateAndStartStateUpdater(final boolean stateUpdaterEnabled,
+                                                                final StreamsConfig streamsConfig,
                                                                 final ChangelogReader changelogReader,
-                                                                final Time time) {
-        final boolean stateUpdaterEnabled =
-            InternalConfig.getBoolean(streamsConfig.originals(), InternalConfig.STATE_UPDATER_ENABLED, false);
+                                                                final Time time,
+                                                                final String clientId,
+                                                                final int threadIdx) {
         if (stateUpdaterEnabled) {
-            final StateUpdater stateUpdater = new DefaultStateUpdater(streamsConfig, changelogReader, time);
+            final String name = clientId + "-StateUpdater-" + threadIdx;
+            final StateUpdater stateUpdater = new DefaultStateUpdater(name, streamsConfig, changelogReader, time);
             stateUpdater.start();
             return stateUpdater;
         } else {

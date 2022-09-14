@@ -3020,7 +3020,8 @@ public class StreamThreadTest {
             stateDirectory,
             new MockChangelogReader(),
             CLIENT_ID,
-            log);
+            log,
+            false);
         return standbyTaskCreator.createTasks(singletonMap(new TaskId(1, 2), emptySet()));
     }
 
