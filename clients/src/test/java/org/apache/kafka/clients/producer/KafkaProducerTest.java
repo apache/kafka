@@ -160,6 +160,16 @@ public class KafkaProducerTest {
                     new PartitionInfo(topic, 2, null, null, null)),
             Collections.emptySet(),
             Collections.emptySet());
+    private final Cluster fourPartitionCluster = new Cluster(
+            "dummy",
+            nodes,
+            Arrays.asList(
+                    new PartitionInfo(topic, 0, null, null, null),
+                    new PartitionInfo(topic, 1, null, null, null),
+                    new PartitionInfo(topic, 2, null, null, null),
+                    new PartitionInfo(topic, 3, null, null, null)),
+            Collections.emptySet(),
+            Collections.emptySet());
     private TestInfo testInfo;
 
     private static final int DEFAULT_METADATA_IDLE_MS = 5 * 60 * 1000;
@@ -690,6 +700,23 @@ public class KafkaProducerTest {
             Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
                 // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
                 return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
+            }
+        };
+    }
+
+    private KafkaProducer<String, String> producerWithOverrideNewPartitioner(Map<String, Object> configs, ProducerMetadata metadata, RoundRobinPartitioner roundRobinPartitioner) {
+        return new KafkaProducer<String, String>(
+            new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, new StringSerializer(), new StringSerializer())),
+            new StringSerializer(), new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, Time.SYSTEM) {
+            @Override
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, ProducerMetadata metadata) {
+              // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
+                return super.newSender(logContext, kafkaClient, newMetadata(0, 100_000));
+            }
+
+            @Override
+            Partitioner newPartitioner(ProducerConfig config) {
+                return roundRobinPartitioner;
             }
         };
     }
@@ -2044,6 +2071,36 @@ public class KafkaProducerTest {
             verify(ctx.transactionManager, never()).maybeAddPartition(topicPartition0);
             verify(ctx.transactionManager).maybeAddPartition(topicPartition1);
         }
+    }
+
+    @Test
+    public void testRoundRobinPartitionerDoesNotSkipPartition() throws InterruptedException {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        RoundRobinPartitioner roundRobinPartitioner = new RoundRobinPartitioner();
+        ProducerMetadata metadata = mock(ProducerMetadata.class);
+        configs.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, RoundRobinPartitioner.class.getName());
+        when(metadata.fetch()).thenReturn(fourPartitionCluster);
+        KafkaProducer<String, String> producer = producerWithOverrideNewPartitioner(configs, metadata, roundRobinPartitioner);
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
+        // the first time, skip partition-0, send to partition-1.
+        producer.send(record);
+        // skip partition-2, send to partition-3.
+        producer.send(record);
+
+        // calling partition() again should result 0. The next partition we get is partition-0
+        int newPartitionCount = roundRobinPartitioner.partition(topic, null,
+            null, null, null, fourPartitionCluster);
+        assertEquals(0, newPartitionCount);
+
+        producer.send(record);
+        // calling partition() again should result 1. The next partition we get is partition-2
+        newPartitionCount = roundRobinPartitioner.partition(topic, null,
+            null, null, null, fourPartitionCluster);
+        assertEquals(2, newPartitionCount);
+        producer.close(Duration.ofMillis(0));
     }
 
     private <T> FutureRecordMetadata expectAppend(
