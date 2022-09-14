@@ -317,9 +317,9 @@ public class TaskManager {
         // 2. for tasks that have changed active/standby status, just recycle and skip re-creating them
         // 3. otherwise, close them since they are no longer owned
         if (stateUpdater == null) {
-            classifyTasksWithoutStateUpdater(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
+            handleTasksWithoutStateUpdater(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
         } else {
-            classifyTasksWithStateUpdater(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
+            handleTasksWithStateUpdater(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
         }
 
         final Map<TaskId, RuntimeException> taskCloseExceptions = closeAndRecycleTasks(tasksToRecycle, tasksToCloseClean);
@@ -389,10 +389,10 @@ public class TaskManager {
         }
     }
 
-    private void classifyTasksWithoutStateUpdater(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
-                                                  final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
-                                                  final Map<Task, Set<TopicPartition>> tasksToRecycle,
-                                                  final Set<Task> tasksToCloseClean) {
+    private void handleTasksWithoutStateUpdater(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+                                                final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
+                                                final Map<Task, Set<TopicPartition>> tasksToRecycle,
+                                                final Set<Task> tasksToCloseClean) {
         for (final Task task : tasks.allTasks()) {
             final TaskId taskId = task.id();
             if (activeTasksToCreate.containsKey(taskId)) {
@@ -421,29 +421,28 @@ public class TaskManager {
         }
     }
 
-    private void classifyRunningTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
-                                      final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
-                                      final Map<Task, Set<TopicPartition>> tasksToRecycle,
-                                      final Set<Task> tasksToCloseClean) {
+    private void handleTasksWithStateUpdater(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+                                             final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
+                                             final Map<Task, Set<TopicPartition>> tasksToRecycle,
+                                             final Set<Task> tasksToCloseClean) {
+        handleRunningAndSuspendedTasks(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
+        handleTasksInStateUpdater(activeTasksToCreate, standbyTasksToCreate);
+    }
+
+    private void handleRunningAndSuspendedTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+                                                final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
+                                                final Map<Task, Set<TopicPartition>> tasksToRecycle,
+                                                final Set<Task> tasksToCloseClean) {
         for (final Task task : tasks.allTasks()) {
+            if (!task.isActive()) {
+                throw new IllegalStateException("Standby tasks should only be managed by the state updater");
+            }
             final TaskId taskId = task.id();
             if (activeTasksToCreate.containsKey(taskId)) {
-                if (task.isActive()) {
-                    final Set<TopicPartition> topicPartitions = activeTasksToCreate.get(taskId);
-                    if (tasks.updateActiveTaskInputPartitions(task, topicPartitions)) {
-                        task.updateInputPartitions(topicPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
-                    }
-                    task.resume();
-                } else {
-                    throw new IllegalStateException("Standby tasks should only be managed by the state updater");
-                }
+                handleReAssignedActiveTask(task, activeTasksToCreate.get(taskId));
                 activeTasksToCreate.remove(taskId);
             } else if (standbyTasksToCreate.containsKey(taskId)) {
-                if (!task.isActive()) {
-                    throw new IllegalStateException("Standby tasks should only be managed by the state updater");
-                } else {
-                    tasksToRecycle.put(task, standbyTasksToCreate.get(taskId));
-                }
+                tasksToRecycle.put(task, standbyTasksToCreate.get(taskId));
                 standbyTasksToCreate.remove(taskId);
             } else {
                 tasksToCloseClean.add(task);
@@ -451,41 +450,65 @@ public class TaskManager {
         }
     }
 
-    private void classifyTasksWithStateUpdater(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
-                                               final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
-                                               final Map<Task, Set<TopicPartition>> tasksToRecycle,
-                                               final Set<Task> tasksToCloseClean) {
-        classifyRunningTasks(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
+    private void handleReAssignedActiveTask(final Task task,
+                                            final Set<TopicPartition> inputPartitions) {
+        if (tasks.updateActiveTaskInputPartitions(task, inputPartitions)) {
+            task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
+        }
+        if (task.state() == State.SUSPENDED) {
+            task.resume();
+            moveTaskFromTasksRegistryToStateUpdater(task);
+        }
+    }
+
+    private void moveTaskFromTasksRegistryToStateUpdater(final Task task) {
+        tasks.removeTask(task);
+        stateUpdater.add(task);
+    }
+
+    private void handleTasksInStateUpdater(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+                                           final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
         for (final Task task : stateUpdater.getTasks()) {
             final TaskId taskId = task.id();
-            final Set<TopicPartition> topicPartitions = activeTasksToCreate.get(taskId);
             if (activeTasksToCreate.containsKey(taskId)) {
+                final Set<TopicPartition> inputPartitions = activeTasksToCreate.get(taskId);
                 if (task.isActive()) {
-                    if (!task.inputPartitions().equals(topicPartitions)) {
-                        stateUpdater.remove(taskId);
-                        tasks.addPendingTaskToUpdateInputPartitions(taskId, topicPartitions);
-                    }
+                    updateInputPartitionsOrRemoveTaskFromTasksToSuspend(task, inputPartitions);
                 } else {
-                    stateUpdater.remove(taskId);
-                    tasks.addPendingTaskToRecycle(taskId, topicPartitions);
+                    removeTaskToRecycleFromStateUpdater(taskId, inputPartitions);
                 }
                 activeTasksToCreate.remove(taskId);
             } else if (standbyTasksToCreate.containsKey(taskId)) {
-                if (!task.isActive()) {
-                    if (!task.inputPartitions().equals(topicPartitions)) {
-                        stateUpdater.remove(taskId);
-                        tasks.addPendingTaskToUpdateInputPartitions(taskId, topicPartitions);
-                    }
-                } else {
-                    stateUpdater.remove(taskId);
-                    tasks.addPendingTaskToRecycle(taskId, topicPartitions);
+                if (task.isActive()) {
+                    removeTaskToRecycleFromStateUpdater(taskId, standbyTasksToCreate.get(taskId));
                 }
                 standbyTasksToCreate.remove(taskId);
             } else {
-                stateUpdater.remove(taskId);
-                tasks.addPendingTaskToCloseClean(taskId);
+                removeUnusedTaskFromStateUpdater(taskId);
             }
         }
+    }
+
+    private void updateInputPartitionsOrRemoveTaskFromTasksToSuspend(final Task task,
+                                                                     final Set<TopicPartition> inputPartitions) {
+        final TaskId taskId = task.id();
+        if (!task.inputPartitions().equals(inputPartitions)) {
+            stateUpdater.remove(taskId);
+            tasks.addPendingTaskToUpdateInputPartitions(taskId, inputPartitions);
+        } else {
+            tasks.removePendingActiveTaskToSuspend(taskId);
+        }
+    }
+
+    private void removeTaskToRecycleFromStateUpdater(final TaskId taskId,
+                                                     final Set<TopicPartition> inputPartitions) {
+        stateUpdater.remove(taskId);
+        tasks.addPendingTaskToRecycle(taskId, inputPartitions);
+    }
+
+    private void removeUnusedTaskFromStateUpdater(final TaskId taskId) {
+        stateUpdater.remove(taskId);
+        tasks.addPendingTaskToCloseClean(taskId);
     }
 
     private Map<TaskId, Set<TopicPartition>> pendingTasksToCreate(final Map<TaskId, Set<TopicPartition>> tasksToCreate) {
@@ -685,10 +708,10 @@ public class TaskManager {
         return !stateUpdater.restoresActiveTasks();
     }
 
-    private void recycleTask(final Task task,
-                             final Set<TopicPartition> inputPartitions,
-                             final Set<Task> tasksToCloseDirty,
-                             final Map<TaskId, RuntimeException> taskExceptions) {
+    private void recycleTaskFromStateUpdater(final Task task,
+                                             final Set<TopicPartition> inputPartitions,
+                                             final Set<Task> tasksToCloseDirty,
+                                             final Map<TaskId, RuntimeException> taskExceptions) {
         Task newTask = null;
         try {
             task.suspend();
@@ -786,7 +809,7 @@ public class TaskManager {
         for (final Task task : stateUpdater.drainRemovedTasks()) {
             Set<TopicPartition> inputPartitions;
             if ((inputPartitions = tasks.removePendingTaskToRecycle(task.id())) != null) {
-                recycleTask(task, inputPartitions, tasksToCloseDirty, taskExceptions);
+                recycleTaskFromStateUpdater(task, inputPartitions, tasksToCloseDirty, taskExceptions);
             } else if (tasks.removePendingTaskToCloseClean(task.id())) {
                 closeTaskClean(task, tasksToCloseDirty, taskExceptions);
             } else if (tasks.removePendingTaskToCloseDirty(task.id())) {
@@ -794,9 +817,12 @@ public class TaskManager {
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
                 stateUpdater.add(task);
+            } else if (tasks.removePendingActiveTaskToSuspend(task.id())) {
+                task.suspend();
+                tasks.addTask(task);
             } else {
                 throw new IllegalStateException("Got a removed task " + task.id() + " from the state updater " +
-                    " that is not for recycle, closing, or updating input partitions; this should not happen");
+                    "that is not for recycle, closing, or updating input partitions; this should not happen");
             }
         }
 
@@ -808,7 +834,7 @@ public class TaskManager {
         maybeThrowTaskExceptions(taskExceptions);
     }
 
-    private boolean handleRestoredTasksFromStateUpdater(final long now,
+    private void handleRestoredTasksFromStateUpdater(final long now,
                                                         final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
         final Set<Task> tasksToCloseDirty = new TreeSet<>(Comparator.comparing(Task::id));
@@ -817,7 +843,7 @@ public class TaskManager {
         for (final Task task : stateUpdater.drainRestoredActiveTasks(timeout)) {
             Set<TopicPartition> inputPartitions;
             if ((inputPartitions = tasks.removePendingTaskToRecycle(task.id())) != null) {
-                recycleTask(task, inputPartitions, tasksToCloseDirty, taskExceptions);
+                recycleTaskFromStateUpdater(task, inputPartitions, tasksToCloseDirty, taskExceptions);
             } else if (tasks.removePendingTaskToCloseClean(task.id())) {
                 closeTaskClean(task, tasksToCloseDirty, taskExceptions);
             } else if (tasks.removePendingTaskToCloseDirty(task.id())) {
@@ -825,6 +851,9 @@ public class TaskManager {
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
                 transitRestoredTaskToRunning(task, now, offsetResetter);
+            } else if (tasks.removePendingActiveTaskToSuspend(task.id())) {
+                task.suspend();
+                tasks.addTask(task);
             } else {
                 transitRestoredTaskToRunning(task, now, offsetResetter);
             }
@@ -835,8 +864,6 @@ public class TaskManager {
         }
 
         maybeThrowTaskExceptions(taskExceptions);
-
-        return !stateUpdater.restoresActiveTasks();
     }
 
     /**
@@ -868,7 +895,7 @@ public class TaskManager {
             }
         }
 
-        removeRevokedTasksFromStateUpdater(remainingRevokedPartitions);
+        addRevokedTasksInStateUpdaterToPendingTasksToSuspend(remainingRevokedPartitions);
 
         if (!remainingRevokedPartitions.isEmpty()) {
             log.debug("The following revoked partitions {} are missing from the current task partitions. It could "
@@ -955,13 +982,12 @@ public class TaskManager {
         }
     }
 
-    private void removeRevokedTasksFromStateUpdater(final Set<TopicPartition> remainingRevokedPartitions) {
+    private void addRevokedTasksInStateUpdaterToPendingTasksToSuspend(final Set<TopicPartition> remainingRevokedPartitions) {
         if (stateUpdater != null) {
             for (final Task restoringTask : stateUpdater.getTasks()) {
                 if (restoringTask.isActive()) {
                     if (remainingRevokedPartitions.containsAll(restoringTask.inputPartitions())) {
-                        tasks.addPendingTaskToCloseClean(restoringTask.id());
-                        stateUpdater.remove(restoringTask.id());
+                        tasks.addPendingActiveTaskToSuspend(restoringTask.id());
                         remainingRevokedPartitions.removeAll(restoringTask.inputPartitions());
                     }
                 }
