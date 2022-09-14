@@ -43,6 +43,8 @@ import org.junit.jupiter.params.provider.MethodSource
 import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.Mockito.{mock, reset, times, verify}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
+
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.jdk.CollectionConverters._
 
 class AlterIsrManagerTest {
@@ -113,7 +115,7 @@ class AlterIsrManagerTest {
     assertFutureThrows(failedSubmitFuture, classOf[OperationNotAttemptedException])
 
     // Simulate response
-    val alterPartitionResp = partitionResponse(tp0, Errors.NONE)
+    val alterPartitionResp = partitionResponse()
     val resp = new ClientResponse(null, null, "", 0L, 0L,
       false, null, null, alterPartitionResp)
     verify(brokerToController).sendRequest(capture.capture(), callbackCapture.capture())
@@ -168,6 +170,58 @@ class AlterIsrManagerTest {
     val request = capture.getValue.build()
     assertEquals(request.data().topics().size(), 1)
     assertEquals(request.data().topics().get(0).partitions().size(), 10)
+  }
+
+  @Test
+  def testSubmitFromCallback(): Unit = {
+    // prepare a partition level retriable error response
+    val alterPartitionRespWithPartitionError = partitionResponse(tp0, Errors.UNKNOWN_SERVER_ERROR)
+    val errorResponse = new ClientResponse(null, null, "", 0L, 0L,
+      false, null, null, alterPartitionRespWithPartitionError)
+
+    val leaderId = 1
+    val leaderEpoch = 1
+    val partitionEpoch = 10
+    val isr = List(1, 2, 3)
+    val leaderAndIsr = new LeaderAndIsr(leaderId, leaderEpoch, isr, LeaderRecoveryState.RECOVERED, partitionEpoch)
+    val callbackCapture : ArgumentCaptor[ControllerRequestCompletionHandler] = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])
+
+    val scheduler = new MockScheduler(time)
+    val alterPartitionManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2, KAFKA_3_2_IV0)
+    alterPartitionManager.start()
+    val future = alterPartitionManager.submit(tp0, leaderAndIsr, 0)
+    val finalFuture = new CompletableFuture[LeaderAndIsr]()
+    future.whenComplete { (_, e) =>
+      if (e != null) {
+        // Retry when error.
+        alterPartitionManager.submit(tp0, leaderAndIsr, 0).whenComplete { (result, e) =>
+          if (e != null) {
+            finalFuture.completeExceptionally(e)
+          } else {
+            finalFuture.complete(result)
+          }
+        }
+      } else {
+        finalFuture.completeExceptionally(new AssertionError("Expected the future to be failed"))
+      }
+    }
+
+    verify(brokerToController).start()
+    verify(brokerToController).sendRequest(any(), callbackCapture.capture())
+    reset(brokerToController)
+    callbackCapture.getValue.onComplete(errorResponse)
+
+    // Complete the retry request
+    val retryAlterPartitionResponse = partitionResponse(tp0, Errors.NONE, partitionEpoch, leaderId, leaderEpoch, isr)
+    val retryResponse = new ClientResponse(null, null, "", 0L, 0L,
+      false, null, null, retryAlterPartitionResponse)
+
+    verify(brokerToController).sendRequest(any(), callbackCapture.capture())
+    callbackCapture.getValue.onComplete(retryResponse)
+
+    assertEquals(leaderAndIsr, finalFuture.get(200, TimeUnit.MILLISECONDS))
+    // No more items in unsentIsrUpdates
+    assertFalse(alterPartitionManager.unsentIsrUpdates.containsKey(tp0))
   }
 
   @Test
@@ -227,7 +281,7 @@ class AlterIsrManagerTest {
     scheduler.tick()
 
     // After a successful response, we can submit another AlterIsrItem
-    val retryAlterPartitionResponse = partitionResponse(tp0, Errors.NONE)
+    val retryAlterPartitionResponse = partitionResponse()
     val retryResponse = new ClientResponse(null, null, "", 0L, 0L,
       false, null, null, retryAlterPartitionResponse)
 
@@ -409,14 +463,26 @@ class AlterIsrManagerTest {
     assertFutureThrows(future2, classOf[InvalidUpdateVersionException])
   }
 
-  private def partitionResponse(tp: TopicPartition, error: Errors): AlterPartitionResponse = {
+  private def partitionResponse(
+    tp: TopicPartition = tp0,
+    error: Errors = Errors.NONE,
+    partitionEpoch: Int = 0,
+    leaderId: Int = 0,
+    leaderEpoch: Int = 0,
+    isr: List[Int] = List.empty
+  ): AlterPartitionResponse = {
     new AlterPartitionResponse(new AlterPartitionResponseData()
       .setTopics(Collections.singletonList(
         new AlterPartitionResponseData.TopicData()
-          .setName(tp.topic())
+          .setName(tp.topic)
           .setPartitions(Collections.singletonList(
             new AlterPartitionResponseData.PartitionData()
               .setPartitionIndex(tp.partition())
+              .setPartitionIndex(tp.partition)
+              .setPartitionEpoch(partitionEpoch)
+              .setLeaderEpoch(leaderEpoch)
+              .setLeaderId(leaderId)
+              .setIsr(isr.map(Integer.valueOf).asJava)
               .setErrorCode(error.code))))))
   }
 }

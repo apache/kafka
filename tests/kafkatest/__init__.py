@@ -23,3 +23,4 @@
 #
 # For example, when Kafka is at version 1.0.0-0, this should be something like "1.0.0-0.dev0"
 __version__ = '7.2.2-0.dev0'
+

@@ -30,6 +30,8 @@ class EmptyTestInfo extends TestInfo {
 }
 
 object TestInfoUtils {
+  final val TestWithParameterizedQuorumName = "{displayName}.quorum={0}"
+
   def isKRaft(testInfo: TestInfo): Boolean = {
     if (testInfo.getDisplayName().contains("quorum=")) {
       if (testInfo.getDisplayName().contains("quorum=kraft")) {

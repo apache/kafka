@@ -294,14 +294,12 @@ class DefaultAlterIsrManager(
         inflightAlterIsrItems.foreach { inflightAlterIsr =>
           partitionResponses.get(inflightAlterIsr.topicPartition) match {
             case Some(leaderAndIsrOrError) =>
-              try {
-                leaderAndIsrOrError match {
-                  case Left(error) => inflightAlterIsr.future.completeExceptionally(error.exception)
-                  case Right(leaderAndIsr) => inflightAlterIsr.future.complete(leaderAndIsr)
-                }
-              } finally {
-                // Regardless of callback outcome, we need to clear from the unsent updates map to unblock further updates
-                unsentIsrUpdates.remove(inflightAlterIsr.topicPartition)
+              // Regardless of callback outcome, we need to clear from the unsent updates map to unblock further
+              // updates. We clear it now to allow the callback to submit a new update if needed.
+              unsentIsrUpdates.remove(inflightAlterIsr.topicPartition)
+              leaderAndIsrOrError match {
+                case Left(error) => inflightAlterIsr.future.completeExceptionally(error.exception)
+                case Right(leaderAndIsr) => inflightAlterIsr.future.complete(leaderAndIsr)
               }
             case None =>
               // Don't remove this partition from the update map so it will get re-sent

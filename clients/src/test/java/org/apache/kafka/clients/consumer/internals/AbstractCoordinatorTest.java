@@ -272,6 +272,21 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
+    public void testWakeupFromEnsureCoordinatorReady() {
+        setupCoordinator();
+
+        consumerClient.wakeup();
+
+        // No wakeup should occur from the async variation.
+        coordinator.ensureCoordinatorReadyAsync();
+
+        // But should wakeup in sync variation even if timer is 0.
+        assertThrows(WakeupException.class, () -> {
+            coordinator.ensureCoordinatorReady(mockTime.timer(0));
+        });
+    }
+
+    @Test
     public void testTimeoutAndRetryJoinGroupIfNeeded() throws Exception {
         setupCoordinator();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -504,7 +519,7 @@ public class AbstractCoordinatorTest {
         ensureActiveGroup(generation, memberId);
         assertEquals("", coordinator.rejoinReason());
 
-        // Force a rebalance
+        // force a rebalance
         expectJoinGroup(memberId, "Manual test trigger", generation, memberId);
         expectSyncGroup(generation, memberId);
         coordinator.requestRejoin("Manual test trigger");
@@ -518,8 +533,17 @@ public class AbstractCoordinatorTest {
                 () -> coordinator.joinGroupIfNeeded(mockTime.timer(100L)));
 
         // next join group request should contain exception message
-        expectJoinGroup(memberId, String.format("rebalance failed due to '%s' (%s)", e.getMessage(), e.getClass().getSimpleName()), generation, memberId);
+        expectJoinGroup(memberId, String.format("rebalance failed due to %s", e.getClass().getSimpleName()), generation, memberId);
         expectSyncGroup(generation, memberId);
+        ensureActiveGroup(generation, memberId);
+        assertEquals("", coordinator.rejoinReason());
+
+        // check limit length of reason field
+        final String reason = "Very looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong reason that is 271 characters long to make sure that length limit logic handles the scenario nicely";
+        final String truncatedReason = reason.substring(0, 255);
+        expectJoinGroup(memberId, truncatedReason, generation, memberId);
+        expectSyncGroup(generation, memberId);
+        coordinator.requestRejoin(reason);
         ensureActiveGroup(generation, memberId);
         assertEquals("", coordinator.rejoinReason());
     }
@@ -1095,6 +1119,19 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
+    public void testHandleNormalLeaveGroupResponseAndTruncatedLeaveReason() {
+        MemberResponse memberResponse = new MemberResponse()
+                .setMemberId(memberId)
+                .setErrorCode(Errors.NONE.code());
+        LeaveGroupResponse response =
+                leaveGroupResponse(Collections.singletonList(memberResponse));
+        String leaveReason = "Very looooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooong leaveReason that is 271 characters long to make sure that length limit logic handles the scenario nicely";
+        RequestFuture<Void> leaveGroupFuture = setupLeaveGroup(response, leaveReason, leaveReason.substring(0, 255));
+        assertNotNull(leaveGroupFuture);
+        assertTrue(leaveGroupFuture.succeeded());
+    }
+
+    @Test
     public void testHandleMultipleMembersLeaveGroupResponse() {
         MemberResponse memberResponse = new MemberResponse()
                                             .setMemberId(memberId)
@@ -1128,6 +1165,12 @@ public class AbstractCoordinatorTest {
     }
 
     private RequestFuture<Void> setupLeaveGroup(LeaveGroupResponse leaveGroupResponse) {
+        return setupLeaveGroup(leaveGroupResponse, "test maybe leave group", "test maybe leave group");
+    }
+
+    private RequestFuture<Void> setupLeaveGroup(LeaveGroupResponse leaveGroupResponse,
+                                                String leaveReason,
+                                                String expectedLeaveReason) {
         setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, Optional.empty());
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -1139,11 +1182,11 @@ public class AbstractCoordinatorTest {
             }
             LeaveGroupRequestData leaveGroupRequest = ((LeaveGroupRequest) body).data();
             return leaveGroupRequest.members().get(0).memberId().equals(memberId) &&
-                   leaveGroupRequest.members().get(0).reason().equals("test maybe leave group");
+                   leaveGroupRequest.members().get(0).reason().equals(expectedLeaveReason);
         }, leaveGroupResponse);
 
         coordinator.ensureActiveGroup();
-        return coordinator.maybeLeaveGroup("test maybe leave group");
+        return coordinator.maybeLeaveGroup(leaveReason);
     }
 
     @Test
@@ -1633,7 +1676,7 @@ public class AbstractCoordinatorTest {
         }
 
         @Override
-        protected boolean onJoinPrepare(int generation, String memberId) {
+        protected boolean onJoinPrepare(Timer timer, int generation, String memberId) {
             onJoinPrepareInvokes++;
             return true;
         }

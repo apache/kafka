@@ -259,10 +259,16 @@ public interface Controller extends AclMutator, AutoCloseable {
      * @param deadlineNs    The time by which this operation needs to be complete, before
      *                      we will complete this operation with a timeout.
      * @param topics        The list of topics to create partitions for.
+     * @param validateOnly  If true, the request is validated, but no partitions will be created.
+     *
      * @return              A future yielding per-topic results.
      */
-    CompletableFuture<List<CreatePartitionsTopicResult>>
-            createPartitions(long deadlineNs, List<CreatePartitionsTopic> topics);
+    CompletableFuture<List<CreatePartitionsTopicResult>> createPartitions(
+        long deadlineNs,
+        List<CreatePartitionsTopic> topics,
+        boolean validateOnly
+    );
+
 
     /**
      * Begin shutting down, but don't block.  You must still call close to clean up all
