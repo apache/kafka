@@ -44,10 +44,6 @@ class TestBounce(Test):
         if self.zk:
             self.zk.start()
 
-    @cluster(num_nodes=6)
-    @parametrize(metadata_quorum=quorum.remote_raft)
-    @cluster(num_nodes=4)
-    @parametrize(metadata_quorum=quorum.colocated_raft)
     @cluster(num_nodes=4)
     @parametrize(metadata_quorum=quorum.zk)
     def test_simple_run(self, metadata_quorum):
