@@ -30,7 +30,7 @@ public class TransactionalKeyValueStoreTest extends AbstractTransactionalStoreTe
     TransactionalKeyValueStore getTxnStore() {
         final TransactionalKeyValueStore txnStore = new TransactionalKeyValueStore(
             Stores.inMemoryKeyValueStore("main").get(),
-            (RocksDBMetricsRecorder)mock(RocksDBMetricsRecorder.class)
+            (RocksDBMetricsRecorder) mock(RocksDBMetricsRecorder.class)
         );
         txnStore.init((StateStoreContext) context, txnStore);
         return txnStore;
