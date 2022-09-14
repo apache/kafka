@@ -939,7 +939,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(DEFAULT_DSL_STORE_CONFIG,
                     Type.STRING,
                     ROCKS_DB,
-                    in(ROCKS_DB, IN_MEMORY),
+                    in(ROCKS_DB, IN_MEMORY, TXN_ROCKS_DB),
                     Importance.LOW,
                     DEFAULT_DSL_STORE_DOC)
             .define(METADATA_MAX_AGE_CONFIG,
