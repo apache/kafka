@@ -107,7 +107,7 @@ public class IncrementalCooperativeAssignorTest {
 
         // Third assignment after revocations
         performStandardRebalance();
-        assertDelay(assignor.delay); // Sucessive revocation so delay should be non-zero
+        assertTrue(assignor.delay > 0); // Sucessive revocation so delay should be non-zero
         assertConnectorAllocations(1, 1);
         assertTaskAllocations(4, 4);
         assertBalancedAndCompleteAllocation();
@@ -438,7 +438,7 @@ public class IncrementalCooperativeAssignorTest {
 
         // Fourth assignment after revocations
         performStandardRebalance();
-        assertDelay(assignor.delay); // Successive revoking rebalance. Should introduce a delay
+        assertTrue(assignor.delay > 0); // Successive revoking rebalance. Should introduce a delay
         assertConnectorAllocations(0, 1, 1);
         assertTaskAllocations(2, 3, 3);
         assertBalancedAndCompleteAllocation();

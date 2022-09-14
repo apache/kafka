@@ -517,13 +517,13 @@ public class WorkerCoordinatorIncrementalTest {
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
                 Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
+                Collections.emptyList(), 1,
                 leaderAssignment);
 
         memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
                 Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
+                Collections.emptyList(), 1,
                 memberAssignment);
 
         anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
