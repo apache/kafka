@@ -316,11 +316,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
         if (optimizationConfigs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {
             LOG.debug("Optimizing the Kafka Streams graph for ktable source nodes");
-            optimizeKTableSourceTopics();
+            reuseKTableSourceTopics();
         }
         if (optimizationConfigs.contains(StreamsConfig.MERGE_REPARTITION_TOPICS)) {
             LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
-            maybeOptimizeRepartitionOperations();
+            mergeRepartitionTopics();
         }
     }
 
@@ -375,12 +375,12 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         }
     }
 
-    private void optimizeKTableSourceTopics() {
+    private void reuseKTableSourceTopics() {
         LOG.debug("Marking KTable source nodes to optimize using source topic for changelogs ");
         tableSourceNodes.forEach(node -> ((TableSourceNode<?, ?>) node).reuseSourceTopicForChangeLog(true));
     }
 
-    private void maybeOptimizeRepartitionOperations() {
+    private void mergeRepartitionTopics() {
         maybeUpdateKeyChangingRepartitionNodeMap();
         final Iterator<Entry<GraphNode, LinkedHashSet<OptimizableRepartitionNode<?, ?>>>> entryIterator =
             keyChangingOperationsToOptimizableRepartitionNodes.entrySet().iterator();
