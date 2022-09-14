@@ -1310,13 +1310,14 @@ public class StreamsConfig extends AbstractConfig {
     private static void validateProcessingConfiguration(final String processingModeConfig) {
         if (processingModeConfig.equals(EXACTLY_ONCE)) {
             throw new ConfigException(String.format("Configuration parameter `%s` was removed in the 4.0.0 release. " +
-                "Please use `%s` instead. Note that this requires broker version 2.5+ so you should prepare "
+                "Please use `%s` instead. Refer to the Kafka Streams upgrade guide on how to upgrade your application " +
+                "to use the new parameter. Note that this requires broker version 2.5+ so you should prepare "
                 + "to upgrade your brokers if necessary.", EXACTLY_ONCE, EXACTLY_ONCE_V2));
         }
         if (processingModeConfig.equals(EXACTLY_ONCE_BETA)) {
             throw new ConfigException(String.format("Configuration parameter `%s` was removed in the 4.0.0 release. " +
-                "Please use `%s` instead. Note that this requires broker version 2.5+ so you should prepare "
-                + "to upgrade your brokers if necessary.", EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2));
+                "Please use `%s` instead, which is the new name for the same processing semantics.",
+                EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2));
         }
         in(AT_LEAST_ONCE, EXACTLY_ONCE_V2).ensureValid(PROCESSING_GUARANTEE_CONFIG, processingModeConfig);
     }

@@ -838,7 +838,8 @@ public class StreamsConfigTest {
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
         assertEquals(
             "Configuration parameter `exactly_once` was removed in the 4.0.0 release. " +
-                "Please use `exactly_once_v2` instead. Note that this requires broker version 2.5+ so you should prepare "
+                "Please use `exactly_once_v2` instead. Refer to the Kafka Streams upgrade guide on how to upgrade your application "
+                + "to use the new parameter. Note that this requires broker version 2.5+ so you should prepare "
                 + "to upgrade your brokers if necessary.",
             exception.getMessage()
         );
@@ -851,8 +852,7 @@ public class StreamsConfigTest {
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
         assertEquals(
             "Configuration parameter `exactly_once_beta` was removed in the 4.0.0 release. " +
-                "Please use `exactly_once_v2` instead. Note that this requires broker version 2.5+ so you should prepare "
-                + "to upgrade your brokers if necessary.",
+                "Please use `exactly_once_v2` instead, which is the new name for the same processing semantics.",
             exception.getMessage()
         );
     }
