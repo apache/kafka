@@ -357,22 +357,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String AT_LEAST_ONCE = "at_least_once";
 
     /**
-     * Former config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"}
-     *
-     * This option was removed in 4.0.0 and is only used to throw an instructive exception.
-     */
-    @Deprecated
-    static final String EXACTLY_ONCE = "exactly_once";
-
-    /**
-     * Former config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"}
-     *
-     * This option was removed in 4.0.0 and is only used to throw an instructive exception.
-     */
-    @Deprecated
-    static final String EXACTLY_ONCE_BETA = "exactly_once_beta";
-
-    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
      * <p>
      * Enabling exactly-once-v2 requires broker version 2.5 or higher.
@@ -1308,16 +1292,16 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     private static void validateProcessingConfiguration(final String processingModeConfig) {
-        if (processingModeConfig.equals(EXACTLY_ONCE)) {
-            throw new ConfigException(String.format("Configuration parameter `%s` was removed in the 4.0.0 release. " +
+        if (processingModeConfig.equals("exactly_once")) {
+            throw new ConfigException(String.format("Configuration parameter `exactly_once` was removed in the 4.0.0 release. " +
                 "Please use `%s` instead. Refer to the Kafka Streams upgrade guide on how to upgrade your application " +
                 "to use the new parameter. Note that this requires broker version 2.5+ so you should prepare "
-                + "to upgrade your brokers if necessary.", EXACTLY_ONCE, EXACTLY_ONCE_V2));
+                + "to upgrade your brokers if necessary.", EXACTLY_ONCE_V2));
         }
-        if (processingModeConfig.equals(EXACTLY_ONCE_BETA)) {
-            throw new ConfigException(String.format("Configuration parameter `%s` was removed in the 4.0.0 release. " +
+        if (processingModeConfig.equals("exactly_once_beta")) {
+            throw new ConfigException(String.format("Configuration parameter `exactly_once_beta` was removed in the 4.0.0 release. " +
                 "Please use `%s` instead, which is the new name for the same processing semantics.",
-                EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2));
+                EXACTLY_ONCE_V2));
         }
         in(AT_LEAST_ONCE, EXACTLY_ONCE_V2).ensureValid(PROCESSING_GUARANTEE_CONFIG, processingModeConfig);
     }

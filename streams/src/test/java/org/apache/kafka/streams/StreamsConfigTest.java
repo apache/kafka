@@ -831,10 +831,9 @@ public class StreamsConfigTest {
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldThrowWhenEosAlphaIsUsed() {
-        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
         assertEquals(
             "Configuration parameter `exactly_once` was removed in the 4.0.0 release. " +
@@ -845,10 +844,9 @@ public class StreamsConfigTest {
         );
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldThrowWhenEosBetaIsUsed() {
-        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once_beta");
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
         assertEquals(
             "Configuration parameter `exactly_once_beta` was removed in the 4.0.0 release. " +
