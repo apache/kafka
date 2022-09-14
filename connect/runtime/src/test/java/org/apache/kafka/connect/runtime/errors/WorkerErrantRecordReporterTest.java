@@ -47,11 +47,11 @@ import static org.mockito.Mockito.when;
 public class WorkerErrantRecordReporterTest {
 
     private WorkerErrantRecordReporter reporter;
-    private RetryWithToleranceOperator retryWithToleranceOperator;
 
     @Mock private Converter converter;
     @Mock private HeaderConverter headerConverter;
     @Mock private InternalSinkRecord record;
+    @Mock private ErrorHandlingMetrics errorHandlingMetrics;
     @Mock private ErrorReporter errorReporter;
 
     @Test
@@ -70,34 +70,39 @@ public class WorkerErrantRecordReporterTest {
     }
 
     @Test
-    public void testReport() {
-        initializeReporter(true);
-        when(errorReporter.report(any())).thenReturn(CompletableFuture.completedFuture(null));
-        @SuppressWarnings("unchecked") ConsumerRecord<byte[], byte[]> consumerRecord = mock(ConsumerRecord.class);
-        when(record.originalRecord()).thenReturn(consumerRecord);
-        reporter.report(record, new Throwable());
-        verify(errorReporter).report(any());
+    public void testReportErrorsTolerated() {
+        testReport(true);
     }
 
     @Test
     public void testReportNoToleratedErrors() {
-        initializeReporter(false);
+        testReport(false);
+    }
+
+    private void testReport(boolean errorsTolerated) {
+        initializeReporter(errorsTolerated);
         when(errorReporter.report(any())).thenReturn(CompletableFuture.completedFuture(null));
         @SuppressWarnings("unchecked") ConsumerRecord<byte[], byte[]> consumerRecord = mock(ConsumerRecord.class);
         when(record.originalRecord()).thenReturn(consumerRecord);
-        assertThrows(ConnectException.class, () -> reporter.report(record, new Throwable()));
+
+        if (errorsTolerated) {
+            reporter.report(record, new Throwable());
+        } else {
+            assertThrows(ConnectException.class, () -> reporter.report(record, new Throwable()));
+        }
+
         verify(errorReporter).report(any());
     }
 
     private void initializeReporter(boolean errorsTolerated) {
-        retryWithToleranceOperator = new RetryWithToleranceOperator(
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(
                 5000,
                 ConnectorConfig.ERRORS_RETRY_MAX_DELAY_DEFAULT,
                 errorsTolerated ? ToleranceType.ALL : ToleranceType.NONE,
-                Time.SYSTEM
+                Time.SYSTEM,
+                errorHandlingMetrics
         );
         retryWithToleranceOperator.reporters(Collections.singletonList(errorReporter));
-        retryWithToleranceOperator.metrics(mock(ErrorHandlingMetrics.class));
         reporter = new WorkerErrantRecordReporter(
                 retryWithToleranceOperator,
                 converter,
