@@ -33,6 +33,7 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -60,9 +61,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -117,7 +119,7 @@ public class RestoreIntegrationTest {
         CLUSTER.createTopic(inputStream, 2, 1);
     }
 
-    private Properties props() {
+    private Properties props(final boolean stateUpdaterEnabled) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -127,6 +129,7 @@ public class RestoreIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
         return streamsConfiguration;
     }
 
@@ -137,12 +140,13 @@ public class RestoreIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldRestoreStateFromSourceTopic() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldRestoreStateFromSourceTopic(final boolean stateUpdaterEnabled) throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Properties props = props();
+        final Properties props = props(stateUpdaterEnabled);
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
@@ -202,15 +206,16 @@ public class RestoreIntegrationTest {
         assertThat(numReceived.get(), equalTo(offsetLimitDelta * 2));
     }
 
-    @Test
-    public void shouldRestoreStateFromChangelogTopic() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldRestoreStateFromChangelogTopic(final boolean stateUpdaterEnabled) throws Exception {
         final String changelog = appId + "-store-changelog";
         CLUSTER.createTopic(changelog, 2, 1);
 
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Properties props = props();
+        final Properties props = props(stateUpdaterEnabled);
 
         // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
         final int offsetCheckpointed = 1000;
@@ -268,8 +273,9 @@ public class RestoreIntegrationTest {
         assertThat(numReceived.get(), equalTo(numberOfKeys));
     }
 
-    @Test
-    public void shouldSuccessfullyStartWhenLoggingDisabled() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldSuccessfullyStartWhenLoggingDisabled(final boolean stateUpdaterEnabled) throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, Integer> stream = builder.stream(inputStream);
@@ -279,7 +285,7 @@ public class RestoreIntegrationTest {
                     Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled());
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
-        kafkaStreams = new KafkaStreams(builder.build(), props());
+        kafkaStreams = new KafkaStreams(builder.build(), props(stateUpdaterEnabled));
         kafkaStreams.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
                 startupLatch.countDown();
@@ -291,8 +297,9 @@ public class RestoreIntegrationTest {
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
     }
 
-    @Test
-    public void shouldProcessDataFromStoresWithLoggingDisabled() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldProcessDataFromStoresWithLoggingDisabled(final boolean stateUpdaterEnabled) throws InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronously(inputStream,
                                                            asList(KeyValue.pair(1, 1),
                                                                          KeyValue.pair(2, 2),
@@ -320,7 +327,7 @@ public class RestoreIntegrationTest {
 
         final Topology topology = streamsBuilder.build();
 
-        kafkaStreams = new KafkaStreams(topology, props());
+        kafkaStreams = new KafkaStreams(topology, props(stateUpdaterEnabled));
 
         final CountDownLatch latch = new CountDownLatch(1);
         kafkaStreams.setStateListener((newState, oldState) -> {
@@ -335,8 +342,9 @@ public class RestoreIntegrationTest {
         assertTrue(processorLatch.await(30, TimeUnit.SECONDS));
     }
 
-    @Test
-    public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore(final boolean stateUpdaterEnabled) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(
                 inputStream,
@@ -344,13 +352,13 @@ public class RestoreIntegrationTest {
         );
         createStateForRestoration(inputStream, 0);
 
-        final Properties props1 = props();
+        final Properties props1 = props(stateUpdaterEnabled);
         props1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-1").getPath());
         purgeLocalStreamsState(props1);
         final KafkaStreams client1 = new KafkaStreams(builder.build(), props1);
 
-        final Properties props2 = props();
+        final Properties props2 = props(stateUpdaterEnabled);
         props2.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props2.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-2").getPath());
         purgeLocalStreamsState(props2);
