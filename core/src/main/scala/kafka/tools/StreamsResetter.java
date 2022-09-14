@@ -217,15 +217,16 @@ public class StreamsResetter {
             .ofType(String.class)
             .describedAs("id")
             .required();
-        bootstrapServerOption = optionParser.accepts("bootstrap-server", "The server(s) to use for bootstrapping.")
-            .withOptionalArg()
-            .ofType(String.class)
-            .describedAs("Server(s) to use for bootstrapping");
         bootstrapServersOption = optionParser.accepts("bootstrap-servers", "DEPRECATED: Comma-separated list of broker urls with format: HOST1:PORT1,HOST2:PORT2")
             .withOptionalArg()
             .ofType(String.class)
             .defaultsTo("localhost:9092")
             .describedAs("urls");
+        bootstrapServerOption = optionParser.accepts("bootstrap-server", "REQUIRED unless --bootstrap-servers(deprecated) is specified. The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
+            .requiredUnless("bootstrap-servers")
+            .withRequiredArg()
+            .describedAs("server to connect to")
+            .ofType(String.class);
         inputTopicsOption = optionParser.accepts("input-topics", "Comma-separated list of user input topics. For these topics, the tool by default will reset the offset to the earliest available offset. "
                 + "Reset to other offset position by appending other reset offset option, ex: --input-topics foo --shift-by 5")
             .withRequiredArg()
@@ -281,9 +282,6 @@ public class StreamsResetter {
             }
             if (options.has(versionOption)) {
                 CommandLineUtils.printVersionAndDie();
-            }
-            if (options.has(bootstrapServerOption) && options.has(bootstrapServersOption)) {
-                CommandLineUtils.printUsageAndDie(optionParser, "Please specify only one of bootstrap-server, bootstrap-servers");
             }
         } catch (final OptionException e) {
             CommandLineUtils.printUsageAndDie(optionParser, e.getMessage());
