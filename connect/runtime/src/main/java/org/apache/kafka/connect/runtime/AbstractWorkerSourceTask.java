@@ -25,6 +25,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -628,9 +629,9 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
             pollTime.add(metricGroup.metricName(registry.sourceRecordPollBatchTimeMax), new Max());
             pollTime.add(metricGroup.metricName(registry.sourceRecordPollBatchTimeAvg), new Avg());
 
-            convertTime = metricGroup.sensor("source-record-convert-time");
-            convertTime.add(metricGroup.metricName(registry.sourceRecordConvertTimeMax), new Max());
-            convertTime.add(metricGroup.metricName(registry.sourceRecordConvertTimeAvg), new Avg());
+            convertTime = metricGroup.sensor("source-record-transform-convert-time", RecordingLevel.DEBUG);
+            convertTime.add(metricGroup.metricName(registry.sourceRecordTransformConvertTimeMax), new Max());
+            convertTime.add(metricGroup.metricName(registry.sourceRecordTransformConvertTimeAvg), new Avg());
 
             sourceRecordActiveCount = metricGroup.sensor("source-record-active-count");
             sourceRecordActiveCount.add(metricGroup.metricName(registry.sourceRecordActiveCount), new Value());

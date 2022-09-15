@@ -65,8 +65,8 @@ public class ConnectMetricsRegistry {
     public final MetricNameTemplate sourceRecordWriteTotal;
     public final MetricNameTemplate sourceRecordPollBatchTimeMax;
     public final MetricNameTemplate sourceRecordPollBatchTimeAvg;
-    public final MetricNameTemplate sourceRecordConvertTimeMax;
-    public final MetricNameTemplate sourceRecordConvertTimeAvg;
+    public final MetricNameTemplate sourceRecordTransformConvertTimeMax;
+    public final MetricNameTemplate sourceRecordTransformConvertTimeAvg;
     public final MetricNameTemplate sourceRecordActiveCount;
     public final MetricNameTemplate sourceRecordActiveCountMax;
     public final MetricNameTemplate sourceRecordActiveCountAvg;
@@ -89,6 +89,7 @@ public class ConnectMetricsRegistry {
     public final MetricNameTemplate sinkRecordActiveCountMax;
     public final MetricNameTemplate sinkRecordActiveCountAvg;
     public final MetricNameTemplate sinkRecordLatencyMax;
+    public final MetricNameTemplate sinkRecordBatchLatencyMax;
     public final MetricNameTemplate sinkRecordLatencyAvg;
     public final MetricNameTemplate connectorCount;
     public final MetricNameTemplate taskCount;
@@ -203,12 +204,12 @@ public class ConnectMetricsRegistry {
                                                       "The average time in milliseconds taken by this task to poll for a batch of " +
                                                       "source records.",
                                                       sourceTaskTags);
-        sourceRecordConvertTimeMax = createTemplate("source-record-convert-max-time-ms", SOURCE_TASK_GROUP_NAME,
-                                                    "The maximum time in milliseconds taken by this task to transform and convert for a record.",
-                                                    sourceTaskTags);
-        sourceRecordConvertTimeAvg = createTemplate("source-record-convert-avg-time-ms", SOURCE_TASK_GROUP_NAME,
-                                                    "The average time in milliseconds taken by this task to transform and convert for a record.",
-                                                    sourceTaskTags);
+        sourceRecordTransformConvertTimeMax = createTemplate("source-record-transform-convert-time-max-ms", SOURCE_TASK_GROUP_NAME,
+                                                             "The maximum time in milliseconds taken by this task to transform and convert for a record.",
+                                                             sourceTaskTags);
+        sourceRecordTransformConvertTimeAvg = createTemplate("source-record-transform-convert-time-avg-ms", SOURCE_TASK_GROUP_NAME,
+                                                             "The average time in milliseconds taken by this task to transform and convert for a record.",
+                                                             sourceTaskTags);
         sourceRecordActiveCount = createTemplate("source-record-active-count", SOURCE_TASK_GROUP_NAME,
                                                  "The number of records that have been produced by this task but not yet completely " +
                                                  "written to Kafka.",
@@ -286,9 +287,9 @@ public class ConnectMetricsRegistry {
                                                    "The maximum time taken by this task to put a batch of sinks records.", sinkTaskTags);
         sinkRecordPutBatchTimeAvg = createTemplate("put-batch-avg-time-ms", SINK_TASK_GROUP_NAME,
                                                    "The average time taken by this task to put a batch of sinks records.", sinkTaskTags);
-        sinkRecordConvertTransformTimeMax = createTemplate("sink-record-convert-transform-max-time-ms", SINK_TASK_GROUP_NAME,
+        sinkRecordConvertTransformTimeMax = createTemplate("sink-record-convert-transform-time-max-ms", SINK_TASK_GROUP_NAME,
                                                            "The maximum time taken by this task to convert and transform a record.", sinkTaskTags);
-        sinkRecordConvertTransformTimeAvg = createTemplate("sink-record-convert-transform-avg-time-ms", SINK_TASK_GROUP_NAME,
+        sinkRecordConvertTransformTimeAvg = createTemplate("sink-record-convert-transform-time-avg-ms", SINK_TASK_GROUP_NAME,
                                                   "The average time taken by this task to convert and transform a record.", sinkTaskTags);
         sinkRecordActiveCount = createTemplate("sink-record-active-count", SINK_TASK_GROUP_NAME,
                                                "The number of records that have been read from Kafka but not yet completely " +
@@ -302,14 +303,18 @@ public class ConnectMetricsRegistry {
                                                   "The average number of records that have been read from Kafka but not yet completely "
                                                   + "committed/flushed/acknowledged by the sink task.",
                                                   sinkTaskTags);
-        sinkRecordLatencyMax = createTemplate("sink-record-latency-max", SINK_TASK_GROUP_NAME,
-                                                 "The maximum latency of a record, measuring by comparing the record timestamp with the "
-                                                 + "system time when it has been received by the Sink task",
-                                                 sinkTaskTags);
-        sinkRecordLatencyAvg = createTemplate("sink-record-latency-avg", SINK_TASK_GROUP_NAME,
-                                                 "The average end-to-end latency of a record, measuring by comparing the record timestamp with the "
-                                                 + "system time when it has been received by the Sink task",
-                                                 sinkTaskTags);
+        sinkRecordLatencyMax = createTemplate("sink-record-latency-max-ms", SINK_TASK_GROUP_NAME,
+                                              "The maximum latency of a record, measuring by comparing the record timestamp with the "
+                                              + "system time when it has been received by the Sink task",
+                                              sinkTaskTags);
+        sinkRecordLatencyAvg = createTemplate("sink-record-latency-avg-ms", SINK_TASK_GROUP_NAME,
+                                              "The average end-to-end latency of a record, measuring by comparing the record timestamp with the "
+                                              + "system time when it has been received by the Sink task",
+                                              sinkTaskTags);
+        sinkRecordBatchLatencyMax = createTemplate("sink-record-batch-latency-max-ms", SINK_TASK_GROUP_NAME,
+                                                   "The maximum latency of a record, measuring by comparing the record timestamp with the "
+                                                   + "system time when it has been received by the Sink task",
+                                                   sinkTaskTags);
 
         /***** Worker level *****/
         Set<String> workerTags = new LinkedHashSet<>(tags);
