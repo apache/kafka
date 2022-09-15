@@ -1306,7 +1306,7 @@ public class StreamsConfigTest {
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
         final StreamsConfig config = new StreamsConfig(props);
         final List<String> configs = Arrays.asList(config.getString(TOPOLOGY_OPTIMIZATION_CONFIG).split(","));
-        assertEquals(3, configs.size());
+        assertEquals(2, configs.size());
         assertTrue(configs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS));
         assertTrue(configs.contains(StreamsConfig.MERGE_REPARTITION_TOPICS));
     }
