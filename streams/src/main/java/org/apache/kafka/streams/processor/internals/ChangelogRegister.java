@@ -33,7 +33,7 @@ public interface ChangelogRegister {
      */
     void register(final TopicPartition partition, final ProcessorStateManager stateManager);
 
-    void register(final Set<TopicPartition> partition, final ProcessorStateManager stateManager);
+    void register(final Set<TopicPartition> partitions, final ProcessorStateManager stateManager);
 
     /**
      * Unregisters and removes the passed in partitions from the set of changelogs

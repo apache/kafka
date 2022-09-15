@@ -348,6 +348,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
+    @Override
     public void register(final Set<TopicPartition> changelogPartitions, final ProcessorStateManager stateManager) {
         for (final TopicPartition changelogPartition : changelogPartitions) {
             register(changelogPartition, stateManager);
