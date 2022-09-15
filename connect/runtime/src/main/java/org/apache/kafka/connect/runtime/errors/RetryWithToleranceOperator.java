@@ -77,24 +77,25 @@ public class RetryWithToleranceOperator implements AutoCloseable {
 
     private long totalFailures = 0;
     private final Time time;
-    private ErrorHandlingMetrics errorHandlingMetrics;
+    private final ErrorHandlingMetrics errorHandlingMetrics;
     private final CountDownLatch stopRequestedLatch;
     private volatile boolean stopping;   // indicates whether the operator has been asked to stop retrying
 
     protected final ProcessingContext context;
 
     public RetryWithToleranceOperator(long errorRetryTimeout, long errorMaxDelayInMillis,
-                                      ToleranceType toleranceType, Time time) {
-        this(errorRetryTimeout, errorMaxDelayInMillis, toleranceType, time, new ProcessingContext(), new CountDownLatch(1));
+                                      ToleranceType toleranceType, Time time, ErrorHandlingMetrics errorHandlingMetrics) {
+        this(errorRetryTimeout, errorMaxDelayInMillis, toleranceType, time, errorHandlingMetrics, new ProcessingContext(), new CountDownLatch(1));
     }
 
     RetryWithToleranceOperator(long errorRetryTimeout, long errorMaxDelayInMillis,
-                               ToleranceType toleranceType, Time time,
+                               ToleranceType toleranceType, Time time, ErrorHandlingMetrics errorHandlingMetrics,
                                ProcessingContext context, CountDownLatch stopRequestedLatch) {
         this.errorRetryTimeout = errorRetryTimeout;
         this.errorMaxDelayInMillis = errorMaxDelayInMillis;
         this.errorToleranceType = toleranceType;
         this.time = time;
+        this.errorHandlingMetrics = errorHandlingMetrics;
         this.context = context;
         this.stopRequestedLatch = stopRequestedLatch;
         this.stopping = false;
@@ -282,10 +283,6 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         } catch (InterruptedException e) {
             return;
         }
-    }
-
-    public synchronized void metrics(ErrorHandlingMetrics errorHandlingMetrics) {
-        this.errorHandlingMetrics = errorHandlingMetrics;
     }
 
     @Override

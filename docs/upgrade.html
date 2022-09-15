@@ -81,6 +81,9 @@
 
 <h5><a id="upgrade_330_notable" href="#upgrade_330_notable">Notable changes in 3.3.0</a></h5>
     <ul>
+        <li>KRaft mode is production ready for new clusters. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-833%3A+Mark+KRaft+as+Production+Ready">KIP-833</a>
+	    for more details (including limitations).
+	</li>
         <li>The partitioner used by default for records with no keys has been improved to avoid pathological behavior when one or more brokers are slow.
             The new logic may affect the batching behavior, which can be tuned using the <code>batch.size</code> and/or <code>linger.ms</code> configuration settings.
             The previous behavior can be restored by setting <code>partitioner.class=org.apache.kafka.clients.producer.internals.DefaultPartitioner</code>.
