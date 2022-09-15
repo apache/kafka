@@ -408,7 +408,7 @@ public class StreamsProducerTest {
     // functional tests
 
     @Test
-    public void shouldEnableEosIfEosBetaEnabled() {
+    public void shouldEnableEosIfEosV2Enabled() {
         assertThat(eosV2StreamsProducer.eosEnabled(), is(true));
     }
 
@@ -440,7 +440,7 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldHaveEosEnabledIfEosBetaEnabled() {
+    public void shouldHaveEosEnabledIfEosV2Enabled() {
         assertThat(eosV2StreamsProducer.eosEnabled(), is(true));
     }
 
@@ -511,7 +511,7 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldCommitTxWithApplicationIdOnEosBetaCommit() {
+    public void shouldCommitTxWithApplicationIdOnEosV2Commit() {
         mockedProducer.initTransactions();
         expectLastCall();
         mockedProducer.beginTransaction();
@@ -533,7 +533,7 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldCommitTxWithConsumerGroupMetadataOnEosBetaCommit() {
+    public void shouldCommitTxWithConsumerGroupMetadataOnEosV2Commit() {
         mockedProducer.initTransactions();
         expectLastCall();
         mockedProducer.beginTransaction();
@@ -595,7 +595,7 @@ public class StreamsProducerTest {
     // error handling tests
 
     @Test
-    public void shouldFailIfProcessIdNullForEosBeta() {
+    public void shouldFailIfProcessIdNullForEosV2() {
         final NullPointerException thrown = assertThrows(
             NullPointerException.class,
             () -> new StreamsProducer(
@@ -639,7 +639,7 @@ public class StreamsProducerTest {
     }
 
     @Test
-    public void shouldFailOnMaybeBeginTransactionIfTransactionsNotInitializedForExactlyOnceBeta() {
+    public void shouldFailOnMaybeBeginTransactionIfTransactionsNotInitializedForExactlyOnceV2() {
         final StreamsProducer streamsProducer =
             new StreamsProducer(
                 eosV2Config,
@@ -981,7 +981,7 @@ public class StreamsProducerTest {
     }
 
 
-    // EOS beta test
+    // EOS test
 
     // functional tests
 
