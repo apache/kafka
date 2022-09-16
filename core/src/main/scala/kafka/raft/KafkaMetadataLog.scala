@@ -48,6 +48,17 @@ final class KafkaMetadataLog private (
 
   this.logIdent = s"[MetadataLog partition=$topicPartition, nodeId=${config.nodeId}] "
 
+  // If the log start offset is not 0, then we must have a snapshot which covers the
+  // initial state up to the current log start offset.
+  if (log.logStartOffset > 0) {
+    val latestSnapshotId = snapshots.lastOption.map(_._1)
+    if (!latestSnapshotId.exists(snapshotId => snapshotId.offset >= log.logStartOffset)) {
+      throw new IllegalStateException("Inconsistent snapshot state: there must be a snapshot " +
+        s"at an offset larger then the current log start offset ${log.logStartOffset}, but the " +
+        s"latest snapshot is ${latestSnapshotId}")
+    }
+  }
+
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
     val isolation = readIsolation match {
       case Isolation.COMMITTED => FetchHighWatermark
