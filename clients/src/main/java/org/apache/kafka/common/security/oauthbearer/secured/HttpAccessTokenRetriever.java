@@ -302,7 +302,13 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         ObjectMapper mapper = new ObjectMapper();
         try {
             JsonNode rootNode = mapper.readTree(errorResponseBody);
-            return String.format("{%s - %s}", rootNode.at("/error"), rootNode.at("/error_description"));
+            if (!rootNode.at("/error").isMissingNode()) {
+                return String.format("{%s - %s}", rootNode.at("/error"), rootNode.at("/error_description"));
+            } else if (!rootNode.at("/errorCode").isMissingNode()) {
+                return String.format("{%s - %s}", rootNode.at("/errorCode"), rootNode.at("/errorSummary"));
+            } else {
+                return errorResponseBody;
+            }
         } catch (Exception e) {
             log.warn("Error parsing error response", e);
         }

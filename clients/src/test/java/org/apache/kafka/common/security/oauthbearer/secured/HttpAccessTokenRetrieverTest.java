@@ -87,6 +87,22 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
         IOException ioe = assertThrows(IOException.class,
             () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
         assertTrue(ioe.getMessage().contains("{\"some_arg\" - \"some problem with arg\"}"));
+
+        // error response body has different keys
+        when(mockedCon.getErrorStream()).thenReturn(new ByteArrayInputStream(
+            "{\"errorCode\":\"some_arg\", \"errorSummary\":\"some problem with arg\"}"
+                .getBytes(StandardCharsets.UTF_8)));
+        ioe = assertThrows(IOException.class,
+            () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+        assertTrue(ioe.getMessage().contains("{\"some_arg\" - \"some problem with arg\"}"));
+
+        // error response is valid json but unknown keys
+        when(mockedCon.getErrorStream()).thenReturn(new ByteArrayInputStream(
+            "{\"err\":\"some_arg\", \"err_des\":\"some problem with arg\"}"
+                .getBytes(StandardCharsets.UTF_8)));
+        ioe = assertThrows(IOException.class,
+            () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+        assertTrue(ioe.getMessage().contains("{\"err\":\"some_arg\", \"err_des\":\"some problem with arg\"}"));
     }
 
     @Test
