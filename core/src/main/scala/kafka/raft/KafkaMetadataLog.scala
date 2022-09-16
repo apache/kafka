@@ -546,7 +546,7 @@ case class MetadataLogConfig(logSegmentBytes: Int,
                              fileDeleteDelayMs: Int,
                              nodeId: Int)
 
-object KafkaMetadataLog {
+object KafkaMetadataLog extends Logging {
   def apply(
     topicPartition: TopicPartition,
     topicId: Uuid,
@@ -645,11 +645,13 @@ object KafkaMetadataLog {
 
       snapshotsToDelete.foreach { snapshotPath =>
         Files.deleteIfExists(snapshotPath.path)
+        info(s"Deleted unneeded snapshot file with path $snapshotPath")
       }
     } finally {
       filesInDir.close()
     }
 
+    info(s"Initialized snapshots with IDs ${snapshotsToRetain.keys} from ${log.dir}")
     snapshotsToRetain
   }
 
