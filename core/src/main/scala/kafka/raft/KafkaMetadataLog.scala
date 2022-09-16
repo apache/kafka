@@ -16,7 +16,7 @@
  */
 package kafka.raft
 
-import kafka.log.{AppendOrigin, Defaults, UnifiedLog, LogConfig, LogOffsetSnapshot, SnapshotGenerated}
+import kafka.log.{AppendOrigin, Defaults, LogConfig, LogOffsetSnapshot, SnapshotGenerated, UnifiedLog}
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMinBytesProp}
 import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, KafkaConfig, LogDirFailureChannel, RequestLocal}
 import kafka.utils.{CoreUtils, Logging, Scheduler}
@@ -26,7 +26,7 @@ import org.apache.kafka.common.record.{ControlRecordUtils, MemoryRecords, Record
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
-import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, Snapshots}
+import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 
 import java.io.File
 import java.nio.file.{Files, NoSuchFileException, Path}
@@ -47,17 +47,6 @@ final class KafkaMetadataLog private (
 ) extends ReplicatedLog with Logging {
 
   this.logIdent = s"[MetadataLog partition=$topicPartition, nodeId=${config.nodeId}] "
-
-  // If the log start offset is not 0, then we must have a snapshot which covers the
-  // initial state up to the current log start offset.
-  if (log.logStartOffset > 0) {
-    val latestSnapshotId = snapshots.lastOption.map(_._1)
-    if (!latestSnapshotId.exists(snapshotId => snapshotId.offset >= log.logStartOffset)) {
-      throw new IllegalStateException("Inconsistent snapshot state: there must be a snapshot " +
-        s"at an offset larger then the current log start offset ${log.logStartOffset}, but the " +
-        s"latest snapshot is ${latestSnapshotId}")
-    }
-  }
 
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
     val isolation = readIsolation match {
@@ -620,7 +609,9 @@ object KafkaMetadataLog {
   private def recoverSnapshots(
     log: UnifiedLog
   ): mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]] = {
-    val snapshots = mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]]
+    val snapshotsToRetain = mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]]
+    val snapshotsToDelete = mutable.Buffer.empty[SnapshotPath]
+
     // Scan the log directory; deleting partial snapshots and older snapshot, only remembering immutable snapshots start
     // from logStartOffset
     val filesInDir = Files.newDirectoryStream(log.dir.toPath)
@@ -628,21 +619,38 @@ object KafkaMetadataLog {
     try {
       filesInDir.forEach { path =>
         Snapshots.parse(path).ifPresent { snapshotPath =>
-          if (snapshotPath.partial ||
-            snapshotPath.deleted ||
-            snapshotPath.snapshotId.offset < log.logStartOffset) {
-            // Delete partial snapshot, deleted snapshot and older snapshot
-            Files.deleteIfExists(snapshotPath.path)
+          // Collect partial snapshot, deleted snapshot and older snapshot for deletion
+          if (snapshotPath.partial
+            || snapshotPath.deleted
+            || snapshotPath.snapshotId.offset < log.logStartOffset) {
+            snapshotsToDelete.append(snapshotPath)
           } else {
-            snapshots.put(snapshotPath.snapshotId, None)
+            snapshotsToRetain.put(snapshotPath.snapshotId, None)
           }
         }
+      }
+
+      // Before deleting any snapshots, we should ensure that the retained snapshots are
+      // consistent with the current state of the log. If the log start offset is not 0,
+      // then we must have a snapshot which covers the initial state up to the current
+      // log start offset.
+      if (log.logStartOffset > 0) {
+        val latestSnapshotId = snapshotsToRetain.lastOption.map(_._1)
+        if (!latestSnapshotId.exists(snapshotId => snapshotId.offset >= log.logStartOffset)) {
+          throw new IllegalStateException("Inconsistent snapshot state: there must be a snapshot " +
+            s"at an offset larger then the current log start offset ${log.logStartOffset}, but the " +
+            s"latest snapshot is $latestSnapshotId")
+        }
+      }
+
+      snapshotsToDelete.foreach { snapshotPath =>
+        Files.deleteIfExists(snapshotPath.path)
       }
     } finally {
       filesInDir.close()
     }
 
-    snapshots
+    snapshotsToRetain
   }
 
   private def deleteSnapshotFiles(

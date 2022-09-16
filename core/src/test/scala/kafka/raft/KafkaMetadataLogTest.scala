@@ -422,14 +422,46 @@ final class KafkaMetadataLogTest {
     assertEquals(500, log.log.logStartOffset)
   }
 
+  @Test
+  def testNoPartialSnapshotDeletionWithInvalidSnapshotState(): Unit = {
+    // Initialize an empty log at offset 100.
+    val log = buildMetadataLog(tempDir, mockTime)
+    log.log.truncateFullyAndStartAt(newOffset = 100)
+    log.close()
+
+    val metadataDir = metadataLogDir(tempDir)
+    println(metadataDir)
+
+    // We have one deleted snapshot at an offset matching the start offset.
+    val snapshotId = new OffsetAndEpoch(100, 1)
+    writeEmptySnapshot(tempDir, snapshotId)
+
+    val deletedPath = Snapshots.markForDelete(metadataDir.toPath, snapshotId)
+    assertTrue(deletedPath.toFile.exists())
+
+    // Initialization should still fail.
+    assertThrows(classOf[IllegalStateException], () => {
+      buildMetadataLog(tempDir, mockTime)
+    })
+
+    // The snapshot marked for deletion should still exist.
+    assertTrue(deletedPath.toFile.exists())
+  }
+
+  private def metadataLogDir(
+    logDir: File
+  ): File = {
+    new File(
+      logDir.getAbsolutePath,
+      UnifiedLog.logDirName(KafkaRaftServer.MetadataPartition)
+    )
+  }
+
   private def writeEmptySnapshot(
     logDir: File,
     snapshotId: OffsetAndEpoch
   ): Unit = {
-    val metadataDir = new File(
-      logDir.getAbsolutePath,
-      UnifiedLog.logDirName(KafkaRaftServer.MetadataPartition)
-    )
+    val metadataDir = metadataLogDir(logDir)
     assertTrue(metadataDir.exists())
 
     val writer = FileRawSnapshotWriter.create(
