@@ -1635,12 +1635,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         )
     }
     val (error, groups) = groupCoordinator.handleListGroups(states)
-    if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))
+    if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME, logIfDenied = false))
       // With describe cluster access all groups are returned. We keep this alternative for backward compatibility.
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         createResponse(requestThrottleMs, groups, error))
     else {
-      val filteredGroups = groups.filter(group => authHelper.authorize(request.context, DESCRIBE, GROUP, group.groupId))
+      val filteredGroups = groups.filter(group => authHelper.authorize(request.context, DESCRIBE, GROUP, group.groupId, logIfDenied = false))
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         createResponse(requestThrottleMs, filteredGroups, error))
     }
