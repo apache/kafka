@@ -398,43 +398,46 @@ final class KafkaMetadataLogTest {
     log.log.truncateFullyAndStartAt(newOffset = 100)
     log.close()
 
+    val metadataDir = metadataLogDir(tempDir)
+    assertTrue(metadataDir.exists())
+
     // Initialization should fail unless we have a snapshot  at an offset
     // greater than or equal to 100.
     assertThrows(classOf[IllegalStateException], () => {
       buildMetadataLog(tempDir, mockTime)
     })
     // Snapshots at offsets less than 100 are not sufficient.
-    writeEmptySnapshot(tempDir, new OffsetAndEpoch(50, 1))
+    writeEmptySnapshot(metadataDir, new OffsetAndEpoch(50, 1))
     assertThrows(classOf[IllegalStateException], () => {
       buildMetadataLog(tempDir, mockTime)
     })
 
     // Snapshot at offset 100 should be fine.
-    writeEmptySnapshot(tempDir, new OffsetAndEpoch(100, 1))
+    writeEmptySnapshot(metadataDir, new OffsetAndEpoch(100, 1))
     log = buildMetadataLog(tempDir, mockTime)
     log.log.truncateFullyAndStartAt(newOffset = 200)
     log.close()
 
     // Snapshots at higher offsets are also fine. In this case, the
     // log start offset should advance to the first snapshot offset.
-    writeEmptySnapshot(tempDir, new OffsetAndEpoch(500, 1))
+    writeEmptySnapshot(metadataDir, new OffsetAndEpoch(500, 1))
     log = buildMetadataLog(tempDir, mockTime)
     assertEquals(500, log.log.logStartOffset)
   }
 
   @Test
-  def testNoPartialSnapshotDeletionWithInvalidSnapshotState(): Unit = {
+  def testSnapshotDeletionWithInvalidSnapshotState(): Unit = {
     // Initialize an empty log at offset 100.
     val log = buildMetadataLog(tempDir, mockTime)
     log.log.truncateFullyAndStartAt(newOffset = 100)
     log.close()
 
     val metadataDir = metadataLogDir(tempDir)
-    println(metadataDir)
+    assertTrue(metadataDir.exists())
 
     // We have one deleted snapshot at an offset matching the start offset.
     val snapshotId = new OffsetAndEpoch(100, 1)
-    writeEmptySnapshot(tempDir, snapshotId)
+    writeEmptySnapshot(metadataDir, snapshotId)
 
     val deletedPath = Snapshots.markForDelete(metadataDir.toPath, snapshotId)
     assertTrue(deletedPath.toFile.exists())
@@ -458,12 +461,9 @@ final class KafkaMetadataLogTest {
   }
 
   private def writeEmptySnapshot(
-    logDir: File,
+    metadataDir: File,
     snapshotId: OffsetAndEpoch
   ): Unit = {
-    val metadataDir = metadataLogDir(logDir)
-    assertTrue(metadataDir.exists())
-
     val writer = FileRawSnapshotWriter.create(
       metadataDir.toPath,
       snapshotId,

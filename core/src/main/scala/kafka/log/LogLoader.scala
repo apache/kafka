@@ -231,7 +231,7 @@ class LogLoader(
       val filename = file.getName
 
       // Delete stray files marked for deletion, but skip KRaft snapshots.
-      // These are handled  in the recovery logic in `KafkaMetadataLog`.
+      // These are handled in the recovery logic in `KafkaMetadataLog`.
       if (filename.endsWith(DeletedFileSuffix) && !filename.endsWith(Snapshots.DELETE_SUFFIX)) {
         debug(s"Deleting stray temporary file ${file.getAbsolutePath}")
         Files.deleteIfExists(file.toPath)
