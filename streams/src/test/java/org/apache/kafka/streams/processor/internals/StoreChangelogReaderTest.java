@@ -202,6 +202,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         final Map<TaskId, Task> mockTasks = mock(Map.class);
         EasyMock.expect(mockTasks.get(null)).andReturn(mock(Task.class)).anyTimes();
         EasyMock.expect(storeMetadata.offset()).andReturn(9L).anyTimes();
+        EasyMock.expect(stateManager.changelogOffsets()).andReturn(singletonMap(tp, 10L));
         EasyMock.replay(mockTasks, stateManager, storeMetadata, store);
 
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 100L));
@@ -210,6 +211,11 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback);
 
         changelogReader.register(tp, stateManager);
+
+        if (type == STANDBY) {
+            changelogReader.transitToUpdateStandby();
+        }
+
         changelogReader.restore(mockTasks);
 
         assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());

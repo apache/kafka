@@ -979,18 +979,21 @@ public class StoreChangelogReader implements ChangelogReader {
             if (changelogMetadata != null) {
                 if (!changelogMetadata.state().equals(ChangelogState.REGISTERED)) {
                     revokedInitializedChangelogs.add(partition);
+
+                    // if the changelog is still in REGISTERED, it means it has not initialized and started
+                    // restoring yet, and hence the corresponding onRestoreStart was not called; in this case
+                    // we should not call onRestorePaused either
+                    if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
+                        try {
+                            final String storeName = changelogMetadata.storeMetadata.store().name();
+                            stateRestoreListener.onRestorePaused(partition, storeName, changelogMetadata.totalRestored);
+                        } catch (final Exception e) {
+                            throw new StreamsException("State restore listener failed on restore paused", e);
+                        }
+                    }
                 }
 
                 changelogMetadata.clear();
-
-                if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
-                    try {
-                        final String storeName = changelogMetadata.storeMetadata.store().name();
-                        stateRestoreListener.onRestorePaused(partition, storeName, changelogMetadata.totalRestored);
-                    } catch (final Exception e) {
-                        throw new StreamsException("State restore listener failed on restore paused", e);
-                    }
-                }
             } else {
                 log.debug("Changelog partition {} could not be found," +
                     " it could be already cleaned up during the handling" +
