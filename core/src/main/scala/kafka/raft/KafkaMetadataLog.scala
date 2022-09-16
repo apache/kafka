@@ -382,7 +382,7 @@ final class KafkaMetadataLog private (
   }
 
   /**
-   * Perform cleaning of old snapshots and log segments based on size.
+   * Perform cleaning of old snapshots and log segments based on size and time.
    *
    * If our configured retention size has been violated, we perform cleaning as follows:
    *
