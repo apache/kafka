@@ -37,6 +37,9 @@ import org.apache.kafka.common.TopicPartition;
  * These two interfaces serve different restoration purposes and users should not try to implement both of them in a single
  * class during state store registration.
  *
+ * Also note that standby tasks restoration process are not monitored via this interface, since a standby task keep
+ * getting data from the changelogs written by the active stream tasks and hence would not complete restoration at all.
+ *
  * Incremental updates are exposed so users can estimate how much progress has been made.
  */
 public interface StateRestoreListener {
@@ -85,4 +88,17 @@ public interface StateRestoreListener {
                       final String storeName,
                       final long totalRestored);
 
+    /**
+     * Method called when restoring the {@link StateStore} is paused due to the task being migrated out of the host.
+     * If the migrated task is recycled or re-assigned back to the current host, another
+     * {@link #onRestoreStart(TopicPartition, String, long, long)} would be called.
+     *
+     * @param topicPartition the TopicPartition containing the values to restore
+     * @param storeName the name of the store just restored
+     * @param totalRestored the total number of records restored for this TopicPartition before being paused
+     */
+    default void onRestorePaused(final TopicPartition topicPartition,
+                                 final String storeName,
+                                 final long totalRestored) {
+    }
 }

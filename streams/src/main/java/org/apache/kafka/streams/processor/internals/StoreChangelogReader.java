@@ -982,6 +982,15 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
 
                 changelogMetadata.clear();
+
+                if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
+                    try {
+                        final String storeName = changelogMetadata.storeMetadata.store().name();
+                        stateRestoreListener.onRestorePaused(partition, storeName, changelogMetadata.totalRestored);
+                    } catch (final Exception e) {
+                        throw new StreamsException("State restore listener failed on restore paused", e);
+                    }
+                }
             } else {
                 log.debug("Changelog partition {} could not be found," +
                     " it could be already cleaned up during the handling" +
