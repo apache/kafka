@@ -382,7 +382,7 @@ final class KafkaMetadataLog private (
   }
 
   /**
-   * Perform cleaning of old snapshots and log segments based on size.
+   * Perform cleaning of old snapshots and log segments based on size and time.
    *
    * If our configured retention size has been violated, we perform cleaning as follows:
    *
@@ -556,15 +556,29 @@ object KafkaMetadataLog {
     config: MetadataLogConfig
   ): KafkaMetadataLog = {
     val props = new Properties()
-    props.put(LogConfig.MaxMessageBytesProp, config.maxBatchSizeInBytes.toString)
-    props.put(LogConfig.SegmentBytesProp, Int.box(config.logSegmentBytes))
-    props.put(LogConfig.SegmentMsProp, Long.box(config.logSegmentMillis))
-    props.put(LogConfig.FileDeleteDelayMsProp, Int.box(Defaults.FileDeleteDelayMs))
+    props.setProperty(LogConfig.MaxMessageBytesProp, config.maxBatchSizeInBytes.toString)
+    props.setProperty(LogConfig.SegmentBytesProp, config.logSegmentBytes.toString)
+    props.setProperty(LogConfig.SegmentMsProp, config.logSegmentMillis.toString)
+    props.setProperty(LogConfig.FileDeleteDelayMsProp, Defaults.FileDeleteDelayMs.toString)
+
+    // Disable time and byte retention when deleting segments
+    props.setProperty(LogConfig.RetentionMsProp, "-1")
+    props.setProperty(LogConfig.RetentionBytesProp, "-1")
     LogConfig.validateValues(props)
     val defaultLogConfig = LogConfig(props)
 
     if (config.logSegmentBytes < config.logSegmentMinBytes) {
-      throw new InvalidConfigurationException(s"Cannot set $MetadataLogSegmentBytesProp below ${config.logSegmentMinBytes}")
+      throw new InvalidConfigurationException(
+        s"Cannot set $MetadataLogSegmentBytesProp below ${config.logSegmentMinBytes}: ${config.logSegmentBytes}"
+      )
+    } else if (defaultLogConfig.retentionMs >= 0) {
+      throw new InvalidConfigurationException(
+        s"Cannot set ${LogConfig.RetentionMsProp} above -1: ${defaultLogConfig.retentionMs}."
+      )
+    } else if (defaultLogConfig.retentionSize >= 0) {
+      throw new InvalidConfigurationException(
+        s"Cannot set ${LogConfig.RetentionBytesProp} above -1: ${defaultLogConfig.retentionSize}."
+      )
     }
 
     val log = UnifiedLog(
