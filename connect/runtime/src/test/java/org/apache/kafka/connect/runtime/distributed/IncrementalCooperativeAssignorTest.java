@@ -150,32 +150,32 @@ public class IncrementalCooperativeAssignorTest {
         assertTaskAllocations(3, 3, 6);
 
         // Fourth assignment and a fourth worker joining
-        // Since the worker is joining immediately and within the rebalance delay
-        // there should not be any revoking rebalance
+        // after first revoking rebalance is expired. We should revoke.
+        time.sleep(assignor.delay);
         addNewEmptyWorkers("worker4");
         performStandardRebalance();
         assertWorkers("worker1", "worker2", "worker3", "worker4");
-        assertConnectorAllocations(0, 0, 1, 2);
-        assertTaskAllocations(0, 3, 3, 6);
+        assertConnectorAllocations(0, 0, 1, 1);
+        assertTaskAllocations(0, 3, 3, 3);
 
-        // Add new worker immediately. Since a scheduled rebalance is in progress,
-        // There should still not be be any revocations
+        // Fifth assignment and a fifth worker joining after a revoking rebalance.
+        // We shouldn't revoke and set a delay > initial interval
         addNewEmptyWorkers("worker5");
         performStandardRebalance();
-        assertTrue(assignor.delay > 0);
+        assertTrue(assignor.delay > 40);
         assertWorkers("worker1", "worker2", "worker3", "worker4", "worker5");
-        assertConnectorAllocations(0, 0, 0, 1, 2);
-        assertTaskAllocations(0, 0, 3, 3, 6);
+        assertConnectorAllocations(0, 0, 1, 1, 1);
+        assertTaskAllocations(1, 2, 3, 3, 3);
 
-        // Add new worker but this time after crossing the delay.
-        // There would be revocations allowed
+        // Sixth assignment with sixth worker joining after the expiry.
+        // Should revoke
         time.sleep(assignor.delay);
         addNewEmptyWorkers("worker6");
         performStandardRebalance();
         assertDelay(0);
         assertWorkers("worker1", "worker2", "worker3", "worker4", "worker5", "worker6");
-        assertConnectorAllocations(0, 0, 0, 0, 1, 1);
-        assertTaskAllocations(0, 0, 0, 2, 2, 2);
+        assertConnectorAllocations(0, 0, 0, 1, 1, 1);
+        assertTaskAllocations(0, 1, 2, 2, 2, 2);
 
         // Follow up rebalance since there were revocations
         performStandardRebalance();

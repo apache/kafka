@@ -302,7 +302,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             // the next round when revoking rebalance would be allowed. Note that delay could be 0, in which
             // case we would always revoke.
             if (revokedInPrevious && !toExplicitlyRevoke.isEmpty()) {
-                numSuccessiveRevokingRebalances++;
+                numSuccessiveRevokingRebalances++; // Should we consider overflow for this?
                 log.debug("Consecutive revoking rebalances observed. Computing delay and next scheduled rebalance.");
                 delay = (int) consecutiveRevokingRebalancesBackoff.backoff(numSuccessiveRevokingRebalances);
                 if (delay != 0) {
@@ -323,7 +323,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 // have converged to a balanced load. We can reset the rebalance clock
                 log.debug("Previous round had revocations but this round didn't. Probably, the cluster has reached a " +
                         "balanced load. Resetting the exponential backoff clock");
-                numSuccessiveRevokingRebalances = 0;
                 revokedInPrevious = false;
             } else {
                 // no-op
