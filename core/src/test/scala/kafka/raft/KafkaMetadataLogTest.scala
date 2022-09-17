@@ -66,13 +66,13 @@ final class KafkaMetadataLogTest {
     props.put(MetadataLogSegmentMillisProp, Int.box(10 * 1024))
     assertThrows(classOf[InvalidConfigurationException], () => {
       val kafkaConfig = KafkaConfig.fromProps(props)
-      val metadataConfig = MetadataLogConfig.apply(kafkaConfig, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)
+      val metadataConfig = MetadataLogConfig(kafkaConfig, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)
       buildMetadataLog(tempDir, mockTime, metadataConfig)
     })
 
     props.put(MetadataLogSegmentMinBytesProp, Int.box(10240))
     val kafkaConfig = KafkaConfig.fromProps(props)
-    val metadataConfig = MetadataLogConfig.apply(kafkaConfig, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)
+    val metadataConfig = MetadataLogConfig(kafkaConfig, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)
     buildMetadataLog(tempDir, mockTime, metadataConfig)
   }
 
@@ -868,6 +868,56 @@ final class KafkaMetadataLogTest {
         assertTrue(reader.sizeInBytes() + log.log.size > config.retentionMaxBytes)
       })
     })
+  }
+
+  @Test
+  def testSegmentsLessThanLatestSnapshot(): Unit = {
+    val config = DefaultMetadataLogConfig.copy(
+      logSegmentBytes = 10240,
+      logSegmentMinBytes = 10240,
+      logSegmentMillis = 10 * 1000,
+      retentionMaxBytes = 10240,
+      retentionMillis = 60 * 1000,
+      maxBatchSizeInBytes = 200
+    )
+    val log = buildMetadataLog(tempDir, mockTime, config)
+
+    // Generate enough data to cause a segment roll
+    for (_ <- 0 to 2000) {
+      append(log, 10, 1)
+    }
+    log.updateHighWatermark(new LogOffsetMetadata(log.endOffset.offset))
+
+    // The clean up code requires that there are at least two snapshots
+    // Generate first snapshots that includes the first segment by using the base offset of the second segment
+    val snapshotId1 = new OffsetAndEpoch(
+      log.log.logSegments.drop(1).head.baseOffset,
+      1
+    )
+    TestUtils.resource(log.storeSnapshot(snapshotId1).get()) { snapshot =>
+      snapshot.freeze()
+    }
+    // Generate second snapshots that includes the second segment by using the base offset of the third segment
+    val snapshotId2 = new OffsetAndEpoch(
+      log.log.logSegments.drop(2).head.baseOffset,
+      1
+    )
+    TestUtils.resource(log.storeSnapshot(snapshotId2).get()) { snapshot =>
+      snapshot.freeze()
+    }
+
+    // Sleep long enough to trigger a possible segment delete because of the default retention
+    val defaultLogRetentionMs = Defaults.RetentionMs * 2
+    mockTime.sleep(defaultLogRetentionMs)
+
+    assertTrue(log.maybeClean())
+    assertEquals(1, log.snapshotCount())
+    assertTrue(log.startOffset > 0, s"${log.startOffset} must be greater than 0")
+    val latestSnapshotOffset = log.latestSnapshotId().get.offset
+    assertTrue(
+      latestSnapshotOffset >= log.startOffset,
+      s"latest snapshot offset ($latestSnapshotOffset) must be >= log start offset (${log.startOffset})"
+    )
   }
 }
 
