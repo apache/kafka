@@ -108,7 +108,7 @@ public class WorkerConfig extends AbstractConfig {
 
     public static final String OFFSET_COMMIT_INTERVAL_MS_CONFIG = "offset.flush.interval.ms";
     private static final String OFFSET_COMMIT_INTERVAL_MS_DOC
-            = "Interval at which to try committing offsets for tasks.";
+            = "Interval at which to try committing offsets for source tasks.";
     public static final long OFFSET_COMMIT_INTERVAL_MS_DEFAULT = 60000L;
 
     public static final String OFFSET_COMMIT_TIMEOUT_MS_CONFIG = "offset.flush.timeout.ms";
