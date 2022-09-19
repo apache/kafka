@@ -243,7 +243,6 @@ public class IntegrationTestUtils {
         final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("unknownMethodName");
         final String testName = displayName.contains(methodName) ? methodName : methodName + displayName;
         return safeUniqueTestName(testClass, testName);
-//        return safeUniqueTestName(testClass, testInfo.getDisplayName());
     }
 
     private static String safeUniqueTestName(final Class<?> testClass, final String testName) {
