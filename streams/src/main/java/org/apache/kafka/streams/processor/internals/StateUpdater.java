@@ -171,6 +171,27 @@ public interface StateUpdater {
     Set<Task> getTasks();
 
     /**
+     * Gets all tasks that are currently being restored inside the state updater.
+     *
+     * Tasks that have just being added into the state updater via {@link StateUpdater#add(Task)}
+     * or have restored completely or removed will not be returned; similarly tasks that have just being
+     * removed via {@link StateUpdater#remove(TaskId)} maybe returned still.
+     *
+     * @return set of all updating tasks inside the state updater
+     */
+    Set<Task> getUpdatingTasks();
+
+    /**
+     * Gets all tasks that are paused from restoring inside the state updater.
+     *
+     * Tasks that have just being paused in the state updater via {@link StateUpdater#pause(TaskId)}
+     * or have restored completely or removed will not be returned.
+     *
+     * @return set of all tasks paused inside the state updater
+     */
+    Set<Task> getPausedTasks();
+
+    /**
      * Gets active tasks that are managed by the state updater.
      *
      * The state updater manages all active tasks that were added with the {@link StateUpdater#add(Task)} and that have

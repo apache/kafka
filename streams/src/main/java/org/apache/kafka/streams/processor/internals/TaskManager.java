@@ -700,6 +700,8 @@ public class TaskManager {
     public boolean checkStateUpdater(final long now,
                                      final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         addTasksToStateUpdater();
+        pauseTasksInStateUpdater();
+        resumeTasksInStateUpdater();
         handleExceptionsFromStateUpdater();
         handleRemovedTasksFromStateUpdater();
         if (stateUpdater.restoresActiveTasks()) {
@@ -782,6 +784,22 @@ public class TaskManager {
         for (final Task task : tasks.drainPendingTaskToInit()) {
             task.initializeIfNeeded();
             stateUpdater.add(task);
+        }
+    }
+
+    private void pauseTasksInStateUpdater() {
+        for (final Task task : stateUpdater.getUpdatingTasks()) {
+            if (topologyMetadata.isPaused(task.id().topologyName())) {
+                stateUpdater.pause(task.id());
+            }
+        }
+    }
+
+    private void resumeTasksInStateUpdater() {
+        for (final Task task : stateUpdater.getPausedTasks()) {
+            if (!topologyMetadata.isPaused(task.id().topologyName())) {
+                stateUpdater.resume(task.id());
+            }
         }
     }
 
