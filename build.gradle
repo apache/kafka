@@ -424,6 +424,8 @@ subprojects {
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
 
+    systemProperty "junit.jupiter.extensions.autodetection.enabled", "true"
+
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
@@ -456,6 +458,7 @@ subprojects {
     maxHeapSize = "2560m"
     jvmArgs = defaultJvmArgs
 
+    systemProperty "junit.jupiter.extensions.autodetection.enabled", "true"
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -472,7 +475,7 @@ subprojects {
         useJUnitPlatform {
           includeTags "integration"
           includeTags "org.apache.kafka.test.IntegrationTest"
-	  // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
+          // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
           // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
           includeEngines "junit-vintage", "junit-jupiter"
         }
@@ -505,6 +508,8 @@ subprojects {
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
 
+    systemProperty "junit.jupiter.extensions.autodetection.enabled", "true"
+
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
@@ -520,7 +525,7 @@ subprojects {
         useJUnitPlatform {
           excludeTags "integration"
           excludeTags "org.apache.kafka.test.IntegrationTest"
-	  // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
+          // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
           // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
           includeEngines "junit-vintage", "junit-jupiter"
         }
