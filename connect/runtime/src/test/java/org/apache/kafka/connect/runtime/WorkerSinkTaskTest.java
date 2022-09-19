@@ -452,9 +452,7 @@ public class WorkerSinkTaskTest {
         assertTaskMetricValue("running-ratio", 1.0);
         assertTaskMetricValue("batch-size-max", 1.0);
         assertTaskMetricValue("batch-size-avg", 0.5);
-
-        assertEquals(workerCurrentOffsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "currentOffsets"));
-
+        
         sinkTaskContext.getValue().requestCommit();
         time.sleep(10000L);
         workerTask.iteration();
