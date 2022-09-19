@@ -20,4 +20,16 @@ package org.apache.kafka.clients.consumer.internals.events;
  * This is the abstract definition of the events created by the KafkaConsumer API
  */
 abstract public class ApplicationEvent {
+    public final EventTypes type;
+    public final boolean needCoordinator;
+
+    public ApplicationEvent(EventTypes type, boolean needCoordinator) {
+        this.type = type;
+        this.needCoordinator = needCoordinator;
+    }
+    public enum EventTypes {
+        COMMIT,
+        FETCH,
+        NOOP,
+    }
 }
