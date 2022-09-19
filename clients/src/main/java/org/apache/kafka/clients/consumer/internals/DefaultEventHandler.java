@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerResponseEvent;
+import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -27,9 +27,10 @@ public class DefaultEventHandler implements EventHandler<ConsumerRequestEvent, C
     BlockingQueue<ConsumerRequestEvent> consumerRequestEvents;
     BlockingQueue<ConsumerResponseEvent> consumerResponseEvents;
 
-    public DefaultEventHandler(ConsumerConfig config) {
+    public DefaultEventHandler() {
         this.consumerRequestEvents = new LinkedBlockingQueue<>();
         this.consumerResponseEvents = new LinkedBlockingQueue<>();
+        // TODO: a concreted implementation of how requests are being consumed, and how responses are being produced.
     }
 
     @Override
