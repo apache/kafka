@@ -23,7 +23,7 @@ package org.apache.kafka.clients.consumer.internals.events;
  * @param <T> Event request type
  * @param <K> Event response type
  */
-public interface EventHandler<T,K> {
+public interface EventHandler<T, K> {
     public K poll();
     public boolean add(T event);
 }
