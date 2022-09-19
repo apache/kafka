@@ -53,7 +53,7 @@
 
     <p>The important configuration options specific to standalone mode are:</p>
     <ul>
-        <li><code>offset.storage.file.filename</code> - File to store offset data in</li>
+        <li><code>offset.storage.file.filename</code> - File to store source connector offsets</li>
     </ul>
 
     <p>The parameters that are configured here are intended for producers and consumers used by Kafka Connect to access the configuration, offset and status topics. For configuration of the producers used by Kafka source tasks and the consumers used by Kafka sink tasks, the same parameters can be used but need to be prefixed with <code>producer.</code> and <code>consumer.</code> respectively. The only Kafka client parameter that is inherited without a prefix from the worker configuration is <code>bootstrap.servers</code>, which in most cases will be sufficient, since the same cluster is often used for all purposes. A notable exception is a secured cluster, which requires extra parameters to allow connections. These parameters will need to be set up to three times in the worker configuration, once for management access, once for Kafka sources and once for Kafka sinks.</p> 
