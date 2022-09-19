@@ -16,7 +16,7 @@
  */
 package kafka.raft
 
-import kafka.log.{Defaults, UnifiedLog, SegmentDeletion}
+import kafka.log.{Defaults, SegmentDeletion, UnifiedLog}
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMillisProp, MetadataLogSegmentMinBytesProp, NodeIdProp, ProcessRolesProp, QuorumVotersProp}
 import kafka.server.{KafkaConfig, KafkaRaftServer}
 import kafka.utils.{MockTime, TestUtils}
@@ -28,7 +28,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft.internals.BatchBuilder
 import org.apache.kafka.raft._
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.snapshot.{RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
+import org.apache.kafka.snapshot.{FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 import org.apache.kafka.test.TestUtils.assertOptional
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -389,6 +389,87 @@ final class KafkaMetadataLogTest {
       .forEach { path =>
         assertFalse(path.get.snapshotId.offset < log.startOffset)
       }
+  }
+
+  @Test
+  def testStartupWithInvalidSnapshotState(): Unit = {
+    // Initialize an empty log at offset 100.
+    var log = buildMetadataLog(tempDir, mockTime)
+    log.log.truncateFullyAndStartAt(newOffset = 100)
+    log.close()
+
+    val metadataDir = metadataLogDir(tempDir)
+    assertTrue(metadataDir.exists())
+
+    // Initialization should fail unless we have a snapshot  at an offset
+    // greater than or equal to 100.
+    assertThrows(classOf[IllegalStateException], () => {
+      buildMetadataLog(tempDir, mockTime)
+    })
+    // Snapshots at offsets less than 100 are not sufficient.
+    writeEmptySnapshot(metadataDir, new OffsetAndEpoch(50, 1))
+    assertThrows(classOf[IllegalStateException], () => {
+      buildMetadataLog(tempDir, mockTime)
+    })
+
+    // Snapshot at offset 100 should be fine.
+    writeEmptySnapshot(metadataDir, new OffsetAndEpoch(100, 1))
+    log = buildMetadataLog(tempDir, mockTime)
+    log.log.truncateFullyAndStartAt(newOffset = 200)
+    log.close()
+
+    // Snapshots at higher offsets are also fine. In this case, the
+    // log start offset should advance to the first snapshot offset.
+    writeEmptySnapshot(metadataDir, new OffsetAndEpoch(500, 1))
+    log = buildMetadataLog(tempDir, mockTime)
+    assertEquals(500, log.log.logStartOffset)
+  }
+
+  @Test
+  def testSnapshotDeletionWithInvalidSnapshotState(): Unit = {
+    // Initialize an empty log at offset 100.
+    val log = buildMetadataLog(tempDir, mockTime)
+    log.log.truncateFullyAndStartAt(newOffset = 100)
+    log.close()
+
+    val metadataDir = metadataLogDir(tempDir)
+    assertTrue(metadataDir.exists())
+
+    // We have one deleted snapshot at an offset matching the start offset.
+    val snapshotId = new OffsetAndEpoch(100, 1)
+    writeEmptySnapshot(metadataDir, snapshotId)
+
+    val deletedPath = Snapshots.markForDelete(metadataDir.toPath, snapshotId)
+    assertTrue(deletedPath.toFile.exists())
+
+    // Initialization should still fail.
+    assertThrows(classOf[IllegalStateException], () => {
+      buildMetadataLog(tempDir, mockTime)
+    })
+
+    // The snapshot marked for deletion should still exist.
+    assertTrue(deletedPath.toFile.exists())
+  }
+
+  private def metadataLogDir(
+    logDir: File
+  ): File = {
+    new File(
+      logDir.getAbsolutePath,
+      UnifiedLog.logDirName(KafkaRaftServer.MetadataPartition)
+    )
+  }
+
+  private def writeEmptySnapshot(
+    metadataDir: File,
+    snapshotId: OffsetAndEpoch
+  ): Unit = {
+    val writer = FileRawSnapshotWriter.create(
+      metadataDir.toPath,
+      snapshotId,
+      Optional.empty()
+    )
+    TestUtils.resource(writer)(_.freeze())
   }
 
   @Test
