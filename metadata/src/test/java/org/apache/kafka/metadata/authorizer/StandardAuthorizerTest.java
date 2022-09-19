@@ -294,6 +294,27 @@ public class StandardAuthorizerTest {
         assertFalse(iterator.hasNext(), "Expected only " + acls.length + " element(s)");
     }
 
+    private static void addAclsWithIds(
+        StandardAuthorizer authorizer,
+        List<StandardAclWithId> acls
+    ) {
+        Map<Uuid, StandardAcl> newAcls = new HashMap<>();
+        acls.forEach(a -> newAcls.put(a.id(), a.acl()));
+        authorizer.applyAclChanges(newAcls, Collections.emptySet());
+    }
+
+    private static void addAcls(
+        StandardAuthorizer authorizer,
+        List<StandardAcl> acls
+    ) {
+        Map<Uuid, StandardAcl> newAcls = new HashMap<>();
+        acls.forEach(acl -> {
+            StandardAclWithId aclWithId = withId(acl);
+            newAcls.put(aclWithId.id(), aclWithId.acl());
+        });
+        authorizer.applyAclChanges(newAcls, Collections.emptySet());
+    }
+
     @Test
     public void testListAcls() throws Exception {
         StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
@@ -303,11 +324,11 @@ public class StandardAuthorizerTest {
         List<StandardAclWithId> barAcls = asList(
             withId(newBarAcl(DESCRIBE_CONFIGS, DENY)),
             withId(newBarAcl(ALTER_CONFIGS, DENY)));
-        fooAcls.forEach(a -> authorizer.addAcl(a.id(), a.acl()));
-        barAcls.forEach(a -> authorizer.addAcl(a.id(), a.acl()));
+        addAclsWithIds(authorizer, fooAcls);
+        addAclsWithIds(authorizer, barAcls);
         assertContains(authorizer.acls(AclBindingFilter.ANY),
             fooAcls.get(0).acl(), fooAcls.get(1).acl(), barAcls.get(0).acl(), barAcls.get(1).acl());
-        authorizer.removeAcl(fooAcls.get(1).id());
+        authorizer.applyAclChanges(Collections.emptyMap(), Collections.singleton(fooAcls.get(1).id()));
         assertContains(authorizer.acls(AclBindingFilter.ANY),
             fooAcls.get(0).acl(), barAcls.get(0).acl(), barAcls.get(1).acl());
         assertContains(authorizer.acls(new AclBindingFilter(new ResourcePatternFilter(
@@ -324,8 +345,8 @@ public class StandardAuthorizerTest {
         List<StandardAclWithId> barAcls = asList(
             withId(newBarAcl(DESCRIBE_CONFIGS, ALLOW)),
             withId(newBarAcl(ALTER_CONFIGS, ALLOW)));
-        fooAcls.forEach(a -> authorizer.addAcl(a.id(), a.acl()));
-        barAcls.forEach(a -> authorizer.addAcl(a.id(), a.acl()));
+        addAclsWithIds(authorizer, fooAcls);
+        addAclsWithIds(authorizer, barAcls);
         assertEquals(singletonList(ALLOWED),
             authorizer.authorize(new MockAuthorizableRequestContext.Builder().
                 setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
@@ -337,6 +358,30 @@ public class StandardAuthorizerTest {
     }
 
     @Test
+    public void testAuthorizeByResourceTYpe() throws Exception {
+        List<StandardAcl> acls = Arrays.asList(
+                new StandardAcl(GROUP, "foo", LITERAL, "User:*", "*", ALL, DENY),
+                new StandardAcl(GROUP, "foo", PREFIXED, "User:bob", "*", DESCRIBE, ALLOW),
+                new StandardAcl(TOPIC, "bar", PREFIXED, "User:alice", "*", READ, ALLOW),
+                new StandardAcl(TOPIC, "foo", LITERAL, "User:fred", "*", ALL, DENY)
+        );
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+        addAcls(authorizer, acls);
+        assertEquals(DENIED, authorizer.authorizeByResourceType(
+            new MockAuthorizableRequestContext.Builder().
+                setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
+                    READ, GROUP));
+        assertEquals(ALLOWED, authorizer.authorizeByResourceType(
+            new MockAuthorizableRequestContext.Builder().
+                setPrincipal(new KafkaPrincipal(USER_TYPE, "alice")).build(),
+                    READ, TOPIC));
+        assertEquals(DENIED, authorizer.authorizeByResourceType(
+            new MockAuthorizableRequestContext.Builder().
+                setPrincipal(new KafkaPrincipal(USER_TYPE, "jane")).build(),
+                    READ, TOPIC));
+    }
+
+    @Test
     public void testDenyPrecedenceWithOperationAll() throws Exception {
         StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
         List<StandardAcl> acls = Arrays.asList(
@@ -345,10 +390,7 @@ public class StandardAuthorizerTest {
             new StandardAcl(TOPIC, "foo", LITERAL, "User:*", "*", ALL, DENY),
             new StandardAcl(TOPIC, "foo", PREFIXED, "User:*", "*", DESCRIBE, ALLOW)
         );
-        acls.forEach(acl -> {
-            StandardAclWithId aclWithId = withId(acl);
-            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
-        });
+        addAcls(authorizer, acls);
         assertEquals(Arrays.asList(DENIED, DENIED, DENIED, ALLOWED), authorizer.authorize(
             newRequestContext("alice"),
             Arrays.asList(
@@ -374,10 +416,7 @@ public class StandardAuthorizerTest {
             new StandardAcl(TOPIC, "bar", PREFIXED, "User:alice", "*", ALL, ALLOW),
             new StandardAcl(TOPIC, "baz", LITERAL, "User:bob", "*", ALL, ALLOW)
         );
-        acls.forEach(acl -> {
-            StandardAclWithId aclWithId = withId(acl);
-            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
-        });
+        addAcls(authorizer, acls);
         assertEquals(Arrays.asList(ALLOWED, ALLOWED, DENIED), authorizer.authorize(
             newRequestContext("alice"),
             Arrays.asList(
@@ -418,12 +457,7 @@ public class StandardAuthorizerTest {
             new StandardAcl(TOPIC, "bar", LITERAL, "User:bob", host2.getHostAddress(), READ, ALLOW),
             new StandardAcl(TOPIC, "bar", LITERAL, "User:*", InetAddress.getLocalHost().getHostAddress(), DESCRIBE, ALLOW)
         );
-
-        acls.forEach(acl -> {
-            StandardAclWithId aclWithId = withId(acl);
-            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
-        });
-
+        addAcls(authorizer, acls);
         List<Action> actions = Arrays.asList(
             newAction(READ, TOPIC, "foo"),
             newAction(READ, TOPIC, "bar"),
@@ -468,10 +502,7 @@ public class StandardAuthorizerTest {
             new StandardAcl(GROUP, "*", LITERAL, "User:bob", "*", WRITE, ALLOW),
             new StandardAcl(GROUP, "wheel", LITERAL, "User:*", "*", WRITE, DENY)
         );
-        acls.forEach(acl -> {
-            StandardAclWithId aclWithId = withId(acl);
-            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
-        });
+        addAcls(authorizer, acls);
     }
 
     @Test

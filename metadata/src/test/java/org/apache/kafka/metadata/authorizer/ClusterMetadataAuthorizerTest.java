@@ -44,6 +44,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
@@ -122,12 +123,10 @@ public class ClusterMetadataAuthorizerTest {
         }
 
         @Override
-        public void addAcl(Uuid id, StandardAcl acl) {
-            // do nothing
-        }
-
-        @Override
-        public void removeAcl(Uuid id) {
+        public void applyAclChanges(
+            Map<Uuid, StandardAcl> newAcls,
+            Set<Uuid> removedAclIds
+        ) {
             // do nothing
         }
 

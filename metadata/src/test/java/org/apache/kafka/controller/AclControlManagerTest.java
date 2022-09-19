@@ -164,12 +164,10 @@ public class AclControlManagerTest {
         }
 
         @Override
-        public void addAcl(Uuid id, StandardAcl acl) {
-            // do nothing
-        }
-
-        @Override
-        public void removeAcl(Uuid id) {
+        public void applyAclChanges(
+            Map<Uuid, StandardAcl> newAcls,
+            Set<Uuid> removedAclIds
+        ) {
             // do nothing
         }
 

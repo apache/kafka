@@ -96,18 +96,16 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     }
 
     @Override
-    public void addAcl(Uuid id, StandardAcl acl) {
-        data.addAcl(id, acl);
-    }
-
-    @Override
-    public void removeAcl(Uuid id) {
-        data.removeAcl(id);
-    }
-
-    @Override
     public synchronized void loadSnapshot(Map<Uuid, StandardAcl> acls) {
-        data = data.copyWithNewAcls(acls.entrySet());
+        data = data.copyWithAllNewAcls(acls);
+    }
+
+    @Override
+    public synchronized void applyAclChanges(
+        Map<Uuid, StandardAcl> newAcls,
+        Set<Uuid> removedAclIds
+    ) {
+        data = data.copyWithAclChanges(newAcls, removedAclIds);
     }
 
     @Override

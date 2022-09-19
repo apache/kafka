@@ -25,14 +25,15 @@ import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.ConfigAdminManager.toLoggableProps
 import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta, TopicsImage}
-import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
+import org.apache.kafka.metadata.authorizer.{ClusterMetadataAuthorizer, StandardAcl}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.fault.FaultHandler
 
+import java.util
 import scala.collection.mutable
 
 
@@ -295,14 +296,15 @@ class BrokerMetadataPublisher(
             }
           } else {
             try {
-              // Because the changes map is a LinkedHashMap, the deltas will be returned in
-              // the order they were performed.
+              val newAcls = new util.HashMap[Uuid, StandardAcl]()
+              val removedAclIds = new util.HashSet[Uuid]()
               aclsDelta.changes().entrySet().forEach(e =>
                 if (e.getValue.isPresent) {
-                  authorizer.addAcl(e.getKey, e.getValue.get())
+                  newAcls.put(e.getKey, e.getValue.get())
                 } else {
-                  authorizer.removeAcl(e.getKey)
+                  removedAclIds.add(e.getKey)
                 })
+              authorizer.applyAclChanges(newAcls, removedAclIds)
             } catch {
               case t: Throwable => metadataPublishingFaultHandler.handleFault("Error loading " +
                 s"authorizer changes in ${deltaName}", t)

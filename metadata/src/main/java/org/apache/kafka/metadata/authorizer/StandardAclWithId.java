@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 
+import java.util.Comparator;
 import java.util.Objects;
 
 
@@ -28,6 +29,13 @@ import java.util.Objects;
  * A tuple of (id, acl)
  */
 final public class StandardAclWithId {
+    public final static Comparator<StandardAclWithId> ACL_COMPARATOR = new Comparator<StandardAclWithId>() {
+        @Override
+        public int compare(StandardAclWithId a, StandardAclWithId  b) {
+            return a.acl().compareTo(b.acl());
+        }
+    };
+
     public static StandardAclWithId fromRecord(AccessControlEntryRecord record) {
         return new StandardAclWithId(record.id(), StandardAcl.fromRecord(record));
     }

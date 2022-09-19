@@ -36,16 +36,16 @@ import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collection;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
-import java.util.NavigableSet;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.acl.AclOperation.ALL;
 import static org.apache.kafka.common.acl.AclOperation.ALTER;
@@ -109,14 +109,9 @@ public class StandardAuthorizerData {
     private final DefaultRule defaultRule;
 
     /**
-     * Contains all of the current ACLs sorted by (resource type, resource name).
+     * An immutable list of all the current ACLs sorted by (resource type, resource name).
      */
-    private final ConcurrentSkipListSet<StandardAcl> aclsByResource;
-
-    /**
-     * Contains all of the current ACLs indexed by UUID.
-     */
-    private final ConcurrentHashMap<Uuid, StandardAcl> aclsById;
+    private final List<StandardAclWithId> acls;
 
     private static Logger createLogger(int nodeId) {
         return new LogContext("[StandardAuthorizer " + nodeId + "] ").logger(StandardAuthorizerData.class);
@@ -132,7 +127,7 @@ public class StandardAuthorizerData {
             false,
             Collections.emptySet(),
             DENIED,
-            new ConcurrentSkipListSet<>(), new ConcurrentHashMap<>());
+            Collections.emptyList());
     }
 
     private StandardAuthorizerData(Logger log,
@@ -140,16 +135,14 @@ public class StandardAuthorizerData {
                                    boolean loadingComplete,
                                    Set<String> superUsers,
                                    AuthorizationResult defaultResult,
-                                   ConcurrentSkipListSet<StandardAcl> aclsByResource,
-                                   ConcurrentHashMap<Uuid, StandardAcl> aclsById) {
+                                   List<StandardAclWithId> acls) {
         this.log = log;
         this.auditLog = auditLogger();
         this.aclMutator = aclMutator;
         this.loadingComplete = loadingComplete;
         this.superUsers = superUsers;
         this.defaultRule = new DefaultRule(defaultResult);
-        this.aclsByResource = aclsByResource;
-        this.aclsById = aclsById;
+        this.acls = acls;
     }
 
     StandardAuthorizerData copyWithNewAclMutator(AclMutator newAclMutator) {
@@ -159,8 +152,7 @@ public class StandardAuthorizerData {
             loadingComplete,
             superUsers,
             defaultRule.result,
-            aclsByResource,
-            aclsById);
+            acls);
     }
 
     StandardAuthorizerData copyWithNewLoadingComplete(boolean newLoadingComplete) {
@@ -169,8 +161,7 @@ public class StandardAuthorizerData {
             newLoadingComplete,
             superUsers,
             defaultRule.result,
-            aclsByResource,
-            aclsById);
+            acls);
     }
 
     StandardAuthorizerData copyWithNewConfig(int nodeId,
@@ -182,59 +173,55 @@ public class StandardAuthorizerData {
             loadingComplete,
             newSuperUsers,
             newDefaultResult,
-            aclsByResource,
-            aclsById);
+            acls);
     }
 
-    StandardAuthorizerData copyWithNewAcls(Collection<Entry<Uuid, StandardAcl>> aclEntries) {
-        StandardAuthorizerData newData = new StandardAuthorizerData(
+    StandardAuthorizerData copyWithAllNewAcls(
+        Map<Uuid, StandardAcl> newAclEntries
+    ) {
+        return copyWithNewAcls(Collections.emptyList(), newAclEntries, Collections.emptySet());
+    }
+
+    StandardAuthorizerData copyWithAclChanges(
+        Map<Uuid, StandardAcl> newAclEntries,
+        Set<Uuid> removedAclIds
+    ) {
+        return copyWithNewAcls(acls, newAclEntries, removedAclIds);
+    }
+
+    StandardAuthorizerData copyWithNewAcls(
+        List<StandardAclWithId> existingAcls,
+        Map<Uuid, StandardAcl> newAclEntries,
+        Set<Uuid> removedAclIds
+    ) {
+        int newEstimatedSize = existingAcls.size() + newAclEntries.size() - removedAclIds.size();
+        List<StandardAclWithId> newAcls = new ArrayList<>(newEstimatedSize);
+        int numRemoved = 0, j = 0;
+        for (StandardAclWithId acl : existingAcls) {
+            if (removedAclIds.contains(acl.id())) {
+                numRemoved++;
+            } else if (!newAclEntries.containsKey(acl.id())) {
+                newAcls.add(acl);
+            }
+        }
+        if (numRemoved < removedAclIds.size()) {
+            throw new RuntimeException("Only located " + numRemoved + " out of " +
+                removedAclIds.size() + " removed ACL ID(s). removedAclIds = " +
+                removedAclIds.stream().map(a -> a.toString()).collect(Collectors.joining(", ")));
+        }
+        if (!newAclEntries.isEmpty()) {
+            for (Entry<Uuid, StandardAcl> entry : newAclEntries.entrySet()) {
+                newAcls.add(new StandardAclWithId(entry.getKey(), entry.getValue()));
+            }
+            Collections.sort(newAcls, StandardAclWithId.ACL_COMPARATOR);
+        }
+        return new StandardAuthorizerData(
             log,
             aclMutator,
             loadingComplete,
             superUsers,
             defaultRule.result,
-            new ConcurrentSkipListSet<>(),
-            new ConcurrentHashMap<>());
-        for (Entry<Uuid, StandardAcl> entry : aclEntries) {
-            newData.addAcl(entry.getKey(), entry.getValue());
-        }
-        log.info("Applied {} acl(s) from image.", aclEntries.size());
-        return newData;
-    }
-
-    void addAcl(Uuid id, StandardAcl acl) {
-        try {
-            StandardAcl prevAcl = aclsById.putIfAbsent(id, acl);
-            if (prevAcl != null) {
-                throw new RuntimeException("An ACL with ID " + id + " already exists.");
-            }
-            if (!aclsByResource.add(acl)) {
-                aclsById.remove(id);
-                throw new RuntimeException("Unable to add the ACL with ID " + id +
-                    " to aclsByResource");
-            }
-            log.trace("Added ACL {}: {}", id, acl);
-        } catch (Throwable e) {
-            log.error("addAcl error", e);
-            throw e;
-        }
-    }
-
-    void removeAcl(Uuid id) {
-        try {
-            StandardAcl acl = aclsById.remove(id);
-            if (acl == null) {
-                throw new RuntimeException("ID " + id + " not found in aclsById.");
-            }
-            if (!aclsByResource.remove(acl)) {
-                throw new RuntimeException("Unable to remove the ACL with ID " + id +
-                    " from aclsByResource");
-            }
-            log.trace("Removed ACL {}: {}", id, acl);
-        } catch (Throwable e) {
-            log.error("removeAcl error", e);
-            throw e;
-        }
+            newAcls);
     }
 
     Set<String> superUsers() {
@@ -246,7 +233,7 @@ public class StandardAuthorizerData {
     }
 
     int aclCount() {
-        return aclsById.size();
+        return acls.size();
     }
 
     /**
@@ -397,6 +384,25 @@ public class StandardAuthorizerData {
         return matchingAclBuilder.build();
     }
 
+    /**
+     * Use a binary search to find the index of the first ACL which is greater than or
+     * equal to the given ACL. This may be equal to the end of the array if there are
+     * no such ACLs.
+     */
+    private int indexOfFirstAclGreaterThanOrEqualTo(StandardAcl exemplar) {
+        int i = Collections.binarySearch(acls,
+                new StandardAclWithId(Uuid.ZERO_UUID, exemplar),
+                StandardAclWithId.ACL_COMPARATOR);
+        // Collections.binarySearch returns a positive number if it found an exact match. Otherwise,
+        // it will return a negative number which encodes the point at which the key should be
+        // inserted, if we were adding to the array.
+        if (i >= 0) {
+            return i;
+        } else {
+            return -(i + 1);
+        }
+    }
+
     private void checkSection(
         Action action,
         StandardAcl exemplar,
@@ -404,11 +410,9 @@ public class StandardAuthorizerData {
         String host,
         MatchingAclBuilder matchingAclBuilder
     ) {
-        NavigableSet<StandardAcl> tailSet = aclsByResource.tailSet(exemplar, true);
         String resourceName = action.resourcePattern().name();
-        for (Iterator<StandardAcl> iterator = tailSet.iterator();
-             iterator.hasNext(); ) {
-            StandardAcl acl = iterator.next();
+        for (int i = indexOfFirstAclGreaterThanOrEqualTo(exemplar); i < acls.size(); i++) {
+            StandardAcl acl = acls.get(i).acl();
             if (!acl.resourceType().equals(action.resourcePattern().resourceType())) {
                 // We've stepped outside the section for the resource type we care about and
                 // should stop scanning.
@@ -427,7 +431,7 @@ public class StandardAuthorizerData {
                 // stepped outside of the section we care about and should stop scanning.
                 break;
             }
-            AuthorizationResult result = findResult(action, matchingPrincipals, host, acl);
+            AuthorizationResult result = findResult(action.operation(), matchingPrincipals, host, acl);
             if (ALLOWED == result) {
                 matchingAclBuilder.allowAcl = acl;
             } else if (DENIED == result) {
@@ -453,7 +457,7 @@ public class StandardAuthorizerData {
                                           AuthorizableRequestContext requestContext,
                                           StandardAcl acl) {
         return findResult(
-            action,
+            action.operation(),
             matchingPrincipals(requestContext),
             requestContext.clientAddress().getHostAddress(),
             acl
@@ -480,14 +484,14 @@ public class StandardAuthorizerData {
      * context should be. Note that this function assumes that the resource name matches;
      * the resource name is not checked here.
      *
-     * @param action             The input action.
+     * @param operation          The input operation.
      * @param matchingPrincipals The set of input matching principals
      * @param host               The input host.
      * @param acl                The input ACL.
      * @return                   null if the ACL does not match. The authorization result
      *                           otherwise.
      */
-    static AuthorizationResult findResult(Action action,
+    static AuthorizationResult findResult(AclOperation operation,
                                           Set<KafkaPrincipal> matchingPrincipals,
                                           String host,
                                           StandardAcl acl) {
@@ -508,7 +512,7 @@ public class StandardAuthorizerData {
         // on a resource does not DENY describe for that resource.
         if (acl.operation() != ALL) {
             if (acl.permissionType().equals(ALLOW)) {
-                switch (action.operation()) {
+                switch (operation) {
                     case DESCRIBE:
                         if (!IMPLIES_DESCRIBE.contains(acl.operation())) return null;
                         break;
@@ -516,12 +520,12 @@ public class StandardAuthorizerData {
                         if (!IMPLIES_DESCRIBE_CONFIGS.contains(acl.operation())) return null;
                         break;
                     default:
-                        if (action.operation() != acl.operation()) {
+                        if (operation != acl.operation()) {
                             return null;
                         }
                         break;
                 }
-            } else if (action.operation() != acl.operation()) {
+            } else if (operation != acl.operation()) {
                 return null;
             }
         }
@@ -548,20 +552,20 @@ public class StandardAuthorizerData {
 
     class AclIterator implements Iterator<AclBinding> {
         private final AclBindingFilter filter;
-        private final Iterator<StandardAcl> iterator;
+        private int i;
         private AclBinding next;
 
         AclIterator(AclBindingFilter filter) {
             this.filter = filter;
-            this.iterator = aclsByResource.iterator();
+            this.i = 0;
             this.next = null;
         }
 
         @Override
         public boolean hasNext() {
             while (next == null) {
-                if (!iterator.hasNext()) return false;
-                AclBinding binding = iterator.next().toBinding();
+                if (i == acls.size()) return false;
+                AclBinding binding = acls.get(i++).acl().toBinding();
                 if (filter.matches(binding)) {
                     next = binding;
                 }
@@ -595,6 +599,20 @@ public class StandardAuthorizerData {
         @Override
         public String toString() {
             return "SuperUser";
+        }
+    }
+
+    private static class InvalidResourceTypeRule implements MatchingRule {
+        private static final InvalidResourceTypeRule INSTANCE = new InvalidResourceTypeRule();
+
+        @Override
+        public AuthorizationResult result() {
+            return DENIED;
+        }
+
+        @Override
+        public String toString() {
+            return "InvalidResourceType";
         }
     }
 

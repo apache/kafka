@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -76,14 +77,15 @@ public interface ClusterMetadataAuthorizer extends Authorizer {
     void loadSnapshot(Map<Uuid, StandardAcl> acls);
 
     /**
-     * Add a new ACL. Any ACL with the same ID will be replaced.
+     * Add or remove ACLs.
+     *
+     * @param newAcls           The ACLs to add.
+     * @param removedAclIds     The ACL IDs to remove.
      */
-    void addAcl(Uuid id, StandardAcl acl);
-
-    /**
-     * Remove the ACL with the given ID.
-     */
-    void removeAcl(Uuid id);
+    void applyAclChanges(
+        Map<Uuid, StandardAcl> newAcls,
+        Set<Uuid> removedAclIds
+    );
 
     /**
      * Create ACLs. This function must be called on the active controller, or else
