@@ -16,45 +16,29 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRequestEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerResponseEvent;
 
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
-/**
- * This class interfaces the KafkaConsumer and the background thread.  It allows the caller to enqueue {@link ApplicationEvent}
- * to be consumed by the background thread and poll {@linkBackgroundEvent} produced by the background thread.
- */
-public class DefaultEventHandler implements EventHandler {
-    private final BlockingQueue<ApplicationEvent> applicationEvents;
-    private final BlockingQueue<BackgroundEvent> backgroundEvents;
+public class DefaultEventHandler implements EventHandler<ConsumerRequestEvent, ConsumerResponseEvent> {
+    BlockingQueue<ConsumerRequestEvent> consumerRequestEvents;
+    BlockingQueue<ConsumerResponseEvent> consumerResponseEvents;
 
-    public DefaultEventHandler() {
-        this.applicationEvents = new LinkedBlockingQueue<>();
-        this.backgroundEvents = new LinkedBlockingQueue<>();
-        // TODO: a concreted implementation of how requests are being consumed, and how responses are being produced.
+    public DefaultEventHandler(ConsumerConfig config) {
+        this.consumerRequestEvents = new LinkedBlockingQueue<>();
+        this.consumerResponseEvents = new LinkedBlockingQueue<>();
     }
 
     @Override
-    public Optional<BackgroundEvent> poll() {
-        return Optional.ofNullable(backgroundEvents.poll());
+    public ConsumerResponseEvent poll() {
+        return consumerResponseEvents.poll();
     }
 
     @Override
-    public boolean isEmpty() {
-        return backgroundEvents.isEmpty();
-    }
-
-    @Override
-    public boolean add(ApplicationEvent event) {
-        try {
-            return applicationEvents.add(event);
-        } catch (IllegalStateException e) {
-            // swallow the capacity restriction exception
-            return false;
-        }
+    public boolean add(ConsumerRequestEvent event) {
+        return consumerRequestEvents.add(event);
     }
 }
