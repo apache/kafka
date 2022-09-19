@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.clients.consumer.internals;
 
 /**
  * The EventHandler interfaces the client and handler implementation.  The client should add an event for consumption,
