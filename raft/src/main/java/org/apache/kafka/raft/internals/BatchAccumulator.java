@@ -107,6 +107,7 @@ public class BatchAccumulator<T> implements Closeable {
      * @throws NotLeaderException if the epoch is less than the leader epoch
      * @throws IllegalArgumentException if the epoch is invalid (greater than the leader epoch)
      * @throws BufferAllocationException if we failed to allocate memory for the records
+     * @throws IllegalStateException if we tried to append new records after the batch has been built
      */
     public long append(int epoch, List<T> records) {
         return append(epoch, records, false);
