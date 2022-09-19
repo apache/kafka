@@ -24,10 +24,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.wa
 import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -49,6 +46,7 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.kstream.TableJoined;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.utils.UniqueTopicSerdeScope;
 import org.apache.kafka.test.TestUtils;
@@ -231,6 +229,61 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
             .to(OUTPUT,
                 Produced.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true),
                     serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)));
+
+        return new KafkaStreams(builder.build(streamsConfig), streamsConfig);
+    }
+
+    static class MultiPartitioner implements StreamPartitioner<String, Void> {
+
+        @Override
+        public Integer partition(String topic, String key, Void value, int numPartitions) {
+            return null;
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(String topic, String key, Void value, int numPartitions) {
+            return Optional.of(new HashSet<>(Arrays.asList(0, 1, 1)));
+        }
+    }
+
+    private static KafkaStreams prepareTopologyWithNonSingletonPartitions(final String queryableName, final Properties streamsConfig) {
+
+        final UniqueTopicSerdeScope serdeScope = new UniqueTopicSerdeScope();
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KTable<String, String> table1 = builder.stream(TABLE_1,
+                        Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true), serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)))
+                .repartition(repartitionA())
+                .toTable(Named.as("table.a"));
+
+        final KTable<String, String> table2 = builder
+                .stream(TABLE_2,
+                        Consumed.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true), serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)))
+                .repartition(repartitionB())
+                .toTable(Named.as("table.b"));
+
+        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized;
+        if (queryableName != null) {
+            materialized = Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(queryableName)
+                    .withKeySerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true))
+                    .withValueSerde(serdeScope.decorateSerde(Serdes.String(), streamsConfig, false))
+                    .withCachingDisabled();
+        } else {
+            throw new RuntimeException("Current implementation of joinOnForeignKey requires a materialized store");
+        }
+
+        final ValueJoiner<String, String, String> joiner = (value1, value2) -> "value1=" + value1 + ",value2=" + value2;
+
+        final TableJoined<String, String> tableJoined = TableJoined.with(
+                new MultiPartitioner(),
+                (topic, key, value, numPartitions) -> Math.abs(key.hashCode()) % numPartitions
+        );
+
+        table1.join(table2, KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest::getKeyB, joiner, tableJoined, materialized)
+                .toStream()
+                .to(OUTPUT,
+                        Produced.with(serdeScope.decorateSerde(Serdes.String(), streamsConfig, true),
+                                serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)));
 
         return new KafkaStreams(builder.build(streamsConfig), streamsConfig);
     }

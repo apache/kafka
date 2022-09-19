@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.Comparator;
+import java.util.Optional;
 import java.util.function.Function;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.apache.kafka.common.Cluster;
@@ -35,6 +36,14 @@ import org.apache.kafka.streams.StreamsMetadata;
 import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
 
 import org.slf4j.Logger;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * Provides access to the {@link StreamsMetadata} in a KafkaStreams application. This can be used
