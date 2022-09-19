@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerResponseEvent;
-import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
