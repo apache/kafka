@@ -152,10 +152,6 @@ public class TaskManager {
         return mainConsumer;
     }
 
-    StreamsProducer streamsProducerForTask(final TaskId taskId) {
-        return activeTaskCreator.streamsProducerForTask(taskId);
-    }
-
     StreamsProducer threadProducer() {
         return activeTaskCreator.threadProducer();
     }
@@ -617,9 +613,7 @@ public class TaskManager {
     }
 
     private StandbyTask convertActiveToStandby(final StreamTask activeTask, final Set<TopicPartition> partitions) {
-        final StandbyTask standbyTask = standbyTaskCreator.createStandbyTaskFromActive(activeTask, partitions);
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(activeTask.id());
-        return standbyTask;
+        return standbyTaskCreator.createStandbyTaskFromActive(activeTask, partitions);
     }
 
     private StreamTask convertStandbyToActive(final StandbyTask standbyTask, final Set<TopicPartition> partitions) {
@@ -743,9 +737,6 @@ public class TaskManager {
         try {
             task.suspend();
             task.closeClean();
-            if (task.isActive()) {
-                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-            }
         } catch (final RuntimeException e) {
             final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
                 "Attempting to close remaining tasks before re-throwing:", task.id());
@@ -1195,10 +1186,6 @@ public class TaskManager {
             if (removeFromTasksRegistry) {
                 tasks.removeTask(task);
             }
-
-            if (task.isActive()) {
-                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-            }
         } catch (final RuntimeException swallow) {
             log.error("Error removing dirty task {}: {}", task.id(), swallow.getMessage());
         }
@@ -1207,9 +1194,6 @@ public class TaskManager {
     private void closeTaskClean(final Task task) {
         task.closeClean();
         tasks.removeTask(task);
-        if (task.isActive()) {
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-        }
     }
 
     void shutdown(final boolean clean) {
@@ -1281,14 +1265,6 @@ public class TaskManager {
             }
 
             task.closeDirty();
-
-            try {
-                if (task.isActive()) {
-                    activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-                }
-            } catch (final RuntimeException swallow) {
-                log.error("Error closing dirty task {}: {}", task.id(), swallow.getMessage());
-            }
         }
     }
 

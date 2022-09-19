@@ -69,13 +69,13 @@
     </p>
 
     <p>
-        Starting in Kafka Streams 2.6.x, a new processing mode is available, named EOS version 2. This can be configured
-        by setting <code>"processing.guarantee"</code> to <code>"exactly_once_v2"</code> for
-        application versions 3.0+, or setting it to <code>"exactly_once_beta"</code> for versions between 2.6 and 2.8.
-        To use this new feature, your brokers must be on version 2.5.x or newer.
-        If you want to upgrade your EOS application from an older version and enable this feature in version 3.0+,
-        you first need to upgrade your application to version 3.0.x, staying on <code>"exactly_once"</code>,
-        and then do second round of rolling bounces to switch to <code>"exactly_once_v2"</code>. If you
+        Starting in Kafka Streams 4.0.0, the only processing modes available are <code>at_least_once</code> and
+        <code>"exactly_once_v2"</code>. To use the latter, your brokers must be on version 2.5.x or newer.
+        Previous versions of Kafka Streams allowed <code>"exactly_once"</code> and <code>"exactly_once_beta"</code>
+        settings, which were deprecated in 3.0.0 and removed in 4.0.0. If you want to upgrade your application that uses
+        <code>"exactly_once"</code> in a version &lt;3.0 and enable this feature in version 3.0+, you first need to
+        upgrade your application to version 3.0.x, staying on <code>"exactly_once"</code>,
+        and then do second round of rolling bounces to switch to <code>exactly_once_v2</code>. If you
         are upgrading an EOS application from an older (pre-2.6) version to a version between 2.6 and 2.8, follow these
         same steps but with the config <code>"exactly_once_beta"</code> instead. No special steps are required
         to upgrade an application using <code>"exactly_once_beta"</code> from version 2.6+ to 3.0 or higher: you can
@@ -103,6 +103,18 @@
         the new <code>StreamsBuilder</code>, you should set this config value to <code>StreamsConfig#OPTIMIZE</code> to continue reusing the source topic; if you are upgrading from 1.0 or 1.1 where you are already using <code>StreamsBuilder</code> and hence have already
         created a separate changelog topic, you should set this config value to <code>StreamsConfig#NO_OPTIMIZATION</code> when upgrading to {{fullDotVersion}} in order to use that changelog topic for restoring the state store.
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
+    </p>
+
+    <h3><a id="streams_api_changes_400" href="#streams_api_changes_400">Streams API changes in 4.0.0</a></h3>
+    <p>
+      We removed the StreamsConfig <code>processing.guarantee</code> configuration values <code>"exactly_once"</code> and <code>"exactly_once_beta"</code>,
+      which were deprecated in 3.0. Now, there is only one implementation of exactly-once semantics available, which is enabled by setting
+      <code>processing.guarantee</code> to <code>"exactly_once_v2"</code> (which is equivalent to the mode formally enabled by <code>exactly_once_beta</code>).
+      Note that eos-v2 requires broker version 2.5 or higher, so users need to upgrade their kafka cluster if necessary.
+      Users that still use <code>"exactly_once"</code> in a version 3.0+ or <code>"exactly_once_beta"</code> can use a rolling bounce to upgrade to the
+      <code>"exactly_once_v2"</code> setting.
+      For users using still using <code>"exactly_once"</code> in a version &lt;3.0, please see <a href="#streams_notable_changes">Notable compatibility changes in past releases</a>
+      for detailed upgrade instructions.
     </p>
 
     <h3><a id="streams_api_changes_300" href="#streams_api_changes_300">Streams API changes in 3.0.0</a></h3>

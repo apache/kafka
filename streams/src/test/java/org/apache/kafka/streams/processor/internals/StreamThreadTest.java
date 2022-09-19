@@ -978,44 +978,6 @@ public class StreamThreadTest {
         assertSame(clientSupplier.restoreConsumer, thread.restoreConsumer());
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldInjectProducerPerTaskUsingClientSupplierOnCreateIfEosAlphaEnabled() {
-        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
-
-        final Properties props = configProps(true);
-        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(props), true);
-
-        thread.setState(StreamThread.State.STARTING);
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList());
-
-        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        final List<TopicPartition> assignedPartitions = new ArrayList<>();
-
-        // assign single partition
-        assignedPartitions.add(t1p1);
-        assignedPartitions.add(t1p2);
-        activeTasks.put(task1, Collections.singleton(t1p1));
-        activeTasks.put(task2, Collections.singleton(t1p2));
-
-        thread.taskManager().handleAssignment(activeTasks, emptyMap());
-
-        final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
-        mockConsumer.assign(assignedPartitions);
-        final Map<TopicPartition, Long> beginOffsets = new HashMap<>();
-        beginOffsets.put(t1p1, 0L);
-        beginOffsets.put(t1p2, 0L);
-        mockConsumer.updateBeginningOffsets(beginOffsets);
-        thread.rebalanceListener().onPartitionsAssigned(new HashSet<>(assignedPartitions));
-
-        thread.runOnce();
-
-        assertEquals(thread.activeTasks().size(), clientSupplier.producers.size());
-        assertSame(clientSupplier.consumer, thread.mainConsumer());
-        assertSame(clientSupplier.restoreConsumer, thread.restoreConsumer());
-    }
-
     @Test
     public void shouldInjectProducerPerThreadUsingClientSupplierOnCreateIfEosV2Enabled() {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);

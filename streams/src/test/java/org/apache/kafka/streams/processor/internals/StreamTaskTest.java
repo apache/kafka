@@ -582,29 +582,6 @@ public class StreamTaskTest {
         assertFalse(task.process(time.milliseconds()));
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldNotProcessRecordsAfterPrepareCommitWhenEosAlphaEnabled() {
-        task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE, "0"), StreamsConfig.METRICS_LATEST);
-
-        assertFalse(task.process(time.milliseconds()));
-
-        task.addRecords(partition1, asList(
-            getConsumerRecordWithOffsetAsTimestamp(partition1, 10),
-            getConsumerRecordWithOffsetAsTimestamp(partition1, 20),
-            getConsumerRecordWithOffsetAsTimestamp(partition1, 30)
-        ));
-
-        assertTrue(task.process(time.milliseconds()));
-        task.prepareCommit();
-        assertFalse(task.process(time.milliseconds()));
-        task.postCommit(false);
-        assertTrue(task.process(time.milliseconds()));
-        assertTrue(task.process(time.milliseconds()));
-
-        assertFalse(task.process(time.milliseconds()));
-    }
-
     @Test
     public void shouldNotProcessRecordsAfterPrepareCommitWhenEosV2Enabled() {
         task = createSingleSourceStateless(createConfig(StreamsConfig.EXACTLY_ONCE_V2, "0"), StreamsConfig.METRICS_LATEST);

@@ -142,20 +142,9 @@ public class KTableSourceTopicRestartIntegrationTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosAlphaEnabled() throws Exception {
-        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-        shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled();
-    }
-
     @Test
     public void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosV2Enabled() throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
-        shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled();
-    }
-
-    private void shouldRestoreAndProgressWhenTopicWrittenToDuringRestorationWithEosEnabled() throws Exception {
         try {
             streams = new KafkaStreams(streamsBuilder.build(), STREAMS_CONFIG);
             streams.start();

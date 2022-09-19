@@ -148,12 +148,10 @@ public class EosIntegrationTest {
 
     private String stateTmpDir;
 
-    @SuppressWarnings("deprecation")
     @Parameters(name = "{0}")
     public static Collection<String[]> data() {
         return Arrays.asList(new String[][]{
                 {StreamsConfig.AT_LEAST_ONCE},
-                {StreamsConfig.EXACTLY_ONCE},
                 {StreamsConfig.EXACTLY_ONCE_V2}
         });
     }
