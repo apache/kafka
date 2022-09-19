@@ -224,11 +224,11 @@ public class StreamsResetter {
             .describedAs("id")
             .required();
         bootstrapServersOption = optionParser.accepts("bootstrap-servers", "DEPRECATED: Comma-separated list of broker urls with format: HOST1:PORT1,HOST2:PORT2")
-            .withOptionalArg()
+            .withRequiredArg()
             .ofType(String.class)
             .describedAs("urls");
         bootstrapServerOption = optionParser.accepts("bootstrap-server", "REQUIRED unless --bootstrap-servers(deprecated) is specified. The server(s) to connect to. The broker list string in the form HOST1:PORT1,HOST2:PORT2. (default: localhost:9092)")
-            .withOptionalArg()
+            .withRequiredArg()
             .ofType(String.class)
             .describedAs("server to connect to");
         inputTopicsOption = optionParser.accepts("input-topics", "Comma-separated list of user input topics. For these topics, the tool by default will reset the offset to the earliest available offset. "
