@@ -84,9 +84,14 @@
 ---------------------                 -----------
 * --application-id &lt;String: id&gt;       The Kafka Streams application ID
                                         (application.id).
---bootstrap-servers &lt;String: urls&gt;    Comma-separated list of broker urls with
-                                        format: HOST1:PORT1,HOST2:PORT2
-                                        (default: localhost:9092)
+--bootstrap-server &lt;String: server to  REQUIRED unless --bootstrap-servers
+                            connect to&gt;                            (deprecated) is specified. The server
+                                         (s) to connect to. The broker list
+                                         string in the form HOST1:PORT1,HOST2:
+                                         PORT2.
+--bootstrap-servers &lt;String: urls&gt;     DEPRECATED: Comma-separated list of
+                                         broker urls with format: HOST1:PORT1,
+                                         HOST2:PORT2 (default: localhost:9092)
 --by-duration &lt;String: urls&gt;          Reset offsets to offset by duration from
                                         current timestamp. Format: &#39;PnDTnHnMnS&#39;
 --config-file &lt;String: file name&gt;     Property file containing configs to be
