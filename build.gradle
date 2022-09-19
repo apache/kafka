@@ -428,6 +428,7 @@ subprojects {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
+      displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
@@ -460,6 +461,7 @@ subprojects {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
+      displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
@@ -507,6 +509,7 @@ subprojects {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
+      displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
