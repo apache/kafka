@@ -22,11 +22,14 @@ import java.util.function.Consumer
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.metadata.util.SnapshotReason
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.snapshot.SnapshotReader
+
+import java.util.concurrent.atomic.AtomicBoolean
 
 
 object BrokerMetadataListener {
@@ -41,8 +44,22 @@ class BrokerMetadataListener(
   val maxBytesBetweenSnapshots: Long,
   val snapshotter: Option[MetadataSnapshotter],
   brokerMetrics: BrokerServerMetrics,
-  metadataLoadingFaultHandler: FaultHandler
+  _metadataLoadingFaultHandler: FaultHandler
 ) extends RaftClient.Listener[ApiMessageAndVersion] with KafkaMetricsGroup {
+
+  private val metadataFaultOccurred = new AtomicBoolean(false)
+  private val metadataLoadingFaultHandler: FaultHandler = new FaultHandler() {
+    override def handleFault(failureMessage: String, cause: Throwable): RuntimeException = {
+      // If the broker has any kind of error handling metadata records or publishing a new image
+      // we will disable taking new snapshots in order to preserve the local metadata log. Once we
+      // encounter a metadata processing error, the broker will be in an undetermined state.
+      if (metadataFaultOccurred.compareAndSet(false, true)) {
+        error("Disabling metadata snapshots until this broker is restarted.")
+      }
+      _metadataLoadingFaultHandler.handleFault(failureMessage, cause)
+    }
+  }
+
   private val logContext = new LogContext(s"[BrokerMetadataListener id=$brokerId] ")
   private val log = logContext.logger(classOf[BrokerMetadataListener])
   logIdent = logContext.logPrefix()
@@ -125,16 +142,29 @@ class BrokerMetadataListener(
       }
 
       _bytesSinceLastSnapshot = _bytesSinceLastSnapshot + results.numBytes
-      if (shouldSnapshot()) {
-        maybeStartSnapshot()
+      
+      val shouldTakeSnapshot: Set[SnapshotReason] = shouldSnapshot()
+      if (shouldTakeSnapshot.nonEmpty) {
+        maybeStartSnapshot(shouldTakeSnapshot)
       }
 
       _publisher.foreach(publish)
     }
   }
 
-  private def shouldSnapshot(): Boolean = {
-    (_bytesSinceLastSnapshot >= maxBytesBetweenSnapshots) || metadataVersionChanged()
+  private def shouldSnapshot(): Set[SnapshotReason] = {
+    val metadataVersionHasChanged = metadataVersionChanged()
+    val maxBytesHaveExceeded = (_bytesSinceLastSnapshot >= maxBytesBetweenSnapshots)
+
+    if (maxBytesHaveExceeded && metadataVersionHasChanged) {
+      Set(SnapshotReason.MetadataVersionChanged, SnapshotReason.MaxBytesExceeded)
+    } else if (maxBytesHaveExceeded) {
+      Set(SnapshotReason.MaxBytesExceeded)
+    } else if (metadataVersionHasChanged) {
+      Set(SnapshotReason.MetadataVersionChanged)
+    } else {
+      Set()
+    }
   }
 
   private def metadataVersionChanged(): Boolean = {
@@ -145,9 +175,11 @@ class BrokerMetadataListener(
     }
   }
 
-  private def maybeStartSnapshot(): Unit = {
+  private def maybeStartSnapshot(reason: Set[SnapshotReason]): Unit = {
     snapshotter.foreach { snapshotter =>
-      if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply())) {
+      if (metadataFaultOccurred.get()) {
+        trace("Not starting metadata snapshot since we previously had an error")
+      } else if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply(), reason)) {
         _bytesSinceLastSnapshot = 0L
       }
     }
@@ -275,7 +307,7 @@ class BrokerMetadataListener(
       log.info(s"Starting to publish metadata events at offset $highestMetadataOffset.")
       try {
         if (metadataVersionChanged()) {
-          maybeStartSnapshot()
+          maybeStartSnapshot(Set(SnapshotReason.MetadataVersionChanged))
         }
         publish(publisher)
         future.complete(null)
@@ -307,11 +339,21 @@ class BrokerMetadataListener(
 
   private def publish(publisher: MetadataPublisher): Unit = {
     val delta = _delta
-    _image = _delta.apply()
+    try {
+      _image = _delta.apply()
+    } catch {
+      case t: Throwable =>
+        // If we cannot apply the delta, this publish event will throw and we will not publish a new image.
+        // The broker will continue applying metadata records and attempt to publish again.
+        throw metadataLoadingFaultHandler.handleFault(s"Error applying metadata delta $delta", t)
+    }
+
     _delta = new MetadataDelta(_image)
     if (isDebugEnabled) {
       debug(s"Publishing new metadata delta $delta at offset ${_image.highestOffsetAndEpoch().offset}.")
     }
+
+    // This publish call is done with its own try-catch and fault handler
     publisher.publish(delta, _image)
 
     // Update the metrics since the publisher handled the lastest image

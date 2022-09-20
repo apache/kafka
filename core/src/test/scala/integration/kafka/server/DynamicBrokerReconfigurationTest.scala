@@ -96,8 +96,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   private val kafkaClientSaslMechanism = "PLAIN"
   private val kafkaServerSaslMechanisms = List("PLAIN")
 
-  private val trustStoreFile1 = File.createTempFile("truststore", ".jks")
-  private val trustStoreFile2 = File.createTempFile("truststore", ".jks")
+  private val trustStoreFile1 = TestUtils.tempFile("truststore", ".jks")
+  private val trustStoreFile2 = TestUtils.tempFile("truststore", ".jks")
   private val sslProperties1 = TestUtils.sslConfigs(Mode.SERVER, clientCert = false, Some(trustStoreFile1), "kafka")
   private val sslProperties2 = TestUtils.sslConfigs(Mode.SERVER, clientCert = false, Some(trustStoreFile2), "kafka")
   private val invalidSslProperties = invalidSslConfigs
@@ -385,7 +385,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // Broker keystore update for internal listener with compatible keystore should succeed
     val sslPropertiesCopy = sslProperties1.clone().asInstanceOf[Properties]
     val oldFile = new File(sslProperties1.getProperty(SSL_KEYSTORE_LOCATION_CONFIG))
-    val newFile = File.createTempFile("keystore", ".jks")
+    val newFile = TestUtils.tempFile("keystore", ".jks")
     Files.copy(oldFile.toPath, newFile.toPath, StandardCopyOption.REPLACE_EXISTING)
     sslPropertiesCopy.setProperty(SSL_KEYSTORE_LOCATION_CONFIG, newFile.getPath)
     alterSslKeystore(sslPropertiesCopy, SecureInternal)
@@ -393,7 +393,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     // Verify that keystores can be updated using same file name.
     val reusableProps = sslProperties2.clone().asInstanceOf[Properties]
-    val reusableFile = File.createTempFile("keystore", ".jks")
+    val reusableFile = TestUtils.tempFile("keystore", ".jks")
     reusableProps.setProperty(SSL_KEYSTORE_LOCATION_CONFIG, reusableFile.getPath)
     Files.copy(new File(sslProperties1.getProperty(SSL_KEYSTORE_LOCATION_CONFIG)).toPath,
       reusableFile.toPath, StandardCopyOption.REPLACE_EXISTING)
@@ -1407,7 +1407,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val cert2 = load(trustStore2Props).getCertificate("kafka")
     val certs = Map("kafka1" -> cert1, "kafka2" -> cert2)
 
-    val combinedStorePath = File.createTempFile("truststore", ".jks").getAbsolutePath
+    val combinedStorePath = TestUtils.tempFile("truststore", ".jks").getAbsolutePath
     val password = trustStore1Props.get(SSL_TRUSTSTORE_PASSWORD_CONFIG).asInstanceOf[Password]
     TestSslUtils.createTrustStore(combinedStorePath, password, certs.asJava)
     val newStoreProps = new Properties

@@ -27,6 +27,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.StandbyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -318,6 +319,7 @@ public final class StreamsTestUtils {
                                               final Set<TopicPartition> changelogPartitions) {
             when(task.changelogPartitions()).thenReturn(changelogPartitions);
             when(task.id()).thenReturn(taskId);
+            when(task.stateManager()).thenReturn(mock(ProcessorStateManager.class));
         }
 
         public TaskBuilder<T> inState(final Task.State state) {

@@ -239,11 +239,14 @@ public class IntegrationTestUtils {
      * Used by tests migrated to JUnit 5.
      */
     public static String safeUniqueTestName(final Class<?> testClass, final TestInfo testInfo) {
-        return safeUniqueTestName(testClass, testInfo.getTestMethod().map(Method::getName).orElse(""));
+        final String displayName = testInfo.getDisplayName();
+        final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("unknownMethodName");
+        final String testName = displayName.contains(methodName) ? methodName : methodName + displayName;
+        return safeUniqueTestName(testClass, testName);
     }
 
-    private static String safeUniqueTestName(final Class<?> testClass, final String methodName) {
-        return (testClass.getSimpleName() + methodName)
+    private static String safeUniqueTestName(final Class<?> testClass, final String testName) {
+        return (testClass.getSimpleName() + testName)
                 .replace(':', '_')
                 .replace('.', '_')
                 .replace('[', '_')

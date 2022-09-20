@@ -87,7 +87,7 @@ class DefaultStateUpdaterTest {
     private final Time time = new MockTime(1L);
     private final StreamsConfig config = new StreamsConfig(configProps(COMMIT_INTERVAL));
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
-    private DefaultStateUpdater stateUpdater = new DefaultStateUpdater(config, changelogReader, time);
+    private DefaultStateUpdater stateUpdater = new DefaultStateUpdater("test-state-updater", config, changelogReader, time);
 
     @AfterEach
     public void tearDown() {
@@ -147,7 +147,7 @@ class DefaultStateUpdaterTest {
     @Test
     public void shouldRemoveUpdatingTasksOnShutdown() throws Exception {
         stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
-        stateUpdater = new DefaultStateUpdater(new StreamsConfig(configProps(Integer.MAX_VALUE)), changelogReader, time);
+        stateUpdater = new DefaultStateUpdater("test-state-updater", new StreamsConfig(configProps(Integer.MAX_VALUE)), changelogReader, time);
         final StreamTask activeTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StandbyTask standbyTask = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
@@ -314,7 +314,9 @@ class DefaultStateUpdaterTest {
         verifyExceptionsAndFailedTasks();
         verifyRemovedTasks();
         verifyPausedTasks();
-        verify(changelogReader, times(1)).enforceRestoreActive();
+        verify(changelogReader).register(task.changelogPartitions(), task.stateManager());
+        verify(changelogReader).unregister(task.changelogPartitions());
+        verify(changelogReader).enforceRestoreActive();
         verify(changelogReader, atLeast(3)).restore(anyMap());
         verify(changelogReader, never()).transitToUpdateStandby();
     }
@@ -346,6 +348,12 @@ class DefaultStateUpdaterTest {
         verifyExceptionsAndFailedTasks();
         verifyRemovedTasks();
         verifyPausedTasks();
+        verify(changelogReader).register(task1.changelogPartitions(), task1.stateManager());
+        verify(changelogReader).register(task2.changelogPartitions(), task2.stateManager());
+        verify(changelogReader).register(task3.changelogPartitions(), task3.stateManager());
+        verify(changelogReader).unregister(task1.changelogPartitions());
+        verify(changelogReader).unregister(task2.changelogPartitions());
+        verify(changelogReader).unregister(task3.changelogPartitions());
         verify(changelogReader, times(3)).enforceRestoreActive();
         verify(changelogReader, atLeast(4)).restore(anyMap());
         verify(changelogReader, never()).transitToUpdateStandby();
@@ -547,7 +555,10 @@ class DefaultStateUpdaterTest {
         verifyExceptionsAndFailedTasks();
         verifyRemovedTasks();
         verifyPausedTasks();
-        verify(changelogReader, times(1)).transitToUpdateStandby();
+        for (final StandbyTask task : tasks) {
+            verify(changelogReader).register(task.changelogPartitions(), task.stateManager());
+        }
+        verify(changelogReader).transitToUpdateStandby();
         verify(changelogReader, timeout(VERIFICATION_TIMEOUT).atLeast(1)).restore(anyMap());
         verify(changelogReader, never()).enforceRestoreActive();
     }
@@ -576,10 +587,14 @@ class DefaultStateUpdaterTest {
         verifyExceptionsAndFailedTasks();
         verifyRemovedTasks();
         verifyPausedTasks();
+        verify(changelogReader).register(task1.changelogPartitions(), task1.stateManager());
+        verify(changelogReader).register(task2.changelogPartitions(), task2.stateManager());
+        verify(changelogReader).register(task3.changelogPartitions(), task3.stateManager());
+        verify(changelogReader).register(task4.changelogPartitions(), task4.stateManager());
         verify(changelogReader, atLeast(3)).restore(anyMap());
         final InOrder orderVerifier = inOrder(changelogReader, task1, task2);
         orderVerifier.verify(changelogReader, times(2)).enforceRestoreActive();
-        orderVerifier.verify(changelogReader, times(1)).transitToUpdateStandby();
+        orderVerifier.verify(changelogReader).transitToUpdateStandby();
     }
 
     @Test
@@ -637,7 +652,7 @@ class DefaultStateUpdaterTest {
         verifyExceptionsAndFailedTasks(expectedExceptionAndTasks);
         final InOrder orderVerifier = inOrder(changelogReader);
         orderVerifier.verify(changelogReader, atLeast(1)).enforceRestoreActive();
-        orderVerifier.verify(changelogReader, times(1)).transitToUpdateStandby();
+        orderVerifier.verify(changelogReader).transitToUpdateStandby();
     }
 
     @Test
@@ -688,6 +703,7 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks();
         verifyPausedTasks();
         verifyExceptionsAndFailedTasks();
+        verify(changelogReader).unregister(task.changelogPartitions());
     }
 
     @Test
@@ -714,6 +730,8 @@ class DefaultStateUpdaterTest {
         verifyCheckpointTasks(true, task1, task2);
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
+        verify(changelogReader).unregister(task1.changelogPartitions());
+        verify(changelogReader).unregister(task2.changelogPartitions());
     }
 
     @Test
@@ -1288,7 +1306,7 @@ class DefaultStateUpdaterTest {
     public void shouldNotAutoCheckpointTasksIfIntervalNotElapsed() {
         // we need to use a non auto-ticking timer here to control how much time elapsed exactly
         final Time time = new MockTime();
-        final DefaultStateUpdater stateUpdater = new DefaultStateUpdater(config, changelogReader, time);
+        final DefaultStateUpdater stateUpdater = new DefaultStateUpdater("test-state-updater", config, changelogReader, time);
         try {
             final StreamTask task1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
             final StreamTask task2 = statefulTask(TASK_0_2, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();

@@ -544,7 +544,7 @@ class StreamsResetter(StreamsTestBaseService):
 
         cmd = "(export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "%(kafka_run_class)s %(streams_class_name)s " \
-              "--bootstrap-servers %(bootstrap.servers)s " \
+              "--bootstrap-server %(bootstrap.servers)s " \
               "--force " \
               "--application-id %(application.id)s " \
               "--input-topics %(input.topics)s " \

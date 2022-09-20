@@ -38,7 +38,7 @@ should_include_file() {
     return 0
   fi
   file=$1
-  if [ -z "$(echo "$file" | egrep "$regex")" ] ; then
+  if [ -z "$(echo "$file" | grep -E "$regex")" ] ; then
     return 0
   else
     return 1

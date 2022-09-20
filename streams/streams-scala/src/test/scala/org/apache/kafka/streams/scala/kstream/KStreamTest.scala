@@ -191,7 +191,7 @@ class KStreamTest extends TestDriver {
     testDriver.close()
   }
 
-  //noinspection ScalaDeprecation
+  // noinspection ScalaDeprecation
   @Test
   def testJoinCorrectlyRecords(): Unit = {
     val builder = new StreamsBuilder()

@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -31,6 +32,9 @@ import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.standbyTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statefulTask;
 import static org.apache.kafka.test.StreamsTestUtils.TaskBuilder.statelessTask;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TasksTest {
@@ -43,11 +47,10 @@ public class TasksTest {
     private final static TaskId TASK_0_1 = new TaskId(0, 1);
     private final static TaskId TASK_1_0 = new TaskId(1, 0);
 
-    private final LogContext logContext = new LogContext();
+    private final Tasks tasks = new Tasks(new LogContext());
 
     @Test
     public void shouldKeepAddedTasks() {
-        final Tasks tasks = new Tasks(logContext);
         final StreamTask statefulTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).build();
         final StandbyTask standbyTask = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_A_1)).build();
         final StreamTask statelessTask = statelessTask(TASK_1_0).build();
@@ -77,8 +80,6 @@ public class TasksTest {
 
     @Test
     public void shouldDrainPendingTasksToCreate() {
-        final Tasks tasks = new Tasks(logContext);
-
         tasks.addPendingActiveTasksToCreate(mkMap(
             mkEntry(new TaskId(0, 0, "A"), mkSet(TOPIC_PARTITION_A_0)),
             mkEntry(new TaskId(0, 1, "A"), mkSet(TOPIC_PARTITION_A_1)),
@@ -107,5 +108,142 @@ public class TasksTest {
 
         assertEquals(Collections.emptyMap(), tasks.drainPendingActiveTasksForTopologies(mkSet("B")));
         assertEquals(Collections.emptyMap(), tasks.drainPendingStandbyTasksForTopologies(mkSet("B")));
+    }
+
+    @Test
+    public void shouldAddAndRemovePendingTaskToRecycle() {
+        final Set<TopicPartition> expectedInputPartitions = mkSet(TOPIC_PARTITION_A_0);
+        assertNull(tasks.removePendingTaskToRecycle(TASK_0_0));
+
+        tasks.addPendingTaskToRecycle(TASK_0_0, expectedInputPartitions);
+        final Set<TopicPartition> actualInputPartitions = tasks.removePendingTaskToRecycle(TASK_0_0);
+
+        assertEquals(expectedInputPartitions, actualInputPartitions);
+        assertNull(tasks.removePendingTaskToRecycle(TASK_0_0));
+    }
+
+    @Test
+    public void shouldAddAndRemovePendingTaskToUpdateInputPartitions() {
+        final Set<TopicPartition> expectedInputPartitions = mkSet(TOPIC_PARTITION_A_0);
+        assertNull(tasks.removePendingTaskToUpdateInputPartitions(TASK_0_0));
+
+        tasks.addPendingTaskToUpdateInputPartitions(TASK_0_0, expectedInputPartitions);
+        final Set<TopicPartition> actualInputPartitions = tasks.removePendingTaskToUpdateInputPartitions(TASK_0_0);
+
+        assertEquals(expectedInputPartitions, actualInputPartitions);
+        assertNull(tasks.removePendingTaskToUpdateInputPartitions(TASK_0_0));
+    }
+
+    @Test
+    public void shouldAddAndRemovePendingTaskToCloseClean() {
+        assertFalse(tasks.removePendingTaskToCloseClean(TASK_0_0));
+
+        tasks.addPendingTaskToCloseClean(TASK_0_0);
+
+        assertTrue(tasks.removePendingTaskToCloseClean(TASK_0_0));
+        assertFalse(tasks.removePendingTaskToCloseClean(TASK_0_0));
+    }
+
+    @Test
+    public void shouldAddAndRemovePendingTaskToCloseDirty() {
+        assertFalse(tasks.removePendingTaskToCloseDirty(TASK_0_0));
+
+        tasks.addPendingTaskToCloseDirty(TASK_0_0);
+
+        assertTrue(tasks.removePendingTaskToCloseDirty(TASK_0_0));
+        assertFalse(tasks.removePendingTaskToCloseDirty(TASK_0_0));
+    }
+
+    @Test
+    public void shouldAddAndRemovePendingTaskToSuspend() {
+        assertFalse(tasks.removePendingActiveTaskToSuspend(TASK_0_0));
+
+        tasks.addPendingActiveTaskToSuspend(TASK_0_0);
+
+        assertTrue(tasks.removePendingActiveTaskToSuspend(TASK_0_0));
+        assertFalse(tasks.removePendingActiveTaskToSuspend(TASK_0_0));
+    }
+
+    @Test
+    public void onlyRemovePendingTaskToRecycleShouldRemoveTaskFromPendingUpdateActions() {
+        tasks.addPendingTaskToRecycle(TASK_0_0, mkSet(TOPIC_PARTITION_A_0));
+
+        assertFalse(tasks.removePendingTaskToCloseDirty(TASK_0_0));
+        assertFalse(tasks.removePendingTaskToCloseClean(TASK_0_0));
+        assertFalse(tasks.removePendingActiveTaskToSuspend(TASK_0_0));
+        assertNull(tasks.removePendingTaskToUpdateInputPartitions(TASK_0_0));
+        assertNotNull(tasks.removePendingTaskToRecycle(TASK_0_0));
+    }
+
+    @Test
+    public void onlyRemovePendingTaskToUpdateInputPartitionsShouldRemoveTaskFromPendingUpdateActions() {
+        tasks.addPendingTaskToUpdateInputPartitions(TASK_0_0, mkSet(TOPIC_PARTITION_A_0));
+
+        assertFalse(tasks.removePendingTaskToCloseDirty(TASK_0_0));
+        assertFalse(tasks.removePendingTaskToCloseClean(TASK_0_0));
+        assertFalse(tasks.removePendingActiveTaskToSuspend(TASK_0_0));
+        assertNull(tasks.removePendingTaskToRecycle(TASK_0_0));
+        assertNotNull(tasks.removePendingTaskToUpdateInputPartitions(TASK_0_0));
+    }
+
+    @Test
+    public void onlyRemovePendingTaskToCloseCleanShouldRemoveTaskFromPendingUpdateActions() {
+        tasks.addPendingTaskToCloseClean(TASK_0_0);
+
+        assertFalse(tasks.removePendingTaskToCloseDirty(TASK_0_0));
+        assertFalse(tasks.removePendingActiveTaskToSuspend(TASK_0_0));
+        assertNull(tasks.removePendingTaskToRecycle(TASK_0_0));
+        assertNull(tasks.removePendingTaskToUpdateInputPartitions(TASK_0_0));
+        assertTrue(tasks.removePendingTaskToCloseClean(TASK_0_0));
+    }
+
+    @Test
+    public void onlyRemovePendingTaskToCloseDirtyShouldRemoveTaskFromPendingUpdateActions() {
+        tasks.addPendingTaskToCloseDirty(TASK_0_0);
+
+        assertFalse(tasks.removePendingTaskToCloseClean(TASK_0_0));
+        assertFalse(tasks.removePendingActiveTaskToSuspend(TASK_0_0));
+        assertNull(tasks.removePendingTaskToRecycle(TASK_0_0));
+        assertNull(tasks.removePendingTaskToUpdateInputPartitions(TASK_0_0));
+        assertTrue(tasks.removePendingTaskToCloseDirty(TASK_0_0));
+    }
+
+    @Test
+    public void onlyRemovePendingTaskToSuspendShouldRemoveTaskFromPendingUpdateActions() {
+        tasks.addPendingActiveTaskToSuspend(TASK_0_0);
+
+        assertFalse(tasks.removePendingTaskToCloseClean(TASK_0_0));
+        assertFalse(tasks.removePendingTaskToCloseDirty(TASK_0_0));
+        assertNull(tasks.removePendingTaskToRecycle(TASK_0_0));
+        assertNull(tasks.removePendingTaskToUpdateInputPartitions(TASK_0_0));
+        assertTrue(tasks.removePendingActiveTaskToSuspend(TASK_0_0));
+    }
+
+    @Test
+    public void shouldOnlyKeepLastUpdateAction() {
+        tasks.addPendingTaskToRecycle(TASK_0_0, mkSet(TOPIC_PARTITION_A_0));
+        tasks.addPendingTaskToUpdateInputPartitions(TASK_0_0, mkSet(TOPIC_PARTITION_A_0));
+        assertNull(tasks.removePendingTaskToRecycle(TASK_0_0));
+        assertNotNull(tasks.removePendingTaskToUpdateInputPartitions(TASK_0_0));
+
+        tasks.addPendingTaskToUpdateInputPartitions(TASK_0_0, mkSet(TOPIC_PARTITION_A_0));
+        tasks.addPendingTaskToCloseClean(TASK_0_0);
+        assertNull(tasks.removePendingTaskToUpdateInputPartitions(TASK_0_0));
+        assertTrue(tasks.removePendingTaskToCloseClean(TASK_0_0));
+
+        tasks.addPendingTaskToCloseClean(TASK_0_0);
+        tasks.addPendingTaskToCloseDirty(TASK_0_0);
+        assertFalse(tasks.removePendingTaskToCloseClean(TASK_0_0));
+        assertTrue(tasks.removePendingTaskToCloseDirty(TASK_0_0));
+
+        tasks.addPendingTaskToCloseDirty(TASK_0_0);
+        tasks.addPendingActiveTaskToSuspend(TASK_0_0);
+        assertFalse(tasks.removePendingTaskToCloseDirty(TASK_0_0));
+        assertTrue(tasks.removePendingActiveTaskToSuspend(TASK_0_0));
+
+        tasks.addPendingActiveTaskToSuspend(TASK_0_0);
+        tasks.addPendingTaskToRecycle(TASK_0_0, mkSet(TOPIC_PARTITION_A_0));
+        assertFalse(tasks.removePendingActiveTaskToSuspend(TASK_0_0));
+        assertNotNull(tasks.removePendingTaskToRecycle(TASK_0_0));
     }
 }

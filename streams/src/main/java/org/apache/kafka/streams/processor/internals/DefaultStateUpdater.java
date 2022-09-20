@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -67,7 +68,7 @@ public class DefaultStateUpdater implements StateUpdater {
             super(name);
             this.changelogReader = changelogReader;
 
-            final String logPrefix = String.format("%s ", name);
+            final String logPrefix = String.format("state-updater [%s] ", name);
             final LogContext logContext = new LogContext(logPrefix);
             log = logContext.logger(DefaultStateUpdater.class);
         }
@@ -98,7 +99,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 while (isRunning.get()) {
                     try {
                         runOnce();
-                    } catch (final InterruptedException interruptedException) {
+                    } catch (final InterruptedException | InterruptException interruptedException) {
                         return;
                     }
                 }
@@ -262,19 +263,19 @@ public class DefaultStateUpdater implements StateUpdater {
         private void addTask(final Task task) {
             if (isStateless(task)) {
                 addToRestoredTasks((StreamTask) task);
-                log.debug("Stateless active task " + task.id() + " was added to the restored tasks of the state updater");
+                log.info("Stateless active task " + task.id() + " was added to the restored tasks of the state updater");
             } else {
                 final Task existingTask = updatingTasks.putIfAbsent(task.id(), task);
                 if (existingTask != null) {
                     throw new IllegalStateException((existingTask.isActive() ? "Active" : "Standby") + " task " + task.id() + " already exist, " +
                         "should not try to add another " + (task.isActive() ? "active" : "standby") + " task with the same id. " + BUG_ERROR_MESSAGE);
                 }
-
+                changelogReader.register(task.changelogPartitions(), task.stateManager());
                 if (task.isActive()) {
-                    log.debug("Stateful active task " + task.id() + " was added to the updating tasks of the state updater");
+                    log.info("Stateful active task " + task.id() + " was added to the state updater");
                     changelogReader.enforceRestoreActive();
                 } else {
-                    log.debug("Standby task " + task.id() + " was added to the updating tasks of the state updater");
+                    log.info("Standby task " + task.id() + " was added to the state updater");
                     if (updatingTasks.size() == 1) {
                         changelogReader.transitToUpdateStandby();
                     }
@@ -287,19 +288,23 @@ public class DefaultStateUpdater implements StateUpdater {
             if (updatingTasks.containsKey(taskId)) {
                 task = updatingTasks.get(taskId);
                 task.maybeCheckpoint(true);
+                final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
+                changelogReader.unregister(changelogPartitions);
                 removedTasks.add(task);
                 updatingTasks.remove(taskId);
                 transitToUpdateStandbysIfOnlyStandbysLeft();
-                log.debug((task.isActive() ? "Active" : "Standby")
+                log.info((task.isActive() ? "Active" : "Standby")
                     + " task " + task.id() + " was removed from the updating tasks and added to the removed tasks.");
             } else if (pausedTasks.containsKey(taskId)) {
                 task = pausedTasks.get(taskId);
+                final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
+                changelogReader.unregister(changelogPartitions);
                 removedTasks.add(task);
                 pausedTasks.remove(taskId);
-                log.debug((task.isActive() ? "Active" : "Standby")
+                log.info((task.isActive() ? "Active" : "Standby")
                     + " task " + task.id() + " was removed from the paused tasks and added to the removed tasks.");
             } else {
-                log.debug("Task " + taskId + " was not removed since it is not updating or paused.");
+                log.info("Task " + taskId + " was not removed since it is not updating or paused.");
             }
         }
 
@@ -344,12 +349,13 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void maybeCompleteRestoration(final StreamTask task,
                                               final Set<TopicPartition> restoredChangelogs) {
-            final Collection<TopicPartition> taskChangelogPartitions = task.changelogPartitions();
-            if (restoredChangelogs.containsAll(taskChangelogPartitions)) {
+            final Collection<TopicPartition> changelogPartitions = task.changelogPartitions();
+            if (restoredChangelogs.containsAll(changelogPartitions)) {
                 task.maybeCheckpoint(true);
+                changelogReader.unregister(changelogPartitions);
                 addToRestoredTasks(task);
                 updatingTasks.remove(task.id());
-                log.debug("Stateful active task " + task.id() + " completed restoration");
+                log.info("Stateful active task " + task.id() + " completed restoration");
                 transitToUpdateStandbysIfOnlyStandbysLeft();
             }
         }
@@ -406,17 +412,21 @@ public class DefaultStateUpdater implements StateUpdater {
     private StateUpdaterThread stateUpdaterThread = null;
     private CountDownLatch shutdownGate;
 
-    public DefaultStateUpdater(final StreamsConfig config,
+    private String name;
+
+    public DefaultStateUpdater(final String name,
+                               final StreamsConfig config,
                                final ChangelogReader changelogReader,
                                final Time time) {
         this.changelogReader = changelogReader;
         this.time = time;
         this.commitIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
+        this.name = name;
     }
 
     public void start() {
         if (stateUpdaterThread == null) {
-            stateUpdaterThread = new StateUpdaterThread("state-updater", changelogReader);
+            stateUpdaterThread = new StateUpdaterThread(name, changelogReader);
             stateUpdaterThread.start();
             shutdownGate = new CountDownLatch(1);
 

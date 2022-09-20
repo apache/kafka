@@ -30,7 +30,7 @@ buildscript {
 }
 
 plugins {
-  id 'com.diffplug.spotless' version '5.12.5'
+  id 'com.diffplug.spotless' version '6.10.0'
   id 'com.github.ben-manes.versions' version '0.42.0'
   id 'idea'
   id 'java-library'
@@ -47,7 +47,7 @@ plugins {
 spotless {
   scala {
     target 'streams/**/*.scala'
-    scalafmt("$versions.scalafmt").configFile('checkstyle/.scalafmt.conf')
+    scalafmt("$versions.scalafmt").configFile('checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
     licenseHeaderFile 'checkstyle/java.header', 'package'
   }
 }
@@ -428,6 +428,7 @@ subprojects {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
+      displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
@@ -460,6 +461,7 @@ subprojects {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
+      displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
@@ -507,6 +509,7 @@ subprojects {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
+      displayGranularity = 0
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
@@ -2535,6 +2538,10 @@ project(':connect:json') {
 }
 
 project(':connect:runtime') {
+  configurations {
+    swagger
+  }
+
   archivesBaseName = "connect-runtime"
 
   dependencies {
@@ -2562,8 +2569,11 @@ project(':connect:runtime') {
     implementation libs.jettyClient
     implementation libs.reflections
     implementation libs.mavenArtifact
-    implementation libs.swaggerJaxrs2
     implementation libs.swaggerAnnotations
+
+    // We use this library to generate OpenAPI docs for the REST API, but we don't want or need it at compile
+    // or run time. So, we add it to a separate configuration, which we use later on during docs generation
+    swagger libs.swaggerJaxrs2
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
@@ -2653,7 +2663,8 @@ project(':connect:runtime') {
 
   task genConnectOpenAPIDocs(type: io.swagger.v3.plugins.gradle.tasks.ResolveTask, dependsOn: setVersionInOpenAPISpec) {
     classpath = sourceSets.main.runtimeClasspath
-    buildClasspath = classpath
+
+    buildClasspath = classpath + configurations.swagger.asCollection()
     outputFileName = 'connect_rest'
     outputFormat = 'YAML'
     prettyPrint = 'TRUE'

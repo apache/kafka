@@ -23,7 +23,6 @@ import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Optional, Properties, Random}
-
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerContext, KafkaController}
@@ -84,7 +83,7 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authoriz
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyDouble, anyInt, anyLong, anyShort, anyString, argThat, isNotNull}
 import org.mockito.Mockito.{mock, reset, times, verify, when}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
@@ -92,6 +91,7 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 
@@ -770,6 +770,57 @@ class KafkaApisTest {
           new CreatableTopic().setName("topic").setNumPartitions(1).
             setReplicationFactor(1.toShort)).iterator())))
     testForwardableApi(ApiKeys.CREATE_TOPICS, requestBuilder)
+  }
+
+  @ParameterizedTest
+  @CsvSource(value = Array("0,1500", "1500,0", "3000,1000"))
+  def testKRaftControllerThrottleTimeEnforced(
+    controllerThrottleTimeMs: Int,
+    requestThrottleTimeMs: Int
+  ): Unit = {
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+
+    val topicToCreate = new CreatableTopic()
+      .setName("topic")
+      .setNumPartitions(1)
+      .setReplicationFactor(1.toShort)
+
+    val requestData = new CreateTopicsRequestData()
+    requestData.topics().add(topicToCreate)
+
+    val requestBuilder = new CreateTopicsRequest.Builder(requestData).build()
+    val request = buildRequest(requestBuilder)
+
+    val kafkaApis = createKafkaApis(enableForwarding = true, raftSupport = true)
+    val forwardCallback: ArgumentCaptor[Option[AbstractResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[Option[AbstractResponse] => Unit])
+
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(request, time.milliseconds()))
+      .thenReturn(requestThrottleTimeMs)
+
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
+
+    verify(forwardingManager).forwardRequest(
+      ArgumentMatchers.eq(request),
+      forwardCallback.capture()
+    )
+
+    val responseData = new CreateTopicsResponseData()
+      .setThrottleTimeMs(controllerThrottleTimeMs)
+    responseData.topics().add(new CreatableTopicResult()
+      .setErrorCode(Errors.THROTTLING_QUOTA_EXCEEDED.code))
+
+    forwardCallback.getValue.apply(Some(new CreateTopicsResponse(responseData)))
+
+    val expectedThrottleTimeMs = math.max(controllerThrottleTimeMs, requestThrottleTimeMs)
+
+    verify(clientRequestQuotaManager).throttle(
+      ArgumentMatchers.eq(request),
+      any[ThrottleCallback](),
+      ArgumentMatchers.eq(expectedThrottleTimeMs)
+    )
+
+    assertEquals(expectedThrottleTimeMs, responseData.throttleTimeMs)
   }
 
   @Test
