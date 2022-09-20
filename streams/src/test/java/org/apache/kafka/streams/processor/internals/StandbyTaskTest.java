@@ -216,6 +216,7 @@ public class StandbyTaskTest {
         task.maybeCheckpoint(true);
 
         verify(stateManager).checkpoint();
+        verify(stateManager).flush();
     }
 
     @Test
