@@ -210,8 +210,9 @@ def get_jdk(prefs, version):
     Get settings for the specified JDK version.
     """
     jdk_java_home = get_pref(prefs, 'jdk%d' % version, lambda: input("Enter the path for JAVA_HOME for a JDK%d compiler (blank to use default JAVA_HOME): " % version))
-    jdk_env = dict(os.environ) if jdk_java_home.strip() else None
-    if jdk_env is not None: jdk_env['JAVA_HOME'] = jdk_java_home
+    jdk_env = dict(os.environ)
+    if jdk_java_home.strip(): jdk_env['JAVA_HOME'] = jdk_java_home
+    else: jdk_java_home = jdk_env['JAVA_HOME']
     java_version = cmd_output("%s/bin/java -version" % jdk_java_home, env=jdk_env)
     if version == 8:
       if "1.8.0" not in java_version:
@@ -277,7 +278,7 @@ def command_stage_docs():
 
     versioned_docs_path = os.path.join(kafka_site_repo_path, docs_version(version))
     if not os.path.exists(versioned_docs_path):
-        os.mkdir(versioned_docs_path, 755)
+        os.mkdir(versioned_docs_path, 0o755)
 
     # The contents of the docs jar are site-docs/<docs dir>. We need to get rid of the site-docs prefix and dump everything
     # inside it into the docs version subdirectory in the kafka-site repo

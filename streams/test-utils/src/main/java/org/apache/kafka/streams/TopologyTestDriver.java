@@ -489,8 +489,8 @@ public class TopologyTestDriver implements Closeable {
                 stateDirectory,
                 new MockChangelogRegister(),
                 processorTopology.storeToChangelogTopic(),
-                new HashSet<>(partitionsByInputTopic.values())
-            );
+                new HashSet<>(partitionsByInputTopic.values()),
+                false);
             final RecordCollector recordCollector = new RecordCollectorImpl(
                 logContext,
                 TASK_ID,
@@ -1126,6 +1126,13 @@ public class TopologyTestDriver implements Closeable {
         @Override
         public void register(final TopicPartition partition, final ProcessorStateManager stateManager) {
             restoringPartitions.add(partition);
+        }
+
+        @Override
+        public void register(final Set<TopicPartition> changelogPartitions, final ProcessorStateManager stateManager) {
+            for (final TopicPartition changelogPartition : changelogPartitions) {
+                register(changelogPartition, stateManager);
+            }
         }
 
         @Override

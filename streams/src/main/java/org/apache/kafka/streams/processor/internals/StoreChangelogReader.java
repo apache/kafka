@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -347,6 +348,13 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
+    @Override
+    public void register(final Set<TopicPartition> changelogPartitions, final ProcessorStateManager stateManager) {
+        for (final TopicPartition changelogPartition : changelogPartitions) {
+            register(changelogPartition, stateManager);
+        }
+    }
+
     private ChangelogMetadata restoringChangelogByPartition(final TopicPartition partition) {
         final ChangelogMetadata changelogMetadata = changelogs.get(partition);
         if (changelogMetadata == null) {
@@ -444,6 +452,8 @@ public class StoreChangelogReader implements ChangelogReader {
                 final Set<TaskId> corruptedTasks = new HashSet<>();
                 e.partitions().forEach(partition -> corruptedTasks.add(changelogs.get(partition).stateManager.taskId()));
                 throw new TaskCorruptedException(corruptedTasks, e);
+            } catch (final InterruptException interruptException) {
+                throw interruptException;
             } catch (final KafkaException e) {
                 throw new StreamsException("Restore consumer get unexpected error polling records.", e);
             }
