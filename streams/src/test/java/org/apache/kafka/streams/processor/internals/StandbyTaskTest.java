@@ -304,7 +304,6 @@ public class StandbyTaskTest {
     @Test
     public void shouldSuspendAndCommitBeforeCloseClean() {
         stateManager.close();
-        verify(stateManager, atLeastOnce()).close();
         stateManager.checkpoint();
         verify(stateManager, times(1)).checkpoint();
         when(stateManager.changelogOffsets())
