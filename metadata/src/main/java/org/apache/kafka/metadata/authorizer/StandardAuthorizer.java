@@ -136,9 +136,13 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
 
     @Override
     public void loadSnapshot(Map<Uuid, StandardAcl> acls) {
+        StandardAuthorizerData newData = StandardAuthorizerData.createEmpty();
+        for (Map.Entry<Uuid, StandardAcl> entry : acls.entrySet()) {
+            newData.addAcl(entry.getKey(), entry.getValue());
+        }
         lock.writeLock().lock();
         try {
-            data = data.copyWithNewAcls(acls.entrySet());
+            data = data.copyWithNewAcls(newData.getAclsByResource(), newData.getAclsById());
         } finally {
             lock.writeLock().unlock();
         }

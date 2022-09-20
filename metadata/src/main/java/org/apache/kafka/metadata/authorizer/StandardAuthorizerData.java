@@ -203,6 +203,20 @@ public class StandardAuthorizerData {
         return newData;
     }
 
+    StandardAuthorizerData copyWithNewAcls(TreeSet<StandardAcl> aclsByResource, HashMap<Uuid,
+        StandardAcl> aclsById) {
+        StandardAuthorizerData newData =  new StandardAuthorizerData(
+            log,
+            aclMutator,
+            loadingComplete,
+            superUsers,
+            defaultRule.result,
+            aclsByResource,
+            aclsById);
+        log.info("Initialized with {} acl(s).", aclsById.size());
+        return newData;
+    }
+
     void addAcl(Uuid id, StandardAcl acl) {
         try {
             StandardAcl prevAcl = aclsById.putIfAbsent(id, acl);
@@ -614,5 +628,13 @@ public class StandardAuthorizerData {
                 return null;
             }
         }
+    }
+
+    TreeSet<StandardAcl> getAclsByResource() {
+        return aclsByResource;
+    }
+
+    HashMap<Uuid, StandardAcl> getAclsById() {
+        return aclsById;
     }
 }
