@@ -301,6 +301,8 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldSuspendAndCommitBeforeCloseClean() {
+        when(stateManager.changelogOffsets())
+            .thenReturn(Collections.singletonMap(partition, 60L));
         stateManager.close();
         stateManager.checkpoint();
         verify(stateManager, times(1)).checkpoint();
@@ -319,6 +321,8 @@ public class StandbyTaskTest {
 
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
+
+        verify(stateManager).changelogOffsets();
     }
 
     @Test
