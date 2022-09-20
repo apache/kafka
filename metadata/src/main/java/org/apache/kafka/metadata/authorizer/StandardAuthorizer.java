@@ -62,7 +62,9 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     /**
-     * The current data. We use a read-write lock to synchronize reads and writes to the data.
+     * The current data. We use a read-write lock to synchronize reads and writes to the data. We
+     * expect one writer and multiple readers accessing the ACL data, and we use the lock to make
+     * sure we have consistent reads when writer tries to change the data.
      */
     private volatile StandardAuthorizerData data = StandardAuthorizerData.createEmpty();
 
@@ -170,8 +172,9 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
         List<AuthorizationResult> results = new ArrayList<>(actions.size());
         lock.readLock().lock();
         try {
+            StandardAuthorizerData curData = data;
             for (Action action : actions) {
-                AuthorizationResult result = data.authorize(requestContext, action);
+                AuthorizationResult result = curData.authorize(requestContext, action);
                 results.add(result);
             }
         } finally {
@@ -184,6 +187,8 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
     public Iterable<AclBinding> acls(AclBindingFilter filter) {
         lock.readLock().lock();
         try {
+            // The Iterable returned here is consistent because it is created over a read-only
+            // copy of ACLs data.
             return data.acls(filter);
         } finally {
             lock.readLock().unlock();

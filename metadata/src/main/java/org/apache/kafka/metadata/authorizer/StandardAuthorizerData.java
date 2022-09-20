@@ -37,13 +37,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.NavigableSet;
 import java.util.Set;
 import java.util.TreeSet;
@@ -185,22 +183,6 @@ public class StandardAuthorizerData {
             newDefaultResult,
             aclsByResource,
             aclsById);
-    }
-
-    StandardAuthorizerData copyWithNewAcls(Collection<Entry<Uuid, StandardAcl>> aclEntries) {
-        StandardAuthorizerData newData = new StandardAuthorizerData(
-            log,
-            aclMutator,
-            loadingComplete,
-            superUsers,
-            defaultRule.result,
-            new TreeSet<>(),
-            new HashMap<>());
-        for (Entry<Uuid, StandardAcl> entry : aclEntries) {
-            newData.addAcl(entry.getKey(), entry.getValue());
-        }
-        log.info("Applied {} acl(s) from image.", aclEntries.size());
-        return newData;
     }
 
     StandardAuthorizerData copyWithNewAcls(TreeSet<StandardAcl> aclsByResource, HashMap<Uuid,
@@ -544,6 +526,12 @@ public class StandardAuthorizerData {
         return acl.permissionType().equals(ALLOW) ? ALLOWED : DENIED;
     }
 
+    /**
+     * Creates a consistent Iterable on read-only copy of AclBindings data for the given filter.
+     *
+     * @param filter The filter constraining the AclBindings to be present in the Iterable.
+     * @return Iterable over AclBindings matching the filter.
+     */
     Iterable<AclBinding> acls(AclBindingFilter filter) {
         List<AclBinding> aclBindingList = new ArrayList<>();
         aclsByResource.forEach(acl -> {
