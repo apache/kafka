@@ -23,8 +23,8 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class DefaultEventHandler implements EventHandler<ConsumerRequestEvent, ConsumerResponseEvent> {
-    BlockingQueue<ConsumerRequestEvent> consumerRequestEvents;
-    BlockingQueue<ConsumerResponseEvent> consumerResponseEvents;
+    private BlockingQueue<ConsumerRequestEvent> consumerRequestEvents;
+    private BlockingQueue<ConsumerResponseEvent> consumerResponseEvents;
 
     public DefaultEventHandler() {
         this.consumerRequestEvents = new LinkedBlockingQueue<>();
