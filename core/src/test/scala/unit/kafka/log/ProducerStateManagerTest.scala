@@ -23,7 +23,6 @@ import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
-
 import kafka.server.LogOffsetMetadata
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
@@ -739,6 +738,30 @@ class ProducerStateManagerTest {
     stateManager.takeSnapshot()
     assertEquals(1, logDir.listFiles().length)
     assertEquals(Set(1), currentSnapshotOffsets)
+  }
+
+  @Test
+  def testReloadSnapshots(): Unit = {
+    val epoch = 0.toShort
+    append(stateManager, producerId, epoch, 1, 1L)
+    append(stateManager, producerId, epoch, 2, 2L)
+    stateManager.takeSnapshot()
+    val pathAndDataList = logDir.listFiles().map(file => (file.toPath, Files.readAllBytes(file.toPath)))
+
+    append(stateManager, producerId, epoch, 3, 3L)
+    append(stateManager, producerId, epoch, 4, 4L)
+    stateManager.takeSnapshot()
+    assertEquals(2, logDir.listFiles().length)
+    assertEquals(Set(3, 5), currentSnapshotOffsets)
+
+    stateManager.truncateAndReload(3, 5, time.milliseconds())
+    assertEquals(1, logDir.listFiles().length)
+    assertEquals(Set(5), currentSnapshotOffsets)
+
+    pathAndDataList.foreach(e => Files.write(e._1, e._2))
+    stateManager.reloadSnapshots()
+    assertEquals(Some(3), stateManager.latestSnapshotOffset)
+    assertEquals(Set(3), currentSnapshotOffsets)
   }
 
   @Test

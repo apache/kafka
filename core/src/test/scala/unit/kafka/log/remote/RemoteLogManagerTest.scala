@@ -26,7 +26,7 @@ import java.util.Properties
 class RemoteLogManagerTest {
 
   @Test
-  def testRLMConfig(): Unit = {
+  def testRemoteLogMetadataManagerWithUserDefinedConfigs(): Unit = {
     val key = "hello"
     val rlmmConfigPrefix = "rlmm.config."
     val props: Properties = new Properties()

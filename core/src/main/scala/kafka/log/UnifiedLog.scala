@@ -297,7 +297,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   @volatile var partitionMetadataFile: Option[PartitionMetadataFile] = None
 
   //todo-tier it needs to be updated.
-  private val _localLogStartOffset: Long = logStartOffset
+  private[log] var _localLogStartOffset: Long = logStartOffset
 
   def localLogStartOffset(): Long = _localLogStartOffset
 
@@ -312,7 +312,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     // Remote logging is enabled only for non-compact and non-internal topics
     remoteStorageSystemEnable &&
       !(config.compact || Topic.isInternal(topicPartition.topic())
-        || TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME.eq(topicPartition.topic())) &&
+        || TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME.equals(topicPartition.topic())) &&
       config.remoteLogConfig.remoteStorageEnable
   }
 
@@ -662,11 +662,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   // Rebuild producer state until lastOffset. This method may be called from the recovery code path, and thus must be
   // free of all side-effects, i.e. it must not update any log-specific state.
   private def rebuildProducerState(lastOffset: Long,
-                                   producerStateManager: ProducerStateManager,
-                                   reloadFromCleanShutdown: Boolean = false): Unit = lock synchronized {
+                                   producerStateManager: ProducerStateManager): Unit = lock synchronized {
     localLog.checkIfMemoryMappedBufferClosed()
     UnifiedLog.rebuildProducerState(producerStateManager, localLog.segments, logStartOffset, lastOffset, recordVersion, time,
-      reloadFromCleanShutdown, logIdent)
+      reloadFromCleanShutdown = false, logIdent)
   }
 
   @threadsafe
@@ -1065,6 +1064,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         if (newLogStartOffset > logStartOffset) {
           updatedLogStartOffset = true
           updateLogStartOffset(newLogStartOffset)
+          _localLogStartOffset = newLogStartOffset
           info(s"Incremented log start offset to $newLogStartOffset due to $reason")
           leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
           producerStateManager.onLogStartOffsetIncremented(newLogStartOffset)
@@ -1880,7 +1880,9 @@ object UnifiedLog extends Logging {
             lastShutdownClean: Boolean = true,
             topicId: Option[Uuid],
             keepPartitionMetadataFile: Boolean,
-            numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]): UnifiedLog = {
+            numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int],
+            remoteStorageSystemEnable: Boolean = false,
+            remoteLogManager: Option[RemoteLogManager] = None): UnifiedLog = {
     // create the log directory if it doesn't exist
     Files.createDirectories(dir.toPath)
     val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
@@ -1917,7 +1919,9 @@ object UnifiedLog extends Logging {
       leaderEpochCache,
       producerStateManager,
       topicId,
-      keepPartitionMetadataFile)
+      keepPartitionMetadataFile,
+      remoteStorageSystemEnable,
+      remoteLogManager)
   }
 
   def logFile(dir: File, offset: Long, suffix: String = ""): File = LocalLog.logFile(dir, offset, suffix)

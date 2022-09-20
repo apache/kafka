@@ -16,105 +16,94 @@
  */
 package kafka.log.remote
 
-import kafka.log.{OffsetIndex, OffsetPosition, TimeIndex}
+import kafka.log.{OffsetIndex, OffsetPosition, TimeIndex, UnifiedLog}
+import kafka.utils.MockTime
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull}
+import org.apache.kafka.test.TestUtils
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
-import org.mockito.Mockito.{times, verify, when}
-import org.mockito.{ArgumentMatchers, Mockito}
+import org.mockito.Mockito.{mock, reset, times, verify, verifyNoInteractions, when}
+import org.mockito.ArgumentMatchers
 
 import java.io.{File, FileInputStream}
 import java.nio.file.Files
 import java.util.Collections
+import scala.collection.mutable
 
 class RemoteIndexCacheTest {
 
-  val rsm: RemoteStorageManager = Mockito.mock(classOf[RemoteStorageManager])
-  var rlsMetadata: RemoteLogSegmentMetadata = _
-  var cache: RemoteIndexCache = _
-  var offsetIndex: OffsetIndex = _
-  var timeIndex: TimeIndex = _
-  val maxEntries = 30
+  val time = new MockTime()
+  val partition = new TopicPartition("foo", 0)
+  val idPartition = new TopicIdPartition(Uuid.randomUuid(), partition)
+  val logDir: File = TestUtils.tempDirectory("kafka-logs")
+  val tpDir: File = new File(logDir, partition.toString)
+  val brokerId = 1
   val baseOffset = 45L
+  val lastOffset = 75L
+  val segmentSize = 1024
+
+  val rsm: RemoteStorageManager = mock(classOf[RemoteStorageManager])
+  val cache: RemoteIndexCache =  new RemoteIndexCache(remoteStorageManager = rsm, logDir = logDir.toString)
+  val remoteLogSegmentId = new RemoteLogSegmentId(idPartition, Uuid.randomUuid())
+  val rlsMetadata: RemoteLogSegmentMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset,
+    time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
 
   @BeforeEach
   def setup(): Unit = {
-    val tempDir = Files.createTempDirectory("kafka-test-").toFile
-    tempDir.deleteOnExit()
-
-    offsetIndex = new OffsetIndex(new File(tempDir, "offset-index"), baseOffset, maxIndexSize = maxEntries * 8)
-    timeIndex = new TimeIndex(new File(tempDir, "time-index"), baseOffset = baseOffset, maxIndexSize = maxEntries * 12)
-    appendIndexEntries()
-
-    // Fetch indexes only once to build the cache, later it should be available in the cache
-    when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), ArgumentMatchers.eq(IndexType.OFFSET)))
-      .thenReturn(new FileInputStream(offsetIndex.file))
-
-    when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), ArgumentMatchers.eq(IndexType.TIMESTAMP)))
-      .thenReturn(new FileInputStream(timeIndex.file))
-
-    when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), ArgumentMatchers.eq(IndexType.TRANSACTION)))
-      .thenReturn(new FileInputStream(File.createTempFile("kafka-test-", ".txn", tempDir)))
-
-    cache = new RemoteIndexCache(remoteStorageManager = rsm, logDir = createLogDir)
-
-    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
-    rlsMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
-      baseOffset, offsetIndex.lastOffset, -1L, 1, 1024, 1024,
-      Collections.singletonMap(0, 0L))
-  }
-
-  private def createLogDir = {
-    Files.createTempDirectory("kafka-").toString
-  }
-
-  private def appendIndexEntries(): Unit = {
-    val curTime = System.currentTimeMillis()
-    for (i <- 0 until offsetIndex.maxEntries) {
-      val offset = offsetIndex.baseOffset + i + 1
-      offsetIndex.append(offset, i)
-      timeIndex.maybeAppend(curTime + i, offset, skipFullCheck = true)
-    }
-
-    offsetIndex.flush()
-    timeIndex.flush()
+    Files.createDirectory(tpDir.toPath)
+    val txnIdxFile = new File(tpDir, "txn-index" + UnifiedLog.TxnIndexFileSuffix)
+    txnIdxFile.createNewFile()
+    when(rsm.fetchIndex(any(classOf[RemoteLogSegmentMetadata]), any(classOf[IndexType])))
+      .thenAnswer(ans => {
+        val metadata = ans.getArgument[RemoteLogSegmentMetadata](0)
+        val indexType = ans.getArgument[IndexType](1)
+        val maxEntries = (metadata.endOffset() - metadata.startOffset()).asInstanceOf[Int]
+        val offsetIdx = new OffsetIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.IndexFileSuffix),
+          metadata.startOffset(), maxIndexSize = maxEntries * 8)
+        val timeIdx = new TimeIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.TimeIndexFileSuffix),
+          metadata.startOffset(), maxIndexSize = maxEntries * 12)
+        maybeAppendIndexEntries(offsetIdx, timeIdx)
+        indexType match {
+          case IndexType.OFFSET => new FileInputStream(offsetIdx.file)
+          case IndexType.TIMESTAMP => new FileInputStream(timeIdx.file)
+          case IndexType.TRANSACTION => new FileInputStream(txnIdxFile)
+          case IndexType.LEADER_EPOCH =>
+          case IndexType.PRODUCER_SNAPSHOT =>
+        }
+      })
   }
 
   @AfterEach
   def cleanup(): Unit = {
-    Mockito.reset(rsm)
-
-    if (offsetIndex != null) offsetIndex.deleteIfExists()
-    if (timeIndex != null) timeIndex.deleteIfExists()
+    reset(rsm)
+    cache.entries.forEach((_, v) => v.cleanup())
     cache.close()
   }
 
   @Test
-  def testLoadingIndexFromRemoteStorage(): Unit = {
+  def testFetchIndexFromRemoteStorage(): Unit = {
+    val offsetIndex = cache.getIndexEntry(rlsMetadata).offsetIndex.get
     val offsetPosition1 = offsetIndex.entry(1)
     // this call should have invoked fetchOffsetIndex, fetchTimestampIndex once
-    val resultOffset = cache.lookupOffset(rlsMetadata, offsetPosition1.offset)
-    assertEquals(offsetPosition1.position, resultOffset)
-    verify(rsm, times(1)).fetchIndex(rlsMetadata, IndexType.OFFSET)
-    verify(rsm, times(1)).fetchIndex(rlsMetadata, IndexType.TIMESTAMP)
+    val resultPosition = cache.lookupOffset(rlsMetadata, offsetPosition1.offset)
+    assertEquals(offsetPosition1.position, resultPosition)
+    verifyFetchIndexInvocation(count = 1, Seq(IndexType.OFFSET, IndexType.TIMESTAMP))
 
     // this should not cause fetching index from RemoteStorageManager as it is already fetched earlier
-    // this is checked by setting expectation times as 1 on the mock
+    reset(rsm)
     val offsetPosition2 = offsetIndex.entry(2)
-    val resultOffset2 = cache.lookupOffset(rlsMetadata, offsetPosition2.offset)
-    assertEquals(offsetPosition2.position, resultOffset2)
+    val resultPosition2 = cache.lookupOffset(rlsMetadata, offsetPosition2.offset)
+    assertEquals(offsetPosition2.position, resultPosition2)
     assertNotNull(cache.getIndexEntry(rlsMetadata))
-
-    verify(rsm, times(1)).fetchIndex(rlsMetadata, IndexType.OFFSET)
-    verify(rsm, times(1)).fetchIndex(rlsMetadata, IndexType.TIMESTAMP)
+    verifyNoInteractions(rsm)
   }
 
   @Test
   def testPositionForNonExistingIndexFromRemoteStorage(): Unit = {
-
+    val offsetIndex = cache.getIndexEntry(rlsMetadata).offsetIndex.get
     val lastOffsetPosition = cache.lookupOffset(rlsMetadata, offsetIndex.lastOffset)
     val greaterOffsetThanLastOffset = offsetIndex.lastOffset + 1
     assertEquals(lastOffsetPosition, cache.lookupOffset(rlsMetadata, greaterOffsetThanLastOffset))
@@ -126,8 +115,65 @@ class RemoteIndexCacheTest {
   }
 
   @Test
-  def testCacheEtryExpiry(): Unit = {
-    cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = createLogDir)
+  def testCacheEntryExpiry(): Unit = {
+    val cache = new RemoteIndexCache(maxSize = 2, rsm, logDir = logDir.toString)
+    val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
+    val metadataList = generateRemoteLogSegmentMetadata(size = 3, tpId)
 
+    cache.getIndexEntry(metadataList.head)
+    cache.getIndexEntry(metadataList.head)
+    assertEquals(1, cache.entries.size())
+    verifyFetchIndexInvocation(count = 1)
+
+    cache.getIndexEntry(metadataList.head)
+    cache.getIndexEntry(metadataList(1))
+    assertEquals(2, cache.entries.size())
+    verifyFetchIndexInvocation(count = 2)
+
+    cache.getIndexEntry(metadataList.last)
+    cache.getIndexEntry(metadataList(1))
+    assertEquals(2, cache.entries.size())
+    assertTrue(cache.entries.containsKey(metadataList.last.remoteLogSegmentId()))
+    assertTrue(cache.entries.containsKey(metadataList(1).remoteLogSegmentId()))
+    verifyFetchIndexInvocation(count = 3)
+
+    cache.getIndexEntry(metadataList(1))
+    cache.getIndexEntry(metadataList.head)
+    assertEquals(2, cache.entries.size())
+    assertFalse(cache.entries.containsKey(metadataList.last.remoteLogSegmentId()))
+    verifyFetchIndexInvocation(count = 4)
+  }
+
+  private def verifyFetchIndexInvocation(count: Int,
+                                         indexTypes: Seq[IndexType] =
+                                         Seq(IndexType.OFFSET, IndexType.TIMESTAMP, IndexType.TRANSACTION)): Unit = {
+    for (indexType <- indexTypes) {
+      verify(rsm, times(count)).fetchIndex(any(classOf[RemoteLogSegmentMetadata]), ArgumentMatchers.eq(indexType))
+    }
+  }
+
+  private def generateRemoteLogSegmentMetadata(size: Int,
+                                               tpId: TopicIdPartition): List[RemoteLogSegmentMetadata] = {
+    val metadataList = mutable.Buffer.empty[RemoteLogSegmentMetadata]
+    for (i <- 0 until size) {
+      metadataList.append(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(tpId, Uuid.randomUuid()), baseOffset * i,
+        baseOffset * i + 10, time.milliseconds(), brokerId, time.milliseconds(), segmentSize,
+        Collections.singletonMap(0, 0L)))
+    }
+    metadataList.toList
+  }
+
+  private def maybeAppendIndexEntries(offsetIndex: OffsetIndex,
+                                      timeIndex: TimeIndex): Unit = {
+    if (!offsetIndex.isFull) {
+      val curTime = time.milliseconds()
+      for (i <- 0 until offsetIndex.maxEntries) {
+        val offset = offsetIndex.baseOffset + i
+        offsetIndex.append(offset, i)
+        timeIndex.maybeAppend(curTime + i, offset, skipFullCheck = true)
+      }
+      offsetIndex.flush()
+      timeIndex.flush()
+    }
   }
 }

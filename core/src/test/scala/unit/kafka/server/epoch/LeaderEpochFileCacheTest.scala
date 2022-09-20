@@ -42,6 +42,23 @@ class LeaderEpochFileCacheTest {
   private val cache = new LeaderEpochFileCache(tp, checkpoint)
 
   @Test
+  def testPreviousEpoch(): Unit = {
+    assertEquals(None, cache.previousEpoch)
+
+    cache.assign(epoch = 2, startOffset = 10)
+    assertEquals(None, cache.previousEpoch)
+
+    cache.assign(epoch = 4, startOffset = 15)
+    assertEquals(Some(2), cache.previousEpoch)
+
+    cache.assign(epoch = 10, startOffset = 20)
+    assertEquals(Some(4), cache.previousEpoch)
+
+    cache.truncateFromEnd(18)
+    assertEquals(Some(2), cache.previousEpoch)
+  }
+
+  @Test
   def shouldAddEpochAndMessageOffsetToCache() = {
     //When
     cache.assign(epoch = 2, startOffset = 10)
@@ -563,13 +580,66 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def testGetEpochEntry(): Unit = {
-    cache.assign(2, 100L)
-    cache.assign(3, 500L)
-    cache.assign(5, 1000L)
+  def testFindPreviousEpoch(): Unit = {
+    assertEquals(None, cache.previousEpoch(epoch = 2))
 
-    assertEquals(EpochEntry(2, 100L), cache.epochEntry(2).get)
-    assertEquals(EpochEntry(3, 500L), cache.epochEntry(3).get)
-    assertEquals(EpochEntry(5, 1000L), cache.epochEntry(5).get)
+    cache.assign(epoch = 2, startOffset = 10)
+    assertEquals(None, cache.previousEpoch(epoch = 2))
+
+    cache.assign(epoch = 4, startOffset = 15)
+    assertEquals(Some(2), cache.previousEpoch(epoch = 4))
+
+    cache.assign(epoch = 10, startOffset = 20)
+    assertEquals(Some(4), cache.previousEpoch(epoch = 10))
+
+    cache.truncateFromEnd(18)
+    assertEquals(Some(2), cache.previousEpoch(cache.latestEpoch.get))
+  }
+
+  @Test
+  def testFindNextEpoch(): Unit = {
+    cache.assign(epoch = 0, startOffset = 0)
+    cache.assign(epoch = 1, startOffset = 100)
+    cache.assign(epoch = 2, startOffset = 200)
+
+    assertEquals(Some(0), cache.nextEpoch(epoch = -1))
+    assertEquals(Some(1), cache.nextEpoch(epoch = 0))
+    assertEquals(Some(2), cache.nextEpoch(epoch = 1))
+    assertEquals(None, cache.nextEpoch(epoch = 2))
+    assertEquals(None, cache.nextEpoch(epoch = 100))
+  }
+
+  @Test
+  def testGetEpochEntry(): Unit = {
+    cache.assign(epoch = 2, startOffset = 100)
+    cache.assign(epoch = 3, startOffset = 500)
+    cache.assign(epoch = 5, startOffset = 1000)
+
+    assertEquals(EpochEntry(2, 100), cache.epochEntry(2).get)
+    assertEquals(EpochEntry(3, 500), cache.epochEntry(3).get)
+    assertEquals(EpochEntry(5, 1000), cache.epochEntry(5).get)
+  }
+
+  @Test
+  def shouldFetchEpochForGivenOffset(): Unit = {
+    cache.assign(epoch = 0, startOffset = 10)
+    cache.assign(epoch = 1, startOffset = 20)
+    cache.assign(epoch = 5, startOffset = 30)
+
+    assertEquals(Some(1), cache.epochForOffset(offset = 25))
+    assertEquals(Some(1), cache.epochForOffset(offset = 20))
+    assertEquals(Some(5), cache.epochForOffset(offset = 30))
+    assertEquals(Some(5), cache.epochForOffset(offset = 50))
+    assertEquals(None, cache.epochForOffset(offset = 5))
+  }
+
+  @Test
+  def testAssignWithoutFlush(): Unit = {
+    assertTrue(checkpoint.read().isEmpty)
+    cache.assign(epoch = 0, startOffset = 0)
+    cache.assign(epoch = 2, startOffset = 10)
+    assertEquals(2, checkpoint.read().size)
+    cache.assign(epoch = 5, startOffset = 100, flushToFile = false)
+    assertEquals(2, checkpoint.read().size)
   }
 }

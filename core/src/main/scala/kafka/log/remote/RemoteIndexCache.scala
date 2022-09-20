@@ -150,9 +150,9 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageM
 
   def getIndexEntry(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Entry = {
     def loadIndexFile[T](fileName: String,
-                                      suffix: String,
-                                      fetchRemoteIndex: RemoteLogSegmentMetadata => InputStream,
-                                      readIndex: File => T): T = {
+                         suffix: String,
+                         fetchRemoteIndex: RemoteLogSegmentMetadata => InputStream,
+                         readIndex: File => T): T = {
       val indexFile = new File(cacheDir, fileName + suffix)
 
       def fetchAndCreateIndex(): T = {

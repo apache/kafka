@@ -17,6 +17,8 @@
 
 package kafka.log
 
+import kafka.log.remote.RemoteLogManager
+
 import java.io.File
 import java.util.Properties
 
@@ -60,7 +62,8 @@ object LogTestUtils {
                       maxMessageBytes: Int = Defaults.MaxMessageSize,
                       indexIntervalBytes: Int = Defaults.IndexInterval,
                       segmentIndexBytes: Int = Defaults.MaxIndexSize,
-                      fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs): LogConfig = {
+                      fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs,
+                      remoteLogStorageEnable: Boolean = Defaults.RemoteLogStorageEnable): LogConfig = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentMsProp, segmentMs: java.lang.Long)
     logProps.put(LogConfig.SegmentBytesProp, segmentBytes: Integer)
@@ -72,6 +75,7 @@ object LogTestUtils {
     logProps.put(LogConfig.IndexIntervalBytesProp, indexIntervalBytes: Integer)
     logProps.put(LogConfig.SegmentIndexBytesProp, segmentIndexBytes: Integer)
     logProps.put(LogConfig.FileDeleteDelayMsProp, fileDeleteDelayMs: java.lang.Long)
+    logProps.put(LogConfig.RemoteLogStorageEnableProp, remoteLogStorageEnable: java.lang.Boolean)
     LogConfig(logProps)
   }
 
@@ -88,7 +92,9 @@ object LogTestUtils {
                 lastShutdownClean: Boolean = true,
                 topicId: Option[Uuid] = None,
                 keepPartitionMetadataFile: Boolean = true,
-                numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]): UnifiedLog = {
+                numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int],
+                remoteStorageSystemEnable: Boolean = false,
+                remoteLogManager: Option[RemoteLogManager] = None): UnifiedLog = {
     UnifiedLog(
       dir = dir,
       config = config,
@@ -104,7 +110,9 @@ object LogTestUtils {
       lastShutdownClean = lastShutdownClean,
       topicId = topicId,
       keepPartitionMetadataFile = keepPartitionMetadataFile,
-      numRemainingSegments = numRemainingSegments
+      numRemainingSegments = numRemainingSegments,
+      remoteStorageSystemEnable = remoteStorageSystemEnable,
+      remoteLogManager = remoteLogManager
     )
   }
 
