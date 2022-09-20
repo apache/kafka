@@ -37,6 +37,7 @@ import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -326,6 +327,20 @@ public class FeatureControlManagerTest {
                 true));
     }
 
+    @Test
+    public void testUnsafeDowngradeIsTemporarilyDisabled() {
+        FeatureControlManager manager = TEST_MANAGER_BUILDER1.build();
+        assertEquals(ControllerResult.of(Collections.emptyList(),
+                        singletonMap(MetadataVersion.FEATURE_NAME, new ApiError(Errors.INVALID_UPDATE_VERSION,
+                                "Invalid metadata.version 4. Unsafe metadata downgrade is not supported in this version."))),
+                manager.updateFeatures(
+                        singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_3_IV0.featureLevel()),
+                        singletonMap(MetadataVersion.FEATURE_NAME, FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE),
+                        emptyMap(),
+                        true));
+    }
+
+    @Disabled
     @Test
     public void testCanUseUnsafeDowngradeIfMetadataChanged() {
         FeatureControlManager manager = TEST_MANAGER_BUILDER1.build();
