@@ -297,8 +297,6 @@ public class StandbyTaskTest {
 
         task.suspend();
         task.closeDirty();
-
-        verify(stateManager, atLeastOnce()).close();
     }
 
     @Test
