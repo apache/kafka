@@ -310,6 +310,7 @@ public class ProcessorStateManagerTest {
 
         stateMgr.registerStore(store, noopStateRestoreCallback, null);
         assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
+        verify(store).close();
 
         stateMgr.close();
 
@@ -332,6 +333,7 @@ public class ProcessorStateManagerTest {
         stateMgr.recycle();
         assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
         assertThat(stateMgr.getStore(persistentStoreName), equalTo(store));
+        verify(context).uninitialize();
 
         stateMgr.registerStateStores(singletonList(store), context);
 
