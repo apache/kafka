@@ -255,7 +255,8 @@ public class FeatureControlManager {
             if (!metadataChanged) {
                 log.info("Downgrading metadata.version from {} to {}.", currentVersion, newVersion);
             } else if (allowUnsafeDowngrade) {
-                log.info("Downgrading metadata.version unsafely from {} to {}.", currentVersion, newVersion);
+                return invalidMetadataVersion(newVersionLevel, "Unsafe metadata downgrade is not supported " +
+                        "in this version.");
             } else {
                 return invalidMetadataVersion(newVersionLevel, "Refusing to perform the requested " +
                         "downgrade because it might delete metadata information. Retry using " +
