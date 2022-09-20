@@ -216,12 +216,12 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
 
   private def checkSequence(producerEpoch: Short, appendFirstSeq: Int, offset: Long): Unit = {
     if (producerEpoch != updatedEntry.producerEpoch) {
-      if (appendFirstSeq != 0) {
-        if (updatedEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH) {
-          throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch of producer $producerId " +
-            s"at offset $offset in partition $topicPartition: $producerEpoch (request epoch), $appendFirstSeq (seq. number), " +
-            s"${updatedEntry.producerEpoch} (current producer epoch)")
-        }
+      if (appendFirstSeq != 0 && updatedEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH) {
+        throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch of producer $producerId " +
+          s"at offset $offset in partition $topicPartition: producer request epoch $producerEpoch, " +
+          s"current entry epoch ${currentEntry.producerEpoch}, " +
+          s"updating entry epoch ${updatedEntry.producerEpoch}, " +
+          s"append first seq $appendFirstSeq")
       }
     } else {
       val currentLastSeq = if (!updatedEntry.isEmpty)
@@ -233,10 +233,16 @@ private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
 
       // If there is no current producer epoch (possibly because all producer records have been deleted due to
       // retention or the DeleteRecords API) accept writes with any sequence number
-      if (!(currentEntry.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH || inSequence(currentLastSeq, appendFirstSeq))) {
+      if (currentEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH && !inSequence(currentLastSeq, appendFirstSeq)) {
         throw new OutOfOrderSequenceException(s"Out of order sequence number for producer $producerId at " +
-          s"offset $offset in partition $topicPartition: $appendFirstSeq (incoming seq. number), " +
-          s"$currentLastSeq (current end sequence number)")
+          s"offset $offset in partition $topicPartition: producer request epoch $producerEpoch, " +
+          s"current entry epoch ${currentEntry.producerEpoch}, " +
+          s"updating entry epoch ${updatedEntry.producerEpoch}, " +
+          s"append first seq $appendFirstSeq, " +
+          s"updating entry last seq ${updatedEntry.lastSeq}, " +
+          s"updating batch empty ${updatedEntry.isEmpty}" +
+          s"current entry last seq ${currentEntry.lastSeq}, " +
+          s"current inferred end seq $currentLastSeq")
       }
     }
   }
