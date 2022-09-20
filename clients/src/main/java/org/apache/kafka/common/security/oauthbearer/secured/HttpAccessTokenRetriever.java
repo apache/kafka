@@ -240,6 +240,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
         log.debug("handleOutput - responseCode: {}", responseCode);
 
         String responseBody = null;
+        String errorResponseBody = null;
 
         try (InputStream is = con.getInputStream()) {
             ByteArrayOutputStream os = new ByteArrayOutputStream();
@@ -247,27 +248,41 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
             copy(is, os);
             responseBody = os.toString(StandardCharsets.UTF_8.name());
         } catch (Exception e) {
+            // there still can be useful error response from the servers, lets get it
+            try (InputStream is = con.getErrorStream()) {
+                ByteArrayOutputStream os = new ByteArrayOutputStream();
+                log.debug("handleOutput - preparing to read error response body from {}", con.getURL());
+                copy(is, os);
+                errorResponseBody = os.toString(StandardCharsets.UTF_8.name());
+            } catch (Exception e2) {
+                log.warn("handleOutput - error retrieving error information", e2);
+            }
             log.warn("handleOutput - error retrieving data", e);
         }
 
         if (responseCode == HttpURLConnection.HTTP_OK || responseCode == HttpURLConnection.HTTP_CREATED) {
-            log.debug("handleOutput - responseCode: {}, response: {}", responseCode, responseBody);
+            log.debug("handleOutput - responseCode: {}, response: {}, error response: {}", responseCode, responseBody,
+                errorResponseBody);
 
             if (responseBody == null || responseBody.isEmpty())
-                throw new IOException(String.format("The token endpoint response was unexpectedly empty despite response code %s from %s", responseCode, con.getURL()));
+                throw new IOException(String.format("The token endpoint response was unexpectedly empty despite response code %s from %s and error message %s",
+                    responseCode, con.getURL(), formatErrorMessage(errorResponseBody)));
 
             return responseBody;
         } else {
-            log.warn("handleOutput - error response code: {}, error response body: {}", responseCode, responseBody);
+            log.warn("handleOutput - error response code: {}, response body: {}, error response body: {}", responseCode,
+                responseBody, errorResponseBody);
 
             if (UNRETRYABLE_HTTP_CODES.contains(responseCode)) {
                 // We know that this is a non-transient error, so let's not keep retrying the
                 // request unnecessarily.
-                throw new UnretryableException(new IOException(String.format("The response code %s was encountered reading the token endpoint response; will not attempt further retries", responseCode)));
+                throw new UnretryableException(new IOException(String.format("The response code %s and error response %s was encountered reading the token endpoint response; will not attempt further retries",
+                    responseCode, formatErrorMessage(errorResponseBody))));
             } else {
                 // We don't know if this is a transient (retryable) error or not, so let's assume
                 // it is.
-                throw new IOException(String.format("The unexpected response code %s was encountered reading the token endpoint response", responseCode));
+                throw new IOException(String.format("The unexpected response code %s and error message %s was encountered reading the token endpoint response",
+                    responseCode, formatErrorMessage(errorResponseBody)));
             }
         }
     }
@@ -278,6 +293,26 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
 
         while ((b = is.read(buf)) != -1)
             os.write(buf, 0, b);
+    }
+
+    static String formatErrorMessage(String errorResponseBody) {
+        if (errorResponseBody == null || errorResponseBody.trim().equals("")) {
+            return "{}";
+        }
+        ObjectMapper mapper = new ObjectMapper();
+        try {
+            JsonNode rootNode = mapper.readTree(errorResponseBody);
+            if (!rootNode.at("/error").isMissingNode()) {
+                return String.format("{%s - %s}", rootNode.at("/error"), rootNode.at("/error_description"));
+            } else if (!rootNode.at("/errorCode").isMissingNode()) {
+                return String.format("{%s - %s}", rootNode.at("/errorCode"), rootNode.at("/errorSummary"));
+            } else {
+                return errorResponseBody;
+            }
+        } catch (Exception e) {
+            log.warn("Error parsing error response", e);
+        }
+        return String.format("{%s}", errorResponseBody);
     }
 
     static String parseAccessToken(String responseBody) throws IOException {

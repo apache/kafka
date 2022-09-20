@@ -20,6 +20,7 @@ package org.apache.kafka.common.security.oauthbearer.secured;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -32,6 +33,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Random;
 import org.apache.kafka.common.utils.Utils;
@@ -59,6 +61,60 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
         when(mockedCon.getInputStream()).thenThrow(new IOException("Can't read"));
 
         assertThrows(IOException.class, () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+    }
+
+    @Test
+    public void testErrorResponseUnretryableCode() throws IOException {
+        HttpURLConnection mockedCon = createHttpURLConnection("dummy");
+        when(mockedCon.getInputStream()).thenThrow(new IOException("Can't read"));
+        when(mockedCon.getErrorStream()).thenReturn(new ByteArrayInputStream(
+            "{\"error\":\"some_arg\", \"error_description\":\"some problem with arg\"}"
+                .getBytes(StandardCharsets.UTF_8)));
+        when(mockedCon.getResponseCode()).thenReturn(HttpURLConnection.HTTP_BAD_REQUEST);
+        UnretryableException ioe = assertThrows(UnretryableException.class,
+            () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+        assertTrue(ioe.getMessage().contains("{\"some_arg\" - \"some problem with arg\"}"));
+    }
+
+    @Test
+    public void testErrorResponseRetryableCode() throws IOException {
+        HttpURLConnection mockedCon = createHttpURLConnection("dummy");
+        when(mockedCon.getInputStream()).thenThrow(new IOException("Can't read"));
+        when(mockedCon.getErrorStream()).thenReturn(new ByteArrayInputStream(
+            "{\"error\":\"some_arg\", \"error_description\":\"some problem with arg\"}"
+                .getBytes(StandardCharsets.UTF_8)));
+        when(mockedCon.getResponseCode()).thenReturn(HttpURLConnection.HTTP_INTERNAL_ERROR);
+        IOException ioe = assertThrows(IOException.class,
+            () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+        assertTrue(ioe.getMessage().contains("{\"some_arg\" - \"some problem with arg\"}"));
+
+        // error response body has different keys
+        when(mockedCon.getErrorStream()).thenReturn(new ByteArrayInputStream(
+            "{\"errorCode\":\"some_arg\", \"errorSummary\":\"some problem with arg\"}"
+                .getBytes(StandardCharsets.UTF_8)));
+        ioe = assertThrows(IOException.class,
+            () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+        assertTrue(ioe.getMessage().contains("{\"some_arg\" - \"some problem with arg\"}"));
+
+        // error response is valid json but unknown keys
+        when(mockedCon.getErrorStream()).thenReturn(new ByteArrayInputStream(
+            "{\"err\":\"some_arg\", \"err_des\":\"some problem with arg\"}"
+                .getBytes(StandardCharsets.UTF_8)));
+        ioe = assertThrows(IOException.class,
+            () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+        assertTrue(ioe.getMessage().contains("{\"err\":\"some_arg\", \"err_des\":\"some problem with arg\"}"));
+    }
+
+    @Test
+    public void testErrorResponseIsInvalidJson() throws IOException {
+        HttpURLConnection mockedCon = createHttpURLConnection("dummy");
+        when(mockedCon.getInputStream()).thenThrow(new IOException("Can't read"));
+        when(mockedCon.getErrorStream()).thenReturn(new ByteArrayInputStream(
+            "non json error output".getBytes(StandardCharsets.UTF_8)));
+        when(mockedCon.getResponseCode()).thenReturn(HttpURLConnection.HTTP_INTERNAL_ERROR);
+        IOException ioe = assertThrows(IOException.class,
+            () -> HttpAccessTokenRetriever.post(mockedCon, null, null, null, null));
+        assertTrue(ioe.getMessage().contains("{non json error output}"));
     }
 
     @Test
