@@ -394,6 +394,24 @@ public class WorkerSinkTaskTest {
             PowerMock.expectLastCall();
         });
 
+        // Expect commit
+        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(2);
+        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
+        // Commit advance by one
+        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        // Nothing polled for this partition
+        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        EasyMock.expect(sinkTask.preCommit(workerCurrentOffsets)).andReturn(workerCurrentOffsets);
+        final Capture<OffsetCommitCallback> callback = EasyMock.newCapture();
+        consumer.commitAsync(EasyMock.eq(workerCurrentOffsets), EasyMock.capture(callback));
+        EasyMock.expectLastCall().andAnswer(() -> {
+            callback.getValue().onComplete(workerCurrentOffsets, null);
+            return null;
+        });
+        expectConsumerPoll(0);
+        sinkTask.put(EasyMock.eq(Collections.emptyList()));
+        EasyMock.expectLastCall();
+
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
@@ -434,6 +452,11 @@ public class WorkerSinkTaskTest {
         assertTaskMetricValue("running-ratio", 1.0);
         assertTaskMetricValue("batch-size-max", 1.0);
         assertTaskMetricValue("batch-size-avg", 0.5);
+        
+        sinkTaskContext.getValue().requestCommit();
+        time.sleep(10000L);
+        workerTask.iteration();
+        assertSinkMetricValue("offset-commit-completion-total", 1.0);
 
         PowerMock.verifyAll();
     }
