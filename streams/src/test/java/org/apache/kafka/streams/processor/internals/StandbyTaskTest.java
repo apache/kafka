@@ -235,6 +235,7 @@ public class StandbyTaskTest {
         assertEquals(Collections.singletonMap(partition, 11000L), task.offsetSnapshotSinceLastFlush);
         task.maybeCheckpoint(false);  // this should not checkpoint
         assertEquals(Collections.singletonMap(partition, 11000L), task.offsetSnapshotSinceLastFlush);
+        verify(stateManager).flush();
     }
 
     @Test
