@@ -323,6 +323,7 @@ public class StandbyTaskTest {
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
         verify(stateManager).changelogOffsets();
+        verify(stateManager, atLeastOnce()).close();
     }
 
     @Test
