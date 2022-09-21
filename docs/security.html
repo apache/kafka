@@ -1148,7 +1148,7 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
     Kafka ACLs are defined in the general format of "Principal {P} is [Allowed|Denied] Operation {O} From Host {H} on any Resource {R} matching ResourcePattern {RP}".
     You can read more about the ACL structure in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-11+-+Authorization+Interface">KIP-11</a> and
     resource patterns in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>.
-    In order to add, remove or list ACLs, you can use the Kafka ACL CLI <code>kafka-acls.sh</code>. By default, if no ResourcePatterns match a specific Resource R,
+    In order to add, remove, or list ACLs, you can use the Kafka ACL CLI <code>kafka-acls.sh</code>. By default, if no ResourcePatterns match a specific Resource R,
     then R has no associated ACLs, and therefore no one other than super users is allowed to access R.
     If you want to change that behavior, you can include the following in server.properties.
     <pre class="line-numbers"><code class="language-text">allow.everyone.if.no.acl.found=true</code></pre>
