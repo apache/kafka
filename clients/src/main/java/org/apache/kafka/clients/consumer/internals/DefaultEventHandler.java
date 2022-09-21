@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -38,8 +39,8 @@ public class DefaultEventHandler implements EventHandler {
     }
 
     @Override
-    public BackgroundEvent poll() {
-        return backgroundEvents.poll();
+    public Optional<BackgroundEvent> poll() {
+        return Optional.ofNullable(backgroundEvents.poll());
     }
 
     @Override
