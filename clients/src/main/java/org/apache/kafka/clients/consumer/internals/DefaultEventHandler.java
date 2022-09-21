@@ -50,6 +50,11 @@ public class DefaultEventHandler implements EventHandler {
 
     @Override
     public boolean add(ApplicationEvent event) {
-        return applicationEvents.add(event);
+        try {
+            return applicationEvents.add(event);
+        } catch (IllegalStateException e) {
+            // swallow the capacity restriction exception
+            return false;
+        }
     }
 }

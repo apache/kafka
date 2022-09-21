@@ -42,6 +42,4 @@ public interface EventHandler {
      * @return          {@code true} upon successful add, {@code false} otherwise.
      */
     boolean add(ApplicationEvent event);
-
-
 }
