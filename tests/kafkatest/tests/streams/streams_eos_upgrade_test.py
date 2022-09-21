@@ -21,7 +21,8 @@ from kafkatest.services.streams import StreamsEosTestDriverService, StreamsEosTe
     StreamsComplexEosTestJobRunnerService, StreamsEosTestVerifyRunnerService, StreamsComplexEosTestVerifyRunnerService
 from kafkatest.version import LATEST_3_0, LATEST_3_1, LATEST_3_2, DEV_VERSION
 
-# TODO: Write upgrade noticex
+from kafkatest.tests.streams.utils.util import wait_for, verify_stopped
+
 eos_v1_versions = [str(LATEST_3_0), str(LATEST_3_1), str(LATEST_3_2)]
 eos_v2_versions = [str(DEV_VERSION)]
 
@@ -92,25 +93,11 @@ class StreamsEosUpgradeTest(KafkaTest):
         # shutdown
         self.driver.stop()
         for p in self.processors:
-            self.stop_streams(p)
+            verify_stopped(p, "StateChange: PENDING_SHUTDOWN -> NOT_RUNNING")
 
         self.verifier.start()
         self.verifier.wait()
         self.verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.verifier.STDOUT_FILE, allow_fail=False)
-
-    def stop_streams(self, processor_to_be_stopped):
-        with processor_to_be_stopped.node.account.monitor_log(processor_to_be_stopped.STDOUT_FILE) as monitor2:
-            processor_to_be_stopped.stop()
-            self.wait_for(monitor2, processor_to_be_stopped, "StateChange: PENDING_SHUTDOWN -> NOT_RUNNING")
-
-    def wait_for_startup(self, monitor, processor):
-        self.wait_for(monitor, processor, "StateChange: REBALANCING -> RUNNING")
-        self.wait_for(monitor, processor, "processed [0-9]* records from topic")
-
-    def wait_for(self, monitor, processor, output):
-        monitor.wait_until(output,
-                           timeout_sec=480,
-                           err_msg=("Never saw output '%s' on " % output) + str(processor.node.account))
 
     @staticmethod
     def prepare_for(processor, version):
@@ -129,13 +116,8 @@ class StreamsEosUpgradeTest(KafkaTest):
         with node1.account.monitor_log(self.processor1.STDOUT_FILE) as monitor:
             with node1.account.monitor_log(self.processor1.LOG_FILE) as log_monitor:
                 self.processor1.start()
-                log_monitor.wait_until(kafka_version_str,
-                                       timeout_sec=60,
-                                       err_msg="Could not detect Kafka Streams version " + version + " " + str(node1.account))
-                monitor.wait_until(self.processed_data_msg,
-                                   timeout_sec=60,
-                                   err_msg="Never saw output '%s' on " % self.processed_data_msg + str(node1.account))
-
+                wait_for(log_monitor, self.processor1, kafka_version_str)
+                wait_for(monitor, self.processor1, self.processed_data_msg)
 
         # start second with <version>
         self.prepare_for(self.processor2, version)
@@ -144,15 +126,9 @@ class StreamsEosUpgradeTest(KafkaTest):
             with node2.account.monitor_log(self.processor2.STDOUT_FILE) as second_monitor:
                 with node2.account.monitor_log(self.processor2.LOG_FILE) as log_monitor:
                     self.processor2.start()
-                    log_monitor.wait_until(kafka_version_str,
-                                           timeout_sec=60,
-                                           err_msg="Could not detect Kafka Streams version " + version + " on " + str(node2.account))
-                    first_monitor.wait_until(self.processed_data_msg,
-                                             timeout_sec=60,
-                                             err_msg="Never saw output '%s' on " % self.processed_data_msg + str(node1.account))
-                    second_monitor.wait_until(self.processed_data_msg,
-                                              timeout_sec=60,
-                                              err_msg="Never saw output '%s' on " % self.processed_data_msg + str(node2.account))
+                    wait_for(log_monitor, self.processor2, kafka_version_str)
+                    wait_for(first_monitor, self.processor1, self.processed_data_msg)
+                    wait_for(second_monitor, self.processor2, self.processed_data_msg)
 
         # start third with <version>
         self.prepare_for(self.processor3, version)
@@ -162,18 +138,10 @@ class StreamsEosUpgradeTest(KafkaTest):
                 with node3.account.monitor_log(self.processor3.STDOUT_FILE) as third_monitor:
                     with node3.account.monitor_log(self.processor3.LOG_FILE) as log_monitor:
                         self.processor3.start()
-                        log_monitor.wait_until(kafka_version_str,
-                                               timeout_sec=60,
-                                               err_msg="Could not detect Kafka Streams version " + version + " on " + str(node3.account))
-                        first_monitor.wait_until(self.processed_data_msg,
-                                                 timeout_sec=60,
-                                                 err_msg="Never saw output '%s' on " % self.processed_data_msg + str(node1.account))
-                        second_monitor.wait_until(self.processed_data_msg,
-                                                  timeout_sec=60,
-                                                  err_msg="Never saw output '%s' on " % self.processed_data_msg + str(node2.account))
-                        third_monitor.wait_until(self.processed_data_msg,
-                                                 timeout_sec=60,
-                                                 err_msg="Never saw output '%s' on " % self.processed_data_msg + str(node3.account))
+                        wait_for(log_monitor, self.processor3, kafka_version_str)
+                        wait_for(first_monitor, self.processor1, self.processed_data_msg)
+                        wait_for(second_monitor, self.processor2, self.processed_data_msg)
+                        wait_for(third_monitor, self.processor3, self.processed_data_msg)
 
     def do_stop_start_bounce(self, processor, upgrade_from, new_version, processing_guarantee, counter, clean_shutdown):
         kafka_version_str = self.get_version_string(new_version)
@@ -195,12 +163,8 @@ class StreamsEosUpgradeTest(KafkaTest):
         with first_other_node.account.monitor_log(first_other_processor.STDOUT_FILE) as first_other_monitor:
             with second_other_node.account.monitor_log(second_other_processor.STDOUT_FILE) as second_other_monitor:
                 processor.stop(clean_shutdown=clean_shutdown)
-                first_other_monitor.wait_until(self.processed_data_msg,
-                                               timeout_sec=60,
-                                               err_msg="Never saw output '%s' on " % self.processed_data_msg + str(first_other_node.account))
-                second_other_monitor.wait_until(self.processed_data_msg,
-                                                timeout_sec=60,
-                                                err_msg="Never saw output '%s' on " % self.processed_data_msg + str(second_other_node.account))
+                wait_for(first_other_monitor, first_other_processor, self.processed_data_msg)
+                wait_for(second_other_monitor, second_other_processor, self.processed_data_msg)
         node.account.ssh_capture("grep UPGRADE-TEST-CLIENT-CLOSED %s" % processor.STDOUT_FILE, allow_fail=False)
 
         if upgrade_from is None:  # upgrade disabled -- second round of rolling bounces
@@ -218,34 +182,15 @@ class StreamsEosUpgradeTest(KafkaTest):
             processor.set_version(new_version)
         processor.set_processing_guarantee(processing_guarantee)
 
-        grep_metadata_error = "grep \"org.apache.kafka.streams.errors.TaskAssignmentException: unable to decode subscription data: version=2\" "
         with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
             with node.account.monitor_log(processor.LOG_FILE) as log_monitor:
                 with first_other_node.account.monitor_log(first_other_processor.STDOUT_FILE) as first_other_monitor:
                     with second_other_node.account.monitor_log(second_other_processor.STDOUT_FILE) as second_other_monitor:
                         processor.start()
-
-                        log_monitor.wait_until(kafka_version_str,
-                                               timeout_sec=60,
-                                               err_msg="Could not detect Kafka Streams version " + new_version + " on " + str(node.account))
-                        first_other_monitor.wait_until(self.processed_data_msg,
-                                                       timeout_sec=60,
-                                                       err_msg="Never saw output '%s' on " % self.processed_data_msg + str(first_other_node.account))
-                        found = list(first_other_node.account.ssh_capture(grep_metadata_error + first_other_processor.STDERR_FILE, allow_fail=True))
-                        if len(found) > 0:
-                            raise Exception("Kafka Streams failed with 'unable to decode subscription data: version=2'")
-
-                        second_other_monitor.wait_until(self.processed_data_msg,
-                                                        timeout_sec=60,
-                                                        err_msg="Never saw output '%s' on " % self.processed_data_msg + str(second_other_node.account))
-                        found = list(second_other_node.account.ssh_capture(grep_metadata_error + second_other_processor.STDERR_FILE, allow_fail=True))
-                        if len(found) > 0:
-                            raise Exception("Kafka Streams failed with 'unable to decode subscription data: version=2'")
-
-                        monitor.wait_until(self.processed_data_msg,
-                                           timeout_sec=60,
-                                           err_msg="Never saw output '%s' on " % self.processed_data_msg + str(node.account))
-
+                        wait_for(log_monitor, processor, kafka_version_str)
+                        wait_for(first_other_monitor, first_other_processor, self.processed_data_msg)
+                        wait_for(second_other_monitor, second_other_processor, self.processed_data_msg)
+                        wait_for(monitor, processor, self.processed_data_msg)
 
     def get_version_string(self, version):
         if version.startswith("0") or version.startswith("1") \
