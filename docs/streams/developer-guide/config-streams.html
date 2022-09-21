@@ -424,8 +424,8 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG), 1);</code></pre>
           </tr>
           <tr class="row-even"><td>topology.optimization</td>
             <td>Medium</td>
-            <td colspan="2">A configuration telling Kafka Streams if it should optimize the topology</td>
-            <td>none</td>
+            <td colspan="2">A configuration telling Kafka Streams if it should optimize the topology and what optimizations to apply. Acceptable values are: <code>NO_OPTIMIZATION</code>, <code>OPTIMIZE</code> or a comma separated list of specific optimizations: (<code>REUSE_KTABLE_SOURCE_TOPICS</code>, <code>MERGE_REPARTITION_TOPICS</code>). </td>
+            <td><code> NO_OPTIMIZATION</code></td>
           </tr>
           <tr class="row-odd"><td>upgrade.from</td>
             <td>Medium</td>
@@ -942,7 +942,7 @@ streamsConfig.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksD
       <blockquote>
         <div>
           <p>
-            You can tell Streams to apply topology optimizations by setting this config. The optimizations are currently all or none and disabled by default.
+            A configuration telling Kafka Streams if it should optimize the topology and what optimizations to apply. Acceptable values are: <code>NO_OPTIMIZATION</code>, <code>OPTIMIZE</code> or a comma separated list of specific optimizations: (<code>REUSE_KTABLE_SOURCE_TOPICS</code>, <code>MERGE_REPARTITION_TOPICS</code>).
             These optimizations include moving/reducing repartition topics and reusing the source topic as the changelog for source KTables. It is recommended to enable this.
           </p>
           <p>

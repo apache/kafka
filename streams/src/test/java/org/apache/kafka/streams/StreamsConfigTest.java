@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import java.util.Set;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -1268,7 +1269,7 @@ public class StreamsConfigTest {
         final String value = String.join(",", StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION);
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
-        assertTrue(exception.getMessage().contains("A topology can either not be optimized with"));
+        assertTrue(exception.getMessage().contains("is not a valid optimization config"));
     }
 
     @Test
@@ -1276,11 +1277,11 @@ public class StreamsConfigTest {
         final String value = String.join(",", StreamsConfig.NO_OPTIMIZATION, StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS);
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
         final ConfigException exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
-        assertTrue(exception.getMessage().contains("A topology can either not be optimized with"));
+        assertTrue(exception.getMessage().contains("is not a valid optimization config"));
     }
 
     @Test
-    public void shouldThrowExceptionWhenOptimizationDoesNotExist() {
+    public void shouldThrowExceptionWhenOptimizationDoesNotExistInList() {
         final String value = String.join(",",
                                          StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS,
                                          "topology.optimization.does.not.exist",
@@ -1309,6 +1310,20 @@ public class StreamsConfigTest {
         assertEquals(2, configs.size());
         assertTrue(configs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS));
         assertTrue(configs.contains(StreamsConfig.MERGE_REPARTITION_TOPICS));
+    }
+
+    @Test
+    public void shouldEnableAllOptimizationsWithOptimizeConfig() {
+        final Set<String> configs = StreamsConfig.verifyTopologyOptimizationConfigs(StreamsConfig.OPTIMIZE);
+        assertEquals(2, configs.size());
+        assertTrue(configs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS));
+        assertTrue(configs.contains(StreamsConfig.MERGE_REPARTITION_TOPICS));
+    }
+
+    @Test
+    public void shouldNotEnableAnyOptimizationsWithNoOptimizationConfig() {
+        final Set<String> configs = StreamsConfig.verifyTopologyOptimizationConfigs(StreamsConfig.NO_OPTIMIZATION);
+        assertEquals(0, configs.size());
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

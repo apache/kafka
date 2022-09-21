@@ -236,13 +236,16 @@ public class StreamsConfig extends AbstractConfig {
     public static final String CLIENT_TAG_PREFIX = "client.tag.";
 
     /** {@code topology.optimization} */
+    private static final String CONFIG_ERROR_MSG = "Acceptable values are:"
+        + " \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
+        + "or a comma separated list of specific optimizations: "
+        + "(\"+REUSE_KTABLE_SOURCE_TOPICS+\", \"+MERGE_REPARTITION_TOPICS+\").";
+
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka "
         + "Streams if it should optimize the topology and what optimizations to apply. "
-        + "Acceptable values are: \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
-        + "or a comma separated list of specific optimizations: "
-        + "(\"+REUSE_KTABLE_SOURCE_TOPICS+\", \"+MERGE_REPARTITION_TOPICS+\"). "
-        + "Disabled by default.";
+        + CONFIG_ERROR_MSG
+        + "\"NO_OPTIMIZATION\" by default.";
 
     /**
      * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"} for disabling topology optimization
@@ -259,13 +262,13 @@ public class StreamsConfig extends AbstractConfig {
      * for enabling the specific optimization that reuses source topic as changelog topic
      * for KTables.
      */
-    public static final String REUSE_KTABLE_SOURCE_TOPICS = "topology.optimization.reuse.ktable.source.topics";
+    public static final String REUSE_KTABLE_SOURCE_TOPICS = "reuse.ktable.source.topics";
 
     /**
      * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"}
      * for enabling the specific optimization that merges duplicated repartition topics.
      */
-    public static final String MERGE_REPARTITION_TOPICS = "topology.optimization.merge.repartition.topics";
+    public static final String MERGE_REPARTITION_TOPICS = "merge.repartition.topics";
 
     private static final List<String> TOPOLOGY_OPTIMIZATION_CONFIGS = Arrays.asList(
         OPTIMIZE, NO_OPTIMIZATION, REUSE_KTABLE_SOURCE_TOPICS, MERGE_REPARTITION_TOPICS);
@@ -1684,12 +1687,7 @@ public class StreamsConfig extends AbstractConfig {
         // Verify it doesn't contain none or all plus a list of optimizations
         if (configs.contains(NO_OPTIMIZATION) || configs.contains(OPTIMIZE)) {
             if (configs.size() > 1) {
-                throw new ConfigException("A topology can either not be optimized with " + NO_OPTIMIZATION + " "
-                                              + "or optimized. If you want to optimize the "
-                                              + "topology, you can choose between all "
-                                              + "optimizations with " + OPTIMIZE + " " + "or "
-                                              + "specific optimizations by specifying a comma "
-                                              + "separated list.");
+                throw new ConfigException("\"" + config + "\" is not a valid optimization config. " + CONFIG_ERROR_MSG);
             }
         }
         for (final String conf: configs) {
