@@ -49,25 +49,27 @@ class StreamsEosUpgradeTest(KafkaTest):
 
     @cluster(num_nodes=9)
     @matrix(from_version=eos_v1_versions,
-            to_version=eos_v2_versions)
-    def test_eos_upgrade_simple(self, from_version, to_version):
+            to_version=eos_v2_versions,
+            clean_shutdown=[True, False])
+    def test_eos_upgrade_simple(self, from_version, to_version, clean_shutdown):
         self.processor1 = StreamsEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once")
         self.processor2 = StreamsEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once")
         self.processor3 = StreamsEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once")
         self.verifier = StreamsEosTestVerifyRunnerService(self.test_context, self.kafka)
-        self.run_rolling_bounce(from_version, to_version)
+        self.run_rolling_bounce(from_version, to_version, clean_shutdown)
 
     @cluster(num_nodes=9)
     @matrix(from_version=eos_v1_versions,
-            to_version=eos_v2_versions)
-    def test_eos_upgrade_complex(self, from_version, to_version):
+            to_version=eos_v2_versions,
+            clean_shutdown=[True, False])
+    def test_eos_upgrade_complex(self, from_version, to_version, clean_shutdown):
         self.processor1 = StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once")
         self.processor2 = StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once")
         self.processor3 = StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once")
         self.verifier = StreamsComplexEosTestVerifyRunnerService(self.test_context, self.kafka)
-        self.run_rolling_bounce(from_version, to_version)
+        self.run_rolling_bounce(from_version, to_version, clean_shutdown)
 
-    def run_rolling_bounce(self, from_version, to_version):
+    def run_rolling_bounce(self, from_version, to_version, clean_shutdown):
         """
         Rolling bounce from version from_version to version to_version
         """
@@ -84,7 +86,7 @@ class StreamsEosUpgradeTest(KafkaTest):
         random.shuffle(self.processors)
         for p in self.processors:
             p.CLEAN_NODE_ENABLED = False
-            self.do_stop_start_bounce(p, from_version[:-2], to_version, "exactly_once_v2", counter)
+            self.do_stop_start_bounce(p, from_version[:-2], to_version, "exactly_once_v2", counter, clean_shutdown)
             counter = counter + 1
 
         # shutdown
@@ -173,7 +175,7 @@ class StreamsEosUpgradeTest(KafkaTest):
                                                  timeout_sec=60,
                                                  err_msg="Never saw output '%s' on " % self.processed_data_msg + str(node3.account))
 
-    def do_stop_start_bounce(self, processor, upgrade_from, new_version, processing_guarantee, counter):
+    def do_stop_start_bounce(self, processor, upgrade_from, new_version, processing_guarantee, counter, clean_shutdown):
         kafka_version_str = self.get_version_string(new_version)
 
         first_other_processor = None
@@ -192,7 +194,7 @@ class StreamsEosUpgradeTest(KafkaTest):
         # stop processor and wait for rebalance of others
         with first_other_node.account.monitor_log(first_other_processor.STDOUT_FILE) as first_other_monitor:
             with second_other_node.account.monitor_log(second_other_processor.STDOUT_FILE) as second_other_monitor:
-                processor.stop()
+                processor.stop(clean_shutdown=clean_shutdown)
                 first_other_monitor.wait_until(self.processed_data_msg,
                                                timeout_sec=60,
                                                err_msg="Never saw output '%s' on " % self.processed_data_msg + str(first_other_node.account))
