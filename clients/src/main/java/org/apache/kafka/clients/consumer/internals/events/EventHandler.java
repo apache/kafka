@@ -17,11 +17,24 @@
 
 package org.apache.kafka.clients.consumer.internals.events;
 
+import java.util.Optional;
+
 /**
  * This class interfaces with the KafkaConsumer and the background thread. It allows the caller to enqueue events via
  * the {@code add()} method and to retrieve events via the {@code poll()} method.
  */
 public interface EventHandler {
-    public BackgroundEvent poll();
+    /**
+     * Retrieves and removes a {@link BackgroundEvent}. Returns an empty Optional instance if there is nothing.
+     * @return an Optional of {@link BackgroundEvent} if the value is present. Otherwise, an empty Optional.
+     */
+    public Optional<BackgroundEvent> poll();
+
+    /**
+     * Add an {@link ApplicationEvent} to the handler. The method returns true upon successful add; otherwise returns
+     * false.
+     * @param event     An {@link ApplicationEvent} created by the polling thread.
+     * @return          {@code true} upon successful add, {@code false} otherwise.
+     */
     public boolean add(ApplicationEvent event);
 }
