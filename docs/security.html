@@ -1150,7 +1150,7 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
 
     <h5 class="anchor-heading"><a id="kraft_principal_forwarding" class="anchor-link"></a><a href="#kraft_principal_forwarding">KRaft Principal Forwarding</a></h5>
 
-    In KRaft clusters, admin requests such as <code>CreateTopics</code> and <code>DeleteTopics</code> are sent to the broker listeners and forwarded to the current controller through the first listener configured in <code>controller.listener.names</code>.
+    In KRaft clusters, admin requests such as <code>CreateTopics</code> and <code>DeleteTopics</code> are sent to the broker listeners by the client. The broker then forwards the request to the active controller through the first listener configured in <code>controller.listener.names</code>.
     Authorization of these requests is done on the controller node. This is achieved by way of an <code>Envelope</code> request which packages both the underlying request from the client as well as the client principal.
     When the controller receives the forwarded <code>Envelope</code> request from the broker, it first authorizes the <code>Envelope</code> request using the authenticated broker principal.
     Then it authorizes the underlying request using the forwarded principal.
