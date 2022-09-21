@@ -943,7 +943,7 @@ object SnapshotFile {
 
 class ProducerStateManagerConfig(@volatile var producerIdExpirationMs: Int) extends Logging with BrokerReconfigurable {
 
-  override def reconfigurableConfigs: Set[String] = Set(KafkaConfig.ProducerIdExpirationMsProp)
+  override def reconfigurableConfigs: Set[String] = ProducerStateManagerConfig.ReconfigurableConfigs
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     if (producerIdExpirationMs != newConfig.producerIdExpirationMs) {
