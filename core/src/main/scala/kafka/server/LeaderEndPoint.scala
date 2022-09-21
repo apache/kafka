@@ -66,22 +66,22 @@ trait LeaderEndPoint {
   def fetch(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData]
 
   /**
-   * Fetches the log start offset of the given topic partition from the leader.
+   * Fetches the epoch and log start offset of the given topic partition from the leader.
    *
    * @param topicPartition The topic partition that we want to fetch from
    * @param currentLeaderEpoch An int representing the current leader epoch of the requester
    *
-   * @return A long representing the earliest offset in the leader's topic partition.
+   * @return A tuple representing the (epoch, earliest_offset) in the leader's topic partition.
    */
   def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long)
 
   /**
-   * Fetches the log end offset of the given topic partition from the leader.
+   * Fetches the epoch and log end offset of the given topic partition from the leader.
    *
    * @param topicPartition The topic partition that we want to fetch from
    * @param currentLeaderEpoch An int representing the current leader epoch of the requester
    *
-   * @return A long representing the latest offset in the leader's topic partition.
+   * @return A tuple representing the (epoch, latest_offset) in the leader's topic partition.
    */
   def fetchLatestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long)
 
@@ -95,12 +95,12 @@ trait LeaderEndPoint {
   def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset]
 
   /**
-   * Fetch the leader's local-log-start-offset and the respective leader-epoch tuple from leader replica for the given
-   * topic partition and the current leader-epoch of leader in this replica.
+   * Fetches the epoch and local log start offset from the leader for the given partition and the current leader-epoch
    *
-   * @param topicPartition
-   * @param currentLeaderEpoch
-   * @return
+   * @param topicPartition  The topic partition that we want to fetch from
+   * @param currentLeaderEpoch An int representing the current leader epoch of the requester
+   *
+   * @return A tuple representing the (epoch, earliest_local_offset) in the leader's topic partition.
    */
   def fetchEarliestLocalOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): (Int, Long)
 
