@@ -1692,7 +1692,7 @@ public class StreamsConfig extends AbstractConfig {
         }
         for (final String conf: configs) {
             if (!TOPOLOGY_OPTIMIZATION_CONFIGS.contains(conf)) {
-                throw new ConfigException("Unrecognized config. String must be in " + TOPOLOGY_OPTIMIZATION_CONFIGS);
+                throw new ConfigException("Unrecognized config. " + CONFIG_ERROR_MSG);
             }
         }
         if (configs.contains(OPTIMIZE)) {
