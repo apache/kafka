@@ -14,7 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer.internals.events;
 
-abstract public class ConsumerResponseEvent {
+/**
+ * This class interfaces with the KafkaConsumer and the background thread. It allows the caller to enqueue events via
+ * the {@code add()} method and to retrieve events via the {@code poll()} method.
+ */
+public interface EventHandler {
+    public BackgroundEvent poll();
+    public boolean add(ApplicationEvent event);
 }

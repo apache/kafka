@@ -14,16 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients.consumer.internals.events;
 
 /**
- * The EventHandler interfaces the client and handler implementation.  The client should add an event for consumption,
- * and try to poll for the responses.  Here, one could poll a response with type K, and add a request with type T.
- * @param <T> Event request type
- * @param <K> Event response type
+ * This is the abstract definition of the events created by the background thread.
  */
-public interface EventHandler<T, K> {
-    public K poll();
-    public boolean add(T event);
+abstract public class BackgroundEvent {
 }

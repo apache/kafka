@@ -16,5 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-abstract public class ConsumerRequestEvent {
+/**
+ * This is the abstract definition of the events created by the KafkaConsumer API
+ */
+abstract public class ApplicationEvent {
 }
