@@ -16,29 +16,34 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.internals.events.ConsumerRequestEvent;
-import org.apache.kafka.clients.consumer.internals.events.ConsumerResponseEvent;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
-public class DefaultEventHandler implements EventHandler<ConsumerRequestEvent, ConsumerResponseEvent> {
-    private BlockingQueue<ConsumerRequestEvent> consumerRequestEvents;
-    private BlockingQueue<ConsumerResponseEvent> consumerResponseEvents;
+/**
+ * This class interfaces the KafkaConsumer and the background thread.  It allows the caller to enqueue {@link ApplicationEvent}
+ * to be consumed by the background thread and poll {@linkBackgroundEvent} produced by the background thread.
+ */
+public class DefaultEventHandler implements EventHandler {
+    private BlockingQueue<ApplicationEvent> applicationEvents;
+    private BlockingQueue<BackgroundEvent> backgroundEvents;
 
     public DefaultEventHandler() {
-        this.consumerRequestEvents = new LinkedBlockingQueue<>();
-        this.consumerResponseEvents = new LinkedBlockingQueue<>();
+        this.applicationEvents = new LinkedBlockingQueue<>();
+        this.backgroundEvents = new LinkedBlockingQueue<>();
         // TODO: a concreted implementation of how requests are being consumed, and how responses are being produced.
     }
 
     @Override
-    public ConsumerResponseEvent poll() {
-        return consumerResponseEvents.poll();
+    public BackgroundEvent poll() {
+        return backgroundEvents.poll();
     }
 
     @Override
-    public boolean add(ConsumerRequestEvent event) {
-        return consumerRequestEvents.add(event);
+    public boolean add(ApplicationEvent event) {
+        return applicationEvents.add(event);
     }
 }
