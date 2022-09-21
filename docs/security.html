@@ -1138,7 +1138,7 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
     <h3 class="anchor-heading"><a id="security_authz" class="anchor-link"></a><a href="#security_authz">7.4 Authorization and ACLs</a></h3>
     Kafka ships with a pluggable authorization framework, which is configured by setting <tt>authorizer.class.name</tt> in server.properties. Configured implementations must extend <code>org.apache.kafka.server.authorizer.Authorizer</code>. Kafka provides default implementations which store ACLs in the cluster metadata (either Zookeeper or the KRaft metadata log).
 
-    For Zookeeper-based clusters, the provided implementation is configurd as follows:
+    For Zookeeper-based clusters, the provided implementation is configured as follows:
     <pre class="line-numbers"><code class="language-text">authorizer.class.name=kafka.security.authorizer.AclAuthorizer</code></pre>
     For KRaft clusters, use the following configuration on all nodes (whether controllers/brokers are combined or configured separately):
     <pre class="line-numbers"><code class="language-text">authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer</code></pre>
