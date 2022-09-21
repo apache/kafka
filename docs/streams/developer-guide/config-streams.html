@@ -424,7 +424,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG), 1);</code></pre>
           </tr>
           <tr class="row-even"><td>topology.optimization</td>
             <td>Medium</td>
-            <td colspan="2">A configuration telling Kafka Streams if it should optimize the topology and what optimizations to apply. Acceptable values are: <code>NO_OPTIMIZATION</code>, <code>OPTIMIZE</code> or a comma separated list of specific optimizations: (<code>REUSE_KTABLE_SOURCE_TOPICS</code>, <code>MERGE_REPARTITION_TOPICS</code>). </td>
+            <td colspan="2">A configuration telling Kafka Streams if it should optimize the topology and what optimizations to apply. Acceptable values are: <code>StreamsConfig.NO_OPTIMIZATION</code> (<code>none</code>), <code>StreamsConfig.OPTIMIZE</code> (<code>all</code>) or a comma separated list of specific optimizations: (<code>StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS</code> (<code>reuse.ktable.source.topics</code>), <code>StreamsConfig.MERGE_REPARTITION_TOPICS</code> (<code>merge.repartition.topics</code>)). </td>
             <td><code> NO_OPTIMIZATION</code></td>
           </tr>
           <tr class="row-odd"><td>upgrade.from</td>
