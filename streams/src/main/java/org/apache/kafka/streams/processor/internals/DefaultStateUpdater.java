@@ -505,11 +505,7 @@ public class DefaultStateUpdater implements StateUpdater {
     public void pause(final TopologyMetadata topologyMetadata) {
         tasksAndActionsLock.lock();
         try {
-            for (final Task task : Stream.concat(
-                    tasksAndActions.stream()
-                            .filter(taskAndAction -> taskAndAction.getAction() == Action.ADD)
-                            .map(TaskAndAction::getTask),
-                    getUpdatingTasks().stream()).collect(Collectors.toSet())) {
+            for (final Task task : getUpdatingTasks()) {
                 if (topologyMetadata.isPaused(task.id().topologyName())) {
                     tasksAndActions.add(TaskAndAction.createPauseTask(task.id()));
                     tasksAndActionsCondition.signalAll();
@@ -523,11 +519,7 @@ public class DefaultStateUpdater implements StateUpdater {
     public void resume(final TopologyMetadata topologyMetadata) {
         tasksAndActionsLock.lock();
         try {
-            for (final Task task : Stream.concat(
-                    tasksAndActions.stream()
-                            .filter(taskAndAction -> taskAndAction.getAction() == Action.PAUSE)
-                            .map(TaskAndAction::getTask),
-                    getPausedTasks().stream()).collect(Collectors.toSet())) {
+            for (final Task task : getPausedTasks()) {
                 if (!topologyMetadata.isPaused(task.id().topologyName())) {
                     tasksAndActions.add(TaskAndAction.createResumeTask(task.id()));
                     tasksAndActionsCondition.signalAll();

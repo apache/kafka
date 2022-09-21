@@ -1015,6 +1015,7 @@ class DefaultStateUpdaterTest {
     private void shouldResumeStatefulTask(final Task task) throws Exception {
         stateUpdater.start();
         stateUpdater.add(task);
+        verifyUpdatingTasks(task);
 
         TopologyMetadata topologyMetadata = unamedTopology().pause().build();
         stateUpdater.pause(topologyMetadata);

@@ -802,6 +802,15 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldPauseAndResumeTasksFromStateUpdater() {
+        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, true);
+        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
+
+        Mockito.verify(stateUpdater).pause(topologyMetadata);
+        Mockito.verify(stateUpdater).resume(topologyMetadata);
+    }
+
+    @Test
     public void shouldUpdateInputPartitionsOfTasksRemovedFromStateUpdater() {
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .withInputPartitions(taskId00Partitions)
