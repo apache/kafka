@@ -425,6 +425,9 @@ subprojects {
     jvmArgs = defaultJvmArgs
 
     systemProperty "junit.jupiter.extensions.autodetection.enabled", "true"
+    if (JavaVersion.current().isJava12Compatible()) {
+      systemProperty "java.security.manager", "allow"
+    }
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -459,6 +462,9 @@ subprojects {
     jvmArgs = defaultJvmArgs
 
     systemProperty "junit.jupiter.extensions.autodetection.enabled", "true"
+    if (JavaVersion.current().isJava12Compatible()) {
+      systemProperty "java.security.manager", "allow"
+    }
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -509,6 +515,9 @@ subprojects {
     jvmArgs = defaultJvmArgs
 
     systemProperty "junit.jupiter.extensions.autodetection.enabled", "true"
+    if (JavaVersion.current().isJava12Compatible()) {
+      systemProperty "java.security.manager", "allow"
+    }
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
