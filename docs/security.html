@@ -1136,14 +1136,21 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
     </ol>
 
     <h3 class="anchor-heading"><a id="security_authz" class="anchor-link"></a><a href="#security_authz">7.4 Authorization and ACLs</a></h3>
-    Kafka ships with a pluggable authorization framework, which is configured by setting <tt>authorizer.class.name</tt> in server.properties. Configured implementations must extend <code>org.apache.kafka.server.authorizer.Authorizer</code>. Kafka provides default implementations which store ACLs in the cluster metadata (either Zookeeper or the KRaft metadata log).
+    Kafka ships with a pluggable authorization framework, which is configured with the <tt>authorizer.class.name</tt> property in the server confgiuration.
+    Configured implementations must extend <code>org.apache.kafka.server.authorizer.Authorizer</code>.
+    Kafka provides default implementations which store ACLs in the cluster metadata (either Zookeeper or the KRaft metadata log).
 
     For Zookeeper-based clusters, the provided implementation is configured as follows:
     <pre class="line-numbers"><code class="language-text">authorizer.class.name=kafka.security.authorizer.AclAuthorizer</code></pre>
     For KRaft clusters, use the following configuration on all nodes (brokers, controllers, or combined broker/controller nodes):
     <pre class="line-numbers"><code class="language-text">authorizer.class.name=org.apache.kafka.metadata.authorizer.StandardAuthorizer</code></pre>
 
-    Kafka ACLs are defined in the general format of "Principal {P} is [Allowed|Denied] Operation {O} From Host {H} on any Resource {R} matching ResourcePattern {RP}". You can read more about the ACL structure in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-11+-+Authorization+Interface">KIP-11</a> and resource patterns in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>. In order to add, remove or list ACLs, you can use the Kafka ACL CLI <code>kafka-acls.sh</code>. By default, if no ResourcePatterns match a specific Resource R, then R has no associated ACLs, and therefore no one other than super users is allowed to access R. If you want to change that behavior, you can include the following in server.properties.
+    Kafka ACLs are defined in the general format of "Principal {P} is [Allowed|Denied] Operation {O} From Host {H} on any Resource {R} matching ResourcePattern {RP}".
+    You can read more about the ACL structure in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-11+-+Authorization+Interface">KIP-11</a> and
+    resource patterns in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-290%3A+Support+for+Prefixed+ACLs">KIP-290</a>.
+    In order to add, remove or list ACLs, you can use the Kafka ACL CLI <code>kafka-acls.sh</code>. By default, if no ResourcePatterns match a specific Resource R,
+    then R has no associated ACLs, and therefore no one other than super users is allowed to access R.
+    If you want to change that behavior, you can include the following in server.properties.
     <pre class="line-numbers"><code class="language-text">allow.everyone.if.no.acl.found=true</code></pre>
     One can also add super users in server.properties like the following (note that the delimiter is semicolon since SSL user names may contain comma). Default PrincipalType string "User" is case sensitive.
     <pre class="line-numbers"><code class="language-text">super.users=User:Bob;User:Alice</code></pre>
@@ -1159,6 +1166,8 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
     In order for customized principals to work with KRaft, the configured class must implement <code>org.apache.kafka.common.security.auth.KafkaPrincipalSerde</code> so that Kafka knows how to serialize and deserialize the principals.
     The default implementation <code>org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder</code> uses the Kafka RPC format defined in the source code: <code>clients/src/main/resources/common/message/DefaultPrincipalData.json</code>.
 
+    For more detail about request forwarding in KRaft, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-590%3A+Redirect+Zookeeper+Mutation+Protocols+to+The+Controller">KIP-590</a>
+    
     <h5 class="anchor-heading"><a id="security_authz_ssl" class="anchor-link"></a><a href="#security_authz_ssl">Customizing SSL User Name</a></h5>
 
     By default, the SSL user name will be of the form "CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown". One can change that by setting <code>ssl.principal.mapping.rules</code> to a customized rule in server.properties.
