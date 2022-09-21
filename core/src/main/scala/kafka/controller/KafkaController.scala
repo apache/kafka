@@ -2252,6 +2252,7 @@ class KafkaController(val config: KafkaConfig,
     if (!isActive) {
       callback(Right(new ApiError(Errors.NOT_CONTROLLER)))
     } else {
+      info(s"Processing API partition reassignments $reassignments")
       val reassignmentResults = mutable.Map.empty[TopicPartition, ApiError]
       val partitionsToReassign = mutable.Map.empty[TopicPartition, ReplicaAssignment]
 
