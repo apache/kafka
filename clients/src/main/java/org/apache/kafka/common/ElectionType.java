@@ -29,7 +29,7 @@ import java.util.Set;
  */
 @InterfaceStability.Evolving
 public enum ElectionType {
-    PREFERRED((byte) 0), UNCLEAN((byte) 1);
+    PREFERRED((byte) 0), UNCLEAN((byte) 1), RECOMMENDED((byte) 2);
 
     public final byte value;
 
@@ -42,6 +42,8 @@ public enum ElectionType {
             return PREFERRED;
         } else if (value == UNCLEAN.value) {
             return UNCLEAN;
+        } else if (value == RECOMMENDED.value) {
+            return RECOMMENDED;
         } else {
             throw new IllegalArgumentException(
                     String.format("Value %s must be one of %s", value, Arrays.asList(ElectionType.values())));

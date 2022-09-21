@@ -1051,7 +1051,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val tp0 = new TopicPartition("t", 0)
     val tp1 = new TopicPartition("t", 1)
     val partitions = Set(tp0, tp1)
-    val event1 = ReplicaLeaderElection(Some(partitions), ElectionType.PREFERRED, ZkTriggered, partitionsMap => {
+    val event1 = ReplicaLeaderElection(Some(partitions), Some(Map.empty), ElectionType.PREFERRED, ZkTriggered, partitionsMap => {
       for (partition <- partitionsMap) {
         partition._2 match {
           case Left(e) => assertEquals(Errors.NOT_CONTROLLER, e.error())

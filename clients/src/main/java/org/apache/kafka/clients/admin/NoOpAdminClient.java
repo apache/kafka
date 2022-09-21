@@ -183,6 +183,13 @@ public class NoOpAdminClient extends AdminClient {
     }
 
     @Override
+    public ElectLeadersResult electRecommendedLeaders(
+        Map<TopicPartition, Integer> partitionsWithRecommendedLeaders,
+        ElectLeadersOptions options) {
+        return null;
+    }
+
+    @Override
     public AlterPartitionReassignmentsResult alterPartitionReassignments(
         Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments,
         AlterPartitionReassignmentsOptions options) {

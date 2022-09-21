@@ -20,7 +20,10 @@ package org.apache.kafka.common.requests;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -36,12 +39,21 @@ public class ElectLeadersRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ElectLeadersRequest> {
         private final ElectionType electionType;
         private final Collection<TopicPartition> topicPartitions;
+        private final Map<TopicPartition, Integer> recommendedLeaders;
         private final int timeoutMs;
 
-        public Builder(ElectionType electionType, Collection<TopicPartition> topicPartitions, int timeoutMs) {
+        public Builder(ElectionType electionType, Collection<TopicPartition> topicPartitions,
+            int timeoutMs) {
+            this(electionType, topicPartitions, Collections.emptyMap(), timeoutMs);
+        }
+
+        public Builder(ElectionType electionType, Collection<TopicPartition> topicPartitions,
+            Map<TopicPartition, Integer> recommendedLeaders,
+            int timeoutMs) {
             super(ApiKeys.ELECT_LEADERS);
             this.electionType = electionType;
             this.topicPartitions = topicPartitions;
+            this.recommendedLeaders = recommendedLeaders;
             this.timeoutMs = timeoutMs;
         }
 
@@ -75,6 +87,15 @@ public class ElectLeadersRequest extends AbstractRequest {
                         data.topicPartitions().add(tps);
                     }
                     tps.partitions().add(tp.partition());
+
+                    // check if there is a recommended leader
+                    Optional<Integer> recommendedLeader = Optional.ofNullable(recommendedLeaders.get(tp));
+                    if (recommendedLeader.isPresent()) {
+                        tps.recommendedPartitionLeaders().add(new ElectLeadersRequestData.RecommendedPartitionLeaderState()
+                            .setPartitionIndex(tp.partition())
+                            .setRecommendedLeader(recommendedLeader.get())
+                        );
+                    }
                 });
             } else {
                 data.setTopicPartitions(null);

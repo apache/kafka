@@ -35,6 +35,19 @@ package object api {
       }
     }
 
+    def partitionRecommendedLeaders: Map[TopicPartition, Int] = {
+      if (self.data.topicPartitions == null) {
+        Map.empty
+      } else {
+        self.data.topicPartitions.asScala.iterator.flatMap { topicPartition =>
+          topicPartition.recommendedPartitionLeaders().asScala.map { recommendedPartitionLeaderState =>
+            new TopicPartition(topicPartition.topic, recommendedPartitionLeaderState.partitionIndex()) ->
+              recommendedPartitionLeaderState.recommendedLeader()
+          }
+        }.toMap
+      }
+    }
+
     def electionType: ElectionType = {
       if (self.version == 0) {
         ElectionType.PREFERRED

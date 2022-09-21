@@ -19,8 +19,7 @@ package kafka.controller
 import kafka.api.LeaderAndIsr
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
-
-import scala.collection.Seq
+import scala.collection.{Map, Seq}
 
 case class ElectionResult(topicPartition: TopicPartition, leaderAndIsr: Option[LeaderAndIsr], liveReplicas: Seq[Int])
 
@@ -100,6 +99,37 @@ object Election extends Logging {
                         leaderAndIsrs: Seq[(TopicPartition, LeaderAndIsr)]): Seq[ElectionResult] = {
     leaderAndIsrs.map { case (partition, leaderAndIsr) =>
       leaderForReassign(partition, leaderAndIsr, controllerContext)
+    }
+  }
+
+  private def leaderForRecommendation(partition: TopicPartition,
+    leaderAndIsr: LeaderAndIsr,
+    recommendedLeader: Option[Int],
+    controllerContext: ControllerContext,
+    controllerContextSnapshot: ControllerContextSnapshot): ElectionResult = {
+    val assignment = controllerContext.partitionReplicaAssignment(partition)
+    val liveReplicas = assignment.filter(replica => controllerContextSnapshot.isReplicaOnline(replica, partition))
+    val isr = leaderAndIsr.isr
+    val leaderOpt = PartitionLeaderElectionAlgorithms.recommendedPartitionLeaderElection(recommendedLeader, isr, liveReplicas.toSet)
+    val newLeaderAndIsrOpt = leaderOpt.map(leader => leaderAndIsr.newLeader(leader))
+    ElectionResult(partition, newLeaderAndIsrOpt, liveReplicas)
+  }
+
+  /**
+   * Elect leaders for partitions that have a recommended leader.
+   *
+   * @param controllerContext Context with the current state of the cluster
+   * @param leaderAndIsrs A sequence of tuples representing the partitions that need election
+   *                                     and their respective leader/ISR states
+   * @param recommendedLeaders A map from each partition to its recommended leader
+   * @return The election results
+   */
+  def leaderForRecommendation(controllerContext: ControllerContext,
+    leaderAndIsrs: Seq[(TopicPartition, LeaderAndIsr)],
+    recommendedLeaders: Map[TopicPartition, Int]): Seq[ElectionResult] = {
+    val controllerContextSnapshot = ControllerContextSnapshot(controllerContext)
+    leaderAndIsrs.map { case (partition, leaderAndIsr) =>
+      leaderForRecommendation(partition, leaderAndIsr, recommendedLeaders.get(partition), controllerContext, controllerContextSnapshot)
     }
   }
 

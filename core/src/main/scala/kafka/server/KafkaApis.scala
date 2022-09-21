@@ -3098,6 +3098,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       replicaManager.electLeaders(
         zkSupport.controller,
         partitions,
+        electionRequest.partitionRecommendedLeaders,
         electionRequest.electionType,
         sendResponseCallback(ApiError.NONE),
         electionRequest.data.timeoutMs

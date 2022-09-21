@@ -3439,9 +3439,27 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
+    public ElectLeadersResult electRecommendedLeaders(
+        Map<TopicPartition, Integer> partitionsWithRecommendedLeaders,
+        ElectLeadersOptions options) {
+        return electLeaders(ElectionType.RECOMMENDED, partitionsWithRecommendedLeaders.keySet(),
+            partitionsWithRecommendedLeaders, options);
+    }
+
+
+    @Override
     public ElectLeadersResult electLeaders(
             final ElectionType electionType,
             final Set<TopicPartition> topicPartitions,
+            ElectLeadersOptions options) {
+        return electLeaders(electionType, topicPartitions, Collections.<TopicPartition, Integer>emptyMap(), options);
+    }
+
+
+    private ElectLeadersResult electLeaders(
+            final ElectionType electionType,
+            final Set<TopicPartition> topicPartitions,
+            final Map<TopicPartition, Integer> recommendedLeaders,
             ElectLeadersOptions options) {
         final KafkaFutureImpl<Map<TopicPartition, Optional<Throwable>>> electionFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
@@ -3450,7 +3468,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             public ElectLeadersRequest.Builder createRequest(int timeoutMs) {
-                return new ElectLeadersRequest.Builder(electionType, topicPartitions, timeoutMs);
+                return new ElectLeadersRequest.Builder(electionType, topicPartitions, recommendedLeaders, timeoutMs);
             }
 
             @Override

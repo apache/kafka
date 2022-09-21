@@ -535,6 +535,14 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    synchronized public ElectLeadersResult electRecommendedLeaders(
+        Map<TopicPartition, Integer> partitionsWithRecommendedLeaders,
+        ElectLeadersOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+
+    @Override
     synchronized public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, RemoveMembersFromConsumerGroupOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
