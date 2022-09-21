@@ -28,7 +28,13 @@ public interface EventHandler {
      * Retrieves and removes a {@link BackgroundEvent}. Returns an empty Optional instance if there is nothing.
      * @return an Optional of {@link BackgroundEvent} if the value is present. Otherwise, an empty Optional.
      */
-    public Optional<BackgroundEvent> poll();
+    Optional<BackgroundEvent> poll();
+
+    /**
+     * Check whether there are pending {@code BackgroundEvent} await to be consumed.
+     * @return true if there are no pending event
+     */
+    boolean isEmpty();
 
     /**
      * Add an {@link ApplicationEvent} to the handler. The method returns true upon successful add; otherwise returns
@@ -36,5 +42,7 @@ public interface EventHandler {
      * @param event     An {@link ApplicationEvent} created by the polling thread.
      * @return          {@code true} upon successful add, {@code false} otherwise.
      */
-    public boolean add(ApplicationEvent event);
+    boolean add(ApplicationEvent event);
+
+
 }

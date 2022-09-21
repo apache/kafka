@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.common.errors.InterruptException;
 
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
@@ -29,8 +30,8 @@ import java.util.concurrent.LinkedBlockingQueue;
  * to be consumed by the background thread and poll {@linkBackgroundEvent} produced by the background thread.
  */
 public class DefaultEventHandler implements EventHandler {
-    private BlockingQueue<ApplicationEvent> applicationEvents;
-    private BlockingQueue<BackgroundEvent> backgroundEvents;
+    private final BlockingQueue<ApplicationEvent> applicationEvents;
+    private final BlockingQueue<BackgroundEvent> backgroundEvents;
 
     public DefaultEventHandler() {
         this.applicationEvents = new LinkedBlockingQueue<>();
@@ -41,6 +42,11 @@ public class DefaultEventHandler implements EventHandler {
     @Override
     public Optional<BackgroundEvent> poll() {
         return Optional.ofNullable(backgroundEvents.poll());
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return backgroundEvents.isEmpty();
     }
 
     @Override
