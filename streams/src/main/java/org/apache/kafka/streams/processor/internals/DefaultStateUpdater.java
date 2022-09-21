@@ -502,23 +502,37 @@ public class DefaultStateUpdater implements StateUpdater {
         }
     }
 
-    @Override
-    public void pause(final TaskId taskId) {
+    public void pause(final TopologyMetadata topologyMetadata) {
         tasksAndActionsLock.lock();
         try {
-            tasksAndActions.add(TaskAndAction.createPauseTask(taskId));
-            tasksAndActionsCondition.signalAll();
+            for (final Task task : Stream.concat(
+                    tasksAndActions.stream()
+                            .filter(taskAndAction -> taskAndAction.getAction() == Action.ADD)
+                            .map(TaskAndAction::getTask),
+                    getUpdatingTasks().stream()).collect(Collectors.toSet())) {
+                if (topologyMetadata.isPaused(task.id().topologyName())) {
+                    tasksAndActions.add(TaskAndAction.createPauseTask(task.id()));
+                    tasksAndActionsCondition.signalAll();
+                }
+            }
         } finally {
             tasksAndActionsLock.unlock();
         }
     }
 
-    @Override
-    public void resume(final TaskId taskId) {
+    public void resume(final TopologyMetadata topologyMetadata) {
         tasksAndActionsLock.lock();
         try {
-            tasksAndActions.add(TaskAndAction.createResumeTask(taskId));
-            tasksAndActionsCondition.signalAll();
+            for (final Task task : Stream.concat(
+                    tasksAndActions.stream()
+                            .filter(taskAndAction -> taskAndAction.getAction() == Action.PAUSE)
+                            .map(TaskAndAction::getTask),
+                    getPausedTasks().stream()).collect(Collectors.toSet())) {
+                if (!topologyMetadata.isPaused(task.id().topologyName())) {
+                    tasksAndActions.add(TaskAndAction.createResumeTask(task.id()));
+                    tasksAndActionsCondition.signalAll();
+                }
+            }
         } finally {
             tasksAndActionsLock.unlock();
         }

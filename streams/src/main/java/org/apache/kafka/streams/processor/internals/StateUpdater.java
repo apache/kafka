@@ -95,30 +95,34 @@ public interface StateUpdater {
     void remove(final TaskId taskId);
 
     /**
-     * Pause a task (active or standby) from restoring in the state updater.
+     * Pause all tasks (active or standby) from restoring in the state updater if their
+     * corresponding topologies are paused.
      *
      * This method does not block until the task is paused.
      *
-     * Restored tasks, removed tasks and failed tasks are not paused so this action would be an no-op for them.
+     * Restored tasks, removed tasks and failed tasks are not paused so this action would be a no-op for them.
+     * A task being added asynchronously via {@link #add(Task)} may not be paused in this function.
      * Stateless tasks will never be paused since they are immediately added to the
      * restored active tasks.
      *
-     * @param taskId ID of the task to remove
+     * @param topologyMetadata topology metadata used to determine if the topology is paused or not
      */
-    void pause(final TaskId taskId);
+    void pause(final TopologyMetadata topologyMetadata);
 
     /**
-     * Resume restoring a task (active or standby) in the state updater.
+     * Resume restoring all paused tasks (active or standby) in the state updater if their
+     * corresponding topologies are no longer paused.
      *
-     * This method does not block until the task is paused.
+     * This method does not block until the task is resumed.
      *
-     * Restored tasks, removed tasks and failed tasks are not resumed so this action would be an no-op for them.
+     * Restored tasks, removed tasks and failed tasks are not resumed so this action would be a no-op for them.
+     * A task being paused asynchronously via {@link #pause(TopologyMetadata)} may not be resumed in this function.
      * Stateless tasks will never be resumed since they are immediately added to the
      * restored active tasks.
      *
-     * @param taskId ID of the task to remove
+     * @param topologyMetadata topology metadata used to determine if the topology is paused or not
      */
-    void resume(final TaskId taskId);
+    void resume(final TopologyMetadata topologyMetadata);
 
     /**
      * Drains the restored active tasks from the state updater.

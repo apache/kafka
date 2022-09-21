@@ -788,19 +788,11 @@ public class TaskManager {
     }
 
     private void pauseTasksInStateUpdater() {
-        for (final Task task : stateUpdater.getUpdatingTasks()) {
-            if (topologyMetadata.isPaused(task.id().topologyName())) {
-                stateUpdater.pause(task.id());
-            }
-        }
+        stateUpdater.pause(topologyMetadata);
     }
 
     private void resumeTasksInStateUpdater() {
-        for (final Task task : stateUpdater.getPausedTasks()) {
-            if (!topologyMetadata.isPaused(task.id().topologyName())) {
-                stateUpdater.resume(task.id());
-            }
-        }
+        stateUpdater.resume(topologyMetadata);
     }
 
     public void handleExceptionsFromStateUpdater() {

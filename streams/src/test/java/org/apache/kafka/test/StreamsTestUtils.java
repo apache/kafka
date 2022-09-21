@@ -27,10 +27,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
-import org.apache.kafka.streams.processor.internals.StandbyTask;
-import org.apache.kafka.streams.processor.internals.StreamTask;
-import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.*;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.io.Closeable;
@@ -334,6 +331,42 @@ public final class StreamsTestUtils {
 
         public T build() {
             return task;
+        }
+    }
+
+    public static class TopologyMetadataBuilder {
+        private final String topologyName;
+        private final TopologyMetadata topologyMetadata;
+
+        private TopologyMetadataBuilder(final TopologyMetadata topologyMetadata, final String topologyName) {
+            this.topologyName = topologyName;
+            this.topologyMetadata = topologyMetadata;
+        }
+
+        public static TopologyMetadataBuilder unamedTopology() {
+            final TopologyMetadata topologyMetadata = mock(TopologyMetadata.class);
+            when(topologyMetadata.isPaused(null)).thenReturn(false);
+            return new TopologyMetadataBuilder(topologyMetadata, null);
+        }
+
+        public static TopologyMetadataBuilder namedTopology(final String name) {
+            final TopologyMetadata topologyMetadata = mock(TopologyMetadata.class);
+            when(topologyMetadata.isPaused(name)).thenReturn(false);
+            return new TopologyMetadataBuilder(topologyMetadata, name);
+        }
+
+        public TopologyMetadataBuilder pause() {
+            when(topologyMetadata.isPaused(topologyName)).thenReturn(true);
+            return this;
+        }
+
+        public TopologyMetadataBuilder resume() {
+            when(topologyMetadata.isPaused(topologyName)).thenReturn(false);
+            return this;
+        }
+
+        public TopologyMetadata build() {
+            return topologyMetadata;
         }
     }
 }
