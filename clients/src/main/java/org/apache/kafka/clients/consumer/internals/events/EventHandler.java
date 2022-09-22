@@ -39,7 +39,7 @@ public interface EventHandler {
      * Add an {@link ApplicationEvent} to the handler. The method returns true upon successful add; otherwise returns
      * false.
      * @param event     An {@link ApplicationEvent} created by the polling thread.
-     * @return          {@code true} upon successful add, {@code false} otherwise.
+     * @return          true upon successful add.
      */
     boolean add(ApplicationEvent event);
 }
