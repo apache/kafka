@@ -252,9 +252,9 @@ plexus-utils-3.3.0
 reload4j-1.2.19
 rocksdbjni-6.29.4.1
 scala-collection-compat_2.13-2.6.0
-scala-library-2.13.8
+scala-library-2.13.10
 scala-logging_2.13-3.9.4
-scala-reflect-2.13.8
+scala-reflect-2.13.10
 scala-java8-compat_2.13-1.0.2
 snakeyaml-1.30
 snappy-java-1.1.8.4
