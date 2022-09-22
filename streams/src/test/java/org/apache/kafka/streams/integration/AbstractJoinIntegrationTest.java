@@ -105,6 +105,17 @@ public abstract class AbstractJoinIntegrationTest {
         new Input<>(INPUT_TOPIC_LEFT, "D")
     );
 
+    private final List<Input<String>> leftInput = Arrays.asList(
+        new Input<>(INPUT_TOPIC_LEFT, null),
+        new Input<>(INPUT_TOPIC_LEFT, "A"),
+        new Input<>(INPUT_TOPIC_LEFT, "B"),
+        new Input<>(INPUT_TOPIC_LEFT, null),
+        new Input<>(INPUT_TOPIC_LEFT, "C"),
+        new Input<>(INPUT_TOPIC_LEFT, null),
+        new Input<>(INPUT_TOPIC_LEFT, "D")
+    );
+
+
     final ValueJoiner<String, String, String> valueJoiner = (value1, value2) -> value1 + "-" + value2;
 
     final boolean cacheEnabled;
@@ -200,6 +211,31 @@ public abstract class AbstractJoinIntegrationTest {
 
             if (storeName != null) {
                 checkQueryableStore(storeName, updatedExpectedFinalResult, driver);
+            }
+        }
+    }
+
+    void runSelfJoinTestWithDriver(final List<List<TestRecord<Long, String>>> expectedResult) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(STREAMS_CONFIG), STREAMS_CONFIG)) {
+            final TestInputTopic<Long, String> left = driver.createInputTopic(INPUT_TOPIC_LEFT, new LongSerializer(), new StringSerializer());
+            final TestOutputTopic<Long, String> outputTopic = driver.createOutputTopic(OUTPUT_TOPIC, new LongDeserializer(), new StringDeserializer());
+
+            final long firstTimestamp = time.milliseconds();
+            long eventTimestamp = firstTimestamp;
+            final Iterator<List<TestRecord<Long, String>>> resultIterator = expectedResult.iterator();
+            for (final Input<String> singleInputRecord : leftInput) {
+                left.pipeInput(singleInputRecord.record.key, singleInputRecord.record.value, ++eventTimestamp);
+
+                final List<TestRecord<Long, String>> expected = resultIterator.next();
+                if (expected != null) {
+                    final List<TestRecord<Long, String>> updatedExpected = new LinkedList<>();
+                    for (final TestRecord<Long, String> record : expected) {
+                        updatedExpected.add(new TestRecord<>(record.key(), record.value(), null, firstTimestamp + record.timestamp()));
+                    }
+
+                    final List<TestRecord<Long, String>> output = outputTopic.readRecordsToList();
+                    assertThat(output, equalTo(updatedExpected));
+                }
             }
         }
     }
