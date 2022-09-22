@@ -180,6 +180,9 @@
   <pre class="line-numbers"><code class="language-bash">&gt; bin/zookeeper-shell.sh localhost
   rmr /controller</code></pre>
 
+  In KRaft mode, the way to force a Controller re-election is to terminate the active controller node. Since KRaft
+  controllers do not host partitions, they are generally very quick to restart.
+
   <h5>Updating Log Cleaner Configs</h5>
   Log cleaner configs may be updated dynamically at cluster-default level used by all brokers. The changes take effect
   on the next iteration of log cleaning. One or more of these configs may be updated:
