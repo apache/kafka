@@ -20,12 +20,21 @@
 
   <h3 class="anchor-heading"><a id="brokerconfigs" class="anchor-link"></a><a href="#brokerconfigs">3.1 Broker Configs</a></h3>
 
-  The essential configurations are the following:
+  For ZooKeeper clusters, brokers must have the following configuration:
   <ul>
-      <li><code>broker.id</code>
-      <li><code>log.dirs</code>
-      <li><code>zookeeper.connect</code>
+    <li><code>broker.id</code></li>
+    <li><code>log.dirs</code></li>
+    <li><code>zookeeper.connect</code></li>
   </ul>
+
+  For KRaft clusters, brokers and controllers must have the following configurations:
+  <ul>
+    <li><code>node.id</code></li>
+    <li><code>log.dirs</code></li>
+    <li><code>process.roles</code></li>
+  </ul>
+
+  On KRaft brokers, if <code>broker.id</code> is set, it must be equal to <code>node.id</code>.
 
   Topic-level configurations and defaults are discussed in more detail <a href="#topicconfigs">below</a>.
 
@@ -62,13 +71,16 @@
   All configs that are configurable at cluster level may also be configured at per-broker level (e.g. for testing).
   If a config value is defined at different levels, the following order of precedence is used:
   <ul>
-  <li>Dynamic per-broker config stored in ZooKeeper</li>
-  <li>Dynamic cluster-wide default config stored in ZooKeeper</li>
-  <li>Static broker config from <code>server.properties</code></li>
+  <li>Dynamic per-broker configs</li>
+  <li>Dynamic cluster-wide default configs</li>
+  <li>Static broker configs from <code>server.properties</code></li>
   <li>Kafka default, see <a href="#brokerconfigs">broker configs</a></li>
   </ul>
 
-  <h5>Updating Password Configs Dynamically</h5>
+  Dynamic configs are stored in Kafka as cluster metadata. In ZooKeeper mode, dynamic configs are stored in ZooKeeper.
+  In KRaft mode, dynamic configs are stored as records in the metadata log.
+
+  <h5>Updating Password Configs Dynamically (ZooKeeper-only)</h5>
   <p>Password config values that are dynamically updated are encrypted before storing in ZooKeeper. The broker config
   <code>password.encoder.secret</code> must be configured in <code>server.properties</code> to enable dynamic update
   of password configs. The secret may be different on different brokers.</p>
@@ -159,8 +171,11 @@
 
   From Kafka version 2.0.0 onwards, unclean leader election is automatically enabled by the controller when the config
   <code>unclean.leader.election.enable</code> is dynamically updated.
-  In Kafka version 1.1.x, changes to <code>unclean.leader.election.enable</code> take effect only when a new controller is elected.
-  Controller re-election may be forced by running:
+  In Kafka version 1.1.x, changes to <code>unclean.leader.election.enable</code> take effect only when a new controller
+  is elected.
+
+  In ZooKeeper mode, a Controller re-election may be forced by removing the Controller's ZNode. This is
+  done using the <code>zookeeper-shell.sh</code> utility included in the "bin" directory.
 
   <pre class="line-numbers"><code class="language-bash">&gt; bin/zookeeper-shell.sh localhost
   rmr /controller</code></pre>

@@ -712,6 +712,7 @@ object KafkaConfig {
   val BrokerHeartbeatIntervalMsDoc = "The length of time in milliseconds between broker heartbeats. Used when running in KRaft mode."
   val BrokerSessionTimeoutMsDoc = "The length of time in milliseconds that a broker lease lasts if no heartbeats are made. Used when running in KRaft mode."
   val NodeIdDoc = "The node ID associated with the roles this process is playing when `process.roles` is non-empty. " +
+    "Every node in a KRaft cluster must have a unique `node.id`, this includes broker and controller nodes. " +
     "This is required configuration when running in KRaft mode."
   val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
     "If it is not set, the metadata log is placed in the first log directory from log.dirs."
