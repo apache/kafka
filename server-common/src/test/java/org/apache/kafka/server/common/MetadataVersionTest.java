@@ -64,6 +64,7 @@ import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV0;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV1;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV4;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -190,11 +191,12 @@ class MetadataVersionTest {
         assertEquals(IBP_3_2_IV0, MetadataVersion.fromVersionString("3.2"));
         assertEquals(IBP_3_2_IV0, MetadataVersion.fromVersionString("3.2-IV0"));
 
-        assertEquals(IBP_3_3_IV3, MetadataVersion.fromVersionString("3.3"));
+        assertEquals(IBP_3_3_IV4, MetadataVersion.fromVersionString("3.3"));
         assertEquals(IBP_3_3_IV0, MetadataVersion.fromVersionString("3.3-IV0"));
         assertEquals(IBP_3_3_IV1, MetadataVersion.fromVersionString("3.3-IV1"));
         assertEquals(IBP_3_3_IV2, MetadataVersion.fromVersionString("3.3-IV2"));
         assertEquals(IBP_3_3_IV3, MetadataVersion.fromVersionString("3.3-IV3"));
+        assertEquals(IBP_3_3_IV4, MetadataVersion.fromVersionString("3.3-IV4"));
     }
 
     @Test
@@ -242,6 +244,7 @@ class MetadataVersionTest {
         assertEquals("3.3", IBP_3_3_IV1.shortVersion());
         assertEquals("3.3", IBP_3_3_IV2.shortVersion());
         assertEquals("3.3", IBP_3_3_IV3.shortVersion());
+        assertEquals("3.3", IBP_3_3_IV4.shortVersion());
     }
 
     @Test
@@ -278,6 +281,7 @@ class MetadataVersionTest {
         assertEquals("3.3-IV1", IBP_3_3_IV1.version());
         assertEquals("3.3-IV2", IBP_3_3_IV2.version());
         assertEquals("3.3-IV3", IBP_3_3_IV3.version());
+        assertEquals("3.3-IV4", IBP_3_3_IV4.version());
     }
 
     @Test

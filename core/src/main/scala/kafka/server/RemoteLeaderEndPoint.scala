@@ -106,14 +106,14 @@ class RemoteLeaderEndPoint(logPrefix: String,
     fetchOffset(topicPartition, currentLeaderEpoch, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP)
   }
 
-  private def fetchOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, earliestOrLatest: Long): (Int, Long) = {
+  private def fetchOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, timestamp: Long): (Int, Long) = {
     val topic = new ListOffsetsTopic()
       .setName(topicPartition.topic)
       .setPartitions(Collections.singletonList(
         new ListOffsetsPartition()
           .setPartitionIndex(topicPartition.partition)
           .setCurrentLeaderEpoch(currentLeaderEpoch)
-          .setTimestamp(earliestOrLatest)))
+          .setTimestamp(timestamp)))
     val metadataVersion = metadataVersionSupplier()
     val requestBuilder = ListOffsetsRequest.Builder.forReplica(metadataVersion.listOffsetRequestVersion, brokerConfig.brokerId)
       .setTargetTimes(Collections.singletonList(topic))
