@@ -48,8 +48,6 @@ import org.mockito.junit.MockitoJUnitRunner;
 
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -188,8 +186,8 @@ public class MeteredTimestampedWindowStoreTest {
         store.fetch(KEY, TIMESTAMP);
         store.put(KEY, VALUE_AND_TIMESTAMP, TIMESTAMP);
 
-        verify(innerStoreMock).fetch(any(Bytes.class), eq(TIMESTAMP));
-        verify(innerStoreMock).put(any(Bytes.class), any(byte[].class), eq(TIMESTAMP));
+        verify(innerStoreMock).fetch(KEY_BYTES, TIMESTAMP);
+        verify(innerStoreMock).put(KEY_BYTES, VALUE_AND_TIMESTAMP_BYTES, TIMESTAMP);
     }
 
     @Test
