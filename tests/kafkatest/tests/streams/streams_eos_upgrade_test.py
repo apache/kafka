@@ -23,6 +23,12 @@ from kafkatest.version import LATEST_3_0, LATEST_3_1, LATEST_3_2, DEV_VERSION
 
 from kafkatest.tests.streams.utils.util import wait_for, verify_stopped
 
+"""
+Given the guarantees that we provide in the upgrade guide, we need to test
+upgrading from Kafka Streams 3.x (with EOSv1) to the latest version of
+Kafka Streams. Please update `eos_v1_versions` for every new version of 3.x,
+after following the update instructions in `streams_upgrade_test.py`.
+"""
 eos_v1_versions = [str(LATEST_3_0), str(LATEST_3_1), str(LATEST_3_2)]
 eos_v2_versions = [str(DEV_VERSION)]
 
