@@ -1010,11 +1010,7 @@ object KafkaMetadataLogTest {
     override def write(data: Array[Byte], serializationCache: ObjectSerializationCache, out: Writable): Unit = {
       out.writeByteArray(data)
     }
-    override def read(input: protocol.Readable, size: Int): Array[Byte] = {
-      val array = new Array[Byte](size)
-      input.readArray(array)
-      array
-    }
+    override def read(input: protocol.Readable, size: Int): Array[Byte] = input.readArray(size)
   }
 
   val DefaultMetadataLogConfig = MetadataLogConfig(

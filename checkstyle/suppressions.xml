@@ -49,6 +49,8 @@
               files="(Fetcher|Sender|SenderTest|ConsumerCoordinator|KafkaConsumer|KafkaProducer|Utils|TransactionManager|TransactionManagerTest|KafkaAdminClient|NetworkClient|Admin|KafkaRaftClient|KafkaRaftClientTest|RaftClientTestContext).java"/>
     <suppress checks="ClassFanOutComplexity"
               files="(SaslServerAuthenticator|SaslAuthenticatorTest).java"/>
+    <suppress checks="NPath"
+              files="SaslServerAuthenticator.java"/>
     <suppress checks="ClassFanOutComplexity"
               files="Errors.java"/>
     <suppress checks="ClassFanOutComplexity"
@@ -169,6 +171,10 @@
 
     <suppress checks="JavaNCSS"
               files="DistributedHerderTest.java"/>
+
+    <!-- Raft -->
+    <suppress checks="NPathComplexity"
+              files="RecordsIterator.java"/>
 
     <!-- Streams -->
     <suppress checks="ClassFanOutComplexity"
