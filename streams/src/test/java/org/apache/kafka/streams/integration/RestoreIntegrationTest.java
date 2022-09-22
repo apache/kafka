@@ -59,10 +59,9 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.hamcrest.CoreMatchers;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.Before;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -120,7 +119,7 @@ public class RestoreIntegrationTest {
         CLUSTER.start();
     }
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
         final Properties props = new Properties();
 
@@ -185,7 +184,7 @@ public class RestoreIntegrationTest {
     @Test
     public void shouldRestoreNullRecord() throws Exception {
         builder.table(INPUT_TOPIC, Materialized.<Integer, Bytes>as(
-                Stores.persistentTimestampedKeyValueStore(STATE_STORE_NAME))
+                        Stores.persistentTimestampedKeyValueStore(STATE_STORE_NAME))
                 .withKeySerde(Serdes.Integer())
                 .withValueSerde(Serdes.Bytes())
                 .withCachingDisabled()).toStream().to(OUTPUT_TOPIC);
@@ -194,9 +193,9 @@ public class RestoreIntegrationTest {
                 CLUSTER.bootstrapServers(), IntegerSerializer.class, BytesSerializer.class);
 
         final List<KeyValue<Integer, Bytes>> initialKeyValues = Arrays.asList(
-                KeyValue.pair(3, new Bytes(new byte[] { 3 })),
+                KeyValue.pair(3, new Bytes(new byte[]{3})),
                 KeyValue.pair(3, null),
-                KeyValue.pair(1, new Bytes(new byte[] { 1 })));
+                KeyValue.pair(1, new Bytes(new byte[]{1})));
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
                 INPUT_TOPIC, initialKeyValues, producerConfig, mockTime);
@@ -255,8 +254,8 @@ public class RestoreIntegrationTest {
         final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
         builder.table(inputStream,
-                Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("store").withKeySerde(Serdes.Integer())
-                        .withValueSerde(Serdes.Integer()))
+                        Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("store").withKeySerde(Serdes.Integer())
+                                .withValueSerde(Serdes.Integer()))
                 .toStream()
                 .foreach((key, value) -> {
                     if (numReceived.incrementAndGet() == offsetLimitDelta * 2) {
@@ -275,19 +274,19 @@ public class RestoreIntegrationTest {
         kafkaStreams.setGlobalStateRestoreListener(new StateRestoreListener() {
             @Override
             public void onRestoreStart(final TopicPartition topicPartition, final String storeName,
-                    final long startingOffset, final long endingOffset) {
+                                       final long startingOffset, final long endingOffset) {
 
             }
 
             @Override
             public void onBatchRestored(final TopicPartition topicPartition, final String storeName,
-                    final long batchEndOffset, final long numRestored) {
+                                        final long batchEndOffset, final long numRestored) {
 
             }
 
             @Override
             public void onRestoreEnd(final TopicPartition topicPartition, final String storeName,
-                    final long totalRestored) {
+                                     final long totalRestored) {
                 restored.addAndGet(totalRestored);
             }
         });
@@ -347,19 +346,19 @@ public class RestoreIntegrationTest {
         kafkaStreams.setGlobalStateRestoreListener(new StateRestoreListener() {
             @Override
             public void onRestoreStart(final TopicPartition topicPartition, final String storeName,
-                    final long startingOffset, final long endingOffset) {
+                                       final long startingOffset, final long endingOffset) {
 
             }
 
             @Override
             public void onBatchRestored(final TopicPartition topicPartition, final String storeName,
-                    final long batchEndOffset, final long numRestored) {
+                                        final long batchEndOffset, final long numRestored) {
 
             }
 
             @Override
             public void onRestoreEnd(final TopicPartition topicPartition, final String storeName,
-                    final long totalRestored) {
+                                     final long totalRestored) {
                 restored.addAndGet(totalRestored);
             }
         });
