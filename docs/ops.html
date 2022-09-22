@@ -1815,6 +1815,162 @@ $ bin/kafka-acls.sh \
       </tr>
   </tbody></table>
 
+<h5 class="anchor-heading"><a id="kraft_monitoring" class="anchor-link"></a><a href="#kraft_monitoring">KRaft Metrics</a></h5>
+All of the following metrics allow monitoring of the KRaft quourm and 
+<table class="data-table">
+  <tbody>
+  <tr>
+    <th>Metric/Attribute name</th>
+    <th>Description</th>
+    <th>Mbean name</th>
+  </tr>
+  <tr>
+    <td>Current State</td>
+    <td>The current state of this member; possible values are leader, candidate, voted, follower, unattached.</td>
+    <td>kafka.raft:type=raft-metrics,name=Current-state</td>
+  </tr>
+  <tr>
+    <td>Current Leader</td>
+    <td>The current quorum leader's id; -1 indicates unknown.</td>
+    <td>kafka.raft:type=raft-metrics,name=current-leader</td>
+  </tr>
+  <tr>
+    <td>Current Voted</td>
+    <td>The current voted leader's id; -1 indicates not voted for anyone.</td>
+    <td>kafka.raft:type=raft-metrics,name=current-vote</td>
+  </tr>
+  <tr>
+    <td>Current Epoch</td>
+    <td>The current quorum epoch.</td>
+    <td>kafka.raft:type=raft-metrics,name=current-epoch</td>
+  </tr>
+  <tr>
+    <td>High Watermark</td>
+    <td>The high watermark maintained on this member; -1 if it is unknown.</td>
+    <td>kafka.raft:type=raft-metrics,name=high-watermark</td>
+  </tr>
+  <tr>
+    <td>Log End Offset</td>
+    <td>The current raft log end offset.</td>
+    <td>kafka.raft:type=raft-metrics,name=log-end-offset</td>
+  </tr>
+  <tr>
+    <td>Election Latency</td>
+    <td>The time in milliseconds to elect a new leader.</td>
+    <td>kafka.raft:type=raft-metrics,name=election-latency</td>
+  </tr>
+  <tr>
+    <td>Fetch Records</td>
+    <td>The average number of records fetched from the leader of the raft quorum.</td>
+    <td>kafka.raft:type=raft-metrics,name=fetch-records</td>
+  </tr>
+  <tr>
+    <td>Append Records</td>
+    <td>The average number of records appended per sec as the leader of the raft quorum.</td>
+    <td>kafka.raft:type=raft-metrics,name=append-records</td>
+  </tr>
+  <tr>
+    <td>Poll Idle Ratio</td>
+    <td>The average fraction of time the client's poll() is idle as opposed to waiting for the user code to process records.</td>
+    <td>kafka.raft:type=raft-metrics,name=poll-idle-ratio</td>
+  </tr>
+  <tr>
+    <td>Active Controller Count</td>
+    <td></td>
+    <td>kafka.controller:type=KafkaController,name=ActiveControllerCount</td>
+  </tr>
+  <tr>
+    <td>Event Queue Time Ms</td>
+    <td></td>
+    <td>kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs</td>
+  </tr>
+  <tr>
+    <td>Event Queue Procesing Time Ms</td>
+    <td></td>
+    <td>kafka.controller:type=ControllerEventManager,name=EventQueueProcessingTimeMs</td>
+  </tr>
+  <tr>
+    <td>Fenced Broker Count</td>
+    <td></td>
+    <td>kafka.controller:type=KafkaController,name=FencedBrokerCount</td>
+  </tr>
+  <tr>
+    <td>Active Broker Count</td>
+    <td></td>
+    <td>kafka.controller:type=KafkaController,name=ActiveBrokerCount</td>
+  </tr>
+  <tr>
+    <td>Global Topic Count</td>
+    <td></td>
+    <td>kafka.controller:type=KafkaController,name=GlobalTopicCount</td>
+  </tr>
+  <tr>
+    <td>Global Partition Count</td>
+    <td></td>
+    <td>kafka.controller:type=KafkaController,name=GlobalPartitionCount</td>
+  </tr>
+  <tr>
+    <td>Offline Partitiion Count</td>
+    <td></td>
+    <td>kafka.controller:type=KafkaController,name=OfflinePartitionCount</td>
+  </tr>
+  <tr>
+    <td>Preferred Replica Imbalace Count</td>
+    <td></td>
+    <td>kafka.controller:type=KafkaController,name=PrefferedReplicaImbalanceCount</td>
+  </tr>
+  <tr>
+    <td>Metadata Error Count</td>
+    <td></td>
+    <td>kafka.controller:type=KafkaController,name=MetadataErrorCount</td>
+  </tr>
+  <tr>
+    <td>Last Applied Record Offset</td>
+    <td></td>
+    <td>kafka.controller:type=KafkaController,name=LastAppliedRecordOffset</td>
+  </tr>
+  <tr>
+    <td>Last Committed Record Offset</td>
+    <td></td>
+    <td>kafka.controller:type=KafkaController,name=LastCommittedRecordOffset</td>
+  </tr>
+  <tr>
+    <td>Last Applied Record Timestamp</td>
+    <td></td>
+    <td>kafka.controller:type=KafkaController,name=LastAppliedRecordTimestamp</td>
+  </tr>
+  <tr>
+    <td>Last Applied Record Lag Ms</td>
+    <td></td>
+    <td>kafka.controller:type=KafkaController,name=LastAppliedRecordLagMs</td>
+  </tr>
+  <tr>
+    <td>Last Applied Record Offset</td>
+    <td>The offset of the last record from the cluster metadata partition that was applied by the broker</td>
+    <td>kafka.server:type=broker-metadata-metrics,name=last-applied-record-offset</td>
+  </tr>
+  <tr>
+    <td>Last Applied Record Timestamp</td>
+    <td>The timestamp of the last record from the cluster metadata partition that was applied by the broker.</td>
+    <td>kafka.server:type=broker-metadata-metrics,name=last-applied-record-timestamp</td>
+  </tr>
+  <tr>
+    <td>Last Applied Record Lag Ms</td>
+    <td>The difference between now and the timestamp of the last record from the cluster metadata partition that was applied by the broker</td>
+    <td>kafka.server:type=broker-metadata-metrics,name=last-applied-record-lag-ms</td>
+  </tr>
+  <tr>
+    <td>Metadata Load Error Count</td>
+    <td>The number of errors encountered by the BrokerMetadataListener while loading the metadata log and generating a new MetadataDelta based on it.</td>
+    <td>kafka.server:type=broker-metadata-metrics,name=metadata-load-error-count</td>
+  </tr>
+  <tr>
+    <td>Metadata Apply Error Count</td>
+    <td>The number of errors encountered by the BrokerMetadataPublisher while applying a new MetadataImage based on the latest MetadataDelta.</td>
+    <td>kafka.server:type=broker-metadata-metrics,name=metadata-apply-error-count</td>
+  </tr>
+  </tbody>
+</table>
   <h4><a id="selector_monitoring" href="#selector_monitoring">Common monitoring metrics for producer/consumer/connect/streams</a></h4>
 
   The following metrics are available on producer/consumer/connector/streams instances. For specific metrics, please see following sections.
