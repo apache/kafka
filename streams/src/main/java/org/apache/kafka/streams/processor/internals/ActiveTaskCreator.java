@@ -60,6 +60,7 @@ class ActiveTaskCreator {
     private final Sensor createTaskSensor;
     private final StreamsProducer threadProducer;
     private final ProcessingMode processingMode;
+    private final boolean stateUpdaterEnabled;
 
     ActiveTaskCreator(final TopologyMetadata topologyMetadata,
                       final StreamsConfig applicationConfig,
@@ -71,7 +72,8 @@ class ActiveTaskCreator {
                       final KafkaClientSupplier clientSupplier,
                       final String threadId,
                       final UUID processId,
-                      final Logger log) {
+                      final Logger log,
+                      final boolean stateUpdaterEnabled) {
         this.topologyMetadata = topologyMetadata;
         this.applicationConfig = applicationConfig;
         this.streamsMetrics = streamsMetrics;
@@ -81,6 +83,7 @@ class ActiveTaskCreator {
         this.time = time;
         this.threadId = threadId;
         this.log = log;
+        this.stateUpdaterEnabled = stateUpdaterEnabled;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
         processingMode = processingMode(applicationConfig);
@@ -129,8 +132,8 @@ class ActiveTaskCreator {
                 stateDirectory,
                 storeChangelogReader,
                 topology.storeToChangelogTopic(),
-                partitions
-            );
+                partitions,
+                stateUpdaterEnabled);
 
             final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
                 taskId,

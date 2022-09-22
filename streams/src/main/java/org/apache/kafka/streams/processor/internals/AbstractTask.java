@@ -133,6 +133,11 @@ public abstract class AbstractTask implements Task {
     }
 
     @Override
+    public ProcessorStateManager stateManager() {
+        return stateMgr;
+    }
+
+    @Override
     public void revive() {
         if (state == CLOSED) {
             clearTaskTimeout();

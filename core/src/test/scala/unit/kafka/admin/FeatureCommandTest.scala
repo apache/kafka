@@ -155,9 +155,10 @@ class FeatureCommandTest extends IntegrationTestHarness {
         "Retry using UNSAFE_DOWNGRADE if you want to force the downgrade to proceed.", env.outputWithoutEpoch())
     }
     TestUtils.resource(FeatureCommandTestEnv()) { env =>
-      assertEquals(0, FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
+      assertEquals(1, FeatureCommand.mainNoExit(Array("--bootstrap-server", bootstrapServers(),
         "downgrade", "--unsafe", "--metadata", "3.3-IV0"), env.out))
-      assertEquals("metadata.version was downgraded to 4.", env.outputWithoutEpoch())
+      assertEquals("Could not downgrade metadata.version to 4. Invalid metadata.version 4. " +
+        "Unsafe metadata downgrade is not supported in this version.", env.outputWithoutEpoch())
     }
   }
 }

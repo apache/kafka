@@ -169,7 +169,7 @@ class Tasks implements TasksRegistry {
 
     private boolean containsTaskIdWithAction(final TaskId taskId, final Action action) {
         final PendingUpdateAction pendingUpdateAction = pendingUpdateActions.get(taskId);
-        return !(pendingUpdateAction == null || pendingUpdateAction.getAction() != action);
+        return pendingUpdateAction != null && pendingUpdateAction.getAction() == action;
     }
 
     @Override

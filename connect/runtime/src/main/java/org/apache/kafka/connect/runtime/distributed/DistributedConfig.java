@@ -119,7 +119,7 @@ public class DistributedConfig extends WorkerConfig {
      * <code>offset.storage.topic</code>
      */
     public static final String OFFSET_STORAGE_TOPIC_CONFIG = OFFSET_STORAGE_PREFIX + TOPIC_SUFFIX;
-    private static final String OFFSET_STORAGE_TOPIC_CONFIG_DOC = "The name of the Kafka topic where connector offsets are stored";
+    private static final String OFFSET_STORAGE_TOPIC_CONFIG_DOC = "The name of the Kafka topic where source connector offsets are stored";
 
     /**
      * <code>offset.storage.partitions</code>
