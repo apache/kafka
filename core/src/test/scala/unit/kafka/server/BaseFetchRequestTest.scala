@@ -35,7 +35,7 @@ class BaseFetchRequestTest extends BaseRequestTest {
 
   protected var producer: KafkaProducer[String, String] = _
 
-  override def brokerPropertyOverrides(properties: Properties): Unit = {
+  protected override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.FetchMaxBytes, Int.MaxValue.toString)
   }
 
