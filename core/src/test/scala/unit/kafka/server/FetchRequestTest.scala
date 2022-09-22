@@ -24,9 +24,11 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringSerializer}
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
 
 import java.io.DataInputStream
 import java.util
@@ -191,6 +193,34 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, oldPartitionData.errorCode)
   }
 
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.FETCH)
+  def testFetchRequestToFollowersWhenFetchingFromFollowerIsDisabled(version: Short): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val replicaIds = brokers.map(_.config.brokerId)
+    val followerId = replicaIds.last
+
+    val admin = createAdminClient()
+
+    val topicId = TestUtils.createTopicWithAdminRaw(
+      admin,
+      tp.topic,
+      replicaAssignment = Map(0 -> replicaIds)
+    )
+
+    val topicIdMap = Map(tp.topic -> topicId)
+
+    val fetchResponse = sendFetch(
+      followerId,
+      Seq(tp),
+      topicIdMap,
+      version,
+      None
+    )
+
+    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, fetchResponse.get(tp).errorCode)
+  }
+
   @Test
   def testLastFetchedEpochValidation(): Unit = {
     checkLastFetchedEpochValidation(ApiKeys.FETCH.latestVersion())
@@ -245,7 +275,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
 
   @Test
   def testCurrentEpochValidation(): Unit = {
-    checkCurrentEpochValidation(ApiKeys.FETCH.latestVersion())
+    checkCurrentEpochValidation(ApiKeys.FETCH.latestVersion)
   }
 
   @Test
@@ -285,8 +315,8 @@ class FetchRequestTest extends BaseFetchRequestTest {
 
     // Check follower error codes
     val followerId = TestUtils.findFollowerId(topicPartition, servers)
-    assertResponseErrorForEpoch(Errors.NONE, followerId, Optional.empty())
-    assertResponseErrorForEpoch(Errors.NONE, followerId, Optional.of(secondLeaderEpoch))
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_OR_FOLLOWER, followerId, Optional.empty())
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_OR_FOLLOWER, followerId, Optional.of(secondLeaderEpoch))
     assertResponseErrorForEpoch(Errors.UNKNOWN_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch + 1))
     assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
   }

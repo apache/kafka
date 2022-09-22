@@ -44,6 +44,9 @@
   //
   // Version 10 indicates that we can use the ZStd compression algorithm, as
   // described in KIP-110.
+  //
+  // Version 11 adds RackId, as described in KIP-392.
+  //
   // Version 12 adds flexible versions support as well as epoch validation through
   // the `LastFetchedEpoch` field
   //
@@ -97,7 +100,7 @@
       { "name": "Partitions", "type": "[]int32", "versions": "7+",
         "about": "The partitions indexes to forget." }
     ]},
-    { "name": "RackId", "type":  "string", "versions": "11+", "default": "", "ignorable": true,
+    { "name": "RackId", "type": "string", "versions": "11+", "default": "", "ignorable": true,
       "about": "Rack ID of the consumer making this request"}
   ]
 }

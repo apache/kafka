@@ -58,7 +58,6 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
@@ -682,11 +681,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
     val fetchRequest = request.body[FetchRequest]
-    val topicNames =
-      if (fetchRequest.version() >= 13)
-        metadataCache.topicIdsToNames()
-      else
-        Collections.emptyMap[Uuid, String]()
+    val topicNames = if (fetchRequest.version >= 13)
+      metadataCache.topicIdsToNames()
+    else
+      Collections.emptyMap[Uuid, String]()
 
     val fetchData = fetchRequest.fetchData(topicNames)
     val forgottenTopics = fetchRequest.forgottenTopics(topicNames)
@@ -949,14 +947,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       val fetchMaxBytes = Math.min(Math.min(fetchRequest.maxBytes, config.fetchMaxBytes), maxQuotaWindowBytes)
       val fetchMinBytes = Math.min(fetchRequest.minBytes, fetchMaxBytes)
 
-      val clientMetadata: Option[ClientMetadata] = if (versionId >= 11) {
-        // Fetch API version 11 added preferred replica logic
+      val clientMetadata = if (versionId >= 11 && replicaManager.hasReplicaSelector) {
+        // Fetching from follower is only supported from Fetch API version 11. Moreover, we
+        // only allow it if the broker has a replica selector configured. If it does not, there
+        // no point in letting the client read from a follower replica because it is not expected.
         Some(new DefaultClientMetadata(
           fetchRequest.rackId,
           clientId,
           request.context.clientAddress,
           request.context.principal,
-          request.context.listenerName.value))
+          request.context.listenerName.value
+        ))
       } else {
         None
       }

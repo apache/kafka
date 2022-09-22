@@ -53,15 +53,54 @@ class BaseFetchRequestTest extends BaseRequestTest {
       .setMaxBytes(maxResponseBytes).build()
   }
 
-  protected def createPartitionMap(maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
-                                   offsetMap: Map[TopicPartition, Long] = Map.empty): util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
+  protected def createPartitionMap(
+    maxPartitionBytes: Int,
+    topicPartitions: Seq[TopicPartition],
+    offsetMap: Map[TopicPartition, Long] = Map.empty,
+    topicIds: Map[String, Uuid] = getTopicIds()
+  ): util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData] = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     topicPartitions.foreach { tp =>
-      partitionMap.put(tp,
-        new FetchRequest.PartitionData(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID), offsetMap.getOrElse(tp, 0), 0L, maxPartitionBytes,
-        Optional.empty()))
+      partitionMap.put(tp, new FetchRequest.PartitionData(
+        topicIds.getOrElse(tp.topic, Uuid.ZERO_UUID),
+        offsetMap.getOrElse(tp, 0),
+        0L,
+        maxPartitionBytes,
+        Optional.empty()
+      ))
     }
     partitionMap
+  }
+
+  protected def sendFetch(
+    brokerId: Int,
+    partitions: Seq[TopicPartition],
+    topicIdMap: Map[String, Uuid],
+    fetchVersion: Short,
+    replicaIdOpt: Option[Int]
+  ): util.LinkedHashMap[TopicPartition, FetchResponseData.PartitionData] = {
+    val topicNameMap = topicIdMap.map(_.swap)
+    val partitionMap = createPartitionMap(1024, partitions, Map.empty, topicIdMap)
+
+    val fetchRequest = replicaIdOpt.map { replicaId =>
+      FetchRequest.Builder.forReplica(
+        fetchVersion,
+        replicaId,
+        Int.MaxValue,
+        0,
+        partitionMap
+      ).build(fetchVersion)
+    }.getOrElse {
+      FetchRequest.Builder.forConsumer(
+        fetchVersion,
+        Int.MaxValue,
+        0,
+        partitionMap
+      ).build(fetchVersion)
+    }
+
+    val fetchResponse = sendFetchRequest(brokerId, fetchRequest)
+    fetchResponse.responseData(topicNameMap.asJava, fetchVersion)
   }
 
   protected def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {

@@ -253,6 +253,8 @@ class ReplicaManager(val config: KafkaConfig,
   // Visible for testing
   private[server] val replicaSelectorOpt: Option[ReplicaSelector] = createReplicaSelector()
 
+  def hasReplicaSelector: Boolean = replicaSelectorOpt.isDefined
+
   newGauge("LeaderCount", () => leaderPartitionsIterator.size)
   // Visible for testing
   private[kafka] val partitionCount = newGauge("PartitionCount", () => allPartitions.size)
@@ -1103,8 +1105,9 @@ class ReplicaManager(val config: KafkaConfig,
           throw new InconsistentTopicIdException("Topic ID in the fetch session did not match the topic ID in the log.")
 
         // If we are the leader, determine the preferred read-replica
-        val preferredReadReplica = params.clientMetadata.flatMap(
-          metadata => findPreferredReadReplica(partition, metadata, params.replicaId, fetchInfo.fetchOffset, fetchTimeMs))
+        val preferredReadReplica = params.clientMetadata.flatMap { metadata =>
+          findPreferredReadReplica(partition, metadata, params.replicaId, fetchInfo.fetchOffset, fetchTimeMs)
+        }
 
         if (preferredReadReplica.isDefined) {
           replicaSelectorOpt.foreach { selector =>
