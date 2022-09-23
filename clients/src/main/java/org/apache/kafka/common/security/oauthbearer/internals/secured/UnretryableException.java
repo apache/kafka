@@ -15,13 +15,22 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.security.oauthbearer.secured;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-/**
- * @deprecated See org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler
- */
+import org.apache.kafka.common.KafkaException;
 
-@Deprecated
-public class OAuthBearerLoginCallbackHandler extends org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler {
+public class UnretryableException extends KafkaException {
+
+    public UnretryableException(String message) {
+        super(message);
+    }
+
+    public UnretryableException(Throwable cause) {
+        super(cause);
+    }
+
+    public UnretryableException(String message, Throwable cause) {
+        super(message, cause);
+    }
 
 }

@@ -494,4 +494,9 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Package name="org.apache.kafka.jmh.metadata.generated"/>
     </Match>
 
+    <Match>
+        <Package name="org.apache.kafka.common.security.oauthbearer.secured" />
+        <Bug pattern="NM_SAME_SIMPLE_NAME_AS_SUPERCLASS"/>
+    </Match>
+
 </FindBugsFilter>
