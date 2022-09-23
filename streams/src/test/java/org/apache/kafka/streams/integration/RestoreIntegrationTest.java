@@ -102,12 +102,10 @@ public class RestoreIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-
     @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
-
 
     @AfterAll
     public static void closeCluster() {
@@ -158,29 +156,29 @@ public class RestoreIntegrationTest {
     public void shouldRestoreNullRecord() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final String APPLICATION_ID = "restoration-test-app";
-        final String STATE_STORE_NAME = "stateStore";
-        final String INPUT_TOPIC = "input";
-        final String OUTPUT_TOPIC = "output";
+        final String applicationId = "restoration-test-app";
+        final String stateStoreName = "stateStore";
+        final String inputTopic = "input";
+        final String outputTopic = "output";
 
         final Properties props = new Properties();
 
-        Properties streamsConfiguration = StreamsTestUtils.getStreamsConfig(
-                APPLICATION_ID,
+        final Properties streamsConfiguration = StreamsTestUtils.getStreamsConfig(
+                applicationId,
                 CLUSTER.bootstrapServers(),
                 Serdes.Integer().getClass().getName(),
                 Serdes.ByteArray().getClass().getName(),
                 props);
 
-        CLUSTER.createTopics(INPUT_TOPIC);
-        CLUSTER.createTopics(OUTPUT_TOPIC);
+        CLUSTER.createTopics(inputTopic);
+        CLUSTER.createTopics(outputTopic);
 
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-        builder.table(INPUT_TOPIC, Materialized.<Integer, Bytes>as(
-                        Stores.persistentTimestampedKeyValueStore(STATE_STORE_NAME))
+        builder.table(inputTopic, Materialized.<Integer, Bytes>as(
+                        Stores.persistentTimestampedKeyValueStore(stateStoreName))
                 .withKeySerde(Serdes.Integer())
                 .withValueSerde(Serdes.Bytes())
-                .withCachingDisabled()).toStream().to(OUTPUT_TOPIC);
+                .withCachingDisabled()).toStream().to(outputTopic);
 
         final Properties producerConfig = TestUtils.producerConfig(
                 CLUSTER.bootstrapServers(), IntegerSerializer.class, BytesSerializer.class);
@@ -191,7 +189,7 @@ public class RestoreIntegrationTest {
                 KeyValue.pair(1, new Bytes(new byte[]{1})));
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                INPUT_TOPIC, initialKeyValues, producerConfig, new MockTime());
+                inputTopic, initialKeyValues, producerConfig, new MockTime());
 
         KafkaStreams streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
         streams.start();
@@ -200,7 +198,7 @@ public class RestoreIntegrationTest {
                 CLUSTER.bootstrapServers(), IntegerDeserializer.class, BytesDeserializer.class);
 
         IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
-                consumerConfig, OUTPUT_TOPIC, initialKeyValues);
+                consumerConfig, outputTopic, initialKeyValues);
 
         // wipe out state store to trigger restore process on restart
         streams.close();
@@ -211,11 +209,11 @@ public class RestoreIntegrationTest {
         final List<KeyValue<Integer, Bytes>> newKeyValues = Collections
                 .singletonList(KeyValue.pair(2, new Bytes(new byte[3])));
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                INPUT_TOPIC, newKeyValues, producerConfig, new MockTime());
+                inputTopic, newKeyValues, producerConfig, new MockTime());
         streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
         streams.start();
         IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
-                consumerConfig, OUTPUT_TOPIC, newKeyValues);
+                consumerConfig, outputTopic, newKeyValues);
         streams.close();
     }
 
@@ -228,16 +226,14 @@ public class RestoreIntegrationTest {
         final Properties props = props(stateUpdaterEnabled);
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
-        // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000
-        // on each of the two partitions
+        // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
         final int offsetLimitDelta = 1000;
         final int offsetCheckpointed = 1000;
         createStateForRestoration(inputStream, 0);
         setCommittedOffset(inputStream, offsetLimitDelta);
 
         final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
-        // note here the checkpointed offset is the last processed record's offset, so
-        // without control message we should write this offset - 1
+        // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
                 .write(Collections.singletonMap(new TopicPartition(inputStream, 0), (long) offsetCheckpointed - 1));
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 1)), ".checkpoint"))
@@ -246,9 +242,7 @@ public class RestoreIntegrationTest {
         final CountDownLatch startupLatch = new CountDownLatch(1);
         final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
-        builder.table(inputStream,
-                        Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("store").withKeySerde(Serdes.Integer())
-                                .withValueSerde(Serdes.Integer()))
+        builder.table(inputStream, Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("store").withKeySerde(Serdes.Integer()).withValueSerde(Serdes.Integer()))
                 .toStream()
                 .foreach((key, value) -> {
                     if (numReceived.incrementAndGet() == offsetLimitDelta * 2) {
@@ -266,20 +260,17 @@ public class RestoreIntegrationTest {
         final AtomicLong restored = new AtomicLong(0);
         kafkaStreams.setGlobalStateRestoreListener(new StateRestoreListener() {
             @Override
-            public void onRestoreStart(final TopicPartition topicPartition, final String storeName,
-                                       final long startingOffset, final long endingOffset) {
+            public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
 
             }
 
             @Override
-            public void onBatchRestored(final TopicPartition topicPartition, final String storeName,
-                                        final long batchEndOffset, final long numRestored) {
+            public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
 
             }
 
             @Override
-            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName,
-                                     final long totalRestored) {
+            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
                 restored.addAndGet(totalRestored);
             }
         });
@@ -303,15 +294,13 @@ public class RestoreIntegrationTest {
 
         final Properties props = props(stateUpdaterEnabled);
 
-        // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of
-        // the two partitions
+        // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
         final int offsetCheckpointed = 1000;
         createStateForRestoration(changelog, 0);
         createStateForRestoration(inputStream, 10000);
 
         final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
-        // note here the checkpointed offset is the last processed record's offset, so
-        // without control message we should write this offset - 1
+        // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
                 .write(Collections.singletonMap(new TopicPartition(changelog, 0), (long) offsetCheckpointed - 1));
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 1)), ".checkpoint"))
@@ -338,20 +327,17 @@ public class RestoreIntegrationTest {
         final AtomicLong restored = new AtomicLong(0);
         kafkaStreams.setGlobalStateRestoreListener(new StateRestoreListener() {
             @Override
-            public void onRestoreStart(final TopicPartition topicPartition, final String storeName,
-                                       final long startingOffset, final long endingOffset) {
+            public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
 
             }
 
             @Override
-            public void onBatchRestored(final TopicPartition topicPartition, final String storeName,
-                                        final long batchEndOffset, final long numRestored) {
+            public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
 
             }
 
             @Override
-            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName,
-                                     final long totalRestored) {
+            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
                 restored.addAndGet(totalRestored);
             }
         });
@@ -366,16 +352,14 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("parameters")
-    public void shouldSuccessfullyStartWhenLoggingDisabled(final boolean stateUpdaterEnabled)
-            throws InterruptedException {
+    public void shouldSuccessfullyStartWhenLoggingDisabled(final boolean stateUpdaterEnabled) throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, Integer> stream = builder.stream(inputStream);
         stream.groupByKey()
                 .reduce(
                         (value1, value2) -> value1 + value2,
-                        Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store")
-                                .withLoggingDisabled());
+                        Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled());
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
         kafkaStreams = new KafkaStreams(builder.build(), props(stateUpdaterEnabled));
@@ -392,8 +376,7 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("parameters")
-    public void shouldProcessDataFromStoresWithLoggingDisabled(final boolean stateUpdaterEnabled)
-            throws InterruptedException {
+    public void shouldProcessDataFromStoresWithLoggingDisabled(final boolean stateUpdaterEnabled) throws InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronously(inputStream,
                 asList(KeyValue.pair(1, 1),
                         KeyValue.pair(2, 2),
@@ -438,12 +421,12 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("parameters")
-    public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore(final boolean stateUpdaterEnabled)
-            throws Exception {
+    public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore(final boolean stateUpdaterEnabled) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(
                 inputStream,
-                Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.as(getCloseCountingStore("store")));
+                Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.as(getCloseCountingStore("store"))
+        );
         createStateForRestoration(inputStream, 0);
 
         final Properties props1 = props(stateUpdaterEnabled);
@@ -468,8 +451,7 @@ public class RestoreIntegrationTest {
         waitForStandbyCompletion(client1, 1, 30 * 1000L);
         waitForStandbyCompletion(client2, 1, 30 * 1000L);
 
-        // Sometimes the store happens to have already been closed sometime during
-        // startup, so just keep track
+        // Sometimes the store happens to have already been closed sometime during startup, so just keep track
         // of where it started and make sure it doesn't happen more times from there
         final int initialStoreCloseCount = CloseCountingInMemoryStore.numStoresClosed();
         final long initialNunRestoredCount = restoreListener.totalNumRestored();
@@ -484,8 +466,7 @@ public class RestoreIntegrationTest {
 
         assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(initialNunRestoredCount));
 
-        // After stopping instance 2 and letting instance 1 take over its tasks, we
-        // should have closed just two stores
+        // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed just two stores
         // total: the active and standby tasks on instance 2
         assertThat(CloseCountingInMemoryStore.numStoresClosed(), equalTo(initialStoreCloseCount + 2));
 
@@ -561,8 +542,8 @@ public class RestoreIntegrationTest {
         final Properties producerConfig = new Properties();
         producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
 
-        try (final KafkaProducer<Integer, Integer> producer = new KafkaProducer<>(producerConfig,
-                new IntegerSerializer(), new IntegerSerializer())) {
+        try (final KafkaProducer<Integer, Integer> producer =
+                     new KafkaProducer<>(producerConfig, new IntegerSerializer(), new IntegerSerializer())) {
 
             for (int i = 0; i < numberOfKeys; i++) {
                 final int offset = startingOffset + i;
