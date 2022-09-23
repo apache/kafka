@@ -160,7 +160,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk")) // KRaft mode will be supported in KAFKA-13910
-  def testMetadataRefresh(quorum: String): Unit = {
+  def testMetadataDurabilityOnControllerFailure(quorum: String): Unit = {
     client = Admin.create(createConfig)
     val topics = Seq("mytopic")
     val newTopics = Seq(new NewTopic("mytopic", 3, 3.toShort))
