@@ -949,7 +949,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       val clientMetadata = if (versionId >= 11 && replicaManager.hasReplicaSelector) {
         // Fetching from follower is only supported from Fetch API version 11. Moreover, we
-        // only allow it if the broker has a replica selector configured. If it does not, there
+        // only allow it if the broker has a replica selector configured. If it does not, there is
         // no point in letting the client read from a follower replica because it is not expected.
         Some(new DefaultClientMetadata(
           fetchRequest.rackId,
