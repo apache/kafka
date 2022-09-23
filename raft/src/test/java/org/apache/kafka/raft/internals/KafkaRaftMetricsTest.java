@@ -177,16 +177,16 @@ public class KafkaRaftMetricsTest {
     }
 
     @Test
-    public void shouldRecordNumUnknownVoterConnections() throws IOException {
+    public void shouldRecordNumKnownVoterConnections() throws IOException {
         QuorumState state = buildQuorumState(Collections.singleton(localId));
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
-        assertEquals((double) 0, getMetric(metrics, "number-unknown-voter-connections").metricValue());
+        assertEquals((double) 0, getMetric(metrics, "number-known-voter-connections").metricValue());
 
-        raftMetrics.updateNumUnknownVoterConnections(2);
+        raftMetrics.updateNumKnownVoterConnections(2);
 
-        assertEquals((double) 2, getMetric(metrics, "number-unknown-voter-connections").metricValue());
+        assertEquals((double) 2, getMetric(metrics, "number-known-voter-connections").metricValue());
     }
 
     @Test

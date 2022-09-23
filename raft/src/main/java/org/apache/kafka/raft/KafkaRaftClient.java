@@ -246,7 +246,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             logContext,
             random);
         this.kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft", quorum);
-        kafkaRaftMetrics.updateNumUnknownVoterConnections(quorum.remoteVoters().size());
+        kafkaRaftMetrics.updateNumKnownVoterConnections(quorum.remoteVoters().size());
 
         // Update the voter endpoints with what's in RaftConfig
         Map<Integer, RaftConfig.AddressSpec> voterAddresses = raftConfig.quorumVoterConnections();
