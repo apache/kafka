@@ -1815,8 +1815,9 @@ $ bin/kafka-acls.sh \
       </tr>
   </tbody></table>
 
-<h5 class="anchor-heading"><a id="kraft_monitoring" class="anchor-link"></a><a href="#kraft_monitoring">KRaft Monitoring Metrics</a></h5>
-The set of metrics that allow monitoring of the KRaft quorum and the metadata log on both Brokers and Controllers
+<h4 class="anchor-heading"><a id="kraft_monitoring" class="anchor-link"></a><a href="#kraft_monitoring">KRaft Monitoring Metrics</a></h4>
+The set of metrics that allow monitoring of the KRaft quorum and the metadata log
+<h5 class="anchor-heading"><a id="kraft_controller_monitoring" class="anchor-link"></a><a href="#kraft_controller_monitoring">KRaft Controller Monitoring Metrics</a></h5>
 <table class="data-table">
   <tbody>
   <tr>
@@ -1855,9 +1856,9 @@ The set of metrics that allow monitoring of the KRaft quorum and the metadata lo
     <td>kafka.server:type=raft-metrics,name=log-end-offset</td>
   </tr>
   <tr>
-    <td>Number of Known Voter Connections</td>
-    <td>The number of voter connections recognized at this member.</td>
-    <td>kafka.server:type=raft-metrics,name=number-known-voter-connections</td>
+    <td>Number of Unknown Voter Connections</td>
+    <td>Number of unknown voters whose connection information is not cached. This value of this metric is always 0.</td>
+    <td>kafka.server:type=raft-metrics,name=number-unknown-voter-connections</td>
   </tr>
   <tr>
     <td>Average Commit Latency</td>
@@ -1965,6 +1966,16 @@ The set of metrics that allow monitoring of the KRaft quorum and the metadata lo
     For active Controllers the value of this lag is always zero.</td>
     <td>kafka.controller:type=KafkaController,name=LastAppliedRecordLagMs</td>
   </tr>
+  </tbody>
+</table>
+  <h5 class="anchor-heading"><a id="kraft_broker_monitoring" class="anchor-link"></a><a href="#kraft_broker_monitoring">KRaft Broker Monitoring Metrics</a></h5>
+  <table class="data-table">
+    <tbody>
+    <tr>
+      <th>Metric/Attribute name</th>
+      <th>Description</th>
+      <th>Mbean name</th>
+    </tr>
   <tr>
     <td>Last Applied Record Offset</td>
     <td>The offset of the last record from the cluster metadata partition that was applied by the broker</td>
