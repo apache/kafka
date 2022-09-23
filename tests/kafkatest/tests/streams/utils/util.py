@@ -16,17 +16,13 @@ def verify_running(processor, message):
     node = processor.node
     with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
         processor.start()
-        monitor.wait_until(message,
-                           timeout_sec=60,
-                           err_msg="Never saw '%s' message " % message + str(processor.node.account))
+        wait_for(monitor, processor, message)
 
 def verify_stopped(processor, message):
     node = processor.node
     with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
         processor.stop()
-        monitor.wait_until(message,
-                           timeout_sec=60,
-                           err_msg="'%s' message " % message + str(processor.node.account))
+        wait_for(monitor, processor, message)
 
 def stop_processors(processors, stopped_message):
     for processor in processors:
@@ -41,3 +37,8 @@ def extract_generation_id(generation):
     # Extracting generationId from it.
     m = re.search(r'Generation{generationId=(\d+),.*', generation)
     return int(m.group(1))
+
+def wait_for(monitor, processor, output, timeout_sec=60):
+    monitor.wait_until(output,
+                       timeout_sec=timeout_sec,
+                       err_msg=("Never saw output '%s' on " % output) + str(processor.node.account))

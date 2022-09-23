@@ -390,6 +390,7 @@ class StreamsEosTestBaseService(StreamsTestBaseService):
                                                         "org.apache.kafka.streams.tests.StreamsEosTest",
                                                         command)
         self.PROCESSING_GUARANTEE = processing_guarantee
+        self.KAFKA_STREAMS_VERSION = ""
 
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
@@ -405,6 +406,35 @@ class StreamsEosTestBaseService(StreamsTestBaseService):
     def clean_node(self, node):
         if self.clean_node_enabled:
             super(StreamsEosTestBaseService, self).clean_node(node)
+
+    def set_version(self, kafka_streams_version):
+        self.KAFKA_STREAMS_VERSION = kafka_streams_version
+
+    def set_processing_guarantee(self, processing_guarantee):
+        self.PROCESSING_GUARANTEE = processing_guarantee
+
+    def start_cmd(self, node):
+        args = self.args.copy()
+        args['config_file'] = self.CONFIG_FILE
+        args['stdout'] = self.STDOUT_FILE
+        args['stderr'] = self.STDERR_FILE
+        args['pidfile'] = self.PID_FILE
+        args['log4j'] = self.LOG4J_CONFIG_FILE
+        args['version'] = self.KAFKA_STREAMS_VERSION
+        args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
+
+        self.logger.info("We are having a version: "+args['version'])
+
+        cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\";" \
+              " INCLUDE_TEST_JARS=true UPGRADE_KAFKA_STREAMS_TEST_VERSION=%(version)s" \
+              " %(kafka_run_class)s %(streams_class_name)s" \
+              " %(config_file)s %(user_test_args1)s" \
+              " & echo $! >&3 ) " \
+              "1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
+
+        self.logger.info("Executing streams cmd: " + cmd)
+
+        return cmd
 
 
 class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):

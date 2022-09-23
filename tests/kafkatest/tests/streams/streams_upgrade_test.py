@@ -73,6 +73,8 @@ which are outlined here:
 
 6. Then you'll need to update any version changes in gradle/dependencies.gradle
 
+7. Also make sure to update the versions in `streams_eos_upgrade_test.py`
+
 """
 
 
