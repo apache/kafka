@@ -31,8 +31,10 @@ import org.mockito.junit.MockitoJUnitRunner;
 import java.util.HashMap;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -56,13 +58,15 @@ public class WorkerMetricsGroupTest {
 
     @Mock private ConnectorStatus.Listener delegateConnectorListener;
     @Mock private TaskStatus.Listener delegateTaskListener;
+    @Mock private ConnectMetricsRegistry connectMetricsRegistry;
+    @Mock private ConnectMetrics.MetricGroup metricGroup;
+    @Mock private MetricName metricName;
 
     @Before
     public void setup() {
-        ConnectMetricsRegistry connectMetricsRegistry = mock(ConnectMetricsRegistry.class);
-        ConnectMetrics.MetricGroup metricGroup = mock(ConnectMetrics.MetricGroup.class);
-        MetricName metricName = mock(MetricName.class);
-
+        // We don't expect metricGroup.metricName to be invoked with null in practice,
+        // but it's easier to test this way, and should have no impact
+        // on the efficacy of these tests
         when(metricGroup.metricName((MetricNameTemplate) isNull())).thenReturn(metricName);
         when(connectMetricsRegistry.workerGroupName()).thenReturn(ConnectMetricsRegistry.WORKER_GROUP_NAME);
         when(connectMetrics.registry()).thenReturn(connectMetricsRegistry);
@@ -109,6 +113,8 @@ public class WorkerMetricsGroupTest {
         verify(delegateConnectorListener).onStartup(connector);
         verifyRecordConnectorStartupSuccess();
         verify(delegateConnectorListener).onFailure(connector, exception);
+        // recordConnectorStartupFailure() should not be called if failure happens after a successful startup.
+        verify(connectorStartupFailures, never()).record(anyDouble());
     }
 
     @Test
@@ -144,6 +150,8 @@ public class WorkerMetricsGroupTest {
         verify(delegateTaskListener).onStartup(task);
         verifyRecordTaskSuccess();
         verify(delegateTaskListener).onFailure(task, exception);
+        // recordTaskFailure() should not be called if failure happens after a successful startup.
+        verify(taskStartupFailures, never()).record(anyDouble());
     }
 
     @Test
