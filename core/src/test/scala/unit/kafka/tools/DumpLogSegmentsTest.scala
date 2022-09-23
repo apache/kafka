@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
 
-import kafka.log.{AppendOrigin, Defaults, LogConfig, LogTestUtils, UnifiedLog}
+import kafka.log.{AppendOrigin, Defaults, LogConfig, LogTestUtils, ProducerStateManagerConfig, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
 import kafka.server.{BrokerTopicStats, FetchLogEnd, KafkaRaftServer, LogDirFailureChannel}
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
@@ -74,7 +74,7 @@ class DumpLogSegmentsTest {
       time = time,
       brokerTopicStats = new BrokerTopicStats,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
-      maxProducerIdExpirationMs = 60 * 60 * 1000,
+      producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs),
       producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,

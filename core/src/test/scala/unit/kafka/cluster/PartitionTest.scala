@@ -383,12 +383,12 @@ class PartitionTest extends AbstractPartitionTest {
         val segments = new LogSegments(log.topicPartition)
         val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
         val maxTransactionTimeoutMs = 5 * 60 * 1000
-        val maxProducerIdExpirationMs = 60 * 60 * 1000
+        val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs)
         val producerStateManager = new ProducerStateManager(
           log.topicPartition,
           log.dir,
           maxTransactionTimeoutMs,
-          maxProducerIdExpirationMs,
+          producerStateManagerConfig,
           mockTime
         )
         val offsets = new LogLoader(
