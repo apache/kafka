@@ -196,7 +196,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
             highWatermarkMetricName,
             logEndOffsetMetricName,
             logEndEpochMetricName,
-                numUnknownVoterConnectionsMetricName
+            numUnknownVoterConnectionsMetricName
         ).forEach(metrics::removeMetric);
 
         Arrays.asList(
