@@ -22,9 +22,15 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Properties;
+import java.util.Set;
+import java.util.Optional;
+import java.util.Arrays;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -161,6 +167,20 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         verifyKTableKTableJoin(expectedOne);
     }
 
+    @Test
+    public void shouldThrowIllegalArgumentExceptionWhenCustomPartionerReturnsMultiplePartitions() throws Exception {
+        final String innerJoinType = "INNER";
+        final String queryableName = innerJoinType + "-store1";
+
+        streams = prepareTopologyWithNonSingletonPartitions(queryableName, streamsConfig);
+        streamsTwo = prepareTopologyWithNonSingletonPartitions(queryableName, streamsConfigTwo);
+        streamsThree = prepareTopologyWithNonSingletonPartitions(queryableName, streamsConfigThree);
+
+        final List<KafkaStreams> kafkaStreamsList = asList(streams, streamsTwo, streamsThree);
+        assertThrows(IllegalArgumentException.class, () -> startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(120)));
+
+    }
+
     private void verifyKTableKTableJoin(final Set<KeyValue<String, String>> expectedResult) throws Exception {
         final String innerJoinType = "INNER";
         final String queryableName = innerJoinType + "-store1";
@@ -236,13 +256,14 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
     static class MultiPartitioner implements StreamPartitioner<String, Void> {
 
         @Override
+        @Deprecated
         public Integer partition(String topic, String key, Void value, int numPartitions) {
             return null;
         }
 
         @Override
         public Optional<Set<Integer>> partitions(String topic, String key, Void value, int numPartitions) {
-            return Optional.of(new HashSet<>(Arrays.asList(0, 1, 1)));
+            return Optional.of(new HashSet<>(Arrays.asList(0, 1, 2)));
         }
     }
 
