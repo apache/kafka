@@ -32,6 +32,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 @SuppressWarnings({"deprecation", "removal"})
 public class SystemExitExtension implements BeforeEachCallback, AfterEachCallback {
 
@@ -58,6 +61,48 @@ public class SystemExitExtension implements BeforeEachCallback, AfterEachCallbac
         checkForLateExits();
     }
 
+    /**
+     * For testing the extension; should not be used by any other tests
+     */
+    static boolean securityManagerInstalled() {
+        return System.getSecurityManager() instanceof ExitCheckingSecurityManager;
+    }
+
+    /**
+     * For testing the extension; should not be used by any other tests
+     */
+    static void allowExitFromCurrentTest() {
+        Object testInstance = CURRENT_TEST_INSTANCE.get();
+        assertNotNull(testInstance);
+        TestCase testCase = ACTIVE_TEST_CASES.get(testInstance);
+        assertNotNull(testCase);
+        testCase.allowExit(true);
+    }
+
+    /**
+     * For testing the extension; should not be used by any other tests
+     */
+    static void assertExitCalledFromCurrentTest(int expectedStatus) {
+        Object testInstance = CURRENT_TEST_INSTANCE.get();
+        assertNotNull(testInstance);
+        TestCase testCase = ACTIVE_TEST_CASES.remove(testInstance);
+        assertExitFromTest(testCase, expectedStatus);
+    }
+
+    /**
+     * For testing the extension; should not be used by any other tests
+     */
+    static void assertExitFromPriorTest(Object testInstance, int expectedStatus) {
+        TestCase testCase = FINISHED_TEST_CASES.remove(testInstance);
+        assertExitFromTest(testCase, expectedStatus);
+    }
+
+    private static void assertExitFromTest(TestCase testCase, int expectedStatus) {
+        assertNotNull(testCase);
+        Integer actualStatus = testCase.exit();
+        assertEquals(Integer.valueOf(expectedStatus), actualStatus);
+    }
+
     private static void maybeInstallSecurityManager() {
         if (!shouldInstallSecurityManager())
             return;
@@ -82,7 +127,7 @@ public class SystemExitExtension implements BeforeEachCallback, AfterEachCallbac
         // If we've already tried and failed to set the security manager, we shouldn't try again
         return canSetSecurityManager
                 // If we've already successfully registered the security manager, we don't need to do it again
-                && !(System.getSecurityManager() instanceof ExitCheckingSecurityManager);
+                && !securityManagerInstalled();
     }
 
     private static void addActiveTestCase(ExtensionContext context) {
@@ -105,7 +150,7 @@ public class SystemExitExtension implements BeforeEachCallback, AfterEachCallbac
                 // Should never happen, but just in case...
                 return;
             }
-            if (testCase.exit() != null) {
+            if (testCase.exit() != null && !testCase.allowExit()) {
                 throw new AssertionError("System exit was invoked with status " + testCase.exit() + " during this test. "
                         + "Tests should never directly or indirectly invoke System::exit or System::halt and instead should use the Exit wrapper class, "
                         + "which can then be mocked during testing to avoid terminating the JVM when called");
@@ -122,6 +167,7 @@ public class SystemExitExtension implements BeforeEachCallback, AfterEachCallbac
         synchronized (SystemExitExtension.class) {
             lateExits = FINISHED_TEST_CASES.values().stream()
                     .filter(tc -> tc.exit() != null)
+                    .filter(tc -> !tc.allowExit())
                     .collect(Collectors.toSet());
             FINISHED_TEST_CASES.values().removeAll(lateExits);
         }
@@ -140,10 +186,13 @@ public class SystemExitExtension implements BeforeEachCallback, AfterEachCallbac
     }
 
     private static class TestCase {
+
+        private volatile boolean allowExit;
         private final String description;
         private final AtomicReference<Integer> exit;
 
         public TestCase(String description) {
+            this.allowExit = false;
             this.description = Objects.requireNonNull(description);
             this.exit = new AtomicReference<>();
         }
@@ -154,6 +203,16 @@ public class SystemExitExtension implements BeforeEachCallback, AfterEachCallbac
 
         public Integer exit() {
             return exit.get();
+        }
+
+        // For testing only {
+        public boolean allowExit() {
+            return allowExit;
+        }
+
+        // For testing only
+        public void allowExit(boolean allowExit) {
+            this.allowExit = allowExit;
         }
 
         @Override
