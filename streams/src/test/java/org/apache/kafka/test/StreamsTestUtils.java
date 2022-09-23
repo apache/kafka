@@ -335,34 +335,16 @@ public final class StreamsTestUtils {
     }
 
     public static class TopologyMetadataBuilder {
-        private final String topologyName;
         private final TopologyMetadata topologyMetadata;
 
-        private TopologyMetadataBuilder(final TopologyMetadata topologyMetadata, final String topologyName) {
-            this.topologyName = topologyName;
+        private TopologyMetadataBuilder(final TopologyMetadata topologyMetadata) {
             this.topologyMetadata = topologyMetadata;
         }
 
         public static TopologyMetadataBuilder unamedTopology() {
             final TopologyMetadata topologyMetadata = mock(TopologyMetadata.class);
             when(topologyMetadata.isPaused(null)).thenReturn(false);
-            return new TopologyMetadataBuilder(topologyMetadata, null);
-        }
-
-        public static TopologyMetadataBuilder namedTopology(final String name) {
-            final TopologyMetadata topologyMetadata = mock(TopologyMetadata.class);
-            when(topologyMetadata.isPaused(name)).thenReturn(false);
-            return new TopologyMetadataBuilder(topologyMetadata, name);
-        }
-
-        public TopologyMetadataBuilder pause() {
-            when(topologyMetadata.isPaused(topologyName)).thenReturn(true);
-            return this;
-        }
-
-        public TopologyMetadataBuilder resume() {
-            when(topologyMetadata.isPaused(topologyName)).thenReturn(false);
-            return this;
+            return new TopologyMetadataBuilder(topologyMetadata);
         }
 
         public TopologyMetadata build() {
