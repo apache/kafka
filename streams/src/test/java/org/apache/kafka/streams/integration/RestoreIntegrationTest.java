@@ -98,20 +98,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(600)
 @Tag("integration")
 public class RestoreIntegrationTest {
-
-    private final StreamsBuilder builder = new StreamsBuilder();
-
-    private static final String APPLICATION_ID = "restoration-test-app";
-    private static final String STATE_STORE_NAME = "stateStore";
-    private static final String INPUT_TOPIC = "input";
-    private static final String OUTPUT_TOPIC = "output";
-
-
     private static final int NUM_BROKERS = 1;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    private final MockTime mockTime = CLUSTER.time;
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -166,6 +156,12 @@ public class RestoreIntegrationTest {
 
     @Test
     public void shouldRestoreNullRecord() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final String APPLICATION_ID = "restoration-test-app";
+        final String STATE_STORE_NAME = "stateStore";
+        final String INPUT_TOPIC = "input";
+        final String OUTPUT_TOPIC = "output";
 
         final Properties props = new Properties();
 
@@ -195,7 +191,7 @@ public class RestoreIntegrationTest {
                 KeyValue.pair(1, new Bytes(new byte[]{1})));
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                INPUT_TOPIC, initialKeyValues, producerConfig, mockTime);
+                INPUT_TOPIC, initialKeyValues, producerConfig, new MockTime());
 
         KafkaStreams streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
         streams.start();
@@ -215,7 +211,7 @@ public class RestoreIntegrationTest {
         final List<KeyValue<Integer, Bytes>> newKeyValues = Collections
                 .singletonList(KeyValue.pair(2, new Bytes(new byte[3])));
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                INPUT_TOPIC, newKeyValues, producerConfig, mockTime);
+                INPUT_TOPIC, newKeyValues, producerConfig, new MockTime());
         streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
         streams.start();
         IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
