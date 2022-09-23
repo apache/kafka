@@ -106,7 +106,6 @@ public class RestoreIntegrationTest {
     private static final String INPUT_TOPIC = "input";
     private static final String OUTPUT_TOPIC = "output";
 
-    private Properties streamsConfiguration;
 
     private static final int NUM_BROKERS = 1;
 
@@ -119,22 +118,6 @@ public class RestoreIntegrationTest {
         CLUSTER.start();
     }
 
-    @BeforeEach
-    public void setUp() throws Exception {
-        final Properties props = new Properties();
-
-        streamsConfiguration = StreamsTestUtils.getStreamsConfig(
-                APPLICATION_ID,
-                CLUSTER.bootstrapServers(),
-                Serdes.Integer().getClass().getName(),
-                Serdes.ByteArray().getClass().getName(),
-                props);
-
-        CLUSTER.createTopics(INPUT_TOPIC);
-        CLUSTER.createTopics(OUTPUT_TOPIC);
-
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-    }
 
     @AfterAll
     public static void closeCluster() {
@@ -183,6 +166,20 @@ public class RestoreIntegrationTest {
 
     @Test
     public void shouldRestoreNullRecord() throws Exception {
+
+        final Properties props = new Properties();
+
+        Properties streamsConfiguration = StreamsTestUtils.getStreamsConfig(
+                APPLICATION_ID,
+                CLUSTER.bootstrapServers(),
+                Serdes.Integer().getClass().getName(),
+                Serdes.ByteArray().getClass().getName(),
+                props);
+
+        CLUSTER.createTopics(INPUT_TOPIC);
+        CLUSTER.createTopics(OUTPUT_TOPIC);
+
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
         builder.table(INPUT_TOPIC, Materialized.<Integer, Bytes>as(
                         Stores.persistentTimestampedKeyValueStore(STATE_STORE_NAME))
                 .withKeySerde(Serdes.Integer())
