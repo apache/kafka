@@ -22,8 +22,9 @@ import java.nio.channels.FileChannel
 import java.nio.file.{Files, NoSuchFileException, StandardOpenOption}
 import java.util.concurrent.ConcurrentSkipListMap
 import kafka.log.UnifiedLog.offsetFromFile
-import kafka.server.LogOffsetMetadata
+import kafka.server.{BrokerReconfigurable, KafkaConfig, LogOffsetMetadata}
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe, threadsafe}
+import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.types._
@@ -487,7 +488,7 @@ class ProducerStateManager(
   val topicPartition: TopicPartition,
   @volatile var _logDir: File,
   val maxTransactionTimeoutMs: Int,
-  val maxProducerIdExpirationMs: Int,
+  val producerStateManagerConfig: ProducerStateManagerConfig,
   val time: Time
 ) extends Logging {
   import ProducerStateManager._
@@ -653,7 +654,7 @@ class ProducerStateManager(
   }
 
   private def isProducerExpired(currentTimeMs: Long, producerState: ProducerStateEntry): Boolean =
-    producerState.currentTxnFirstOffset.isEmpty && currentTimeMs - producerState.lastTimestamp >= maxProducerIdExpirationMs
+    producerState.currentTxnFirstOffset.isEmpty && currentTimeMs - producerState.lastTimestamp >= producerStateManagerConfig.producerIdExpirationMs
 
   /**
    * Expire any producer ids which have been idle longer than the configured maximum expiration timeout.
@@ -938,4 +939,25 @@ object SnapshotFile {
     val offset = offsetFromFile(file)
     SnapshotFile(file, offset)
   }
+}
+
+class ProducerStateManagerConfig(@volatile var producerIdExpirationMs: Int) extends Logging with BrokerReconfigurable {
+
+  override def reconfigurableConfigs: Set[String] = ProducerStateManagerConfig.ReconfigurableConfigs
+
+  override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
+    if (producerIdExpirationMs != newConfig.producerIdExpirationMs) {
+      info(s"Reconfigure ${KafkaConfig.ProducerIdExpirationMsProp} from $producerIdExpirationMs to ${newConfig.producerIdExpirationMs}")
+      producerIdExpirationMs = newConfig.producerIdExpirationMs
+    }
+  }
+
+  override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
+    if (newConfig.producerIdExpirationMs < 0)
+      throw new ConfigException(s"${KafkaConfig.ProducerIdExpirationMsProp} cannot be less than 0, current value is $producerIdExpirationMs")
+  }
+}
+
+object ProducerStateManagerConfig {
+  val ReconfigurableConfigs = Set(KafkaConfig.ProducerIdExpirationMsProp)
 }

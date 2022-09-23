@@ -589,7 +589,7 @@ class LogSegmentTest {
       topicPartition,
       logDir,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
-      maxProducerIdExpirationMs = 60 * 60 * 1000,
+      producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs),
       time = new MockTime()
     )
   }
