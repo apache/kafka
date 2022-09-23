@@ -1816,8 +1816,10 @@ $ bin/kafka-acls.sh \
   </tbody></table>
 
 <h4 class="anchor-heading"><a id="kraft_monitoring" class="anchor-link"></a><a href="#kraft_monitoring">KRaft Monitoring Metrics</a></h4>
-The set of metrics that allow monitoring of the KRaft quorum and the metadata log
-<h5 class="anchor-heading"><a id="kraft_controller_monitoring" class="anchor-link"></a><a href="#kraft_controller_monitoring">KRaft Controller Monitoring Metrics</a></h5>
+The set of metrics that allow monitoring of the KRaft quorum and the metadata log.<br>
+Note: A Controller is defined as a Kafka Broker which has "controller" included among the <code>process.roles</code> config
+<h5 class="anchor-heading"><a id="kraft_quorum_monitoring" class="anchor-link"></a><a href="#kraft_quorum_monitoring">KRaft Quorum Monitoring Metrics</a></h5>
+These metrics are reported on both Controllers and Brokers in a KRaft Cluster
 <table class="data-table">
   <tbody>
   <tr>
@@ -1887,13 +1889,23 @@ The set of metrics that allow monitoring of the KRaft quorum and the metadata lo
   </tr>
   <tr>
     <td>Append Records Rate</td>
-    <td>The average number of records appended per sec as the leader of the raft quorum.</td>
+    <td>The average number of records appended per sec by the leader of the raft quorum.</td>
     <td>kafka.server:type=raft-metrics,name=append-records-raft</td>
   </tr>
   <tr>
     <td>Average Poll Idle Ratio</td>
     <td>The average fraction of time the client's poll() is idle as opposed to waiting for the user code to process records.</td>
     <td>kafka.server:type=raft-metrics,name=poll-idle-ratio-avg</td>
+  </tr>
+  </tbody>
+</table>
+<h5 class="anchor-heading"><a id="kraft_controller_monitoring" class="anchor-link"></a><a href="#kraft_controller_monitoring">KRaft Controller Monitoring Metrics</a></h5>
+<table class="data-table">
+  <tbody>
+  <tr>
+    <th>Metric/Attribute name</th>
+    <th>Description</th>
+    <th>Mbean name</th>
   </tr>
   <tr>
     <td>Active Controller Count</td>
