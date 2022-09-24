@@ -23,6 +23,8 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.BytesDeserializer;
+import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -55,7 +57,9 @@ import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.hamcrest.CoreMatchers;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -69,6 +73,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -143,8 +148,73 @@ public class RestoreIntegrationTest {
 
     private static Stream<Boolean> parameters() {
         return Stream.of(
-            Boolean.TRUE,
-            Boolean.FALSE);
+                Boolean.TRUE,
+                Boolean.FALSE);
+    }
+
+    @Test
+    public void shouldRestoreNullRecord() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final String applicationId = "restoration-test-app";
+        final String stateStoreName = "stateStore";
+        final String inputTopic = "input";
+        final String outputTopic = "output";
+
+        final Properties props = new Properties();
+
+        final Properties streamsConfiguration = StreamsTestUtils.getStreamsConfig(
+                applicationId,
+                CLUSTER.bootstrapServers(),
+                Serdes.Integer().getClass().getName(),
+                Serdes.ByteArray().getClass().getName(),
+                props);
+
+        CLUSTER.createTopics(inputTopic);
+        CLUSTER.createTopics(outputTopic);
+
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+        builder.table(inputTopic, Materialized.<Integer, Bytes>as(
+                        Stores.persistentTimestampedKeyValueStore(stateStoreName))
+                .withKeySerde(Serdes.Integer())
+                .withValueSerde(Serdes.Bytes())
+                .withCachingDisabled()).toStream().to(outputTopic);
+
+        final Properties producerConfig = TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(), IntegerSerializer.class, BytesSerializer.class);
+
+        final List<KeyValue<Integer, Bytes>> initialKeyValues = Arrays.asList(
+                KeyValue.pair(3, new Bytes(new byte[]{3})),
+                KeyValue.pair(3, null),
+                KeyValue.pair(1, new Bytes(new byte[]{1})));
+
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic, initialKeyValues, producerConfig, new MockTime());
+
+        KafkaStreams streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
+        streams.start();
+
+        final Properties consumerConfig = TestUtils.consumerConfig(
+                CLUSTER.bootstrapServers(), IntegerDeserializer.class, BytesDeserializer.class);
+
+        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+                consumerConfig, outputTopic, initialKeyValues);
+
+        // wipe out state store to trigger restore process on restart
+        streams.close();
+        streams.cleanUp();
+
+        // Restart the stream instance. There should not be exception handling the null
+        // value within changelog topic.
+        final List<KeyValue<Integer, Bytes>> newKeyValues = Collections
+                .singletonList(KeyValue.pair(2, new Bytes(new byte[3])));
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic, newKeyValues, producerConfig, new MockTime());
+        streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
+        streams.start();
+        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+                consumerConfig, outputTopic, newKeyValues);
+        streams.close();
     }
 
     @ParameterizedTest
@@ -288,8 +358,8 @@ public class RestoreIntegrationTest {
         final KStream<Integer, Integer> stream = builder.stream(inputStream);
         stream.groupByKey()
                 .reduce(
-                    (value1, value2) -> value1 + value2,
-                    Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled());
+                        (value1, value2) -> value1 + value2,
+                        Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled());
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
         kafkaStreams = new KafkaStreams(builder.build(), props(stateUpdaterEnabled));
@@ -308,20 +378,20 @@ public class RestoreIntegrationTest {
     @MethodSource("parameters")
     public void shouldProcessDataFromStoresWithLoggingDisabled(final boolean stateUpdaterEnabled) throws InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronously(inputStream,
-                                                           asList(KeyValue.pair(1, 1),
-                                                                         KeyValue.pair(2, 2),
-                                                                         KeyValue.pair(3, 3)),
-                                                           TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                                                                                    IntegerSerializer.class,
-                                                                                    IntegerSerializer.class),
-                                                           CLUSTER.time);
+                asList(KeyValue.pair(1, 1),
+                        KeyValue.pair(2, 2),
+                        KeyValue.pair(3, 3)),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(),
+                        IntegerSerializer.class,
+                        IntegerSerializer.class),
+                CLUSTER.time);
 
         final KeyValueBytesStoreSupplier lruMapSupplier = Stores.lruMap(inputStream, 10);
 
         final StoreBuilder<KeyValueStore<Integer, Integer>> storeBuilder = new KeyValueStoreBuilder<>(lruMapSupplier,
-                                                                                                      Serdes.Integer(),
-                                                                                                      Serdes.Integer(),
-                                                                                                      CLUSTER.time)
+                Serdes.Integer(),
+                Serdes.Integer(),
+                CLUSTER.time)
                 .withLoggingDisabled();
 
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
@@ -355,7 +425,7 @@ public class RestoreIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(
                 inputStream,
-            Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.as(getCloseCountingStore("store"))
+                Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.as(getCloseCountingStore("store"))
         );
         createStateForRestoration(inputStream, 0);
 
@@ -492,8 +562,8 @@ public class RestoreIntegrationTest {
 
         final Consumer<Integer, Integer> consumer = new KafkaConsumer<>(consumerConfig);
         final List<TopicPartition> partitions = asList(
-            new TopicPartition(topic, 0),
-            new TopicPartition(topic, 1));
+                new TopicPartition(topic, 0),
+                new TopicPartition(topic, 1));
 
         consumer.assign(partitions);
         consumer.seekToEnd(partitions);
