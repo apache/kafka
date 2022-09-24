@@ -64,9 +64,8 @@ public class StringDeserializer implements Deserializer<String> {
         try {
             if (data.hasArray()) {
                 return new String(data.array(), data.position() + data.arrayOffset(), data.remaining(), encoding);
-            } else {
-                return new String(Utils.toArray(data), encoding);
             }
+            return new String(Utils.toArray(data), encoding);
         } catch (UnsupportedEncodingException e) {
             throw new SerializationException("Error when deserializing ByteBuffer to string due to unsupported encoding " + encoding);
         }
