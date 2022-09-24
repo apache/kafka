@@ -1817,7 +1817,7 @@ $ bin/kafka-acls.sh \
 
 <h4 class="anchor-heading"><a id="kraft_monitoring" class="anchor-link"></a><a href="#kraft_monitoring">KRaft Monitoring Metrics</a></h4>
 The set of metrics that allow monitoring of the KRaft quorum and the metadata log.<br>
-Note: A Controller is defined as a Kafka Broker which has "controller" included among the <code>process.roles</code> config
+Note that some exposed metrics depend on the role of the node as defined by <code>process.roles</code>
 <h5 class="anchor-heading"><a id="kraft_quorum_monitoring" class="anchor-link"></a><a href="#kraft_quorum_monitoring">KRaft Quorum Monitoring Metrics</a></h5>
 These metrics are reported on both Controllers and Brokers in a KRaft Cluster
 <table class="data-table">
