@@ -1070,15 +1070,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // handling exceptions and record the errors;
             // for API exceptions return them in the future,
             // for other exceptions throw directly
-        } catch (ClusterAuthorizationException | TransactionalIdAuthorizationException e) {
-            if (callback != null) {
-                TopicPartition tp = appendCallbacks.topicPartition();
-                RecordMetadata nullMetadata = new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1);
-                callback.onCompletion(nullMetadata, e);
-            }
-            this.errors.record();
-            this.interceptors.onSendError(record, appendCallbacks.topicPartition(), e);
-            return new FutureFailure(e);
         } catch (ApiException e) {
             log.debug("Exception occurred during message send:", e);
             if (callback != null) {
