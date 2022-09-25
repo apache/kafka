@@ -55,6 +55,7 @@ import java.util.function.BiConsumer;
 import org.slf4j.Logger;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -610,7 +611,7 @@ public class StreamThread extends Thread {
                 }
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
-                    log.info("Triggering the followup rebalance scheduled for {} ms.", nextProbingRebalanceMs.get());
+                    log.info("Triggering the followup rebalance scheduled for {}.", Instant.ofEpochMilli(nextProbingRebalanceMs.get()));
                     mainConsumer.enforceRebalance("Scheduled probing rebalance");
                     nextProbingRebalanceMs.set(Long.MAX_VALUE);
                 }
