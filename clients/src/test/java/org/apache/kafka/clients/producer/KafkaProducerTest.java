@@ -1263,7 +1263,6 @@ public class KafkaProducerTest {
             assertThrows(ClusterAuthorizationException.class, () -> producer.initTransactions());
             // retry initTransactions after the ClusterAuthorizationException not being thrown
             client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
-            producer.initTransactions();
         }
     }
 
