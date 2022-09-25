@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
+import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.metrics.Sensor;
@@ -300,9 +301,18 @@ public class Sender implements Runnable {
             try {
                 transactionManager.maybeResolveSequences();
 
+                RuntimeException lastError = transactionManager.lastError();
+                if (transactionManager.hasAbortableError() && (
+                        lastError instanceof TransactionalIdAuthorizationException ||
+                                lastError instanceof ClusterAuthorizationException)) {
+                    transactionManager.failPendingRequestsUponError(new AuthenticationException(lastError));
+                    transactionManager.transitionToUninitialized(lastError);
+                    maybeAbortBatches(lastError);
+                    return;
+                }
+
                 // do not continue sending if the transaction manager is in a failed state
                 if (transactionManager.hasFatalError()) {
-                    RuntimeException lastError = transactionManager.lastError();
                     if (lastError != null)
                         maybeAbortBatches(lastError);
                     client.poll(retryBackoffMs, time.milliseconds());
