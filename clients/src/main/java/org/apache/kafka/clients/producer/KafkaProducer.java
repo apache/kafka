@@ -45,12 +45,14 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -81,6 +83,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -618,7 +621,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
      *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
-     *         transactional.id is not authorized. See the exception for more details
+     *         transactional.id is not authorized, or the idempotent producer id is unavailable. See the exception for
+     *         more details.  User may retry this function call after fixing the permission.
      * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
      * @throws TimeoutException if the time taken for initialize the transaction has surpassed <code>max.block.ms</code>.
      * @throws InterruptException if the thread is interrupted while blocked
@@ -1066,6 +1070,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // handling exceptions and record the errors;
             // for API exceptions return them in the future,
             // for other exceptions throw directly
+        } catch (ClusterAuthorizationException | TransactionalIdAuthorizationException e) {
+            if (callback != null) {
+                TopicPartition tp = appendCallbacks.topicPartition();
+                RecordMetadata nullMetadata = new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1);
+                callback.onCompletion(nullMetadata, e);
+            }
+            this.errors.record();
+            this.interceptors.onSendError(record, appendCallbacks.topicPartition(), e);
+            return new FutureFailure(e);
         } catch (ApiException e) {
             log.debug("Exception occurred during message send:", e);
             if (callback != null) {
