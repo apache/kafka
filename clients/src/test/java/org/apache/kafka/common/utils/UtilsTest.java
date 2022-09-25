@@ -96,7 +96,17 @@ public class UtilsTest {
         cases.put(new byte[] {'a', 'b', 'c'}, 479470107);
 
         for (Map.Entry<byte[], Integer> c : cases.entrySet()) {
-            assertEquals(c.getValue().intValue(), murmur2(c.getKey()));
+            final byte[] key = c.getKey();
+            assertEquals(c.getValue().intValue(), murmur2(key));
+            assertEquals(c.getValue().intValue(), murmur2(ByteBuffer.wrap(key)));
+
+            final ByteBuffer heapBuffer = ByteBuffer.allocate(key.length << 1).put(key);
+            heapBuffer.flip();
+            assertEquals(c.getValue().intValue(), murmur2(heapBuffer));
+
+            final ByteBuffer directBuffer = ByteBuffer.allocateDirect(key.length << 1).put(key);
+            directBuffer.flip();
+            assertEquals(c.getValue().intValue(), murmur2(directBuffer));
         }
     }
 

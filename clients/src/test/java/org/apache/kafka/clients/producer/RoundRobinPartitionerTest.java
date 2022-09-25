@@ -53,7 +53,7 @@ public class RoundRobinPartitionerTest {
         Cluster cluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), partitions,
             Collections.<String>emptySet(), Collections.<String>emptySet());
         for (int i = 1; i <= 100; i++) {
-            int part = partitioner.partition("test", null, null, null, null, cluster);
+            int part = partitioner.partition("test", null, (byte[]) null, null, null, cluster);
             assertTrue(part == 0 || part == 2, "We should never choose a leader-less node in round robin");
             if (part == 0)
                 countForPart0++;
@@ -110,14 +110,14 @@ public class RoundRobinPartitionerTest {
 
         Partitioner partitioner = new RoundRobinPartitioner();
         for (int i = 0; i < 30; ++i) {
-            int partition = partitioner.partition(topicA, null, null, null, null, testCluster);
+            int partition = partitioner.partition(topicA, null, (byte[])  null, null, null, testCluster);
             Integer count = partitionCount.get(partition);
             if (null == count)
                 count = 0;
             partitionCount.put(partition, count + 1);
 
             if (i % 5 == 0) {
-                partitioner.partition(topicB, null, null, null, null, testCluster);
+                partitioner.partition(topicB, null, (byte[]) null, null, null, testCluster);
             }
         }
 

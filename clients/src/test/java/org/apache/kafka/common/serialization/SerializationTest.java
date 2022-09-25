@@ -31,6 +31,9 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Stack;
 
+import static java.nio.ByteBuffer.wrap;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -97,7 +100,7 @@ public class SerializationTest {
     @Test
     public void stringSerdeShouldSupportDifferentEncodings() {
         String str = "my string";
-        List<String> encodings = Arrays.asList(StandardCharsets.UTF_8.name(), StandardCharsets.UTF_16.name());
+        List<String> encodings = Arrays.asList(UTF_8.name(), StandardCharsets.UTF_16.name());
 
         for (String encoding : encodings) {
             try (Serde<String> serDeser = getStringSerde(encoding)) {
@@ -367,5 +370,20 @@ public class SerializationTest {
         deserializer.configure(deserializerConfigs, true);
 
         return Serdes.serdeFrom(serializer, deserializer);
+    }
+
+    @Test
+    public void byteBuffer() {
+        final byte[] bytes = "ABC".getBytes(UTF_8);
+        try (Serde<ByteBuffer> serde = Serdes.ByteBuffer()) {
+            assertArrayEquals(bytes, serde.serializer().serialize(topic, wrap(bytes)));
+            assertEquals(bytes, serde.serializer().serialize(topic, wrap(bytes)));
+            assertEquals(wrap(bytes), serde.serializer().serializeToByteBuffer(topic, wrap(bytes)));
+
+            final ByteBuffer directBuffer = ByteBuffer.allocate(bytes.length << 1).put(bytes);
+            directBuffer.flip();
+            assertArrayEquals(bytes, serde.serializer().serialize(topic, directBuffer));
+            assertEquals(wrap(bytes), serde.serializer().serializeToByteBuffer(topic, directBuffer));
+        }
     }
 }

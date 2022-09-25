@@ -55,6 +55,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
+import static org.apache.kafka.common.utils.Utils.wrapNullable;
+
 /**
  * This class acts as a queue that accumulates records into {@link MemoryRecords}
  * instances to be sent to the server.
@@ -281,6 +283,41 @@ public class RecordAccumulator {
                                      boolean abortOnNewBatch,
                                      long nowMs,
                                      Cluster cluster) throws InterruptedException {
+        return append(topic, partition, timestamp, wrapNullable(key), wrapNullable(value), headers, callbacks,
+                maxTimeToBlock, abortOnNewBatch, nowMs, cluster);
+    }
+
+    /**
+     * Add a record to the accumulator, return the append result
+     * <p>
+     * The append result will contain the future metadata, and flag for whether the appended batch is full or a new batch is created
+     * <p>
+     *
+     * @param topic The topic to which this record is being sent
+     * @param partition The partition to which this record is being sent or RecordMetadata.UNKNOWN_PARTITION
+     *                  if any partition could be used
+     * @param timestamp The timestamp of the record
+     * @param key The key for the record
+     * @param value The value for the record
+     * @param headers the Headers for the record
+     * @param callbacks The callbacks to execute
+     * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
+     * @param abortOnNewBatch A boolean that indicates returning before a new batch is created and
+     *                        running the partitioner's onNewBatch method before trying to append again
+     * @param nowMs The current time, in milliseconds
+     * @param cluster The cluster metadata
+     */
+    public RecordAppendResult append(String topic,
+                                     int partition,
+                                     long timestamp,
+                                     ByteBuffer key,
+                                     ByteBuffer value,
+                                     Header[] headers,
+                                     AppendCallbacks callbacks,
+                                     long maxTimeToBlock,
+                                     boolean abortOnNewBatch,
+                                     long nowMs,
+                                     Cluster cluster) throws InterruptedException {
         TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(logContext, k, batchSize));
 
         // We keep track of the number of appending thread to make sure we do not miss batches in
@@ -381,8 +418,8 @@ public class RecordAccumulator {
                                               int partition,
                                               Deque<ProducerBatch> dq,
                                               long timestamp,
-                                              byte[] key,
-                                              byte[] value,
+                                              ByteBuffer key,
+                                              ByteBuffer value,
                                               Header[] headers,
                                               AppendCallbacks callbacks,
                                               ByteBuffer buffer,
@@ -431,7 +468,7 @@ public class RecordAccumulator {
      *  and memory records built) in one of the following cases (whichever comes first): right before send,
      *  if it is expired, or when the producer is closed.
      */
-    private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
+    private RecordAppendResult tryAppend(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers,
                                          Callback callback, Deque<ProducerBatch> deque, long nowMs) {
         if (closed)
             throw new KafkaException("Producer closed while send in progress");

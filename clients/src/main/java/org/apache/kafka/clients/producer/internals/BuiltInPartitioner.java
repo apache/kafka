@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
@@ -318,10 +319,17 @@ public class BuiltInPartitioner {
         }
     }
 
-    /*
+    /**
      * Default hashing function to choose a partition from the serialized key bytes
      */
     public static int partitionForKey(final byte[] serializedKey, final int numPartitions) {
+        return Utils.toPositive(Utils.murmur2(serializedKey)) % numPartitions;
+    }
+
+    /**
+     * Default hashing function to choose a partition from the serialized key bytes
+     */
+    public static int partitionForKey(final ByteBuffer serializedKey, final int numPartitions) {
         return Utils.toPositive(Utils.murmur2(serializedKey)) % numPartitions;
     }
 

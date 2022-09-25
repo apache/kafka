@@ -58,7 +58,7 @@ public class UniformStickyPartitionerTest {
         Cluster cluster = new Cluster("clusterId", asList(NODES[0], NODES[1], NODES[2]), partitions,
             Collections.<String>emptySet(), Collections.<String>emptySet());
         for (int i = 0; i < 50; i++) {
-            part = partitioner.partition("test", null, null, null, null, cluster);
+            part = partitioner.partition("test", null, (byte[]) null, null, null, cluster);
             assertTrue(part == 0 || part == 2, "We should never choose a leader-less node in round robin");
             if (part == 0)
                 countForPart0++;
@@ -68,7 +68,7 @@ public class UniformStickyPartitionerTest {
         // Simulates switching the sticky partition on a new batch.
         partitioner.onNewBatch("test", cluster, part);       
         for (int i = 1; i <= 50; i++) {
-            part = partitioner.partition("test", null, null, null, null, cluster);
+            part = partitioner.partition("test", null, (byte[]) null, null, null, cluster);
             assertTrue(part == 0 || part == 2, "We should never choose a leader-less node in round robin");
             if (part == 0)
                 countForPart0++;
@@ -157,14 +157,14 @@ public class UniformStickyPartitionerTest {
         int partition = 0;
         Partitioner partitioner = new UniformStickyPartitioner();
         for (int i = 0; i < 30; ++i) {
-            partition = partitioner.partition(TOPIC_A, null, null, null, null, testCluster);
+            partition = partitioner.partition(TOPIC_A, null, (byte[]) null, null, null, testCluster);
             Integer count = partitionCount.get(partition);
             if (null == count)
                 count = 0;
             partitionCount.put(partition, count + 1);
 
             if (i % 5 == 0) {
-                partitioner.partition(TOPIC_B, null, null, null, null, testCluster);
+                partitioner.partition(TOPIC_B, null, (byte[]) null, null, null, testCluster);
             }
         }
         // Simulate a batch filling up and switching the sticky partition.
@@ -175,14 +175,14 @@ public class UniformStickyPartitionerTest {
         int oldPart = partition;
 
         for (int i = 0; i < 30; ++i) {
-            partition = partitioner.partition(TOPIC_A, null, null, null, null, testCluster);
+            partition = partitioner.partition(TOPIC_A, null, (byte[]) null, null, null, testCluster);
             Integer count = partitionCount.get(partition);
             if (null == count)
                 count = 0;
             partitionCount.put(partition, count + 1);
 
             if (i % 5 == 0) {
-                partitioner.partition(TOPIC_B, null, null, null, null, testCluster);
+                partitioner.partition(TOPIC_B, null, (byte[]) null, null, null, testCluster);
             }
         }
 
@@ -192,14 +192,14 @@ public class UniformStickyPartitionerTest {
         partitioner.onNewBatch(TOPIC_A, testCluster, oldPart);
 
         for (int i = 0; i < 30; ++i) {
-            partition = partitioner.partition(TOPIC_A, null, null, null, null, testCluster);
+            partition = partitioner.partition(TOPIC_A, null, (byte[])  null, null, null, testCluster);
             Integer count = partitionCount.get(partition);
             if (null == count)
                 count = 0;
             partitionCount.put(partition, count + 1);
 
             if (i % 5 == 0) {
-                partitioner.partition(TOPIC_B, null, null, null, null, testCluster);
+                partitioner.partition(TOPIC_B, null, (byte[]) null, null, null, testCluster);
             }
         }
 
