@@ -1137,7 +1137,7 @@ public class TransactionManagerTest {
         assertTrue(initPidResult.isCompleted());
         assertFalse(initPidResult.isSuccessful());
         assertThrows(TransactionalIdAuthorizationException.class, initPidResult::await);
-        assertFatalError(TransactionalIdAuthorizationException.class);
+        assertAbortableError(TransactionalIdAuthorizationException.class);
     }
 
     @Test
