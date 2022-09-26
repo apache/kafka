@@ -39,15 +39,15 @@
     <h3 class="anchor-heading"><a id="listener_configuration" class="anchor-link"></a><a href="#listener_configuration">7.2 Listener Configuration</a></h3>
 
     <p>In order to secure a Kafka cluster, it is necessary to secure the channels that are used to
-      communicate with the servers. Each node must define the set of listeners that are used to
+      communicate with the servers. Each server must define the set of listeners that are used to
       receive requests from clients as well as other servers. Each listener may be configured
       to authenticate clients using various mechanisms and to ensure traffic between the
       server and the client is encrypted. This section provides a primer for the configuration
       of listeners.</p>
 
-    <p>Kafka brokers support listening for connections on multiple ports. This is configured through
+    <p>Kafka servers support listening for connections on multiple ports. This is configured through
       the <code>listeners</code> property in the server configuration, which accepts a comma-separated
-      list of the listeners to enable. At least one listener must be defined on each node. The format
+      list of the listeners to enable. At least one listener must be defined on each server. The format
       of each listener defined in <code>listeners</code> is given below:</p>
 	  
     <pre class="line-numbers"><code class="language-text">{LISTENER_NAME}://{hostname}:{port}</code></pre>
@@ -73,10 +73,10 @@
       <li>SASL_PLAINTEXT</li>
       <li>SASL_SSL</li>
     </ol>
-    
+
     <p>The plaintext protocol provides no security and does not require any additional configuration.
       In the following sections, this document covers how to configure the remaining protocols.</p>
-    
+
     <p>If each required listener uses a separate security protocol, it is also possible to use the
       security protocol name as the listener name in <code>listeners</code>. Using the example above,
       we could skip the definition of the <code>CLIENT</code> and <code>BROKER</code> listeners
@@ -85,11 +85,12 @@
     <pre class="line-numbers"><code class="language-text">listeners=SSL://localhost:9092,PLAINTEXT://localhost:9093</code></pre>
       
     <p>However, we recommend users to provide explicit names for the listeners since it
-      makes the intended usage clearer.</p>
+      makes the intended usage of each listener clearer.</p>
 
     <p>Among the listeners in this list, it is possible to declare the listener to be used for
       inter-broker communication by setting the <code>inter.broker.listener.name</code> configuration
-      to the name of the listener. If not defined, then the inter-broker listener is determined
+      to the name of the listener. The primary purpose of the inter-broker listener is
+      partition replication. If not defined, then the inter-broker listener is determined
       by the security protocol defined by <code>security.inter.broker.protocol</code>, which
       defaults to <code>PLAINTEXT</code>.</p>
     
@@ -100,38 +101,69 @@
       The benefit of using a control plane listener is that it uses a separate processing thread,
       which makes it less likely for application traffic to impede timely propagation of metadata changes
       (such as partition leader and ISR updates). Note that the default value is null, which
-      means that the controller will use the same listener as defined by <code>inter.broker.listener</code></p>
+      means that the controller will use the same listener defined by <code>inter.broker.listener</code></p>
     
-    <p>In a KRaft cluster, the listener defined by <code>inter.broker.listener.name</code> is used
-      exclusively for requests sent to nodes which have the "broker" role enabled in <code>process.roles</code>.
-      For legacy clusters, the active controller will connect to all brokers in the cluster
-      to send metadata updates. In KRaft, it is the other way around. The broker is responsible
-      for finding the current controller and connecting to it in order to receive metadata updates.
-      Hence the configuration <code>control.plane.listener.name</code> cannot be used in KRaft clusters.</p>
+    <p>In a KRaft cluster, a broker is any server which has the <code>broker</code> role enabled
+      in <code>process.roles</code> and a controller is any server which has the <code>controller</code>
+      role enabled. Listener configuration depends on the role. The listener defined by
+      <code>inter.broker.listener.name</code> is used exclusively for requests between brokers.
+      Controllers, on the other hand, must use separate listener which is defined by the
+      <code>controller.listener.names</code> configuration. This cannot be set to the same
+      value as the inter-broker listener.</p>
+
+    <p>Controllers receive requests both from other controllers and from brokers. For
+      this reason, even if a server does not have the <code>controller</code> role enabled
+      (i.e. it is just a broker), it must still define the controller listener along with
+      any security properties that are needed to configure it. For example, we might
+      use the following configuration on a standalone broker:</p>
       
-    <p>Instead, nodes with the "controller" role must define separate listeners through the
-      <code>controller.listener.names</code> configuration. Any node running with both the
-      "broker" and "controller" roles must use separate listeners for the broker and controller.
-      For example, a minimal configuration for a combined node might look like the following:</p>
+    <pre class="line-numbers"><code class="language-text">process.roles=broker
+listeners=BROKER://localhost:9092
+inter.broker.listener.name=BROKER
+controller.quorum.voters=0@localhost:9093
+controller.listener.names=CONTROLLER
+listener.security.protocol.map=BROKER:SASL_SSL,CONTROLLER:SASL_SSL</code></pre>
+
+    <p>The controller listener is still configured in this example to use the <code>SASL_SSL</code>
+      security protocol, but it is not included in <code>listeners</code> since the broker
+      does not expose the controller listener itself. The port that will be used in this case
+      comes from the <code>controller.quorum.voters</code> configuration, which defines
+      the complete list of controllers.</p>
+
+    <p>For KRaft servers which have both the broker and controller role enabled, the configuration
+      is similar. The only difference is that the controller listener must be included in
+      <code>listeners</code>:</p>
     
     <pre class="line-numbers"><code class="language-text">process.roles=broker,controller
 listeners=BROKER://localhost:9092,CONTROLLER://localhost:9093
 inter.broker.listener.name=BROKER
+controller.quorum.voters=0@localhost:9093
 controller.listener.names=CONTROLLER
 listener.security.protocol.map=BROKER:SASL_SSL,CONTROLLER:SASL_SSL</code></pre>
 
-    <p>This defines two listeners, one for the controller and one for the broker. It is conventional
-      to use a separate listener for client traffic as well.</p>
-    
+    <p>It is a requirement for the port defined in <code>controller.quorum.voters</code> to
+      exactly match one of the exposed controller listeners. For example, here the
+      <code>CONTROLLER</code> listener is bound to port 9093. The connection string
+      defined by <code>controller.quorum.voters</code> must then also use port 9093,
+      as it does here.</p>
+
     <p>The controller will accept requests on all listeners defined by <code>controller.listener.names</code>.
-      For outbound requests to other controller nodes, the first listener listed in <code>controller.listener.names</code>
-      will be used. The list of listeners provides a way to change the active listener from one port
-      to another through a roll of the cluster. Basically do one roll to expose the new listener,
-      and one roll to remove the old listener.</p>
+      Typically there would be just one controller listener, but it is possible to have more.
+      For example, this provides a way to change the active listener from one port or security
+      protocol to another through a roll of the cluster (one roll to expose the new listener,
+      and one roll to remove the old listener). When multiple controller listeners are defined,
+      the first one in the list will be used for outbound requests.</p>
+
+    <p>It is conventional in Kafka to use a separate listener for clients. This allows the
+      inter-cluster listeners to be isolated at the network level. In the case of the controller
+      listener in KRaft, the listener should be isolated since clients do not work with it
+      anyway. Clients are expected to connect to any other listener configured on a broker.
+      Any requests that are bound for the controller will be forwarded as described
+      <a href="#kraft_principal_forwarding">below</a></p>
     
-    <p>In the following section, this document covers how to enable SSL on a listener for encryption
-      as well as authentication. The subsequent section will then cover additional authentication
-      mechanism using SASL.</p>
+    <p>In the following <a href="#security_ssl">section</a>, this document covers how to enable SSL
+      on a listener for encryption as well as authentication. The subsequent <a href="#security_sasl">section</a> will then
+      cover additional authentication mechanisms using SASL.</p>
     
     <h3 class="anchor-heading"><a id="security_ssl" class="anchor-link"></a><a href="#security_ssl">7.3 Encryption and Authentication using SSL</a></h3>
     Apache Kafka allows clients to use SSL for encryption of traffic as well as authentication. By default, SSL is disabled but can be turned on if needed.
