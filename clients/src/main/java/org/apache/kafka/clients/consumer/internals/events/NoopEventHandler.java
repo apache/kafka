@@ -28,7 +28,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 /**
  * The NoopEventHandler uses a background thread to process events in the ApplicationEventQueue. The background thread
  * performs two simple tasks. First, it polls ApplicationEvents off the queue and logs a message for each event it
- * consumes. Second, it handles the exception by sending an ExceptionBackgroundEvent to the backgroundEventQueue.
+ * consumes. Second, if it encounters an exception, the background thread will create an ExceptionBackgroundEvent
+ * and send it to the backgroundEventQueue.
  */
 public class NoopEventHandler implements EventHandler {
     private final Logger log;
