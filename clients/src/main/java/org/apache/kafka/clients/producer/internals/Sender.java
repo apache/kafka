@@ -305,7 +305,7 @@ public class Sender implements Runnable {
                 if (transactionManager.hasAbortableError() && (
                         lastError instanceof TransactionalIdAuthorizationException ||
                                 lastError instanceof ClusterAuthorizationException)) {
-                    transactionManager.failPendingRequestsUponError(new AuthenticationException(lastError));
+                    transactionManager.failPendingRequests(new AuthenticationException(lastError));
                     transactionManager.transitionToUninitialized(lastError);
                     maybeAbortBatches(lastError);
                     return;
