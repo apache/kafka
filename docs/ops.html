@@ -3187,27 +3187,27 @@ for built-in state stores, currently we have:
 
   <h5 class="anchor-heading"><a id="kraft_role" class="anchor-link"></a><a href="#kraft_role">Process Roles</a></h5>
 
-  <p>In KRaft mode each Kafka server can be configured as a controller, as a broker or as both using the <code>process.roles<code> property. This property can have the following values:</p>
+  <p>In KRaft mode each Kafka server can be configured as a controller, a broker, or both using the <code>process.roles<code> property. This property can have the following values:</p>
 
   <ul>
     <li>If <code>process.roles</code> is set to <code>broker</code>, the server acts as a broker.</li>
     <li>If <code>process.roles</code> is set to <code>controller</code>, the server acts as a controller.</li>
-    <li>If <code>process.roles</code> is set to <code>broker,controller</code>, the server acts as a broker and a controller.</li>
+    <li>If <code>process.roles</code> is set to <code>broker,controller</code>, the server acts as both a broker and a controller.</li>
     <li>If <code>process.roles</code> is not set at all, it is assumed to be in ZooKeeper mode.</li>
   </ul>
 
-  <p>Nodes that act as both brokers and controllers are referred to as "combined" nodes. Combined nodes are simpler to operate for simple use cases like a development environment. The key disadvantage is that the controller will be less isolated from the rest of the system. Combined mode is not recommended is critical deployment environments.</p>
+  <p>Kafka servers that act as both brokers and controllers are referred to as "combined" nodes. Combined nodes are simpler to operate for small use cases like a development environment. The key disadvantage is that the controller will be less isolated from the rest of the system. For example, it is not possible to roll or scale the controllers separately from the brokers in combined mode. Combined mode is not recommended in critical deployment environments.</p>
 
 
   <h5 class="anchor-heading"><a id="kraft_voter" class="anchor-link"></a><a href="#kraft_voter">Controllers</a></h5>
 
-  <p>In KRaft mode, only a small group of specially selected servers can act as controllers (unlike the ZooKeeper-based mode, where any server can become the Controller). The specially selected controller servers will participate in the metadata quorum. Each controller server is either active, or a hot standby for the current active controller server.</p>
+  <p>In KRaft mode, specific Kafka servers are selected to be controllers (unlike the ZooKeeper-based mode, where any server can become the Controller). The servers selected to be controllers will participate in the metadata quorum. Each controller is either an active or a hot standby for the current active controller.</p>
 
-  <p>A Kafka cluster will typically select 3 or 5 servers for this role, depending on factors like cost and the number of concurrent failures your system should withstand without availability impact. A majority of the controllers must be alive in order to maintain availability. With 3 controllers, the cluster can tolerate 1 controller failure; with 5 controllers, the cluster can tolerate 2 controller failures.</p>
+  <p>A Kafka admin will typically select 3 or 5 servers for this role, depending on factors like cost and the number of concurrent failures your system should withstand without availability impact. A majority of the controllers must be alive in order to maintain availability. With 3 controllers, the cluster can tolerate 1 controller failure; with 5 controllers, the cluster can tolerate 2 controller failures.</p>
 
   <p>All of the servers in a Kafka cluster discover the quorum voters using the <code>controller.quorum.voters</code> property. This identifies the quorum controller servers that should be used. All the controllers must be enumerated. Each controller is identified with their <code>id</code>, <code>host</code> and <code>port</code> information. This is an example configuration: <code>controller.quorum.voters=id1@host1:port1,id2@host2:port2,id3@host3:port3</code></p>
 
-  <p>If the Kafka cluster has 3 controllers named controller1, controller2 and controller3 then controller3 may have the following:</p>
+  <p>If a Kafka cluster has 3 controllers named controller1, controller2 and controller3, then controller3 may have the following configuration:</p>
 
   <pre class="line-numbers"><code class="language-bash">
 process.roles=controller
@@ -3227,7 +3227,7 @@ controller.quorum.voters=1@controller1.example.com:9093,2@controller2.example.co
 
   <h5 class="anchor-heading"><a id="kraft_metadata_tool" class="anchor-link"></a><a href="#kraft_metadata_tool">Metadata Quorum Tool</a></h5>
 
-  <p>The <code>kafka-metadata-quorum</code> tool can be used to describe the runtime state of the cluster metadata partition. For example, the following command display a summary of the metadata quorum:</p>
+  <p>The <code>kafka-metadata-quorum</code> tool can be used to describe the runtime state of the cluster metadata partition. For example, the following command displays a summary of the metadata quorum:</p>
 
   <pre class="line-numbers"><code class="language-bash">  &gt; bin/kafka-metadata-quorum.sh --bootstrap-server  broker_host:port describe --status
 ClusterId:              fMCL8kv1SWm87L_Md-I2hg
