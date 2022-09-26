@@ -306,8 +306,9 @@ public class Sender implements Runnable {
                         lastError instanceof TransactionalIdAuthorizationException ||
                                 lastError instanceof ClusterAuthorizationException)) {
                     transactionManager.failPendingRequests(new AuthenticationException(lastError));
-                    transactionManager.transitionToUninitialized(lastError);
                     maybeAbortBatches(lastError);
+                    transactionManager.transitionToUninitialized(lastError);
+                    client.poll(retryBackoffMs, time.milliseconds());
                     return;
                 }
 
