@@ -674,7 +674,24 @@ class DefaultStateUpdaterTest {
         verifyRemovedTasks(activeTask1, activeTask2);
         final InOrder orderVerifier = inOrder(changelogReader);
         orderVerifier.verify(changelogReader, atLeast(1)).enforceRestoreActive();
-        orderVerifier.verify(changelogReader, times(1)).transitToUpdateStandby();
+        orderVerifier.verify(changelogReader).transitToUpdateStandby();
+    }
+
+    @Test
+    public void shouldNotSwitchTwiceToUpdatingStandbyTaskIfStandbyTaskIsRemoved() throws Exception {
+        final StandbyTask standbyTask1 = standbyTask(TASK_1_0, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
+        final StandbyTask standbyTask2 = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
+        when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        stateUpdater.start();
+        stateUpdater.add(standbyTask1);
+        stateUpdater.add(standbyTask2);
+        verifyUpdatingTasks(standbyTask1, standbyTask2);
+
+        stateUpdater.remove(standbyTask2.id());
+
+        verifyRemovedTasks(standbyTask2);
+        verify(changelogReader).transitToUpdateStandby();
     }
 
     @Test
