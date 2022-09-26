@@ -84,7 +84,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 .collect(Collectors.toList());
         }
 
-        public boolean onlyStandbyTasksLeft() {
+        private boolean onlyStandbyTasksUpdating() {
             return !updatingTasks.isEmpty() && updatingTasks.values().stream().noneMatch(Task::isActive);
         }
 
@@ -292,7 +292,9 @@ public class DefaultStateUpdater implements StateUpdater {
                 changelogReader.unregister(changelogPartitions);
                 removedTasks.add(task);
                 updatingTasks.remove(taskId);
-                transitToUpdateStandbysIfOnlyStandbysLeft();
+                if (task.isActive()) {
+                    transitToUpdateStandbysIfOnlyStandbysLeft();
+                }
                 log.info((task.isActive() ? "Active" : "Standby")
                     + " task " + task.id() + " was removed from the updating tasks and added to the removed tasks.");
             } else if (pausedTasks.containsKey(taskId)) {
@@ -361,7 +363,7 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         private void transitToUpdateStandbysIfOnlyStandbysLeft() {
-            if (onlyStandbyTasksLeft()) {
+            if (onlyStandbyTasksUpdating()) {
                 changelogReader.transitToUpdateStandby();
             }
         }
