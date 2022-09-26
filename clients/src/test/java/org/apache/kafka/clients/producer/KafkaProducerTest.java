@@ -118,6 +118,7 @@ import java.util.stream.Stream;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1257,14 +1258,13 @@ public class KafkaProducerTest {
 
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some-txn", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.CLUSTER_AUTHORIZATION_FAILED));
+        Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time);
+        assertThrows(ClusterAuthorizationException.class, producer::initTransactions);
 
-        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
-                new StringSerializer(), metadata, client, null, time)) {
-            assertThrows(ClusterAuthorizationException.class, () -> producer.initTransactions());
-            // retry initTransactions after the ClusterAuthorizationException not being thrown
-            client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
-            producer.initTransactions();
-        }
+        // retry initTransactions after the ClusterAuthorizationException not being thrown
+        client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
+        assertDoesNotThrow(producer::initTransactions);
     }
 
     @Test
