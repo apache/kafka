@@ -42,7 +42,11 @@ import org.mockito.junit.MockitoJUnitRunner;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.Map;
+import java.util.Properties;
+import java.util.TreeMap;
+import java.util.Optional;
+import java.util.Collections;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;

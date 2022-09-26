@@ -39,6 +39,7 @@ import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Repartitioned;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -65,12 +66,15 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.streams.KafkaStreams.State.ERROR;
 import static org.apache.kafka.streams.KafkaStreams.State.REBALANCING;
@@ -123,6 +127,20 @@ public class KStreamRepartitionIntegrationTest {
 
     @Rule
     public TestName testName = new TestName();
+
+    static class BroadcastingPartitioner implements StreamPartitioner<Integer, String> {
+
+        @Override
+        @Deprecated
+        public Integer partition(final String topic, final Integer key, final String value, final int numPartitions) {
+            return null;
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final Integer key, final String value, final int numPartitions) {
+            return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
+        }
+    }
 
     @Before
     public void before() throws InterruptedException {
@@ -292,6 +310,44 @@ public class KStreamRepartitionIntegrationTest {
             expectedRecords
         );
     }
+
+    @Test
+    public void shouldRepartitionToMultiplePartitions() throws Exception {
+        final String repartitionName = "partitioner-test";
+        final long timestamp = System.currentTimeMillis();
+        final AtomicInteger partitionerInvocation = new AtomicInteger(0);
+
+        final List<KeyValue<Integer, String>> expectedRecords = Arrays.asList(
+                new KeyValue<>(1, "A"),
+                new KeyValue<>(2, "B")
+        );
+
+        sendEvents(timestamp, expectedRecords);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Repartitioned<Integer, String> repartitioned = Repartitioned
+                .<Integer, String>as(repartitionName)
+                .withStreamPartitioner(new BroadcastingPartitioner());
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+                .repartition(repartitioned)
+                .to(outputTopic);
+
+        startStreams(builder);
+
+        final String topic = toRepartitionTopicName(repartitionName);
+
+        validateReceivedMessages(
+                new IntegerDeserializer(),
+                new StringDeserializer(),
+                expectedRecords
+        );
+
+        assertTrue(topicExists(topic));
+        assertEquals(expectedRecords.size(), partitionerInvocation.get());
+    }
+
 
     @Test
     public void shouldUseStreamPartitionerForRepartitionOperation() throws Exception {

@@ -22,7 +22,6 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -42,6 +41,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -86,6 +86,20 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
 
     private final static Properties PRODUCER_CONFIG_1 = new Properties();
     private final static Properties PRODUCER_CONFIG_2 = new Properties();
+
+    static class MultiPartitioner implements StreamPartitioner<String, Void> {
+
+        @Override
+        @Deprecated
+        public Integer partition(final String topic, final String key, final Void value, final int numPartitions) {
+            return null;
+        }
+
+        @Override
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Void value, final int numPartitions) {
+            return Optional.of(new HashSet<>(Arrays.asList(0, 1, 2)));
+        }
+    }
 
     @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {
@@ -177,8 +191,22 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         streamsThree = prepareTopologyWithNonSingletonPartitions(queryableName, streamsConfigThree);
 
         final List<KafkaStreams> kafkaStreamsList = asList(streams, streamsTwo, streamsThree);
-        assertThrows(IllegalArgumentException.class, () -> startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(120)));
 
+        for (final KafkaStreams stream: kafkaStreamsList) {
+            stream.setUncaughtExceptionHandler(e -> {
+                assertEquals("The partitions returned by StreamPartitioner#partitions method when used for FK join should be a singleton set", e.getCause().getMessage());
+                return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
+            });
+        }
+
+        startApplicationAndWaitUntilRunning(kafkaStreamsList, ofSeconds(120));
+
+        // Sleeping to let the processing happen inducing the failure
+        Thread.sleep(60000);
+
+        assertEquals(KafkaStreams.State.ERROR, streams.state());
+        assertEquals(KafkaStreams.State.ERROR, streamsTwo.state());
+        assertEquals(KafkaStreams.State.ERROR, streamsThree.state());
     }
 
     private void verifyKTableKTableJoin(final Set<KeyValue<String, String>> expectedResult) throws Exception {
@@ -251,20 +279,6 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
                     serdeScope.decorateSerde(Serdes.String(), streamsConfig, false)));
 
         return new KafkaStreams(builder.build(streamsConfig), streamsConfig);
-    }
-
-    static class MultiPartitioner implements StreamPartitioner<String, Void> {
-
-        @Override
-        @Deprecated
-        public Integer partition(String topic, String key, Void value, int numPartitions) {
-            return null;
-        }
-
-        @Override
-        public Optional<Set<Integer>> partitions(String topic, String key, Void value, int numPartitions) {
-            return Optional.of(new HashSet<>(Arrays.asList(0, 1, 2)));
-        }
     }
 
     private static KafkaStreams prepareTopologyWithNonSingletonPartitions(final String queryableName, final Properties streamsConfig) {

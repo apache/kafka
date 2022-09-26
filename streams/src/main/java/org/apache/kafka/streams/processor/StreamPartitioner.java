@@ -78,7 +78,7 @@ public interface StreamPartitioner<K, V> {
      * Optional of Set of integers means the partitions to which the record should be sent to.
      * */
     default Optional<Set<Integer>> partitions(String topic, K key, V value, int numPartitions) {
-        Integer partition = partition(topic, key, value, numPartitions);
+        final Integer partition = partition(topic, key, value, numPartitions);
         return partition == null ? Optional.empty() : Optional.of(Collections.singleton(partition(topic, key, value, numPartitions)));
     }
 

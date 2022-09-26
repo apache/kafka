@@ -1047,6 +1047,17 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         return doJoinOnForeignKey(other, foreignKeyExtractor, joiner, TableJoined.with(null, null), materialized, true);
     }
 
+    private final Function<Optional<Set<Integer>>, Integer> getPartition = maybeMulticastPartitions -> {
+        if (!maybeMulticastPartitions.isPresent()) {
+            return null;
+        }
+        if (maybeMulticastPartitions.get().size() != 1) {
+            throw new IllegalArgumentException("The partitions returned by StreamPartitioner#partitions method when used for FK join should be a singleton set");
+        }
+        return maybeMulticastPartitions.get().iterator().next();
+    };
+
+
     @SuppressWarnings({"unchecked", "deprecation"})
     private <VR, KO, VO> KTable<K, VR> doJoinOnForeignKey(final KTable<KO, VO> foreignKeyTable,
                                                           final Function<V, KO> foreignKeyExtractor,
@@ -1060,6 +1071,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         Objects.requireNonNull(tableJoined, "tableJoined can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
 
+
         //Old values are a useful optimization. The old values from the foreignKeyTable table are compared to the new values,
         //such that identical values do not cause a prefixScan. PrefixScan and propagation can be expensive and should
         //not be done needlessly.
@@ -1070,6 +1082,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         enableSendingOldValues(true);
 
         final TableJoinedInternal<K, KO> tableJoinedInternal = new TableJoinedInternal<>(tableJoined);
+
         final NamedInternal renamed = new NamedInternal(tableJoinedInternal.name());
 
         final String subscriptionTopicName = renamed.suffixWithOrElseGet(
@@ -1118,17 +1131,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             )
         );
         builder.addGraphNode(graphNode, subscriptionNode);
-
-        final Function<Optional<Set<Integer>>, Integer> getPartition = (maybeMulticastPartitions) -> {
-            if (!maybeMulticastPartitions.isPresent()) {
-                return null;
-            }
-            if (maybeMulticastPartitions.get().size() != 1) {
-                throw new IllegalArgumentException("The partitions returned by StreamPartitioner#partitions method when used for FK join should be a singleton set");
-            }
-            return maybeMulticastPartitions.get().iterator().next();
-        };
-
 
         final StreamPartitioner<KO, SubscriptionWrapper<K>> subscriptionSinkPartitioner =
                 tableJoinedInternal.otherPartitioner() == null

@@ -136,12 +136,12 @@ public class RecordCollectorTest {
 
         @Override
         @Deprecated
-        public Integer partition(String topic, String key, Object value, int numPartitions) {
+        public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
             return null;
         }
 
         @Override
-        public Optional<Set<Integer>> partitions(String topic, String key, Object value, int numPartitions) {
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
             final Set<Integer> partitions = new HashSet<>();
             for (int i = 0; i < numPartitions; i += 2) {
                 partitions.add(i);
@@ -154,12 +154,12 @@ public class RecordCollectorTest {
 
         @Override
         @Deprecated
-        public Integer partition(String topic, String key, Object value, int numPartitions) {
+        public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
             return null;
         }
 
         @Override
-        public Optional<Set<Integer>> partitions(String topic, String key, Object value, int numPartitions) {
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
             return Optional.of(IntStream.range(0, numPartitions).boxed().collect(Collectors.toSet()));
         }
     }
@@ -168,12 +168,12 @@ public class RecordCollectorTest {
 
         @Override
         @Deprecated
-        public Integer partition(String topic, String key, Object value, int numPartitions) {
+        public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
             return null;
         }
 
         @Override
-        public Optional<Set<Integer>> partitions(String topic, String key, Object value, int numPartitions) {
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
             return Optional.of(Collections.emptySet());
         }
     }
@@ -182,12 +182,12 @@ public class RecordCollectorTest {
 
         @Override
         @Deprecated
-        public Integer partition(String topic, String key, Object value, int numPartitions) {
+        public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
             return null;
         }
 
         @Override
-        public Optional<Set<Integer>> partitions(String topic, String key, Object value, int numPartitions) {
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
             return Optional.empty();
         }
     }

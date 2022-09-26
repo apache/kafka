@@ -461,7 +461,7 @@ public class StreamsMetadataState {
         return rebuiltMetadata;
     }
 
-    final Function<Optional<Set<Integer>>, Integer> getPartition = (maybeMulticastPartitions) -> {
+    private final Function<Optional<Set<Integer>>, Integer> getPartition = maybeMulticastPartitions -> {
         if (!maybeMulticastPartitions.isPresent()) {
             return null;
         }

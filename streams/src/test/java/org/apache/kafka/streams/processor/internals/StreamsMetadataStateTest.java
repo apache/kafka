@@ -37,7 +37,16 @@ import org.apache.kafka.streams.state.internals.StreamsMetadataImpl;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Optional;
+import java.util.HashSet;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -133,13 +142,13 @@ public class StreamsMetadataStateTest {
 
         @Override
         @Deprecated
-        public Integer partition(String topic, String key, Object value, int numPartitions) {
+        public Integer partition(final String topic, final String key, final Object value, final int numPartitions) {
             return null;
         }
 
         @Override
-        public Optional<Set<Integer>> partitions(String topic, String key, Object value, int numPartitions) {
-            Set<Integer> partitions = new HashSet<>();
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final Object value, final int numPartitions) {
+            final Set<Integer> partitions = new HashSet<>();
             partitions.add(0);
             partitions.add(1);
             return Optional.of(partitions);

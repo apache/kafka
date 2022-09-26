@@ -54,7 +54,14 @@ import org.junit.Test;
 import java.io.File;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Properties;
+import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.HashSet;
 import java.util.function.Supplier;
 
 import static java.util.Arrays.asList;
@@ -1593,12 +1600,12 @@ public class ProcessorTopologyTest {
 
         @Override
         @Deprecated
-        public Integer partition(String topic, String key, String value, int numPartitions) {
+        public Integer partition(final String topic, final String key, final String value, final int numPartitions) {
             return null;
         }
 
         @Override
-        public Optional<Set<Integer>> partitions(String topic, String key, String value, int numPartitions) {
+        public Optional<Set<Integer>> partitions(final String topic, final String key, final String value, final int numPartitions) {
             final Set<Integer> partitions = new HashSet<>();
             for (int i = 1; i < numPartitions; i += 2) {
                 partitions.add(i);
