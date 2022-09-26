@@ -99,18 +99,20 @@
       will use this listener when it needs to push metadata updates to the brokers in the cluster.
       The benefit of using a control plane listener is that it uses a separate processing thread,
       which makes it less likely for application traffic to impede timely propagation of metadata changes
-      (such as partition leader and ISR updates).</p>
+      (such as partition leader and ISR updates). Note that the default value is null, which
+      means that the controller will use the same listener as defined by <code>inter.broker.listener</code></p>
     
     <p>In a KRaft cluster, the listener defined by <code>inter.broker.listener.name</code> is used
       exclusively for requests sent to nodes which have the "broker" role enabled in <code>process.roles</code>.
-      Unlike with legacy clusters, brokers connect to controllers (i.e. nodes with the "controller" role enabled)
-      in order to receive metadata updates; not the other way around. Hence the configuration
-      <code>control.plane.listener.name</code> cannot be used in KRaft clusters.</p>
-    
-    <p>Instead, nodes with the "controller" role must define <code>controller.listener.names</code>.
-      Any node running with both the "broker" and "controller" roles must have use separate listeners
-      for the broker an controller. For example, a minimal configuration for a combined node
-      might look like the following:</p>
+      For legacy clusters, the active controller will connect to all brokers in the cluster
+      to send metadata updates. In KRaft, it is the other way around. The broker is responsible
+      for finding the current controller and connecting to it in order to receive metadata updates.
+      Hence the configuration <code>control.plane.listener.name</code> cannot be used in KRaft clusters.</p>
+      
+    <p>Instead, nodes with the "controller" role must define separate listeners through the
+      <code>controller.listener.names</code> configuration. Any node running with both the
+      "broker" and "controller" roles must have use separate listeners for the broker and controller.
+      For example, a minimal configuration for a combined node might look like the following:</p>
     
     <pre class="line-numbers"><code class="language-text">process.roles=broker,controller
 listeners=BROKER://localhost:9092,CONTROLLER://localhost:9093
@@ -124,7 +126,8 @@ listener.security.protocol.map=BROKER:SASL_SSL,CONTROLLER:SASL_SSL</code></pre>
     <p>The controller will accept requests on all listeners defined by <code>controller.listener.names</code>.
       For outbound requests to other controller nodes, the first listener listed in <code>controller.listener.names</code>
       will be used. The list of listeners provides a way to change the active listener from one port
-      to another through a roll of the cluster.</p>
+      to another through a roll of the cluster. Basically do one roll to expose the new listener,
+      and one roll to remove the old listener.</p>
     
     <p>In the following section, this document covers how to enable SSL on a listener for encryption
       as well as authentication. The subsequent section will then cover additional authentication
