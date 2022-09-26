@@ -68,7 +68,8 @@ public interface ThreadMetadata {
     String restoreConsumerClientId();
 
     /**
-     * Client IDs of the Kafka producers used by the stream thread.
+     * Client IDs of the Kafka producers used by the stream thread. This function always returns a singleton starting
+     * from release 4.0.
      *
      * @return client IDs of the Kafka producers
      */
