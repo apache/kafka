@@ -25,25 +25,26 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.HashMap;
 
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.anyString;
-import static org.easymock.EasyMock.eq;
-import static org.powermock.api.easymock.PowerMock.expectLastCall;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({Sensor.class, MetricName.class})
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class WorkerMetricsGroupTest {
     private final String connector = "org.FakeConnector";
     private final ConnectorTaskId task = new ConnectorTaskId(connector, 0);
     private final RuntimeException exception = new RuntimeException();
 
-    private ConnectMetrics connectMetrics;
+    @Mock private ConnectMetrics connectMetrics;
     
     private Sensor connectorStartupResults;
     private Sensor connectorStartupAttempts;
@@ -55,24 +56,21 @@ public class WorkerMetricsGroupTest {
     private Sensor taskStartupSuccesses;
     private Sensor taskStartupFailures;
 
-    private ConnectorStatus.Listener delegateConnectorListener;
-    private TaskStatus.Listener delegateTaskListener;
+    @Mock private ConnectorStatus.Listener delegateConnectorListener;
+    @Mock private TaskStatus.Listener delegateTaskListener;
+    @Mock private ConnectMetricsRegistry connectMetricsRegistry;
+    @Mock private ConnectMetrics.MetricGroup metricGroup;
+    @Mock private MetricName metricName;
 
     @Before
     public void setup() {
-        connectMetrics = PowerMock.createMock(ConnectMetrics.class);
-        ConnectMetricsRegistry connectMetricsRegistry = PowerMock.createNiceMock(ConnectMetricsRegistry.class);
-        ConnectMetrics.MetricGroup metricGroup = PowerMock.createNiceMock(ConnectMetrics.MetricGroup.class);
-
-        connectMetrics.registry();
-        expectLastCall().andReturn(connectMetricsRegistry);
-
-        connectMetrics.group(anyString());
-        expectLastCall().andReturn(metricGroup);
-
-        MetricName metricName = PowerMock.createMock(MetricName.class);
-        metricGroup.metricName(anyObject(MetricNameTemplate.class));
-        expectLastCall().andStubReturn(metricName);
+        // We don't expect metricGroup.metricName to be invoked with null in practice,
+        // but it's easier to test this way, and should have no impact
+        // on the efficacy of these tests
+        when(metricGroup.metricName((MetricNameTemplate) isNull())).thenReturn(metricName);
+        when(connectMetricsRegistry.workerGroupName()).thenReturn(ConnectMetricsRegistry.WORKER_GROUP_NAME);
+        when(connectMetrics.registry()).thenReturn(connectMetricsRegistry);
+        when(connectMetrics.group(ConnectMetricsRegistry.WORKER_GROUP_NAME)).thenReturn(metricGroup);
 
         connectorStartupResults = mockSensor(metricGroup, "connector-startup-results");
         connectorStartupAttempts = mockSensor(metricGroup, "connector-startup-attempts");
@@ -83,167 +81,111 @@ public class WorkerMetricsGroupTest {
         taskStartupAttempts = mockSensor(metricGroup, "task-startup-attempts");
         taskStartupSuccesses = mockSensor(metricGroup, "task-startup-successes");
         taskStartupFailures = mockSensor(metricGroup, "task-startup-failures");
-
-        delegateConnectorListener = PowerMock.createStrictMock(ConnectorStatus.Listener.class);
-        delegateTaskListener = PowerMock.createStrictMock(TaskStatus.Listener.class);
     }
 
     private Sensor mockSensor(ConnectMetrics.MetricGroup metricGroup, String name) {
-        Sensor sensor = PowerMock.createMock(Sensor.class);
-        metricGroup.sensor(eq(name));
-        expectLastCall().andReturn(sensor);
-
-        sensor.add(anyObject(CompoundStat.class));
-        expectLastCall().andStubReturn(true);
-
-        sensor.add(anyObject(MetricName.class), anyObject(CumulativeSum.class));
-        expectLastCall().andStubReturn(true);
-
+        Sensor sensor = mock(Sensor.class);
+        when(metricGroup.sensor(name)).thenReturn(sensor);
+        when(sensor.add(any(CompoundStat.class))).thenReturn(true);
+        when(sensor.add(any(MetricName.class), any(CumulativeSum.class))).thenReturn(true);
         return sensor;
     }
     
     @Test
     public void testConnectorStartupRecordedMetrics() {
-        delegateConnectorListener.onStartup(eq(connector));
-        expectLastCall();
-
-        connectorStartupAttempts.record(eq(1.0));
-        expectLastCall();
-        connectorStartupSuccesses.record(eq(1.0));
-        expectLastCall();
-        connectorStartupResults.record(eq(1.0));
-        expectLastCall();
-
-        PowerMock.replayAll();
-
         WorkerMetricsGroup workerMetricsGroup = new WorkerMetricsGroup(new HashMap<>(), new HashMap<>(), connectMetrics);
         final ConnectorStatus.Listener connectorListener = workerMetricsGroup.wrapStatusListener(delegateConnectorListener);
 
         connectorListener.onStartup(connector);
 
-        PowerMock.verifyAll();
+        verifyRecordConnectorStartupSuccess();
+        verify(delegateConnectorListener).onStartup(connector);
     }
 
     @Test
     public void testConnectorFailureAfterStartupRecordedMetrics() {
-        delegateConnectorListener.onStartup(eq(connector));
-        expectLastCall();
-
-        connectorStartupAttempts.record(eq(1.0));
-        expectLastCall();
-        connectorStartupSuccesses.record(eq(1.0));
-        expectLastCall();
-        connectorStartupResults.record(eq(1.0));
-        expectLastCall();
-        
-        delegateConnectorListener.onFailure(eq(connector), eq(exception));
-        expectLastCall();
-
-        // recordConnectorStartupFailure() should not be called if failure happens after a successful startup
-
-        PowerMock.replayAll();
-
         WorkerMetricsGroup workerMetricsGroup = new WorkerMetricsGroup(new HashMap<>(), new HashMap<>(), connectMetrics);
         final ConnectorStatus.Listener connectorListener = workerMetricsGroup.wrapStatusListener(delegateConnectorListener);
 
         connectorListener.onStartup(connector);
         connectorListener.onFailure(connector, exception);
 
-        PowerMock.verifyAll();
+        verify(delegateConnectorListener).onStartup(connector);
+        verifyRecordConnectorStartupSuccess();
+        verify(delegateConnectorListener).onFailure(connector, exception);
+        // recordConnectorStartupFailure() should not be called if failure happens after a successful startup.
+        verify(connectorStartupFailures, never()).record(anyDouble());
     }
 
     @Test
     public void testConnectorFailureBeforeStartupRecordedMetrics() {
-        delegateConnectorListener.onFailure(eq(connector), eq(exception));
-        expectLastCall();
-
-        connectorStartupAttempts.record(eq(1.0));
-        expectLastCall();
-        connectorStartupFailures.record(eq(1.0));
-        expectLastCall();
-        connectorStartupResults.record(eq(0.0));
-        expectLastCall();
-        
-        PowerMock.replayAll();
-
         WorkerMetricsGroup workerMetricsGroup = new WorkerMetricsGroup(new HashMap<>(), new HashMap<>(), connectMetrics);
         final ConnectorStatus.Listener connectorListener = workerMetricsGroup.wrapStatusListener(delegateConnectorListener);
         
         connectorListener.onFailure(connector, exception);
 
-        PowerMock.verifyAll();
+        verify(delegateConnectorListener).onFailure(connector, exception);
+        verifyRecordConnectorStartupFailure();
     }
 
     @Test
     public void testTaskStartupRecordedMetrics() {
-        delegateTaskListener.onStartup(eq(task));
-        expectLastCall();
-
-        taskStartupAttempts.record(eq(1.0));
-        expectLastCall();
-        taskStartupSuccesses.record(eq(1.0));
-        expectLastCall();
-        taskStartupResults.record(eq(1.0));
-        expectLastCall();
-
-        PowerMock.replayAll();
-
         WorkerMetricsGroup workerMetricsGroup = new WorkerMetricsGroup(new HashMap<>(), new HashMap<>(), connectMetrics);
         final TaskStatus.Listener taskListener = workerMetricsGroup.wrapStatusListener(delegateTaskListener);
 
         taskListener.onStartup(task);
 
-        PowerMock.verifyAll();
+        verify(delegateTaskListener).onStartup(task);
+        verifyRecordTaskSuccess();
     }
     
     @Test
     public void testTaskFailureAfterStartupRecordedMetrics() {
-        delegateTaskListener.onStartup(eq(task));
-        expectLastCall();
-
-        taskStartupAttempts.record(eq(1.0));
-        expectLastCall();
-        taskStartupSuccesses.record(eq(1.0));
-        expectLastCall();
-        taskStartupResults.record(eq(1.0));
-        expectLastCall();
-
-        delegateTaskListener.onFailure(eq(task), eq(exception));
-        expectLastCall();
-
-        // recordTaskFailure() should not be called if failure happens after a successful startup
-
-        PowerMock.replayAll();
-
         WorkerMetricsGroup workerMetricsGroup = new WorkerMetricsGroup(new HashMap<>(), new HashMap<>(), connectMetrics);
         final TaskStatus.Listener taskListener = workerMetricsGroup.wrapStatusListener(delegateTaskListener);
 
         taskListener.onStartup(task);
         taskListener.onFailure(task, exception);
 
-        PowerMock.verifyAll();
+        verify(delegateTaskListener).onStartup(task);
+        verifyRecordTaskSuccess();
+        verify(delegateTaskListener).onFailure(task, exception);
+        // recordTaskFailure() should not be called if failure happens after a successful startup.
+        verify(taskStartupFailures, never()).record(anyDouble());
     }
 
     @Test
     public void testTaskFailureBeforeStartupRecordedMetrics() {
-        delegateTaskListener.onFailure(eq(task), eq(exception));
-        expectLastCall();
-
-        taskStartupAttempts.record(eq(1.0));
-        expectLastCall();
-        taskStartupFailures.record(eq(1.0));
-        expectLastCall();
-        taskStartupResults.record(eq(0.0));
-        expectLastCall();
-
-        PowerMock.replayAll();
-
         WorkerMetricsGroup workerMetricsGroup = new WorkerMetricsGroup(new HashMap<>(), new HashMap<>(), connectMetrics);
         final TaskStatus.Listener taskListener = workerMetricsGroup.wrapStatusListener(delegateTaskListener);
 
         taskListener.onFailure(task, exception);
 
-        PowerMock.verifyAll();
+        verify(delegateTaskListener).onFailure(task, exception);
+        verifyRecordTaskFailure();
     }
 
+    private void verifyRecordTaskFailure() {
+        verify(taskStartupAttempts).record(1.0);
+        verify(taskStartupFailures).record(1.0);
+        verify(taskStartupResults).record(0.0);
+    }
+
+    private void verifyRecordTaskSuccess() {
+        verify(taskStartupAttempts).record(1.0);
+        verify(taskStartupSuccesses).record(1.0);
+        verify(taskStartupResults).record(1.0);
+    }
+
+    private void verifyRecordConnectorStartupSuccess() {
+        verify(connectorStartupAttempts).record(1.0);
+        verify(connectorStartupSuccesses).record(1.0);
+        verify(connectorStartupResults).record(1.0);
+    }
+
+    private void verifyRecordConnectorStartupFailure() {
+        verify(connectorStartupAttempts).record(1.0);
+        verify(connectorStartupFailures).record(1.0);
+        verify(connectorStartupResults).record(0.0);
+    }
 }

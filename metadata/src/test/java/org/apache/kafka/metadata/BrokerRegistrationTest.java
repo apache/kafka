@@ -27,10 +27,13 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.AbstractMap.SimpleEntry;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -48,7 +51,9 @@ public class BrokerRegistrationTest {
             Optional.empty(), true, false),
         new BrokerRegistration(2, 0, Uuid.fromString("eY7oaG1RREie5Kk9uy1l6g"),
             Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
-            Collections.singletonMap("foo", VersionRange.of((short) 2, (short) 3)),
+            Stream.of(new SimpleEntry<>("foo", VersionRange.of((short) 2, (short) 3)),
+                new SimpleEntry<>("bar", VersionRange.of((short) 1, (short) 4))).collect(
+                        Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue)),
             Optional.of("myrack"), false, true));
 
     @Test
@@ -77,6 +82,12 @@ public class BrokerRegistrationTest {
             "host='localhost', port=9091)], supportedFeatures={foo: 1-2}, " +
             "rack=Optional.empty, fenced=true, inControlledShutdown=false)",
             REGISTRATIONS.get(1).toString());
+        assertEquals("BrokerRegistration(id=2, epoch=0, " +
+            "incarnationId=eY7oaG1RREie5Kk9uy1l6g, listeners=[Endpoint(" +
+            "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
+            "host='localhost', port=9092)], supportedFeatures={bar: 1-4, foo: 2-3}, " +
+            "rack=Optional[myrack], fenced=false, inControlledShutdown=true)",
+            REGISTRATIONS.get(2).toString());
     }
 
     @Test

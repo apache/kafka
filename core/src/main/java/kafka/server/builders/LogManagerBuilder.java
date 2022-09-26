@@ -20,6 +20,7 @@ package kafka.server.builders;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
+import kafka.log.ProducerStateManagerConfig;
 import kafka.server.BrokerTopicStats;
 import kafka.server.LogDirFailureChannel;
 import kafka.server.metadata.ConfigRepository;
@@ -45,7 +46,7 @@ public class LogManagerBuilder {
     private long flushStartOffsetCheckpointMs = 10000L;
     private long retentionCheckMs = 1000L;
     private int maxTransactionTimeoutMs = 15 * 60 * 1000;
-    private int maxPidExpirationMs = 60000;
+    private ProducerStateManagerConfig producerStateManagerConfig = new ProducerStateManagerConfig(60000);
     private int producerIdExpirationCheckIntervalMs = 600000;
     private MetadataVersion interBrokerProtocolVersion = MetadataVersion.latest();
     private Scheduler scheduler = null;
@@ -109,8 +110,8 @@ public class LogManagerBuilder {
         return this;
     }
 
-    public LogManagerBuilder setMaxPidExpirationMs(int maxPidExpirationMs) {
-        this.maxPidExpirationMs = maxPidExpirationMs;
+    public LogManagerBuilder setMaxProducerIdExpirationMs(int maxProducerIdExpirationMs) {
+        this.producerStateManagerConfig = new ProducerStateManagerConfig(maxProducerIdExpirationMs);
         return this;
     }
 
@@ -164,7 +165,7 @@ public class LogManagerBuilder {
                               flushStartOffsetCheckpointMs,
                               retentionCheckMs,
                               maxTransactionTimeoutMs,
-                              maxPidExpirationMs,
+                              producerStateManagerConfig,
                               producerIdExpirationCheckIntervalMs,
                               interBrokerProtocolVersion,
                               scheduler,
