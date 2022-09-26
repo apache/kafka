@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.graph;
 
-public class WindowedStreamProcessorNode<K, V> extends StatefulProcessorNode<K, V> {
+public class WindowedStreamProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
     private final String windowStoreName;
     private final String processorName;
@@ -27,7 +27,7 @@ public class WindowedStreamProcessorNode<K, V> extends StatefulProcessorNode<K, 
     public WindowedStreamProcessorNode(final String windowStoreName,
                                        final String processorName,
                                        final ProcessorParameters<K, V, ?, ?> processorParameters) {
-        super(processorParameters.processorName(), processorParameters, new String[]{windowStoreName});
+        super(processorParameters.processorName(), processorParameters);
         this.windowStoreName = windowStoreName;
         this.processorName = processorName;
     }

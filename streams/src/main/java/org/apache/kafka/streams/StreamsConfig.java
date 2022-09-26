@@ -239,7 +239,9 @@ public class StreamsConfig extends AbstractConfig {
     private static final String CONFIG_ERROR_MSG = "Acceptable values are:"
         + " \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
         + "or a comma separated list of specific optimizations: "
-        + "(\"+REUSE_KTABLE_SOURCE_TOPICS+\", \"+MERGE_REPARTITION_TOPICS+\").";
+        + "(\"+REUSE_KTABLE_SOURCE_TOPICS+\", \"+MERGE_REPARTITION_TOPICS+\" + "
+        + "\"SINGLE_STORE_SELF_JOIN+\").";
+
 
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka "
@@ -275,7 +277,7 @@ public class StreamsConfig extends AbstractConfig {
      * for enabling the optimization that optimizes inner stream-stream joins into self-joins when
      * both arguments are the same stream.
      */
-    public static final String SINGLE_STORE_SELF_JOIN = "topology.optimization.single.store.self.join";
+    public static final String SINGLE_STORE_SELF_JOIN = "single.store.self.join";
 
     private static final List<String> TOPOLOGY_OPTIMIZATION_CONFIGS = Arrays.asList(
         OPTIMIZE, NO_OPTIMIZATION, REUSE_KTABLE_SOURCE_TOPICS, MERGE_REPARTITION_TOPICS,

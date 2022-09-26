@@ -30,7 +30,6 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.internals.graph.GlobalStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
-import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StateStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
@@ -402,8 +401,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             final GraphNode parent = joinNode.parentNodes().stream().findFirst().get();
             GraphNode left = null, right = null;
             for (final GraphNode child: parent.children()) {
-                if (child instanceof WindowedStreamProcessorNode
-                    && child.buildPriority() < joinNode.buildPriority()) {
+                if (child instanceof WindowedStreamProcessorNode && child.buildPriority() < joinNode.buildPriority()) {
                     if (child.nodeName().equals(joinNode.getThisWindowedStreamProcessorParameters().processorName())) {
                         left = child;
                     } else if (child.nodeName().equals(joinNode.getOtherWindowedStreamProcessorParameters().processorName())) {
