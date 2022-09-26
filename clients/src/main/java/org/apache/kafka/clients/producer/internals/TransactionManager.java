@@ -610,10 +610,10 @@ public class TransactionManager {
 
     public synchronized void transitionToUninitialized(RuntimeException exception) {
         transitionTo(State.UNINITIALIZED);
-        lastError = null;
         if (pendingTransition != null) {
             pendingTransition.result.fail(exception);
         }
+        lastError = null;
     }
 
     public synchronized void maybeTransitionToErrorState(RuntimeException exception) {
@@ -821,7 +821,7 @@ public class TransactionManager {
             request.fatalError(e);
     }
 
-    synchronized void failPendingRequestsUponError(RuntimeException exception) {
+    synchronized void failPendingRequests(RuntimeException exception) {
         pendingRequests.forEach(handler ->
                 handler.fatalError(exception));
     }
@@ -1013,19 +1013,18 @@ public class TransactionManager {
         if (!hasError()) {
             return;
         }
-
         // for ProducerFencedException, do not wrap it as a KafkaException
         // but create a new instance without the call trace since it was not thrown because of the current call
         if (lastError instanceof ProducerFencedException) {
             throw new ProducerFencedException("Producer with transactionalId '" + transactionalId
                     + "' and " + producerIdAndEpoch + " has been fenced by another producer " +
                     "with the same transactionalId");
-        } else if (lastError instanceof InvalidProducerEpochException) {
+        }
+        if (lastError instanceof InvalidProducerEpochException) {
             throw new InvalidProducerEpochException("Producer with transactionalId '" + transactionalId
                     + "' and " + producerIdAndEpoch + " attempted to produce with an old epoch");
-        } else {
-            throw new KafkaException("Cannot execute transactional method because we are in an error state", lastError);
         }
+        throw new KafkaException("Cannot execute transactional method because we are in an error state", lastError);
     }
 
     private boolean maybeTerminateRequestWithError(TxnRequestHandler requestHandler) {
