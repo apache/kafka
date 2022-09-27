@@ -109,7 +109,7 @@ public class ActiveTaskCreatorTest {
             time,
             threadId,
             lc.logger(ActiveTaskCreator.class),
-			false
+            false
         );
 
         assertThat(

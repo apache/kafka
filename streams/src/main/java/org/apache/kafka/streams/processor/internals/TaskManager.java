@@ -897,38 +897,52 @@ public class TaskManager {
 
         prepareCommitAndAddOffsetsToMap(revokedActiveTasks, consumedOffsetsPerTask);
 
-        // if we need to commit any revoking task then we just commit all of those needed committing together
-        final boolean shouldCommitAdditionalTasks = !consumedOffsetsPerTask.isEmpty();
-        if (shouldCommitAdditionalTasks) {
-            prepareCommitAndAddOffsetsToMap(commitNeededActiveTasks, consumedOffsetsPerTask);
-        }
-
         // even if commit failed, we should still continue and complete suspending those tasks, so we would capture
         // any exception and rethrow it at the end. some exceptions may be handled immediately and then swallowed,
         // as such we just need to skip those dirty tasks in the checkpoint
         final Set<Task> dirtyTasks = new HashSet<>();
-        try {
-            // in handleRevocation we must call commitOffsetsOrTransaction() directly rather than
-            // commitAndFillInConsumedOffsetsAndMetadataPerTaskMap() to make sure we don't skip the
-            // offset commit because we are in a rebalance
-            taskExecutor.commitOffsetsOrTransaction(consumedOffsetsPerTask);
-        } catch (final TaskCorruptedException e) {
-            log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
-                     e.corruptedTasks());
 
-            // If we hit a TaskCorruptedException it must be EOS, just handle the cleanup for those corrupted tasks right here
-            dirtyTasks.addAll(tasks.tasks(e.corruptedTasks()));
-            closeDirtyAndRevive(dirtyTasks, true);
-        } catch (final TimeoutException e) {
-            log.warn("Timed out while trying to commit all tasks during revocation, these will be cleaned and revived");
+        if (!consumedOffsetsPerTask.isEmpty()) {
+            // if we need to commit any revoking task then we just commit all of those needed committing together
+            prepareCommitAndAddOffsetsToMap(commitNeededActiveTasks, consumedOffsetsPerTask);
 
-            // If we hit a TimeoutException it must be ALOS, just close dirty and revive without wiping the state
-            dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
-            closeDirtyAndRevive(dirtyTasks, false);
-        } catch (final RuntimeException e) {
-            log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
-            firstException.compareAndSet(null, e);
-            dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
+            try {
+                // in handleRevocation we must call commitOffsetsOrTransaction() directly rather than
+                // commitAndFillInConsumedOffsetsAndMetadataPerTaskMap() to make sure we don't skip the
+                // offset commit because we are in a rebalance
+                taskExecutor.commitOffsetsOrTransaction(consumedOffsetsPerTask);
+            } catch (final TaskCorruptedException e) {
+                log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
+                    e.corruptedTasks());
+
+                // If we hit a TaskCorruptedException it must be EOS, just handle the cleanup for those corrupted tasks right here
+                dirtyTasks.addAll(tasks.tasks(e.corruptedTasks()));
+                closeDirtyAndRevive(dirtyTasks, true);
+            } catch (final TimeoutException e) {
+                log.warn("Timed out while trying to commit all tasks during revocation, these will be cleaned and revived");
+
+                // If we hit a TimeoutException it must be ALOS, just close dirty and revive without wiping the state
+                dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
+                closeDirtyAndRevive(dirtyTasks, false);
+            } catch (final RuntimeException e) {
+                log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
+                firstException.compareAndSet(null, e);
+                dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
+            }
+
+            for (final Task task : commitNeededActiveTasks) {
+                if (!dirtyTasks.contains(task)) {
+                    try {
+                        // for non-revoking active tasks, we should not enforce checkpoint
+                        // since if it is EOS enabled, no checkpoint should be written while
+                        // the task is in RUNNING state
+                        task.postCommit(false);
+                    } catch (final RuntimeException e) {
+                        log.error("Exception caught while post-committing task " + task.id(), e);
+                        maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
+                    }
+                }
+            }
         }
 
         // we enforce checkpointing upon suspending a task: if it is resumed later we just proceed normally, if it is
@@ -940,22 +954,6 @@ public class TaskManager {
                 } catch (final RuntimeException e) {
                     log.error("Exception caught while post-committing task " + task.id(), e);
                     maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
-                }
-            }
-        }
-
-        if (shouldCommitAdditionalTasks) {
-            for (final Task task : commitNeededActiveTasks) {
-                if (!dirtyTasks.contains(task)) {
-                    try {
-                        // for non-revoking active tasks, we should not enforce checkpoint
-                        // since if it is EOS enabled, no checkpoint should be written while
-                        // the task is in RUNNING tate
-                        task.postCommit(false);
-                    } catch (final RuntimeException e) {
-                        log.error("Exception caught while post-committing task " + task.id(), e);
-                        maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
-                    }
                 }
             }
         }
