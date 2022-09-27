@@ -322,7 +322,7 @@
     Followers consume messages from the leader just as a normal Kafka consumer would and apply them to their own log. Having the followers pull from the leader has the nice property of allowing the follower to naturally
     batch together log entries they are applying to their log.
     <p>
-    As with most distributed systems automatically handling failures requires having a precise definition of what it means for a node to be "alive." In Kafka, a special node
+    As with most distributed systems, automatically handling failures requires a precise definition of what it means for a node to be "alive." In Kafka, a special node
     known as the "controller" is responsible for managing the registration of brokers in the cluster. Broker liveness has two conditions:
     <ol>
       <li>Brokers must maintain an active session with the controller in order to receive regular metadata updates.</li>
@@ -335,7 +335,7 @@
     <p>
     For clusters using Zookeeper, liveness is determined indirectly through the existence of an ephemeral node which is created by the broker on
     initialization of its Zookeeper session. If the broker loses its session after failing to send heartbeats to Zookeeper before expiration of
-    <code>zookeeper.session.timeout.ms</code>, the the node gets deleted. The controller would then notice the node deletion through a Zookeeper watch
+    <code>zookeeper.session.timeout.ms</code>, then the node gets deleted. The controller would then notice the node deletion through a Zookeeper watch
     and mark the broker offline.
     <p>
     We refer to nodes satisfying these two conditions as being "in sync" to avoid the vagueness of "alive" or "failed". The leader keeps track of the set of "in sync" replicas,
