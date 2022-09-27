@@ -158,21 +158,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     waitForTopics(client, List(), topics)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk")) // KRaft mode will be supported in KAFKA-13910
-  def testMetadataDurabilityOnControllerFailure(quorum: String): Unit = {
-    client = Admin.create(createConfig)
-    val topics = Seq("mytopic")
-    val newTopics = Seq(new NewTopic("mytopic", 3, 3.toShort))
-    client.createTopics(newTopics.asJava).all.get()
-    waitForTopics(client, expectedPresent = topics, expectedMissing = List())
-
-    val controller = brokers.find(_.config.brokerId == brokers.flatMap(_.metadataCache.getControllerId).head).get
-    killBroker(controller.config.brokerId)
-    val topicDesc = client.describeTopics(topics.asJava).allTopicNames.get()
-    assertEquals(topics.toSet, topicDesc.keySet.asScala)
-  }
-
   /**
     * describe should not auto create topics
     */
