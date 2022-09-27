@@ -72,15 +72,4 @@ final class LeaderAndIsrTest {
 
     assertEquals(2, leaderAndIsr.leaderOpt.get)
   }
-
-  @Test
-  def testWithZkVersion() : Unit = {
-    val leaderAndIsr = LeaderAndIsr(3, List(1, 2, 3))
-
-    assertEquals(0, leaderAndIsr.zkVersion)
-
-    val leaderWithNewZkVersion = leaderAndIsr.withZkVersion(2)
-
-    assertEquals(2, leaderWithNewZkVersion.zkVersion)
-  }
 }
