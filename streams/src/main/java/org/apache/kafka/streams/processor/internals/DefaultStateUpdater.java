@@ -572,7 +572,6 @@ public class DefaultStateUpdater implements StateUpdater {
         return Collections.unmodifiableSet(new HashSet<>(removedTasks));
     }
 
-    @Override
     public Set<Task> getPausedTasks() {
         return stateUpdaterThread != null
             ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.getPausedTasks()))
