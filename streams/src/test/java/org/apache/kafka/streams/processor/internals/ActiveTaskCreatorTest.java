@@ -16,17 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.producer.MockProducer;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.KafkaMetric;
-import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -41,9 +36,7 @@ import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -55,10 +48,7 @@ import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.closeTo;
-import static org.junit.Assert.assertThrows;
 import static java.util.Collections.emptySet;
 
 @RunWith(EasyMockRunner.class)
@@ -77,161 +67,11 @@ public class ActiveTaskCreatorTest {
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
     );
-    final UUID uuid = UUID.randomUUID();
-
-    private ActiveTaskCreator activeTaskCreator;
-
-    // non-EOS test
-
-    // functional test
-
-    @Test
-    public void shouldConstructProducerMetricsWithEosDisabled() {
-        shouldConstructThreadProducerMetric();
-    }
-
-    @Test
-    public void shouldConstructClientIdWithEosDisabled() {
-        createTasks();
-
-        final Set<String> clientIds = activeTaskCreator.producerClientIds();
-
-        assertThat(clientIds, is(Collections.singleton("clientId-StreamThread-0-producer")));
-    }
-
-    @Test
-    public void shouldCloseThreadProducerIfEosDisabled() {
-        createTasks();
-
-        activeTaskCreator.closeThreadProducerIfNeeded();
-
-        assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
-    }
-
-    @Test
-    public void shouldReturnBlockedTimeWhenThreadProducer() {
-        final double blockedTime = 123.0;
-        createTasks();
-        final MockProducer<?, ?> producer = mockClientSupplier.producers.get(0);
-        addMetric(producer, "flush-time-ns-total", blockedTime);
-
-        assertThat(activeTaskCreator.totalProducerBlockedTime(), closeTo(blockedTime, 0.01));
-    }
 
     // error handling
-
     @Test
-    public void shouldFailOnGetThreadProducerIfEosDisabled() {
-        createTasks();
-
-        final IllegalStateException thrown = assertThrows(
-            IllegalStateException.class,
-            activeTaskCreator::threadProducer
-        );
-
-        assertThat(thrown.getMessage(), is("Expected EXACTLY_ONCE_V2 to be enabled, but the processing mode was AT_LEAST_ONCE"));
-    }
-
-    @Test
-    public void shouldThrowStreamsExceptionOnErrorCloseThreadProducerIfEosDisabled() {
-        createTasks();
-        mockClientSupplier.producers.get(0).closeException = new RuntimeException("KABOOM!");
-
-        final StreamsException thrown = assertThrows(
-            StreamsException.class,
-            activeTaskCreator::closeThreadProducerIfNeeded
-        );
-
-        assertThat(thrown.getMessage(), is("Thread producer encounter error trying to close."));
-        assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
-    }
-
-    // eos-v2 test
-
-    // functional test
-
-    @Test
-    public void shouldReturnThreadProducerIfEosV2Enabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        createTasks();
-
-        final StreamsProducer threadProducer = activeTaskCreator.threadProducer();
-
-        assertThat(mockClientSupplier.producers.size(), is(1));
-        assertThat(threadProducer.kafkaProducer(), is(mockClientSupplier.producers.get(0)));
-    }
-
-    @Test
-    public void shouldConstructProducerMetricsWithEosV2Enabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-
-        shouldConstructThreadProducerMetric();
-    }
-
-    @Test
-    public void shouldConstructClientIdWithEosV2Enabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-        createTasks();
-
-        final Set<String> clientIds = activeTaskCreator.producerClientIds();
-
-        assertThat(clientIds, is(Collections.singleton("clientId-StreamThread-0-producer")));
-    }
-
-    @Test
-    public void shouldCloseThreadProducerIfEosV2Enabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-        createTasks();
-
-        activeTaskCreator.closeThreadProducerIfNeeded();
-
-        assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
-    }
-
-    // error handling
-
-    @Test
-    public void shouldThrowStreamsExceptionOnErrorCloseThreadProducerIfEosV2Enabled() {
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
-        mockClientSupplier.setApplicationIdForProducer("appId");
-        createTasks();
-        mockClientSupplier.producers.get(0).closeException = new RuntimeException("KABOOM!");
-
-        final StreamsException thrown = assertThrows(
-            StreamsException.class,
-            activeTaskCreator::closeThreadProducerIfNeeded
-        );
-
-        assertThat(thrown.getMessage(), is("Thread producer encounter error trying to close."));
-        assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
-    }
-
-    private void shouldConstructThreadProducerMetric() {
-        createTasks();
-
-        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
-        final Metric testMetric = new KafkaMetric(
-            new Object(),
-            testMetricName,
-            (Measurable) (config, now) -> 0,
-            null,
-            new MockTime());
-        mockClientSupplier.producers.get(0).setMockMetrics(testMetricName, testMetric);
-        assertThat(mockClientSupplier.producers.size(), is(1));
-
-        final Map<MetricName, Metric> producerMetrics = activeTaskCreator.producerMetrics();
-
-        assertThat(producerMetrics.size(), is(1));
-        assertThat(producerMetrics.get(testMetricName), is(testMetric));
-    }
-
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private void createTasks() {
+    public void shouldCreateTasksCorrectly() {
         final TaskId task00 = new TaskId(0, 0);
         final TaskId task01 = new TaskId(0, 1);
 
@@ -254,24 +94,28 @@ public class ActiveTaskCreatorTest {
         expect(topology.sources()).andStubReturn(Collections.singleton(sourceNode));
         replay(builder, stateDirectory, topology, sourceNode);
 
+        final LogContext lc = new LogContext();
+        final String threadId = "clientId-StreamThread-0";
+        final Time time = new MockTime();
+
         final StreamsConfig config = new StreamsConfig(properties);
-        activeTaskCreator = new ActiveTaskCreator(
+        final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
             new TopologyMetadata(builder, config),
             config,
             streamsMetrics,
             stateDirectory,
             changeLogReader,
             new ThreadCache(new LogContext(), 0L, streamsMetrics),
-            new MockTime(),
-            mockClientSupplier,
-            "clientId-StreamThread-0",
-            uuid,
-            new LogContext().logger(ActiveTaskCreator.class),
-            false);
+            time,
+            threadId,
+            lc.logger(ActiveTaskCreator.class),
+			false
+        );
 
         assertThat(
             activeTaskCreator.createTasks(
                 mockClientSupplier.consumer,
+                new StreamsProducer(config, threadId, mockClientSupplier, UUID.randomUUID(), lc, time),
                 mkMap(
                     mkEntry(task00, Collections.singleton(new TopicPartition("topic", 0))),
                     mkEntry(task01, Collections.singleton(new TopicPartition("topic", 1)))
@@ -279,27 +123,5 @@ public class ActiveTaskCreatorTest {
             ).stream().map(Task::id).collect(Collectors.toSet()),
             equalTo(mkSet(task00, task01))
         );
-    }
-
-    private void addMetric(
-        final MockProducer<?, ?> producer,
-        final String name,
-        final double value) {
-        final MetricName metricName = metricName(name);
-        producer.setMockMetrics(metricName, new Metric() {
-            @Override
-            public MetricName metricName() {
-                return metricName;
-            }
-
-            @Override
-            public Object metricValue() {
-                return value;
-            }
-        });
-    }
-
-    private MetricName metricName(final String name) {
-        return new MetricName(name, "", "", Collections.emptyMap());
     }
 }

@@ -23,8 +23,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
@@ -96,6 +94,7 @@ public class TaskManager {
     private final ActiveTaskCreator activeTaskCreator;
     private final StandbyTaskCreator standbyTaskCreator;
     private final StateUpdater stateUpdater;
+    private final StreamsProducer threadProducer;
 
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
@@ -103,6 +102,7 @@ public class TaskManager {
                 final String logPrefix,
                 final ActiveTaskCreator activeTaskCreator,
                 final StandbyTaskCreator standbyTaskCreator,
+                final StreamsProducer streamsProducer,
                 final TasksRegistry tasks,
                 final TopologyMetadata topologyMetadata,
                 final Admin adminClient,
@@ -117,6 +117,7 @@ public class TaskManager {
         this.topologyMetadata = topologyMetadata;
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
+        this.threadProducer = streamsProducer;
         this.processingMode = topologyMetadata.processingMode();
 
         final LogContext logContext = new LogContext(logPrefix);
@@ -137,7 +138,7 @@ public class TaskManager {
     }
 
     public double totalProducerBlockedTime() {
-        return activeTaskCreator.totalProducerBlockedTime();
+        return threadProducer.totalBlockedTime();
     }
 
     public UUID processId() {
@@ -153,7 +154,7 @@ public class TaskManager {
     }
 
     StreamsProducer threadProducer() {
-        return activeTaskCreator.threadProducer();
+        return threadProducer;
     }
 
     boolean isRebalanceInProgress() {
@@ -373,7 +374,7 @@ public class TaskManager {
 
     private void createNewTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                                 final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
-        final Collection<Task> newActiveTasks = activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate);
+        final Collection<Task> newActiveTasks = activeTaskCreator.createTasks(mainConsumer, threadProducer, activeTasksToCreate);
         final Collection<Task> newStandbyTask = standbyTaskCreator.createTasks(standbyTasksToCreate);
 
         if (stateUpdater == null) {
@@ -617,7 +618,7 @@ public class TaskManager {
     }
 
     private StreamTask convertStandbyToActive(final StandbyTask standbyTask, final Set<TopicPartition> partitions) {
-        return activeTaskCreator.createActiveTaskFromStandby(standbyTask, partitions, mainConsumer);
+        return activeTaskCreator.createActiveTaskFromStandby(standbyTask, partitions, mainConsumer, threadProducer);
     }
 
     /**
@@ -1017,7 +1018,7 @@ public class TaskManager {
         removeLostActiveTasksFromStateUpdater();
 
         if (processingMode == EXACTLY_ONCE_V2) {
-            activeTaskCreator.reInitializeThreadProducer();
+            threadProducer.resetProducer();
         }
     }
 
@@ -1214,7 +1215,7 @@ public class TaskManager {
 
         executeAndMaybeSwallow(
             clean,
-            activeTaskCreator::closeThreadProducerIfNeeded,
+            this::closeThreadProducer,
             e -> firstException.compareAndSet(null, e),
             e -> log.warn("Ignoring an exception while closing thread producer.", e)
         );
@@ -1233,6 +1234,14 @@ public class TaskManager {
         final RuntimeException fatalException = firstException.get();
         if (fatalException != null) {
             throw fatalException;
+        }
+    }
+
+    private void closeThreadProducer() {
+        try {
+            threadProducer.close();
+        } catch (final RuntimeException e) {
+            throw new StreamsException("Thread producer encounter error trying to close.", e);
         }
     }
 
@@ -1685,14 +1694,6 @@ public class TaskManager {
                          .append('(').append(task.isActive() ? "active" : "standby").append(')');
         }
         return stringBuilder.toString();
-    }
-
-    Map<MetricName, Metric> producerMetrics() {
-        return activeTaskCreator.producerMetrics();
-    }
-
-    Set<String> producerClientIds() {
-        return activeTaskCreator.producerClientIds();
     }
 
     Set<TaskId> lockedTaskDirectories() {

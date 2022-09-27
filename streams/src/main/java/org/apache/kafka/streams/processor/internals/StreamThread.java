@@ -73,6 +73,7 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
 
 public class StreamThread extends Thread {
 
@@ -374,9 +375,7 @@ public class StreamThread extends Thread {
             changelogReader,
             cache,
             time,
-            clientSupplier,
             threadId,
-            processId,
             log,
             stateUpdaterEnabled);
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
@@ -389,6 +388,15 @@ public class StreamThread extends Thread {
             log,
             stateUpdaterEnabled);
 
+        log.info("Creating thread producer client");
+        final StreamsProducer threadProducer = new StreamsProducer(
+            config,
+            threadId,
+            clientSupplier,
+            processId,
+            logContext,
+            time);
+
         final TaskManager taskManager = new TaskManager(
             time,
             changelogReader,
@@ -396,6 +404,7 @@ public class StreamThread extends Thread {
             logPrefix,
             activeTaskCreator,
             standbyTaskCreator,
+            threadProducer,
             new Tasks(new LogContext(logPrefix)),
             topologyMetadata,
             adminClient,
@@ -1212,7 +1221,7 @@ public class StreamThread extends Thread {
             state().name(),
             getConsumerClientId(getName()),
             getRestoreConsumerClientId(getName()),
-            taskManager.producerClientIds(),
+            getThreadProducerClientId(getName()),
             adminClientId,
             Collections.emptySet(),
             Collections.emptySet());
@@ -1249,7 +1258,7 @@ public class StreamThread extends Thread {
             state().name(),
             getConsumerClientId(getName()),
             getRestoreConsumerClientId(getName()),
-            taskManager.producerClientIds(),
+            getThreadProducerClientId(getName()),
             adminClientId,
             activeTasksMetadata,
             standbyTasksMetadata
@@ -1297,8 +1306,8 @@ public class StreamThread extends Thread {
         leaveGroupRequested.set(true);
     }
 
-    public Map<MetricName, Metric> producerMetrics() {
-        return taskManager.producerMetrics();
+    public Map<MetricName, ? extends Metric> producerMetrics() {
+        return taskManager.threadProducer().metrics();
     }
 
     public Map<MetricName, Metric> consumerMetrics() {

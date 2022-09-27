@@ -41,9 +41,7 @@ public class ThreadMetadataImplTest {
     public static final String THREAD_STATE = "thread state";
     public static final String MAIN_CONSUMER_CLIENT_ID = "main Consumer ClientID";
     public static final String RESTORE_CONSUMER_CLIENT_ID = "restore Consumer ClientID";
-    public static final String CLIENT_ID_1 = "client Id 1";
-    public static final String CLIENT_ID_2 = "client Id 2";
-    public static final Set<String> PRODUCER_CLIENT_IDS = mkSet(CLIENT_ID_1, CLIENT_ID_2);
+    public static final String PRODUCER_CLIENT_ID = "client Id";
     public static final TaskId TASK_ID_0 = new TaskId(1, 2);
     public static final TaskId TASK_ID_1 = new TaskId(1, 1);
     public static final TopicPartition TP_0_0 = new TopicPartition("t", 0);
@@ -75,7 +73,7 @@ public class ThreadMetadataImplTest {
             THREAD_STATE,
             MAIN_CONSUMER_CLIENT_ID,
             RESTORE_CONSUMER_CLIENT_ID,
-            PRODUCER_CLIENT_IDS,
+            PRODUCER_CLIENT_ID,
             ADMIN_CLIENT_ID,
             ACTIVE_TASKS,
             STANDBY_TASKS
@@ -96,7 +94,7 @@ public class ThreadMetadataImplTest {
             THREAD_STATE,
             MAIN_CONSUMER_CLIENT_ID,
             RESTORE_CONSUMER_CLIENT_ID,
-            PRODUCER_CLIENT_IDS,
+            PRODUCER_CLIENT_ID,
             ADMIN_CLIENT_ID,
             ACTIVE_TASKS,
             STANDBY_TASKS
@@ -112,7 +110,7 @@ public class ThreadMetadataImplTest {
             THREAD_STATE,
             MAIN_CONSUMER_CLIENT_ID,
             RESTORE_CONSUMER_CLIENT_ID,
-            PRODUCER_CLIENT_IDS,
+            PRODUCER_CLIENT_ID,
             ADMIN_CLIENT_ID,
             ACTIVE_TASKS,
             STANDBY_TASKS
@@ -128,7 +126,7 @@ public class ThreadMetadataImplTest {
             "different",
             MAIN_CONSUMER_CLIENT_ID,
             RESTORE_CONSUMER_CLIENT_ID,
-            PRODUCER_CLIENT_IDS,
+            PRODUCER_CLIENT_ID,
             ADMIN_CLIENT_ID,
             ACTIVE_TASKS,
             STANDBY_TASKS
@@ -144,7 +142,7 @@ public class ThreadMetadataImplTest {
             THREAD_STATE,
             "different",
             RESTORE_CONSUMER_CLIENT_ID,
-            PRODUCER_CLIENT_IDS,
+            PRODUCER_CLIENT_ID,
             ADMIN_CLIENT_ID,
             ACTIVE_TASKS,
             STANDBY_TASKS
@@ -160,7 +158,7 @@ public class ThreadMetadataImplTest {
             THREAD_STATE,
             MAIN_CONSUMER_CLIENT_ID,
             "different",
-            PRODUCER_CLIENT_IDS,
+            PRODUCER_CLIENT_ID,
             ADMIN_CLIENT_ID,
             ACTIVE_TASKS,
             STANDBY_TASKS
@@ -176,7 +174,7 @@ public class ThreadMetadataImplTest {
             THREAD_STATE,
             MAIN_CONSUMER_CLIENT_ID,
             RESTORE_CONSUMER_CLIENT_ID,
-            mkSet(CLIENT_ID_1),
+            "different",
             ADMIN_CLIENT_ID,
             ACTIVE_TASKS,
             STANDBY_TASKS
@@ -192,7 +190,7 @@ public class ThreadMetadataImplTest {
             THREAD_STATE,
             MAIN_CONSUMER_CLIENT_ID,
             RESTORE_CONSUMER_CLIENT_ID,
-            PRODUCER_CLIENT_IDS,
+            PRODUCER_CLIENT_ID,
             "different",
             ACTIVE_TASKS,
             STANDBY_TASKS
@@ -208,7 +206,7 @@ public class ThreadMetadataImplTest {
             THREAD_STATE,
             MAIN_CONSUMER_CLIENT_ID,
             RESTORE_CONSUMER_CLIENT_ID,
-            PRODUCER_CLIENT_IDS,
+            PRODUCER_CLIENT_ID,
             ADMIN_CLIENT_ID,
             mkSet(TM_0),
             STANDBY_TASKS
@@ -224,7 +222,7 @@ public class ThreadMetadataImplTest {
             THREAD_STATE,
             MAIN_CONSUMER_CLIENT_ID,
             RESTORE_CONSUMER_CLIENT_ID,
-            PRODUCER_CLIENT_IDS,
+            PRODUCER_CLIENT_ID,
             ADMIN_CLIENT_ID,
             ACTIVE_TASKS,
             mkSet(TM_0)

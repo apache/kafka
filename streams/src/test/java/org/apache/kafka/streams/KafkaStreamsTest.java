@@ -344,7 +344,7 @@ public class KafkaStreamsTest {
                 "DEAD",
                 "",
                 "",
-                Collections.emptySet(),
+                "",
                 "",
                 Collections.emptySet(),
                 Collections.emptySet()
