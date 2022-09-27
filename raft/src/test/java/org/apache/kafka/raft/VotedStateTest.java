@@ -86,4 +86,10 @@ class VotedStateTest {
         assertFalse(state.canGrantVote(2, isLogUpToDate));
         assertFalse(state.canGrantVote(3, isLogUpToDate));
     }
+
+    @Test
+    public final void testToString() {
+        assertFalse(this.newVotedState(Utils.mkSet(1, 2, 3),
+            Optional.empty()).toString().contains("@"));
+    }
 }
