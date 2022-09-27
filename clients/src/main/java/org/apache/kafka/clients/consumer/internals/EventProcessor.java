@@ -14,21 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.clients.consumer.internals;
+
+import java.io.Closeable;
 
 /**
- * This is the abstract definition of the events created by the KafkaConsumer API
+ * This interfaces the DefaultEventHandler and the underlying processing thread.
  */
-abstract public class ApplicationEvent {
-    public final EventType type;
-    public final boolean needCoordinator;
-
-    public ApplicationEvent(EventType type, boolean needCoordinator) {
-        this.type = type;
-        this.needCoordinator = needCoordinator;
-    }
-    public enum EventType {
-        COMMIT,
-        NOOP,
-    }
+public interface EventProcessor extends Runnable, Closeable {
 }

@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.Time;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -114,7 +113,7 @@ public abstract class AbstractPrototypeAsyncConsumer<K, V> implements Consumer<K
      */
     private class CommitApplicationEvent extends ApplicationEvent {
         public CommitApplicationEvent() {
-            super(EventTypes.COMMIT, false);
+            super(EventType.COMMIT, false);
         }
         // this is the stubbed commitAsyncEvents
         CompletableFuture<Void> commitFuture = new CompletableFuture<>();
