@@ -116,7 +116,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private void runOnce() throws InterruptedException {
             performActionsOnTasks();
             restoreTasks();
-            maybeCheckpointUpdatingTasks(time.milliseconds());
+            checkAllUpdatingTaskStates(time.milliseconds());
             waitIfAllChangelogsCompletelyRead();
         }
 
@@ -365,11 +365,11 @@ public class DefaultStateUpdater implements StateUpdater {
             }
         }
 
-        private void maybeCheckpointUpdatingTasks(final long now) {
+        private void checkAllUpdatingTaskStates(final long now) {
             final long elapsedMsSinceLastCommit = now - lastCommitMs;
             if (elapsedMsSinceLastCommit > commitIntervalMs) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Checkpointing all restoring tasks since {}ms has elapsed (commit interval is {}ms)",
+                    log.debug("Checking all restoring task states since {}ms has elapsed (commit interval is {}ms)",
                         elapsedMsSinceLastCommit, commitIntervalMs);
                 }
 
@@ -377,6 +377,7 @@ public class DefaultStateUpdater implements StateUpdater {
                     if (topologyMetadata.isPaused(task.id().topologyName())) {
                         pauseTask(task);
                     } else {
+                        log.debug("Try to checkpoint current restoring progress for task {}", task.id());
                         // do not enforce checkpointing during restoration if its position has not advanced much
                         task.maybeCheckpoint(false);
                     }
