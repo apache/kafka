@@ -433,12 +433,11 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       .quota(new Quota(quotaLimit, true))
   }
 
-  protected def getOrCreateSensor(sensorName: String, expirationTime: Long, metricName: MetricName): Sensor = {
+  protected def getOrCreateSensor(sensorName: String, expirationTimeSeconds: Long, registerMetrics: Sensor => Unit): Sensor = {
     sensorAccessor.getOrCreate(
       sensorName,
-      expirationTime,
-      sensor => sensor.add(metricName, new Rate)
-    )
+      expirationTimeSeconds,
+      registerMetrics)
   }
 
   /**

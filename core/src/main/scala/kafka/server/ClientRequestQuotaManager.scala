@@ -17,11 +17,11 @@
 package kafka.server
 
 import java.util.concurrent.TimeUnit
-
 import kafka.network.RequestChannel
 import kafka.utils.QuotaUtils
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
+import org.apache.kafka.common.metrics.stats.Rate
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.quota.ClientQuotaCallback
 
@@ -49,7 +49,8 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
     QuotaType.Request.toString, "Tracking exempt-request-time utilization percentage")
 
   val exemptSensor: Sensor = getOrCreateSensor(ClientRequestQuotaManager.ExemptSensorName,
-    ClientRequestQuotaManager.DefaultInactiveExemptSensorExpirationTimeSeconds, exemptMetricName)
+    ClientRequestQuotaManager.DefaultInactiveExemptSensorExpirationTimeSeconds,
+    sensor => sensor.add(exemptMetricName, new Rate))
 
   def recordExempt(value: Double): Unit = {
     exemptSensor.record(value)
