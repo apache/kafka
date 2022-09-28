@@ -22,7 +22,7 @@
     <groupId>org.apache.kafka</groupId>
     <artifactId>streams-quickstart</artifactId>
     <packaging>pom</packaging>
-    <version>6.2.7-0-ccs</version>
+    <version>6.2.8-0-ccs</version>
 
     <name>Kafka Streams :: Quickstart</name>
 
