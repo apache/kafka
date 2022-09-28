@@ -1,0 +1,12 @@
+{
+  "configs": [
+    {
+      "name": "reserved.broker.max.id",
+      "value": "10000"
+    },
+    {
+      "name": "broker.id",
+      "value": "123"
+    }
+  ]
+}

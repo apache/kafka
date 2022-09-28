@@ -17,6 +17,9 @@
 
 package kafka.server
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
+
 import java.util
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Locale, Properties}
@@ -55,6 +58,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
+import scala.io.Source
 
 object Defaults {
   /** ********* Zookeeper Configuration ***********/
@@ -1510,13 +1514,38 @@ object KafkaConfig {
   }
 }
 
+case class Configs (name: String,value: Object)
+
+case class CtestConfigModel (configs: Seq[Configs])
+
 class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynamicConfigOverride: Option[DynamicBrokerConfig])
   extends AbstractConfig(KafkaConfig.configDef, props, doLog) with Logging {
 
-  def this(props: java.util.Map[_, _]) = this(true, KafkaConfig.populateSynonyms(props), None)
-  def this(props: java.util.Map[_, _], doLog: Boolean) = this(doLog, KafkaConfig.populateSynonyms(props), None)
-  def this(props: java.util.Map[_, _], doLog: Boolean, dynamicConfigOverride: Option[DynamicBrokerConfig]) =
+  def this(props: java.util.Map[_, _]) = {
+    this(true, KafkaConfig.populateSynonyms(props), None)
+    insertCtestConfigs()
+  }
+  def this(props: java.util.Map[_, _], doLog: Boolean) = {
+    this(doLog, KafkaConfig.populateSynonyms(props), None)
+    insertCtestConfigs()
+  }
+  def this(props: java.util.Map[_, _], doLog: Boolean, dynamicConfigOverride: Option[DynamicBrokerConfig]) = {
     this(doLog, KafkaConfig.populateSynonyms(props), dynamicConfigOverride)
+    insertCtestConfigs()
+  }
+
+  def insertCtestConfigs(): Unit = {
+    val mapper = new ObjectMapper()
+    // val jsonString = "{\n  \"configs\": [\n    {\n      \"name\": \"reserved.broker.max.id\",\n      \"value\": \"10000\"\n    },\n    {\n      \"name\": \"broker.id\",\n      \"value\": \"123\"\n    }\n  ]\n}"
+    val jsonString = Source.fromFile("ctest.json").mkString
+    print("jsonStringjsonString " + jsonString + "\n")
+    mapper.registerModule(DefaultScalaModule)
+    val ctestConfig = mapper.readValue(jsonString, classOf[CtestConfigModel])
+    for (config <- ctestConfig.configs) {
+      println("name: " + config.name + "\n")
+      println("value: " + config.value + "\n")
+    }
+  }
 
   // Cache the current config to avoid acquiring read lock to access from dynamicConfig
   @volatile private var currentConfig = this
