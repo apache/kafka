@@ -58,7 +58,6 @@ import org.apache.zookeeper.client.ZKClientConfig
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
-import scala.io.Source
 
 object Defaults {
   /** ********* Zookeeper Configuration ***********/
@@ -1514,7 +1513,7 @@ object KafkaConfig {
   }
 }
 
-case class Configs (name: String,value: Object)
+case class Configs (name: String,value: AnyRef)
 
 case class CtestConfigModel (configs: Seq[Configs])
 
@@ -1523,27 +1522,25 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   def this(props: java.util.Map[_, _]) = {
     this(true, KafkaConfig.populateSynonyms(props), None)
-    insertCtestConfigs()
   }
   def this(props: java.util.Map[_, _], doLog: Boolean) = {
     this(doLog, KafkaConfig.populateSynonyms(props), None)
-    insertCtestConfigs()
   }
   def this(props: java.util.Map[_, _], doLog: Boolean, dynamicConfigOverride: Option[DynamicBrokerConfig]) = {
     this(doLog, KafkaConfig.populateSynonyms(props), dynamicConfigOverride)
-    insertCtestConfigs()
   }
 
-  def insertCtestConfigs(): Unit = {
+  override def insertCtestConfigs(): Unit = {
     val mapper = new ObjectMapper()
-    // val jsonString = "{\n  \"configs\": [\n    {\n      \"name\": \"reserved.broker.max.id\",\n      \"value\": \"10000\"\n    },\n    {\n      \"name\": \"broker.id\",\n      \"value\": \"123\"\n    }\n  ]\n}"
-    val jsonString = Source.fromFile("ctest.json").mkString
+    val jsonString = "{\n  \"configs\": [\n    {\n      \"name\": \"reserved.broker.max.id\",\n      \"value\": \"10000\"\n    },\n    {\n      \"name\": \"broker.id\",\n      \"value\": \"123\"\n    }\n  ]\n}"
+//    val jsonString = Source.fromFile("ctest.json").mkString
     print("jsonStringjsonString " + jsonString + "\n")
     mapper.registerModule(DefaultScalaModule)
     val ctestConfig = mapper.readValue(jsonString, classOf[CtestConfigModel])
     for (config <- ctestConfig.configs) {
       println("name: " + config.name + "\n")
       println("value: " + config.value + "\n")
+      insertCtestConfigToValues(config.name, config.value)
     }
   }
 
@@ -1666,8 +1663,14 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val ZkSslOcspEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(KafkaConfig.ZkSslOcspEnableProp)
   /** ********* General Configuration ***********/
   val brokerIdGenerationEnable: Boolean = getBoolean(KafkaConfig.BrokerIdGenerationEnableProp)
-  val maxReservedBrokerId: Int = getInt(KafkaConfig.MaxReservedBrokerIdProp)
-  var brokerId: Int = getInt(KafkaConfig.BrokerIdProp)
+  val maxReservedBrokerId: Int = {
+    print("maxReservedBrokerId " + getInt(KafkaConfig.MaxReservedBrokerIdProp) + "\n")
+    getInt(KafkaConfig.MaxReservedBrokerIdProp)
+  }
+  var brokerId: Int = {
+    print("brokerId " + getInt(KafkaConfig.BrokerIdProp) + "\n")
+    getInt(KafkaConfig.BrokerIdProp)
+  }
   val nodeId: Int = getInt(KafkaConfig.NodeIdProp)
   val initialRegistrationTimeoutMs: Int = getInt(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp)
   val brokerHeartbeatIntervalMs: Int = getInt(KafkaConfig.BrokerHeartbeatIntervalMsProp)

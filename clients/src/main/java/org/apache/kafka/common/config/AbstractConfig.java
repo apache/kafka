@@ -110,15 +110,26 @@ public class AbstractConfig {
                 throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
 
         this.originals = resolveConfigVariables(configProviderProps, (Map<String, Object>) originals);
+        System.out.println("Before definition.parse");
         this.values = definition.parse(this.originals);
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
         for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
             this.values.put(update.getKey(), update.getValue());
         }
+        insertCtestConfigs();
         definition.parse(this.values);
         this.definition = definition;
         if (doLog)
             logAll();
+    }
+
+    public void insertCtestConfigs() {
+
+    }
+
+    public void insertCtestConfigToValues(String key, Object value) {
+        System.out.println("insertCtestConfigToValues " + key + " " + value);
+        this.values.put(key, value);
     }
 
     /**
