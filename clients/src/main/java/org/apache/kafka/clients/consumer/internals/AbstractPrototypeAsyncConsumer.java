@@ -65,8 +65,6 @@ public abstract class AbstractPrototypeAsyncConsumer<K, V> implements Consumer<K
                         processEvent(backgroundEvent.get(), timeout); // might trigger callbacks or handle exceptions
                     }
                 }
-
-                maybeSendFetches(); // send new fetches
             } while (time.timer(timeout).notExpired());
         } catch (Exception e) {
             throw new RuntimeException(e);
