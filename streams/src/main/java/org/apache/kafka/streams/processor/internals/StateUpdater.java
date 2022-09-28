@@ -156,21 +156,6 @@ public interface StateUpdater {
     Set<Task> getUpdatingTasks();
 
     /**
-     * Gets active tasks that are managed by the state updater.
-     *
-     * The state updater manages all active tasks that were added with the {@link StateUpdater#add(Task)} and that have
-     * not been removed from the state updater with one of the following methods:
-     * <ul>
-     *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
-     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
-     *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
-     * </ul>
-     *
-     * @return set of all tasks managed by the state updater
-     */
-    Set<StreamTask> getActiveTasks();
-
-    /**
      * Returns if the state updater restores active tasks.
      *
      * The state updater restores active tasks if at least one active task was added with {@link StateUpdater#add(Task)},

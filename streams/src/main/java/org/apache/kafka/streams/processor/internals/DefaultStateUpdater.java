@@ -591,7 +591,6 @@ public class DefaultStateUpdater implements StateUpdater {
         ).isEmpty();
     }
 
-    @Override
     public Set<StreamTask> getActiveTasks() {
         return executeWithQueuesLocked(
             () -> getStreamOfTasks().filter(Task::isActive).map(t -> (StreamTask) t).collect(Collectors.toSet())
