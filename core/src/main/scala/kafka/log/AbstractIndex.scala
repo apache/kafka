@@ -35,7 +35,7 @@ import java.util.concurrent.locks.{Lock, ReentrantLock}
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex(@volatile private var indexFile: File, val baseOffset: Long, val maxIndexSize: Int = -1,
+abstract class AbstractIndex(private val indexFile: File, val baseOffset: Long, val maxIndexSize: Int = -1,
                              val writable: Boolean) extends BaseIndex(indexFile) {
   import AbstractIndex._
 
@@ -158,7 +158,7 @@ abstract class AbstractIndex(@volatile private var indexFile: File, val baseOffs
 
   def length: Long = _length
 
-  def updateParentDir(parentDir: File): Unit = indexFile = new File(parentDir, file.getName)
+  def updateParentDir(parentDir: File): Unit = _file = new File(parentDir, file.getName)
 
   /**
    * Reset the size of the memory map and the underneath file. This is used in two kinds of cases: (1) in

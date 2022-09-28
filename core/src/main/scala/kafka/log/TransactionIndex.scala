@@ -41,14 +41,14 @@ private[log] case class TxnIndexSearchResult(abortedTransactions: List[AbortedTx
  * order to find the start of the transactions.
  */
 @nonthreadsafe
-class TransactionIndex(val startOffset: Long, @volatile private var indexFile: File) extends BaseIndex(indexFile)
+class TransactionIndex(val startOffset: Long, private val indexFile: File) extends BaseIndex(indexFile)
   with Logging {
 
   // note that the file is not created until we need it
   @volatile private var maybeChannel: Option[FileChannel] = None
   private var lastOffset: Option[Long] = None
 
-  if (indexFile.exists)
+  if (file.exists)
     openChannel()
 
   def append(abortedTxn: AbortedTxn): Unit = {
@@ -63,7 +63,7 @@ class TransactionIndex(val startOffset: Long, @volatile private var indexFile: F
 
   def flush(): Unit = maybeChannel.foreach(_.force(true))
 
-  def updateParentDir(parentDir: File): Unit = indexFile = new File(parentDir, file.getName)
+  def updateParentDir(parentDir: File): Unit = _file = new File(parentDir, file.getName)
 
   /**
    * Delete this index.

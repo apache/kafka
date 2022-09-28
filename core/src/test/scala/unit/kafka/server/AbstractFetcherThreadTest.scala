@@ -638,6 +638,7 @@ class AbstractFetcherThreadTest {
     // Overriding the log start offset to zero to mock the segment 0-4 moved to remote store.
     leaderState.logStartOffset = 0
     fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
     assertEquals(3L, replicaState.logEndOffset)
     val expectedState = if (truncateOnFetch) Option(Fetching) else Option(Truncating)
@@ -679,13 +680,16 @@ class AbstractFetcherThreadTest {
       mkBatch(baseOffset = 2, leaderEpoch = 4, new SimpleRecord("c".getBytes)))
     val replicaState = PartitionState(replicaLog, leaderEpoch = 5, highWatermark = 2L, rlmEnabled = true)
     fetcher.setReplicaState(partition, replicaState)
-    fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), 0L, leaderEpoch = 5)))
+    fetcher.addPartitions(Map(partition -> initialFetchState(topicIds.get(partition.topic), fetchOffset = 0L, leaderEpoch = 5)))
 
     val leaderLog = Seq(
       mkBatch(baseOffset = 5, leaderEpoch = 5, new SimpleRecord("b".getBytes)),
       mkBatch(baseOffset = 6, leaderEpoch = 5, new SimpleRecord("c".getBytes)))
     val leaderState = PartitionState(leaderLog, leaderEpoch = 5, highWatermark = 6L, rlmEnabled = true)
+    // Overriding the log start offset to zero to mock the segment 0-4 moved to remote store.
+    leaderState.logStartOffset = 0
     fetcher.mockLeader.setLeaderState(partition, leaderState)
+    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
     // After the offset moved to tiered storage error, we get a fenced error and remove the partition and mark as failed
     fetcher.doWork()
@@ -1161,6 +1165,8 @@ class AbstractFetcherThreadTest {
           (Errors.OFFSET_OUT_OF_RANGE, MemoryRecords.EMPTY)
         } else if (divergingEpoch.nonEmpty) {
           (Errors.NONE, MemoryRecords.EMPTY)
+        } else if (leaderState.rlmEnabled && fetchData.fetchOffset < leaderState.localLogStartOffset) {
+          (Errors.OFFSET_MOVED_TO_TIERED_STORAGE, MemoryRecords.EMPTY)
         } else {
           // for simplicity, we fetch only one batch at a time
           val records = leaderState.log.find(_.baseOffset >= fetchData.fetchOffset) match {
