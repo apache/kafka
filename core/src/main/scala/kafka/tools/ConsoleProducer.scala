@@ -92,15 +92,12 @@ object ConsoleProducer {
       props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
 
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec)
-    if (props.getProperty(ProducerConfig.CLIENT_ID_CONFIG) == null) {
+    if (props.getProperty(ProducerConfig.CLIENT_ID_CONFIG) == null)
       props.put(ProducerConfig.CLIENT_ID_CONFIG, "console-producer")
-    }
-    if (props.getProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG) == null) {
+    if (props.getProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG) == null)
       props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName())
-    }
-    if (props.hasProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG) == null) {
+    if (props.hasProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG) == null)
       props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName())
-    }
     CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.LINGER_MS_CONFIG, config.options, config.sendTimeoutOpt)
     CommandLineUtils.maybeMergeOptions(
