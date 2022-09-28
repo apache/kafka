@@ -29,7 +29,7 @@ import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, ToolsUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
+import org.apache.kafka.common.serialization.{ByteArraySerializer}
 import org.apache.kafka.common.utils.Utils
 import scala.jdk.CollectionConverters._
 
@@ -95,9 +95,9 @@ object ConsoleProducer {
     if (props.getProperty(ProducerConfig.CLIENT_ID_CONFIG) == null)
       props.put(ProducerConfig.CLIENT_ID_CONFIG, "console-producer")
     if (props.getProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG) == null)
-      props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName())
-    if (props.hasProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG) == null)
-      props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName())
+      props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)
+    if (props.getProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG) == null)
+      props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)
     CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.LINGER_MS_CONFIG, config.options, config.sendTimeoutOpt)
     CommandLineUtils.maybeMergeOptions(
