@@ -165,7 +165,7 @@ public class TaggedFields extends DocumentedType {
             }
             return objects;
         } catch (ClassCastException e) {
-            throw new SchemaException("Not a NavigableMap.", e);
+            throw new SchemaException("Not a NavigableMap. Found class " + item.getClass().getSimpleName());
         }
     }
 
