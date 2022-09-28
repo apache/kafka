@@ -31,6 +31,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.StandbyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.io.Closeable;
@@ -334,6 +335,24 @@ public final class StreamsTestUtils {
 
         public T build() {
             return task;
+        }
+    }
+
+    public static class TopologyMetadataBuilder {
+        private final TopologyMetadata topologyMetadata;
+
+        private TopologyMetadataBuilder(final TopologyMetadata topologyMetadata) {
+            this.topologyMetadata = topologyMetadata;
+        }
+
+        public static TopologyMetadataBuilder unamedTopology() {
+            final TopologyMetadata topologyMetadata = mock(TopologyMetadata.class);
+            when(topologyMetadata.isPaused(null)).thenReturn(false);
+            return new TopologyMetadataBuilder(topologyMetadata);
+        }
+
+        public TopologyMetadata build() {
+            return topologyMetadata;
         }
     }
 }
