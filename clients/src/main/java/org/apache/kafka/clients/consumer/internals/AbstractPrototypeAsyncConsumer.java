@@ -37,8 +37,8 @@ public abstract class AbstractPrototypeAsyncConsumer<K, V> implements Consumer<K
     private final Time time;
 
     public AbstractPrototypeAsyncConsumer(final Time time, final EventHandler eventHandler) {
-        this.eventHandler = eventHandler;
         this.time = time;
+        this.eventHandler = eventHandler;
     }
 
     /**
@@ -56,13 +56,15 @@ public abstract class AbstractPrototypeAsyncConsumer<K, V> implements Consumer<K
             do {
                 if (!eventHandler.isEmpty()) {
                     Optional<BackgroundEvent> backgroundEvent = eventHandler.poll();
-                    if (backgroundEvent.isPresent()) {
-                        if (isFetchResult(backgroundEvent.get())) {
-                            // return fetches
-                            return processFetchResult(backgroundEvent.get());
-                        }
-                        processEvent(backgroundEvent.get(), timeout); // might trigger callbacks or handle exceptions
-                    }
+                    backgroundEvent.ifPresent(event -> processEvent(event, timeout));
+                }
+
+                // The idea here is to have the background thread sending fetches autonomously, and the fetcher
+                // uses the poll loop to poll for the records and process them. We return the records once they become
+                // available.
+                final Fetch<K, V> fetch = collectFetches();
+                if (!fetch.isEmpty()) {
+                    return processFetchResults(fetch);
                 }
             } while (time.timer(timeout).notExpired());
         } catch (Exception e) {
@@ -73,9 +75,8 @@ public abstract class AbstractPrototypeAsyncConsumer<K, V> implements Consumer<K
     }
 
     abstract void processEvent(BackgroundEvent backgroundEvent, Duration timeout);
-    abstract boolean isFetchResult(BackgroundEvent event);
-    abstract ConsumerRecords<K, V> processFetchResult(BackgroundEvent event);
-    abstract void maybeSendFetches();
+    abstract ConsumerRecords<K, V> processFetchResults(Fetch<K, V> fetch);
+    abstract Fetch<K, V> collectFetches();
 
     /**
      * This method sends a commit event to the EventHandler and return.
