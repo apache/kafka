@@ -63,7 +63,7 @@ object ConsoleConsumer extends Logging {
 
   def run(conf: ConsumerConfig): Unit = {
     val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs.toLong else Long.MaxValue
-    val consumer = new KafkaConsumer(consumerProps(conf), new ByteArrayDeserializer, new ByteArrayDeserializer)
+    val consumer = new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps(conf))
 
     val consumerWrapper =
       if (conf.partitionArg.isDefined)
@@ -299,10 +299,11 @@ object ConsoleConsumer extends Logging {
     var includedTopicsArg: String = _
     var filterSpec: TopicFilter = _
     val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt).asScala)
-    val consumerProps = if (options.has(consumerConfigOpt))
-      Utils.loadProps(options.valueOf(consumerConfigOpt))
-    else
-      new Properties()
+    val consumerProps = new Properties
+    consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
+    consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
+    if (options.has(consumerConfigOpt))
+      consumerProps.putAll(Utils.loadProps(options.valueOf(consumerConfigOpt)))
     val fromBeginning = options.has(resetBeginningOpt)
     val partitionArg = if (options.has(partitionIdOpt)) Some(options.valueOf(partitionIdOpt).intValue) else None
     val skipMessageOnError = options.has(skipMessageOnErrorOpt)
