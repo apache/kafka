@@ -19,6 +19,7 @@ package org.apache.kafka.common.serialization;
 import org.apache.kafka.common.header.Headers;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * When a {@link Deserializer} deserializes a message, it may throws an exception. E.g. a decryption deserializer fails to decrypt a corrupted message. When this happens, the {@link Deserializer} exits and stop consuming messages. This is often undesirable as it means the calling code is unable to take action, even reconnecting to the topic might just cause the exception to happen again.
@@ -50,6 +51,19 @@ public class ExceptionHandlingDeserializer<T> implements Deserializer<ExceptionH
 
         public Exception getException() {
             return exception;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Result<?> result1 = (Result<?>) o;
+            return Objects.equals(result, result1.result) && Objects.equals(exception, result1.exception);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(result, exception);
         }
     }
 
