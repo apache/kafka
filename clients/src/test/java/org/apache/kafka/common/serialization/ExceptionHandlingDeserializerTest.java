@@ -42,7 +42,7 @@ public class ExceptionHandlingDeserializerTest {
         ExceptionHandlingDeserializer<String> sut = new ExceptionHandlingDeserializer<>();
         Map<String, String> configs = new HashMap<>();
         configs.put("exception.handling.deserializer.delegate", OKDeserializer.class.getName());
-        assertEquals(new ExceptionHandlingDeserializer.Result<String>(null , EXCEPTION), sut.deserialize(null, null));
+        assertEquals(new ExceptionHandlingDeserializer.Result<String>(null, EXCEPTION), sut.deserialize(null, null));
         assertEquals(new ExceptionHandlingDeserializer.Result<String>(null, EXCEPTION), sut.deserialize(null, null, null));
     }
 
