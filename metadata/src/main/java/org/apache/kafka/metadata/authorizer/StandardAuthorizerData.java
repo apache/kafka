@@ -36,16 +36,15 @@ import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collection;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.Iterator;
-import java.util.Map.Entry;
+import java.util.List;
 import java.util.NavigableSet;
-import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.TreeSet;
 
 import static org.apache.kafka.common.acl.AclOperation.ALL;
 import static org.apache.kafka.common.acl.AclOperation.ALTER;
@@ -64,7 +63,7 @@ import static org.apache.kafka.server.authorizer.AuthorizationResult.DENIED;
 /**
  * A class which encapsulates the configuration and the ACL data owned by StandardAuthorizer.
  *
- * The methods in this class support lockless concurrent access.
+ * The class is not thread-safe.
  */
 public class StandardAuthorizerData {
     /**
@@ -111,12 +110,12 @@ public class StandardAuthorizerData {
     /**
      * Contains all of the current ACLs sorted by (resource type, resource name).
      */
-    private final ConcurrentSkipListSet<StandardAcl> aclsByResource;
+    private final TreeSet<StandardAcl> aclsByResource;
 
     /**
      * Contains all of the current ACLs indexed by UUID.
      */
-    private final ConcurrentHashMap<Uuid, StandardAcl> aclsById;
+    private final HashMap<Uuid, StandardAcl> aclsById;
 
     private static Logger createLogger(int nodeId) {
         return new LogContext("[StandardAuthorizer " + nodeId + "] ").logger(StandardAuthorizerData.class);
@@ -132,7 +131,7 @@ public class StandardAuthorizerData {
             false,
             Collections.emptySet(),
             DENIED,
-            new ConcurrentSkipListSet<>(), new ConcurrentHashMap<>());
+            new TreeSet<>(), new HashMap<>());
     }
 
     private StandardAuthorizerData(Logger log,
@@ -140,8 +139,8 @@ public class StandardAuthorizerData {
                                    boolean loadingComplete,
                                    Set<String> superUsers,
                                    AuthorizationResult defaultResult,
-                                   ConcurrentSkipListSet<StandardAcl> aclsByResource,
-                                   ConcurrentHashMap<Uuid, StandardAcl> aclsById) {
+                                   TreeSet<StandardAcl> aclsByResource,
+                                   HashMap<Uuid, StandardAcl> aclsById) {
         this.log = log;
         this.auditLog = auditLogger();
         this.aclMutator = aclMutator;
@@ -186,19 +185,17 @@ public class StandardAuthorizerData {
             aclsById);
     }
 
-    StandardAuthorizerData copyWithNewAcls(Collection<Entry<Uuid, StandardAcl>> aclEntries) {
-        StandardAuthorizerData newData = new StandardAuthorizerData(
+    StandardAuthorizerData copyWithNewAcls(TreeSet<StandardAcl> aclsByResource, HashMap<Uuid,
+        StandardAcl> aclsById) {
+        StandardAuthorizerData newData =  new StandardAuthorizerData(
             log,
             aclMutator,
             loadingComplete,
             superUsers,
             defaultRule.result,
-            new ConcurrentSkipListSet<>(),
-            new ConcurrentHashMap<>());
-        for (Entry<Uuid, StandardAcl> entry : aclEntries) {
-            newData.addAcl(entry.getKey(), entry.getValue());
-        }
-        log.info("Applied {} acl(s) from image.", aclEntries.size());
+            aclsByResource,
+            aclsById);
+        log.info("Initialized with {} acl(s).", aclsById.size());
         return newData;
     }
 
@@ -529,55 +526,21 @@ public class StandardAuthorizerData {
         return acl.permissionType().equals(ALLOW) ? ALLOWED : DENIED;
     }
 
+    /**
+     * Creates a consistent Iterable on read-only copy of AclBindings data for the given filter.
+     *
+     * @param filter The filter constraining the AclBindings to be present in the Iterable.
+     * @return Iterable over AclBindings matching the filter.
+     */
     Iterable<AclBinding> acls(AclBindingFilter filter) {
-        return new AclIterable(filter);
-    }
-
-    class AclIterable implements Iterable<AclBinding> {
-        private final AclBindingFilter filter;
-
-        AclIterable(AclBindingFilter filter) {
-            this.filter = filter;
-        }
-
-        @Override
-        public Iterator<AclBinding> iterator() {
-            return new AclIterator(filter);
-        }
-    }
-
-    class AclIterator implements Iterator<AclBinding> {
-        private final AclBindingFilter filter;
-        private final Iterator<StandardAcl> iterator;
-        private AclBinding next;
-
-        AclIterator(AclBindingFilter filter) {
-            this.filter = filter;
-            this.iterator = aclsByResource.iterator();
-            this.next = null;
-        }
-
-        @Override
-        public boolean hasNext() {
-            while (next == null) {
-                if (!iterator.hasNext()) return false;
-                AclBinding binding = iterator.next().toBinding();
-                if (filter.matches(binding)) {
-                    next = binding;
-                }
+        List<AclBinding> aclBindingList = new ArrayList<>();
+        aclsByResource.forEach(acl -> {
+            AclBinding aclBinding = acl.toBinding();
+            if (filter.matches(aclBinding)) {
+                aclBindingList.add(aclBinding);
             }
-            return true;
-        }
-
-        @Override
-        public AclBinding next() {
-            if (!hasNext()) {
-                throw new NoSuchElementException();
-            }
-            AclBinding result = next;
-            next = null;
-            return result;
-        }
+        });
+        return aclBindingList;
     }
 
     private interface MatchingRule {
@@ -653,5 +616,13 @@ public class StandardAuthorizerData {
                 return null;
             }
         }
+    }
+
+    TreeSet<StandardAcl> getAclsByResource() {
+        return aclsByResource;
+    }
+
+    HashMap<Uuid, StandardAcl> getAclsById() {
+        return aclsById;
     }
 }

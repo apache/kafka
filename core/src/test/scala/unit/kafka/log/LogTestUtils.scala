@@ -19,6 +19,7 @@ package kafka.log
 
 import java.io.File
 import java.util.Properties
+
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchIsolation, FetchLogEnd, LogDirFailureChannel}
 import kafka.utils.{Scheduler, TestUtils}
@@ -26,9 +27,11 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
-
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
+
+import kafka.log
+
 import scala.collection.Iterable
 import scala.jdk.CollectionConverters._
 
@@ -80,7 +83,7 @@ object LogTestUtils {
                 logStartOffset: Long = 0L,
                 recoveryPoint: Long = 0L,
                 maxTransactionTimeoutMs: Int = 5 * 60 * 1000,
-                maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
+                producerStateManagerConfig: ProducerStateManagerConfig = new log.ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs),
                 producerIdExpirationCheckIntervalMs: Int = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
                 lastShutdownClean: Boolean = true,
                 topicId: Option[Uuid] = None,
@@ -95,7 +98,7 @@ object LogTestUtils {
       brokerTopicStats = brokerTopicStats,
       time = time,
       maxTransactionTimeoutMs = maxTransactionTimeoutMs,
-      maxProducerIdExpirationMs = maxProducerIdExpirationMs,
+      producerStateManagerConfig = producerStateManagerConfig,
       producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
       lastShutdownClean = lastShutdownClean,
