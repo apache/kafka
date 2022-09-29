@@ -640,4 +640,31 @@ public class StandardAuthorizerTest {
         assertTrue(futures.get(CONTROLLER).toCompletableFuture().isDone());
         assertFalse(futures.get(CONTROLLER).toCompletableFuture().isCompletedExceptionally());
     }
+
+    @Test
+    public void testPrefixAcls() throws Exception {
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+        List<StandardAcl> acls = Arrays.asList(
+                new StandardAcl(TOPIC, "fooa", PREFIXED, "User:alice", "*", ALL, ALLOW),
+                new StandardAcl(TOPIC, "foobar", LITERAL, "User:bob", "*", ALL, ALLOW),
+                new StandardAcl(TOPIC, "f", PREFIXED, "User:bob", "*", ALL, ALLOW)
+        );
+        acls.forEach(acl -> {
+            StandardAclWithId aclWithId = withId(acl);
+            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
+        });
+        assertEquals(Arrays.asList(ALLOWED, DENIED, ALLOWED), authorizer.authorize(
+                newRequestContext("bob"),
+                Arrays.asList(
+                        newAction(WRITE, TOPIC, "foobarr"),
+                        newAction(READ, TOPIC, "goobar"),
+                        newAction(READ, TOPIC, "fooa"))));
+
+        assertEquals(Arrays.asList(ALLOWED, DENIED, DENIED), authorizer.authorize(
+                newRequestContext("alice"),
+                Arrays.asList(
+                        newAction(DESCRIBE, TOPIC, "fooa"),
+                        newAction(WRITE, TOPIC, "bar"),
+                        newAction(READ, TOPIC, "baz"))));
+    }
 }
