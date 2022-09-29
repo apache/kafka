@@ -21,15 +21,15 @@ import org.apache.kafka.common.header.Headers;
 import java.util.Map;
 
 /**
- * When a {@link Deserializer} deserializes a message, it may throws an exception. E.g. a decryption deserializer fails to decrypt a corrupted message. When this happens, the {@link Deserializer} exits and stop consuming messages. This is often undesirable as it means the calling code is unable to take action, even reconnecting to the topic might simple cause the exception to happen again.
+ * When a {@link Deserializer} deserializes a message, it may throws an exception. E.g. a decryption deserializer fails to decrypt a corrupted message. When this happens, the {@link Deserializer} exits and stop consuming messages. This is often undesirable as it means the calling code is unable to take action, even reconnecting to the topic might just cause the exception to happen again.
  * <p>
  * {@link ExceptionHandlingDeserializer} is a decorator than allows you to wrap up another deserializer and return a result that contains either the deserialized result, or any exception throw by the deserializer.
  * <p>
- * You may configure using properties
+ * You may configure using properties:
  * <p>
  * <code>
  *     exception.handling.deserializer.delegate=org.apache.kafka.common.deserialization.ListDeserializer
- * </codd>
+ * </code>
  *
  * @param <T>
  */
