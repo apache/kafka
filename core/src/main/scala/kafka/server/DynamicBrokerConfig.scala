@@ -870,6 +870,7 @@ object DynamicListenerConfig {
     KafkaConfig.SslProviderProp,
     KafkaConfig.SslCipherSuitesProp,
     KafkaConfig.SslEnabledProtocolsProp,
+    KafkaConfig.SslKernelOffloadEnableProp,
     KafkaConfig.SslKeystoreTypeProp,
     KafkaConfig.SslKeystoreLocationProp,
     KafkaConfig.SslKeystorePasswordProp,

@@ -405,7 +405,7 @@ public class SslSelectorTest extends SelectorTest {
 
             public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine,
                                          ChannelMetadataRegistry metadataRegistry) throws IOException {
-                super(channelId, key, sslEngine, metadataRegistry);
+                super(channelId, key, sslEngine, metadataRegistry, false);
                 transportLayers.put(channelId, this);
             }
 
