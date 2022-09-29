@@ -2628,8 +2628,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       new ResourcePattern(TOPIC, "fooa", PREFIXED))
     addAndVerifyAcls(Set(new AccessControlEntry("User:otherPrincipal", WildcardHost, CREATE, ALLOW)),
       new ResourcePattern(TOPIC, "foob", PREFIXED))
-    val future = createAdminClient().createTopics(Collections.
-      singletonList(new NewTopic("foobar", 1, 1.toShort))).all()
-    JTestUtils.assertFutureThrows(future, classOf[TopicAuthorizationException])
+    createAdminClient().createTopics(Collections.
+      singletonList(new NewTopic("foobar", 1, 1.toShort))).all().get()
   }
 }
