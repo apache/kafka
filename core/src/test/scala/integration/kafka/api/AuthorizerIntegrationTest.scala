@@ -25,7 +25,7 @@ import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.waitUntilTrue
-import org.apache.kafka.clients.admin.{Admin, AlterConfigOp}
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.producer._
@@ -2619,4 +2619,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     )
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testPrefixAcls(quorum: String): Unit = {
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, CREATE, ALLOW)),
+      new ResourcePattern(TOPIC, "f", PREFIXED))
+    addAndVerifyAcls(Set(new AccessControlEntry("User:otherPrincipal", WildcardHost, CREATE, DENY)),
+      new ResourcePattern(TOPIC, "fooa", PREFIXED))
+    addAndVerifyAcls(Set(new AccessControlEntry("User:otherPrincipal", WildcardHost, CREATE, ALLOW)),
+      new ResourcePattern(TOPIC, "foob", PREFIXED))
+    createAdminClient().createTopics(Collections.
+      singletonList(new NewTopic("foobar", 1, 1.toShort))).all().get()
+  }
 }
