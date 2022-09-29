@@ -56,6 +56,14 @@ public abstract class AbstractPrototypeAsyncConsumer<K, V> implements Consumer<K
             do {
                 if (!eventHandler.isEmpty()) {
                     Optional<BackgroundEvent> backgroundEvent = eventHandler.poll();
+                    // processEvent() may process 3 types of event:
+                    // 1. Errors
+                    // 2. Callback Invocation
+                    // 3. Fetch responses
+                    // Errors will be handled or rethrown.
+                    // Callback invocation will trigger callback function execution, which is blocking until completion.
+                    // Successful fetch responses will be added to the completedFetches in the fetcher, which will then
+                    // be processed in the collectFetches().
                     backgroundEvent.ifPresent(event -> processEvent(event, timeout));
                 }
                 // The idea here is to have the background thread sending fetches autonomously, and the fetcher
@@ -67,6 +75,7 @@ public abstract class AbstractPrototypeAsyncConsumer<K, V> implements Consumer<K
                 if (!fetch.isEmpty()) {
                     return processFetchResults(fetch);
                 }
+                // We will wait for retryBackoffMs
             } while (time.timer(timeout).notExpired());
         } catch (Exception e) {
             throw new RuntimeException(e);
