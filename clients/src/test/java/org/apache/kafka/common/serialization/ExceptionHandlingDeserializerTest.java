@@ -29,21 +29,24 @@ public class ExceptionHandlingDeserializerTest {
 
     @Test
     public void ok() {
-        ExceptionHandlingDeserializer<String> sut = new ExceptionHandlingDeserializer<>();
-        Map<String, String> configs = new HashMap<>();
-        configs.put("exception.handling.deserializer.delegate", OKDeserializer.class.getName());
-        sut.configure(configs, false);
-        assertEquals(new ExceptionHandlingDeserializer.Result<>("ok", null), sut.deserialize(null, null));
-        assertEquals(new ExceptionHandlingDeserializer.Result<>("ok", null), sut.deserialize(null, null, null));
+        try (ExceptionHandlingDeserializer<String> sut = new ExceptionHandlingDeserializer<>()) {
+            Map<String, String> configs = new HashMap<>();
+            configs.put("exception.handling.deserializer.delegate", OKDeserializer.class.getName());
+            sut.configure(configs, false);
+            assertEquals(new ExceptionHandlingDeserializer.Result<>("ok", null), sut.deserialize(null, null));
+            assertEquals(new ExceptionHandlingDeserializer.Result<>("ok", null), sut.deserialize(null, null, null));
+        }
     }
 
     @Test
     public void boom() {
-        ExceptionHandlingDeserializer<String> sut = new ExceptionHandlingDeserializer<>();
-        Map<String, String> configs = new HashMap<>();
-        configs.put("exception.handling.deserializer.delegate", OKDeserializer.class.getName());
-        assertEquals(new ExceptionHandlingDeserializer.Result<String>(null, EXCEPTION), sut.deserialize(null, null));
-        assertEquals(new ExceptionHandlingDeserializer.Result<String>(null, EXCEPTION), sut.deserialize(null, null, null));
+        try (ExceptionHandlingDeserializer<String> sut = new ExceptionHandlingDeserializer<>()) {
+            Map<String, String> configs = new HashMap<>();
+            configs.put("exception.handling.deserializer.delegate", OKDeserializer.class.getName());
+            sut.configure(configs, false);
+            assertEquals(new ExceptionHandlingDeserializer.Result<String>(null, EXCEPTION), sut.deserialize(null, null));
+            assertEquals(new ExceptionHandlingDeserializer.Result<String>(null, EXCEPTION), sut.deserialize(null, null, null));
+        }
     }
 
     static class OKDeserializer implements Deserializer<String> {
