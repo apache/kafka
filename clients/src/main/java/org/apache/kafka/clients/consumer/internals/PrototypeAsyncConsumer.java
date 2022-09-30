@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * This pototype consumer uses the EventHandler to process application events so that the network IO can be processed in a background thread. Visit
+ * This prototype consumer uses the EventHandler to process application events so that the network IO can be processed in a background thread. Visit
  * <a href="https://cwiki.apache.org/confluence/display/KAFKA/Proposal%3A+Consumer+Threading+Model+Refactor" >this document</a>
  * for detail implementation.
  */
