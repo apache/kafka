@@ -18,26 +18,26 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.Stack;
+import java.util.UUID;
 
-import static java.nio.ByteBuffer.wrap;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SerializationTest {
 
@@ -388,21 +388,35 @@ public class SerializationTest {
             assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer2));
             assertArrayEquals(bytes, serializer.serialize(topic, directBuffer0));
             assertArrayEquals(bytes, serializer.serialize(topic, directBuffer1));
+
+            assertArrayEquals(bytes, Utils.toArray(serializer.serializeToByteBuffer(topic, heapBuffer0)));
+            assertArrayEquals(bytes, Utils.toArray(serializer.serializeToByteBuffer(topic, heapBuffer1)));
+            assertArrayEquals(bytes, Utils.toArray(serializer.serializeToByteBuffer(topic, heapBuffer2)));
+            assertArrayEquals(bytes, Utils.toArray(serializer.serializeToByteBuffer(topic, directBuffer0)));
+            assertArrayEquals(bytes, Utils.toArray(serializer.serializeToByteBuffer(topic, directBuffer1)));
         }
     }
 
     @Test
-    public void byteBuffer() {
-        final byte[] bytes = "ABC".getBytes(UTF_8);
-        try (Serde<ByteBuffer> serde = Serdes.ByteBuffer()) {
-            assertArrayEquals(bytes, serde.serializer().serialize(topic, wrap(bytes)));
-            assertEquals(bytes, serde.serializer().serialize(topic, wrap(bytes)));
-            assertEquals(wrap(bytes), serde.serializer().serializeToByteBuffer(topic, wrap(bytes)));
-
-            final ByteBuffer directBuffer = ByteBuffer.allocate(bytes.length << 1).put(bytes);
-            directBuffer.flip();
-            assertArrayEquals(bytes, serde.serializer().serialize(topic, directBuffer));
-            assertEquals(wrap(bytes), serde.serializer().serializeToByteBuffer(topic, directBuffer));
+    public void testByteBufferSerde() {
+        final byte[] bytes = "Hello".getBytes(UTF_8);
+        final ByteBuffer heapBuffer0 = ByteBuffer.allocate(bytes.length + 1).put(bytes);
+        final ByteBuffer heapBuffer1 = ByteBuffer.allocate(bytes.length).put(bytes);
+        final ByteBuffer heapBuffer2 = ByteBuffer.wrap(bytes);
+        final ByteBuffer directBuffer0 = ByteBuffer.allocateDirect(bytes.length + 1).put(bytes);
+        final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(bytes.length).put(bytes);
+        try (ByteBufferSerializer ser = new ByteBufferSerializer();
+             ByteBufferDeserializer des = new ByteBufferDeserializer()) {
+//            assertEquals(heapBuffer0.duplicate().flip(), des.deserialize(topic, ser.serialize(topic, heapBuffer0)));
+//            assertEquals(heapBuffer1.duplicate().flip(), des.deserialize(topic, ser.serialize(topic, heapBuffer1)));
+//            assertEquals(heapBuffer2, des.deserialize(topic, ser.serialize(topic, heapBuffer2)));
+//            assertEquals(directBuffer0.duplicate().flip(), des.deserialize(topic, ser.serialize(topic, directBuffer0)));
+//            assertEquals(directBuffer1.duplicate().flip(), des.deserialize(topic, ser.serialize(topic, directBuffer1)));
+            assertEquals(heapBuffer0, des.deserialize(topic, ser.serialize(topic, heapBuffer0)));
+            assertEquals(heapBuffer1, des.deserialize(topic, ser.serialize(topic, heapBuffer1)));
+            assertEquals(heapBuffer2, des.deserialize(topic, ser.serialize(topic, heapBuffer2)));
+            assertEquals(directBuffer0, des.deserialize(topic, ser.serialize(topic, directBuffer0)));
+            assertEquals(directBuffer1, des.deserialize(topic, ser.serialize(topic, directBuffer1)));
         }
     }
 }
