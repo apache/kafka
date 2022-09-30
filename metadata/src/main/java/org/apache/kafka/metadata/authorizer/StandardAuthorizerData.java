@@ -352,8 +352,10 @@ public class StandardAuthorizerData {
         // This code relies on the ordering of StandardAcl within the NavigableMap.
         // Entries are sorted by resource type first, then REVERSE resource name.
         // Therefore, we can find all the applicable ACLs by starting at
-        // (resource_type, resource_name) and stepping forwards until we reach an ACL with
-        // a resource name which is not a prefix of the current one.
+        // (resource_type, resource_name) and stepping forwards until we reach
+        // an ACL with a resource name which is not a prefix of the current one.
+        // At that point, we need to search for if there are any more ACLs at
+        // the first divergence point.
         //
         // For example, when trying to authorize a TOPIC resource named foobar, we would
         // start at element 2, and continue on to 3 and 4 following map:
@@ -362,9 +364,12 @@ public class StandardAuthorizerData {
         // 2. rs=TOPIC rn=foobar pt=PREFIX
         // 3. rs=TOPIC rn=foob pt=LITERAL
         // 4. rs=TOPIC rn=foo pt=PREFIX
-        // 5. rs=TOPIC rn=eeee pt=LITERAL
+        // 5. rs=TOPIC rn=fb pt=PREFIX
+        // 6. rs=TOPIC rn=fa pt=PREFIX
+        // 7. rs=TOPIC rn=f  pt=PREFIX
+        // 8. rs=TOPIC rn=eeee pt=LITERAL
         //
-        // Once we reached element 5, we would stop scanning.
+        // Once we reached element 5, we would jump to element 7.
         MatchingAclBuilder matchingAclBuilder = new MatchingAclBuilder();
         StandardAcl exemplar = new StandardAcl(
             action.resourcePattern().resourceType(),
@@ -394,6 +399,20 @@ public class StandardAuthorizerData {
         return matchingAclBuilder.build();
     }
 
+    static int matchesUpTo(
+        String resource,
+        String pattern
+    ) {
+        int i = 0;
+        while (true) {
+            if (resource.length() == i) break;
+            if (pattern.length() == i) break;
+            if (resource.charAt(i) != pattern.charAt(i)) break;
+            i++;
+        }
+        return i;
+    }
+
     private void checkSection(
         Action action,
         StandardAcl exemplar,
@@ -401,28 +420,40 @@ public class StandardAuthorizerData {
         String host,
         MatchingAclBuilder matchingAclBuilder
     ) {
-        NavigableSet<StandardAcl> tailSet = aclsByResource.tailSet(exemplar, true);
         String resourceName = action.resourcePattern().name();
-        for (Iterator<StandardAcl> iterator = tailSet.iterator();
-             iterator.hasNext(); ) {
+        NavigableSet<StandardAcl> tailSet = aclsByResource.tailSet(exemplar, true);
+        Iterator<StandardAcl> iterator = tailSet.iterator();
+        while (iterator.hasNext()) {
             StandardAcl acl = iterator.next();
             if (!acl.resourceType().equals(action.resourcePattern().resourceType())) {
                 // We've stepped outside the section for the resource type we care about and
                 // should stop scanning.
                 break;
             }
-            if (resourceName.startsWith(acl.resourceName())) {
-                if (acl.patternType() == LITERAL && !resourceName.equals(acl.resourceName())) {
+            int matchesUpTo = matchesUpTo(resourceName, acl.resourceName());
+            if (matchesUpTo == acl.resourceName().length()) {
+                if (acl.patternType() == LITERAL && matchesUpTo != resourceName.length()) {
                     // This is a literal ACL whose name is a prefix of the resource name, but
                     // which doesn't match it exactly. We should skip over this ACL, but keep
                     // scanning in case there are any relevant PREFIX ACLs.
                     continue;
                 }
+
             } else if (!(acl.resourceName().equals(WILDCARD) && acl.patternType() == LITERAL)) {
                 // If the ACL resource name is NOT a prefix of the current resource name,
                 // and we're not dealing with the special case of a wildcard ACL, we've
-                // stepped outside of the section we care about and should stop scanning.
-                break;
+                // stepped outside of the section we care about. Scan for any other potential
+                // prefix matches.
+                exemplar = new StandardAcl(exemplar.resourceType(),
+                    exemplar.resourceName().substring(0, matchesUpTo),
+                    exemplar.patternType(),
+                    exemplar.principal(),
+                    exemplar.host(),
+                    exemplar.operation(),
+                    exemplar.permissionType());
+                tailSet = aclsByResource.tailSet(exemplar, true);
+                iterator = tailSet.iterator();
+                continue;
             }
             AuthorizationResult result = findResult(action, matchingPrincipals, host, acl);
             if (ALLOWED == result) {

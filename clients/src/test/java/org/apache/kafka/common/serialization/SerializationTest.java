@@ -373,6 +373,23 @@ public class SerializationTest {
     }
 
     @Test
+    public void testByteBufferSerializer() {
+        final byte[] bytes = "Hello".getBytes(UTF_8);
+        final ByteBuffer heapBuffer0 = ByteBuffer.allocate(bytes.length + 1).put(bytes);
+        final ByteBuffer heapBuffer1 = ByteBuffer.allocate(bytes.length).put(bytes);
+        final ByteBuffer heapBuffer2 = ByteBuffer.wrap(bytes);
+        final ByteBuffer directBuffer0 = ByteBuffer.allocateDirect(bytes.length + 1).put(bytes);
+        final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(bytes.length).put(bytes);
+        try (final ByteBufferSerializer serializer = new ByteBufferSerializer()) {
+            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer0));
+            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer1));
+            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer2));
+            assertArrayEquals(bytes, serializer.serialize(topic, directBuffer0));
+            assertArrayEquals(bytes, serializer.serialize(topic, directBuffer1));
+        }
+    }
+
+    @Test
     public void byteBuffer() {
         final byte[] bytes = "ABC".getBytes(UTF_8);
         try (Serde<ByteBuffer> serde = Serdes.ByteBuffer()) {

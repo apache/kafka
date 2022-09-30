@@ -246,7 +246,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             logContext,
             random);
         this.kafkaRaftMetrics = new KafkaRaftMetrics(metrics, "raft", quorum);
-        kafkaRaftMetrics.updateNumUnknownVoterConnections(quorum.remoteVoters().size());
+        // All Raft voters are statically configured and known at startup
+        // so there are no unknown voter connections. Report this metric as 0.
+        kafkaRaftMetrics.updateNumUnknownVoterConnections(0);
 
         // Update the voter endpoints with what's in RaftConfig
         Map<Integer, RaftConfig.AddressSpec> voterAddresses = raftConfig.quorumVoterConnections();
