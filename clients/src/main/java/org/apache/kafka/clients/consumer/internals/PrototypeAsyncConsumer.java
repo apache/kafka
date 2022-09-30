@@ -30,13 +30,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * This is the prototype of the consumer that uses the {@link EventHandler} to process application events.
+ * This pototype consumer uses the EventHandler to process application events so that the network IO can be processed in a background thread. Visit
+ * <a href="https://cwiki.apache.org/confluence/display/KAFKA/Proposal%3A+Consumer+Threading+Model+Refactor" >this document</a>
+ * for detail implementation.
  */
-public abstract class AbstractPrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
+public abstract class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final EventHandler eventHandler;
     private final Time time;
 
-    public AbstractPrototypeAsyncConsumer(final Time time, final EventHandler eventHandler) {
+    public PrototypeAsyncConsumer(final Time time, final EventHandler eventHandler) {
         this.time = time;
         this.eventHandler = eventHandler;
     }
