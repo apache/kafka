@@ -95,32 +95,6 @@ public interface StateUpdater {
     void remove(final TaskId taskId);
 
     /**
-     * Pause a task (active or standby) from restoring in the state updater.
-     *
-     * This method does not block until the task is paused.
-     *
-     * Restored tasks, removed tasks and failed tasks are not paused so this action would be an no-op for them.
-     * Stateless tasks will never be paused since they are immediately added to the
-     * restored active tasks.
-     *
-     * @param taskId ID of the task to remove
-     */
-    void pause(final TaskId taskId);
-
-    /**
-     * Resume restoring a task (active or standby) in the state updater.
-     *
-     * This method does not block until the task is paused.
-     *
-     * Restored tasks, removed tasks and failed tasks are not resumed so this action would be an no-op for them.
-     * Stateless tasks will never be resumed since they are immediately added to the
-     * restored active tasks.
-     *
-     * @param taskId ID of the task to remove
-     */
-    void resume(final TaskId taskId);
-
-    /**
      * Drains the restored active tasks from the state updater.
      *
      * The returned active tasks are removed from the state updater.
@@ -171,19 +145,15 @@ public interface StateUpdater {
     Set<Task> getTasks();
 
     /**
-     * Gets active tasks that are managed by the state updater.
+     * Gets all tasks that are currently being restored inside the state updater.
      *
-     * The state updater manages all active tasks that were added with the {@link StateUpdater#add(Task)} and that have
-     * not been removed from the state updater with one of the following methods:
-     * <ul>
-     *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
-     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
-     *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
-     * </ul>
+     * Tasks that have just being added into the state updater via {@link StateUpdater#add(Task)}
+     * or have restored completely or removed will not be returned; similarly tasks that have just being
+     * removed via {@link StateUpdater#remove(TaskId)} maybe returned still.
      *
-     * @return set of all tasks managed by the state updater
+     * @return set of all updating tasks inside the state updater
      */
-    Set<StreamTask> getActiveTasks();
+    Set<Task> getUpdatingTasks();
 
     /**
      * Returns if the state updater restores active tasks.
