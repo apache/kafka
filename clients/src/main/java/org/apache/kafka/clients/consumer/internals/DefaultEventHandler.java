@@ -40,7 +40,7 @@ public class DefaultEventHandler implements EventHandler {
     public DefaultEventHandler(ConsumerConfig config, LogContext logcontext) {
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
-        this.eventProcessor = new ApplicationEventProcessor(
+        this.eventProcessor = new DefaultEventProcessor(
                 config,
                 logcontext,
                 applicationEventQueue,

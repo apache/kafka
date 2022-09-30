@@ -66,7 +66,7 @@ import java.util.concurrent.BlockingQueue;
  * in this state.</li>
  * </ul>
  */
-public class ApplicationEventProcessor implements EventProcessor {
+public class DefaultEventProcessor implements EventProcessor {
     private final Logger log;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
@@ -78,10 +78,10 @@ public class ApplicationEventProcessor implements EventProcessor {
     private boolean running = false;
     private Optional<ApplicationEvent> inflightEvent;
 
-    public ApplicationEventProcessor(ConsumerConfig config,
-                                     LogContext logContext,
-                                     BlockingQueue<ApplicationEvent> applicationEventQueue,
-                                     BlockingQueue<BackgroundEvent> backgroundEventQueue) {
+    public DefaultEventProcessor(ConsumerConfig config,
+                                 LogContext logContext,
+                                 BlockingQueue<ApplicationEvent> applicationEventQueue,
+                                 BlockingQueue<BackgroundEvent> backgroundEventQueue) {
         this(Time.SYSTEM,
                 config,
                 logContext,
@@ -89,13 +89,13 @@ public class ApplicationEventProcessor implements EventProcessor {
                 backgroundEventQueue);
     }
 
-    public ApplicationEventProcessor(Time time,
-                                     ConsumerConfig config,
-                                     LogContext logContext,
-                                     BlockingQueue<ApplicationEvent> applicationEventQueue,
-                                     BlockingQueue<BackgroundEvent> backgroundEventQueue) {
+    public DefaultEventProcessor(Time time,
+                                 ConsumerConfig config,
+                                 LogContext logContext,
+                                 BlockingQueue<ApplicationEvent> applicationEventQueue,
+                                 BlockingQueue<BackgroundEvent> backgroundEventQueue) {
         this.time = time;
-        this.log = logContext.logger(ApplicationEventProcessor.class);
+        this.log = logContext.logger(DefaultEventProcessor.class);
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundEventQueue = backgroundEventQueue;
         this.config = config;
@@ -114,7 +114,7 @@ public class ApplicationEventProcessor implements EventProcessor {
     @Override
     public void run() {
         try {
-            log.debug("ApplicationEventProcessor started");
+            log.debug("DefaultEventProcessor started");
             while (running) {
                 pollOnce();
                 this.wait(retryBackoffMs);
@@ -122,7 +122,7 @@ public class ApplicationEventProcessor implements EventProcessor {
         } catch (Exception e) {
             // TODO: Define fine grain exceptions here
         } finally {
-            log.debug("ApplicationEventProcessor closed");
+            log.debug("DefaultEventProcessor closed");
         }
     }
 
