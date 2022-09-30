@@ -130,37 +130,28 @@ public class DefaultEventProcessor implements EventProcessor {
      * Process event from a single poll
      */
     void pollOnce() {
-        inflightEvent = maybePollEvent();
-        maybeConsumeInflightEvent();
+        this.inflightEvent = maybePollEvent();
+        if (this.inflightEvent.isPresent() && maybeConsumeInflightEvent(this.inflightEvent.get())) {
+            // clear inflight event upon successful consumption
+            this.inflightEvent = Optional.empty();
+        }
     }
 
     public Optional<ApplicationEvent> maybePollEvent() {
-        if (inflightEvent.isPresent()) {
-            return Optional.empty();
+        if (this.inflightEvent.isPresent()) {
+            return this.inflightEvent;
         }
-        return Optional.ofNullable(applicationEventQueue.poll());
+        return Optional.ofNullable(this.applicationEventQueue.poll());
     }
 
     private void transitionTo(BackgroundState newState) {
         if (!state.isValidTransition(newState)) {
-            throw new IllegalStateException("unable to transition from " + state + " to " + newState);
+            throw new IllegalStateException("unable to transition from " + this.state + " to " + newState);
         }
-        state = newState;
+        this.state = newState;
     }
 
-    public void maybeConsumeInflightEvent() {
-        if (!inflightEvent.isPresent()) {
-            return;
-        }
-        ApplicationEvent event = inflightEvent.get();
-        if (!tryConsumeEvent(event)) {
-            return;
-        }
-        // clear inflight event upon successful consumption
-        inflightEvent = Optional.empty();
-    }
-
-    public boolean tryConsumeEvent(ApplicationEvent event) {
+    public boolean maybeConsumeInflightEvent(ApplicationEvent event) {
         // consumption maybe return false when
         // 1. need a coordinator and it's not available
         // 2. other errors
