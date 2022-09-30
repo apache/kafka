@@ -677,7 +677,7 @@ public class TransactionalStateStoreIntegrationTest {
         final KafkaStreams driver1 = getRunningStreams(STREAMS_CONFIG, builder, false);
 
         final ReadOnlySessionStore<Object, Object> store = IntegrationTestUtils.getStore(
-            storeName, driver, sessionStore());
+            storeName, driver1, sessionStore());
         assertEquals("v1",  store.fetchSession("k1", sessionStart, sessionEnd));
         assertNull(store.fetchSession("k2", sessionStart, sessionEnd));
 
