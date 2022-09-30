@@ -67,10 +67,7 @@ public abstract class AbstractPrototypeAsyncConsumer<K, V> implements Consumer<K
                     backgroundEvent.ifPresent(event -> processEvent(event, timeout));
                 }
                 // The idea here is to have the background thread sending fetches autonomously, and the fetcher
-                // uses the poll loop to retrieve successful fetches and process them on the polling thread.
-                // The fetcher will return the records once they become available. One of the reason to do so is to
-                // move deserialization and serialization to the polling thread, so that the background thread
-                // can stay lightweight and focuses on just the network IO.
+                // uses the poll loop to retrieve successful fetchResponse and process them on the polling thread.
                 final Fetch<K, V> fetch = collectFetches();
                 if (!fetch.isEmpty()) {
                     return processFetchResults(fetch);
