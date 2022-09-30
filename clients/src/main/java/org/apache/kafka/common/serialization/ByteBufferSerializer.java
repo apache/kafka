@@ -54,11 +54,15 @@ public class ByteBufferSerializer implements Serializer<ByteBuffer> {
 
     @Override
     public ByteBuffer serializeToByteBuffer(String topic, ByteBuffer data) {
+        // Consider that ByteBuffer#wrap(byte[]) return a ByteBuffer that does not need to call flip().
+        if (data.position() > 0) {
+            data.flip();
+        }
         return data;
     }
 
     @Override
     public ByteBuffer serializeToByteBuffer(String topic, Headers headers, ByteBuffer data) {
-        return data;
+        return serializeToByteBuffer(topic, data);
     }
 }
