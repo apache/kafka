@@ -47,6 +47,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
@@ -76,6 +77,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -305,9 +307,10 @@ public class StandbyTaskTest {
     public void shouldSuspendAndCommitBeforeCloseClean() {
         when(stateManager.changelogOffsets())
             .thenReturn(Collections.singletonMap(partition, 60L));
+        final InOrder stateManagerOrdered = inOrder(stateManager);
         stateManager.close();
         stateManager.checkpoint();
-        verify(stateManager, times(1)).checkpoint();
+        stateManagerOrdered.verify(stateManager, times(1)).checkpoint();
         when(stateManager.changelogOffsets())
                 .thenReturn(Collections.singletonMap(partition, 60L));
         final MetricName metricName = setupCloseTaskMetric();
@@ -325,7 +328,7 @@ public class StandbyTaskTest {
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
         verify(stateManager).changelogOffsets();
-        verify(stateManager, atLeastOnce()).close();
+        stateManagerOrdered.verify(stateManager, atLeastOnce()).close();
     }
 
     @Test
