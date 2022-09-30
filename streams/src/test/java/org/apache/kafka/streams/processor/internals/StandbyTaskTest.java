@@ -300,7 +300,6 @@ public class StandbyTaskTest {
 
         task.suspend();
         task.closeDirty();
-        verify(stateManager).close();
     }
 
     @Test
