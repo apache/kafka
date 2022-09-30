@@ -45,15 +45,15 @@ public class Topic {
 
     private static String detectInvalidTopic(String name) {
         if (name.isEmpty())
-            return "empty string";
+            return "the empty string is not allowed";
         if (".".equals(name))
-            return "'\".\"' is not allowed";
+            return "'.' is not allowed";
         if ("..".equals(name))
-            return "'\"..\"' is not allowed";
+            return "'..' is not allowed";
         if (name.length() > MAX_NAME_LENGTH)
             return "the length of '" + name + "' is longer than the max allowed length " + MAX_NAME_LENGTH;
         if (!containsValidPattern(name))
-            return "'\"" + name + "\"' contains one or more characters other than " +
+            return "'" + name + "' contains one or more characters other than " +
                 "ASCII alphanumerics, '.', '_' and '-'";
         return null;
     }
