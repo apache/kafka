@@ -41,16 +41,20 @@ public class SerializationTest {
     final private String topic = "testTopic";
     final private Map<Class<?>, List<Object>> testData = new HashMap<Class<?>, List<Object>>() {
         {
-            put(String.class, Arrays.asList("my string"));
-            put(Short.class, Arrays.asList((short) 32767, (short) -32768));
-            put(Integer.class, Arrays.asList(423412424, -41243432));
-            put(Long.class, Arrays.asList(922337203685477580L, -922337203685477581L));
-            put(Float.class, Arrays.asList(5678567.12312f, -5678567.12341f));
-            put(Double.class, Arrays.asList(5678567.12312d, -5678567.12341d));
-            put(byte[].class, Arrays.asList("my string".getBytes()));
-            put(ByteBuffer.class, Arrays.asList(ByteBuffer.allocate(10).put("my string".getBytes())));
-            put(Bytes.class, Arrays.asList(new Bytes("my string".getBytes())));
-            put(UUID.class, Arrays.asList(UUID.randomUUID()));
+            put(String.class, Arrays.asList(null, "my string"));
+            put(Short.class, Arrays.asList(null, (short) 32767, (short) -32768));
+            put(Integer.class, Arrays.asList(null, 423412424, -41243432));
+            put(Long.class, Arrays.asList(null, 922337203685477580L, -922337203685477581L));
+            put(Float.class, Arrays.asList(null, 5678567.12312f, -5678567.12341f));
+            put(Double.class, Arrays.asList(null, 5678567.12312d, -5678567.12341d));
+            put(byte[].class, Arrays.asList(null, "my string".getBytes()));
+            put(ByteBuffer.class, Arrays.asList(
+                    null,
+                    ByteBuffer.wrap("my string".getBytes()),
+                    ByteBuffer.allocate(10).put("my string".getBytes()),
+                    ByteBuffer.allocateDirect(10).put("my string".getBytes())));
+            put(Bytes.class, Arrays.asList(null, new Bytes("my string".getBytes())));
+            put(UUID.class, Arrays.asList(null, UUID.randomUUID()));
         }
     };
 
@@ -78,6 +82,8 @@ public class SerializationTest {
                     "Should support null in " + cls.getSimpleName() + " serialization");
                 assertNull(serde.deserializer().deserialize(topic, null),
                     "Should support null in " + cls.getSimpleName() + " deserialization");
+                assertNull(serde.deserializer().deserialize(topic, null, (ByteBuffer) null),
+                        "Should support null in " + cls.getSimpleName() + " deserialization");
             }
         }
     }

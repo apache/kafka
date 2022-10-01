@@ -70,7 +70,7 @@ public interface Deserializer<T> extends Closeable {
      * @return deserialized typed data; may be null
      */
     default T deserialize(String topic, Headers headers, ByteBuffer data) {
-        return deserialize(topic, headers, Utils.toArray(data));
+        return deserialize(topic, headers, Utils.toNullableArray(data));
     }
 
     /**
