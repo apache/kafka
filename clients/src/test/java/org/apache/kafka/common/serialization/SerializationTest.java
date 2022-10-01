@@ -51,7 +51,9 @@ public class SerializationTest {
             put(Float.class, Arrays.asList(5678567.12312f, -5678567.12341f));
             put(Double.class, Arrays.asList(5678567.12312d, -5678567.12341d));
             put(byte[].class, Arrays.asList("my string".getBytes()));
-            put(ByteBuffer.class, Arrays.asList(ByteBuffer.wrap("my string".getBytes()),
+            put(ByteBuffer.class, Arrays.asList(
+                    null,
+                    ByteBuffer.wrap("my string".getBytes()),
                     ByteBuffer.allocate(10).put("my string".getBytes()),
                     ByteBuffer.allocateDirect(10).put("my string".getBytes())));
             put(Bytes.class, Arrays.asList(new Bytes("my string".getBytes())));
@@ -81,6 +83,9 @@ public class SerializationTest {
             try (Serde<?> serde = Serdes.serdeFrom(cls)) {
                 assertNull(serde.serializer().serialize(topic, null),
                     "Should support null in " + cls.getSimpleName() + " serialization");
+                assertNull(serde.serializer().serializeToByteBuffer(topic, null),
+                        "Should support null in " + cls.getSimpleName() + " serialization");
+
                 assertNull(serde.deserializer().deserialize(topic, null),
                     "Should support null in " + cls.getSimpleName() + " deserialization");
             }
@@ -383,12 +388,14 @@ public class SerializationTest {
         final ByteBuffer directBuffer0 = ByteBuffer.allocateDirect(bytes.length + 1).put(bytes);
         final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(bytes.length).put(bytes);
         try (final ByteBufferSerializer serializer = new ByteBufferSerializer()) {
+            assertNull(serializer.serialize(topic, null));
             assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer0.duplicate()));
             assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer1.duplicate()));
             assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer2.duplicate()));
             assertArrayEquals(bytes, serializer.serialize(topic, directBuffer0.duplicate()));
             assertArrayEquals(bytes, serializer.serialize(topic, directBuffer1.duplicate()));
 
+            assertNull(serializer.serializeToByteBuffer(topic, null));
             assertArrayEquals(bytes, Utils.toArray(serializer.serializeToByteBuffer(topic, heapBuffer0.duplicate())));
             assertArrayEquals(bytes, Utils.toArray(serializer.serializeToByteBuffer(topic, heapBuffer1.duplicate())));
             assertArrayEquals(bytes, Utils.toArray(serializer.serializeToByteBuffer(topic, heapBuffer2.duplicate())));
@@ -407,6 +414,7 @@ public class SerializationTest {
         final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(bytes.length).put(bytes);
         try (ByteBufferSerializer ser = new ByteBufferSerializer();
              ByteBufferDeserializer des = new ByteBufferDeserializer()) {
+            assertNull(des.deserialize(topic, ser.serialize(topic, null)));
             assertEquals(heapBuffer0.duplicate().flip(), des.deserialize(topic, ser.serialize(topic, heapBuffer0.duplicate())));
             assertEquals(heapBuffer1.duplicate().flip(), des.deserialize(topic, ser.serialize(topic, heapBuffer1.duplicate())));
             assertEquals(heapBuffer2.duplicate(), des.deserialize(topic, ser.serialize(topic, heapBuffer2.duplicate())));
