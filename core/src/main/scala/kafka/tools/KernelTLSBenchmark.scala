@@ -22,11 +22,31 @@ object KernelTLSBenchmark extends LazyLogging {
   def main(args: Array[String]): Unit = {
     val config = new KernelTLSBenchmarkConfig(args)
     println("Warming up page cache...")
-    runConsume(print = false, 1, config)
-    val withDisabled = multipleRuns(print = true, kernelOffloadEnabled = false, config)
-    val withEnabled = multipleRuns(print = true, kernelOffloadEnabled = true, config)
+
+    val adminProps = filterProps(config.props, AdminClientConfig.configNames)
+    val adminClient = AdminClient.create(adminProps)
+    val (partitionCount, leaderIds) = getPartitions(config.topic, adminClient)
+
+    config.partitions.foreach(partitions => {
+      if (partitions > partitionCount) {
+        throw new IllegalArgumentException(
+          s"Number of partitions of topic ${config.topic} found to " +
+            s"be ${partitionCount}, which is less than $partitions")
+      }
+    })
+
+    val partitionsToConsume: Int = config.partitions match {
+      case Some(p) => p
+      case None => partitionCount
+    }
+
+    runConsume(print = false, 1, partitionsToConsume, config)
+    val withDisabled = multipleRuns(
+      print = true, kernelOffloadEnabled = false, adminClient, partitionsToConsume, leaderIds, config)
+    val withEnabled = multipleRuns(
+      print = true, kernelOffloadEnabled = true, adminClient, partitionsToConsume, leaderIds, config)
     val gainPercentage = 100.0 * (withEnabled - withDisabled) / withDisabled
-    println("Throughput gain percentage = %.2f".format(gainPercentage))
+    println("Throughput gain percentage = %.2f%%".format(gainPercentage))
   }
 
   private def filterProps(in: Properties, allowedKeys: util.Set[String]): Properties = {
@@ -38,23 +58,36 @@ object KernelTLSBenchmark extends LazyLogging {
     out
   }
 
-  private def setKernelTlsConfig(kernelOffloadEnabled: Boolean, config: KernelTLSBenchmarkConfig): Unit = {
-    val props = filterProps(config.props, AdminClientConfig.configNames)
-    val admin = AdminClient.create(props)
-    val configResource = new ConfigResource(ConfigResource.Type.BROKER, "0")
-    val configEntry = new ConfigEntry(
-      s"listener.name.ssl.${SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_CONFIG}",
-      if (kernelOffloadEnabled) "true" else "false")
-    val configMap = Map[ConfigResource, util.Collection[AlterConfigOp]](
-      configResource -> Seq(new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET)).asJava
-    ).asJava
-    val result = admin.incrementalAlterConfigs(configMap)
-    result.all().get()
-    admin.close()
+  private def getPartitions(topicName: String, adminClient: AdminClient): (Int, Set[Int]) = {
+    val result = adminClient.describeTopics(Seq(topicName).asJava).all().get()
+    val partitionCount = result.get(topicName).partitions().size()
+    val leaderIds = result.get(topicName).partitions().asScala
+      .map(tpInfo => tpInfo.leader().id()).toSet
+    (partitionCount, leaderIds)
   }
 
-  private def multipleRuns(print: Boolean, kernelOffloadEnabled: Boolean, config: KernelTLSBenchmarkConfig): Double = {
-    setKernelTlsConfig(kernelOffloadEnabled, config)
+  private def setKernelTlsConfig(
+    kernelOffloadEnabled: Boolean, adminClient: AdminClient,
+    brokerIds: Iterable[Int], sslListenerName: String): Unit = {
+    val configKey = s"listener.name.${sslListenerName.toLowerCase}.${SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_CONFIG}"
+    val configValue = if (kernelOffloadEnabled) "true" else "false"
+    val configEntry = new ConfigEntry(configKey, configValue)
+
+    val configMap = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]
+
+    brokerIds.foreach(brokerId => {
+      val configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString)
+      configMap.put(configResource, Seq(new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET)).asJava)
+    })
+
+    val result = adminClient.incrementalAlterConfigs(configMap)
+    result.all().get()
+  }
+
+  private def multipleRuns(
+    print: Boolean, kernelOffloadEnabled: Boolean, adminClient: AdminClient,
+    partitionsToConsume: Int, brokerIds: Iterable[Int], config: KernelTLSBenchmarkConfig): Double = {
+    setKernelTlsConfig(kernelOffloadEnabled, adminClient, brokerIds, config.sslListenerName)
     Thread.sleep(10 * 1000)
     val enableStr = if (kernelOffloadEnabled) "enabled" else "disabled"
     if (print) {
@@ -63,7 +96,7 @@ object KernelTLSBenchmark extends LazyLogging {
     var totalBytesRead: Long = 0
     var totalElapsedMillis: Long = 0
     for (runIndex <- 1 to config.numRuns) {
-      val (runBytesRead: Long, runElapsedMillis: Long) = runConsume(print, runIndex, config)
+      val (runBytesRead: Long, runElapsedMillis: Long) = runConsume(print, runIndex, partitionsToConsume, config)
       totalBytesRead += runBytesRead
       totalElapsedMillis += runElapsedMillis
     }
@@ -71,46 +104,31 @@ object KernelTLSBenchmark extends LazyLogging {
     val totalSec = totalElapsedMillis / 1000.0
     val totalMBPerSec = totalMB / totalSec
     if (print) {
-      println("Total throughput with KTLS %s = %.2f MB/s".format(enableStr, totalMBPerSec))
+      println("Total throughput with KTLS %s = %.2f MB/s, time elapsed = %d ms"
+        .format(enableStr, totalMBPerSec, totalElapsedMillis))
     }
     totalMBPerSec
   }
 
-  private def runConsume(print: Boolean, runIndex: Int, config: KernelTLSBenchmarkConfig): (Long, Long) = {
+  private def runConsume(print: Boolean, runIndex: Int, partitionsToConsume: Int, config: KernelTLSBenchmarkConfig): (Long, Long) = {
     val groupId = UUID.randomUUID.toString
     val props = filterProps(config.props, ConsumerConfig.configNames)
     props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
 
-    val totalMessagesRead = new AtomicLong(0)
+    val totalRecordsRead = new AtomicLong(0)
     val totalBytesRead = new AtomicLong(0)
 
     var startMs, endMs = 0L
-    val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](props)
-    val partitionInfoList = consumer.partitionsFor(config.topic)
-    consumer.close()
-
-    config.partitions.foreach(partitions => {
-      if (partitions > partitionInfoList.size) {
-        throw new IllegalArgumentException(
-          s"Number of partitions of topic ${config.topic} found to " +
-            s"be ${partitionInfoList.size}, which is less than $partitions")
-      }
-    })
-
-    val partitionsToConsume: Int = config.partitions match {
-      case Some(p) => p
-      case None => partitionInfoList.size
-    }
 
     val countDownLatch = new CountDownLatch(partitionsToConsume)
 
     if (print) {
-      printf(s"[Run $runIndex] Fetching messages...")
+      printf(s"[Run $runIndex] Fetching records...")
     }
     startMs = System.currentTimeMillis
     for (partition <- 0 to partitionsToConsume - 1) {
       val runnable = new ConsumeRunnable(
-        config.topic, partition, props, config, countDownLatch, totalMessagesRead, totalBytesRead)
+        config.topic, partition, props, config, countDownLatch, totalRecordsRead, totalBytesRead)
       val thread = new Thread(runnable, "consumer-" + partition.toString)
       thread.start()
     }
@@ -123,7 +141,7 @@ object KernelTLSBenchmark extends LazyLogging {
 
     val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
     val mbRate: Double = totalMBRead / elapsedSecs
-    val messageRate = totalMessagesRead.get / elapsedSecs
+    val messageRate = totalRecordsRead.get / elapsedSecs
 
     if (print) {
       println(" Throughput = %.2f MB/s".format(mbRate))
@@ -133,7 +151,7 @@ object KernelTLSBenchmark extends LazyLogging {
 
   class ConsumeRunnable(
     topic: String, partition: Int, props: Properties, config: KernelTLSBenchmarkConfig, countDownLatch: CountDownLatch,
-    totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong) extends Runnable {
+    totalRecordsRead: AtomicLong, totalBytesRead: AtomicLong) extends Runnable {
     override def run(): Unit = {
       val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](props)
       consumer.assign(Seq(new TopicPartition(topic, partition)).asJava)
@@ -143,27 +161,27 @@ object KernelTLSBenchmark extends LazyLogging {
       var lastConsumedTime = currentTimeMillis
 
       var tot: Long = 0
-      while (totalMessagesRead.get < config.numMessages && currentTimeMillis - lastConsumedTime <= config.timeoutMs) {
+      while (totalRecordsRead.get < config.numRecords && currentTimeMillis - lastConsumedTime <= config.timeoutMs) {
         val records = consumer.poll(Duration.ofMillis(100)).asScala
         currentTimeMillis = System.currentTimeMillis
         if (records.nonEmpty)
           lastConsumedTime = currentTimeMillis
         var bytesRead = 0L
-        var messagesRead = 0L
+        var recordsRead = 0L
         for (record <- records) {
-          messagesRead += 1
+          recordsRead += 1
           if (record.key != null)
             bytesRead += record.key.length
           if (record.value != null)
             bytesRead += record.value.length
         }
-        totalMessagesRead.addAndGet(messagesRead)
+        totalRecordsRead.addAndGet(recordsRead)
         totalBytesRead.addAndGet(bytesRead)
-        tot += messagesRead
+        tot += recordsRead
       }
 
-      if (totalMessagesRead.get() < config.numMessages) {
-        println(s"WARNING: Exiting before consuming the expected number of messages: timeout (${config.timeoutMs} ms) exceeded. ")
+      if (totalRecordsRead.get() < config.numRecords) {
+        println(s"WARNING: Exiting before consuming the expected number of records: timeout (${config.timeoutMs} ms) exceeded. ")
       }
       consumer.close()
       countDownLatch.countDown()
@@ -171,7 +189,7 @@ object KernelTLSBenchmark extends LazyLogging {
   }
 
   class KernelTLSBenchmarkConfig(args: Array[String]) extends CommandDefaultOptions(args) {
-    val consumerConfigOpt = parser.accepts("consumer.config", "Consumer config properties file.")
+    val consumerConfigOpt = parser.accepts("consumer-config", "Consumer config properties file.")
       .withRequiredArg
       .describedAs("config file")
       .ofType(classOf[String])
@@ -179,12 +197,12 @@ object KernelTLSBenchmark extends LazyLogging {
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
-    val numMessagesOpt = parser.accepts("messages", "REQUIRED: The number of messages to consume")
+    val numRecordsOpt = parser.accepts("records", "REQUIRED: The number of records to consume")
       .withRequiredArg
       .describedAs("count")
       .ofType(classOf[java.lang.Long])
     val partitionsOpt = parser.accepts("partitions", "REQUIRED: The number of partitions from which to consume")
-      .withOptionalArg()
+      .withRequiredArg
       .describedAs("partitions")
       .ofType(classOf[java.lang.Integer])
     val numRunsOpt = parser.accepts("runs", "Number of runs to perform during the benchmark.")
@@ -192,6 +210,12 @@ object KernelTLSBenchmark extends LazyLogging {
       .describedAs("runs")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1)
+    val sslListenerNameOpt = parser.accepts("ssl-listener-name",
+      "The name of the SSL listener as configured in Kafka broker config.")
+      .withRequiredArg
+      .describedAs("ssl listener name")
+      .ofType(classOf[String])
+      .defaultsTo("SSL")
 
     try
       options = parser.parse(args: _*)
@@ -202,7 +226,8 @@ object KernelTLSBenchmark extends LazyLogging {
 
     CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps in performance test for the full zookeeper consumer")
 
-    CommandLineUtils.checkRequiredArgs(parser, options, consumerConfigOpt, topicOpt, numMessagesOpt, numRunsOpt)
+    CommandLineUtils.checkRequiredArgs(parser, options,
+      consumerConfigOpt, topicOpt, numRecordsOpt, numRunsOpt)
 
     val props: Properties = Utils.loadProps(options.valueOf(consumerConfigOpt))
 
@@ -218,9 +243,10 @@ object KernelTLSBenchmark extends LazyLogging {
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
 
     val topic = options.valueOf(topicOpt)
-    val numMessages = options.valueOf(numMessagesOpt).longValue
-    val numRuns = options.valueOf(numRunsOpt).intValue()
-    val timeoutMs = 10 * 1000;
+    val numRecords = options.valueOf(numRecordsOpt).longValue
+    val numRuns = options.valueOf(numRunsOpt).intValue
+    val sslListenerName = options.valueOf(sslListenerNameOpt)
+    val timeoutMs = 10 * 1000
     val partitions : Option[Int] = if (options.has(partitionsOpt)) Some(options.valueOf(partitionsOpt).intValue()) else None
   }
 }

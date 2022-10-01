@@ -115,7 +115,8 @@ public class SslTransportLayer implements TransportLayer {
         final LogContext logContext = new LogContext(String.format("[SslTransportLayer channelId=%s key=%s] ", channelId, key));
         this.log = logContext.logger(getClass());
 
-        log.info(String.format("New SSL channel created with kernel offload turned %s", shouldAttemptKtls ? "on" : "off"));
+        log.info(String.format(
+            "New SSL channel created with kernel offload turned %s", shouldAttemptKtls ? "on" : "off"));
     }
 
     // Visible for testing
@@ -189,6 +190,10 @@ public class SslTransportLayer implements TransportLayer {
         state = State.CLOSING;
         sslEngine.closeOutbound();
         try {
+            if (ktlsEnabled) {
+                kernelTLS.closeNotify(socketChannel);
+                return;
+            }
             if (prevState != State.NOT_INITIALIZED && isConnected()) {
                 if (!flush(netWriteBuffer)) {
                     throw new IOException("Remaining data in the network buffer, can't send SSL close message.");
@@ -746,7 +751,7 @@ public class SslTransportLayer implements TransportLayer {
             log.debug("Kernel TLS enabled on socket on channel {}", channelId);
             ktlsEnabled = true;
         } catch (KTLSEnableFailedException e) {
-            log.info("Attempt to enable KTLS failed with exception", e);
+            log.warn("Attempt to enable KTLS failed with exception, falling back to userspace encryption", e);
             ktlsEnabled = false;
         } finally {
             ktlsAttempted = true;
