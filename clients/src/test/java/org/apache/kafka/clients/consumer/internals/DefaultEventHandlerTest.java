@@ -16,12 +16,17 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -38,22 +43,40 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DefaultEventHandlerTest {
     private final Properties properties = new Properties();
+    private SubscriptionState subscriptions;
+
 
     @BeforeEach
     public void setup() {
+        subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     }
 
     @Test
-    public void testPollAndAdd() {
-        EventHandler handler = new DefaultEventHandler(
+    public void testBasicPollAndAddWithNoopEvent() {
+        LogContext logContext = new LogContext();
+        Time time = new MockTime();
+        ConsumerMetadata metadata = newConsumerMetadata(false);
+        MockClient client = new MockClient(time, metadata);
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time,
+                100, 1000, 100);
+        DefaultEventHandler handler = new DefaultEventHandler(
+                time,
                 new ConsumerConfig(properties),
-                new LogContext());
+                new LinkedBlockingQueue<>(),
+                new LinkedBlockingQueue<>(),
+                subscriptions,
+                metadata,
+                consumerClient);
+        assertTrue(client.active());
         assertTrue(handler.isEmpty());
         assertTrue(!handler.poll().isPresent());
-        handler.add(new StubbedApplicationEvent());
+        handler.add(new NoopTestApplicationEvent());
         assertTrue(handler.isEmpty());
+        assertFalse(client.hasInFlightRequests()); // noop does not send network request
+        handler.close();
+        assertFalse(client.active());
     }
 
     @Test
@@ -61,35 +84,42 @@ public class DefaultEventHandlerTest {
         BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
         EventHandler eventHandler = new DefaultEventHandler(
-                new RunOnceBackgroundThread(applicationEventQueue, backgroundEventQueue),
+                new RunOnceBackgroundThreadRunnable(applicationEventQueue, backgroundEventQueue),
                 applicationEventQueue,
                 backgroundEventQueue);
-        assertTrue(eventHandler.add(new StubbedApplicationEvent("hello-world")));
+        assertTrue(eventHandler.add(new NoopTestApplicationEvent("hello-world")));
         assertFalse(eventHandler.isEmpty());
         Optional<BackgroundEvent> event = eventHandler.poll();
         assertTrue(event.isPresent());
-        assertTrue(event.get() instanceof RunOnceBackgroundThread.NoopBackgroundEvent);
+        assertTrue(event.get() instanceof RunOnceBackgroundThreadRunnable.NoopBackgroundEvent);
         assertEquals(BackgroundEvent.EventType.NOOP, event.get().type);
-        assertEquals("hello-world", ((RunOnceBackgroundThread.NoopBackgroundEvent) event.get()).message);
+        assertEquals("hello-world", ((RunOnceBackgroundThreadRunnable.NoopBackgroundEvent) event.get()).message);
     }
 
-    private class StubbedApplicationEvent extends ApplicationEvent {
+    private class NoopTestApplicationEvent extends ApplicationEvent {
         public final String message;
-        public StubbedApplicationEvent() {
+        public NoopTestApplicationEvent() {
             this("");
         }
 
-        public StubbedApplicationEvent(String message) {
+        public NoopTestApplicationEvent(String message) {
             super(EventType.NOOP, false);
             this.message = message;
         }
     }
 
-    private class RunOnceBackgroundThread implements EventProcessor {
+    private ConsumerMetadata newConsumerMetadata(boolean includeInternalTopics) {
+        long refreshBackoffMs = 50;
+        long expireMs = 50000;
+        return new ConsumerMetadata(refreshBackoffMs, expireMs, includeInternalTopics, false,
+                subscriptions, new LogContext(), new ClusterResourceListeners());
+    }
+
+    private class RunOnceBackgroundThreadRunnable implements BackgroundThreadRunnable {
         private BlockingQueue<ApplicationEvent> applicationEventQueue;
         private BlockingQueue<BackgroundEvent> backgroundEventQueue;
-        public RunOnceBackgroundThread(BlockingQueue<ApplicationEvent> applicationEvents,
-                                       BlockingQueue<BackgroundEvent> backgroundEventQueue) {
+        public RunOnceBackgroundThreadRunnable(BlockingQueue<ApplicationEvent> applicationEvents,
+                                               BlockingQueue<BackgroundEvent> backgroundEventQueue) {
             this.applicationEventQueue = applicationEvents;
             this.backgroundEventQueue = backgroundEventQueue;
         }
@@ -97,7 +127,7 @@ public class DefaultEventHandlerTest {
         public void run() {
             while (applicationEventQueue.isEmpty()) { }
             ApplicationEvent event = applicationEventQueue.poll();
-            String message = ((StubbedApplicationEvent) event).message;
+            String message = ((NoopTestApplicationEvent) event).message;
             backgroundEventQueue.add(new NoopBackgroundEvent(message));
         }
 

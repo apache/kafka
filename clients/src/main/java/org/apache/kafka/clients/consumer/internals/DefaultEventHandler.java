@@ -16,12 +16,17 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
@@ -34,27 +39,59 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class DefaultEventHandler implements EventHandler {
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
-    private final EventProcessor eventProcessor;
+    private final BackgroundThreadRunnable runnable;
     private final KafkaThread backgroundThread;
 
-    public DefaultEventHandler(ConsumerConfig config, LogContext logcontext) {
+    public DefaultEventHandler(ConsumerConfig config, LogContext logcontext,
+                               SubscriptionState subscriptionState,
+                               Metrics metrics,
+                               ClusterResourceListeners clusterResourceListeners,
+                               Sensor fetcherThrottleTimeSensor,
+                               ApiVersions apiVersions) {
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
-        this.eventProcessor = new DefaultEventProcessor(
+        this.runnable = new DefaultBackgroundThreadRunnable(
                 config,
                 logcontext,
                 applicationEventQueue,
-                backgroundEventQueue);
-        this.backgroundThread = new KafkaThread("consumer_background_thread", eventProcessor, true);
+                backgroundEventQueue,
+                subscriptionState,
+                apiVersions,
+                metrics,
+                clusterResourceListeners,
+                fetcherThrottleTimeSensor);
+        this.backgroundThread = new KafkaThread("consumer_background_thread", runnable, true);
         backgroundThread.start();
 
     }
 
     // VisibleForTesting
-    DefaultEventHandler(EventProcessor runnable,
-                         BlockingQueue<ApplicationEvent> applicationEventQueue,
-                         BlockingQueue<BackgroundEvent> backgroundEventQueue) {
-        this.eventProcessor = runnable;
+    DefaultEventHandler(BackgroundThreadRunnable runnable,
+                        BlockingQueue<ApplicationEvent> applicationEventQueue,
+                        BlockingQueue<BackgroundEvent> backgroundEventQueue) {
+        this.runnable = runnable;
+        this.backgroundThread = new KafkaThread("consumer_background_thread", runnable, true);
+        this.applicationEventQueue = applicationEventQueue;
+        this.backgroundEventQueue = backgroundEventQueue;
+        backgroundThread.start();
+    }
+
+    // VisibleForTesting
+    DefaultEventHandler(Time time,
+                        ConsumerConfig config,
+                        BlockingQueue<ApplicationEvent> applicationEventQueue,
+                        BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                        SubscriptionState subscriptionState,
+                        ConsumerMetadata metadata,
+                        ConsumerNetworkClient networkClient) {
+        this.runnable = new DefaultBackgroundThreadRunnable(
+                time,
+                config,
+                applicationEventQueue,
+                backgroundEventQueue,
+                subscriptionState,
+                metadata,
+                networkClient);
         this.backgroundThread = new KafkaThread("consumer_background_thread", runnable, true);
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundEventQueue = backgroundEventQueue;
@@ -83,7 +120,7 @@ public class DefaultEventHandler implements EventHandler {
 
     public void close() {
         try {
-            this.eventProcessor.close();
+            this.runnable.close();
             // close logic
         } catch (Exception e) {
             throw new RuntimeException(e);
