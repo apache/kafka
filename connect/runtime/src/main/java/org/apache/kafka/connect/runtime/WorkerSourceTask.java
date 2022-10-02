@@ -87,7 +87,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
 
         super(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
                 new WorkerSourceTaskContext(offsetReader, id, configState, null), producer,
-                admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, loader,
+                admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics, loader,
                 time, retryWithToleranceOperator, statusBackingStore, closeExecutor);
 
         this.committableOffsets = CommittableOffsets.EMPTY;

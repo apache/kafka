@@ -75,10 +75,8 @@ public class WorkerTaskTest {
     public void standardStartup() {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
-        WorkerTask workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics,
+        WorkerTask workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
                 retryWithToleranceOperator, Time.SYSTEM, statusBackingStore);
-                        ErrorHandlingMetrics.class,
-
         workerTask.initialize(TASK_CONFIG);
         workerTask.run();
         workerTask.stop();
@@ -92,9 +90,8 @@ public class WorkerTaskTest {
     public void stopBeforeStarting() {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
-        WorkerTask workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics,
+        WorkerTask workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
                 retryWithToleranceOperator, Time.SYSTEM, statusBackingStore) {
-                        ErrorHandlingMetrics.class,
 
             @Override
             public void initializeAndStart() {
@@ -120,9 +117,8 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
         final CountDownLatch stopped = new CountDownLatch(1);
 
-        WorkerTask workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics,
+        WorkerTask workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
                 retryWithToleranceOperator, Time.SYSTEM, statusBackingStore) {
-                        ErrorHandlingMetrics.class,
 
             @Override
             public void execute() {
@@ -230,9 +226,9 @@ public class WorkerTaskTest {
     private static class TestWorkerTask extends WorkerTask {
 
         public TestWorkerTask(ConnectorTaskId id, Listener statusListener, TargetState initialState, ClassLoader loader,
-                              ConnectMetrics connectMetrics, RetryWithToleranceOperator retryWithToleranceOperator, Time time,
+                              ConnectMetrics connectMetrics, ErrorHandlingMetrics errorHandlingMetrics, RetryWithToleranceOperator retryWithToleranceOperator, Time time,
                               StatusBackingStore statusBackingStore) {
-            super(id, statusListener, initialState, loader, connectMetrics, retryWithToleranceOperator, time, statusBackingStore);
+            super(id, statusListener, initialState, loader, connectMetrics, errorHandlingMetrics,  retryWithToleranceOperator, time, statusBackingStore);
         }
 
         @Override

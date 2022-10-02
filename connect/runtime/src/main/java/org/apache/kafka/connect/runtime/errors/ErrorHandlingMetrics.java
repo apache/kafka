@@ -146,6 +146,7 @@ public class ErrorHandlingMetrics implements AutoCloseable {
     /**
      * Close the task Error metrics group when the task is closed
      */
+    @Override
     public void close() {
         log.debug("Removing error handling metrics of group {}", metricGroup.groupId());
         metricGroup.close();

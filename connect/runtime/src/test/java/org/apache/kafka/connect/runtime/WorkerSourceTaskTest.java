@@ -230,6 +230,7 @@ public class WorkerSourceTaskTest {
 
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter,
                                   HeaderConverter headerConverter, RetryWithToleranceOperator retryWithToleranceOperator) {
+        workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
                 offsetReader, offsetWriter, offsetStore, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
                 retryWithToleranceOperator, statusBackingStore, Runnable::run);
