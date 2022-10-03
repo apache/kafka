@@ -29,11 +29,13 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
@@ -78,16 +80,16 @@ public class DefaultEventHandlerTest {
     }
 
     @Test
-    public void testRunOnceBackgroundThread() {
+    @Timeout(1)
+    public void testRunOnceBackgroundThread() throws InterruptedException {
         BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         EventHandler eventHandler = new DefaultEventHandler(
                 new RunOnceBackgroundThreadRunnable(applicationEventQueue, backgroundEventQueue),
                 applicationEventQueue,
                 backgroundEventQueue);
         assertTrue(eventHandler.add(new NoopTestApplicationEvent("hello-world")));
-        assertFalse(eventHandler.isEmpty());
+        runUntil(() -> !eventHandler.isEmpty(), 1000);
         Optional<BackgroundEvent> event = eventHandler.poll();
         assertTrue(event.isPresent());
         assertTrue(event.get() instanceof NoopTestBackgroundEvent);
@@ -151,5 +153,17 @@ public class DefaultEventHandlerTest {
         public String toString() {
             return type + ":" + message;
         }
+    }
+
+    void runUntil(
+            Supplier<Boolean> condition,
+            int timeoutMs
+    ) throws InterruptedException {
+        int tries = 0;
+        while (!condition.get()) {
+            tries++;
+            this.wait(timeoutMs);
+        }
+        assertTrue(condition.get(), "Condition not satisfied after " + timeoutMs + "ms");
     }
 }
