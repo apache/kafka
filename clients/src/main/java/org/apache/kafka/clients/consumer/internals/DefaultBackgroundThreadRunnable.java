@@ -23,6 +23,7 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
@@ -41,8 +42,10 @@ import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 
 /**
- * Lives inside of the {@code DefaultEventHandler}, and consumes {@code ApplicationEvent} and produces
- * {@code BackgroundEvent}.
+ * The background process of the {@code DefaultEventHandler} that consumes {@code ApplicationEvent} and produces
+ * {@code BackgroundEvent}. It owns the network client and handles all the network IO to the brokers.
+ *
+ * It holds a reference to the {@link SubscriptionState}, which is initialized by the polling thread.
  */
 public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable {
     private static final String CLIENT_ID_METRIC_TAG = "client-id";
@@ -53,16 +56,16 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final ConsumerNetworkClient networkClient;
-
-    private final ConsumerConfig config;
-    private final Metrics metrics;
     private final SubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
+    private final Metrics metrics;
+    private final ConsumerConfig config;
+
     private String clientId;
     private long retryBackoffMs;
     private int heartbeatIntervalMs;
-    private boolean running = false;
-    private Optional<ApplicationEvent> inflightEvent;
+    private boolean running;
+    private Optional<ApplicationEvent> inflightEvent = Optional.empty();
 
     public DefaultBackgroundThreadRunnable(ConsumerConfig config,
                                            LogContext logContext,
@@ -96,7 +99,6 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
                                            ClusterResourceListeners clusterResourceListeners,
                                            Sensor fetcherThrottleTimeSensor) {
         try {
-
             this.time = time;
             this.log = logContext.logger(DefaultBackgroundThreadRunnable.class);
             this.applicationEventQueue = applicationEventQueue;
@@ -104,7 +106,7 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
             this.config = config;
             setConfig();
             this.inflightEvent = Optional.empty();
-            this.subscriptions = subscriptions;
+            this.subscriptions = subscriptions; // subscriptionState is initialized in the polling thread and passed here.
             this.metrics = metrics;
             this.metadata = bootstrapMetadata(clusterResourceListeners, logContext);
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
@@ -133,8 +135,10 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
                     retryBackoffMs,
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                     heartbeatIntervalMs);
+            this.running = true;
         } catch (Exception e) {
             // now propagate the exception
+            close();
             throw new KafkaException("Failed to construct background processor", e);
         }
     }
@@ -157,6 +161,7 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
         this.metadata = metadata;
         this.networkClient = client;
         this.metrics = new Metrics();
+        this.running = true;
     }
 
     private void setConfig() {
@@ -168,15 +173,15 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
     @Override
     public void run() {
         try {
-            log.debug("DefaultBackgroundThreadRunnable started");
+            log.debug("{} started", getClass());
             while (running) {
                 pollOnce();
-                this.wait(retryBackoffMs);
+                time.sleep(retryBackoffMs);
             }
         } catch (Exception e) {
             // TODO: Define fine grain exceptions here
         } finally {
-            log.debug("DefaultBackgroundThreadRunnable closed");
+            log.debug("{} closed", getClass());
         }
     }
 
@@ -193,7 +198,7 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
     }
 
     public Optional<ApplicationEvent> maybePollEvent() {
-        if (this.inflightEvent.isPresent()) {
+        if (this.inflightEvent.isPresent() || this.applicationEventQueue.isEmpty()) {
             return this.inflightEvent;
         }
         return Optional.ofNullable(this.applicationEventQueue.poll());
@@ -205,15 +210,24 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
      * @return true when successfully consumed the event.
      */
     public boolean maybeConsumeInflightEvent(ApplicationEvent event) {
+        log.debug("try consuming event: {}", Optional.ofNullable(event));
         switch (event.type) {
             case NOOP:
-                log.info("consuming a NOOP event");
+                process((NoopApplicationEvent) event);
                 return true;
             default:
                 inflightEvent = Optional.empty();
                 log.warn("unsupported event type: {}", event.type);
+                return true;
         }
-        return false;
+    }
+
+    /**
+     * Processes {@link NoopApplicationEvent} and equeue a {@link NoopBackgroundEvent}.
+     * @param event a {@link NoopApplicationEvent}
+     */
+    private void process(NoopApplicationEvent event) {
+        backgroundEventQueue.add(new NoopBackgroundEvent(event.message));
     }
 
     @Override

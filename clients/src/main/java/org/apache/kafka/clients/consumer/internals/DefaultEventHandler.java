@@ -84,17 +84,17 @@ public class DefaultEventHandler implements EventHandler {
                         SubscriptionState subscriptionState,
                         ConsumerMetadata metadata,
                         ConsumerNetworkClient networkClient) {
+        this.applicationEventQueue = applicationEventQueue;
+        this.backgroundEventQueue = backgroundEventQueue;
         this.runnable = new DefaultBackgroundThreadRunnable(
                 time,
                 config,
-                applicationEventQueue,
-                backgroundEventQueue,
+                this.applicationEventQueue,
+                this.backgroundEventQueue,
                 subscriptionState,
                 metadata,
                 networkClient);
         this.backgroundThread = new KafkaThread("consumer_background_thread", runnable, true);
-        this.applicationEventQueue = applicationEventQueue;
-        this.backgroundEventQueue = backgroundEventQueue;
         backgroundThread.start();
     }
 
