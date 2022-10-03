@@ -164,9 +164,6 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
         this.heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
     }
 
-    /**
-     * The main processor loop.
-     */
     @Override
     public void run() {
         try {
