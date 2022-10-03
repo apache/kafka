@@ -110,8 +110,6 @@ class KafkaRaftServer(
 
   private val controller: Option[ControllerServer] = if (config.processRoles.contains(ControllerRole)) {
     val controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)
-    val metadataFaultHandler = new LoggingFaultHandler("controller metadata",
-      () => controllerMetrics.incrementMetadataErrorCount())
     val fatalFaultHandler = new ProcessExitingFaultHandler()
     Some(new ControllerServer(
       metaProps,
@@ -125,7 +123,6 @@ class KafkaRaftServer(
       KafkaRaftServer.configSchema,
       raftManager.apiVersions,
       bootstrapMetadata,
-      metadataFaultHandler,
       fatalFaultHandler
     ))
   } else {

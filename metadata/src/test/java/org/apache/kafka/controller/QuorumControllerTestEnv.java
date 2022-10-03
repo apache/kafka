@@ -41,7 +41,6 @@ public class QuorumControllerTestEnv implements AutoCloseable {
     private final List<QuorumController> controllers;
     private final LocalLogManagerTestEnv logEnv;
     private final MockFaultHandler fatalFaultHandler = new MockFaultHandler("fatalFaultHandler");
-    private final MockFaultHandler metadataFaultHandler = new MockFaultHandler("metadataFaultHandler");
 
     public static class Builder {
         private final LocalLogManagerTestEnv logEnv;
@@ -108,7 +107,6 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                     builder.setSessionTimeoutNs(NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS));
                 });
                 builder.setFatalFaultHandler(fatalFaultHandler);
-                builder.setMetadataFaultHandler(metadataFaultHandler);
                 controllerBuilderInitializer.accept(builder);
                 this.controllers.add(builder.build());
             }
@@ -146,10 +144,6 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         return fatalFaultHandler;
     }
 
-    public MockFaultHandler metadataFaultHandler() {
-        return metadataFaultHandler;
-    }
-
     @Override
     public void close() throws InterruptedException {
         for (QuorumController controller : controllers) {
@@ -159,6 +153,5 @@ public class QuorumControllerTestEnv implements AutoCloseable {
             controller.close();
         }
         fatalFaultHandler.maybeRethrowFirstException();
-        metadataFaultHandler.maybeRethrowFirstException();
     }
 }

@@ -68,7 +68,6 @@ class ControllerServer(
   val configSchema: KafkaConfigSchema,
   val raftApiVersions: ApiVersions,
   val bootstrapMetadata: BootstrapMetadata,
-  val metadataFaultHandler: FaultHandler,
   val fatalFaultHandler: FaultHandler,
 ) extends Logging with KafkaMetricsGroup {
   import kafka.server.Server._
@@ -209,7 +208,6 @@ class ControllerServer(
           setConfigurationValidator(new ControllerConfigurationValidator()).
           setStaticConfig(config.originals).
           setBootstrapMetadata(bootstrapMetadata).
-          setMetadataFaultHandler(metadataFaultHandler).
           setFatalFaultHandler(fatalFaultHandler)
       }
       authorizer match {

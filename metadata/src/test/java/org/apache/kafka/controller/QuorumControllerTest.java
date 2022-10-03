@@ -1298,27 +1298,24 @@ public class QuorumControllerTest {
 
     @Test
     public void testFatalMetadataReplayErrorOnActive() throws Throwable {
-        try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
-                build();
-            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
-                build();
-        ) {
-            QuorumController active = controlEnv.activeController();
-            CompletableFuture<Void> future = active.appendWriteEvent("errorEvent",
-                    OptionalLong.empty(), () -> {
-                        return ControllerResult.of(Collections.singletonList(new ApiMessageAndVersion(
-                                new ConfigRecord().
-                                        setName(null).
-                                        setResourceName(null).
-                                        setResourceType((byte) 255).
-                                        setValue(null), (short) 0)), null);
-                    });
-            assertThrows(ExecutionException.class, () -> future.get());
-            assertEquals(NullPointerException.class,
-                    controlEnv.fatalFaultHandler().firstException().getCause().getClass());
-            controlEnv.fatalFaultHandler().setIgnore(true);
-            controlEnv.metadataFaultHandler().setIgnore(true);
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+            })) {
+                QuorumController active = controlEnv.activeController();
+                CompletableFuture<Void> future = active.appendWriteEvent("errorEvent",
+                        OptionalLong.empty(), () -> {
+                            return ControllerResult.of(Collections.singletonList(new ApiMessageAndVersion(
+                                    new ConfigRecord().
+                                            setName(null).
+                                            setResourceName(null).
+                                            setResourceType((byte) 255).
+                                            setValue(null), (short) 0)), null);
+                        });
+                assertThrows(ExecutionException.class, () -> future.get());
+                assertEquals(NullPointerException.class,
+                        controlEnv.fatalFaultHandler().firstException().getCause().getClass());
+                controlEnv.fatalFaultHandler().setIgnore(true);
+            }
         }
     }
 
