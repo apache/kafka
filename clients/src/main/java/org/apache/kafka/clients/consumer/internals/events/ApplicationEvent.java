@@ -21,12 +21,11 @@ package org.apache.kafka.clients.consumer.internals.events;
  */
 abstract public class ApplicationEvent {
     public final EventType type;
-    public final boolean needCoordinator;
 
-    public ApplicationEvent(EventType type, boolean needCoordinator) {
+    public ApplicationEvent(EventType type) {
         this.type = type;
-        this.needCoordinator = needCoordinator;
     }
+
     public enum EventType {
         COMMIT,
         NOOP,

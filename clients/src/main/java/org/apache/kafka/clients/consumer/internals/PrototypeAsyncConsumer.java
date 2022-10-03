@@ -122,5 +122,9 @@ public abstract class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private class CommitApplicationEvent extends ApplicationEvent {
         // this is the stubbed commitAsyncEvents
         CompletableFuture<Void> commitFuture = new CompletableFuture<>();
+
+        public CommitApplicationEvent() {
+            super(EventType.NOOP);
+        }
     }
 }
