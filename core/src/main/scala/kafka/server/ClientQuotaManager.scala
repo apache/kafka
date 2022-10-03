@@ -317,7 +317,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     } catch {
       case e: QuotaViolationException =>
         val throttleTimeMs = throttleTime(e, timeMs).toInt
-        info(s"Quota violated for sensor (${clientSensors.quotaSensor.name}). Delay time: ($throttleTimeMs)")
+        debug(s"Quota violated for sensor (${clientSensors.quotaSensor.name}). Delay time: ($throttleTimeMs)")
         throttleTimeMs
     }
   }
