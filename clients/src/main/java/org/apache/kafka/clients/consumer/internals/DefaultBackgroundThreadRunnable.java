@@ -96,6 +96,7 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
                                            ClusterResourceListeners clusterResourceListeners,
                                            Sensor fetcherThrottleTimeSensor) {
         try {
+
             this.time = time;
             this.log = logContext.logger(DefaultBackgroundThreadRunnable.class);
             this.applicationEventQueue = applicationEventQueue;
@@ -109,7 +110,7 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
             NetworkClient netClient = new NetworkClient(
                     new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, METRIC_GRP_PREFIX, channelBuilder, logContext),
-                    this.metadata,
+                    metadata,
                     clientId,
                     100, // a fixed large enough value will suffice for max in-flight requests
                     config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
@@ -148,6 +149,7 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
                                     ConsumerNetworkClient client) {
         this.time = time;
         this.config = config;
+        setConfig();
         this.log = LoggerFactory.getLogger(getClass());
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundEventQueue = backgroundEventQueue;
@@ -209,7 +211,7 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
                 return true;
             default:
                 inflightEvent = Optional.empty();
-                log.info("unsupported event type: {}", event.type);
+                log.warn("unsupported event type: {}", event.type);
         }
         return false;
     }
@@ -218,6 +220,7 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
     public void close() {
         this.running = false;
         Utils.closeQuietly(networkClient, "consumer network client");
+        Utils.closeQuietly(metadata, "consumer network client");
     }
 
     private ConsumerMetadata bootstrapMetadata(ClusterResourceListeners clusterResourceListeners, LogContext logContext) {
