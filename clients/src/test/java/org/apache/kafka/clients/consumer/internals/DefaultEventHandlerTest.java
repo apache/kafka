@@ -44,7 +44,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class DefaultEventHandlerTest {
     private final Properties properties = new Properties();
 
-
     @BeforeEach
     public void setup() {
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
