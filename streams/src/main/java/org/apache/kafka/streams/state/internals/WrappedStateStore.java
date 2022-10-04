@@ -134,6 +134,11 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
     }
 
     @Override
+    public boolean recover(final Long changelogOffset) {
+        return wrapped.recover(changelogOffset);
+    }
+
+    @Override
     public boolean transactional() {
         return wrapped.transactional();
     }

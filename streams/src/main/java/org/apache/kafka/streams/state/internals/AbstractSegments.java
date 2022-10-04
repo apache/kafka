@@ -171,6 +171,15 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     }
 
     @Override
+    public boolean recover(final Long changelogOffset) {
+        boolean ret = true;
+        for (final S segment : segments.values()) {
+            ret &= segment.recover(changelogOffset);
+        }
+        return ret;
+    }
+
+    @Override
     public void close() {
         for (final S segment : segments.values()) {
             segment.close();

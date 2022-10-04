@@ -310,6 +310,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         return open;
     }
 
+    @Override
+    public boolean recover(final Long changelogOffset) {
+        return segments.recover(changelogOffset);
+    }
+
     // Visible for testing
     List<S> getSegments() {
         return segments.allSegments(false);

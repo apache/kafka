@@ -137,7 +137,7 @@ public interface StateStore {
      * @param changelogOffset the checkpointed changelog offset.
      * @return {@code true} if the state store recovered, {@code false} otherwise.
      */
-    default boolean recover(final long changelogOffset) {
+    default boolean recover(final Long changelogOffset) {
         if (transactional()) {
             throw new UnsupportedOperationException("Transactional state store must implement StateStore#recover");
         }

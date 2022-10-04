@@ -80,7 +80,7 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     }
 
     @Override
-    public boolean recover(final long changelogOffset) {
+    public boolean recover(final Long changelogOffset) {
         return transactional;
     }
 
