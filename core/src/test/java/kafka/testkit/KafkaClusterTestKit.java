@@ -203,6 +203,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         KafkaRaftServer.configSchema(),
                         raftManager.apiVersions(),
                         bootstrapMetadata,
+                        metadataFaultHandler,
                         fatalFaultHandler
                     );
                     controllers.put(node.id(), controller);

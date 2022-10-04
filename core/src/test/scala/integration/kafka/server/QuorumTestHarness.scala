@@ -322,6 +322,7 @@ abstract class QuorumTestHarness extends Logging {
         configSchema = KafkaRaftServer.configSchema,
         raftApiVersions = raftManager.apiVersions,
         bootstrapMetadata = BootstrapMetadata.fromVersion(metadataVersion, "test harness"),
+        metadataFaultHandler = faultHandler,
         fatalFaultHandler = faultHandler
       )
       controllerServer.socketServerFirstBoundPortFuture.whenComplete((port, e) => {

@@ -68,6 +68,7 @@ class ControllerServer(
   val configSchema: KafkaConfigSchema,
   val raftApiVersions: ApiVersions,
   val bootstrapMetadata: BootstrapMetadata,
+  val metadataFaultHandler: FaultHandler,
   val fatalFaultHandler: FaultHandler,
 ) extends Logging with KafkaMetricsGroup {
   import kafka.server.Server._

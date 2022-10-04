@@ -1298,9 +1298,8 @@ public class QuorumControllerTest {
 
     @Test
     public void testFatalMetadataReplayErrorOnActive() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
-            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
-            })) {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build()) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).build()) {
                 QuorumController active = controlEnv.activeController();
                 CompletableFuture<Void> future = active.appendWriteEvent("errorEvent",
                         OptionalLong.empty(), () -> {
