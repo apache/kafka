@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -40,6 +41,7 @@ import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutionException;
 
 /**
  * The background process of the {@code DefaultEventHandler} that consumes {@code ApplicationEvent} and produces
@@ -178,6 +180,8 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
                 pollOnce();
                 time.sleep(retryBackoffMs);
             }
+        } catch (InterruptException e) {
+            throw new RuntimeException(e);
         } catch (Exception e) {
             // TODO: Define fine grain exceptions here
         } finally {
@@ -223,7 +227,8 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
     }
 
     /**
-     * Processes {@link NoopApplicationEvent} and equeue a {@link NoopBackgroundEvent}.
+     * Processes {@link NoopApplicationEvent} and equeue a {@link NoopBackgroundEvent}. This is intentionally left here
+     * for demonstration purpose.
      * @param event a {@link NoopApplicationEvent}
      */
     private void process(NoopApplicationEvent event) {
