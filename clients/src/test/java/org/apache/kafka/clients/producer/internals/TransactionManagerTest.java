@@ -30,6 +30,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -1215,6 +1216,26 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testInvalidTxnStateFailureInAddOffsetsToTxn() {
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            singletonMap(tp, new OffsetAndMetadata(39L)), new ConsumerGroupMetadata(consumerGroupId));
+
+        prepareAddOffsetsToTxnResponse(Errors.INVALID_TXN_STATE, consumerGroupId, producerId, epoch);
+        runUntil(transactionManager::hasError);
+        assertTrue(transactionManager.lastError() instanceof InvalidTxnStateException);
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertTrue(sendOffsetsResult.error() instanceof InvalidTxnStateException);
+
+        assertFatalError(InvalidTxnStateException.class);
+    }
+
+    @Test
     public void testTransactionalIdAuthorizationFailureInTxnOffsetCommit() {
         final TopicPartition tp = new TopicPartition("foo", 0);
 
@@ -1598,6 +1619,22 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.lastError() instanceof TransactionalIdAuthorizationException);
 
         assertFatalError(TransactionalIdAuthorizationException.class);
+    }
+
+    @Test
+    public void testInvalidTxnStateInAddPartitions() {
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartition(tp);
+
+        prepareAddPartitionsToTxn(tp, Errors.INVALID_TXN_STATE);
+        runUntil(transactionManager::hasError);
+        assertTrue(transactionManager.lastError() instanceof InvalidTxnStateException);
+
+        assertFatalError(InvalidTxnStateException.class);
     }
 
     @Test
