@@ -66,6 +66,10 @@ public enum ControlRecordType {
         this.type = type;
     }
 
+    public short getType() {
+        return type;
+    }
+
     public Struct recordKey() {
         if (this == UNKNOWN)
             throw new IllegalArgumentException("Cannot serialize UNKNOWN control record type");

@@ -146,8 +146,7 @@ public final class SnapshotFileReader implements AutoCloseable {
         }
     }
 
-    // visible for testing
-    void handleMetadataBatch(FileChannelRecordBatch batch) {
+    private void handleMetadataBatch(FileChannelRecordBatch batch) {
         List<ApiMessageAndVersion> messages = new ArrayList<>();
         for (Record record : batch) {
             ByteBufferAccessor accessor = new ByteBufferAccessor(record.value());

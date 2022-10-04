@@ -17,59 +17,72 @@
 
 package org.apache.kafka.metadata.util;
 
-import kafka.raft.KafkaMetadataLog;
-import kafka.server.KafkaRaftServer;
-import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
-import org.apache.kafka.common.metadata.PartitionChangeRecord;
-import org.apache.kafka.common.metadata.RegisterBrokerRecord;
-import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.FileLogInputStream;
-import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
-import org.apache.kafka.raft.Batch;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.log4j.Logger;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import java.io.File;
-import java.nio.file.Path;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.List;
+import java.util.Iterator;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 
 final public class SnapshotFileReaderTest {
     @Test
-    public void testHeaderFooter() throws Exception {
-        List<ApiMessageAndVersion> metadataRecords = Arrays.asList(
-            new ApiMessageAndVersion(new RegisterBrokerRecord().setBrokerId(0).setBrokerEpoch(10), (short) 0),
-            new ApiMessageAndVersion(
-                new RegisterBrokerRecord().setBrokerId(1).setBrokerEpoch(20),  (short) 0),
-            new ApiMessageAndVersion(
-                new TopicRecord().setName("test-topic").setTopicId(Uuid.randomUuid()), (short) 0),
-            new ApiMessageAndVersion(
-                new PartitionChangeRecord().setTopicId(Uuid.randomUuid()).setLeader(1).
-                    setPartitionId(0).setIsr(Arrays.asList(0, 1, 2)), (short) 0)
-        );
-
+    public void testHeaderFooterControlRecord() throws Exception {
         SnapshotFileReader mockReader = Mockito.mock(SnapshotFileReader.class);
-
         Mockito.doCallRealMethod().when(mockReader).handleControlBatch(any(FileLogInputStream.FileChannelRecordBatch.class));
-        Mockito.doCallRealMethod().when(mockReader).handleMetadataBatch(any(FileLogInputStream.FileChannelRecordBatch.class));
 
+        SnapshotHeaderRecord snapshotHeaderMessage = new SnapshotHeaderRecord().setVersion((short) 0).setLastContainedLogTimestamp(1);
+        SnapshotFooterRecord snapshotFooterMessage = new SnapshotFooterRecord().setVersion((short) 0);
+        Record snapshotHeaderRecord = generateControlRecord(snapshotHeaderMessage, ControlRecordType.SNAPSHOT_HEADER.getType());
+        Record snapshotFooterRecord = generateControlRecord(snapshotFooterMessage, ControlRecordType.SNAPSHOT_FOOTER.getType());
 
-        val appender = LogCaptureAppender.createAndRegister()
-        val previousLevel = LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], Level.WARN)
+        FileLogInputStream.FileChannelRecordBatch mockBatch = Mockito.mock(FileLogInputStream.FileChannelRecordBatch.class);
+        Iterator<Record> recordIterator = Arrays.asList(snapshotHeaderRecord, snapshotFooterRecord).iterator();
+        Mockito.when(mockBatch.iterator()).thenReturn(recordIterator);
+
+        LogCaptureAppender appender = new LogCaptureAppender();
+        Logger.getRootLogger().addAppender(appender);
         try {
-            testAclCli(adminArgs)
+            mockReader.handleControlBatch(mockBatch);
+            // should not log any messages
+            assertThat(appender.getMessages(), not(hasItem(containsString("Ignoring control record"))));
         } finally {
-            LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], previousLevel)
-            LogCaptureAppender.unregister(appender)
+            Logger.getRootLogger().removeAppender(appender);
         }
+    }
+
+    private Record generateControlRecord(ApiMessage data, short controlRecordType) throws IOException {
+        ByteBuffer valueBuffer = ByteBuffer.allocate(256);
+        data.write(new ByteBufferAccessor(valueBuffer), new ObjectSerializationCache(), data.highestSupportedVersion());
+        valueBuffer.flip();
+
+        byte[] keyData = new byte[]{0, 0, 0, (byte) controlRecordType};
+
+        ByteBufferOutputStream out = new ByteBufferOutputStream(256);
+        DefaultRecord.writeTo(new DataOutputStream(out), 1, 1, ByteBuffer.wrap(keyData), valueBuffer, new Header[0]);
+
+        ByteBuffer buffer = out.buffer();
+        buffer.flip();
+
+        return DefaultRecord.readFrom(buffer, 0, 0, 0, null);
     }
 }
