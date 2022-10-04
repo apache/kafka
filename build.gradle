@@ -1926,7 +1926,7 @@ project(':streams') {
   }
 
   task createStreamsVersionFile() {
-    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    def receiptFile = file("$buildDir/kafka/$buildStreamsVersionFileName")
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile
