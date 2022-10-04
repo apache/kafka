@@ -17,7 +17,7 @@
 package kafka.server
 
 import java.util
-import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
+import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue, TimeUnit}
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{KafkaScheduler, Logging, Scheduler}
@@ -112,8 +112,11 @@ class DefaultAlterIsrManager(
   val brokerEpochSupplier: () => Long
 ) extends AlterIsrManager with Logging with KafkaMetricsGroup {
 
-  // Used to allow only one pending ISR update per partition (visible for testing)
-  private[server] val unsentIsrUpdates: util.Map[TopicPartition, AlterIsrItem] = new ConcurrentHashMap[TopicPartition, AlterIsrItem]()
+  private[server] val unsentIsrQueue: BlockingQueue[AlterIsrItem] = new LinkedBlockingQueue()
+  // The inflightIsrUpdates map is populated by the unsentIsrQueue, and the items in it are removed in the response callback.
+  // Putting new items to the inflightIsrUpdates and removing items from it won't be performed at the same time, and the coordination is
+  // done via the inflightRequest flag.
+  private[server] val inflightIsrUpdates: util.Map[TopicPartition, AlterIsrItem] = new ConcurrentHashMap[TopicPartition, AlterIsrItem]()
 
   // Used to allow only one in-flight request at a time
   private val inflightRequest: AtomicBoolean = new AtomicBoolean(false)
@@ -127,18 +130,28 @@ class DefaultAlterIsrManager(
   }
 
   override def submit(alterIsrItem: AlterIsrItem): Boolean = {
-    val enqueued = unsentIsrUpdates.putIfAbsent(alterIsrItem.topicPartition, alterIsrItem) == null
+    unsentIsrQueue.put(alterIsrItem)
     maybePropagateIsrChanges()
-    enqueued
+    true
   }
 
   private[server] def maybePropagateIsrChanges(): Unit = {
     // Send all pending items if there is not already a request in-flight.
-    if (!unsentIsrUpdates.isEmpty && inflightRequest.compareAndSet(false, true)) {
+    if ((!unsentIsrQueue.isEmpty || !inflightIsrUpdates.isEmpty) && inflightRequest.compareAndSet(false, true)) {
       // Copy current unsent ISRs but don't remove from the map, they get cleared in the response handler
+      while (!unsentIsrQueue.isEmpty) {
+        val item = unsentIsrQueue.poll()
+        // if there are multiple AlterIsrItems for the same partition in the queue, the last one wins
+        // and the previous ones will be discarded
+        inflightIsrUpdates.put(item.topicPartition, item)
+      }
+      // Since the maybePropagateIsrChanges can be called from the response callback,
+      // there may be cases where right after the while loop, some new items are added to the unsentIsrQueue in the submit
+      // thread. In such a case, the newly added item will be sent in the next request
+
       val inflightAlterIsrItems = new ListBuffer[AlterIsrItem]()
-      unsentIsrUpdates.values().forEach(item => inflightAlterIsrItems.append(item))
-      sendRequest(inflightAlterIsrItems.toSeq)
+      inflightIsrUpdates.values().forEach(item => inflightAlterIsrItems.append(item))
+      sendRequest(inflightAlterIsrItems)
     }
   }
 
@@ -256,7 +269,7 @@ class DefaultAlterIsrManager(
               inflightAlterIsr.callback.apply(partitionResponses(inflightAlterIsr.topicPartition))
             } finally {
               // Regardless of callback outcome, we need to clear from the unsent updates map to unblock further updates
-              unsentIsrUpdates.remove(inflightAlterIsr.topicPartition)
+              inflightIsrUpdates.remove(inflightAlterIsr.topicPartition)
             }
           } else {
             // Don't remove this partition from the update map so it will get re-sent

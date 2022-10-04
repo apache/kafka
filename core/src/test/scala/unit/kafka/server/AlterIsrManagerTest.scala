@@ -80,9 +80,8 @@ class AlterIsrManagerTest {
     val alterIsrManager = new DefaultAlterIsrManager(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
 
-    // Only send one ISR update for a given topic+partition
     assertTrue(alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}, 0)))
-    assertFalse(alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2), 10), _ => {}, 0)))
+    assertTrue(alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2), 10), _ => {}, 0)))
 
     // Simulate response
     val alterIsrResp = partitionResponse(tp0, Errors.NONE)
@@ -90,14 +89,13 @@ class AlterIsrManagerTest {
       false, null, null, alterIsrResp)
     callbackCapture.getValue.onComplete(resp)
 
-    // Now we can submit this partition again
-    assertTrue(alterIsrManager.submit(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1), 10), _ => {}, 0)))
+    // Completion of the previous item will trigger the 2nd request
     EasyMock.verify(brokerToController)
 
-    // Make sure we sent the right request ISR={1}
+    // Make sure we sent the right request ISR={1,2}
     val request = capture.getValue.build()
     assertEquals(request.data().topics().size(), 1)
-    assertEquals(request.data().topics().get(0).partitions().get(0).newIsr().size(), 1)
+    assertEquals(request.data().topics().get(0).partitions().get(0).newIsr().size(), 2)
   }
 
   @Test
@@ -192,7 +190,7 @@ class AlterIsrManagerTest {
     callbackCapture.getValue.onComplete(response)
 
     // Any top-level error, we want to retry, so we don't clear items from the pending map
-    assertTrue(alterIsrManager.unsentIsrUpdates.containsKey(tp0))
+    assertTrue(alterIsrManager.inflightIsrUpdates.containsKey(tp0))
 
     EasyMock.reset(brokerToController)
     EasyMock.expect(brokerToController.sendRequest(EasyMock.anyObject(), EasyMock.capture(callbackCapture))).times(1)
@@ -210,7 +208,7 @@ class AlterIsrManagerTest {
 
     EasyMock.verify(brokerToController)
 
-    assertFalse(alterIsrManager.unsentIsrUpdates.containsKey(tp0))
+    assertFalse(alterIsrManager.inflightIsrUpdates.containsKey(tp0))
   }
 
   @Test

@@ -323,7 +323,7 @@ object Defaults {
   /** Linkedin Internal states */
   val LiCombinedControlRequestEnabled = false
   val LiUpdateMetadataDelayMs = 0
-  val LiAlterIsrEnabled = false
+  val LiAlterIsrEnabled = true
   val LiAsyncFetcherEnabled = false
   val LiNumControllerInitThreads = 1
   val LiLogCleanerFineGrainedLockEnabled = true
