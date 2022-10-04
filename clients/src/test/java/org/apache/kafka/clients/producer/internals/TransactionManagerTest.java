@@ -2180,7 +2180,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testHandlingOfInvalidProducerEpochErrorOnTxnOffsetCommit() {
-        testFatalErrorInTxnOffsetCommit(Errors.INVALID_PRODUCER_EPOCH);
+        testFatalErrorInTxnOffsetCommit(Errors.INVALID_PRODUCER_EPOCH, Errors.PRODUCER_FENCED);
     }
 
     @Test
@@ -2189,6 +2189,10 @@ public class TransactionManagerTest {
     }
 
     private void testFatalErrorInTxnOffsetCommit(final Errors error) {
+        testFatalErrorInTxnOffsetCommit(error, error);
+    }
+
+    private void testFatalErrorInTxnOffsetCommit(final Errors triggeredError, final Errors resultingError) {
         doInitTransactions();
 
         transactionManager.beginTransaction();
@@ -2205,14 +2209,14 @@ public class TransactionManagerTest {
 
         Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
         txnOffsetCommitResponse.put(tp0, Errors.NONE);
-        txnOffsetCommitResponse.put(tp1, error);
+        txnOffsetCommitResponse.put(tp1, triggeredError);
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, txnOffsetCommitResponse);
 
         runUntil(addOffsetsResult::isCompleted);
         assertFalse(addOffsetsResult.isSuccessful());
-        assertEquals(error.exception().getClass(), addOffsetsResult.error().getClass());
+        assertEquals(resultingError.exception().getClass(), addOffsetsResult.error().getClass());
     }
 
     @Test
