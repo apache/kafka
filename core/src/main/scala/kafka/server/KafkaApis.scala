@@ -364,6 +364,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.shouldNeverReceive(request))
     val correlationId = request.header.correlationId
     val updateMetadataRequest = request.body[UpdateMetadataRequest]
+    if (config.liUpdateMetadataDelayMs > 0 && !updateMetadataRequest.topicStates().isEmpty) {
+      warn(s"Sleeping for ${config.liUpdateMetadataDelayMs}ms before processing the UpdateMetadata request")
+      Thread.sleep(config.liUpdateMetadataDelayMs)
+    }
+
 
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     if (isBrokerEpochStale(zkSupport, updateMetadataRequest.brokerEpoch, updateMetadataRequest.maxBrokerEpoch)) {

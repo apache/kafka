@@ -17,30 +17,30 @@
 
 package kafka.controller
 
-import java.util.Properties
-import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingQueue, TimeUnit}
-
 import com.yammer.metrics.core.Timer
 import kafka.api.{ApiVersion, KAFKA_2_6_IV0, KAFKA_2_7_IV0, LeaderAndIsr}
 import kafka.controller.KafkaController.AlterIsrCallback
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{LogCaptureAppender, TestUtils}
-import kafka.zk.{FeatureZNodeStatus, _}
-import org.apache.kafka.common.errors.{ControllerMovedException, NotEnoughReplicasException, StaleBrokerEpochException}
-import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig, AlterConfigsResult, Config, ConfigEntry}
+import kafka.zk._
+import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
+import org.apache.kafka.common.errors.{ControllerMovedException, NotEnoughReplicasException, StaleBrokerEpochException}
 import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.metrics.KafkaMetric
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{doAnswer, spy, verify}
 import org.mockito.invocation.InvocationOnMock
-import org.apache.kafka.common.network.ListenerName
 
+import java.util.Properties
+import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingQueue, TimeUnit}
 import scala.annotation.nowarn
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -129,7 +129,8 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.createTopic(zkClient, topic2, 1, 1, servers)
 
     val sumOfTopicNameLength = TestUtils.yammerMetricValue("SumOfTopicNameLength")
-    assertEquals(topic1.size + topic2.size + 2 * KafkaController.topicNameBytesOverheadOnZk, sumOfTopicNameLength)
+    assertEquals(topic1.size + topic2.size + 2 * KafkaController.topicNameBytesOverheadOnZk, sumOfTopicNameLength,
+      "all topics in the cluster " + zkClient.getAllTopicsInCluster())
   }
 
   // This test case is used to ensure that there will be no correctness issue after we avoid sending out full
@@ -1593,6 +1594,51 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testFastTopicDeletionAndRecreation(): Unit = {
+    val topic = "t1"
+    val tp = new TopicPartition(topic, 0)
+    // delay the 2nd broker's UpdateMetadata
+    servers = makeServers(2, liUpdateMetadataDelayMap = Map(0 -> 0, 1 -> 5000))
+
+    val assignment = Map(0 -> Seq(0))
+    adminZkClient.createTopicWithAssignment(topic, new Properties(), assignment)
+    // wait until broker 0 has the metadata for the topic
+    // Note that broker 1 won't get the metadata since its processing of the UpdateMetadata is delayed
+    var originalTopicId: Uuid = Uuid.ZERO_UUID
+    TestUtils.waitUntilTrue(() => {
+      val topicMetadataSeq = servers.find(_.config.brokerId == 0).get.metadataCache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+      topicMetadataSeq.find(_.name() == topic) match {
+        case Some(topicMetadata) => {
+          originalTopicId = topicMetadata.topicId()
+          true
+        }
+        case _ => false
+      }
+    }, "broker 0 never gets the metadata for the topic $topic")
+
+    info(s"original topic id $originalTopicId")
+    // delete and then immediately recreate the topic
+    info("deleting the 1st topic")
+    adminZkClient.deleteTopic(topic)
+    TestUtils.waitUntilTrue(() => {
+      !zkClient.pathExists(TopicZNode.path(tp.topic()))
+    }, "The topic cannot be deleted")
+
+    info("creating topic for the 2nd time")
+    TestUtils.createTopic(zkClient, topic, assignment, servers)
+    TestUtils.waitUntilTrue(() => {
+      servers.forall { server =>
+        val topicMetadataOpt = server.metadataCache.getTopicMetadata(Set(topic), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)).find(_.name() == topic)
+        val result = topicMetadataOpt.isDefined && !topicMetadataOpt.get.topicId().equals(originalTopicId)
+        if (result) {
+          info(s"server ${server.config.brokerId} got new topic id ${topicMetadataOpt.get.topicId()}")
+        }
+        result
+      }
+    }, "Now all servers end up with the new topic id in its metadata cache")
+  }
+
+  @Test
   def testTopicIdUpgradeAfterReassigningPartitions(): Unit = {
     val tp = new TopicPartition("t", 0)
     val reassignment = Map(tp -> Some(Seq(0)))
@@ -1772,13 +1818,16 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
                           controlPlaneListenerName : Option[String] = None,
                           interBrokerProtocolVersion: Option[ApiVersion] = None,
                           logDirCount: Int = 1,
-                          startingIdNumber: Int = 0) = {
+                          startingIdNumber: Int = 0,
+                          liUpdateMetadataDelayMap: Map[Int, Long] = Map.empty) = {
     val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown, logDirCount = logDirCount, startingIdNumber = startingIdNumber )
     configs.foreach { config =>
       config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, autoLeaderRebalanceEnable.toString)
       config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, uncleanLeaderElectionEnable.toString)
       config.setProperty(KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp, "1")
       config.setProperty(KafkaConfig.LiCombinedControlRequestEnableProp, "true")
+      val brokerId: Int = config.get(KafkaConfig.BrokerIdProp).toString.toInt
+      config.setProperty(KafkaConfig.LiUpdateMetadataDelayMsProp, liUpdateMetadataDelayMap.getOrElse(brokerId, 0).toString)
       listeners.foreach(listener => config.setProperty(KafkaConfig.ListenersProp, listener))
       listenerSecurityProtocolMap.foreach(listenerMap => config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerMap))
       controlPlaneListenerName.foreach(controlPlaneListener => config.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListener))

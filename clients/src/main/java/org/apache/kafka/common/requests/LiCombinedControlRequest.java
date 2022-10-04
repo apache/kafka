@@ -181,6 +181,11 @@ public class LiCombinedControlRequest extends AbstractControlRequest {
                 bld.append("\t" + partitionState + "\n");
             }
 
+            bld.append("topicIds=\n");
+            for (Map.Entry<String, Uuid> topicId: topicIds.entrySet()) {
+                bld.append(topicId.getKey() + "->" + topicId.getValue());
+            }
+
             return bld.toString();
         }
 

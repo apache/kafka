@@ -97,11 +97,19 @@ class ControllerRequestMerger(config: KafkaConfig) extends Logging {
     topicIds.forEach((topicName, topicId) => {
       val existingTopicId = aggregateTopicIds.get(topicName)
       if (existingTopicId != null && !existingTopicId.equals(topicId)) {
-        // TODO: A topic name may be associated with multiple topicIds if a topic is recreated under the same name
-        //  while the controller has not finished sending requests with the previous topic id.
-        //  Currently, that is not supported, and we may add support for it in the future.
-        throw new IllegalStateException("topic " + topicName + " associated with the topic id " +
-          existingTopicId + " is given a new topic id " + topicId)
+        warn(s"topic $topicName associated with the topic id $existingTopicId is given a new topic id $topicId " +
+          "clearing relevant requests associated with previous topic ids")
+
+        def clearObsoleteEntriesInMap(map: mutable.Map[TopicIdPartition, _]) = {
+          val obsoletePartitions = map.filterKeys{
+            topicIdPartition => topicIdPartition.topicPartition().topic().equals(topicName) && !topicIdPartition.topicId().equals(topicId)}
+          obsoletePartitions.foreach{
+            case (topicIdPartition, _) => map.remove(topicIdPartition)}
+        }
+
+        clearObsoleteEntriesInMap(leaderAndIsrPartitionStates)
+        clearObsoleteEntriesInMap(updateMetadataPartitionStates)
+        clearObsoleteEntriesInMap(stopReplicaPartitionStates)
       }
     })
     aggregateTopicIds.putAll(topicIds)

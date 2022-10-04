@@ -243,7 +243,7 @@ class RequestSendThread(val controllerId: Int,
                         val controllerChannelManager: ControllerChannelManager)
   extends ShutdownableThread(name = name) with KafkaMetricsGroup {
 
-  logIdent = s"[RequestSendThread controllerId=$controllerId] "
+  logIdent = s"[RequestSendThread controllerId=$controllerId brokerId=${brokerNode.id()}] "
 
   private val MaxRequestAgeMetricName = "maxRequestAge"
 
