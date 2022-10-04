@@ -337,8 +337,8 @@ public class Sender implements Runnable {
     // failing the inflight requests, then transition the state to UNINITIALIZED so that the user doesn't need to
     // instantiate the producer again.
     private boolean shouldHandleAuthorizationError(RuntimeException exception) {
-        if ((exception instanceof TransactionalIdAuthorizationException ||
-                        exception instanceof ClusterAuthorizationException)) {
+        if (exception instanceof TransactionalIdAuthorizationException ||
+                        exception instanceof ClusterAuthorizationException) {
             transactionManager.failPendingRequests(new AuthenticationException(exception));
             maybeAbortBatches(exception);
             transactionManager.transitionToUninitialized(exception);
