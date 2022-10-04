@@ -116,7 +116,8 @@ public final class SnapshotFileReader implements AutoCloseable {
         });
     }
 
-    private void handleControlBatch(FileChannelRecordBatch batch) {
+    // visible for testing
+    void handleControlBatch(FileChannelRecordBatch batch) {
         for (Iterator<Record> iter = batch.iterator(); iter.hasNext(); ) {
             Record record = iter.next();
             try {
@@ -145,7 +146,8 @@ public final class SnapshotFileReader implements AutoCloseable {
         }
     }
 
-    private void handleMetadataBatch(FileChannelRecordBatch batch) {
+    // visible for testing
+    void handleMetadataBatch(FileChannelRecordBatch batch) {
         List<ApiMessageAndVersion> messages = new ArrayList<>();
         for (Record record : batch) {
             ByteBufferAccessor accessor = new ByteBufferAccessor(record.value());
