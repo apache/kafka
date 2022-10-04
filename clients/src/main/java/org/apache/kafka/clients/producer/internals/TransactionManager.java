@@ -1376,7 +1376,7 @@ public class TransactionManager {
                     fatalError(error.exception());
                     return;
                 } else if (error == Errors.INVALID_TXN_STATE) {
-                    fatalError(new KafkaException(error.exception()));
+                    fatalError(error.exception());
                     return;
                 } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                     unauthorizedTopics.add(topicPartition.topic());
@@ -1598,6 +1598,8 @@ public class TransactionManager {
                 // just treat it the same as PRODUCE_FENCED.
                 fatalError(Errors.PRODUCER_FENCED.exception());
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatalError(error.exception());
+            } else if (error == Errors.INVALID_TXN_STATE) {
                 fatalError(error.exception());
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
