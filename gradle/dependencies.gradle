@@ -101,6 +101,7 @@ versions += [
   kafka_30: "3.0.2",
   kafka_31: "3.1.2",
   kafka_32: "3.2.3",
+  kafka_33: "3.3.1",
   lz4: "1.8.0",
   mavenArtifact: "3.8.4",
   metrics: "2.2.0",
