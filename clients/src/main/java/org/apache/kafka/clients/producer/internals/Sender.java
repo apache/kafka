@@ -302,13 +302,7 @@ public class Sender implements Runnable {
                 transactionManager.maybeResolveSequences();
 
                 RuntimeException lastError = transactionManager.lastError();
-                if (transactionManager.hasAbortableError() && (
-                        lastError instanceof TransactionalIdAuthorizationException ||
-                                lastError instanceof ClusterAuthorizationException)) {
-                    transactionManager.failPendingRequests(new AuthenticationException(lastError));
-                    maybeAbortBatches(lastError);
-                    transactionManager.transitionToUninitialized(lastError);
-                    client.poll(retryBackoffMs, time.milliseconds());
+                if (shouldHandleAuthorizationError(lastError)) {
                     return;
                 }
 
@@ -337,6 +331,21 @@ public class Sender implements Runnable {
         long currentTimeMs = time.milliseconds();
         long pollTimeout = sendProducerData(currentTimeMs);
         client.poll(pollTimeout, currentTimeMs);
+    }
+
+    // We handle {@code TransactionalIdAuthorizationException} and {@code ClusterAuthorizationException} by first
+    // failing the inflight requests, then transition the state to UNINITIALIZED so that the user doesn't need to
+    // instantiate the producer again.
+    private boolean shouldHandleAuthorizationError(RuntimeException exception) {
+        if ((exception instanceof TransactionalIdAuthorizationException ||
+                        exception instanceof ClusterAuthorizationException)) {
+            transactionManager.failPendingRequests(new AuthenticationException(exception));
+            maybeAbortBatches(exception);
+            transactionManager.transitionToUninitialized(exception);
+            client.poll(retryBackoffMs, time.milliseconds());
+            return true;
+        }
+        return false;
     }
 
     private long sendProducerData(long now) {
