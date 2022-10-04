@@ -51,13 +51,12 @@ public abstract class AbstractTransactionalSegment extends AbstractTransactional
     @Override
     public void addToBatch(final KeyValue<byte[], byte[]> record, final WriteBatch batch)
         throws RocksDBException {
-        final byte[] value = toUncommittedValue(record.value);
-        tmpStore.addToBatch(KeyValue.pair(record.key, value), batch);
+        mainStore.addToBatch(record, batch);
     }
 
     @Override
     public void write(final WriteBatch batch) throws RocksDBException {
-        tmpStore.write(batch);
+        mainStore.write(batch);
     }
 
     @Override
