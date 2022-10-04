@@ -28,6 +28,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
@@ -105,7 +106,7 @@ public class TransactionalStateStoreIntegrationTest {
     @Parameterized.Parameters(name = "{0}")
     public static Collection<String> data() {
         return asList(
-            StreamsConfig.EXACTLY_ONCE,
+            //StreamsConfig.EXACTLY_ONCE,
             StreamsConfig.EXACTLY_ONCE_V2
         );
     }
@@ -117,6 +118,8 @@ public class TransactionalStateStoreIntegrationTest {
 
     private static Properties consumerConfig;
 
+    private static final long COMMIT_INTERVAL_MS = 100L;
+
     @BeforeClass
     public static void startCluster() throws IOException {
         CLUSTER.start();
@@ -126,7 +129,7 @@ public class TransactionalStateStoreIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TEST_FOLDER.getRoot().getPath());
-        STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
+        STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.TXN_ROCKS_DB);
 
         producerConfig = TestUtils.producerConfig(
@@ -157,7 +160,6 @@ public class TransactionalStateStoreIntegrationTest {
     private static final Properties STREAMS_CONFIG = new Properties();
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
-
 
     @Test
     public void testDiscardsUncommittedDataKVStore() throws Exception {
@@ -228,12 +230,13 @@ public class TransactionalStateStoreIntegrationTest {
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 singletonList(new KeyValueTimestamp<>("k1", "v1", 0L)));
             IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                consumerConfig, outputTopic, 1, 20000);
+                consumerConfig, outputTopic, 1, 20000L);
 
             final ReadOnlyKeyValueStore<Object, Object> store = IntegrationTestUtils.getStore(
                 storeName, driver, keyValueStore());
             assertEquals("v1", store.get("k1"));
 
+            Thread.sleep(2 * COMMIT_INTERVAL_MS);
             crashRequested.set(true);
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 singletonList(new KeyValueTimestamp<>("k2", "v2", 1L)));
@@ -247,11 +250,7 @@ public class TransactionalStateStoreIntegrationTest {
             throw new RuntimeException(e);
         }
 
-        final StreamsBuilder builder1 = new StreamsBuilder();
-        builder1.stream(input);
-        builder1.addStateStore(storeBuilder);
         final KafkaStreams driver1 = getRunningStreams(STREAMS_CONFIG, builder, false);
-
         final ReadOnlyKeyValueStore<String, String> store = IntegrationTestUtils.getStore(storeName, driver1, keyValueStore());
         assertEquals("v1", store.get("k1"));
         assertNull(store.get("k2"));
@@ -330,12 +329,13 @@ public class TransactionalStateStoreIntegrationTest {
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 singletonList(new KeyValueTimestamp<>("k1", "v1", 0L)));
             IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                consumerConfig, outputTopic, 1, 20000);
+                consumerConfig, outputTopic, 1, 20000L);
 
             final ReadOnlyKeyValueStore<Object, Object> store = IntegrationTestUtils.getStore(
                 storeName, driver, keyValueStore());
             assertEquals("v1", store.get("k1"));
 
+            Thread.sleep(2 * COMMIT_INTERVAL_MS);
             crashRequested.set(true);
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 singletonList(new KeyValueTimestamp<>("k2", "v2", 1L)));
@@ -349,9 +349,6 @@ public class TransactionalStateStoreIntegrationTest {
             throw new RuntimeException(e);
         }
 
-        final StreamsBuilder builder1 = new StreamsBuilder();
-        builder1.stream(input);
-        builder1.addStateStore(storeBuilder);
         final KafkaStreams driver1 = getRunningStreams(STREAMS_CONFIG, builder, false);
 
         final ReadOnlyKeyValueStore<String, String> store = IntegrationTestUtils.getStore(storeName, driver1, keyValueStore());
@@ -369,7 +366,6 @@ public class TransactionalStateStoreIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
 
-
         final String input = "input-topic";
         cleanStateBeforeTest(CLUSTER, input);
 
@@ -383,7 +379,7 @@ public class TransactionalStateStoreIntegrationTest {
                     storeName,
                     Duration.of(1, ChronoUnit.DAYS),
                     Duration.of(1, ChronoUnit.DAYS),
-                    true,
+                    false,
                     true),
                 Serdes.String(),
                 Serdes.String()
@@ -437,16 +433,17 @@ public class TransactionalStateStoreIntegrationTest {
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 singletonList(new KeyValueTimestamp<>("k1", "v1", 0L)));
             IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                consumerConfig, outputTopic, 1, 20000);
+                consumerConfig, outputTopic, 1, 20000L);
 
             final ReadOnlyWindowStore<Object, Object> store = IntegrationTestUtils.getStore(
                 storeName, driver, windowStore());
-            assertEquals("v1", store.fetch("k1", 0));
+            assertEquals("v1", store.fetch("k1", 0L));
 
+            Thread.sleep(2 * COMMIT_INTERVAL_MS);
             crashRequested.set(true);
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 singletonList(new KeyValueTimestamp<>("k2", "v2", 1L)));
-            TestUtils.waitForCondition(() -> store.fetch("k2", 1).equals("v2"),
+            TestUtils.waitForCondition(() -> store.fetch("k2", 1L).equals("v2"),
                 "Expected to read the second key");
             crashLatch.countDown();
 
@@ -456,14 +453,11 @@ public class TransactionalStateStoreIntegrationTest {
             throw new RuntimeException(e);
         }
 
-        final StreamsBuilder builder1 = new StreamsBuilder();
-        builder1.stream(input);
-        builder1.addStateStore(storeBuilder);
         final KafkaStreams driver1 = getRunningStreams(STREAMS_CONFIG, builder, false);
 
         final ReadOnlyWindowStore<String, String> store = IntegrationTestUtils.getStore(storeName, driver1, windowStore());
-        assertEquals("v1", store.fetch("k1", 0));
-        assertNull(store.fetch("k2", 1));
+        assertEquals("v1", store.fetch("k1", 0L));
+        assertNull(store.fetch("k2", 1L));
 
         driver1.close();
         quietlyCleanStateAfterTest(CLUSTER, driver);
@@ -476,7 +470,6 @@ public class TransactionalStateStoreIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
 
-
         final String input = "input-topic";
         cleanStateBeforeTest(CLUSTER, input);
 
@@ -488,9 +481,9 @@ public class TransactionalStateStoreIntegrationTest {
         final StoreBuilder<WindowStore<String, String>> storeBuilder = Stores.windowStoreBuilder(
                 Stores.persistentTimestampedWindowStore(
                     storeName,
-                    Duration.of(1, ChronoUnit.DAYS),
-                    Duration.of(1, ChronoUnit.DAYS),
-                    true,
+                    Duration.of(1L, ChronoUnit.DAYS),
+                    Duration.of(1L, ChronoUnit.DAYS),
+                    false,
                     true),
                 Serdes.String(),
                 Serdes.String()
@@ -544,16 +537,17 @@ public class TransactionalStateStoreIntegrationTest {
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 singletonList(new KeyValueTimestamp<>("k1", "v1", 0L)));
             IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                consumerConfig, outputTopic, 1, 20000);
+                consumerConfig, outputTopic, 1, 20000L);
 
             final ReadOnlyWindowStore<Object, Object> store = IntegrationTestUtils.getStore(
                 storeName, driver, windowStore());
-            assertEquals("v1", store.fetch("k1", 0));
+            assertEquals("v1", store.fetch("k1", 0L));
 
+            Thread.sleep(2 * COMMIT_INTERVAL_MS);
             crashRequested.set(true);
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 singletonList(new KeyValueTimestamp<>("k2", "v2", 1L)));
-            TestUtils.waitForCondition(() -> store.fetch("k2", 1).equals("v2"),
+            TestUtils.waitForCondition(() -> store.fetch("k2", 1L).equals("v2"),
                 "Expected to read the second key");
             crashLatch.countDown();
 
@@ -563,14 +557,17 @@ public class TransactionalStateStoreIntegrationTest {
             throw new RuntimeException(e);
         }
 
-        final StreamsBuilder builder1 = new StreamsBuilder();
-        builder1.stream(input);
-        builder1.addStateStore(storeBuilder);
         final KafkaStreams driver1 = getRunningStreams(STREAMS_CONFIG, builder, false);
 
         final ReadOnlyWindowStore<String, String> store = IntegrationTestUtils.getStore(storeName, driver1, windowStore());
-        assertEquals("v1", store.fetch("k1", 0));
-        assertNull(store.fetch("k2", 1));
+        // RecordConverters puts the timestamp inside the value after reading raw records from the changelog
+        final String expectedString = new String(
+            ByteBuffer
+                .allocate(10)
+                .putLong(0L)
+                .put("v1".getBytes()).array());
+        assertEquals(expectedString, store.fetch("k1", 0L));
+        assertNull(store.fetch("k2", 1L));
 
         driver1.close();
         quietlyCleanStateAfterTest(CLUSTER, driver);
@@ -652,12 +649,13 @@ public class TransactionalStateStoreIntegrationTest {
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 singletonList(new KeyValueTimestamp<>("k1", "v1", 0L)));
             IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                consumerConfig, outputTopic, 1, 20000);
+                consumerConfig, outputTopic, 1, 20000L);
 
             final ReadOnlySessionStore<Object, Object> store = IntegrationTestUtils.getStore(
                 storeName, driver, sessionStore());
             assertEquals("v1", store.fetchSession("k1", sessionStart, sessionEnd));
 
+            Thread.sleep(2 * COMMIT_INTERVAL_MS);
             crashRequested.set(true);
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 singletonList(new KeyValueTimestamp<>("k2", "v2", 1L)));
@@ -671,11 +669,7 @@ public class TransactionalStateStoreIntegrationTest {
             throw new RuntimeException(e);
         }
 
-        final StreamsBuilder builder1 = new StreamsBuilder();
-        builder1.stream(input);
-        builder1.addStateStore(storeBuilder);
         final KafkaStreams driver1 = getRunningStreams(STREAMS_CONFIG, builder, false);
-
         final ReadOnlySessionStore<Object, Object> store = IntegrationTestUtils.getStore(
             storeName, driver1, sessionStore());
         assertEquals("v1",  store.fetchSession("k1", sessionStart, sessionEnd));
