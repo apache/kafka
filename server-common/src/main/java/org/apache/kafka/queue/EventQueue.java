@@ -255,6 +255,11 @@ public interface EventQueue extends AutoCloseable {
     default void wakeup() { }
 
     /**
+     * Return the number of events scheduled in the queue.
+     */
+    int size();
+
+    /**
      * Synchronously close the event queue and wait for any threads to be joined.
      */
     void close() throws InterruptedException;
