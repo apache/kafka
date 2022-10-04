@@ -414,7 +414,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 parent.removeChild(right);
                 joinNode.setSelfJoin();
             } else {
-                throw new StreamsException(String.format("Expected the left node %s to have smaller build priority than the right node %s.", left, right));
+                throw new IllegalStateException(String.format("Expected the left node %s to have smaller build priority than the right node %s.", left, right));
             }
         }
         for (final GraphNode child: currentNode.children()) {

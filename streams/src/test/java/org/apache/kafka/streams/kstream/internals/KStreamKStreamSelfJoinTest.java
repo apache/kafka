@@ -50,12 +50,12 @@ public class KStreamKStreamSelfJoinTest {
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final ValueJoiner<String, String, String> valueJoiner = (v, v2) -> v + v2;
         final List<KeyValueTimestamp<String, String>> expected;
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
 
         // Inner join topology
-        final StreamsBuilder innerJoinBuilder = new StreamsBuilder();
         final MockApiProcessorSupplier<String, String, Void, Void> innerJoinSupplier =
             new MockApiProcessorSupplier<>();
-        final KStream<String, String> stream2 = innerJoinBuilder.stream(
+        final KStream<String, String> stream2 = streamsBuilder.stream(
             topic2, Consumed.with(Serdes.String(), Serdes.String()));
         final KStream<String, String> innerJoin = stream2.join(
             stream2,
@@ -65,7 +65,7 @@ public class KStreamKStreamSelfJoinTest {
         );
         innerJoin.process(innerJoinSupplier);
 
-        final Topology innerJoinTopology =  innerJoinBuilder.build();
+        final Topology innerJoinTopology =  streamsBuilder.build();
         try (final TopologyTestDriver driver = new TopologyTestDriver(innerJoinTopology)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer());
@@ -80,10 +80,9 @@ public class KStreamKStreamSelfJoinTest {
         }
 
         // Self join topology
-        final StreamsBuilder selfJoinBuilder = new StreamsBuilder();
         final MockApiProcessorSupplier<String, String, Void, Void> selfJoinSupplier =
             new MockApiProcessorSupplier<>();
-        final KStream<String, String> stream1 = selfJoinBuilder.stream(
+        final KStream<String, String> stream1 = streamsBuilder.stream(
             topic1, Consumed.with(Serdes.String(), Serdes.String()));
         final KStream<String, String> selfJoin = stream1.join(
             stream1,
@@ -93,7 +92,7 @@ public class KStreamKStreamSelfJoinTest {
         );
         selfJoin.process(selfJoinSupplier);
 
-        final Topology selfJoinTopology =  selfJoinBuilder.build(props);
+        final Topology selfJoinTopology =  streamsBuilder.build(props);
         try (final TopologyTestDriver driver = new TopologyTestDriver(selfJoinTopology, props)) {
 
             final TestInputTopic<String, String> inputTopic =
@@ -118,14 +117,14 @@ public class KStreamKStreamSelfJoinTest {
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final ValueJoiner<String, String, String> valueJoiner = (v, v2) -> v + v2;
         final List<KeyValueTimestamp<String, String>> expected;
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
 
         // Inner join topology
-        final StreamsBuilder innerJoinBuilder = new StreamsBuilder();
         final MockApiProcessorSupplier<String, String, Void, Void> innerJoinSupplier =
             new MockApiProcessorSupplier<>();
-        final KStream<String, String> stream3 = innerJoinBuilder.stream(
+        final KStream<String, String> stream3 = streamsBuilder.stream(
             topic2, Consumed.with(Serdes.String(), Serdes.String()));
-        final KStream<String, String> stream4 = innerJoinBuilder.stream(
+        final KStream<String, String> stream4 = streamsBuilder.stream(
             topic2, Consumed.with(Serdes.String(), Serdes.String()));
         final KStream<String, String> innerJoin = stream3.join(
             stream4,
@@ -135,7 +134,7 @@ public class KStreamKStreamSelfJoinTest {
         );
         innerJoin.process(innerJoinSupplier);
 
-        final Topology innerJoinTopology =  innerJoinBuilder.build();
+        final Topology innerJoinTopology =  streamsBuilder.build();
         try (final TopologyTestDriver driver = new TopologyTestDriver(innerJoinTopology)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer());
@@ -150,12 +149,11 @@ public class KStreamKStreamSelfJoinTest {
         }
 
         // Self join topology
-        final StreamsBuilder selfJoinBuilder = new StreamsBuilder();
         final MockApiProcessorSupplier<String, String, Void, Void> selfJoinSupplier =
             new MockApiProcessorSupplier<>();
-        final KStream<String, String> stream1 = selfJoinBuilder.stream(
+        final KStream<String, String> stream1 = streamsBuilder.stream(
             topic1, Consumed.with(Serdes.String(), Serdes.String()));
-        final KStream<String, String> stream2 = selfJoinBuilder.stream(
+        final KStream<String, String> stream2 = streamsBuilder.stream(
             topic1, Consumed.with(Serdes.String(), Serdes.String()));
         final KStream<String, String> selfJoin = stream1.join(
             stream2,
@@ -165,7 +163,7 @@ public class KStreamKStreamSelfJoinTest {
         );
         selfJoin.process(selfJoinSupplier);
 
-        final Topology topology1 =  selfJoinBuilder.build(props);
+        final Topology topology1 =  streamsBuilder.build(props);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology1, props)) {
 
             final TestInputTopic<String, String> inputTopic =
@@ -189,14 +187,14 @@ public class KStreamKStreamSelfJoinTest {
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final ValueJoiner<String, String, String> valueJoiner = (v, v2) -> v + v2;
         final List<KeyValueTimestamp<String, String>> expected;
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
 
         // Inner join topology
-        final StreamsBuilder innerJoinBuilder = new StreamsBuilder();
         final MockApiProcessorSupplier<String, String, Void, Void> innerJoinSupplier =
             new MockApiProcessorSupplier<>();
-        final KStream<String, String> stream3 = innerJoinBuilder.stream(
+        final KStream<String, String> stream3 = streamsBuilder.stream(
             topic2, Consumed.with(Serdes.String(), Serdes.String()));
-        final KStream<String, String> stream4 = innerJoinBuilder.stream(
+        final KStream<String, String> stream4 = streamsBuilder.stream(
             topic2, Consumed.with(Serdes.String(), Serdes.String()));
         final KStream<String, String> innerJoin = stream3.join(
             stream4,
@@ -206,7 +204,7 @@ public class KStreamKStreamSelfJoinTest {
         );
         innerJoin.process(innerJoinSupplier);
 
-        final Topology innerJoinTopology =  innerJoinBuilder.build();
+        final Topology innerJoinTopology =  streamsBuilder.build();
         try (final TopologyTestDriver driver = new TopologyTestDriver(innerJoinTopology)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer());
@@ -224,12 +222,11 @@ public class KStreamKStreamSelfJoinTest {
         }
 
         // Self join topology
-        final StreamsBuilder selfJoinBuilder = new StreamsBuilder();
         final MockApiProcessorSupplier<String, String, Void, Void> selfJoinSupplier =
             new MockApiProcessorSupplier<>();
-        final KStream<String, String> stream1 = selfJoinBuilder.stream(
+        final KStream<String, String> stream1 = streamsBuilder.stream(
             topic1, Consumed.with(Serdes.String(), Serdes.String()));
-        final KStream<String, String> stream2 = selfJoinBuilder.stream(
+        final KStream<String, String> stream2 = streamsBuilder.stream(
             topic1, Consumed.with(Serdes.String(), Serdes.String()));
         final KStream<String, String> selfJoin = stream1.join(
             stream2,
@@ -238,7 +235,7 @@ public class KStreamKStreamSelfJoinTest {
             StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
         );
         selfJoin.process(selfJoinSupplier);
-        final Topology selfJoinTopology =  selfJoinBuilder.build(props);
+        final Topology selfJoinTopology =  streamsBuilder.build(props);
         try (final TopologyTestDriver driver = new TopologyTestDriver(selfJoinTopology, props)) {
 
             final TestInputTopic<String, String> inputTopic =
@@ -265,14 +262,14 @@ public class KStreamKStreamSelfJoinTest {
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final ValueJoiner<String, String, String> valueJoiner = (v, v2) -> v + v2;
         final List<KeyValueTimestamp<String, String>> expected;
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
 
         // Inner join topology
-        final StreamsBuilder innerJoinBuilder = new StreamsBuilder();
         final MockApiProcessorSupplier<String, String, Void, Void> innerJoinSupplier =
             new MockApiProcessorSupplier<>();
-        final KStream<String, String> stream3 = innerJoinBuilder.stream(
+        final KStream<String, String> stream3 = streamsBuilder.stream(
             topic2, Consumed.with(Serdes.String(), Serdes.String()));
-        final KStream<String, String> stream4 = innerJoinBuilder.stream(
+        final KStream<String, String> stream4 = streamsBuilder.stream(
             topic2, Consumed.with(Serdes.String(), Serdes.String()));
         final KStream<String, String> innerJoin = stream3.join(
             stream4,
@@ -282,7 +279,7 @@ public class KStreamKStreamSelfJoinTest {
         );
         innerJoin.process(innerJoinSupplier);
 
-        final Topology topology2 =  innerJoinBuilder.build();
+        final Topology topology2 =  streamsBuilder.build();
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology2)) {
             final TestInputTopic<String, String> inputTopic =
                 driver.createInputTopic(topic2, new StringSerializer(), new StringSerializer());
@@ -302,10 +299,9 @@ public class KStreamKStreamSelfJoinTest {
         }
 
         // Self join topology
-        final StreamsBuilder selfJoinBuilder = new StreamsBuilder();
-        final KStream<String, String> stream1 = selfJoinBuilder.stream(
+        final KStream<String, String> stream1 = streamsBuilder.stream(
             topic1, Consumed.with(Serdes.String(), Serdes.String()));
-        final KStream<String, String> stream2 = selfJoinBuilder.stream(
+        final KStream<String, String> stream2 = streamsBuilder.stream(
             topic1, Consumed.with(Serdes.String(), Serdes.String()));
         final MockApiProcessorSupplier<String, String, Void, Void> selfJoinSupplier =
             new MockApiProcessorSupplier<>();
@@ -317,7 +313,7 @@ public class KStreamKStreamSelfJoinTest {
         );
         selfJoin.process(selfJoinSupplier);
 
-        final Topology selfJoinTopology =  selfJoinBuilder.build(props);
+        final Topology selfJoinTopology =  streamsBuilder.build(props);
         try (final TopologyTestDriver driver = new TopologyTestDriver(selfJoinTopology, props)) {
 
             final TestInputTopic<String, String> inputTopic =

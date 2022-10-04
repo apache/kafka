@@ -19,24 +19,20 @@ package org.apache.kafka.streams.kstream.internals.graph;
 public class WindowedStreamProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
     private final String windowStoreName;
-    private final String processorName;
 
     /**
      * Create a node representing a Stream Join Window processor.
      */
     public WindowedStreamProcessorNode(final String windowStoreName,
-                                       final String processorName,
                                        final ProcessorParameters<K, V, ?, ?> processorParameters) {
         super(processorParameters.processorName(), processorParameters);
         this.windowStoreName = windowStoreName;
-        this.processorName = processorName;
     }
 
     @Override
     public String toString() {
         return "WindowedStreamProcessorNode{" +
             "storeName=" + windowStoreName +
-            ", processorName =" + processorName +
             "} " + super.toString();
     }
 }

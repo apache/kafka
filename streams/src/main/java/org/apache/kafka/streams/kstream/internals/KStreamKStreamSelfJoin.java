@@ -95,8 +95,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
             sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
 
             // Join current record with other
-            try (final WindowStoreIterator<V2> iter = windowStore.fetch(
-                record.key(), timeFrom, timeTo)) {
+            try (final WindowStoreIterator<V2> iter = windowStore.fetch(record.key(), timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     final KeyValue<Long, V2> otherRecord = iter.next();
                     final long otherRecordTimestamp = otherRecord.key;
@@ -113,8 +112,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
             // correct ordering means it matches the output of an inner join.
             timeFrom = Math.max(0L, inputRecordTimestamp - joinOtherBeforeMs);
             timeTo = Math.max(0L, inputRecordTimestamp + joinOtherAfterMs);
-            try (final WindowStoreIterator<V2> iter2 = windowStore.fetch(
-                record.key(), timeFrom, timeTo)) {
+            try (final WindowStoreIterator<V2> iter2 = windowStore.fetch(record.key(), timeFrom, timeTo)) {
                 while (iter2.hasNext()) {
                     final KeyValue<Long, V2> otherRecord = iter2.next();
                     final long otherRecordTimestamp = otherRecord.key;
