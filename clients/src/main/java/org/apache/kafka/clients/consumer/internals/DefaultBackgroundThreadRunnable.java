@@ -41,7 +41,6 @@ import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutionException;
 
 /**
  * The background process of the {@code DefaultEventHandler} that consumes {@code ApplicationEvent} and produces
