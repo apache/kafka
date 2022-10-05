@@ -647,12 +647,13 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
-    private int binaryExponentialElectionBackoffMs(int retries) {
+    // visible for testing
+    int binaryExponentialElectionBackoffMs(int retries) {
         if (retries <= 0) {
             throw new IllegalArgumentException("Retries " + retries + " should be larger than zero");
         }
         // upper limit exponential co-efficients at 20 to avoid overflow
-        return Math.min(RETRY_BACKOFF_BASE_MS * random.nextInt(2 << Math.min(20, retries - 1)),
+        return Math.min(RETRY_BACKOFF_BASE_MS * random.nextInt(2 << Math.min(20, retries)),
                 raftConfig.electionBackoffMaxMs());
     }
 

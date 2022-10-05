@@ -1217,6 +1217,25 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testBinaryExponentialElectionBackoffMs() throws InterruptedException, IOException {
+        int localId = 0;
+        int otherNodeId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+
+        TestUtils.waitForCondition(() -> context.client.binaryExponentialElectionBackoffMs(1) > 0, 1000,
+            "exponential election backoff should return a value in range [0, 4] for retries = 1");
+
+        int remainingRetries = 10;
+        while (remainingRetries-- >= 0) {
+            int backOffMs = context.client.binaryExponentialElectionBackoffMs(Integer.MAX_VALUE);
+            assertTrue(backOffMs >= 0 && backOffMs <= context.electionBackoffMaxMs,
+                "exponential election backoff should return a value in range [0, electionBackoffMaxMs] for large retries");
+        }
+    }
+
+    @Test
     public void testRetryElection() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
