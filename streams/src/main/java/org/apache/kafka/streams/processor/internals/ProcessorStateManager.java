@@ -253,36 +253,32 @@ public class ProcessorStateManager implements StateManager {
                     log.info("Initializing to the starting offset for changelog {} of in-memory state store {}",
                              store.changelogPartition, store.stateStore.name());
                 } else if (store.offset() == null) {
-                    if (loadedCheckpoints.containsKey(store.changelogPartition)) {
-                        final Long changelogOffset = changelogOffsetFromCheckpointedOffset(loadedCheckpoints.remove(store.changelogPartition));
-                        final boolean recovered = changelogOffset != null && store.stateStore.recover(changelogOffset);
-                        if (eosEnabled && !recovered) {
-                            log.warn("Failed to recover state store {} from changelog {} at offset {}",
-                                      store.stateStore.name(), store.changelogPartition, changelogOffset);
-                            throw new TaskCorruptedException(Collections.singleton(taskId));
-                        }
-                        store.setOffset(changelogOffset);
-
-                        log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
-                                  store.stateStore.name(), store.offset, store.changelogPartition);
+                    final Long offset;
+                    final boolean hasCheckpoint = loadedCheckpoints.containsKey(store.changelogPartition);
+                    if (hasCheckpoint) {
+                        offset = changelogOffsetFromCheckpointedOffset(loadedCheckpoints.remove(store.changelogPartition));
                     } else {
-                        // with EOS, if the previous run did not shutdown gracefully, we may lost the checkpoint file
-                        // and hence we are uncertain that the current local state only contains committed data;
-                        // in that case we need to treat it as a task-corrupted exception
-                        if (eosEnabled && !storeDirIsEmpty) {
+                        offset = null;
+                    }
+
+                    final boolean recovered = store.stateStore.recover(offset);
+                    if (eosEnabled && !storeDirIsEmpty && !recovered) {
+                        if (hasCheckpoint) {
+                            log.warn("Failed to recover state store {} from changelog {} at offset {}",
+                                store.stateStore.name(), store.changelogPartition, offset);
+                        } else {
                             log.warn("State store {} did not find checkpoint offsets while stores are not empty, " +
                                 "since under EOS it has the risk of getting uncommitted data in stores we have to " +
                                 "treat it as a task corruption error and wipe out the local state of task {} " +
                                 "before re-bootstrapping", store.stateStore.name(), taskId);
-
-                            throw new TaskCorruptedException(Collections.singleton(taskId));
-                        } else {
-                            log.info("State store {} did not find checkpoint offset, hence would " +
-                                "default to the starting offset at changelog {}",
-                                store.stateStore.name(), store.changelogPartition);
                         }
+
+                        throw new TaskCorruptedException(Collections.singleton(taskId));
                     }
-                }  else {
+                    store.setOffset(offset);
+                    log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
+                              store.stateStore.name(), store.offset, store.changelogPartition);
+                } else {
                     loadedCheckpoints.remove(store.changelogPartition);
                     log.debug("Skipping re-initialization of offset from checkpoint for recycled store {}",
                               store.stateStore.name());
