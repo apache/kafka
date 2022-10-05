@@ -40,5 +40,7 @@ interface Segments<S extends Segment> {
 
     void commit(final Long changelogOffset);
 
+    boolean recover(final Long changelogOffset);
+
     void close();
 }

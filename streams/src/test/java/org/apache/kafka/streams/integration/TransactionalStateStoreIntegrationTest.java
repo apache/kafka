@@ -89,7 +89,7 @@ import org.junit.runners.Parameterized;
  * the state store and then crashes. The Long.MAX_VALUE commit interval ensures that we don't
  * read the first records because it was committed.
  *
- * The test asserts that:
+ * The tests assert that:
  * 1. Both records were inserted into the state store before the crash
  * 2. After the recovery only the first record is available. This happens because the
  * the txn state store wipes both uncommitted records, then replays the first one from the
@@ -106,7 +106,7 @@ public class TransactionalStateStoreIntegrationTest {
     @Parameterized.Parameters(name = "{0}")
     public static Collection<String> data() {
         return asList(
-            //StreamsConfig.EXACTLY_ONCE,
+            StreamsConfig.EXACTLY_ONCE,
             StreamsConfig.EXACTLY_ONCE_V2
         );
     }
