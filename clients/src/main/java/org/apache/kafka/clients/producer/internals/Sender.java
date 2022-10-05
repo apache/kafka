@@ -302,7 +302,7 @@ public class Sender implements Runnable {
                 transactionManager.maybeResolveSequences();
 
                 RuntimeException lastError = transactionManager.lastError();
-                if (shouldHandleAuthorizationError(lastError)) {
+                if (transactionManager.hasAbortableError() && shouldHandleAuthorizationError(lastError)) {
                     return;
                 }
 
