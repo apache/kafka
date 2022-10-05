@@ -50,7 +50,9 @@ public class SerializationTest {
             put(Float.class, Arrays.asList(5678567.12312f, -5678567.12341f));
             put(Double.class, Arrays.asList(5678567.12312d, -5678567.12341d));
             put(byte[].class, Arrays.asList("my string".getBytes()));
-            put(ByteBuffer.class, Arrays.asList(ByteBuffer.allocate(10).put("my string".getBytes())));
+            put(ByteBuffer.class, Arrays.asList(ByteBuffer.wrap("my string".getBytes()),
+                    ByteBuffer.allocate(10).put("my string".getBytes()),
+                    ByteBuffer.allocateDirect(10).put("my string".getBytes())));
             put(Bytes.class, Arrays.asList(new Bytes("my string".getBytes())));
             put(UUID.class, Arrays.asList(UUID.randomUUID()));
         }
