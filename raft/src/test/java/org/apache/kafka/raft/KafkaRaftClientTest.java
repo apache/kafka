@@ -1225,7 +1225,7 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         TestUtils.waitForCondition(() -> context.client.binaryExponentialElectionBackoffMs(1) > 0, 1000,
-            "exponential election backoff should return a value in range [0, 4] for retries = 1");
+            "exponential election backoff should return a value in range [0, 400] for retries = 1");
 
         int remainingRetries = 10;
         while (remainingRetries-- >= 0) {
