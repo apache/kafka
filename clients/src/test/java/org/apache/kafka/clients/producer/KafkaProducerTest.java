@@ -118,7 +118,6 @@ import java.util.stream.Stream;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1264,7 +1263,7 @@ public class KafkaProducerTest {
 
         // retry initTransactions after the ClusterAuthorizationException not being thrown
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
-        assertDoesNotThrow(producer::initTransactions);
+        TestUtils.retryOnExceptionWithTimeout(1000, 100, producer::initTransactions);
     }
 
     @Test
