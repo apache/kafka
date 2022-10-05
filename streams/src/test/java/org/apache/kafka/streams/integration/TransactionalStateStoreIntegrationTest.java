@@ -21,6 +21,7 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getRunningStreams;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.sessionStore;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.windowStore;
@@ -75,6 +76,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
+import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -101,6 +103,9 @@ public class TransactionalStateStoreIntegrationTest {
 
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);
+
+    @Rule
+    public TestName testName = new TestName();
 
     @SuppressWarnings("deprecation")
     @Parameterized.Parameters(name = "{0}")
@@ -163,19 +168,17 @@ public class TransactionalStateStoreIntegrationTest {
 
     @Test
     public void testDiscardsUncommittedDataKVStore() throws Exception {
-        final String appId = "testDiscardsUncommittedDataKVStore";
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        final String uniqueTestName = safeUniqueTestName(getClass(), testName);
+        final String input = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-store";
+        final String outputTopic = uniqueTestName + "-output";
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app");
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
 
-
-        final String input = "input-topic";
         cleanStateBeforeTest(CLUSTER, input);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> inputStream = builder.stream(input);
-        final String storeName = "store0";
-        final String outputTopic = "output_" + appId;
-
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder = Stores.keyValueStoreBuilder(
                 Stores.persistentKeyValueStore(storeName, true),
                 Serdes.String(),
@@ -262,18 +265,17 @@ public class TransactionalStateStoreIntegrationTest {
 
     @Test
     public void testDiscardsUncommittedDataTimestampedKVStore() throws Exception {
-        final String appId = "testDiscardsUncommittedDataTimestampedKVStore";
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        final String uniqueTestName = safeUniqueTestName(getClass(), testName);
+        final String input = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-store";
+        final String outputTopic = uniqueTestName + "-output";
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app");
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
 
-
-        final String input = "input-topic";
         cleanStateBeforeTest(CLUSTER, input);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> inputStream = builder.stream(input);
-        final String storeName = "store0";
-        final String outputTopic = "output_" + appId;
 
         final StoreBuilder<KeyValueStore<String, String>> storeBuilder = Stores.keyValueStoreBuilder(
                 Stores.persistentTimestampedKeyValueStore(storeName, true),
@@ -362,17 +364,17 @@ public class TransactionalStateStoreIntegrationTest {
 
     @Test
     public void testDiscardsUncommittedDataWindowStore() throws Exception {
-        final String appId = "testDiscardsUncommittedDataWindowStore";
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        final String uniqueTestName = safeUniqueTestName(getClass(), testName);
+        final String input = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-store";
+        final String outputTopic = uniqueTestName + "-output";
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app");
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
 
-        final String input = "input-topic";
         cleanStateBeforeTest(CLUSTER, input);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> inputStream = builder.stream(input);
-        final String storeName = "store0";
-        final String outputTopic = "output_" + appId;
 
         final StoreBuilder<WindowStore<String, String>> storeBuilder = Stores.windowStoreBuilder(
                 Stores.persistentWindowStore(
@@ -466,17 +468,17 @@ public class TransactionalStateStoreIntegrationTest {
 
     @Test
     public void testDiscardsUncommittedDataTSWindowStore() throws Exception {
-        final String appId = "testDiscardsUncommittedDataTSWindowStore";
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        final String uniqueTestName = safeUniqueTestName(getClass(), testName);
+        final String input = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-store";
+        final String outputTopic = uniqueTestName + "-output";
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app");
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
 
-        final String input = "input-topic";
         cleanStateBeforeTest(CLUSTER, input);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> inputStream = builder.stream(input);
-        final String storeName = "store0";
-        final String outputTopic = "output_" + appId;
 
         final StoreBuilder<WindowStore<String, String>> storeBuilder = Stores.windowStoreBuilder(
                 Stores.persistentTimestampedWindowStore(
@@ -576,18 +578,17 @@ public class TransactionalStateStoreIntegrationTest {
 
     @Test
     public void testDiscardsUncommittedDataSessionStore() throws Exception {
-        final String appId = "testDiscardsUncommittedDataSessionStore";
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        final String uniqueTestName = safeUniqueTestName(getClass(), testName);
+        final String input = uniqueTestName + "-input";
+        final String storeName = uniqueTestName + "-store";
+        final String outputTopic = uniqueTestName + "-output";
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app");
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
 
-
-        final String input = "input-topic";
         cleanStateBeforeTest(CLUSTER, input);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> inputStream = builder.stream(input);
-        final String storeName = "store0";
-        final String outputTopic = "output_" + appId;
 
         final StoreBuilder<SessionStore<String, String>> storeBuilder = Stores.sessionStoreBuilder(
                 Stores.persistentSessionStore(
