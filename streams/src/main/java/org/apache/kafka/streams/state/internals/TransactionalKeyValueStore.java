@@ -17,29 +17,32 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 public class TransactionalKeyValueStore extends AbstractTransactionalStore<KeyValueStore<Bytes, byte[]>> {
-    private final String name;
+    private final RocksDBMetricsRecorder metricsRecorder;
 
-    final KeyValueSegment tmpStore;
-    final KeyValueStore<Bytes, byte[]> mainStore;
-
-    TransactionalKeyValueStore(final KeyValueStore<Bytes, byte[]> mainStore, final String metricsScope) {
-        this(mainStore, new RocksDBMetricsRecorder(metricsScope, mainStore.name()));
-    }
+    private final KeyValueSegment tmpStore;
+    private final KeyValueStore<Bytes, byte[]> mainStore;
 
     //VisibleForTesting
-    TransactionalKeyValueStore(final KeyValueStore<Bytes, byte[]> mainStore,
-                               final RocksDBMetricsRecorder metricsRecorder) {
-        this.name = PREFIX + mainStore.name();
+    TransactionalKeyValueStore(final KeyValueStore<Bytes, byte[]> mainStore, final RocksDBMetricsRecorder metricsRecorder) {
+        this.metricsRecorder = metricsRecorder;
         this.mainStore = mainStore;
-        this.tmpStore = createTmpStore(mainStore.name(),
-            mainStore.name(),
-            0,
-            metricsRecorder
-        );
+        this.tmpStore = createTmpStore(mainStore.name() + TMP_SUFFIX,
+                                       mainStore.name(),
+                                       0,
+                                       metricsRecorder);
+    }
+
+    @Override
+    public void init(final StateStoreContext context, final StateStore root) {
+        metricsRecorder.init(ProcessorContextUtils.getMetricsImpl(context), context.taskId());
+        super.init(context, root);
     }
 
     @Override
@@ -54,8 +57,6 @@ public class TransactionalKeyValueStore extends AbstractTransactionalStore<KeyVa
 
     @Override
     public String name() {
-        return name;
+        return mainStore.name();
     }
-
-
 }

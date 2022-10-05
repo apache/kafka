@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+
 import java.io.File;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -25,11 +28,20 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
@@ -38,6 +50,8 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
     private static final byte MODIFICATION = 0x1;
     private static final byte DELETION = 0x2;
     private static final byte[] DELETION_VAL = {DELETION};
+
+    private StateStoreContext context;
 
     static final String PREFIX = "transactional-";
     //VisibleForTesting
@@ -48,10 +62,14 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
     Map<String, Object> configs;
     File stateDir;
 
+    private boolean consistencyEnabled = false;
+    private Position position;
+    protected OffsetCheckpoint positionCheckpoint;
+
     KeyValueSegment createTmpStore(final String segmentName,
-                                           final String windowName,
-                                           final long segmentId,
-                                           final RocksDBMetricsRecorder metricsRecorder) {
+                                   final String windowName,
+                                   final long segmentId,
+                                   final RocksDBMetricsRecorder metricsRecorder) {
         return new KeyValueSegment(segmentName + TMP_SUFFIX,
                                     windowName,
                                     segmentId,
@@ -76,8 +94,41 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
+        this.context = context;
+
         doInit(context.appConfigs(), context.stateDir());
-        mainStore().init(context, root);
+        ((RocksDBStore) mainStore()).openDB(configs, stateDir);
+
+        final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
+        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
+        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+        tmpStore().consistencyEnabled = consistencyEnabled;
+
+        // register and possibly restore the state from the logs
+        context.register(
+            root,
+            (RecordBatchingStateRestoreCallback) this::restoreBatch,
+            () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
+        );
+
+        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+            context.appConfigs(),
+            IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+            false);
+    }
+
+    private void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
+        final Collection<ConsumerRecord<byte[], byte[]>> changelogRecords = records
+            .stream()
+            .map(record -> new ConsumerRecord<>(
+                record.topic(),
+                record.partition(),
+                record.offset(),
+                record.key(),
+                toUncommittedValue(record.value())))
+            .collect(Collectors.toList());
+        tmpStore().restoreBatch(changelogRecords);
+        commit(null);
     }
 
     void doInit(final Map<String, Object> configs, final File stateDir) {
@@ -107,7 +158,7 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
     }
 
     @Override
-    public boolean recover(final long changelogOffset) {
+    public boolean recover(final Long changelogOffset) {
         truncateTmpStore();
         return true;
     }
@@ -134,6 +185,7 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
 
     @Override
     public void put(final Bytes key, final byte[] value) {
+        StoreQueryUtils.updatePosition(position, context);
         tmpStore().put(key, toUncommittedValue(value));
     }
 
@@ -141,6 +193,7 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
     public byte[] putIfAbsent(final Bytes key, final byte[] value) {
         final byte[] prev = get(key);
         if (prev == null) {
+            StoreQueryUtils.updatePosition(position, context);
             tmpStore().put(key, toUncommittedValue(value));
         }
         return prev;
@@ -148,6 +201,7 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
 
     @Override
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+        StoreQueryUtils.updatePosition(position, context);
         final List<KeyValue<Bytes, byte[]>> tmpEntries = entries
             .stream()
             .map(e -> new KeyValue<>(e.key, toUncommittedValue(e.value)))
@@ -165,6 +219,7 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
     @Override
     public byte[] get(final Bytes key) {
         final byte[] tmpValue = tmpStore().get(key);
+        //TODO: get main only if tmp is null
         final byte[] mainValue = mainStore().get(key);
         if (tmpValue == null) {
             return mainValue;
@@ -219,6 +274,11 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
         }
     }
 
+    @Override
+    public Position getPosition() {
+        return position;
+    }
+
     private void doCommit() {
         try (final KeyValueIterator<Bytes, byte[]> it = tmpStore().all()) {
             while (it.hasNext()) {
@@ -228,6 +288,30 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
         }
 
         truncateTmpStore();
+    }
+
+    @Override
+    public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound,
+        final QueryConfig config) {
+        return StoreQueryUtils.handleBasicQueries(
+            query,
+            positionBound,
+            config,
+            this,
+            position,
+            context
+        );
+    }
+
+    @Override
+    public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(final P prefix,
+                                                                                    final PS prefixKeySerializer) {
+        final MergeKeyValueIterator iterator = new MergeKeyValueIterator(
+            tmpStore().prefixScan(prefix, prefixKeySerializer),
+            mainStore().prefixScan(prefix, prefixKeySerializer),
+            openIterators);
+        openIterators.add(iterator);
+        return iterator;
     }
 
     private static KeyValue<Bytes, byte[]> fromUncommittedKV(final KeyValue<Bytes, byte[]> kv) {

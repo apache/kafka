@@ -58,6 +58,11 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
     }
 
     RocksDBTimestampedStore(final String name,
+                            final RocksDBMetricsRecorder metricsRecorder) {
+        super(name, metricsRecorder);
+    }
+
+    RocksDBTimestampedStore(final String name,
                             final String parentDir,
                             final RocksDBMetricsRecorder metricsRecorder) {
         super(name, parentDir, metricsRecorder);

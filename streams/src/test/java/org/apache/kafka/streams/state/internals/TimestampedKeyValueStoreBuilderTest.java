@@ -171,7 +171,7 @@ public class TimestampedKeyValueStoreBuilderTest {
     @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
         reset(supplier);
-        expect(supplier.get()).andReturn(new RocksDBTimestampedStore("name", null));
+        expect(supplier.get()).andReturn(new RocksDBTimestampedStore("name", (String) null));
         expect(supplier.name()).andReturn("name");
         replay(supplier);
 

@@ -96,7 +96,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     final String name;
     private final String parentDir;
     final Set<KeyValueIterator<Bytes, byte[]>> openIterators = Collections.synchronizedSet(new HashSet<>());
-    private boolean consistencyEnabled = false;
+    boolean consistencyEnabled = false;
 
     // VisibleForTesting
     protected File dbDir;
@@ -125,6 +125,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     public RocksDBStore(final String name,
                         final String metricsScope) {
         this(name, DB_FILE_DIR, new RocksDBMetricsRecorder(metricsScope, name));
+    }
+
+    public RocksDBStore(final String name,
+                        final RocksDBMetricsRecorder metricsRecorder) {
+        this(name, DB_FILE_DIR, metricsRecorder);
     }
 
     RocksDBStore(final String name,

@@ -144,7 +144,7 @@ public class KeyValueStoreBuilderTest {
     @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
         reset(supplier);
-        expect(supplier.get()).andReturn(new RocksDBStore("name", null));
+        expect(supplier.get()).andReturn(new RocksDBStore("name", (String) null));
         expect(supplier.name()).andReturn("name");
         replay(supplier);
 

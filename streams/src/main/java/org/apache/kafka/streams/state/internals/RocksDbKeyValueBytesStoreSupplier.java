@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 public class RocksDbKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupplier {
 
@@ -48,10 +49,11 @@ public class RocksDbKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupp
         }
 
         if (mechanism == RocksDBTransactionalMechanism.SECONDARY_STORE) {
+            final RocksDBMetricsRecorder metricsRecorder = new RocksDBMetricsRecorder(name, metricsScope());
             if (returnTimestampedStore) {
-                return new TransactionalKeyValueStore(new RocksDBTimestampedStore(name, metricsScope()), metricsScope());
+                return new TransactionalKeyValueStore(new RocksDBTimestampedStore(name, metricsRecorder), metricsRecorder);
             } else {
-                return new TransactionalKeyValueStore(new RocksDBStore(name, metricsScope()), metricsScope());
+                return new TransactionalKeyValueStore(new RocksDBStore(name, metricsRecorder), metricsRecorder);
             }
         }
         throw new IllegalArgumentException("Unsupported transactional mechanism: " + mechanism);
