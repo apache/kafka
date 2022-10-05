@@ -55,6 +55,11 @@ public class StateManagerStub implements StateManager {
     }
 
     @Override
+    public boolean transactional() {
+        return false;
+    }
+
+    @Override
     public Map<TopicPartition, Long> changelogOffsets() {
         return null;
     }

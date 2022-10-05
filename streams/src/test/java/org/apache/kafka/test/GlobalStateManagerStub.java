@@ -90,6 +90,11 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
+    public boolean transactional() {
+        return false;
+    }
+
+    @Override
     public Map<TopicPartition, Long> changelogOffsets() {
         return offsets;
     }

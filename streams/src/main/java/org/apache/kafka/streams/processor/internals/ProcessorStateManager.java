@@ -654,6 +654,15 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
+    @Override
+    public boolean transactional() {
+        return stores
+            .values()
+            .stream()
+            .map(metadata -> metadata.stateStore)
+            .allMatch(StateStore::transactional);
+    }
+
     private  TopicPartition getStorePartition(final String storeName) {
         // NOTE we assume the partition of the topic can always be inferred from the task id;
         // if user ever use a custom partition grouper (deprecated in KIP-528) this would break and

@@ -159,6 +159,16 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
+    public boolean transactional() {
+        return globalStores
+            .values()
+            .stream()
+            .filter(Optional::isPresent)
+            .map(Optional::get)
+            .allMatch(StateStore::transactional);
+    }
+
+    @Override
     public StateStore getStore(final String name) {
         return getGlobalStore(name);
     }

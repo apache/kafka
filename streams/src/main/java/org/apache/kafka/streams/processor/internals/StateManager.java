@@ -57,4 +57,6 @@ public interface StateManager {
 
     // TODO: we can remove this when consolidating global state manager into processor state manager
     StateStore getGlobalStore(final String name);
+
+    boolean transactional();
 }
