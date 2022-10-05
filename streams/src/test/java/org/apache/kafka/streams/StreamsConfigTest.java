@@ -1300,14 +1300,24 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldEnableSelfJoin() {
+        final String value = StreamsConfig.SINGLE_STORE_SELF_JOIN;
+        props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(config.getString(TOPOLOGY_OPTIMIZATION_CONFIG), StreamsConfig.SINGLE_STORE_SELF_JOIN);
+    }
+
+    @Test
     public void shouldAllowMultipleOptimizations() {
         final String value = String.join(",",
+                                         StreamsConfig.SINGLE_STORE_SELF_JOIN,
                                          StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS,
                                          StreamsConfig.MERGE_REPARTITION_TOPICS);
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
         final StreamsConfig config = new StreamsConfig(props);
         final List<String> configs = Arrays.asList(config.getString(TOPOLOGY_OPTIMIZATION_CONFIG).split(","));
-        assertEquals(2, configs.size());
+        assertEquals(3, configs.size());
+        assertTrue(configs.contains(StreamsConfig.SINGLE_STORE_SELF_JOIN));
         assertTrue(configs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS));
         assertTrue(configs.contains(StreamsConfig.MERGE_REPARTITION_TOPICS));
     }
@@ -1315,9 +1325,10 @@ public class StreamsConfigTest {
     @Test
     public void shouldEnableAllOptimizationsWithOptimizeConfig() {
         final Set<String> configs = StreamsConfig.verifyTopologyOptimizationConfigs(StreamsConfig.OPTIMIZE);
-        assertEquals(2, configs.size());
+        assertEquals(3, configs.size());
         assertTrue(configs.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS));
         assertTrue(configs.contains(StreamsConfig.MERGE_REPARTITION_TOPICS));
+        assertTrue(configs.contains(StreamsConfig.SINGLE_STORE_SELF_JOIN));
     }
 
     @Test

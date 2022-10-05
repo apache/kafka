@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.IdentityHashMap;
 import java.util.Properties;
 import java.util.TreeMap;
 import org.apache.kafka.common.serialization.Serde;
@@ -33,7 +34,9 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StateStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
+import org.apache.kafka.streams.kstream.internals.graph.WindowedStreamProcessorNode;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -322,6 +325,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
             mergeRepartitionTopics();
         }
+        if (optimizationConfigs.contains(StreamsConfig.SINGLE_STORE_SELF_JOIN)) {
+            LOG.debug("Optimizing the Kafka Streams graph for self-joins");
+            rewriteSingleStoreSelfJoin(root, new IdentityHashMap<>());
+        }
     }
 
     private void mergeDuplicateSourceNodes() {
@@ -371,6 +378,48 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                         }
                     }
                 }
+            }
+        }
+    }
+
+
+    /**
+     * The self-join rewriting can be applied if the StreamStreamJoinNode has a single parent.
+     * If the join is a self-join, remove the node KStreamJoinWindow corresponding to the
+     * right argument of the join (the "other"). The join node may have multiple siblings but for
+     * this rewriting we only care about the ThisKStreamJoinWindow and the OtherKStreamJoinWindow.
+     * We iterate over all the siblings to identify these two nodes so that we can remove the
+     * latter.
+     */
+    @SuppressWarnings("unchecked")
+    private void rewriteSingleStoreSelfJoin(
+        final GraphNode currentNode, final Map<GraphNode, Boolean> visited) {
+        visited.put(currentNode, true);
+        if (currentNode instanceof StreamStreamJoinNode && currentNode.parentNodes().size() == 1) {
+            final StreamStreamJoinNode joinNode = (StreamStreamJoinNode) currentNode;
+            // Remove JoinOtherWindowed node
+            final GraphNode parent = joinNode.parentNodes().stream().findFirst().get();
+            GraphNode left = null, right = null;
+            for (final GraphNode child: parent.children()) {
+                if (child instanceof WindowedStreamProcessorNode && child.buildPriority() < joinNode.buildPriority()) {
+                    if (child.nodeName().equals(joinNode.getThisWindowedStreamProcessorParameters().processorName())) {
+                        left = child;
+                    } else if (child.nodeName().equals(joinNode.getOtherWindowedStreamProcessorParameters().processorName())) {
+                        right = child;
+                    }
+                }
+            }
+            // Sanity check
+            if (left != null && right != null && left.buildPriority() < right.buildPriority()) {
+                parent.removeChild(right);
+                joinNode.setSelfJoin();
+            } else {
+                throw new IllegalStateException(String.format("Expected the left node %s to have smaller build priority than the right node %s.", left, right));
+            }
+        }
+        for (final GraphNode child: currentNode.children()) {
+            if (!visited.containsKey(child)) {
+                rewriteSingleStoreSelfJoin(child, visited);
             }
         }
     }
