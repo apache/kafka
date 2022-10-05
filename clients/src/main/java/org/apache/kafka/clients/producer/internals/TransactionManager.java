@@ -823,7 +823,7 @@ public class TransactionManager {
 
     synchronized void failPendingRequests(RuntimeException exception) {
         pendingRequests.forEach(handler ->
-                handler.fatalError(exception));
+                handler.abortableError(exception));
     }
 
     synchronized void close() {
