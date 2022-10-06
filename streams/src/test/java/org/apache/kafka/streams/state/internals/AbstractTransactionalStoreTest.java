@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -25,6 +27,7 @@ import static org.junit.Assert.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -407,6 +410,90 @@ public abstract class AbstractTransactionalStoreTest<T extends KeyValueStore<Byt
             InvalidStateStoreException.class,
             all::hasNext
         );
+    }
+
+    @Test
+    public void testPrefixScanUncommittedOnly() {
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(Bytes.wrap("k1".getBytes()), "a".getBytes()));
+        entries.add(new KeyValue<>(Bytes.wrap("prefix_3".getBytes()), "b".getBytes()));
+        entries.add(new KeyValue<>(Bytes.wrap("k2".getBytes()), "c".getBytes()));
+        entries.add(new KeyValue<>(Bytes.wrap("prefix_2".getBytes()), "d".getBytes()));
+        entries.add(new KeyValue<>(Bytes.wrap("k3".getBytes()), "e".getBytes()));
+        entries.add(new KeyValue<>(Bytes.wrap("prefix_1".getBytes()), "f".getBytes()));
+        txnStore.putAll(entries);
+
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = txnStore.prefixScan("prefix", new StringSerializer())) {
+            final List<String> valuesWithPrefix = new ArrayList<>();
+            int numberOfKeysReturned = 0;
+
+            while (keysWithPrefix.hasNext()) {
+                final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+                valuesWithPrefix.add(new String(next.value));
+                numberOfKeysReturned++;
+            }
+            assertThat(numberOfKeysReturned, is(3));
+            assertThat(valuesWithPrefix.get(0), is("f"));
+            assertThat(valuesWithPrefix.get(1), is("d"));
+            assertThat(valuesWithPrefix.get(2), is("b"));
+        }
+    }
+
+    @Test
+    public void testPrefixScanDisjointCommittedAndUncommitted() {
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(Bytes.wrap("k1".getBytes()), "a".getBytes()));
+        entries.add(new KeyValue<>(Bytes.wrap("prefix_3".getBytes()), "b".getBytes()));
+        entries.add(new KeyValue<>(Bytes.wrap("k2".getBytes()), "c".getBytes()));
+        entries.add(new KeyValue<>(Bytes.wrap("prefix_2".getBytes()), "d".getBytes()));
+        txnStore.putAll(entries);
+        txnStore.commit(null);
+        txnStore.put(Bytes.wrap("k3".getBytes()), "e".getBytes());
+        txnStore.put(Bytes.wrap("prefix_1".getBytes()), "f".getBytes());
+
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = txnStore.prefixScan("prefix", new StringSerializer())) {
+            final List<String> valuesWithPrefix = new ArrayList<>();
+            int numberOfKeysReturned = 0;
+
+            while (keysWithPrefix.hasNext()) {
+                final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+                valuesWithPrefix.add(new String(next.value));
+                numberOfKeysReturned++;
+            }
+            assertThat(numberOfKeysReturned, is(3));
+            assertThat(valuesWithPrefix.get(0), is("f"));
+            assertThat(valuesWithPrefix.get(1), is("d"));
+            assertThat(valuesWithPrefix.get(2), is("b"));
+        }
+    }
+
+    @Test
+    public void testPrefixScanCommittedShadowsUncommitted() {
+        final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(Bytes.wrap("k1".getBytes()), "a".getBytes()));
+        entries.add(new KeyValue<>(Bytes.wrap("prefix_3".getBytes()), "b".getBytes()));
+        entries.add(new KeyValue<>(Bytes.wrap("k2".getBytes()), "c".getBytes()));
+        entries.add(new KeyValue<>(Bytes.wrap("prefix_2".getBytes()), "d".getBytes()));
+        entries.add(new KeyValue<>(Bytes.wrap("k3".getBytes()), "e".getBytes()));
+        entries.add(new KeyValue<>(Bytes.wrap("prefix_1".getBytes()), "f".getBytes()));
+        txnStore.putAll(entries);
+        txnStore.commit(null);
+        txnStore.put(Bytes.wrap("prefix_2".getBytes()), "d1".getBytes());
+        txnStore.delete(Bytes.wrap("prefix_1".getBytes()));
+
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = txnStore.prefixScan("prefix", new StringSerializer())) {
+            final List<String> valuesWithPrefix = new ArrayList<>();
+            int numberOfKeysReturned = 0;
+
+            while (keysWithPrefix.hasNext()) {
+                final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+                valuesWithPrefix.add(new String(next.value));
+                numberOfKeysReturned++;
+            }
+            assertThat(numberOfKeysReturned, is(2));
+            assertThat(valuesWithPrefix.get(0), is("d1"));
+            assertThat(valuesWithPrefix.get(1), is("b"));
+        }
     }
 
     abstract AbstractTransactionalStore<T> getTxnStore();
