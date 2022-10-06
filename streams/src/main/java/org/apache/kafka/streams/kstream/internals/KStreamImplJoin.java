@@ -127,13 +127,10 @@ class KStreamImplJoin {
         final WindowBytesStoreSupplier otherStoreSupplier = streamJoinedInternal.otherStoreSupplier();
 
         assertUniqueStoreNames(thisStoreSupplier, otherStoreSupplier);
-        final boolean transactional;
-        final TopologyConfig topologyConfig = builder.internalTopologyBuilder.topologyConfigs();
-        if (topologyConfig != null) {
-            transactional = topologyConfig.parseStoreType() == StoreType.TXN_ROCKS_DB;
-        } else {
-            transactional = false;
-        }
+        final boolean transactional = Optional
+            .ofNullable(builder.internalTopologyBuilder.topologyConfigs())
+            .map(tc -> tc.parseStoreType() == StoreType.TXN_ROCKS_DB)
+            .orElse(false);
 
         if (thisStoreSupplier == null) {
             final String thisJoinStoreName = userProvidedBaseStoreName == null ? joinThisGeneratedName : userProvidedBaseStoreName + joinThisSuffix;
