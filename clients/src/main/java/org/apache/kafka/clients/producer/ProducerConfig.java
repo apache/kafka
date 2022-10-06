@@ -105,7 +105,7 @@ public class ProducerConfig extends AbstractConfig {
             "If a broker cannot process produce requests from a partition for <code>" + PARTITIONER_AVAILABILITY_TIMEOUT_MS_CONFIG + "</code> time, "
             + "the partitioner treats that partition as not available.  If the value is 0, this logic is disabled. "
             + "Note: this setting has no effect if a custom partitioner is used or <code>" + PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG
-            + "<code/> is set to 'false'";
+            + "</code> is set to 'false'";
 
     /** <code>partitioner.ignore.keys</code> */
     public static final String PARTITIONER_IGNORE_KEYS_CONFIG = "partitioner.ignore.keys";
