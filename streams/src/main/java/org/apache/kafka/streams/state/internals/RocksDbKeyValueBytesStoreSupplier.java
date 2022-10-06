@@ -49,7 +49,7 @@ public class RocksDbKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupp
         }
 
         if (mechanism == RocksDBTransactionalMechanism.SECONDARY_STORE) {
-            final RocksDBMetricsRecorder metricsRecorder = new RocksDBMetricsRecorder(name, metricsScope());
+            final RocksDBMetricsRecorder metricsRecorder = new RocksDBMetricsRecorder(metricsScope(), name);
             if (returnTimestampedStore) {
                 return new TransactionalKeyValueStore(new RocksDBTimestampedStore(name, metricsRecorder), metricsRecorder);
             } else {
