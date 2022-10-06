@@ -41,15 +41,17 @@ import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * The background process of the {@code DefaultEventHandler} that consumes {@code ApplicationEvent} and produces
- * {@code BackgroundEvent}. It owns the network client and handles all the network IO to the brokers.
+ * Background thread runnable that consumes {@code ApplicationEvent} and
+ * produces {@code BackgroundEvent}. It uses an event loop to consume and
+ * produce events, and poll the network client to handle network IO.
  *
- * It holds a reference to the {@link SubscriptionState}, which is initialized by the polling thread.
+ * It holds a reference to the {@link SubscriptionState}, which is
+ * initialized by the polling thread.
  */
 public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable {
-    private static final String CLIENT_ID_METRIC_TAG = "client-id";
     private static final String METRIC_GRP_PREFIX = "consumer";
 
     private final Time time;
@@ -67,6 +69,8 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
     private int heartbeatIntervalMs;
     private boolean running;
     private Optional<ApplicationEvent> inflightEvent = Optional.empty();
+    private AtomicReference<Optional<RuntimeException>> exception =
+            new AtomicReference<>(Optional.empty());
 
     public DefaultBackgroundThreadRunnable(ConsumerConfig config,
                                            LogContext logContext,
@@ -107,15 +111,24 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
             this.config = config;
             setConfig();
             this.inflightEvent = Optional.empty();
-            this.subscriptions = subscriptions; // subscriptionState is initialized in the polling thread and passed here.
+            // subscriptionState is initialized in the polling thread
+            this.subscriptions = subscriptions;
             this.metrics = metrics;
             this.metadata = bootstrapMetadata(clusterResourceListeners, logContext);
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
+            Selector selector = new Selector(config.getLong(
+                    ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
+                    metrics,
+                    time,
+                    METRIC_GRP_PREFIX,
+                    channelBuilder,
+                    logContext);
             NetworkClient netClient = new NetworkClient(
-                    new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, METRIC_GRP_PREFIX, channelBuilder, logContext),
+                    selector,
                     metadata,
                     clientId,
-                    100, // a fixed large enough value will suffice for max in-flight requests
+                    100, // a fixed large enough value will suffice for max
+                    // in-flight requests
                     config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                     config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
                     config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
@@ -176,14 +189,20 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
         try {
             log.debug("{} started", getClass());
             while (running) {
-                pollOnce();
+                runOnce();
                 time.sleep(retryBackoffMs);
             }
         } catch (InterruptException e) {
-            throw new RuntimeException(e);
-        } catch (Exception e) {
-            // TODO: Define fine grain exceptions here
+            log.error("The background thread has been interrupted");
+            this.exception.set(Optional.of(new RuntimeException(e)));
+        } catch (Throwable t) {
+            log.error("The background failed due to unexpected error", t);
+            if (t instanceof RuntimeException)
+                this.exception.set(Optional.of((RuntimeException) t));
+            else
+                this.exception.set(Optional.of(new RuntimeException(t)));
         } finally {
+            close();
             log.debug("{} closed", getClass());
         }
     }
@@ -191,8 +210,9 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
     /**
      * Process event from a single poll
      */
-    void pollOnce() {
+    void runOnce() {
         this.inflightEvent = maybePollEvent();
+        log.debug("processing applicatoin event: {}", this.inflightEvent);
         if (this.inflightEvent.isPresent() && maybeConsumeInflightEvent(this.inflightEvent.get())) {
             // clear inflight event upon successful consumption
             this.inflightEvent = Optional.empty();
@@ -232,6 +252,14 @@ public class DefaultBackgroundThreadRunnable implements BackgroundThreadRunnable
      */
     private void process(NoopApplicationEvent event) {
         backgroundEventQueue.add(new NoopBackgroundEvent(event.message));
+    }
+
+    public boolean isRunning() {
+        return this.running;
+    }
+
+    public Optional<RuntimeException> exception() {
+        return this.exception.get();
     }
 
     @Override

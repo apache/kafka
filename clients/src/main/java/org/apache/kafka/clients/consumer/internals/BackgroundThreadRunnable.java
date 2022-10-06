@@ -19,8 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import java.io.Closeable;
 
 /**
- * The {@link org.apache.kafka.clients.consumer.internals.events.EventHandler} constructs a thread that runs
- * {@code BackgroundThreadRunnable} to handle network requests and responses.
+ * Background thread runnable that handles network IO such as fetching and committing.
  */
 public interface BackgroundThreadRunnable extends Runnable, Closeable {
 }
