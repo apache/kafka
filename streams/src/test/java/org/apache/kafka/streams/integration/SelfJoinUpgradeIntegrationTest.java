@@ -165,7 +165,7 @@ public class SelfJoinUpgradeIntegrationTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldUpgradeWithTopologyOptimizationOn() throws Exception {
+    public void shouldRestartWithTopologyOptimizationOn() throws Exception {
 
         final StreamsBuilder streamsBuilderOld = new StreamsBuilder();
         final KStream<String, String> leftOld = streamsBuilderOld.stream(
