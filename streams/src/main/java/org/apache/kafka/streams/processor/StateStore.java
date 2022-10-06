@@ -119,6 +119,7 @@ public interface StateStore {
      *                        offset can be null if the state store does not have a changelog
      *                        (e.g. a global store).
      */
+    @Evolving
     default void commit(final Long changelogOffset) {
         if (transactional()) {
             throw new UnsupportedOperationException("Transactional state store must implement StateStore#commit");
@@ -137,6 +138,7 @@ public interface StateStore {
      * @param changelogOffset the checkpointed changelog offset.
      * @return {@code true} if the state store recovered, {@code false} otherwise.
      */
+    @Evolving
     default boolean recover(final Long changelogOffset) {
         if (transactional()) {
             throw new UnsupportedOperationException("Transactional state store must implement StateStore#recover");
@@ -166,6 +168,7 @@ public interface StateStore {
      *
      * @return {@code true} if the storage supports transactions, {@code false} otherwise
      */
+    @Evolving
     default boolean transactional() {
         return false;
     }
