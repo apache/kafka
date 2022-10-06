@@ -16,22 +16,18 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.easymock.EasyMock.mock;
-
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 public class TransactionalKeyValueStoreTest extends AbstractTransactionalStoreTest<KeyValueStore<Bytes, byte[]>> {
 
     @Override
     TransactionalKeyValueStore getTxnStore() {
-        final TransactionalKeyValueStore txnStore = new TransactionalKeyValueStore(
-            Stores.inMemoryKeyValueStore("main").get(),
-            (RocksDBMetricsRecorder) mock(RocksDBMetricsRecorder.class)
-        );
+        final TransactionalKeyValueStore txnStore = (TransactionalKeyValueStore) Stores
+            .persistentKeyValueStore("txn-store", true).get();
+
         txnStore.init((StateStoreContext) context, txnStore);
         return txnStore;
     }
