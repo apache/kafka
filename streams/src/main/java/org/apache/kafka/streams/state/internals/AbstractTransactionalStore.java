@@ -219,10 +219,8 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
     @Override
     public byte[] get(final Bytes key) {
         final byte[] tmpValue = tmpStore().get(key);
-        //TODO: get main only if tmp is null
-        final byte[] mainValue = mainStore().get(key);
         if (tmpValue == null) {
-            return mainValue;
+            return mainStore().get(key);
         } else if (tmpValue[0] == DELETION) {
             return null;
         } else {
