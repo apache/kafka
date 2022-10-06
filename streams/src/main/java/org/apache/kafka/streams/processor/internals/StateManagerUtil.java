@@ -115,7 +115,7 @@ final class StateManagerUtil {
                                   final StateDirectory stateDirectory,
                                   final TaskType taskType) {
         // if EOS is enabled, wipe out the whole state store for unclean close since it is now invalid
-        final boolean wipeStateStore = !closeClean && eosEnabled && stateMgr.transactional();
+        final boolean wipeStateStore = !closeClean && eosEnabled && !stateMgr.transactional();
 
         final TaskId id = stateMgr.taskId();
         log.trace("Closing state manager for {} task {}", taskType, id);
