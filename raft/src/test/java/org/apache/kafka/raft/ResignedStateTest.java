@@ -104,11 +104,4 @@ class ResignedStateTest {
         // try non-existed voter must throw an exception
         assertThrows(IllegalArgumentException.class, () -> state.acknowledgeResignation(10));
     }
-
-    @Test
-    void testToString() {
-        assertFalse(newResignedState(
-            Utils.mkSet(1, 2, 3),
-            Collections.emptyList()).toString().contains("@"));
-    }
 }

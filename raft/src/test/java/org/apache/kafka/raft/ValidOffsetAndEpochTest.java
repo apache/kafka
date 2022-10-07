@@ -51,11 +51,4 @@ class ValidOffsetAndEpochTest {
         assertEquals(ValidOffsetAndEpoch.Kind.VALID, validOffsetAndEpoch.kind());
         assertEquals(new OffsetAndEpoch(-1, -1), validOffsetAndEpoch.offsetAndEpoch());
     }
-
-    @Test
-    void testToString() {
-        assertFalse(ValidOffsetAndEpoch.valid(new OffsetAndEpoch(0, 0)).toString().contains("@"));
-        assertFalse(ValidOffsetAndEpoch.snapshot(new OffsetAndEpoch(0, 0)).toString().contains("@"));
-        assertFalse(ValidOffsetAndEpoch.diverging(new OffsetAndEpoch(0, 0)).toString().contains("@"));
-    }
 }

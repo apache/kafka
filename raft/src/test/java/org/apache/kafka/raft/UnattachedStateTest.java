@@ -84,11 +84,4 @@ public class UnattachedStateTest {
         assertEquals(isLogUpToDate, state.canGrantVote(2, isLogUpToDate));
         assertEquals(isLogUpToDate, state.canGrantVote(3, isLogUpToDate));
     }
-
-    @Test
-    void testToString() {
-        assertFalse(newUnattachedState(
-            Utils.mkSet(1, 2, 3),
-            Optional.empty()).toString().contains("@"));
-    }
 }
