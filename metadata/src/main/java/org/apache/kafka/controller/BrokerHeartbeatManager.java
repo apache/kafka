@@ -433,7 +433,7 @@ public class BrokerHeartbeatManager {
     }
 
     /**
-     * Check if the oldest broker to have hearbeated has already violated the
+     * Check if the oldest broker to have heartbeated has already violated the
      * sessionTimeoutNs timeout and needs to be fenced.
      *
      * @return      An Optional broker node id.
