@@ -1363,22 +1363,26 @@ class ReplicaManager(val config: KafkaConfig,
               val requestTopicId = topicIdFromRequest(topicPartition.topic)
               val logTopicId = partition.topicId
 
-              if (!hasConsistentTopicId(requestTopicId, logTopicId)) {
-                stateChangeLogger.warn(s"Topic ID in memory: ${logTopicId.get} does not" +
-                  s" match the topic ID for partition $topicPartition received: " +
-                  s"${requestTopicId.get}. Deleting the current replica.")
-                deleteStrayReplicas(List(topicPartition))
-              }
-
               if (requestLeaderEpoch > currentLeaderEpoch) {
+                var maybeRecreatedPartition = partition
+                if (!hasConsistentTopicId(requestTopicId, logTopicId)) {
+                  stateChangeLogger.warn(s"Topic ID in memory: ${logTopicId.get} does not" +
+                    s" match the topic ID for partition $topicPartition received: " +
+                    s"${requestTopicId.get}. Deleting the current replica.")
+                  deleteStrayReplicas(List(topicPartition))
+                  // recreate the partition
+                  maybeRecreatedPartition = Partition(topicPartition, time, this)
+                  allPartitions.put(topicPartition, HostedPartition.Online(maybeRecreatedPartition))
+                }
+
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
                 // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
                 if (partitionState.replicas.contains(localBrokerId)) {
-                  partitions += partition
+                  partitions += maybeRecreatedPartition
                   if (partitionState.leader == localBrokerId) {
-                    partitionsToBeLeader.put(partition, partitionState)
+                    partitionsToBeLeader.put(maybeRecreatedPartition, partitionState)
                   } else {
-                    partitionsToBeFollower.put(partition, partitionState)
+                    partitionsToBeFollower.put(maybeRecreatedPartition, partitionState)
                   }
                 } else {
                   stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from controller $controllerId with " +
@@ -1427,8 +1431,13 @@ class ReplicaManager(val config: KafkaConfig,
           }
 
           if (leaderAndIsrRequest.`type`() == LeaderAndIsrRequestType.FULL) {
+            stateChangeLogger.trace("received FULL LeaderAndISR request")
             val partitionsToDelete = findStrayPartitions(allRequestPartitions, logManager.allLogs)
             deleteStrayReplicas(partitionsToDelete)
+          } else if (leaderAndIsrRequest.`type`() == LeaderAndIsrRequestType.INCREMENTAL) {
+            stateChangeLogger.trace("received INCREMENTAL LeaderAndISR request, skip finding of stray partitions")
+          } else {
+            stateChangeLogger.trace("received UNKNOWN LeaderAndISR request, skip finding of stray partitions")
           }
 
           val highWatermarkCheckpoints = new LazyOffsetCheckpoints(this.highWatermarkCheckpoints)
@@ -2253,6 +2262,7 @@ class ReplicaManager(val config: KafkaConfig,
     logs.flatMap{ log => {
       val topicPartition = log.topicPartition
       if (!requestPartitions.contains(topicPartition)) {
+        stateChangeLogger.trace(s"$topicPartition is not found in the LeaderAndISR request and is identified as a stray partition")
         Some(topicPartition)
       } else {
         None

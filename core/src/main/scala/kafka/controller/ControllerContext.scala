@@ -366,12 +366,16 @@ class ControllerContext {
     topicsToBeDeleted
   }
 
+  def replicasInStates(topic: String, expectedStates: Set[ReplicaState]): Set[PartitionAndReplica] = {
+    replicasForTopic(topic).filter(replica => expectedStates.contains(replicaStates(replica))).toSet
+  }
+
   def replicasInState(topic: String, state: ReplicaState): Set[PartitionAndReplica] = {
     replicasForTopic(topic).filter(replica => replicaStates(replica) == state).toSet
   }
 
-  def areAllReplicasInState(topic: String, state: ReplicaState): Boolean = {
-    replicasForTopic(topic).forall(replica => replicaStates(replica) == state)
+  def areAllReplicasInStates(topic: String, expectedStates: Set[ReplicaState]): Boolean = {
+    replicasForTopic(topic).forall(replica => expectedStates.contains(replicaStates(replica)))
   }
 
   def isAnyReplicaInState(topic: String, state: ReplicaState): Boolean = {

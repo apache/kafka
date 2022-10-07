@@ -290,6 +290,11 @@ class ReplicaStateMachineTest {
   }
 
   @Test
+  def testInvalidOfflineReplicaToReplicaDeletionSuccessfulTransition(): Unit = {
+    testInvalidTransition(OfflineReplica, ReplicaDeletionSuccessful)
+  }
+
+  @Test
   def testInvalidReplicaDeletionStartedToNonexistentReplicaTransition(): Unit = {
     testInvalidTransition(ReplicaDeletionStarted, NonExistentReplica)
   }
