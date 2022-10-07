@@ -1687,7 +1687,7 @@ public final class QuorumController implements Controller {
     private ImbalanceSchedule imbalancedScheduled = ImbalanceSchedule.DEFERRED;
 
     /**
-     * Tracks if the a write of the NoOpRecord has been scheduled.
+     * Tracks if the write of the NoOpRecord has been scheduled.
      */
     private boolean noOpRecordScheduled = false;
 
