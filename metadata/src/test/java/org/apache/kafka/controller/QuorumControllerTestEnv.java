@@ -18,7 +18,6 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.controller.QuorumController.Builder;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.LeaderAndEpoch;
@@ -44,28 +43,51 @@ public class QuorumControllerTestEnv implements AutoCloseable {
     private final MockFaultHandler fatalFaultHandler = new MockFaultHandler("fatalFaultHandler");
     private final MockFaultHandler metadataFaultHandler = new MockFaultHandler("metadataFaultHandler");
 
-    public QuorumControllerTestEnv(
-        LocalLogManagerTestEnv logEnv,
-        Consumer<QuorumController.Builder> builderConsumer
-    ) throws Exception {
-        this(logEnv, builderConsumer, OptionalLong.empty(), OptionalLong.empty(),
-                BootstrapMetadata.fromVersion(MetadataVersion.latest(), "test-provided version"));
+    public static class Builder {
+        private final LocalLogManagerTestEnv logEnv;
+        private Consumer<QuorumController.Builder> controllerBuilderInitializer = __ -> { };
+        private OptionalLong sessionTimeoutMillis = OptionalLong.empty();
+        private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
+        private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
+                fromVersion(MetadataVersion.latest(), "test-provided version");
+
+        public Builder(LocalLogManagerTestEnv logEnv) {
+            this.logEnv = logEnv;
+        }
+
+        public Builder setControllerBuilderInitializer(Consumer<QuorumController.Builder> controllerBuilderInitializer) {
+            this.controllerBuilderInitializer = controllerBuilderInitializer;
+            return this;
+        }
+
+        public Builder setSessionTimeoutMillis(OptionalLong sessionTimeoutMillis) {
+            this.sessionTimeoutMillis = sessionTimeoutMillis;
+            return this;
+        }
+
+        public Builder setLeaderImbalanceCheckIntervalNs(OptionalLong leaderImbalanceCheckIntervalNs) {
+            this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;
+            return this;
+        }
+
+        public Builder setBootstrapMetadata(BootstrapMetadata bootstrapMetadata) {
+            this.bootstrapMetadata = bootstrapMetadata;
+            return this;
+        }
+
+        public QuorumControllerTestEnv build() throws Exception {
+            return new QuorumControllerTestEnv(
+                logEnv,
+                controllerBuilderInitializer,
+                sessionTimeoutMillis,
+                leaderImbalanceCheckIntervalNs,
+                bootstrapMetadata);
+        }
     }
 
-    public QuorumControllerTestEnv(
-            LocalLogManagerTestEnv logEnv,
-            Consumer<Builder> builderConsumer,
-            OptionalLong sessionTimeoutMillis,
-            OptionalLong leaderImbalanceCheckIntervalNs,
-            MetadataVersion metadataVersion
-    ) throws Exception {
-        this(logEnv, builderConsumer, sessionTimeoutMillis, leaderImbalanceCheckIntervalNs,
-                BootstrapMetadata.fromVersion(metadataVersion, "test-provided version"));
-    }
-
-    public QuorumControllerTestEnv(
+    private QuorumControllerTestEnv(
         LocalLogManagerTestEnv logEnv,
-        Consumer<Builder> builderConsumer,
+        Consumer<QuorumController.Builder> controllerBuilderInitializer,
         OptionalLong sessionTimeoutMillis,
         OptionalLong leaderImbalanceCheckIntervalNs,
         BootstrapMetadata bootstrapMetadata
@@ -87,7 +109,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 });
                 builder.setFatalFaultHandler(fatalFaultHandler);
                 builder.setMetadataFaultHandler(metadataFaultHandler);
-                builderConsumer.accept(builder);
+                controllerBuilderInitializer.accept(builder);
                 this.controllers.add(builder.build());
             }
         } catch (Exception e) {
