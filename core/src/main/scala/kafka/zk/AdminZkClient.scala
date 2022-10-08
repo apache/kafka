@@ -355,7 +355,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * @param entityName The entityName of the entityType
    * @param configs The config of the entityName
    */
-  def changeConfigs(entityType: String, entityName: String, configs: Properties): Unit = {
+  def changeConfigs(entityType: String, entityName: String, configs: Properties, isUserClientId: Boolean = false): Unit = {
 
     entityType match {
       case ConfigType.Topic => changeTopicConfig(entityName, configs)
@@ -364,6 +364,29 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       case ConfigType.Broker => changeBrokerConfig(parseBroker(entityName), configs)
       case ConfigType.Ip => changeIpConfig(entityName, configs)
       case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.all}")
+    }
+
+    if ((ConfigType.Client.equals(entityType) || ConfigType.User.equals(entityType) || ConfigType.Ip.equals(entityType)) && configs.isEmpty) {
+      val currPath = ConfigEntityZNode.path(entityType, entityName)
+      if (zkClient.getChildren(currPath).isEmpty) {
+        var pathToDelete = currPath
+        if (isUserClientId) {
+          val user = entityName.substring(0, entityName.indexOf("/"))
+          val clientId = entityName.substring(entityName.lastIndexOf("/") + 1)
+          val clientsPath = ConfigEntityZNode.path(ConfigType.User, user + "/" + ConfigType.Client)
+          val clientsChildren = zkClient.getChildren(clientsPath)
+          if (clientsChildren.size == 1 && clientsChildren.head.equals(clientId)) {
+            pathToDelete = clientsPath
+            val userData = fetchEntityConfig(ConfigType.User, user)
+            val userPath = ConfigEntityZNode.path(ConfigType.User, user)
+            val userChildren = zkClient.getChildren(userPath)
+            if (userData.isEmpty && userChildren.size == 1 && userChildren.head.equals(ConfigType.Client)) {
+              pathToDelete = userPath
+            }
+          }
+        }
+        zkClient.deletePath(pathToDelete)
+      }
     }
   }
 

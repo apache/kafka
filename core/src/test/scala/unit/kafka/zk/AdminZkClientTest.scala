@@ -27,9 +27,10 @@ import kafka.server.{ConfigType, KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
-import kafka.zk.{AdminZkClient, KafkaZkClient}
+import kafka.zk.{AdminZkClient, KafkaZkClient, ConfigEntityTypeZNode}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.test.{TestUtils => JTestUtils}
@@ -42,6 +43,8 @@ import scala.collection.{Map, Seq, immutable}
 
 class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTest {
 
+  private val producerByteRate = "1024"
+  private val ipConnectionRate = "10"
   var servers: Seq[KafkaServer] = Seq()
 
   @AfterEach
@@ -354,5 +357,57 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     adminZkClient.createTopic("foo", numPartitions, 2, rackAwareMode = RackAwareMode.Safe)
     val assignment = zkClient.getReplicaAssignmentForTopics(Set("foo"))
     assertEquals(numPartitions, assignment.size)
+  }
+
+  @Test
+  def testChangeConfigsWithUserAndClientId(): Unit = {
+    val config = new Properties()
+    config.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerByteRate)
+    adminZkClient.changeConfigs(ConfigType.User, "user01/clients/client01", config, isUserClientId = true)
+    val props = zkClient.getEntityConfigs(ConfigType.User, "user01/clients/client01")
+    assertEquals(props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), producerByteRate)
+
+    adminZkClient.changeConfigs(ConfigType.User, "user01/clients/client01", new Properties(), isUserClientId = true)
+    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.User))
+    assert(users.isEmpty)
+  }
+
+  @Test
+  def testChangeConfigsWithUser(): Unit = {
+    val config = new Properties()
+    config.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerByteRate)
+    adminZkClient.changeConfigs(ConfigType.User, "user01", config)
+    val props = zkClient.getEntityConfigs(ConfigType.User, "user01")
+    assertEquals(props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), producerByteRate)
+
+    adminZkClient.changeConfigs(ConfigType.User, "user01", new Properties())
+    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.User))
+    assert(users.isEmpty)
+  }
+
+  @Test
+  def testChangeConfigsWithClientId(): Unit = {
+    val config = new Properties()
+    config.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerByteRate)
+    adminZkClient.changeConfigs(ConfigType.Client, "client01", config)
+    val props = zkClient.getEntityConfigs(ConfigType.Client, "client01")
+    assertEquals(props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), producerByteRate)
+
+    adminZkClient.changeConfigs(ConfigType.Client, "client01", new Properties())
+    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.Client))
+    assert(users.isEmpty)
+  }
+
+  @Test
+  def testChangeConfigsWithIp(): Unit = {
+    val config = new Properties()
+    config.put(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, ipConnectionRate)
+    adminZkClient.changeConfigs(ConfigType.Ip, "127.0.0.1", config)
+    val props = zkClient.getEntityConfigs(ConfigType.Ip, "127.0.0.1")
+    assertEquals(props.getProperty(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG), ipConnectionRate)
+
+    adminZkClient.changeConfigs(ConfigType.Ip, "127.0.0.1", new Properties())
+    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.Ip))
+    assert(users.isEmpty)
   }
 }
