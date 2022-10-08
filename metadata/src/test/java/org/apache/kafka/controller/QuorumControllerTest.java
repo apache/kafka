@@ -1349,7 +1349,7 @@ public class QuorumControllerTest {
                 activeLogManager.scheduleAtomicAppend(
                         active.curClaimEpoch(), CORRUPT_RECORD);
 
-                // Ugly, but simplest way to ensure replication applied records on both standby
+                // Ugly, but simplest way to ensure replication applied records on the standby
                 Thread.sleep(maxReplicationDelayMs);
 
                 assertEquals(RuntimeException.class,
