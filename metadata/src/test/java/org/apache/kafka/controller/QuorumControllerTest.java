@@ -1328,7 +1328,7 @@ public class QuorumControllerTest {
 
     @Test
     public void testFatalMetadataReplayErrorOnStandbys() throws Exception {
-        long maxReplicationDelayMs = 5_000;
+        long maxReplicationDelayMs = 10_000;
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(2).build()) {
             try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).build()) {
                 QuorumController active = controlEnv.activeController();
@@ -1346,11 +1346,19 @@ public class QuorumControllerTest {
                         "High watermark was not established"
                 );
 
+                // Bypassing the QuorumController machinery and directly flushing
+                // a broken record to the log.
                 activeLogManager.scheduleAtomicAppend(
                         active.curClaimEpoch(), CORRUPT_RECORD);
 
-                // Ugly, but simplest way to ensure replication applied records on the standby
-                Thread.sleep(maxReplicationDelayMs);
+                // The Standby Controllers should raise fatal faults on trying to apply
+                // the corrupt record relatively quickly
+                TestUtils.waitForCondition(() ->
+                    controlEnv.fatalFaultHandler().firstException() != null,
+                    maxReplicationDelayMs,
+                    "The Standby Controller either did not replicate the log within reasonable time" +
+                    " or did not raise a fatal fault while applying the corrupt record"
+                );
 
                 assertEquals(RuntimeException.class,
                     controlEnv.fatalFaultHandler().firstException().getCause().getClass());
