@@ -28,7 +28,7 @@ import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.metadata.ZkConfigRepository
 import kafka.utils._
 import kafka.utils.Implicits._
-import kafka.zk.{AdminZkClient, KafkaZkClient, ConfigEntityZNode}
+import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{AlterConfigOp, ScramMechanism}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource}
@@ -740,8 +740,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
   def alterClientQuotas(entries: Seq[ClientQuotaAlteration], validateOnly: Boolean): Map[ClientQuotaEntity, ApiError] = {
     def alterEntityQuotas(entity: ClientQuotaEntity, ops: Iterable[ClientQuotaAlteration.Op]): Unit = {
-      val (userOpt, clientIdOpt, ipOpt) = parseAndSanitizeQuotaEntity(entity)
-      val (path, configType, configKeys, userClientQuota) = (userOpt, clientIdOpt, ipOpt) match {
+      val (path, configType, configKeys, isUserClientId) = parseAndSanitizeQuotaEntity(entity) match {
         case (Some(user), Some(clientId), None) => (user + "/clients/" + clientId, ConfigType.User, DynamicConfig.User.configKeys, true)
         case (Some(user), None, None) => (user, ConfigType.User, DynamicConfig.User.configKeys, false)
         case (None, Some(clientId), None) => (clientId, ConfigType.Client, DynamicConfig.Client.configKeys, false)
@@ -780,30 +779,8 @@ class ZkAdminManager(val config: KafkaConfig,
           }
         }
       }
-      if (!validateOnly) {
-        adminZkClient.changeConfigs(configType, path, props)
-        if (props.isEmpty) {
-          // try to clean empty quota nodes
-          val currPath = ConfigEntityZNode.path(configType, path)
-          if (zkClient.getChildren(currPath).isEmpty) {
-            var pathToDelete = currPath
-            if (userClientQuota) {
-              val clientsPath = ConfigEntityZNode.path(ConfigType.User, userOpt.get + "/" + ConfigType.Client)
-              val clientsChildren = zkClient.getChildren(clientsPath)
-              if (clientsChildren.size == 1 && clientsChildren.head.equals(clientIdOpt.get)) {
-                pathToDelete = clientsPath
-                val userData = adminZkClient.fetchEntityConfig(ConfigType.User, userOpt.get)
-                val userPath = ConfigEntityZNode.path(ConfigType.User, userOpt.get)
-                val userChildren = zkClient.getChildren(userPath)
-                if (userData.isEmpty && userChildren.size == 1 && userChildren.head.equals(ConfigType.Client)) {
-                  pathToDelete = userPath
-                }
-              }
-            }
-            zkClient.deletePath(pathToDelete)
-          }
-        }
-      }
+      if (!validateOnly)
+        adminZkClient.changeConfigs(configType, path, props, isUserClientId)
     }
     entries.map { entry =>
       val apiError = try {
