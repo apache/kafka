@@ -17,17 +17,18 @@
 
 package kafka.server
 
-import java.util.Properties
-
+import java.util.{Collections, Properties, HashMap}
 import kafka.server.metadata.ZkConfigRepository
 import kafka.utils.TestUtils
-import kafka.zk.{AdminZkClient, KafkaZkClient}
+import kafka.zk.{AdminZkClient, ConfigEntityTypeZNode, KafkaZkClient}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.message.DescribeConfigsRequestData
 import org.apache.kafka.common.message.DescribeConfigsResponseData
 import org.apache.kafka.common.protocol.Errors
-import org.junit.jupiter.api.{AfterEach, Test}
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -36,17 +37,27 @@ import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
 
-class ZkAdminManagerTest {
+class ZkAdminManagerTest extends QuorumTestHarness {
 
-  private val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
+  private val kafkaZkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
   private val metrics = new Metrics()
   private val brokerId = 1
   private val topic = "topic-1"
   private val metadataCache: MetadataCache = mock(classOf[MetadataCache])
+  private val producerByteRate = 1024
+  private val ipConnectionRate = 10
+  private var adminManager: ZkAdminManager = _
+
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
+    adminManager = new ZkAdminManager(createKafkaConfig(), metrics, metadataCache, super.zkClient)
+  }
 
   @AfterEach
-  def tearDown(): Unit = {
+  override def tearDown(): Unit = {
     metrics.close()
+    super.tearDown()
   }
 
   def createConfigHelper(metadataCache: MetadataCache, zkClient: KafkaZkClient): ConfigHelper = {
@@ -54,16 +65,21 @@ class ZkAdminManagerTest {
     new ConfigHelper(metadataCache, KafkaConfig.fromProps(props), new ZkConfigRepository(new AdminZkClient(zkClient)))
   }
 
+  def createKafkaConfig(): KafkaConfig = {
+    val props = TestUtils.createBrokerConfig(brokerId, "zk")
+    KafkaConfig(props, doLog = false)
+  }
+
   @Test
   def testDescribeConfigsWithNullConfigurationKeys(): Unit = {
-    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
+    when(kafkaZkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
     when(metadataCache.contains(topic)).thenReturn(true)
 
     val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
       .setResourceName(topic)
       .setResourceType(ConfigResource.Type.TOPIC.id)
       .setConfigurationKeys(null))
-    val configHelper = createConfigHelper(metadataCache, zkClient)
+    val configHelper = createConfigHelper(metadataCache, kafkaZkClient)
     val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, true, true)
     assertEquals(Errors.NONE.code, results.head.errorCode())
     assertFalse(results.head.configs().isEmpty, "Should return configs")
@@ -71,13 +87,13 @@ class ZkAdminManagerTest {
 
   @Test
   def testDescribeConfigsWithEmptyConfigurationKeys(): Unit = {
-    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
+    when(kafkaZkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
     when(metadataCache.contains(topic)).thenReturn(true)
 
     val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
       .setResourceName(topic)
       .setResourceType(ConfigResource.Type.TOPIC.id))
-    val configHelper = createConfigHelper(metadataCache, zkClient)
+    val configHelper = createConfigHelper(metadataCache, kafkaZkClient)
     val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, true, true)
     assertEquals(Errors.NONE.code, results.head.errorCode())
     assertFalse(results.head.configs().isEmpty, "Should return configs")
@@ -85,7 +101,7 @@ class ZkAdminManagerTest {
 
   @Test
   def testDescribeConfigsWithConfigurationKeys(): Unit = {
-    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
+    when(kafkaZkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
     when(metadataCache.contains(topic)).thenReturn(true)
 
     val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
@@ -93,7 +109,7 @@ class ZkAdminManagerTest {
       .setResourceType(ConfigResource.Type.TOPIC.id)
       .setConfigurationKeys(List("retention.ms", "retention.bytes", "segment.bytes").asJava)
     )
-    val configHelper = createConfigHelper(metadataCache, zkClient)
+    val configHelper = createConfigHelper(metadataCache, kafkaZkClient)
     val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = configHelper.describeConfigs(resources, true, true)
     assertEquals(Errors.NONE.code, results.head.errorCode())
     val resultConfigKeys = results.head.configs().asScala.map(r => r.name()).toSet
@@ -102,11 +118,11 @@ class ZkAdminManagerTest {
 
   @Test
   def testDescribeConfigsWithDocumentation(): Unit = {
-    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(new Properties)
-    when(zkClient.getEntityConfigs(ConfigType.Broker, brokerId.toString)).thenReturn(new Properties)
+    when(kafkaZkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(new Properties)
+    when(kafkaZkClient.getEntityConfigs(ConfigType.Broker, brokerId.toString)).thenReturn(new Properties)
     when(metadataCache.contains(topic)).thenReturn(true)
 
-    val configHelper = createConfigHelper(metadataCache, zkClient)
+    val configHelper = createConfigHelper(metadataCache, kafkaZkClient)
 
     val resources = List(
       new DescribeConfigsRequestData.DescribeConfigsResource()
@@ -126,5 +142,70 @@ class ZkAdminManagerTest {
         assertNotEquals(s"Config ${c.name} should have non blank documentation", "", c.documentation.trim)
       })
     })
+  }
+
+  @Test
+  def testAlterClientQuotasWithUserAndClientId(): Unit = {
+    val alterEntityMap = new HashMap[String, String]()
+    alterEntityMap.put(ClientQuotaEntity.USER, "user01")
+    alterEntityMap.put(ClientQuotaEntity.CLIENT_ID, "client01")
+    val quotaEntity = new ClientQuotaEntity(alterEntityMap)
+    adminManager.alterClientQuotas(Seq(new ClientQuotaAlteration(quotaEntity, Collections.singleton(
+      new ClientQuotaAlteration.Op(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerByteRate)))), validateOnly = false)
+    val props = zkClient.getEntityConfigs(ConfigType.User, "user01/clients/client01")
+    assertEquals(props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG).toInt, producerByteRate)
+
+    adminManager.alterClientQuotas(Seq(new ClientQuotaAlteration(quotaEntity, Collections.singleton(
+      new ClientQuotaAlteration.Op(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, null)))), validateOnly = false)
+    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.User))
+    assert(users.isEmpty)
+  }
+
+  @Test
+  def testAlterClientQuotasWithUser(): Unit = {
+    val alterEntityMap = new HashMap[String, String]()
+    alterEntityMap.put(ClientQuotaEntity.USER, "user01")
+    val quotaEntity = new ClientQuotaEntity(alterEntityMap)
+    adminManager.alterClientQuotas(Seq(new ClientQuotaAlteration(quotaEntity, Collections.singleton(
+      new ClientQuotaAlteration.Op(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerByteRate)))), validateOnly = false)
+    val props = zkClient.getEntityConfigs(ConfigType.User, "user01")
+    assertEquals(props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG).toInt, producerByteRate)
+
+    adminManager.alterClientQuotas(Seq(new ClientQuotaAlteration(quotaEntity, Collections.singleton(
+      new ClientQuotaAlteration.Op(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, null)))), validateOnly = false)
+    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.User))
+    assert(users.isEmpty)
+  }
+
+  @Test
+  def testAlterClientQuotasWithClientId(): Unit = {
+    val alterEntityMap = new HashMap[String, String]()
+    alterEntityMap.put(ClientQuotaEntity.CLIENT_ID, "client01")
+    val quotaEntity = new ClientQuotaEntity(alterEntityMap)
+    adminManager.alterClientQuotas(Seq(new ClientQuotaAlteration(quotaEntity, Collections.singleton(
+      new ClientQuotaAlteration.Op(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerByteRate)))), validateOnly = false)
+    val props = zkClient.getEntityConfigs(ConfigType.Client, "client01")
+    assertEquals(props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG).toInt, producerByteRate)
+
+    adminManager.alterClientQuotas(Seq(new ClientQuotaAlteration(quotaEntity, Collections.singleton(
+      new ClientQuotaAlteration.Op(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, null)))), validateOnly = false)
+    val clients = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.Client))
+    assert(clients.isEmpty)
+  }
+
+  @Test
+  def testAlterClientQuotasWithIp(): Unit = {
+    val alterEntityMap = new HashMap[String, String]()
+    alterEntityMap.put(ClientQuotaEntity.IP, "127.0.0.1")
+    val quotaEntity = new ClientQuotaEntity(alterEntityMap)
+    adminManager.alterClientQuotas(Seq(new ClientQuotaAlteration(quotaEntity, Collections.singleton(
+      new ClientQuotaAlteration.Op(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, ipConnectionRate)))), validateOnly = false)
+    val props = zkClient.getEntityConfigs(ConfigType.Ip, "127.0.0.1")
+    assertEquals(props.getProperty(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG).toInt, ipConnectionRate)
+
+    adminManager.alterClientQuotas(Seq(new ClientQuotaAlteration(quotaEntity, Collections.singleton(
+      new ClientQuotaAlteration.Op(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, null)))), validateOnly = false)
+    val ips = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.Ip))
+    assert(ips.isEmpty)
   }
 }
