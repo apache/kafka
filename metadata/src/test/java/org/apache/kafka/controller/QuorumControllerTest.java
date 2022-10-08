@@ -1298,21 +1298,62 @@ public class QuorumControllerTest {
 
     @Test
     public void testFatalMetadataReplayErrorOnActive() throws Throwable {
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build()) {
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
+                build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+                build();
+        ) {
+            QuorumController active = controlEnv.activeController();
+            CompletableFuture<Void> future = active.appendWriteEvent("errorEvent",
+                    OptionalLong.empty(), () -> {
+                        return ControllerResult.of(Collections.singletonList(new ApiMessageAndVersion(
+                                new ConfigRecord().
+                                        setName(null).
+                                        setResourceName(null).
+                                        setResourceType((byte) 255).
+                                        setValue(null), (short) 0)), null);
+                    });
+            assertThrows(ExecutionException.class, () -> future.get());
+            assertEquals(NullPointerException.class,
+                    controlEnv.fatalFaultHandler().firstException().getCause().getClass());
+            controlEnv.fatalFaultHandler().setIgnore(true);
+        }
+    }
+
+    private final static List<ApiMessageAndVersion> CORRUPT_RECORD =
+            Collections.unmodifiableList(Arrays.asList(
+                    new ApiMessageAndVersion(
+                            new PartitionRecord(), (short) 0)));
+
+    @Test
+    public void testFatalMetadataReplayErrorOnStandbys() throws Exception {
+        long maxReplicationDelayMs = 5_000;
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(2).build()) {
             try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).build()) {
                 QuorumController active = controlEnv.activeController();
-                CompletableFuture<Void> future = active.appendWriteEvent("errorEvent",
-                        OptionalLong.empty(), () -> {
-                            return ControllerResult.of(Collections.singletonList(new ApiMessageAndVersion(
-                                    new ConfigRecord().
-                                            setName(null).
-                                            setResourceName(null).
-                                            setResourceType((byte) 255).
-                                            setValue(null), (short) 0)), null);
-                        });
-                assertThrows(ExecutionException.class, () -> future.get());
-                assertEquals(NullPointerException.class,
-                        controlEnv.fatalFaultHandler().firstException().getCause().getClass());
+
+                LocalLogManager activeLogManager = logEnv
+                        .logManagers()
+                        .stream()
+                        .filter(logManager -> logManager.nodeId().equals(OptionalInt.of(active.nodeId())))
+                        .findAny()
+                        .get();
+
+                TestUtils.waitForCondition(
+                        () -> activeLogManager.highWatermark().isPresent(),
+                        maxReplicationDelayMs,
+                        "High watermark was not established"
+                );
+
+                activeLogManager.scheduleAtomicAppend(
+                        active.curClaimEpoch(), CORRUPT_RECORD);
+
+                // Ugly, but simplest way to ensure replication applied records on both standby
+                Thread.sleep(maxReplicationDelayMs);
+
+                assertEquals(RuntimeException.class,
+                    controlEnv.fatalFaultHandler().firstException().getCause().getClass());
                 controlEnv.fatalFaultHandler().setIgnore(true);
             }
         }
