@@ -55,6 +55,8 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -76,6 +78,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+
 
 import static java.util.UUID.randomUUID;
 
@@ -957,8 +960,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 shouldEncodeProbingRebalance = false;
             } else if (shouldEncodeProbingRebalance) {
                 final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
-                log.info("Requesting followup rebalance be scheduled by {} for {} to probe for caught-up replica tasks.",
-                        consumer, Instant.ofEpochMilli(nextRebalanceTimeMs));
+                log.info("Requesting followup rebalance be scheduled by {} {} for to probe for caught-up replica tasks.",
+                        consumer, formatInstantTime(nextRebalanceTimeMs));
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
                 shouldEncodeProbingRebalance = false;
             }
@@ -1358,7 +1361,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         } else if (encodedNextScheduledRebalanceMs < Long.MAX_VALUE) {
             log.info(
                 "Requested to schedule next probing rebalance at {} to try for a more balanced assignment.",
-                Instant.ofEpochMilli(encodedNextScheduledRebalanceMs) // The Instant#toString format is more readable.
+                formatInstantTime(encodedNextScheduledRebalanceMs)
             );
             nextScheduledRebalanceMs.set(encodedNextScheduledRebalanceMs);
         } else {
@@ -1445,6 +1448,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 minSupportedMetadataVersion, supportedVersion);
             return minSupportedMetadataVersion;
         }
+    }
+
+    private String formatInstantTime(final long instant) {
+        final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss,SSS");
+        return Instant.ofEpochMilli(instant).atZone(ZoneId.systemDefault()).format(dateTimeFormatter);
     }
 
     // following functions are for test only
