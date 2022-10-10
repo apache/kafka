@@ -16,69 +16,38 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
+import java.net.InetSocketAddress;
+import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 /**
  * An {@code EventHandler} that uses a single background thread to consume {@code ApplicationEvent} and produce
  * {@code BackgroundEvent} from the {@ConsumerBackgroundThread}.
  */
 public class DefaultEventHandler implements EventHandler {
+    private static final String METRIC_GRP_PREFIX = "consumer";
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
-    private final BackgroundThreadRunnable runnable;
     private final KafkaThread backgroundThread;
 
-    public DefaultEventHandler(ConsumerConfig config, LogContext logcontext,
-                               SubscriptionState subscriptionState,
-                               Metrics metrics,
-                               ClusterResourceListeners clusterResourceListeners,
-                               Sensor fetcherThrottleTimeSensor,
-                               ApiVersions apiVersions) {
-        this.applicationEventQueue = new LinkedBlockingQueue<>();
-        this.backgroundEventQueue = new LinkedBlockingQueue<>();
-        this.runnable = new DefaultBackgroundThreadRunnable(
-                config,
-                logcontext,
-                applicationEventQueue,
-                backgroundEventQueue,
-                subscriptionState,
-                apiVersions,
-                metrics,
-                clusterResourceListeners,
-                fetcherThrottleTimeSensor);
-        this.backgroundThread = new KafkaThread("consumer_background_thread", runnable, true);
-        backgroundThread.start();
-
-    }
-
-    // VisibleForTesting
-    DefaultEventHandler(BackgroundThreadRunnable runnable,
-                        BlockingQueue<ApplicationEvent> applicationEventQueue,
-                        BlockingQueue<BackgroundEvent> backgroundEventQueue) {
-        this.runnable = runnable;
-        this.backgroundThread = new KafkaThread("consumer_background_thread", runnable, true);
-        this.applicationEventQueue = applicationEventQueue;
-        this.backgroundEventQueue = backgroundEventQueue;
-        backgroundThread.start();
-    }
-
-    // VisibleForTesting
-    DefaultEventHandler(Time time,
+    public DefaultEventHandler(Time time,
                         ConsumerConfig config,
+                        LogContext logContext,
                         BlockingQueue<ApplicationEvent> applicationEventQueue,
                         BlockingQueue<BackgroundEvent> backgroundEventQueue,
                         SubscriptionState subscriptionState,
@@ -86,21 +55,42 @@ public class DefaultEventHandler implements EventHandler {
                         ConsumerNetworkClient networkClient) {
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundEventQueue = backgroundEventQueue;
-        this.runnable = new DefaultBackgroundThreadRunnable(
+        this.backgroundThread = new DefaultBackgroundThread(
                 time,
                 config,
+                logContext,
                 this.applicationEventQueue,
                 this.backgroundEventQueue,
                 subscriptionState,
                 metadata,
-                networkClient);
-        this.backgroundThread = new KafkaThread("consumer_background_thread", runnable, true);
+                networkClient,
+                new Metrics(time));
+        backgroundThread.start();
+    }
+
+    // VisibleForTesting
+    DefaultEventHandler(KafkaThread backgroundThread,
+                        BlockingQueue<ApplicationEvent> applicationEventQueue,
+                        BlockingQueue<BackgroundEvent> backgroundEventQueue) {
+        this.backgroundThread = backgroundThread;
+        this.applicationEventQueue = applicationEventQueue;
+        this.backgroundEventQueue = backgroundEventQueue;
         backgroundThread.start();
     }
 
     @Override
     public Optional<BackgroundEvent> poll() {
         return Optional.ofNullable(backgroundEventQueue.poll());
+    }
+
+    @Override
+    public Optional<BackgroundEvent> poll(Duration timeout) {
+        try {
+            return Optional.ofNullable(backgroundEventQueue.poll(timeout.toMillis(),
+                    TimeUnit.MILLISECONDS));
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
+        }
     }
 
     @Override
@@ -118,9 +108,27 @@ public class DefaultEventHandler implements EventHandler {
         }
     }
 
+    private ConsumerMetadata bootstrapMetadata(
+            LogContext logContext,
+            ClusterResourceListeners clusterResourceListeners,
+            ConsumerConfig config,
+            SubscriptionState subscriptions) {
+        ConsumerMetadata metadata = new ConsumerMetadata(
+                config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
+                config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG),
+                !config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
+                config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
+                subscriptions,
+                logContext, clusterResourceListeners);
+        List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
+                config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG), config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG));
+        metadata.bootstrap(addresses);
+        return metadata;
+    }
+
     public void close() {
         try {
-            this.runnable.close();
+            // this.backgroundThread.interrupt();
             // close logic
         } catch (Exception e) {
             throw new RuntimeException(e);

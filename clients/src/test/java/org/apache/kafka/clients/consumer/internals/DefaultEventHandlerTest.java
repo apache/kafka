@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.io.Closeable;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
@@ -69,7 +71,9 @@ public class DefaultEventHandlerTest {
         DefaultEventHandler handler = new DefaultEventHandler(
                 time,
                 new ConsumerConfig(properties),
-                aq, bq,
+                logContext,
+                aq,
+                bq,
                 subscriptions,
                 metadata,
                 consumerClient);
@@ -90,8 +94,10 @@ public class DefaultEventHandlerTest {
     public void testRunOnceBackgroundThread() {
         BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
+        KafkaThread backgroundThread =
+                new KafkaThread("", new RunOnceBackgroundThreadRunnable(applicationEventQueue, backgroundEventQueue), true);
         EventHandler eventHandler = new DefaultEventHandler(
-                new RunOnceBackgroundThreadRunnable(applicationEventQueue, backgroundEventQueue),
+                backgroundThread,
                 applicationEventQueue,
                 backgroundEventQueue);
         assertTrue(eventHandler.add(new NoopApplicationEvent("hello-world")));
@@ -110,7 +116,7 @@ public class DefaultEventHandlerTest {
                 subscriptions, new LogContext(), new ClusterResourceListeners());
     }
 
-    private class RunOnceBackgroundThreadRunnable implements BackgroundThreadRunnable {
+    private class RunOnceBackgroundThreadRunnable implements Runnable, Closeable {
         private BlockingQueue<ApplicationEvent> applicationEventQueue;
         private BlockingQueue<BackgroundEvent> backgroundEventQueue;
 
