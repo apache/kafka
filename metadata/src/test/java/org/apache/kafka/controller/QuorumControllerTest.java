@@ -1321,11 +1321,6 @@ public class QuorumControllerTest {
         }
     }
 
-    private final static List<ApiMessageAndVersion> CORRUPT_RECORD =
-            Collections.unmodifiableList(Arrays.asList(
-                    new ApiMessageAndVersion(
-                            new PartitionRecord(), (short) 0)));
-
     @Test
     public void testFatalMetadataReplayErrorOnStandbys() throws Exception {
         long maxReplicationDelayMs = 10_000;
@@ -1346,13 +1341,20 @@ public class QuorumControllerTest {
                         "High watermark was not established"
                 );
 
-                // Bypassing the QuorumController machinery and directly flushing
-                // a broken record to the log.
-                activeLogManager.scheduleAtomicAppend(
-                        active.curClaimEpoch(), CORRUPT_RECORD);
+                // The following record should fail to apply to the controller
+                // as it is a Partition Record with no TopicID set.
+                List<ApiMessageAndVersion> INVALID_RECORD =
+                        Collections.unmodifiableList(Arrays.asList(
+                                new ApiMessageAndVersion(
+                                        new PartitionRecord(), (short) 0)));
 
-                // The Standby Controllers should raise fatal faults on trying to apply
-                // the corrupt record relatively quickly
+                // Bypassing the QuorumController machinery and directly flushing
+                // the invalid record to the log.
+                activeLogManager.scheduleAtomicAppend(
+                        active.curClaimEpoch(), INVALID_RECORD);
+
+                // The Standby Controller should raise fatal faults on trying to apply
+                // the invalid record relatively quickly
                 TestUtils.waitForCondition(() ->
                     controlEnv.fatalFaultHandler().firstException() != null,
                     maxReplicationDelayMs,
