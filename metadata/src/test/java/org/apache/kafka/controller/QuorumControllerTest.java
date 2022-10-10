@@ -1343,7 +1343,7 @@ public class QuorumControllerTest {
 
                 // The following record should fail to apply to the controller
                 // as it is a Partition Record with no TopicID set.
-                List<ApiMessageAndVersion> INVALID_RECORD =
+                List<ApiMessageAndVersion> invalidRecord =
                         Collections.unmodifiableList(Arrays.asList(
                                 new ApiMessageAndVersion(
                                         new PartitionRecord(), (short) 0)));
@@ -1351,7 +1351,7 @@ public class QuorumControllerTest {
                 // Bypassing the QuorumController machinery and directly flushing
                 // the invalid record to the log.
                 activeLogManager.scheduleAtomicAppend(
-                        active.curClaimEpoch(), INVALID_RECORD);
+                        active.curClaimEpoch(), invalidRecord);
 
                 // The Standby Controller should raise fatal faults on trying to apply
                 // the invalid record relatively quickly
