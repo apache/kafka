@@ -1336,8 +1336,8 @@ public class QuorumControllerTest {
         try (LocalLogManagerTestEnv logEnv = logEnvBuilder.build()) {
             try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).build()) {
                 TestUtils.waitForCondition(() -> controlEnv.controllers().stream().allMatch(controller -> {
-                        return controlEnv.fatalFaultHandler(controller.nodeId()).firstException() != null;
-                    }),
+                    return controlEnv.fatalFaultHandler(controller.nodeId()).firstException() != null;
+                }),
                     "At least one controller failed to detect the fatal fault"
                 );
                 controlEnv.ignoreFatalFaults();
@@ -1354,8 +1354,8 @@ public class QuorumControllerTest {
 
             try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).build()) {
                 TestUtils.waitForCondition(() -> controlEnv.controllers().stream().allMatch(controller -> {
-                        return controlEnv.fatalFaultHandler(controller.nodeId()).firstException() != null;
-                    }),
+                    return controlEnv.fatalFaultHandler(controller.nodeId()).firstException() != null;
+                }),
                     "At least one controller failed to detect the fatal fault"
                 );
                 controlEnv.ignoreFatalFaults();
