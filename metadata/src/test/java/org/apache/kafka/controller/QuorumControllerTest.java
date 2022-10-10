@@ -1315,56 +1315,50 @@ public class QuorumControllerTest {
                                         setValue(null), (short) 0)), null);
                     });
             assertThrows(ExecutionException.class, () -> future.get());
-            assertEquals(NullPointerException.class,
-                    controlEnv.fatalFaultHandler().firstException().getCause().getClass());
-            controlEnv.fatalFaultHandler().setIgnore(true);
+            assertEquals(NullPointerException.class, controlEnv.fatalFaultHandler(active.nodeId())
+                .firstException().getCause().getClass());
+            controlEnv.ignoreFatalFaults();
         }
     }
 
     @Test
-    public void testFatalMetadataReplayErrorOnStandbys() throws Exception {
-        long maxReplicationDelayMs = 10_000;
-        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(2).build()) {
+    public void testFatalMetadataErrorDuringSnapshotLoading() throws Exception {
+        InitialSnapshot invalidSnapshot = new InitialSnapshot(Collections.unmodifiableList(Arrays.asList(
+            new ApiMessageAndVersion(new PartitionRecord(), (short) 0)))
+        );
+
+        LocalLogManagerTestEnv.Builder logEnvBuilder = new LocalLogManagerTestEnv.Builder(3)
+            .setSnapshotReader(FileRawSnapshotReader.open(
+                invalidSnapshot.tempDir.toPath(),
+                new OffsetAndEpoch(0, 0)
+            ));
+
+        try (LocalLogManagerTestEnv logEnv = logEnvBuilder.build()) {
             try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).build()) {
-                QuorumController active = controlEnv.activeController();
-
-                LocalLogManager activeLogManager = logEnv
-                        .logManagers()
-                        .stream()
-                        .filter(logManager -> logManager.nodeId().equals(OptionalInt.of(active.nodeId())))
-                        .findAny()
-                        .get();
-
-                TestUtils.waitForCondition(
-                        () -> activeLogManager.highWatermark().isPresent(),
-                        maxReplicationDelayMs,
-                        "High watermark was not established"
+                TestUtils.waitForCondition(() -> controlEnv.controllers().stream().allMatch(controller -> {
+                        return controlEnv.fatalFaultHandler(controller.nodeId()).firstException() != null;
+                    }),
+                    "At least one controller failed to detect the fatal fault"
                 );
+                controlEnv.ignoreFatalFaults();
+            }
+        }
+    }
 
-                // The following record should fail to apply to the controller
-                // as it is a Partition Record with no TopicID set.
-                List<ApiMessageAndVersion> invalidRecord =
-                        Collections.unmodifiableList(Arrays.asList(
-                                new ApiMessageAndVersion(
-                                        new PartitionRecord(), (short) 0)));
+    @Test
+    public void testFatalMetadataErrorDuringLogLoading() throws Exception {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build()) {
+            logEnv.appendInitialRecords(Collections.unmodifiableList(Arrays.asList(
+                new ApiMessageAndVersion(new PartitionRecord(), (short) 0))
+            ));
 
-                // Bypassing the QuorumController machinery and directly flushing
-                // the invalid record to the log.
-                activeLogManager.scheduleAtomicAppend(
-                        active.curClaimEpoch(), invalidRecord);
-
-                // The Standby Controller should raise fatal faults on trying to apply
-                // the invalid record relatively quickly
-                TestUtils.waitForCondition(() ->
-                    controlEnv.fatalFaultHandler().firstException() != null,
-                    maxReplicationDelayMs,
-                    "The Standby Controller either did not replicate the log within reasonable time" +
-                    " or did not raise a fatal fault while applying the corrupt record"
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).build()) {
+                TestUtils.waitForCondition(() -> controlEnv.controllers().stream().allMatch(controller -> {
+                        return controlEnv.fatalFaultHandler(controller.nodeId()).firstException() != null;
+                    }),
+                    "At least one controller failed to detect the fatal fault"
                 );
-
-                assertEquals(RuntimeException.class,
-                    controlEnv.fatalFaultHandler().firstException().getCause().getClass());
-                controlEnv.fatalFaultHandler().setIgnore(true);
+                controlEnv.ignoreFatalFaults();
             }
         }
     }
