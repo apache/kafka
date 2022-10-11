@@ -27,7 +27,9 @@ import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
@@ -41,8 +43,7 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 public class QuorumControllerTestEnv implements AutoCloseable {
     private final List<QuorumController> controllers;
     private final LocalLogManagerTestEnv logEnv;
-    private final MockFaultHandler fatalFaultHandler = new MockFaultHandler("fatalFaultHandler");
-    private final MockFaultHandler metadataFaultHandler = new MockFaultHandler("metadataFaultHandler");
+    private final Map<Integer, MockFaultHandler> fatalFaultHandlers = new HashMap<>();
 
     public QuorumControllerTestEnv(
         LocalLogManagerTestEnv logEnv,
@@ -76,17 +77,18 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         try {
             ApiVersions apiVersions = new ApiVersions();
             List<Integer> nodeIds = IntStream.range(0, numControllers).boxed().collect(Collectors.toList());
-            for (int i = 0; i < numControllers; i++) {
-                QuorumController.Builder builder = new QuorumController.Builder(i, logEnv.clusterId());
-                builder.setRaftClient(logEnv.logManagers().get(i));
+            for (int nodeId = 0; nodeId < numControllers; nodeId++) {
+                QuorumController.Builder builder = new QuorumController.Builder(nodeId, logEnv.clusterId());
+                builder.setRaftClient(logEnv.logManagers().get(nodeId));
                 builder.setBootstrapMetadata(bootstrapMetadata);
                 builder.setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs);
-                builder.setQuorumFeatures(new QuorumFeatures(i, apiVersions, QuorumFeatures.defaultFeatureMap(), nodeIds));
+                builder.setQuorumFeatures(new QuorumFeatures(nodeId, apiVersions, QuorumFeatures.defaultFeatureMap(), nodeIds));
                 sessionTimeoutMillis.ifPresent(timeout -> {
                     builder.setSessionTimeoutNs(NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS));
                 });
+                MockFaultHandler fatalFaultHandler = new MockFaultHandler("fatalFaultHandler");
                 builder.setFatalFaultHandler(fatalFaultHandler);
-                builder.setMetadataFaultHandler(metadataFaultHandler);
+                fatalFaultHandlers.put(nodeId, fatalFaultHandler);
                 builderConsumer.accept(builder);
                 this.controllers.add(builder.build());
             }
@@ -120,12 +122,14 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         return controllers;
     }
 
-    public MockFaultHandler fatalFaultHandler() {
-        return fatalFaultHandler;
+    public MockFaultHandler fatalFaultHandler(Integer nodeId) {
+        return fatalFaultHandlers.get(nodeId);
     }
 
-    public MockFaultHandler metadataFaultHandler() {
-        return metadataFaultHandler;
+    public void ignoreFatalFaults() {
+        for (MockFaultHandler faultHandler : fatalFaultHandlers.values()) {
+            faultHandler.setIgnore(true);
+        }
     }
 
     @Override
@@ -136,7 +140,8 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         for (QuorumController controller : controllers) {
             controller.close();
         }
-        fatalFaultHandler.maybeRethrowFirstException();
-        metadataFaultHandler.maybeRethrowFirstException();
+        for (MockFaultHandler faultHandler : fatalFaultHandlers.values()) {
+            faultHandler.maybeRethrowFirstException();
+        }
     }
 }

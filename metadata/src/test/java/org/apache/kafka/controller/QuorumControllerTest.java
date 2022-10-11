@@ -1255,10 +1255,48 @@ public class QuorumControllerTest {
                                             setValue(null), (short) 0)), null);
                         });
                 assertThrows(ExecutionException.class, () -> future.get());
-                assertEquals(NullPointerException.class,
-                        controlEnv.fatalFaultHandler().firstException().getCause().getClass());
-                controlEnv.fatalFaultHandler().setIgnore(true);
-                controlEnv.metadataFaultHandler().setIgnore(true);
+                assertEquals(NullPointerException.class, controlEnv.fatalFaultHandler(active.nodeId())
+                        .firstException().getCause().getClass());
+                controlEnv.ignoreFatalFaults();
+            }
+        }
+    }
+
+    @Test
+    public void testFatalMetadataErrorDuringSnapshotLoading() throws Exception {
+        InitialSnapshot invalidSnapshot = new InitialSnapshot(Collections.unmodifiableList(Arrays.asList(
+            new ApiMessageAndVersion(new PartitionRecord(), (short) 0)))
+        );
+
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3,
+                Optional.of(FileRawSnapshotReader.open(
+                invalidSnapshot.tempDir.toPath(),
+                new OffsetAndEpoch(0, 0)
+        )))) {
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> {
+            })) {
+                TestUtils.waitForCondition(() -> controlEnv.controllers().stream().allMatch(controller -> {
+                    return controlEnv.fatalFaultHandler(controller.nodeId()).firstException() != null;
+                }),
+                    "At least one controller failed to detect the fatal fault"
+                );
+                controlEnv.ignoreFatalFaults();
+            }
+        }
+    }
+
+    @Test
+    public void testFatalMetadataErrorDuringLogLoading() throws Exception {
+        try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv(3, Optional.empty())) {
+            logEnv.appendInitialRecords(Collections.unmodifiableList(Arrays.asList(
+                new ApiMessageAndVersion(new PartitionRecord(), (short) 0))));
+
+            try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv(logEnv, b -> { })) {
+                TestUtils.waitForCondition(() -> controlEnv.controllers().stream().allMatch(controller -> {
+                    return controlEnv.fatalFaultHandler(controller.nodeId()).firstException() != null;
+                }),
+                    "At least one controller failed to detect the fatal fault");
+                controlEnv.ignoreFatalFaults();
             }
         }
     }
