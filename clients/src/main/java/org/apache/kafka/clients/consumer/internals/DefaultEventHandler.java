@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
@@ -77,7 +76,7 @@ public class DefaultEventHandler implements EventHandler {
         NetworkClient netClient = new NetworkClient(
                 selector,
                 metadata,
-                config.getString(ProducerConfig.CLIENT_ID_CONFIG),
+                config.getString(ConsumerConfig.CLIENT_ID_CONFIG),
                 100, // a fixed large enough value will suffice for max
                 // in-flight requests
                 config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
@@ -168,15 +167,9 @@ public class DefaultEventHandler implements EventHandler {
 
     @Override
     public boolean add(ApplicationEvent event) {
-        try {
-            synchronized (backgroundThread) {
-                backgroundThread.notify();
-            }
-            return applicationEventQueue.add(event);
-        } catch (IllegalStateException e) {
-            // swallow the capacity restriction exception
-            return false;
-        }
+        boolean res = applicationEventQueue.add(event);
+        backgroundThread.wakeup();
+        return res;
     }
 
     private ConsumerMetadata bootstrapMetadata(

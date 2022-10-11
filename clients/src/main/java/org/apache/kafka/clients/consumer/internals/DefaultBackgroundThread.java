@@ -27,6 +27,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -100,7 +101,7 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.config = config;
             setConfig();
             this.inflightEvent = Optional.empty();
-            // subscriptionState is initialized in the polling thread
+            // subscriptionState is initialized by the polling thread
             this.subscriptions = subscriptions;
             this.metadata = metadata;
             this.networkClient = networkClient;
@@ -125,12 +126,10 @@ public class DefaultBackgroundThread extends KafkaThread {
             log.debug("{} started", getClass());
             while (running) {
                 runOnce();
-                time.sleep(retryBackoffMs);
             }
         } catch (InterruptException e) {
             log.error("The background thread has been interrupted");
             this.exception.set(Optional.of(new RuntimeException(e)));
-            Thread.interrupted();
         } catch (Throwable t) {
             log.error("The background thread failed due to unexpected error",
                     t);
@@ -147,18 +146,36 @@ public class DefaultBackgroundThread extends KafkaThread {
     /**
      * Process event from a single poll
      */
-    void runOnce() {
+    void runOnce() throws InterruptedException {
         this.inflightEvent = maybePollEvent();
-        log.debug("processing applicatoin event: {}", this.inflightEvent);
+        log.debug("processing application event: {}", this.inflightEvent);
         if (this.inflightEvent.isPresent() && maybeConsumeInflightEvent(this.inflightEvent.get())) {
             // clear inflight event upon successful consumption
             this.inflightEvent = Optional.empty();
         }
-        System.out.println(retryBackoffMs);
-        networkClient.poll(time.timer(this.retryBackoffMs));
+
+        // if there are pending events to process, poll then continue without
+        // blocking.
+        if (!applicationEventQueue.isEmpty() || inflightEvent.isPresent()) {
+            networkClient.poll(time.timer(0));
+            return;
+        }
+        // if there are no even to process, poll and wait until timeout
+        Timer timer = time.timer(retryBackoffMs);
+        networkClient.poll(timer);
+        synchronized (this) {
+            while (waitOnCondition(timer)) this.wait(timer.remainingMs());
+        }
     }
 
-    public Optional<ApplicationEvent> maybePollEvent() {
+    private boolean waitOnCondition(Timer timer) {
+        timer.update(time.milliseconds());
+        return !inflightEvent.isPresent() &&
+                applicationEventQueue.isEmpty() &&
+                timer.notExpired();
+    }
+
+    private Optional<ApplicationEvent> maybePollEvent() {
         if (this.inflightEvent.isPresent() || this.applicationEventQueue.isEmpty()) {
             return this.inflightEvent;
         }
@@ -170,7 +187,7 @@ public class DefaultBackgroundThread extends KafkaThread {
      * @param event an {@link ApplicationEvent}
      * @return true when successfully consumed the event.
      */
-    public boolean maybeConsumeInflightEvent(ApplicationEvent event) {
+    private boolean maybeConsumeInflightEvent(ApplicationEvent event) {
         log.debug("try consuming event: {}", Optional.ofNullable(event));
         switch (event.type) {
             case NOOP:
@@ -197,11 +214,15 @@ public class DefaultBackgroundThread extends KafkaThread {
         return this.running;
     }
 
+    public synchronized void wakeup() {
+        networkClient.wakeup();
+        notify();
+    }
+
     public void close() {
+        this.wakeup();
         this.running = false;
         Utils.closeQuietly(networkClient, "consumer network client");
         Utils.closeQuietly(metadata, "consumer network client");
     }
-
-
 }

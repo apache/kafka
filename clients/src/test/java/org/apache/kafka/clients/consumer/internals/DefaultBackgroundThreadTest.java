@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Timer;
@@ -82,11 +81,10 @@ public class DefaultBackgroundThreadTest {
         this.consumerClient = new ConsumerNetworkClient(context, client, metadata, time,
                 100, 1000, 100);
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
-        DefaultBackgroundThread runnable = setupMockHandler();
-        KafkaThread thread = new KafkaThread("test-thread", runnable, true);
-        thread.start();
+        DefaultBackgroundThread backgroundThread = setupMockHandler();
+        backgroundThread.start();
         assertTrue(client.active());
-        runnable.close();
+        backgroundThread.close();
         assertFalse(client.active());
     }
 
