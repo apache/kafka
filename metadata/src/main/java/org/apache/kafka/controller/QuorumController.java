@@ -157,7 +157,6 @@ public final class QuorumController implements Controller {
         private final int nodeId;
         private final String clusterId;
         private FaultHandler fatalFaultHandler = null;
-        private FaultHandler metadataFaultHandler = null;
         private Time time = Time.SYSTEM;
         private String threadNamePrefix = null;
         private LogContext logContext = null;
@@ -187,11 +186,6 @@ public final class QuorumController implements Controller {
 
         public Builder setFatalFaultHandler(FaultHandler fatalFaultHandler) {
             this.fatalFaultHandler = fatalFaultHandler;
-            return this;
-        }
-
-        public Builder setMetadataFaultHandler(FaultHandler metadataFaultHandler) {
-            this.metadataFaultHandler = metadataFaultHandler;
             return this;
         }
 
@@ -314,8 +308,6 @@ public final class QuorumController implements Controller {
                 throw new IllegalStateException("You must specify the quorum features");
             } else if (fatalFaultHandler == null) {
                 throw new IllegalStateException("You must specify a fatal fault handler.");
-            } else if (metadataFaultHandler == null) {
-                throw new IllegalStateException("You must specify a metadata fault handler.");
             }
 
             if (threadNamePrefix == null) {
@@ -334,7 +326,6 @@ public final class QuorumController implements Controller {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix + "QuorumController");
                 return new QuorumController(
                     fatalFaultHandler,
-                    metadataFaultHandler,
                     logContext,
                     nodeId,
                     clusterId,
@@ -983,7 +974,7 @@ public final class QuorumController implements Controller {
                                             "controller, which was %d of %d record(s) in the batch with baseOffset %d.",
                                             message.message().getClass().getSimpleName(), i, messages.size(),
                                             batch.baseOffset());
-                                    throw metadataFaultHandler.handleFault(failureMessage, e);
+                                    throw fatalFaultHandler.handleFault(failureMessage, e);
                                 }
                                 i++;
                             }
@@ -1039,7 +1030,7 @@ public final class QuorumController implements Controller {
                                         "%d record(s) in the batch with baseOffset %d.",
                                         message.message().getClass().getSimpleName(), reader.snapshotId(),
                                         i, messages.size(), batch.baseOffset());
-                                throw metadataFaultHandler.handleFault(failureMessage, e);
+                                throw fatalFaultHandler.handleFault(failureMessage, e);
                             }
                             i++;
                         }
@@ -1490,11 +1481,6 @@ public final class QuorumController implements Controller {
     private final FaultHandler fatalFaultHandler;
 
     /**
-     * Handles faults in metadata handling that are normally not fatal.
-     */
-    private final FaultHandler metadataFaultHandler;
-
-    /**
      * The slf4j log context, used to create new loggers.
      */
     private final LogContext logContext;
@@ -1702,7 +1688,6 @@ public final class QuorumController implements Controller {
 
     private QuorumController(
         FaultHandler fatalFaultHandler,
-        FaultHandler metadataFaultHandler,
         LogContext logContext,
         int nodeId,
         String clusterId,
@@ -1728,7 +1713,6 @@ public final class QuorumController implements Controller {
         int maxRecordsPerBatch
     ) {
         this.fatalFaultHandler = fatalFaultHandler;
-        this.metadataFaultHandler = metadataFaultHandler;
         this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;

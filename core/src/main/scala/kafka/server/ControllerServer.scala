@@ -209,7 +209,6 @@ class ControllerServer(
           setConfigurationValidator(new ControllerConfigurationValidator()).
           setStaticConfig(config.originals).
           setBootstrapMetadata(bootstrapMetadata).
-          setMetadataFaultHandler(metadataFaultHandler).
           setFatalFaultHandler(fatalFaultHandler)
       }
       authorizer match {
