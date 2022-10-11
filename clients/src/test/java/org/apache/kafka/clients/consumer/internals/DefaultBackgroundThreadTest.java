@@ -34,6 +34,7 @@ import org.mockito.Mockito;
 
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
@@ -76,10 +77,11 @@ public class DefaultBackgroundThreadTest {
     }
 
     @Test
-    public void testStartupAndTearDown() {
+    public void testStartupAndTearDown() throws InterruptedException {
         this.client = new MockClient(time, metadata);
         this.consumerClient = new ConsumerNetworkClient(context, client, metadata, time,
                 100, 1000, 100);
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
         DefaultBackgroundThread runnable = setupMockHandler();
         KafkaThread thread = new KafkaThread("test-thread", runnable, true);
         thread.start();
@@ -89,9 +91,10 @@ public class DefaultBackgroundThreadTest {
     }
 
     @Test
-    void testNetworkAndBlockingQueuePoll() {
+    void testNetworkAndBlockingQueuePoll() throws InterruptedException {
         // ensure network poll and application queue poll will happen in a
         // single iteration
+        this.time = new MockTime(100);
         DefaultBackgroundThread runnable = setupMockHandler();
         runnable.runOnce();
 
@@ -106,7 +109,7 @@ public class DefaultBackgroundThreadTest {
 
     private DefaultBackgroundThread setupMockHandler() {
         return new DefaultBackgroundThread(
-                new MockTime(),
+                this.time,
                 new ConsumerConfig(properties),
                 new LogContext(),
                 applicationEventsQueue,

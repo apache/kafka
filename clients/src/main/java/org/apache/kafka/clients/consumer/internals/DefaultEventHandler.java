@@ -16,15 +16,20 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.network.ChannelBuilder;
+import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
@@ -43,9 +48,72 @@ public class DefaultEventHandler implements EventHandler {
     private static final String METRIC_GRP_PREFIX = "consumer";
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
-    private final KafkaThread backgroundThread;
+    private final DefaultBackgroundThread backgroundThread;
+
 
     public DefaultEventHandler(Time time,
+                               ConsumerConfig config,
+                               LogContext logContext,
+                               BlockingQueue<ApplicationEvent> applicationEventQueue,
+                               BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                               SubscriptionState subscriptionState,
+                               ApiVersions apiVersions,
+                               Metrics metrics,
+                               ClusterResourceListeners clusterResourceListeners,
+                               Sensor fetcherThrottleTimeSensor) {
+        this.applicationEventQueue = applicationEventQueue;
+        this.backgroundEventQueue = backgroundEventQueue;
+        ConsumerMetadata metadata = bootstrapMetadata(logContext,
+                clusterResourceListeners,
+                config, subscriptionState);
+        ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
+        Selector selector = new Selector(config.getLong(
+                ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
+                metrics,
+                time,
+                METRIC_GRP_PREFIX,
+                channelBuilder,
+                logContext);
+        NetworkClient netClient = new NetworkClient(
+                selector,
+                metadata,
+                config.getString(ProducerConfig.CLIENT_ID_CONFIG),
+                100, // a fixed large enough value will suffice for max
+                // in-flight requests
+                config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
+                config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
+                config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
+                config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
+                config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                config.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
+                config.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
+                time,
+                true,
+                apiVersions,
+                fetcherThrottleTimeSensor,
+                logContext);
+        ConsumerNetworkClient networkClient = new ConsumerNetworkClient(
+                logContext,
+                netClient,
+                metadata,
+                time,
+                config.getInt(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
+                config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG));
+        this.backgroundThread = new DefaultBackgroundThread(
+                time,
+                config,
+                logContext,
+                this.applicationEventQueue,
+                this.backgroundEventQueue,
+                subscriptionState,
+                metadata,
+                networkClient,
+                new Metrics(time));
+    }
+
+    // VisibleForTesting
+    DefaultEventHandler(Time time,
                         ConsumerConfig config,
                         LogContext logContext,
                         BlockingQueue<ApplicationEvent> applicationEventQueue,
@@ -69,7 +137,7 @@ public class DefaultEventHandler implements EventHandler {
     }
 
     // VisibleForTesting
-    DefaultEventHandler(KafkaThread backgroundThread,
+    DefaultEventHandler(DefaultBackgroundThread backgroundThread,
                         BlockingQueue<ApplicationEvent> applicationEventQueue,
                         BlockingQueue<BackgroundEvent> backgroundEventQueue) {
         this.backgroundThread = backgroundThread;
@@ -101,6 +169,9 @@ public class DefaultEventHandler implements EventHandler {
     @Override
     public boolean add(ApplicationEvent event) {
         try {
+            synchronized (backgroundThread) {
+                backgroundThread.notify();
+            }
             return applicationEventQueue.add(event);
         } catch (IllegalStateException e) {
             // swallow the capacity restriction exception
@@ -128,8 +199,7 @@ public class DefaultEventHandler implements EventHandler {
 
     public void close() {
         try {
-            // this.backgroundThread.interrupt();
-            // close logic
+            backgroundThread.close();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

@@ -21,11 +21,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -33,8 +31,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.io.Closeable;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -42,7 +38,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -85,28 +80,6 @@ public class DefaultEventHandlerTest {
         }
         assertTrue(handler.poll().get() instanceof NoopBackgroundEvent);
         assertFalse(client.hasInFlightRequests()); // noop does not send network request
-        handler.close();
-        assertFalse(client.active());
-    }
-
-    @Test
-    @Timeout(1)
-    public void testRunOnceBackgroundThread() {
-        BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
-        BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-        KafkaThread backgroundThread =
-                new KafkaThread("", new RunOnceBackgroundThreadRunnable(applicationEventQueue, backgroundEventQueue), true);
-        EventHandler eventHandler = new DefaultEventHandler(
-                backgroundThread,
-                applicationEventQueue,
-                backgroundEventQueue);
-        assertTrue(eventHandler.add(new NoopApplicationEvent("hello-world")));
-        while (eventHandler.isEmpty()) { }
-        Optional<BackgroundEvent> event = eventHandler.poll();
-        assertTrue(event.isPresent());
-        assertTrue(event.get() instanceof NoopBackgroundEvent);
-        assertEquals(BackgroundEvent.EventType.NOOP, event.get().type);
-        assertEquals("hello-world", ((NoopBackgroundEvent) event.get()).message);
     }
 
     private static ConsumerMetadata newConsumerMetadata(boolean includeInternalTopics, SubscriptionState subscriptions) {
@@ -114,28 +87,5 @@ public class DefaultEventHandlerTest {
         long expireMs = 50000;
         return new ConsumerMetadata(refreshBackoffMs, expireMs, includeInternalTopics, false,
                 subscriptions, new LogContext(), new ClusterResourceListeners());
-    }
-
-    private class RunOnceBackgroundThreadRunnable implements Runnable, Closeable {
-        private BlockingQueue<ApplicationEvent> applicationEventQueue;
-        private BlockingQueue<BackgroundEvent> backgroundEventQueue;
-
-        public RunOnceBackgroundThreadRunnable(BlockingQueue<ApplicationEvent> applicationEvents,
-                                               BlockingQueue<BackgroundEvent> backgroundEventQueue) {
-            this.applicationEventQueue = applicationEvents;
-            this.backgroundEventQueue = backgroundEventQueue;
-        }
-
-        @Override
-        public void run() {
-            while (applicationEventQueue.isEmpty()) { }
-            ApplicationEvent event = applicationEventQueue.poll();
-            String message = ((NoopApplicationEvent) event).message;
-            backgroundEventQueue.add(new NoopBackgroundEvent(message));
-        }
-
-        @Override
-        public void close() {
-        }
     }
 }
