@@ -38,11 +38,11 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * ForwardingAdmin is the default value of `forwarding.admin.class` in MM2.
- * MM2 users who wish to use customized behaviour Admin; they can extend the ForwardingAdmin and override some behaviours
- * without need to provide a whole implementation of Admin.
- * The class must have a contractor that accept configuration (Map<String, Object> config) to configure
- * {@link KafkaAdminClient} and any other needed resource management clients.
+ * {@code ForwardingAdmin} is the default value of {@code forwarding.admin.class} in MM2.
+ * Users who wish to customize the MM2 behaviour for the creation of topics and access control lists can extend this 
+  * class without needing to provide a whole implementation of {@code Admin}.
+ * The class must have a constructor with signature {@code (Map<String, Object> config)} for configuring
+ * a decorated {@link KafkaAdminClient} and any other clients needed for external resource management.
  */
 public class ForwardingAdmin implements Admin {
     private final Admin delegate;
