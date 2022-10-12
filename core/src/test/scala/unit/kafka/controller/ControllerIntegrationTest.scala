@@ -128,9 +128,10 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val topic2 = "topic2"
     TestUtils.createTopic(zkClient, topic2, 1, 1, servers)
 
-    val sumOfTopicNameLength = TestUtils.yammerMetricValue("SumOfTopicNameLength")
-    assertEquals(topic1.size + topic2.size + 2 * KafkaController.topicNameBytesOverheadOnZk, sumOfTopicNameLength,
-      "all topics in the cluster " + zkClient.getAllTopicsInCluster())
+    TestUtils.waitUntilTrue(() => {
+      val sumOfTopicNameLength = TestUtils.yammerMetricValue("SumOfTopicNameLength")
+      topic1.size + topic2.size + 2 * KafkaController.topicNameBytesOverheadOnZk == sumOfTopicNameLength
+    }, "all topics in the cluster " + zkClient.getAllTopicsInCluster())
   }
 
   // This test case is used to ensure that there will be no correctness issue after we avoid sending out full
