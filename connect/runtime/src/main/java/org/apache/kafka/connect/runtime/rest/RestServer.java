@@ -41,8 +41,6 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.Slf4jRequestLogWriter;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
-import org.eclipse.jetty.server.handler.DefaultHandler;
-import org.eclipse.jetty.server.handler.RequestLogHandler;
 import org.eclipse.jetty.server.handler.StatisticsHandler;
 import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletContextHandler;
@@ -190,6 +188,11 @@ public class RestServer {
     public void initializeServer() {
         log.info("Initializing REST server");
 
+        Slf4jRequestLogWriter slf4jRequestLogWriter = new Slf4jRequestLogWriter();
+        slf4jRequestLogWriter.setLoggerName(RestServer.class.getCanonicalName());
+        CustomRequestLog requestLog = new CustomRequestLog(slf4jRequestLogWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT + " %{ms}T");
+        jettyServer.setRequestLog(requestLog);
+
         /* Needed for graceful shutdown as per `setStopTimeout` documentation */
         StatisticsHandler statsHandler = new StatisticsHandler();
         statsHandler.setHandler(handlers);
@@ -283,15 +286,6 @@ public class RestServer {
         if (!Utils.isBlank(headerConfig)) {
             configureHttpResponsHeaderFilter(context);
         }
-
-        RequestLogHandler requestLogHandler = new RequestLogHandler();
-        Slf4jRequestLogWriter slf4jRequestLogWriter = new Slf4jRequestLogWriter();
-        slf4jRequestLogWriter.setLoggerName(RestServer.class.getCanonicalName());
-        CustomRequestLog requestLog = new CustomRequestLog(slf4jRequestLogWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT + " %{ms}T");
-        requestLogHandler.setRequestLog(requestLog);
-
-        contextHandlers.add(new DefaultHandler());
-        contextHandlers.add(requestLogHandler);
 
         handlers.setHandlers(contextHandlers.toArray(new Handler[0]));
         try {
