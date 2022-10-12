@@ -317,7 +317,6 @@ class Tasks implements TasksRegistry {
         return null;
     }
 
-    @Override
     public Task task(final TaskId taskId) {
         final Task task = getTask(taskId);
 
@@ -336,7 +335,6 @@ class Tasks implements TasksRegistry {
         return tasks;
     }
 
-    @Override
     public Collection<Task> activeTasks() {
         return Collections.unmodifiableCollection(activeTasksPerId.values());
     }
