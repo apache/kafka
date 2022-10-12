@@ -105,19 +105,6 @@ public class DefaultBackgroundThreadTest {
     }
 
     @Test
-    void testBackgroundThreadSwallowedException() {
-        // ensure network poll and application queue poll will happen in a
-        // single iteration
-        this.time = new MockTime(100);
-        DefaultBackgroundThread runnable = spy(setupMockHandler());
-        runnable.start();
-        doThrow(WakeupException.class).when(runnable).wakeup();
-        runnable.wakeup();
-        assertTrue(runnable.isRunning());
-        runnable.close();
-    }
-
-    @Test
     void testNetworkAndBlockingQueuePoll() {
         // ensure network poll and application queue poll will happen in a
         // single iteration
