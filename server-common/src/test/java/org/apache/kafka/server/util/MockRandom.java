@@ -15,24 +15,30 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.image;
+package org.apache.kafka.server.util;
 
-import org.apache.kafka.server.common.ApiMessageAndVersion;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
+import java.util.Random;
 
 
-public class MockSnapshotConsumer implements Consumer<List<ApiMessageAndVersion>> {
-    private final List<List<ApiMessageAndVersion>> batches = new ArrayList<>();
+/**
+ * A subclass of Random with a fixed seed and generation algorithm.
+ *
+ * This is useful for generating a deterministic sequence of pseudorandom numbers.
+ */
+public class MockRandom extends Random {
+    private long state;
 
-    @Override
-    public void accept(List<ApiMessageAndVersion> batch) {
-        batches.add(batch);
+    public MockRandom() {
+        this(17);
     }
 
-    public List<List<ApiMessageAndVersion>> batches() {
-        return batches;
+    public MockRandom(long state) {
+        this.state = state;
+    }
+
+    @Override
+    protected int next(int bits) {
+        state = (state * 2862933555777941757L) + 3037000493L;
+        return (int) (state >>> (64 - bits));
     }
 }
