@@ -29,6 +29,7 @@ import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -44,6 +45,7 @@ import org.slf4j.LoggerFactory;
 import javax.ws.rs.core.MediaType;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
@@ -51,10 +53,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.connect.runtime.WorkerConfig.ADMIN_LISTENERS_CONFIG;
+import static org.apache.kafka.connect.runtime.rest.RestServer.maybeThrowInvalidHostNameException;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -149,6 +153,17 @@ public class RestServerTest {
         config = new DistributedConfig(configMap);
         server = new RestServer(config);
         Assert.assertEquals("http://plaintext-localhost:4761/", server.advertisedUrl().toString());
+    }
+
+    @Test
+    public void testMaybeThrowInvalidHostNameException() {
+        maybeThrowInvalidHostNameException(URI.create("http://localhost:8080"), null);
+
+        ConnectException exception = assertThrows(ConnectException.class, () -> maybeThrowInvalidHostNameException(URI.create("http://kafka_connect-0.dev-2:8080"), "kafka_connect-0.dev-2"));
+        assertTrue(exception.getMessage().contains("RFC 1123"));
+
+        exception = assertThrows(ConnectException.class, () -> maybeThrowInvalidHostNameException(URI.create("http://:8080"), null));
+        assertTrue(exception.getMessage().contains("Could not parse host"));
     }
 
     @Test
