@@ -40,11 +40,10 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 public class DefaultBackgroundThreadTest {
@@ -53,7 +52,6 @@ public class DefaultBackgroundThreadTest {
     private MockTime time;
     private SubscriptionState subscriptions;
     private ConsumerMetadata metadata;
-    private MockClient client;
     private LogContext context;
     private ConsumerNetworkClient consumerClient;
     private Metrics metrics;
@@ -80,7 +78,7 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     public void testStartupAndTearDown() throws InterruptedException {
-        this.client = new MockClient(time, metadata);
+        MockClient client = new MockClient(time, metadata);
         this.consumerClient = new ConsumerNetworkClient(context, client, metadata, time,
                 100, 1000, 100);
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
@@ -93,7 +91,7 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     public void testInterruption() throws InterruptedException {
-        this.client = new MockClient(time, metadata);
+        MockClient client = new MockClient(time, metadata);
         this.consumerClient = new ConsumerNetworkClient(context, client, metadata, time,
                 100, 1000, 100);
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
@@ -102,6 +100,22 @@ public class DefaultBackgroundThreadTest {
         assertTrue(client.active());
         backgroundThread.close();
         assertFalse(client.active());
+    }
+
+    @Test
+    void testWakeup() {
+        this.time = new MockTime(0);
+        MockClient client = new MockClient(time, metadata);
+        this.consumerClient = new ConsumerNetworkClient(context, client, metadata, time,
+                100, 1000, 100);
+        when(applicationEventsQueue.isEmpty()).thenReturn(true);
+        when(applicationEventsQueue.isEmpty()).thenReturn(true);
+        DefaultBackgroundThread runnable = setupMockHandler();
+        client.poll(0, time.milliseconds());
+        runnable.wakeup();
+
+        assertThrows(WakeupException.class, () -> runnable.runOnce());
+        runnable.close();
     }
 
     @Test
