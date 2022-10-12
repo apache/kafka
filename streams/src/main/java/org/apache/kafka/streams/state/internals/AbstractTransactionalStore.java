@@ -62,7 +62,6 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
     Map<String, Object> configs;
     File stateDir;
 
-    private boolean consistencyEnabled = false;
     private Position position;
     protected OffsetCheckpoint positionCheckpoint;
 
@@ -102,7 +101,10 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
         final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
         this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
-        tmpStore().consistencyEnabled = consistencyEnabled;
+        tmpStore().consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
+            context.appConfigs(),
+            IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
+            false);
 
         // register and possibly restore the state from the logs
         context.register(
@@ -110,11 +112,6 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
             (RecordBatchingStateRestoreCallback) this::restoreBatch,
             () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
         );
-
-        consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-            context.appConfigs(),
-            IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
-            false);
     }
 
     private void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
