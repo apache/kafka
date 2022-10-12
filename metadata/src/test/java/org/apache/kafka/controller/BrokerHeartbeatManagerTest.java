@@ -230,9 +230,9 @@ public class BrokerHeartbeatManagerTest {
         expected.add(new UsableBroker(3, Optional.of("rack2"), false));
         expected.add(new UsableBroker(4, Optional.of("rack1"), true));
         manager.updateControlledShutdownOffset(2, 101);
-        assertEquals(101, manager.getControlledShutDownOffset(2));
+        assertEquals(101, manager.controlledShutDownOffset(2));
         manager.updateControlledShutdownOffset(2, 102);
-        assertEquals(101, manager.getControlledShutDownOffset(2));
+        assertEquals(101, manager.controlledShutDownOffset(2));
     }
 
     @Test
