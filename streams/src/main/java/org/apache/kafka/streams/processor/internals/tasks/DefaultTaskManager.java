@@ -1,4 +1,4 @@
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.processor.internals.tasks;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -6,9 +6,11 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskExecutor;
-import org.apache.kafka.streams.processor.internals.tasks.TaskExecutor;
-import org.apache.kafka.streams.processor.internals.tasks.TaskManager;
+import org.apache.kafka.streams.processor.internals.DefaultStateUpdater;
+import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
+import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.Tasks;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
