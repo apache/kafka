@@ -24,6 +24,7 @@ import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpOptions;
 import org.apache.http.client.methods.HttpPut;
+import org.apache.http.client.methods.HttpTrace;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -60,7 +61,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
 public class RestServerTest {
-    
+
     private Herder herder;
     private Plugins plugins;
     private RestServer server;
@@ -104,6 +105,61 @@ public class RestServerTest {
         checkCORSRequest("", "http://bar.com", null, null);
     }
 
+    @Test
+    public void testTraceDisabled() throws IOException {
+
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        DistributedConfig workerConfig = new DistributedConfig(configMap);
+
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        doReturn(Collections.emptyList()).when(plugins).newPlugins(
+            Collections.emptyList(),
+            workerConfig,
+            ConnectRestExtension.class);
+
+        server = new RestServer(workerConfig);
+        server.initializeServer();
+        server.initializeResources(herder);
+
+        HttpTrace request = new HttpTrace("/");
+
+        CloseableHttpClient httpClient = HttpClients.createMinimal();
+        HttpHost httpHost = new HttpHost(
+                server.advertisedUrl().getHost(),
+                server.advertisedUrl().getPort()
+        );
+        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        Assert.assertEquals(403, response.getStatusLine().getStatusCode());
+    }
+
+    @Test
+    public void testGetEnabled() throws IOException {
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        DistributedConfig workerConfig = new DistributedConfig(configMap);
+
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        doReturn(Collections.emptyList()).when(plugins).newPlugins(
+            Collections.emptyList(),
+            workerConfig,
+            ConnectRestExtension.class);
+
+        server = new RestServer(workerConfig);
+        server.initializeServer();
+        server.initializeResources(herder);
+
+        HttpGet request = new HttpGet("/");
+        CloseableHttpClient httpClient = HttpClients.createMinimal();
+        HttpHost httpHost = new HttpHost(
+                server.advertisedUrl().getHost(),
+                server.advertisedUrl().getPort()
+        );
+        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        Assert.assertEquals(200, response.getStatusLine().getStatusCode());
+    }
+
+    @SuppressWarnings("deprecation")
     @Test
     public void testAdvertisedUri() {
         // Advertised URI from listeners without protocol
