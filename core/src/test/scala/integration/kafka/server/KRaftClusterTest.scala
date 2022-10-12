@@ -804,7 +804,6 @@ class KRaftClusterTest {
       }
       val admin = createAdminClient(cluster)
       try {
-
         val quorumState = admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
         val quorumInfo = quorumState.quorumInfo.get()
 
