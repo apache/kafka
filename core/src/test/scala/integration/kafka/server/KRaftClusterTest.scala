@@ -811,20 +811,20 @@ class KRaftClusterTest {
         assertTrue(cluster.controllers.asScala.keySet.contains(quorumInfo.leaderId),
           s"Leader ID ${quorumInfo.leaderId} was not a controller ID.")
 
-        quorumInfo.voters.forEach { voter =>
-          assertTrue(0 < voter.logEndOffset,
-            s"logEndOffset for voter with ID ${voter.replicaId} was ${voter.logEndOffset}")
-          assertNotEquals(OptionalLong.empty(), voter.lastFetchTimestamp)
-          assertNotEquals(OptionalLong.empty(), voter.lastCaughtUpTimestamp)
-        }
+        TestUtils.waitUntilTrue(() => quorumInfo.voters.stream.allMatch(voter => (
+            voter.logEndOffset > 0
+            && voter.lastFetchTimestamp() != OptionalLong.empty()
+            && voter.lastCaughtUpTimestamp() != OptionalLong.empty()
+        )), s"Atleast one voter did not return the expected state within timeout." +
+          s"The responses gathered for all the voters: ${quorumInfo.voters.toString}")
 
         assertEquals(cluster.brokers.asScala.keySet, quorumInfo.observers.asScala.map(_.replicaId).toSet)
-        quorumInfo.observers.forEach { observer =>
-          assertTrue(0 < observer.logEndOffset,
-            s"logEndOffset for observer with ID ${observer.replicaId} was ${observer.logEndOffset}")
-          assertNotEquals(OptionalLong.empty(), observer.lastFetchTimestamp)
-          assertNotEquals(OptionalLong.empty(), observer.lastCaughtUpTimestamp)
-        }
+        TestUtils.waitUntilTrue(() => quorumInfo.observers.stream.allMatch(observer => (
+          observer.logEndOffset > 0
+            && observer.lastFetchTimestamp() != OptionalLong.empty()
+            && observer.lastCaughtUpTimestamp() != OptionalLong.empty()
+          )), s"Atleast one observer did not return the expected state within timeout." +
+          s"The responses gathered for all the observers: ${quorumInfo.observers.toString}")
       } finally {
         admin.close()
       }
