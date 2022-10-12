@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -41,7 +42,9 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 public class DefaultBackgroundThreadTest {
@@ -89,7 +92,33 @@ public class DefaultBackgroundThreadTest {
     }
 
     @Test
-    void testNetworkAndBlockingQueuePoll() throws InterruptedException {
+    public void testInterruption() throws InterruptedException {
+        this.client = new MockClient(time, metadata);
+        this.consumerClient = new ConsumerNetworkClient(context, client, metadata, time,
+                100, 1000, 100);
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        DefaultBackgroundThread backgroundThread = setupMockHandler();
+        backgroundThread.start();
+        assertTrue(client.active());
+        backgroundThread.close();
+        assertFalse(client.active());
+    }
+
+    @Test
+    void testBackgroundThreadSwallowedException() {
+        // ensure network poll and application queue poll will happen in a
+        // single iteration
+        this.time = new MockTime(100);
+        DefaultBackgroundThread runnable = spy(setupMockHandler());
+        runnable.start();
+        doThrow(WakeupException.class).when(runnable).wakeup();
+        runnable.wakeup();
+        assertTrue(runnable.isRunning());
+        runnable.close();
+    }
+
+    @Test
+    void testNetworkAndBlockingQueuePoll() {
         // ensure network poll and application queue poll will happen in a
         // single iteration
         this.time = new MockTime(100);

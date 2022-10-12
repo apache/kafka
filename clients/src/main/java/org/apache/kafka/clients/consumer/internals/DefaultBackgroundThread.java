@@ -128,6 +128,8 @@ public class DefaultBackgroundThread extends KafkaThread {
                 try {
                     runOnce();
                 } catch (WakeupException | InterruptException e) {
+                    log.debug("Exception thrown, background thread won't " +
+                            "terminate", e);
                     // swallow
                 }
             }
