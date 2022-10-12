@@ -449,6 +449,8 @@ class Partition(val topicPartition: TopicPartition,
    */
   def isLeader: Boolean = leaderReplicaIdOpt.contains(localBrokerId)
 
+  def isFollower: Boolean = !isLeader
+
   def leaderIdIfLocal: Option[Int] = {
     leaderReplicaIdOpt.filter(_ == localBrokerId)
   }
@@ -1337,6 +1339,26 @@ class Partition(val topicPartition: TopicPartition,
           logEndOffset = initialLogEndOffset,
           lastStableOffset = initialLastStableOffset)
       }
+    }
+
+    // Fetching from a follower is only allowed from version 11 of the fetch request. Our intent
+    // was to allow it assuming that those would also implement KIP-320 (leader epoch). It turns
+    // out that some clients use version 11 without KIP-320 and the broker allows this. The issue
+    // is that we don't know whether the client fetches from the follower based on the order of
+    // the leader or by mistake e.g. based on stale metadata. The latter means that a client could
+    // end up on the follower with a offset that the follower does not have yet. Instead of returning
+    // OffsetOutOfRangeException, we return an empty batch to the client with the expectation that
+    // the client will retry and eventually refresh its metadata. Note that we only do this if the
+    // client does not provide a leader epoch and use version 11.
+    if (isFollower && !currentLeaderEpoch.isPresent && fetchOffset > initialLogEndOffset) {
+      return LogReadInfo(
+        fetchedData = FetchDataInfo.empty(fetchOffset),
+        divergingEpoch = None,
+        highWatermark = initialHighWatermark,
+        logStartOffset = initialLogStartOffset,
+        logEndOffset = initialLogEndOffset,
+        lastStableOffset = initialLastStableOffset
+      )
     }
 
     val fetchedData = localLog.read(

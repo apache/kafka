@@ -2783,6 +2783,60 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(replicas, partition.assignmentState.replicas)
   }
 
+  @Test
+  def testFetchFromFollowerWithOffsetAboveEndOffset(): Unit = {
+    val controllerEpoch = 3
+    val localReplica = brokerId
+    val leaderReplica = brokerId + 1
+    val replicas = List(localReplica, leaderReplica)
+    val topicId = Uuid.randomUuid()
+
+    val followerState = new LeaderAndIsrPartitionState()
+      .setControllerEpoch(controllerEpoch)
+      .setLeader(leaderReplica)
+      .setLeaderEpoch(2)
+      .setIsr(replicas.map(Int.box).asJava)
+      .setPartitionEpoch(2)
+      .setReplicas(replicas.map(Int.box).asJava)
+      .setIsNew(false)
+    assertTrue(partition.makeFollower(followerState, offsetCheckpoints, Some(topicId)))
+
+    // Append to the log and increment HWM.
+    val log = partition.localLogOrException
+    seedLogData(log, numRecords = 10, leaderEpoch = 2)
+    log.updateHighWatermark(8)
+
+    val clientMetadata = new DefaultClientMetadata(
+      "",
+      "clientid",
+      InetAddress.getLocalHost,
+      KafkaPrincipal.ANONYMOUS,
+      "PLAINTEXT"
+    )
+
+    // Fetching with a leader epoch should result in an OffsetOutOfRangeException
+    // because client knows that it is fetching from a follower and that it should
+    // go back to the leader to verify its offset.
+    assertThrows(classOf[OffsetOutOfRangeException], () => fetchConsumer(
+      partition = partition,
+      fetchOffset = 11,
+      leaderEpoch = Some(2),
+      clientMetadata = Some(clientMetadata)
+    ))
+
+    // Fetching without a leader epoch should result in an empty batch. Without the
+    // leader epoch, we don't know if the client is here on purpose or by mistake
+    // (e.g. based on stale metadata) so we don't send an OffsetOutOfRangeException
+    // in order to avoid causing an unexpected reset on the client side.
+    val fetchResult = fetchConsumer(
+      partition = partition,
+      fetchOffset = 11,
+      leaderEpoch = None,
+      clientMetadata = Some(clientMetadata)
+    )
+    assertEquals(0, fetchResult.fetchedData.records.sizeInBytes)
+  }
+
   private def makeLeader(
     topicId: Option[Uuid],
     controllerEpoch: Int,
