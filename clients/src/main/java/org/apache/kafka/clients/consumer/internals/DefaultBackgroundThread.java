@@ -28,7 +28,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -62,7 +61,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     private int heartbeatIntervalMs;
     private boolean running;
     private Optional<ApplicationEvent> inflightEvent = Optional.empty();
-    private AtomicReference<Optional<RuntimeException>> exception =
+    private final AtomicReference<Optional<RuntimeException>> exception =
             new AtomicReference<>(Optional.empty());
 
     public DefaultBackgroundThread(ConsumerConfig config,
@@ -165,22 +164,15 @@ public class DefaultBackgroundThread extends KafkaThread {
             networkClient.poll(time.timer(0));
             return;
         }
-        // if there are no even to process, poll until the next heartbeat.
-        // The networkClient will take the minimum of the requestTimeoutMs,
-        // nextHeartBeatMs, and nextMetadataUpdate
+        // if there are no events to process, poll until timeout. The timeout
+        // will be the minimum of the requestTimeoutMs, nextHeartBeatMs, and
+        // nextMetadataUpdate. See NetworkClient.poll impl.
         networkClient.poll(time.timer(timeToNextHeartbeatMs(time.milliseconds())));
     }
 
     private long timeToNextHeartbeatMs(long nowMs) {
         // TODO: implemented when heartbeat is added to the impl
         return 100;
-    }
-
-    private boolean waitOnCondition(Timer timer) {
-        timer.update(time.milliseconds());
-        return !inflightEvent.isPresent() &&
-                applicationEventQueue.isEmpty() &&
-                timer.notExpired();
     }
 
     private Optional<ApplicationEvent> maybePollEvent() {
