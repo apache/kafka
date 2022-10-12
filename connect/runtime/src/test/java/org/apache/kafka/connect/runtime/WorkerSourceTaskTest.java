@@ -35,6 +35,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
+import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -144,6 +145,7 @@ public class WorkerSourceTaskTest {
     @Mock private Future<RecordMetadata> sendFuture;
     @MockStrict private TaskStatus.Listener statusListener;
     @Mock private StatusBackingStore statusBackingStore;
+    @Mock private ErrorHandlingMetrics errorHandlingMetrics;
 
     private Capture<org.apache.kafka.clients.producer.Callback> producerCallbacks;
 
@@ -228,7 +230,7 @@ public class WorkerSourceTaskTest {
 
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter,
                                   HeaderConverter headerConverter, RetryWithToleranceOperator retryWithToleranceOperator) {
-        workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
+        workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
                 offsetReader, offsetWriter, offsetStore, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
                 retryWithToleranceOperator, statusBackingStore, Runnable::run);
