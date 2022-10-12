@@ -53,7 +53,6 @@ import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirs
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -68,6 +67,10 @@ import java.util.UUID;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoSession;
+import org.mockito.quality.Strictness;
 
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMinutes;
@@ -90,6 +93,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.*;
 
 @RunWith(Parameterized.class)
 public class TimeOrderedCachingPersistentWindowStoreTest {
@@ -104,11 +108,11 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     private ThreadCache cache;
     private InternalMockProcessorContext context;
     private TimeFirstWindowKeySchema baseKeySchema;
-    private WindowStore<Bytes, byte[]> underlyingStore;
+    private RocksDBTimeOrderedWindowStore underlyingStore;
     private TimeOrderedCachingWindowStore cachingStore;
     private RocksDBTimeOrderedWindowSegmentedBytesStore bytesStore;
     private CacheFlushListenerStub<Windowed<String>, String> cacheListener;
-
+    private MockitoSession mockitoSession;
     @Parameter
     public boolean hasIndex;
 
@@ -122,9 +126,16 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
 
     @Before
     public void setUp() {
+        // Use strict mode to detect unused mocks
+        mockitoSession = Mockito.mockitoSession()
+                .initMocks(this)
+                .strictness(Strictness.STRICT_STUBS)
+                .startMocking();
+
         baseKeySchema = new TimeFirstWindowKeySchema();
         bytesStore = new RocksDBTimeOrderedWindowSegmentedBytesStore("test", "metrics-scope", 100, SEGMENT_INTERVAL, hasIndex);
-        underlyingStore = new RocksDBTimeOrderedWindowStore(bytesStore, false, WINDOW_SIZE);
+        underlyingStore = spy(new RocksDBTimeOrderedWindowStore(bytesStore,
+            false, WINDOW_SIZE));
         final TimeWindowedDeserializer<String> keyDeserializer = new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE);
         keyDeserializer.setIsChangelogTopic(true);
         cacheListener = new CacheFlushListenerStub<>(keyDeserializer, new StringDeserializer());
@@ -134,55 +145,78 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, TOPIC, new RecordHeaders()));
         cachingStore.init((StateStoreContext) context, cachingStore);
+
+
     }
 
     @After
     public void closeStore() {
-        cachingStore.close();
+
+
+        try {
+            cachingStore.close();
+        } catch (RuntimeException runtimeException){
+           /*
+           It will reach here for the testcases like
+           shouldCloseCacheAndWrappedStoreAfterErrorDuringCacheFlush(),
+           shouldCloseWrappedStoreAfterErrorDuringCacheClose(),
+           shouldCloseCacheAfterErrorDuringStateStoreClose()
+
+           In these testcase we have set the throw for the cache#close
+           cache#flush, underlyingStore#close method.
+            */
+        }
+
+        mockitoSession.finishMocking();
     }
 
     @SuppressWarnings("deprecation")
     @Test
     public void shouldDelegateDeprecatedInit() {
-        final RocksDBTimeOrderedWindowStore inner = EasyMock.mock(RocksDBTimeOrderedWindowStore.class);
-        EasyMock.expect(inner.hasIndex()).andReturn(hasIndex);
-        EasyMock.replay(inner);
-        final TimeOrderedCachingWindowStore outer = new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
+        final RocksDBTimeOrderedWindowStore inner = mock(RocksDBTimeOrderedWindowStore.class);
+        when(inner.hasIndex()).thenReturn(hasIndex);
 
-        EasyMock.reset(inner);
-        EasyMock.expect(inner.name()).andStubReturn("store");
+        final TimeOrderedCachingWindowStore outer =
+                spy(new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE,
+                        SEGMENT_INTERVAL));
+
+        reset(inner);
+        when(inner.name()).thenReturn("store");
         inner.init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
-        EasyMock.expectLastCall();
-        EasyMock.replay(inner);
+        verify(inner).init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
+
         outer.init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
-        EasyMock.verify(inner);
+        verify(outer).init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
     }
 
     @Test
     public void shouldDelegateInit() {
-        final RocksDBTimeOrderedWindowStore inner = EasyMock.mock(RocksDBTimeOrderedWindowStore.class);
-        EasyMock.expect(inner.hasIndex()).andReturn(hasIndex);
-        EasyMock.replay(inner);
-        final TimeOrderedCachingWindowStore outer = new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
+        final RocksDBTimeOrderedWindowStore inner = mock(RocksDBTimeOrderedWindowStore.class);
+        when(inner.hasIndex()).thenReturn(hasIndex);
 
-        EasyMock.reset(inner);
-        EasyMock.expect(inner.name()).andStubReturn("store");
+        final TimeOrderedCachingWindowStore outer =
+                spy(new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE,
+                        SEGMENT_INTERVAL));
+
+        reset(inner);
+        when(inner.name()).thenReturn("store");
         inner.init((StateStoreContext) context, outer);
-        EasyMock.expectLastCall();
-        EasyMock.replay(inner);
+        verify(inner).init((StateStoreContext) context, outer);
         outer.init((StateStoreContext) context, outer);
-        EasyMock.verify(inner);
+        verify(outer).init((StateStoreContext) context, outer);
+        verify(inner, times(2)).init((StateStoreContext) context, outer);
+
     }
 
     @Test
     public void shouldThrowIfWrongStore() {
-        final RocksDBTimestampedWindowStore innerWrong = EasyMock.mock(RocksDBTimestampedWindowStore.class);
+        final RocksDBTimestampedWindowStore innerWrong = mock(RocksDBTimestampedWindowStore.class);
         final Exception e = assertThrows(IllegalArgumentException.class,
             () -> new TimeOrderedCachingWindowStore(innerWrong, WINDOW_SIZE, SEGMENT_INTERVAL));
         assertThat(e.getMessage(),
             containsString("TimeOrderedCachingWindowStore only supports RocksDBTimeOrderedWindowStore backed store"));
 
-        final RocksDBTimeOrderedWindowStore inner = EasyMock.mock(RocksDBTimeOrderedWindowStore.class);
+        final RocksDBTimeOrderedWindowStore inner = mock(RocksDBTimeOrderedWindowStore.class);
         // Nothing happens
         new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
     }
@@ -1157,60 +1191,49 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     }
 
     @Test
-    public void shouldCloseCacheAndWrappedStoreAfterErrorDuringCacheFlush() {
-        setUpCloseTests();
-        EasyMock.reset(cache);
-        cache.flush(CACHE_NAMESPACE);
-        EasyMock.expectLastCall().andThrow(new RuntimeException("Simulating an error on flush"));
-        cache.close(CACHE_NAMESPACE);
-        EasyMock.replay(cache);
-        EasyMock.reset(underlyingStore);
-        underlyingStore.close();
-        EasyMock.replay(underlyingStore);
+    public void shouldCloseCacheAndWrappedStoreAfterErrorDuringCacheFlush(){
 
-        assertThrows(RuntimeException.class, cachingStore::close);
-        EasyMock.verify(cache, underlyingStore);
+        setUpCloseTests();
+        reset(cache);
+        doThrow(new RuntimeException("Simulating an error on flush2")).when(cache).flush(CACHE_NAMESPACE) ;
+        cache.close(CACHE_NAMESPACE);
+        reset(underlyingStore);
+        underlyingStore.close();
+        assertThrows(RuntimeException.class, ()->cachingStore.close());
     }
 
     @Test
     public void shouldCloseWrappedStoreAfterErrorDuringCacheClose() {
-        setUpCloseTests();
-        EasyMock.reset(cache);
-        cache.flush(CACHE_NAMESPACE);
-        cache.close(CACHE_NAMESPACE);
-        EasyMock.expectLastCall().andThrow(new RuntimeException("Simulating an error on close"));
-        EasyMock.replay(cache);
-        EasyMock.reset(underlyingStore);
-        underlyingStore.close();
-        EasyMock.replay(underlyingStore);
 
+        setUpCloseTests();
+        reset(cache);
+        cache.flush(CACHE_NAMESPACE);
+        doThrow(new RuntimeException("Simulating an error on close")).when(cache).close(CACHE_NAMESPACE) ;
+        reset(underlyingStore);
+        underlyingStore.close();
         assertThrows(RuntimeException.class, cachingStore::close);
-        EasyMock.verify(cache, underlyingStore);
     }
 
     @Test
     public void shouldCloseCacheAfterErrorDuringStateStoreClose() {
+
+
         setUpCloseTests();
-        EasyMock.reset(cache);
+        reset(cache);
         cache.flush(CACHE_NAMESPACE);
         cache.close(CACHE_NAMESPACE);
-        EasyMock.replay(cache);
-        EasyMock.reset(underlyingStore);
-        underlyingStore.close();
-        EasyMock.expectLastCall().andThrow(new RuntimeException("Simulating an error on close"));
-        EasyMock.replay(underlyingStore);
-
+        reset(underlyingStore);
+        doThrow(new RuntimeException("Simulating an error on close")).when(underlyingStore).close() ;
         assertThrows(RuntimeException.class, cachingStore::close);
-        EasyMock.verify(cache, underlyingStore);
+
     }
 
     private void setUpCloseTests() {
-        underlyingStore = EasyMock.createNiceMock(RocksDBTimeOrderedWindowStore.class);
-        EasyMock.expect(underlyingStore.name()).andStubReturn("store-name");
-        EasyMock.expect(underlyingStore.isOpen()).andStubReturn(true);
-        EasyMock.replay(underlyingStore);
-        cachingStore = new TimeOrderedCachingWindowStore(underlyingStore, WINDOW_SIZE, SEGMENT_INTERVAL);
-        cache = EasyMock.createNiceMock(ThreadCache.class);
+        underlyingStore = mock(RocksDBTimeOrderedWindowStore.class);
+        when(underlyingStore.name()).thenReturn("store-name");
+        cachingStore = spy(new TimeOrderedCachingWindowStore(underlyingStore,
+            WINDOW_SIZE, SEGMENT_INTERVAL));
+        cache = mock(ThreadCache.class);
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
         cachingStore.init((StateStoreContext) context, cachingStore);
