@@ -151,7 +151,7 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
     @Override
     public void commit(final Long changelogOffset) {
         tmpStore().commit(changelogOffset);
-        doCommit();
+        doCommit(changelogOffset);
     }
 
     @Override
@@ -274,13 +274,14 @@ public abstract class AbstractTransactionalStore<T extends KeyValueStore<Bytes, 
         return position;
     }
 
-    private void doCommit() {
+    private void doCommit(final Long changelogOffset) {
         try (final KeyValueIterator<Bytes, byte[]> it = tmpStore().all()) {
             while (it.hasNext()) {
                 final KeyValue<Bytes, byte[]> kv = it.next();
                 mainStore().put(kv.key, fromUncommittedValue(kv.value));
             }
         }
+        mainStore().commit(changelogOffset);
 
         truncateTmpStore();
     }
