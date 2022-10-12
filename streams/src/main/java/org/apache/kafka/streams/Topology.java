@@ -738,17 +738,18 @@ public class Topology {
     }
 
     /**
-     * Adds a Read Only {@link StateStore} to the topology.
+     * Adds a read-only {@link StateStore} to the topology.
      *
-     * A Read Only StateStore can use any compacted topic as a changelog.
-     * <p>
+     * A read-only state store uses its input topic for fault-tolerance. Thus, in contrast to regular state stores,
+     * it must never create an internal changelog topic. Therefore, the input topic should be configured with
+     * log compaction.
+     *
      * A {@link SourceNode} will be added to consume the data arriving from the partitions of the input topic.
-     * <p>
      * The provided {@link ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
-     * records forwarded from the {@link SourceNode}.
-     * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
+     * records forwarded from the {@link SourceNode}. This {@link ProcessorNode} should be used to keep the
+     * {@link StateStore} up-to-date.
      *
-     * @param storeBuilder          user defined key value store builder
+     * @param storeBuilder          user defined store builder
      * @param sourceName            name of the {@link SourceNode} that will be automatically added
      * @param timestampExtractor    the stateless timestamp extractor used for this source,
      *                              if not specified the default extractor defined in the configs will be used
@@ -769,8 +770,7 @@ public class Topology {
                                                                   final String processorName,
                                                                   final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
         if (storeBuilder.loggingEnabled()) {
-            // -- disabling logging. We might want to print some logging.
-            storeBuilder.withLoggingDisabled();
+            throw new TopologyException("Read-only state stores must have logging disabled.");
         }
 
         internalTopologyBuilder.addSource(AutoOffsetReset.EARLIEST, sourceName, timestampExtractor, keyDeserializer, valueDeserializer, topic);
