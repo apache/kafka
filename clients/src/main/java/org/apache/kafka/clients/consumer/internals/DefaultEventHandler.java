@@ -167,8 +167,8 @@ public class DefaultEventHandler implements EventHandler {
 
     @Override
     public boolean add(ApplicationEvent event) {
-        boolean res = applicationEventQueue.add(event);
         backgroundThread.wakeup();
+        boolean res = applicationEventQueue.add(event);
         return res;
     }
 

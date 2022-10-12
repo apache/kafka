@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
@@ -125,7 +126,11 @@ public class DefaultBackgroundThread extends KafkaThread {
         try {
             log.debug("{} started", getClass());
             while (running) {
-                runOnce();
+                try {
+                    runOnce();
+                } catch (WakeupException e) {
+                    // swallow wakup
+                }
             }
         } catch (InterruptException e) {
             log.error("The background thread has been interrupted");
@@ -146,7 +151,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     /**
      * Process event from a single poll
      */
-    void runOnce() throws InterruptedException {
+    void runOnce() {
         this.inflightEvent = maybePollEvent();
         log.debug("processing application event: {}", this.inflightEvent);
         if (this.inflightEvent.isPresent() && maybeConsumeInflightEvent(this.inflightEvent.get())) {
@@ -160,12 +165,15 @@ public class DefaultBackgroundThread extends KafkaThread {
             networkClient.poll(time.timer(0));
             return;
         }
-        // if there are no even to process, poll and wait until timeout
-        Timer timer = time.timer(retryBackoffMs);
-        networkClient.poll(timer);
-        synchronized (this) {
-            while (waitOnCondition(timer)) this.wait(timer.remainingMs());
-        }
+        // if there are no even to process, poll until the next heartbeat.
+        // The networkClient will take the minimum of the requestTimeoutMs,
+        // nextHeartBeatMs, and nextMetadataUpdate
+        networkClient.poll(time.timer(timeToNextHeartbeatMs(time.milliseconds())));
+    }
+
+    private long timeToNextHeartbeatMs(long nowMs) {
+        // TODO: implemented when heartbeat is added to the impl
+        return 100;
     }
 
     private boolean waitOnCondition(Timer timer) {
@@ -214,9 +222,8 @@ public class DefaultBackgroundThread extends KafkaThread {
         return this.running;
     }
 
-    public synchronized void wakeup() {
+    public void wakeup() {
         networkClient.wakeup();
-        notify();
     }
 
     public void close() {
