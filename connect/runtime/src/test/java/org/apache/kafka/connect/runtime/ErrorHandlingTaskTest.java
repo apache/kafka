@@ -77,12 +77,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.Executor;
 
 import static java.util.Collections.emptyMap;
@@ -231,9 +226,7 @@ public class ErrorHandlingTaskTest {
         retryWithToleranceOperator.reporters(singletonList(reporter));
 
         createSinkTask(initialState, retryWithToleranceOperator);
-        verify(consumer).subscribe(any(Collection.class),
-                any(ConsumerRebalanceListener.class));
-        verify(sinkTask).initialize(any(WorkerSinkTaskContext.class));
+
         workerSinkTask.initialize(TASK_CONFIG);
         workerSinkTask.initializeAndStart();
         workerSinkTask.close();
