@@ -127,13 +127,10 @@ public class DefaultBackgroundThread extends KafkaThread {
             while (running) {
                 try {
                     runOnce();
-                } catch (WakeupException e) {
-                    // swallow wakup
+                } catch (WakeupException | InterruptException e) {
+                    // swallow
                 }
             }
-        } catch (InterruptException e) {
-            log.error("The background thread has been interrupted");
-            this.exception.set(Optional.of(new RuntimeException(e)));
         } catch (Throwable t) {
             log.error("The background thread failed due to unexpected error",
                     t);
