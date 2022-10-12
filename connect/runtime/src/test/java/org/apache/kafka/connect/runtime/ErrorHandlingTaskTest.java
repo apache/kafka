@@ -68,10 +68,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 //import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.MockitoSession;
+import org.mockito.*;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.quality.Strictness;
 import org.mockito.stubbing.OngoingStubbing;
@@ -105,7 +102,7 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABL
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.*;
 
-
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ErrorHandlingTaskTest {
 
     private static final String TOPIC = "test";
@@ -139,9 +136,8 @@ public class ErrorHandlingTaskTest {
     @SuppressWarnings("unused")
     @Mock
     private SourceTask sourceTask;
-
-    private ArgumentCaptor<WorkerSinkTaskContext> sinkTaskContext =
-            ArgumentCaptor.forClass(WorkerSinkTaskContext.class);;
+    @Captor
+    private ArgumentCaptor<WorkerSinkTaskContext> sinkTaskContext;
     private WorkerConfig workerConfig;
     private SourceConnectorConfig sourceConfig;
     @Mock
@@ -166,9 +162,8 @@ public class ErrorHandlingTaskTest {
     OffsetStorageWriter offsetWriter;
     @Mock
     private ConnectorOffsetBackingStore offsetStore;
-
-    private ArgumentCaptor<ConsumerRebalanceListener> rebalanceListener =
-            ArgumentCaptor.forClass(ConsumerRebalanceListener.class);
+    @Captor
+    private ArgumentCaptor<ConsumerRebalanceListener> rebalanceListener;
     @SuppressWarnings("unused")
     @Mock
     private TaskStatus.Listener statusListener;
@@ -180,9 +175,8 @@ public class ErrorHandlingTaskTest {
 
     private ErrorHandlingMetrics errorHandlingMetrics;
 
-    private boolean enableTopicCreation = false;
+    private boolean enableTopicCreation;
 
-    private MockitoSession mockitoSession;
     @ParameterizedTest.Parameters
     public static Collection<Boolean> parameters() {
         return Arrays.asList(false, true);
@@ -203,11 +197,6 @@ public class ErrorHandlingTaskTest {
         sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorProps(TOPIC), true);
         errorHandlingMetrics = new ErrorHandlingMetrics(taskId, metrics);
 
-        // Use strict mode to detect unused mocks
-        mockitoSession = Mockito.mockitoSession()
-                .initMocks(this)
-                .strictness(Strictness.STRICT_STUBS)
-                .startMocking();
     }
 
     private Map<String, String> sourceConnectorProps(String topic) {
@@ -231,7 +220,6 @@ public class ErrorHandlingTaskTest {
         if (metrics != null) {
             metrics.stop();
         }
-        mockitoSession.finishMocking();
 
     }
 
@@ -243,10 +231,9 @@ public class ErrorHandlingTaskTest {
         retryWithToleranceOperator.reporters(singletonList(reporter));
 
         createSinkTask(initialState, retryWithToleranceOperator);
-        doNothing().when(consumer).subscribe(
-                eq(singletonList(TOPIC)),
-                rebalanceListener.capture());
-        doNothing().when(sinkTask).initialize(sinkTaskContext.capture());
+        verify(consumer).subscribe(any(Collection.class),
+                any(ConsumerRebalanceListener.class));
+        verify(sinkTask).initialize(any(WorkerSinkTaskContext.class));
         workerSinkTask.initialize(TASK_CONFIG);
         workerSinkTask.initializeAndStart();
         workerSinkTask.close();
@@ -368,8 +355,8 @@ public class ErrorHandlingTaskTest {
         SourceRecord record2 = new SourceRecord(emptyMap(), emptyMap(), TOPIC, PARTITION1, valSchema, struct2);
 
         when(workerSourceTask.isStopping()).thenReturn(false);
-        when(workerSourceTask.isStopping()).thenReturn(false);;
-        when(workerSourceTask.isStopping()).thenReturn(false);;
+        when(workerSourceTask.isStopping()).thenReturn(false);
+        when(workerSourceTask.isStopping()).thenReturn(false);
 
         doReturn(true).when(workerSourceTask).commitOffsets();
 
@@ -515,16 +502,14 @@ public class ErrorHandlingTaskTest {
     private void expectTopicCreation(String topic) {
         if (workerConfig.topicCreationEnable()) {
             when(admin.describeTopics(topic)).thenReturn(Collections.emptyMap());
-            ArgumentCaptor<NewTopic> newTopicCapture =
-                    ArgumentCaptor.forClass(NewTopic.class);
 
             if (enableTopicCreation) {
                 Set<String> created = Collections.singleton(topic);
                 Set<String> existing = Collections.emptySet();
                 TopicAdmin.TopicCreationResponse response = new TopicAdmin.TopicCreationResponse(created, existing);
-                when(admin.createOrFindTopics(newTopicCapture.capture())).thenReturn(response);
+                when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(response);
             } else {
-                when(admin.createTopic(newTopicCapture.capture())).thenReturn(true);
+                when(admin.createTopic(any(NewTopic.class))).thenReturn(true);
             }
         }
     }
