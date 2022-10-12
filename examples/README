@@ -2,7 +2,7 @@ This directory contains examples of client code that uses kafka.
 
 To run the demo:
 
-   1. Start Zookeeper and the Kafka server.Note, it's unnecessary to start Zookeeper in KRaft mode.
+   1. In Zookeeper mode, Start Zookeeper and the Kafka server. In KRaft mode, start the Kafka server. Note, it's unnecessary to start Zookeeper in KRaft mode.
    2. For unlimited sync-producer-consumer run, `run bin/java-producer-consumer-demo.sh sync`
    3. For unlimited async-producer-consumer run, `run bin/java-producer-consumer-demo.sh`
    4. For exactly once demo run, `run bin/exactly-once-demo.sh 6 3 50000`,
