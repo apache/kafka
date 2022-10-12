@@ -67,11 +67,8 @@ import java.util.UUID;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
-import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoSession;
-import org.mockito.quality.Strictness;
-
+import org.mockito.junit.MockitoJUnitRunner;
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMinutes;
 import static java.time.Instant.ofEpochMilli;
@@ -95,7 +92,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.*;
 
-@RunWith(Parameterized.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class TimeOrderedCachingPersistentWindowStoreTest {
 
     private static final int MAX_CACHE_SIZE_BYTES = 300;
@@ -126,12 +123,6 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
 
     @Before
     public void setUp() {
-        // Use strict mode to detect unused mocks
-        mockitoSession = Mockito.mockitoSession()
-                .initMocks(this)
-                .strictness(Strictness.STRICT_STUBS)
-                .startMocking();
-
         baseKeySchema = new TimeFirstWindowKeySchema();
         bytesStore = new RocksDBTimeOrderedWindowSegmentedBytesStore("test", "metrics-scope", 100, SEGMENT_INTERVAL, hasIndex);
         underlyingStore = spy(new RocksDBTimeOrderedWindowStore(bytesStore,
@@ -145,14 +136,10 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, TOPIC, new RecordHeaders()));
         cachingStore.init((StateStoreContext) context, cachingStore);
-
-
     }
 
     @After
     public void closeStore() {
-
-
         try {
             cachingStore.close();
         } catch (RuntimeException runtimeException){
@@ -162,12 +149,11 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
            shouldCloseWrappedStoreAfterErrorDuringCacheClose(),
            shouldCloseCacheAfterErrorDuringStateStoreClose()
 
-           In these testcase we have set the throw for the cache#close
+           In these testcases we have set the doThrow for the cache#close
            cache#flush, underlyingStore#close method.
             */
         }
 
-        mockitoSession.finishMocking();
     }
 
     @SuppressWarnings("deprecation")
