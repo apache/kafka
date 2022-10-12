@@ -215,6 +215,27 @@ public class BrokerHeartbeatManagerTest {
     }
 
     @Test
+    public void testControlledShutdownOffsetIsOnlyUpdatedOnce() {
+        BrokerHeartbeatManager manager = newBrokerHeartbeatManager();
+        assertEquals(Collections.emptySet(), usableBrokersToSet(manager));
+        manager.touch(0, false, 100);
+        manager.touch(1, false, 100);
+        manager.touch(2, false, 98);
+        manager.touch(3, false, 100);
+        manager.touch(4, true, 100);
+        Set<UsableBroker> expected = new HashSet<>();
+        expected.add(new UsableBroker(0, Optional.of("rack1"), false));
+        expected.add(new UsableBroker(1, Optional.of("rack2"), false));
+        expected.add(new UsableBroker(2, Optional.of("rack1"), false));
+        expected.add(new UsableBroker(3, Optional.of("rack2"), false));
+        expected.add(new UsableBroker(4, Optional.of("rack1"), true));
+        manager.updateControlledShutdownOffset(2, 101);
+        assertEquals(101, manager.getControlledShutDownOffset(2));
+        manager.updateControlledShutdownOffset(2, 102);
+        assertEquals(101, manager.getControlledShutDownOffset(2));
+    }
+
+    @Test
     public void testBrokerHeartbeatStateList() {
         BrokerHeartbeatStateList list = new BrokerHeartbeatStateList();
         assertEquals(null, list.first());

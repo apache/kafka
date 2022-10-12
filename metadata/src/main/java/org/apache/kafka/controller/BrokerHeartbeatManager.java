@@ -275,6 +275,12 @@ public class BrokerHeartbeatManager {
         return brokers.values();
     }
 
+    // VisibleForTesting
+    long getControlledShutDownOffset(int brokerId) {
+        return brokers.get(brokerId).controlledShutDownOffset;
+    }
+
+
     /**
      * Mark a broker as fenced.
      *
@@ -414,7 +420,9 @@ public class BrokerHeartbeatManager {
             throw new RuntimeException("Fenced brokers cannot enter controlled shutdown.");
         }
         active.remove(broker);
-        broker.controlledShutDownOffset = controlledShutDownOffset;
+        if (broker.controlledShutDownOffset < 0) {
+            broker.controlledShutDownOffset = controlledShutDownOffset;
+        }
         log.debug("Updated the controlled shutdown offset for broker {} to {}.",
             brokerId, controlledShutDownOffset);
     }
