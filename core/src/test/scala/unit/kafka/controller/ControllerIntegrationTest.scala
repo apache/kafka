@@ -769,6 +769,49 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilTrue(() => newController.controllerContext.topicMinIsrConfig.getOrElse(topic, -1) == 1, "Controller never saw min.insync.replicas config change for topic.")
   }
 
+  // This test is to verify that skipping the shutdown check would allow the broker to shutdown
+  // even though it may lead to offline partitions
+  @Test
+  def testSkipShutdownCheck(): Unit = {
+    // create brokers
+    val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, true, enableControlledShutdownSafetyCheck = true)
+      .map{props => {
+        props.setProperty(KafkaConfig.ControlledShutdownMaxRetriesProp, Integer.MAX_VALUE.toString)
+        props
+      }}
+      .map(KafkaConfig.fromProps)
+    // create the servers in reverse order so that broker 2 becomes the controller
+    servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    assertTrue(controllerId == 2)
+    val controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
+
+    val topicConfig = new Properties()
+    val expectedReplicaAssignment = Map(0  -> List(0, 1))
+    val topic = "test"
+    val tp = new TopicPartition(topic, 0)
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers, topicConfig = topicConfig)
+
+    // skip shutdown safety check for all data brokers
+    val dataBrokers = servers.filterNot(_.config.brokerId == controllerId)
+
+    val brokerIdAndEpochs = dataBrokers.map{s => (s.config.brokerId, s.kafkaController.brokerEpoch)}
+    for (brokerEntry <- brokerIdAndEpochs) {
+      @volatile var skipSafetyCheckSucceeded = false
+      controller.skipControlledShutdownSafetyCheck(brokerEntry._1, brokerEntry._2, {
+        case scala.util.Failure(t) => throw t
+        case _ => skipSafetyCheckSucceeded = true
+      })
+      TestUtils.waitUntilTrue(() => skipSafetyCheckSucceeded, s"Failed to skip shutdown safety check for $brokerEntry")
+    }
+    dataBrokers.foreach {s => s.shutdown()}
+
+    // verify that the partition has become Offline
+    TestUtils.waitUntilTrue(() => {
+      controller.controllerContext.partitionState(tp) == OfflinePartition
+    }, s"the partition $tp does not become offline after all replicas are shutdown")
+  }
+
   @nowarn("cat=deprecation")
   private def alterTopicConfigs(adminClient: Admin, topic: String, topicConfigs: Properties): AlterConfigsResult = {
     val configEntries = topicConfigs.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava

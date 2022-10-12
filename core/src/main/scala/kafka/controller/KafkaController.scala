@@ -1682,8 +1682,9 @@ class KafkaController(val config: KafkaConfig,
       }
       else brokerEpoch
 
+    val shouldSkipShutdownSafetyCheck = controllerContext.skipShutdownSafetyCheck.getOrElse(id, -1L) >= actualBrokerEpoch
     if (config.controlledShutdownSafetyCheckEnable && !safeToShutdown(id, actualBrokerEpoch)) {
-      if (controllerContext.skipShutdownSafetyCheck.getOrElse(id, -1L) >= actualBrokerEpoch) {
+      if (shouldSkipShutdownSafetyCheck) {
         info(s"Controlled shutdown safety check has been skipped for broker $id (broker epoch $actualBrokerEpoch). Allowing shutdown even though it is not safe to do so.")
       } else {
         info(s"Controlled shutdown safety has prevented broker $id (broker epoch $actualBrokerEpoch) from shutting down.")
@@ -1722,7 +1723,13 @@ class KafkaController(val config: KafkaConfig,
     replicaStateMachine.handleStateChanges(partitionsFollowedByBroker.map(partition =>
       PartitionAndReplica(partition, id)).toSeq, OfflineReplica)
     trace(s"All leaders = ${controllerContext.partitionsLeadershipInfo.mkString(",")}")
-    controllerContext.partitionLeadersOnBroker(id)
+    if (shouldSkipShutdownSafetyCheck) {
+      // When skipping shutdown safety check, we allow the broker to shutdown even though it may be the leader for some partitions.
+      // This may lead to OfflinePartitions
+      Set.empty[TopicPartition]
+    } else {
+      controllerContext.partitionLeadersOnBroker(id)
+    }
   }
 
   private def processUpdateMetadataResponseReceived(updateMetadataResponse: UpdateMetadataResponse, brokerId: Int): Unit = {
