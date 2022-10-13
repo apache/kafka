@@ -418,7 +418,7 @@ public class BrokerHeartbeatManager {
      * @param brokerId                  The broker id.
      * @param controlledShutDownOffset  The offset at which controlled shutdown will be complete.
      */
-    void maybeControlledShutdownOffset(int brokerId, long controlledShutDownOffset) {
+    void maybeUpdateControlledShutdownOffset(int brokerId, long controlledShutDownOffset) {
         BrokerHeartbeatState broker = brokers.get(brokerId);
         if (broker == null) {
             throw new RuntimeException("Unable to locate broker " + brokerId);
