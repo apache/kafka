@@ -53,6 +53,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.ParameterizedTest;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
@@ -99,6 +100,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CO
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -372,7 +374,7 @@ public class WorkerSourceTaskTest {
 
         sourceTask.stop();
         EasyMock.expectLastCall();
-        expectOffsetFlush(true);
+        expectEmptyOffsetFlush();
 
         expectClose();
 
@@ -382,8 +384,9 @@ public class WorkerSourceTaskTest {
         Future<?> taskFuture = executor.submit(workerTask);
 
         assertTrue(awaitLatch(pollLatch));
-        //Failure in poll should trigger automatic stop of the worker
+        //Failure in poll should trigger automatic stop of the task
         assertTrue(workerTask.awaitStop(1000));
+        assertShouldSkipCommit();
 
         taskFuture.get();
         assertPollMetrics(0);
@@ -467,6 +470,7 @@ public class WorkerSourceTaskTest {
         workerTask.stop();
         workerStopLatch.countDown();
         assertTrue(workerTask.awaitStop(1000));
+        assertShouldSkipCommit();
 
         taskFuture.get();
         assertPollMetrics(0);
@@ -483,11 +487,11 @@ public class WorkerSourceTaskTest {
 
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectEmptyPolls(1, new AtomicInteger());
-        expectOffsetFlush(true);
+        expectEmptyOffsetFlush();
 
         sourceTask.stop();
         EasyMock.expectLastCall();
-        expectOffsetFlush(true);
+        expectEmptyOffsetFlush();
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
@@ -528,7 +532,7 @@ public class WorkerSourceTaskTest {
 
         sourceTask.stop();
         EasyMock.expectLastCall();
-        expectOffsetFlush(true);
+        expectEmptyOffsetFlush();
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
@@ -647,10 +651,6 @@ public class WorkerSourceTaskTest {
 
     @Test
     public void testSendRecordsProducerSendFailsImmediately() {
-        if (!enableTopicCreation)
-            // should only test with topic creation enabled
-            return;
-
         createWorkerTask();
 
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, TOPIC, 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
@@ -1023,6 +1023,12 @@ public class WorkerSourceTaskTest {
         }
     }
 
+    private void expectEmptyOffsetFlush() throws Exception {
+        EasyMock.expect(offsetWriter.beginFlush()).andReturn(false);
+        sourceTask.commit();
+        EasyMock.expectLastCall();
+    }
+
     private void assertPollMetrics(int minimumPollCountExpected) {
         MetricGroup sourceTaskGroup = workerTask.sourceTaskMetricsGroup().metricGroup();
         MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
@@ -1107,6 +1113,22 @@ public class WorkerSourceTaskTest {
             EasyMock.expect(admin.describeTopics(topic)).andReturn(Collections.emptyMap());
             Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
             EasyMock.expect(admin.createOrFindTopics(EasyMock.capture(newTopicCapture))).andReturn(createdTopic(topic));
+        }
+    }
+
+    private void assertShouldSkipCommit() {
+        assertFalse(workerTask.shouldCommitOffsets());
+
+        LogCaptureAppender.setClassLoggerToTrace(SourceTaskOffsetCommitter.class);
+        LogCaptureAppender.setClassLoggerToTrace(WorkerSourceTask.class);
+        try (LogCaptureAppender committerAppender = LogCaptureAppender.createAndRegister(SourceTaskOffsetCommitter.class);
+             LogCaptureAppender taskAppender = LogCaptureAppender.createAndRegister(WorkerSourceTask.class)) {
+            SourceTaskOffsetCommitter.commit(workerTask);
+            assertEquals(Collections.emptyList(), taskAppender.getMessages());
+
+            List<String> committerMessages = committerAppender.getMessages();
+            assertEquals(1, committerMessages.size());
+            assertTrue(committerMessages.get(0).contains("Skipping offset commit"));
         }
     }
 }

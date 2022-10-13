@@ -104,7 +104,13 @@ class SourceTaskOffsetCommitter {
         }
     }
 
-    private void commit(WorkerSourceTask workerTask) {
+    // Visible for testing
+    static void commit(WorkerSourceTask workerTask) {
+        if (!workerTask.shouldCommitOffsets()) {
+            log.trace("{} Skipping offset commit as there are no offsets that should be committed", workerTask);
+            return;
+        }
+
         log.debug("{} Committing offsets", workerTask);
         try {
             if (workerTask.commitOffsets()) {
