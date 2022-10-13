@@ -1994,7 +1994,7 @@ public final class QuorumController implements Controller {
                 public void processBatchEndOffset(long offset) {
                     if (inControlledShutdown) {
                         clusterControl.heartbeatManager().
-                            updateControlledShutdownOffset(brokerId, offset);
+                            maybeUpdateControlledShutdownOffset(brokerId, offset);
                     }
                 }
             });
