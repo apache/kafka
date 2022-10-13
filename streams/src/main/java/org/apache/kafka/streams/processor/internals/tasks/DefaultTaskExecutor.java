@@ -58,7 +58,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
                 // TODO: add exception handling
             } finally {
                 if (currentTask != null) {
-                    taskManager.unassignTask(currentTask, DefaultTaskExecutor.this);
+                    unassignCurrentTask();
                 }
 
                 shutdownGate.countDown();
@@ -69,26 +69,35 @@ public class DefaultTaskExecutor implements TaskExecutor {
         private void runOnce(final long nowMs) {
             KafkaFutureImpl<StreamTask> pauseFuture;
             if ((pauseFuture = pauseRequested.getAndSet(null)) != null) {
-                if (currentTask == null)
-                    throw new IllegalStateException("Does not own any task while being ask to unassign from task manager");
-
-                taskManager.unassignTask(currentTask, DefaultTaskExecutor.this);
-                pauseFuture.complete(currentTask);
-                currentTask = null;
+                final StreamTask unassignedTask = unassignCurrentTask();
+                pauseFuture.complete(unassignedTask);
             }
 
             if (currentTask == null) {
                 currentTask = taskManager.assignNextTask(DefaultTaskExecutor.this);
-            }
-
-            // if a task is no longer processable, ask task-manager to give it another
-            // task in the next iteration
-            if (currentTask.isProcessable(nowMs)) {
-                currentTask.process(nowMs);
             } else {
-                taskManager.unassignTask(currentTask, DefaultTaskExecutor.this);
-                currentTask = null;
+                // if a task is no longer processable, ask task-manager to give it another
+                // task in the next iteration
+                if (currentTask.isProcessable(nowMs)) {
+                    currentTask.process(nowMs);
+                } else {
+                    unassignCurrentTask();
+                }
             }
+        }
+
+        private StreamTask unassignCurrentTask() {
+            if (currentTask == null)
+                throw new IllegalStateException("Does not own any task while being ask to unassign from task manager");
+
+            // flush the task before giving it back to task manager
+            // TODO: we can add a separate function in StreamTask to just flush and not return offsets
+            currentTask.prepareCommit();
+            taskManager.unassignTask(currentTask, DefaultTaskExecutor.this);
+
+            final StreamTask retTask = currentTask;
+            currentTask = null;
+            return retTask;
         }
     }
 

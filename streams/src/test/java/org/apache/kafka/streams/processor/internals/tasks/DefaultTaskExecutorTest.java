@@ -31,8 +31,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,9 +48,10 @@ public class DefaultTaskExecutorTest {
 
     @BeforeEach
     public void setUp() {
-        when(taskManager.assignNextTask(taskExecutor)).thenReturn(task);
+        // only assign a task for the first time
+        when(taskManager.assignNextTask(taskExecutor)).thenReturn(task).thenReturn(null);
         when(task.isProcessable(anyLong())).thenReturn(true);
-        doNothing().when(task.process(anyLong()));
+        when(task.process(anyLong())).thenReturn(true);
     }
 
     @AfterEach
@@ -72,6 +73,9 @@ public class DefaultTaskExecutorTest {
 
         taskExecutor.shutdown(Duration.ofMinutes(1));
 
+        verify(task).prepareCommit();
+        verify(taskManager).unassignTask(task, taskExecutor);
+
         assertNull(taskExecutor.currentTask(), "Have task assigned after shutdown");
     }
 
@@ -85,6 +89,7 @@ public class DefaultTaskExecutorTest {
             "Did not get the task assigned after startup!"
         );
 
+        reset(task);
         when(task.isProcessable(anyLong())).thenReturn(false);
 
         waitForCondition(
@@ -93,6 +98,7 @@ public class DefaultTaskExecutorTest {
             "Did not unassign task!"
         );
 
+        verify(task).prepareCommit();
         verify(taskManager).unassignTask(task, taskExecutor);
     }
 
@@ -114,10 +120,10 @@ public class DefaultTaskExecutorTest {
             "Did not unassign task!"
         );
 
-        assertTrue(future.isDone(), "Unassign is not completed");
-
-        assertEquals(task, future.get(), "Unexpected task was unassigned");
-
+        verify(task).prepareCommit();
         verify(taskManager).unassignTask(task, taskExecutor);
+
+        assertTrue(future.isDone(), "Unassign is not completed");
+        assertEquals(task, future.get(), "Unexpected task was unassigned");
     }
 }
