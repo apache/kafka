@@ -61,20 +61,25 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.ParameterizedTest;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
-
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.*;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.Collections;
+import java.util.Collection;
 import java.util.concurrent.Executor;
 
 import static java.util.Collections.emptyMap;
@@ -92,7 +97,15 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CO
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
 import static org.junit.Assert.assertEquals;
-import static org.mockito.Mockito.*;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.doReturn;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ErrorHandlingTaskTest {
@@ -320,8 +333,8 @@ public class ErrorHandlingTaskTest {
     }
 
     private RetryWithToleranceOperator operator() {
-        return new RetryWithToleranceOperator(OPERATOR_RETRY_TIMEOUT_MILLIS
-                , OPERATOR_RETRY_MAX_DELAY_MILLIS, OPERATOR_TOLERANCE_TYPE,
+        return new RetryWithToleranceOperator(OPERATOR_RETRY_TIMEOUT_MILLIS,
+                OPERATOR_RETRY_MAX_DELAY_MILLIS, OPERATOR_TOLERANCE_TYPE,
                 SYSTEM, errorHandlingMetrics);
     }
 
