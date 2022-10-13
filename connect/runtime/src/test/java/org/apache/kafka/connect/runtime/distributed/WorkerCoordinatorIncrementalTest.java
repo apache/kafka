@@ -460,9 +460,6 @@ public class WorkerCoordinatorIncrementalTest {
         ExtendedAssignment memberAssignment1 = memberAssignment;
         ExtendedAssignment anotherMemberAssignment1 = anotherMemberAssignment;
 
-        System.out.println(leaderAssignment);
-        System.out.println(memberAssignment);
-        System.out.println(anotherMemberAssignment);
 
         // Second rebalance detects a worker is missing
         coordinator.metadata();
@@ -541,6 +538,7 @@ public class WorkerCoordinatorIncrementalTest {
                 anotherMemberAssignment);
 
         responseMembers.clear();
+
         addJoinGroupResponseMember(responseMembers, leaderId, offset, leaderAssignment1);
         addJoinGroupResponseMember(responseMembers, memberId, offset, memberAssignment1);
         addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, anotherMemberAssignment1);
