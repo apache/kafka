@@ -286,12 +286,11 @@ public class KStreamWindowAggregateTest {
         inputTopic1.pipeInput("A", "1", 20L);
 
         processors.get(0).checkAndClearProcessResult(
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+1+1", 10),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+2+2", 13),
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(5, 15)), "0+3", 14),
-                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+4", 12)
+            new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+1+1", 10),
+            new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+2+2", 13),
+            new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(5, 15)), "0+3", 14),
+            new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+4", 12)
         );
-
         processors.get(1).checkAndClearProcessResult();
         processors.get(2).checkAndClearProcessResult();
 
@@ -302,24 +301,18 @@ public class KStreamWindowAggregateTest {
         inputTopic2.pipeInput("A", "a", 15L);
 
         processors.get(0).checkAndClearProcessResult();
-
-        if (withCache) {
-            processors.get(1).checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+a", 0),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)), "0+b", 1),
-                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+c", 2)
-            );
-            processors.get(2).checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),
-                            "0+1+1%0+a", 9),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),
-                            "0+2%0+b", 1),
-                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+3%0+c",
-                            2));
-        } else {
-            processors.get(0).checkAndClearProcessResult();
-            processors.get(2).checkAndClearProcessResult();
-        }
+        processors.get(1).checkAndClearProcessResult(
+            new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+a", 0),
+            new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)), "0+b", 1),
+            new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+c", 2)
+        );
+        processors.get(2).checkAndClearProcessResult(
+            new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)),
+                "0+1+1%0+a", 9),
+            new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)),
+                "0+2%0+b", 1),
+            new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+3%0+c",
+                2));
 
         inputTopic2.pipeInput("A", "a", 5L);
         inputTopic2.pipeInput("B", "b", 6L);
@@ -328,23 +321,11 @@ public class KStreamWindowAggregateTest {
         inputTopic2.pipeInput("A", "a", 21L);
 
         processors.get(0).checkAndClearProcessResult();
-        if (withCache) {
-            processors.get(1).checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+a", 5),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+b", 6),
-                    new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+d+d", 10)
-            );
-        } else {
-            processors.get(1).checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(0, 10)), "0+a", 0),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(0, 10)), "0+b", 1),
-                    new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(0, 10)), "0+c", 2),
-                    new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+a", 5),
-                    new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+b", 6),
-                    new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+d+d", 10)
-            );
-
-        }
+        processors.get(1).checkAndClearProcessResult(
+            new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+a", 5),
+            new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(5, 15)), "0+b", 6),
+            new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(5, 15)), "0+d+d", 10)
+        );
         processors.get(2).checkAndClearProcessResult(
             new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(5, 15)), "0+1+1%0+a",
                 10),

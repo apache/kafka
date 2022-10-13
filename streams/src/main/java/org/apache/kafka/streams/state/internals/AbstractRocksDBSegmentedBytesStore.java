@@ -52,7 +52,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private final String name;
     private final AbstractSegments<S> segments;
     private final String metricScope;
-    private final long retentionPeriod;
     private final KeySchema keySchema;
 
     private ProcessorContext context;
@@ -66,12 +65,10 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     AbstractRocksDBSegmentedBytesStore(final String name,
                                        final String metricScope,
-                                       final long retentionPeriod,
                                        final KeySchema keySchema,
                                        final AbstractSegments<S> segments) {
         this.name = name;
         this.metricScope = metricScope;
-        this.retentionPeriod = retentionPeriod;
         this.keySchema = keySchema;
         this.segments = segments;
     }
@@ -94,28 +91,17 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                                           final long from,
                                           final long to,
                                           final boolean forward) {
-        final long actualFrom = getActualFrom(from);
+        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to, forward);
 
-        if (keySchema instanceof WindowKeySchema && to < actualFrom) {
-            LOG.debug("Returning no records for key {} as to ({}) < actualFrom ({}) ", key.toString(), to, actualFrom);
-            return KeyValueIterators.emptyIterator();
-        }
-
-        final List<S> searchSpace = keySchema.segmentsToSearch(segments, actualFrom, to, forward);
-
-        final Bytes binaryFrom = keySchema.lowerRangeFixedSize(key, actualFrom);
+        final Bytes binaryFrom = keySchema.lowerRangeFixedSize(key, from);
         final Bytes binaryTo = keySchema.upperRangeFixedSize(key, to);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                keySchema.hasNextCondition(key, key, actualFrom, to, forward),
+                keySchema.hasNextCondition(key, key, from, to, forward),
                 binaryFrom,
                 binaryTo,
                 forward);
-    }
-
-    private long getActualFrom(final long from) {
-        return Math.max(from, observedStreamTime - retentionPeriod + 1);
     }
 
     @Override
@@ -147,21 +133,14 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             return KeyValueIterators.emptyIterator();
         }
 
-        final long actualFrom = getActualFrom(from);
+        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to, forward);
 
-        if (keySchema instanceof WindowKeySchema && to < actualFrom) {
-            LOG.debug("Returning no records for keys {}/{} as to ({}) < actualFrom ({}) ", keyFrom, keyTo, to, actualFrom);
-            return KeyValueIterators.emptyIterator();
-        }
-
-        final List<S> searchSpace = keySchema.segmentsToSearch(segments, actualFrom, to, forward);
-
-        final Bytes binaryFrom = keyFrom == null ? null : keySchema.lowerRange(keyFrom, actualFrom);
+        final Bytes binaryFrom = keyFrom == null ? null : keySchema.lowerRange(keyFrom, from);
         final Bytes binaryTo = keyTo == null ? null : keySchema.upperRange(keyTo, to);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                keySchema.hasNextCondition(keyFrom, keyTo, actualFrom, to, forward),
+                keySchema.hasNextCondition(keyFrom, keyTo, from, to, forward),
                 binaryFrom,
                 binaryTo,
                 forward);
@@ -169,12 +148,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-        final long actualFrom = getActualFrom(0);
-        final List<S> searchSpace = keySchema.segmentsToSearch(segments, actualFrom, Long.MAX_VALUE, true);
+        final List<S> searchSpace = segments.allSegments(true);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                keySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, true),
+                keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE, true),
                 null,
                 null,
                 true);
@@ -182,13 +160,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardAll() {
-        final long actualFrom = getActualFrom(0);
-
-        final List<S> searchSpace = keySchema.segmentsToSearch(segments, actualFrom, Long.MAX_VALUE, false);
+        final List<S> searchSpace = segments.allSegments(false);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                keySchema.hasNextCondition(null, null, actualFrom, Long.MAX_VALUE, false),
+                keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE, false),
                 null,
                 null,
                 false);
@@ -197,18 +173,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     @Override
     public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom,
                                                     final long timeTo) {
-        final long actualFrom = getActualFrom(timeFrom);
-
-        if (keySchema instanceof WindowKeySchema && timeTo < actualFrom) {
-            LOG.debug("Returning no records for as timeTo ({}) < actualFrom ({}) ", timeTo, actualFrom);
-            return KeyValueIterators.emptyIterator();
-        }
-
-        final List<S> searchSpace = segments.segments(actualFrom, timeTo, true);
+        final List<S> searchSpace = segments.segments(timeFrom, timeTo, true);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                keySchema.hasNextCondition(null, null, actualFrom, timeTo, true),
+                keySchema.hasNextCondition(null, null, timeFrom, timeTo, true),
                 null,
                 null,
                 true);
@@ -217,18 +186,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardFetchAll(final long timeFrom,
                                                             final long timeTo) {
-        final long actualFrom = getActualFrom(timeFrom);
-
-        if (keySchema instanceof WindowKeySchema && timeTo < actualFrom) {
-            LOG.debug("Returning no records for as timeTo ({}) < actualFrom ({}) ", timeTo, actualFrom);
-            return KeyValueIterators.emptyIterator();
-        }
-
-        final List<S> searchSpace = segments.segments(actualFrom, timeTo, false);
+        final List<S> searchSpace = segments.segments(timeFrom, timeTo, false);
 
         return new SegmentIterator<>(
                 searchSpace.iterator(),
-                keySchema.hasNextCondition(null, null, actualFrom, timeTo, false),
+                keySchema.hasNextCondition(null, null, timeFrom, timeTo, false),
                 null,
                 null,
                 false);
@@ -272,14 +234,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     @Override
     public byte[] get(final Bytes key) {
-        final long timestampFromKey = keySchema.segmentTimestamp(key);
-        // check if timestamp is expired
-        if (timestampFromKey < observedStreamTime - retentionPeriod + 1) {
-            LOG.debug("Record with key {} is expired as timestamp from key ({}) < actual stream time ({})",
-                    key.toString(), timestampFromKey, observedStreamTime - retentionPeriod + 1);
-            return null;
-        }
-        final S segment = segments.getSegmentForTimestamp(timestampFromKey);
+        final S segment = segments.getSegmentForTimestamp(keySchema.segmentTimestamp(key));
         if (segment == null) {
             return null;
         }
