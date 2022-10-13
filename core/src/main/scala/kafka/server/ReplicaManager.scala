@@ -2142,7 +2142,6 @@ class ReplicaManager(val config: KafkaConfig,
   ): Unit = {
     stateChangeLogger.info(s"Transitioning ${localFollowers.size} partition(s) to " +
       "local followers.")
-    val shuttingDown = isShuttingDown.get()
     val partitionsToStartFetching = new mutable.HashMap[TopicPartition, Partition]
     val partitionsToStopFetching = new mutable.HashMap[TopicPartition, Boolean]
     val followerTopicSet = new mutable.HashSet[String]
@@ -2151,28 +2150,24 @@ class ReplicaManager(val config: KafkaConfig,
         try {
           followerTopicSet.add(tp.topic)
 
-          if (shuttingDown) {
-            stateChangeLogger.trace(s"Unable to start fetching $tp with topic " +
-              s"ID ${info.topicId} because the replica manager is shutting down.")
-          } else {
-            // We always update the follower state.
-            // - This ensure that a replica with no leader can step down;
-            // - This also ensures that the local replica is created even if the leader
-            //   is unavailable. This is required to ensure that we include the partition's
-            //   high watermark in the checkpoint file (see KAFKA-1647).
-            val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
-            val isNewLeaderEpoch = partition.makeFollower(state, offsetCheckpoints, Some(info.topicId))
+          // We always update the follower state.
+          // - This ensure that a replica with no leader can step down;
+          // - This also ensures that the local replica is created even if the leader
+          //   is unavailable. This is required to ensure that we include the partition's
+          //   high watermark in the checkpoint file (see KAFKA-1647).
+          val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
+          val isNewLeaderEpoch = partition.makeFollower(state, offsetCheckpoints, Some(info.topicId))
 
-            if (isInControlledShutdown && (info.partition.leader == NO_LEADER ||
-                !info.partition.isr.contains(config.brokerId))) {
-              // During controlled shutdown, replica with no leaders and replica
-              // where this broker is not in the ISR are stopped.
-              partitionsToStopFetching.put(tp, false)
-            } else if (isNewLeaderEpoch) {
-              // Otherwise, fetcher is restarted if the leader epoch has changed.
-              partitionsToStartFetching.put(tp, partition)
-            }
+          if (isInControlledShutdown && (info.partition.leader == NO_LEADER ||
+              !info.partition.isr.contains(config.brokerId))) {
+            // During controlled shutdown, replica with no leaders and replica
+            // where this broker is not in the ISR are stopped.
+            partitionsToStopFetching.put(tp, false)
+          } else if (isNewLeaderEpoch) {
+            // Otherwise, fetcher is restarted if the leader epoch has changed.
+            partitionsToStartFetching.put(tp, partition)
           }
+
           changedPartitions.add(partition)
         } catch {
           case e: KafkaStorageException =>
