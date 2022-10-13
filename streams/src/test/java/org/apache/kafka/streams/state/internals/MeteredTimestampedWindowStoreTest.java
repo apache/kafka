@@ -66,6 +66,7 @@ public class MeteredTimestampedWindowStoreTest {
         ValueAndTimestamp.make("value", TIMESTAMP);
     private static final byte[] VALUE_AND_TIMESTAMP_BYTES = "\0\0\0\0\0\0\0avalue".getBytes();
     private static final int WINDOW_SIZE_MS = 10;
+    private static final int RETENTION_PERIOD = 100;
 
     private InternalMockProcessorContext context;
     private final TaskId taskId = new TaskId(0, 0, "My-Topology");

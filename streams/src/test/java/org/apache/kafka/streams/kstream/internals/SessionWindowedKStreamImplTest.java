@@ -233,12 +233,21 @@ public class SessionWindowedKStreamImplTest {
             processData(driver);
             final SessionStore<String, Long> store = driver.getSessionStore("count-store");
             final List<KeyValue<Windowed<String>, Long>> data = StreamsTestUtils.toList(store.fetch("1", "2"));
-            assertThat(
-                data,
-                equalTo(Arrays.asList(
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), 2L),
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
-                    KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L))));
+            if (!emitFinal) {
+                assertThat(
+                        data,
+                        equalTo(Arrays.asList(
+                                KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), 2L),
+                                KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L))));
+            } else {
+                assertThat(
+                        data,
+                        equalTo(Arrays.asList(
+                                KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L))));
+
+            }
         }
     }
 
@@ -251,12 +260,21 @@ public class SessionWindowedKStreamImplTest {
             final SessionStore<String, String> sessionStore = driver.getSessionStore("reduced");
             final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toList(sessionStore.fetch("1", "2"));
 
-            assertThat(
-                data,
-                equalTo(Arrays.asList(
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "1+2"),
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "3"),
-                    KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2"))));
+            if (!emitFinal) {
+                assertThat(
+                        data,
+                        equalTo(Arrays.asList(
+                                KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "1+2"),
+                                KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "3"),
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2"))));
+            } else {
+                assertThat(
+                        data,
+                        equalTo(Arrays.asList(
+                                KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "3"),
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2"))));
+
+            }
         }
     }
 
@@ -272,12 +290,21 @@ public class SessionWindowedKStreamImplTest {
             processData(driver);
             final SessionStore<String, String> sessionStore = driver.getSessionStore("aggregated");
             final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toList(sessionStore.fetch("1", "2"));
-            assertThat(
-                data,
-                equalTo(Arrays.asList(
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "0+0+1+2"),
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "0+3"),
-                    KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2"))));
+            if (!emitFinal) {
+                assertThat(
+                        data,
+                        equalTo(Arrays.asList(
+                                KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "0+0+1+2"),
+                                KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "0+3"),
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2"))));
+            } else {
+                assertThat(
+                        data,
+                        equalTo(Arrays.asList(
+                                KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "0+3"),
+                                KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2"))));
+
+            }
         }
     }
 
