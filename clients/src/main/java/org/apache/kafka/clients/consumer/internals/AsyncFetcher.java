@@ -6,6 +6,8 @@ import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.FetchResponseBackgroundEvent;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
@@ -44,6 +46,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
+import org.slf4j.helpers.MessageFormatter;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
@@ -97,11 +100,13 @@ public class AsyncFetcher<K, V> {
             IsolationLevel isolationLevel,
             int minBytes, int maxBytes, int maxWaitMs, int fetchSize,
             String clientRackId,
-            FetchBuffer fetchBuffer) {
+            boolean checkCrcs,
+            FetchBuffer fetchBuffer,
+            BlockingQueue<BackgroundEvent> backgroundEventQueue) {
         return new FetchSender(time, logContext, subscriptions, metadata,
                 client, metrics, metricsRegistry, apiVersions, isolationLevel
                 , minBytes, maxBytes, maxWaitMs, fetchSize, clientRackId,
-                fetchBuffer);
+                checkCrcs, fetchBuffer, backgroundEventQueue);
     }
 
     public FetchHandler<K, V> createFetchHandler(LogContext logContext,
@@ -165,6 +170,8 @@ public class AsyncFetcher<K, V> {
 
         private final Queue<RequestFuture<ClientResponse>> futureResults;
         private final FetchBuffer fetchBuffer;
+        private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
+        private final boolean chechCrcs;
 
         public FetchSender(
                 Time time,
@@ -178,7 +185,9 @@ public class AsyncFetcher<K, V> {
                 IsolationLevel isolationLevel,
                 int minBytes, int maxBytes, int maxWaitMs, int fetchSize,
                 String clientRackId,
-                FetchBuffer fetchBuffer) {
+                boolean checkCrcs,
+                FetchBuffer fetchBuffer,
+                BlockingQueue<BackgroundEvent> backgroundEventQueue) {
             this.time = time;
             this.logContext = logContext;
             this.log = logContext.logger(getClass());
@@ -197,8 +206,10 @@ public class AsyncFetcher<K, V> {
             this.maxWaitMs = maxWaitMs;
             this.maxBytes = maxBytes;
             this.fetchSize = fetchSize;
+            this.chechCrcs = checkCrcs;
             this.clientRackId = clientRackId;
             this.fetchBuffer = fetchBuffer;
+            this.backgroundEventQueue = backgroundEventQueue;
         }
 
         /**
@@ -258,6 +269,50 @@ public class AsyncFetcher<K, V> {
                                     }
                                     return;
                                 }
+
+                                Map<TopicPartition, FetchResponseData.PartitionData> responseData = response.responseData(handler.sessionTopicNames(), resp.requestHeader().apiVersion());
+                                Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
+                                FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
+
+                                for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
+                                    TopicPartition partition = entry.getKey();
+                                    FetchRequest.PartitionData requestData = data.sessionPartitions().get(partition);
+                                    if (requestData == null) {
+                                        String message;
+                                        if (data.metadata().isFull()) {
+                                            message = MessageFormatter.arrayFormat(
+                                                    "Response for missing full request partition: partition={}; metadata={}",
+                                                    new Object[]{partition, data.metadata()}).getMessage();
+                                        } else {
+                                            message = MessageFormatter.arrayFormat(
+                                                    "Response for missing session request partition: partition={}; metadata={}; toSend={}; toForget={}; toReplace={}",
+                                                    new Object[]{partition, data.metadata(), data.toSend(), data.toForget(), data.toReplace()}).getMessage();
+                                        }
+
+                                        // Received fetch response for missing session partition
+                                        throw new IllegalStateException(message);
+                                    } else {
+                                        long fetchOffset = requestData.fetchOffset;
+                                        FetchResponseData.PartitionData partitionData = entry.getValue();
+
+                                        log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
+                                                isolationLevel, fetchOffset, partition, partitionData);
+
+                                        Iterator<? extends RecordBatch> batches = FetchResponse.recordsOrFail(partitionData).batches().iterator();
+                                        short responseVersion = resp.requestHeader().apiVersion();
+
+                                        fetchBuffer.completedFetches.add(new CompletedFetch(partition, partitionData,
+                                                metricAggregator, batches,
+                                                fetchOffset, responseVersion,
+                                                checkCrcs));
+                                        // TODO: to be implemented
+                                        BackgroundEvent backgroundEvent =
+                                                new FetchResponseBackgroundEvent(response);
+                                        backgroundEventQueue.add(backgroundEvent);
+                                    }
+                                }
+
+
                                 sensors.fetchLatency.record(resp.requestLatencyMs());
                             } finally {
                                 nodesWithPendingFetchRequests.remove(fetchTarget.id());
@@ -1006,35 +1061,35 @@ public class AsyncFetcher<K, V> {
 
 
 
-     static class CompletedFetch<K, V> {
-        final TopicPartition partition;
-        final Iterator<? extends RecordBatch> batches;
-        final Set<Long> abortedProducerIds;
-        final PriorityQueue<FetchResponseData.AbortedTransaction> abortedTransactions;
-        final FetchResponseData.PartitionData partitionData;
-        final FetchResponseMetricAggregator metricAggregator;
-        final short responseVersion;
+     private static class CompletedFetch<K, V> {
+        private final TopicPartition partition;
+        private final Iterator<? extends RecordBatch> batches;
+        private final Set<Long> abortedProducerIds;
+        private final PriorityQueue<FetchResponseData.AbortedTransaction> abortedTransactions;
+        private final FetchResponseData.PartitionData partitionData;
+        private final FetchResponseMetricAggregator metricAggregator;
+        private final short responseVersion;
 
-        int recordsRead;
-        int bytesRead;
-        RecordBatch currentBatch;
-        Record lastRecord;
-        CloseableIterator<Record> records;
-        long nextFetchOffset;
-        Optional<Integer> lastEpoch;
-        boolean isConsumed = false;
-        Exception cachedRecordException = null;
-        boolean corruptLastRecord = false;
-        boolean initialized = false;
-        boolean checkCrcs;
+        private int recordsRead;
+        private int bytesRead;
+        private RecordBatch currentBatch;
+        private Record lastRecord;
+        private CloseableIterator<Record> records;
+        private long nextFetchOffset;
+        private Optional<Integer> lastEpoch;
+        private boolean isConsumed = false;
+        private Exception cachedRecordException = null;
+        private boolean corruptLastRecord = false;
+        private boolean initialized = false;
+        private boolean checkCrcs;
 
         CompletedFetch(TopicPartition partition,
-                               FetchResponseData.PartitionData partitionData,
-                               FetchResponseMetricAggregator metricAggregator,
-                               Iterator<? extends RecordBatch> batches,
-                               Long fetchOffset,
-                               short responseVersion,
-                               boolean checkCrcs) {
+                       FetchResponseData.PartitionData partitionData,
+                       FetchResponseMetricAggregator metricAggregator,
+                       Iterator<? extends RecordBatch> batches,
+                       Long fetchOffset,
+                       short responseVersion,
+                       boolean checkCrcs) {
             this.partition = partition;
             this.partitionData = partitionData;
             this.metricAggregator = metricAggregator;
