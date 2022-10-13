@@ -183,13 +183,9 @@ public class TaskManager {
                 .stream()
                 .flatMap(task -> task.inputPartitions().stream())
                 .collect(Collectors.toSet());
-
-            mainConsumer.pause(
-                mainConsumer.assignment()
-                    .stream()
-                    .filter(partition -> !partitionsNotToPause.contains(partition))
-                    .collect(Collectors.toSet())
-            );
+            final Set<TopicPartition> partitionsToPause = new HashSet<>(mainConsumer.assignment());
+            partitionsToPause.removeAll(partitionsNotToPause);
+            mainConsumer.pause(partitionsToPause);
         }
 
         releaseLockedUnassignedTaskDirectories();
