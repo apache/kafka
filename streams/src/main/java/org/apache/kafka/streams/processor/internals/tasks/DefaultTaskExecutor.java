@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.streams.processor.internals.tasks;
 
 import org.apache.kafka.common.KafkaFuture;
@@ -39,7 +55,12 @@ public class DefaultTaskExecutor implements TaskExecutor {
                 while (isRunning.get()) {
                     runOnce(time.milliseconds());
                 }
+                // TODO: add exception handling
             } finally {
+                if (currentTask != null) {
+                    taskManager.unassignTask(currentTask, DefaultTaskExecutor.this);
+                }
+
                 shutdownGate.countDown();
                 log.info("Task executor thread shutdown");
             }
@@ -48,6 +69,9 @@ public class DefaultTaskExecutor implements TaskExecutor {
         private void runOnce(final long nowMs) {
             KafkaFutureImpl<StreamTask> pauseFuture;
             if ((pauseFuture = pauseRequested.getAndSet(null)) != null) {
+                if (currentTask == null)
+                    throw new IllegalStateException("Does not own any task while being ask to unassign from task manager");
+
                 taskManager.unassignTask(currentTask, DefaultTaskExecutor.this);
                 pauseFuture.complete(currentTask);
                 currentTask = null;
@@ -57,6 +81,8 @@ public class DefaultTaskExecutor implements TaskExecutor {
                 currentTask = taskManager.assignNextTask(DefaultTaskExecutor.this);
             }
 
+            // if a task is no longer processable, ask task-manager to give it another
+            // task in the next iteration
             if (currentTask.isProcessable(nowMs)) {
                 currentTask.process(nowMs);
             } else {
@@ -105,7 +131,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
 
     @Override
     public ReadOnlyTask currentTask() {
-        return new ReadOnlyTask(currentTask);
+        return currentTask != null ? new ReadOnlyTask(currentTask) : null;
     }
 
     @Override
