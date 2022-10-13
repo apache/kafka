@@ -175,14 +175,21 @@ public class TaskManager {
     void handleRebalanceComplete() {
         // we should pause consumer only within the listener since
         // before then the assignment has not been updated yet.
-        mainConsumer.pause(mainConsumer.assignment());
+        if (stateUpdater == null) {
+            mainConsumer.pause(mainConsumer.assignment());
+        } else {
+            // All tasks that are owned by the task manager are ready and do not need to be paused
+            final Set<TopicPartition> partitionsNotToPause = tasks.allTasks()
+                .stream()
+                .flatMap(task -> task.inputPartitions().stream())
+                .collect(Collectors.toSet());
 
-        if (stateUpdater != null) {
-            // All tasks that need restoration are now owned by the state updater.
-            // All tasks that are owned by the task manager are ready and can be resumed immediately.
-            for (final Task t : tasks.allTasks()) {
-                mainConsumer.resume(t.inputPartitions());
-            }
+            mainConsumer.pause(
+                mainConsumer.assignment()
+                    .stream()
+                    .filter(partition -> !partitionsNotToPause.contains(partition))
+                    .collect(Collectors.toSet())
+            );
         }
 
         releaseLockedUnassignedTaskDirectories();

@@ -1486,28 +1486,28 @@ public class TaskManagerTest {
         final Set<TopicPartition> assigned = mkSet(t1p0, t1p1);
         expect(consumer.assignment()).andReturn(assigned);
         consumer.pause(assigned);
-        expectLastCall();
         replay(consumer);
+
         taskManager.handleRebalanceComplete();
+
         verify(consumer);
     }
 
     @Test
     public void shouldNotPauseReadyTasksWithStateUpdaterOnRebalanceComplete() {
-        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, true);
         final StreamTask statefulTask0 = statefulTask(taskId00, taskId00ChangelogPartitions)
-            .inState(State.RESTORING)
+            .inState(State.RUNNING)
             .withInputPartitions(taskId00Partitions).build();
-        taskManager.addTask(statefulTask0);
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.allTasks()).thenReturn(mkSet(statefulTask0));
         final Set<TopicPartition> assigned = mkSet(t1p0, t1p1);
-
         expect(consumer.assignment()).andReturn(assigned);
-        consumer.pause(assigned);
-        expectLastCall();
-        consumer.resume(mkSet(t1p0));
-        expectLastCall();
+        consumer.pause(mkSet(t1p1));
         replay(consumer);
+
         taskManager.handleRebalanceComplete();
+
         verify(consumer);
     }
 
