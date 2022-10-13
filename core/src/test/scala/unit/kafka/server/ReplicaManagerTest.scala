@@ -21,7 +21,7 @@ import java.io.File
 import java.net.InetAddress
 import java.nio.file.Files
 import java.util
-import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.stream.IntStream
 import java.util.{Collections, Optional, Properties}
@@ -2210,7 +2210,8 @@ class ReplicaManagerTest {
     aliveBrokerIds: Seq[Int] = Seq(0, 1),
     propsModifier: Properties => Unit = _ => {},
     mockReplicaFetcherManager: Option[ReplicaFetcherManager] = None,
-    mockReplicaAlterLogDirsManager: Option[ReplicaAlterLogDirsManager] = None
+    mockReplicaAlterLogDirsManager: Option[ReplicaAlterLogDirsManager] = None,
+    isShuttingDown: AtomicBoolean = new AtomicBoolean(false)
   ): ReplicaManager = {
     val props = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect)
     props.put("log.dirs", TestUtils.tempRelativeDir("data").getAbsolutePath + "," + TestUtils.tempRelativeDir("data2").getAbsolutePath)
@@ -2245,6 +2246,7 @@ class ReplicaManagerTest {
       metadataCache = metadataCache,
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterPartitionManager,
+      isShuttingDown = isShuttingDown,
       delayedProducePurgatoryParam = Some(mockProducePurgatory),
       delayedFetchPurgatoryParam = Some(mockFetchPurgatory),
       delayedDeleteRecordsPurgatoryParam = Some(mockDeleteRecordsPurgatory),
@@ -3868,10 +3870,12 @@ class ReplicaManagerTest {
     val foo2 = new TopicPartition("foo", 2)
 
     val mockReplicaFetcherManager = mock(classOf[ReplicaFetcherManager])
+    val isShuttingDown = new AtomicBoolean(false)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
       timer = new MockTimer(time),
       brokerId = localId,
-      mockReplicaFetcherManager = Some(mockReplicaFetcherManager)
+      mockReplicaFetcherManager = Some(mockReplicaFetcherManager),
+      isShuttingDown = isShuttingDown
     )
 
     try {
@@ -3939,6 +3943,10 @@ class ReplicaManagerTest {
       assertEquals(0, fooPartition2.getPartitionEpoch)
 
       reset(mockReplicaFetcherManager)
+
+      // The broker transitions to SHUTTING_DOWN state. This should not have
+      // any impact in KRaft mode.
+      isShuttingDown.set(true)
 
       // The replica begins the controlled shutdown.
       replicaManager.beginControlledShutdown()
