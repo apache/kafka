@@ -58,6 +58,7 @@ import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.internal.util.collections.Sets;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -2349,6 +2350,63 @@ public class TopologyTest {
             id);
 
         expectedDescription.addGlobalStore(expectedGlobalStore);
+    }
+
+    @Test
+    public void readonlyStateStoresShouldHaveTheirOwnSubTopology() {
+        final String sourceName = "source";
+        final String storeName = "store";
+        final String topicName = "topic";
+        final String processorName = "processor";
+
+        final KeyValueStoreBuilder<?, ?> storeBuilder = mock(KeyValueStoreBuilder.class);
+        when(storeBuilder.name()).thenReturn(storeName);
+        topology.addReadOnlyStateStore(
+                storeBuilder,
+                sourceName,
+                null,
+                null,
+                null,
+                topicName,
+                processorName,
+                new MockProcessorSupplier<>());
+
+        final TopologyDescription.Source expectedSource = new InternalTopologyBuilder.Source(sourceName, Sets.newSet(topicName), null);
+        final TopologyDescription.Processor expectedProcessor = new InternalTopologyBuilder.Processor(processorName, Sets.newSet(storeName));
+
+        ((InternalTopologyBuilder.AbstractNode) expectedSource).addSuccessor(expectedProcessor);
+        ((InternalTopologyBuilder.AbstractNode) expectedProcessor).addPredecessor(expectedSource);
+
+        final Set<TopologyDescription.Node> allNodes = new HashSet<>();
+        allNodes.add(expectedSource);
+        allNodes.add(expectedProcessor);
+        expectedDescription.addSubtopology(new SubtopologyDescription(0, allNodes));
+
+        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().hashCode(), equalTo(expectedDescription.hashCode()));
+    }
+
+    @Test
+    public void readonlyStateStoresShouldNotLog() {
+        final String sourceName = "source";
+        final String storeName = "store";
+        final String topicName = "topic";
+        final String processorName = "processor";
+
+        final KeyValueStoreBuilder<?, ?> storeBuilder = mock(KeyValueStoreBuilder.class);
+        when(storeBuilder.name()).thenReturn(storeName);
+        topology.addReadOnlyStateStore(
+                storeBuilder,
+                sourceName,
+                null,
+                null,
+                null,
+                topicName,
+                processorName,
+                new MockProcessorSupplier<>());
+
+        final InternalTopologyBuilder.StateStoreFactory<?> stateStoreFactory = topology.internalTopologyBuilder.stateStores().get(storeName);
+        assertThat(stateStoreFactory.loggingEnabled(), equalTo(false));
     }
 
     private TopologyConfig overrideDefaultStore(final String defaultStore) {
