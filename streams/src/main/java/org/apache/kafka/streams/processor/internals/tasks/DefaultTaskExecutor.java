@@ -67,7 +67,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
         }
 
         private void runOnce(final long nowMs) {
-            KafkaFutureImpl<StreamTask> pauseFuture;
+            final KafkaFutureImpl<StreamTask> pauseFuture;
             if ((pauseFuture = pauseRequested.getAndSet(null)) != null) {
                 final StreamTask unassignedTask = unassignCurrentTask();
                 pauseFuture.complete(unassignedTask);
