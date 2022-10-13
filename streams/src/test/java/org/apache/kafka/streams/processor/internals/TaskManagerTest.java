@@ -1482,6 +1482,36 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldPauseAllTopicsWithoutStateUpdaterOnRebalanceComplete() {
+        final Set<TopicPartition> assigned = mkSet(t1p0, t1p1);
+        expect(consumer.assignment()).andReturn(assigned);
+        consumer.pause(assigned);
+        expectLastCall();
+        replay(consumer);
+        taskManager.handleRebalanceComplete();
+        verify(consumer);
+    }
+
+    @Test
+    public void shouldNotPauseReadyTasksWithStateUpdaterOnRebalanceComplete() {
+        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, true);
+        final StreamTask statefulTask0 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId00Partitions).build();
+        taskManager.addTask(statefulTask0);
+        final Set<TopicPartition> assigned = mkSet(t1p0, t1p1);
+
+        expect(consumer.assignment()).andReturn(assigned);
+        consumer.pause(assigned);
+        expectLastCall();
+        consumer.resume(mkSet(t1p0));
+        expectLastCall();
+        replay(consumer);
+        taskManager.handleRebalanceComplete();
+        verify(consumer);
+    }
+
+    @Test
     public void shouldReleaseLockForUnassignedTasksAfterRebalance() throws Exception {
         expectLockObtainedFor(taskId00, taskId01, taskId02);
         expectUnlockFor(taskId02);

@@ -177,6 +177,14 @@ public class TaskManager {
         // before then the assignment has not been updated yet.
         mainConsumer.pause(mainConsumer.assignment());
 
+        if (stateUpdater != null) {
+            // All tasks that need restoration are now owned by the state updater.
+            // All tasks that are owned by the task manager are ready and can be resumed immediately.
+            for (final Task t : tasks.allTasks()) {
+                mainConsumer.resume(t.inputPartitions());
+            }
+        }
+
         releaseLockedUnassignedTaskDirectories();
 
         rebalanceInProgress = false;
