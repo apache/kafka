@@ -89,6 +89,9 @@ public class IncrementalCooperativeAssignorTest {
 
     @Test
     public void testTaskAssignmentWhenWorkerJoins() {
+        // Customize assignor for this test case
+        time = new MockTime();
+        initAssignor();
         // First assignment with 1 worker and 2 connectors configured but not yet assigned
         performStandardRebalance();
         assertDelay(0);
@@ -190,6 +193,7 @@ public class IncrementalCooperativeAssignorTest {
 
         // Customize assignor for this test case
         rebalanceDelay = 0;
+        time = new MockTime();
         initAssignor();
 
         addNewConnector("connector3", 4);

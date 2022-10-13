@@ -324,12 +324,14 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 log.debug("Previous round had revocations but this round didn't. Probably, the cluster has reached a " +
                         "balanced load. Resetting the exponential backoff clock");
                 revokedInPrevious = false;
+                numSuccessiveRevokingRebalances = 0;
             } else {
                 // no-op
                 log.debug("No revocations in previous and current round.");
             }
         } else {
             log.debug("Delayed rebalance is active. Delaying {}ms before revoking connectors and tasks: {}", delay, toRevoke);
+            revokedInPrevious = false;
         }
 
         assignConnectors(completeWorkerAssignment, newSubmissions.connectors());
@@ -494,7 +496,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                                          ConnectorsAndTasks newSubmissions,
                                          List<WorkerLoad> completeWorkerAssignment) {
         // There are no lost assignments and there have been no successive revoking rebalances
-        if (lostAssignments.isEmpty() && numSuccessiveRevokingRebalances == 0) {
+        if (lostAssignments.isEmpty() && !revokedInPrevious) {
             resetDelay();
             return;
         }
