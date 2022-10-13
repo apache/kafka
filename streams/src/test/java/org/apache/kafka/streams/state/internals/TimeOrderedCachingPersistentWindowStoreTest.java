@@ -167,8 +167,8 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         when(inner.hasIndex()).thenReturn(hasIndex);
 
         final TimeOrderedCachingWindowStore outer =
-                spy(new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE,
-                        SEGMENT_INTERVAL));
+                new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE,
+                        SEGMENT_INTERVAL);
 
         reset(inner);
         when(inner.name()).thenReturn("store");
@@ -176,7 +176,8 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         verify(inner).init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
 
         outer.init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
-        verify(outer).init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
+        verify(inner, times(2))
+                .init((org.apache.kafka.streams.processor.ProcessorContext) context, outer);
     }
 
     @Test
