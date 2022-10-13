@@ -67,7 +67,6 @@ import java.util.UUID;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
-import org.mockito.MockitoSession;
 import org.mockito.junit.MockitoJUnitRunner;
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMinutes;
@@ -90,7 +89,13 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class TimeOrderedCachingPersistentWindowStoreTest {
@@ -109,7 +114,6 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     private TimeOrderedCachingWindowStore cachingStore;
     private RocksDBTimeOrderedWindowSegmentedBytesStore bytesStore;
     private CacheFlushListenerStub<Windowed<String>, String> cacheListener;
-    private MockitoSession mockitoSession;
     @Parameter
     public boolean hasIndex;
 
@@ -142,7 +146,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     public void closeStore() {
         try {
             cachingStore.close();
-        } catch (RuntimeException runtimeException){
+        } catch (final RuntimeException runtimeException) {
            /*
            It will reach here for the testcases like
            shouldCloseCacheAndWrappedStoreAfterErrorDuringCacheFlush(),
@@ -1177,24 +1181,22 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
     }
 
     @Test
-    public void shouldCloseCacheAndWrappedStoreAfterErrorDuringCacheFlush(){
-
+    public void shouldCloseCacheAndWrappedStoreAfterErrorDuringCacheFlush() {
         setUpCloseTests();
         reset(cache);
-        doThrow(new RuntimeException("Simulating an error on flush2")).when(cache).flush(CACHE_NAMESPACE) ;
+        doThrow(new RuntimeException("Simulating an error on flush2")).when(cache).flush(CACHE_NAMESPACE);
         cache.close(CACHE_NAMESPACE);
         reset(underlyingStore);
         underlyingStore.close();
-        assertThrows(RuntimeException.class, ()->cachingStore.close());
+        assertThrows(RuntimeException.class, cachingStore::close);
     }
 
     @Test
     public void shouldCloseWrappedStoreAfterErrorDuringCacheClose() {
-
         setUpCloseTests();
         reset(cache);
         cache.flush(CACHE_NAMESPACE);
-        doThrow(new RuntimeException("Simulating an error on close")).when(cache).close(CACHE_NAMESPACE) ;
+        doThrow(new RuntimeException("Simulating an error on close")).when(cache).close(CACHE_NAMESPACE);
         reset(underlyingStore);
         underlyingStore.close();
         assertThrows(RuntimeException.class, cachingStore::close);
@@ -1202,16 +1204,13 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
 
     @Test
     public void shouldCloseCacheAfterErrorDuringStateStoreClose() {
-
-
         setUpCloseTests();
         reset(cache);
         cache.flush(CACHE_NAMESPACE);
         cache.close(CACHE_NAMESPACE);
         reset(underlyingStore);
-        doThrow(new RuntimeException("Simulating an error on close")).when(underlyingStore).close() ;
+        doThrow(new RuntimeException("Simulating an error on close")).when(underlyingStore).close();
         assertThrows(RuntimeException.class, cachingStore::close);
-
     }
 
     private void setUpCloseTests() {
