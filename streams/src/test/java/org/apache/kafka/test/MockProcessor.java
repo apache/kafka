@@ -32,6 +32,8 @@ import java.util.Map;
 public class MockProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
     private final MockApiProcessor<KIn, VIn, KOut, VOut> delegate;
 
+    private ProcessorContext<KOut, VOut> context;
+
 
     public MockProcessor(final PunctuationType punctuationType,
                          final long scheduleInterval) {
@@ -45,6 +47,7 @@ public class MockProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, 
     @Override
     public void init(ProcessorContext<KOut, VOut> context) {
         delegate.init(context);
+        this.context = context;
     }
 
     @Override
@@ -85,8 +88,8 @@ public class MockProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, 
     }
 
     public void addProcessorMetadata(final String key, final long value) {
-        if (delegate.context() instanceof InternalProcessorContext) {
-            ((InternalProcessorContext<KOut, VOut>) delegate.context()).addProcessorMetadataKeyValue(key, value);
+        if (context instanceof InternalProcessorContext) {
+            ((InternalProcessorContext<KOut, VOut>) context).addProcessorMetadataKeyValue(key, value);
         }
     }
 
