@@ -342,7 +342,7 @@ public abstract class AbstractWindowBytesStoreTest {
         );
         assertEquals(
             asList(zero, one, two, three),
-            toList(windowStore.fetchAll(ofEpochMilli(defaultStartTime), ofEpochMilli(defaultStartTime + 3)))
+            toList(windowStore.fetchAll(ofEpochMilli(defaultStartTime + 0), ofEpochMilli(defaultStartTime + 3)))
         );
         assertEquals(
             asList(one, two, three, four, five),
@@ -360,7 +360,7 @@ public abstract class AbstractWindowBytesStoreTest {
         );
         assertEquals(
             asList(three, two, one, zero),
-            toList(windowStore.backwardFetchAll(ofEpochMilli(defaultStartTime), ofEpochMilli(defaultStartTime + 3)))
+            toList(windowStore.backwardFetchAll(ofEpochMilli(defaultStartTime + 0), ofEpochMilli(defaultStartTime + 3)))
         );
         assertEquals(
             asList(five, four, three, two, one),
