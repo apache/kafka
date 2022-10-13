@@ -811,29 +811,31 @@ class KRaftClusterTest {
         assertTrue(cluster.controllers.asScala.keySet.contains(quorumInfo.leaderId),
           s"Leader ID ${quorumInfo.leaderId} was not a controller ID.")
 
-        val(voters, voterResponseValid) = TestUtils.computeUntilTrue(
-          admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
-            .quorumInfo().get().voters()){
-          voters => voters.stream
+        val (voters, voterResponseValid) =
+          TestUtils.computeUntilTrue(
+            admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
+              .quorumInfo().get().voters()
+          ) { voters => voters.stream
             .allMatch(voter => (voter.logEndOffset > 0
               && voter.lastFetchTimestamp() != OptionalLong.empty()
               && voter.lastCaughtUpTimestamp() != OptionalLong.empty()))
-        }
+          }
 
-        assertTrue(voterResponseValid, s"Atleast one voter did not return the expected state within timeout." +
+        assertTrue(voterResponseValid, s"At least one voter did not return the expected state within timeout." +
           s"The responses gathered for all the voters: ${voters.toString}")
 
-        val(observers, observerResponseValid) = TestUtils.computeUntilTrue(
-          admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
-            .quorumInfo().get().observers()){
-          observers => observers.stream.allMatch(observer => (observer.logEndOffset > 0
+        val (observers, observerResponseValid) =
+          TestUtils.computeUntilTrue(
+            admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
+              .quorumInfo().get().observers()
+          ) { observers => observers.stream.allMatch(observer => (observer.logEndOffset > 0
             && observer.lastFetchTimestamp() != OptionalLong.empty()
             && observer.lastCaughtUpTimestamp() != OptionalLong.empty()))
-        }
+          }
 
         assertEquals(cluster.brokers.asScala.keySet, observers.asScala.map(_.replicaId).toSet)
-        assertTrue(observerResponseValid, s"Atleast one voter did not return the expected state within timeout." +
-            s"The responses gathered for all the voters: ${observers.toString}")
+        assertTrue(observerResponseValid, s"At least one observer did not return the expected state within timeout." +
+            s"The responses gathered for all the observers: ${observers.toString}")
       } finally {
         admin.close()
       }
