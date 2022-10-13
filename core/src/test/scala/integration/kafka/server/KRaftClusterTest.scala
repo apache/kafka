@@ -828,12 +828,14 @@ class KRaftClusterTest {
           TestUtils.computeUntilTrue(
             admin.describeMetadataQuorum(new DescribeMetadataQuorumOptions)
               .quorumInfo().get().observers()
-          ) { observers => observers.stream.allMatch(observer => (observer.logEndOffset > 0
-            && observer.lastFetchTimestamp() != OptionalLong.empty()
-            && observer.lastCaughtUpTimestamp() != OptionalLong.empty()))
+          ) { observers =>
+            (
+              cluster.brokers.asScala.keySet == observers.asScala.map(_.replicaId).toSet
+                && observers.stream.allMatch(observer => (observer.logEndOffset > 0
+                && observer.lastFetchTimestamp() != OptionalLong.empty()
+                && observer.lastCaughtUpTimestamp() != OptionalLong.empty())))
           }
 
-        assertEquals(cluster.brokers.asScala.keySet, observers.asScala.map(_.replicaId).toSet)
         assertTrue(observerResponseValid, s"At least one observer did not return the expected state within timeout." +
             s"The responses gathered for all the observers: ${observers.toString}")
       } finally {
