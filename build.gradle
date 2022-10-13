@@ -1274,6 +1274,7 @@ project(':clients') {
 
     testImplementation libs.bcpkix
     testImplementation libs.junitJupiter
+    testImplementation libs.log4j
     testImplementation libs.mockitoInline
 
     testRuntimeOnly libs.slf4jlog4j

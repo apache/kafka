@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.rest;
 
-import kafka.utils.LogCaptureAppender;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.HttpHost;
@@ -31,6 +30,7 @@ import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -362,10 +362,10 @@ public class RestServerTest {
         // Stop the server to flush all logs
         server.stop();
 
-        Collection<String> logMessages = restServerAppender.getRenderedMessages();
+        Collection<String> logMessages = restServerAppender.getMessages();
         LogCaptureAppender.unregister(restServerAppender);
         restServerAppender.close();
-        String expectedlogContent = "\"GET / HTTP/1.1\" " + String.valueOf(response.getStatusLine().getStatusCode());
+        String expectedlogContent = "\"GET / HTTP/1.1\" " + response.getStatusLine().getStatusCode();
         assertTrue(logMessages.stream().anyMatch(logMessage -> logMessage.contains(expectedlogContent)));
     }
 
