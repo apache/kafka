@@ -283,7 +283,7 @@ public class BrokerHeartbeatManager {
         if (broker == null || broker.controlledShutdownOffset == -1) {
             return OptionalLong.empty();
         }
-        return OptionalLong.of(brokers.get(brokerId).controlledShutdownOffset);
+        return OptionalLong.of(broker.controlledShutdownOffset);
     }
 
 
