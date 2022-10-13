@@ -827,7 +827,7 @@ public class QuorumControllerTest {
         final int maxNewRecordBytes = 1000;
         Map<Integer, Long> brokerEpochs = new HashMap<>();
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
                 build();
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
                 setControllerBuilderInitializer(controllerBuilder -> {
@@ -860,7 +860,7 @@ public class QuorumControllerTest {
                     logEnv.appendedBytes(),
                     maxNewRecordBytes));
 
-            // Keep creating topic until we reached the max bytes limit
+            // Keep creating topic and resign leader until we reached the max bytes limit
             int counter = 0;
             while (logEnv.appendedBytes() < maxNewRecordBytes) {
                 active = controlEnv.activeController();
