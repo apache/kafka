@@ -21,7 +21,6 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.internals.DefaultStateUpdater;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.slf4j.Logger;
@@ -45,7 +44,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
             super(name);
             final String logPrefix = String.format("%s ", name);
             final LogContext logContext = new LogContext(logPrefix);
-            log = logContext.logger(DefaultStateUpdater.class);
+            log = logContext.logger(DefaultTaskExecutor.class);
         }
 
         @Override

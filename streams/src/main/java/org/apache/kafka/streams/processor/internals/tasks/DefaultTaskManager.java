@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.DefaultStateUpdater;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -60,21 +59,29 @@ public class DefaultTaskManager implements TaskManager {
 
     private final List<TaskExecutor> taskExecutors;
 
+    static class DefaultTaskExecutorCreator implements TaskExecutorCreator {
+        @Override
+        public TaskExecutor create(final TaskManager taskManager, String name, Time time) {
+            return new DefaultTaskExecutor(taskManager, name, time);
+        }
+    }
+
     public DefaultTaskManager(final Time time,
+                              final String clientId,
                               final TasksRegistry tasks,
                               final StreamsConfig config,
-                              final String clientId) {
+                              final TaskExecutorCreator executorCreator) {
         final String logPrefix = String.format("%s ", clientId);
         final LogContext logContext = new LogContext(logPrefix);
-        this.log = logContext.logger(DefaultStateUpdater.class);
+        this.log = logContext.logger(DefaultTaskManager.class);
         this.time = time;
         this.tasks = tasks;
 
         final int numExecutors = config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
-        taskExecutors = new ArrayList<>(numExecutors);
+        this.taskExecutors = new ArrayList<>(numExecutors);
         for (int i = 1; i <= numExecutors; i++) {
             final String name = clientId + "-TaskExecutor-" + i;
-            taskExecutors.add(new DefaultTaskExecutor(this, name, time));
+            this.taskExecutors.add(executorCreator.create(this, name, time));
         }
     }
 
@@ -111,7 +118,7 @@ public class DefaultTaskManager implements TaskManager {
             }
 
             final TaskExecutor lockedExecutor = assignedTasks.get(task.id());
-            if (lockedExecutor == null || lockedExecutor == executor) {
+            if (lockedExecutor == null || lockedExecutor != executor) {
                 throw new IllegalArgumentException("Task " + task.id() + " is not locked by the executor");
             }
 
@@ -154,6 +161,9 @@ public class DefaultTaskManager implements TaskManager {
                     });
                 } else {
                     remainingTaskIds.remove(taskId);
+                    if (remainingTaskIds.isEmpty()) {
+                        result.complete(null);
+                    }
                 }
             }
 
