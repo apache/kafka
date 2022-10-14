@@ -61,7 +61,7 @@ public class DefaultTaskManager implements TaskManager {
 
     static class DefaultTaskExecutorCreator implements TaskExecutorCreator {
         @Override
-        public TaskExecutor create(final TaskManager taskManager, String name, Time time) {
+        public TaskExecutor create(final TaskManager taskManager, final String name, final Time time) {
             return new DefaultTaskExecutor(taskManager, name, time);
         }
     }
@@ -148,7 +148,7 @@ public class DefaultTaskManager implements TaskManager {
                 }
 
                 if (assignedTasks.containsKey(taskId)) {
-                    KafkaFuture<StreamTask> future = assignedTasks.get(taskId).unassign();
+                    final KafkaFuture<StreamTask> future = assignedTasks.get(taskId).unassign();
                     future.whenComplete((streamTask, throwable) -> {
                         if (throwable != null) {
                             result.completeExceptionally(throwable);
