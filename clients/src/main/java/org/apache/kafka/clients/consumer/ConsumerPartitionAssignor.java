@@ -30,6 +30,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 
+import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
+
 /**
  * This interface is used to define custom partition assignment for use in
  * {@link org.apache.kafka.clients.consumer.KafkaConsumer}. Members of the consumer group subscribe
@@ -102,12 +104,18 @@ public interface ConsumerPartitionAssignor {
         private final ByteBuffer userData;
         private final List<TopicPartition> ownedPartitions;
         private Optional<String> groupInstanceId;
+        private final int generationId;
 
-        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
+        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions, int generationId) {
             this.topics = topics;
             this.userData = userData;
             this.ownedPartitions = ownedPartitions;
             this.groupInstanceId = Optional.empty();
+            this.generationId = generationId;
+        }
+
+        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
+            this(topics, userData, ownedPartitions, DEFAULT_GENERATION);
         }
 
         public Subscription(List<String> topics, ByteBuffer userData) {
@@ -136,6 +144,10 @@ public interface ConsumerPartitionAssignor {
 
         public Optional<String> groupInstanceId() {
             return groupInstanceId;
+        }
+
+        public int generationId() {
+            return generationId;
         }
 
         @Override

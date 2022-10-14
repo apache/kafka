@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -73,7 +74,8 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                                     Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> consumerToOwnedPartitions = new HashMap<>();
         Set<TopicPartition> partitionsWithMultiplePreviousOwners = new HashSet<>();
-        if (allSubscriptionsEqual(partitionsPerTopic.keySet(), subscriptions, consumerToOwnedPartitions, partitionsWithMultiplePreviousOwners)) {
+        if (validateSubscriptionAndCheckSubscriptionsEqual(
+            partitionsPerTopic.keySet(), subscriptions, consumerToOwnedPartitions, partitionsWithMultiplePreviousOwners)) {
             log.debug("Detected that all consumers were subscribed to same set of topics, invoking the "
                           + "optimized assignment algorithm");
             partitionsTransferringOwnership = new HashMap<>();
@@ -92,10 +94,10 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
      * {@code consumerToOwnedPartitions} with each consumer's previously owned and still-subscribed partitions,
      * and the {@code partitionsWithMultiplePreviousOwners} with any partitions claimed by multiple previous owners
      */
-    private boolean allSubscriptionsEqual(Set<String> allTopics,
-                                          Map<String, Subscription> subscriptions,
-                                          Map<String, List<TopicPartition>> consumerToOwnedPartitions,
-                                          Set<TopicPartition> partitionsWithMultiplePreviousOwners) {
+    private boolean validateSubscriptionAndCheckSubscriptionsEqual(Set<String> allTopics,
+                                                                   Map<String, Subscription> subscriptions,
+                                                                   Map<String, List<TopicPartition>> consumerToOwnedPartitions,
+                                                                   Set<TopicPartition> partitionsWithMultiplePreviousOwners) {
         Set<String> membersOfCurrentHighestGeneration = new HashSet<>();
         boolean isAllSubscriptionsEqual = true;
 
@@ -117,18 +119,29 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 isAllSubscriptionsEqual = false;
             }
 
-            MemberData memberData = memberData(subscription);
+            Optional<Integer> generation;
+            List<TopicPartition> ownedPartitionsInMetadata;
+            if (!subscription.ownedPartitions().isEmpty() && subscription.generationId() != DEFAULT_GENERATION) {
+                // In ConsumerProtocolSubscription v2 or higher, we don't need to deserialize the byte buffer
+                // and take from fields directly
+                ownedPartitionsInMetadata = subscription.ownedPartitions();
+                generation = Optional.of(subscription.generationId());
+            } else {
+                MemberData memberData = memberData(subscription);
+                ownedPartitionsInMetadata = memberData.partitions;
+                generation = memberData.generation;
+            }
 
             List<TopicPartition> ownedPartitions = new ArrayList<>();
             consumerToOwnedPartitions.put(consumer, ownedPartitions);
 
             // Only consider this consumer's owned partitions as valid if it is a member of the current highest
             // generation, or it's generation is not present but we have not seen any known generation so far
-            if (memberData.generation.isPresent() && memberData.generation.get() >= maxGeneration
-                || !memberData.generation.isPresent() && maxGeneration == DEFAULT_GENERATION) {
+            if (generation.isPresent() && generation.get() >= maxGeneration
+                || !generation.isPresent() && maxGeneration == DEFAULT_GENERATION) {
 
                 // If the current member's generation is higher, all the previously owned partitions are invalid
-                if (memberData.generation.isPresent() && memberData.generation.get() > maxGeneration) {
+                if (generation.isPresent() && generation.get() > maxGeneration) {
                     allPreviousPartitionsToOwner.clear();
                     partitionsWithMultiplePreviousOwners.clear();
                     for (String droppedOutConsumer : membersOfCurrentHighestGeneration) {
@@ -136,11 +149,11 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                     }
 
                     membersOfCurrentHighestGeneration.clear();
-                    maxGeneration = memberData.generation.get();
+                    maxGeneration = generation.get();
                 }
 
                 membersOfCurrentHighestGeneration.add(consumer);
-                for (final TopicPartition tp : memberData.partitions) {
+                for (final TopicPartition tp : ownedPartitionsInMetadata) {
                     // filter out any topics that no longer exist or aren't part of the current subscription
                     if (allTopics.contains(tp.topic())) {
                         String otherConsumer = allPreviousPartitionsToOwner.put(tp, consumer);
@@ -148,6 +161,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                             // this partition is not owned by other consumer in the same generation
                             ownedPartitions.add(tp);
                         } else {
+                            // don't throw exception since we'll handle the situation by ourselves
                             log.error("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
                                 + "same generation {}, this will be invalidated and removed from their previous assignment.",
                                      consumer, otherConsumer, tp, maxGeneration);
