@@ -456,11 +456,6 @@ public class WorkerCoordinatorIncrementalTest {
                 Collections.emptyList(), 0,
                 anotherMemberAssignment);
 
-        ExtendedAssignment leaderAssignment1 = leaderAssignment;
-        ExtendedAssignment memberAssignment1 = memberAssignment;
-        ExtendedAssignment anotherMemberAssignment1 = anotherMemberAssignment;
-
-
         // Second rebalance detects a worker is missing
         coordinator.metadata();
         ++configStorageCalls;
@@ -518,7 +513,7 @@ public class WorkerCoordinatorIncrementalTest {
 
         result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
-        // A rebalance after the delay expires leads to a revoking rebalance
+        // A rebalance after the delay expires re-assigns the lost tasks to the returning member
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
                 Collections.emptyList(), 0,
@@ -534,32 +529,6 @@ public class WorkerCoordinatorIncrementalTest {
         anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
         assertAssignment(leaderId, offset,
                 Collections.emptyList(), 2,
-                Collections.emptyList(), 0,
-                anotherMemberAssignment);
-
-        responseMembers.clear();
-
-        addJoinGroupResponseMember(responseMembers, leaderId, offset, leaderAssignment1);
-        addJoinGroupResponseMember(responseMembers, memberId, offset, memberAssignment1);
-        addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, anotherMemberAssignment1);
-
-        result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
-
-        leaderAssignment = deserializeAssignment(result, leaderId);
-        assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
-                leaderAssignment);
-
-        memberAssignment = deserializeAssignment(result, memberId);
-        assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
-                Collections.emptyList(), 0,
-                memberAssignment);
-
-        anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
-        assertAssignment(leaderId, offset,
-                Collections.emptyList(), 0,
                 Collections.emptyList(), 0,
                 anotherMemberAssignment);
 
