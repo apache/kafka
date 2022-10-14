@@ -25,14 +25,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.Collections;
 
-import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,6 +53,7 @@ public class DefaultTaskExecutorTest {
         when(taskManager.assignNextTask(taskExecutor)).thenReturn(task).thenReturn(null);
         when(task.isProcessable(anyLong())).thenReturn(true);
         when(task.process(anyLong())).thenReturn(true);
+        when(task.prepareCommit()).thenReturn(Collections.emptyMap());
     }
 
     @AfterEach
@@ -60,16 +62,12 @@ public class DefaultTaskExecutorTest {
     }
 
     @Test
-    public void shouldShutdownTaskExecutor() throws Exception {
+    public void shouldShutdownTaskExecutor() {
         assertNull(taskExecutor.currentTask(), "Have task assigned before startup");
 
         taskExecutor.start();
 
-        waitForCondition(
-            () -> taskExecutor.currentTask() != null,
-            VERIFICATION_TIMEOUT,
-            "Did not get the task assigned after startup!"
-        );
+        verify(taskManager, timeout(VERIFICATION_TIMEOUT)).assignNextTask(taskExecutor);
 
         taskExecutor.shutdown(Duration.ofMinutes(1));
 
@@ -80,48 +78,28 @@ public class DefaultTaskExecutorTest {
     }
 
     @Test
-    public void shouldUnassignTaskWhenNotProcessable() throws Exception {
-        taskExecutor.start();
-
-        waitForCondition(
-            () -> taskExecutor.currentTask() != null,
-            VERIFICATION_TIMEOUT,
-            "Did not get the task assigned after startup!"
-        );
-
-        reset(task);
+    public void shouldUnassignTaskWhenNotProcessable() {
         when(task.isProcessable(anyLong())).thenReturn(false);
 
-        waitForCondition(
-            () -> taskExecutor.currentTask() == null,
-            VERIFICATION_TIMEOUT,
-            "Did not unassign task!"
-        );
+        taskExecutor.start();
 
+        verify(taskManager, timeout(VERIFICATION_TIMEOUT)).unassignTask(task, taskExecutor);
         verify(task).prepareCommit();
-        verify(taskManager).unassignTask(task, taskExecutor);
+        assertNull(taskExecutor.currentTask());
     }
 
     @Test
     public void shouldUnassignTaskWhenRequired() throws Exception {
         taskExecutor.start();
 
-        waitForCondition(
-            () -> taskExecutor.currentTask() != null,
-            VERIFICATION_TIMEOUT,
-            "Did not get the task assigned after startup!"
-        );
+        verify(taskManager, timeout(VERIFICATION_TIMEOUT)).assignNextTask(taskExecutor);
+        assertNotNull(taskExecutor.currentTask());
 
         final KafkaFuture<StreamTask> future = taskExecutor.unassign();
 
-        waitForCondition(
-            () -> taskExecutor.currentTask() == null,
-            VERIFICATION_TIMEOUT,
-            "Did not unassign task!"
-        );
-
+        verify(taskManager, timeout(VERIFICATION_TIMEOUT)).unassignTask(task, taskExecutor);
         verify(task).prepareCommit();
-        verify(taskManager).unassignTask(task, taskExecutor);
+        assertNull(taskExecutor.currentTask());
 
         assertTrue(future.isDone(), "Unassign is not completed");
         assertEquals(task, future.get(), "Unexpected task was unassigned");
