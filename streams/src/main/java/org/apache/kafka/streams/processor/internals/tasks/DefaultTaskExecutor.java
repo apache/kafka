@@ -21,7 +21,6 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.internals.DefaultStateUpdater;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.slf4j.Logger;
@@ -45,7 +44,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
             super(name);
             final String logPrefix = String.format("%s ", name);
             final LogContext logContext = new LogContext(logPrefix);
-            log = logContext.logger(DefaultStateUpdater.class);
+            log = logContext.logger(DefaultTaskExecutor.class);
         }
 
         @Override
@@ -102,6 +101,7 @@ public class DefaultTaskExecutor implements TaskExecutor {
     }
 
     private final Time time;
+    private final String name;
     private final TaskManager taskManager;
 
     private StreamTask currentTask = null;
@@ -109,15 +109,22 @@ public class DefaultTaskExecutor implements TaskExecutor {
     private CountDownLatch shutdownGate;
 
     public DefaultTaskExecutor(final TaskManager taskManager,
+                               final String name,
                                final Time time) {
         this.time = time;
+        this.name = name;
         this.taskManager = taskManager;
+    }
+
+    @Override
+    public String name() {
+        return name;
     }
 
     @Override
     public void start() {
         if (taskExecutorThread == null) {
-            taskExecutorThread = new TaskExecutorThread("task-executor");
+            taskExecutorThread = new TaskExecutorThread(name);
             taskExecutorThread.start();
             shutdownGate = new CountDownLatch(1);
         }
