@@ -25,17 +25,18 @@ import java.util.Set;
 public interface TaskManager {
 
     /**
-     * Get the next processible active task for the requested executor. Once the task is assigned to
+     * Get the next processable active task for the requested executor. Once the task is assigned to
      * the requested task executor, it should not be assigned to any other executors until it was
      * returned to the task manager.
      *
      * @param executor the requesting {@link TaskExecutor}
+     * @return a processable active task not assigned to any other executors, or null if there is no such task available
      */
     StreamTask assignNextTask(final TaskExecutor executor);
 
     /**
      * Unassign the stream task so that it can be assigned to other executors later
-     * or be removed from the task manager. The requested executor must have locked
+     * or be removed from the task manager. The requested executor must have
      * the task already, otherwise an exception would be thrown.
      *
      * @param executor the requesting {@link TaskExecutor}
