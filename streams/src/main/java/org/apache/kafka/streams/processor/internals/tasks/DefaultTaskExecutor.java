@@ -74,12 +74,6 @@ public class DefaultTaskExecutor implements TaskExecutor {
 
             if (currentTask == null) {
                 currentTask = taskManager.assignNextTask(DefaultTaskExecutor.this);
-            }
-
-            // if a task is no longer processable, ask task-manager to give it another
-            // task in the next iteration
-            if (currentTask.isProcessable(nowMs)) {
-                currentTask.process(nowMs);
             } else {
                 // if a task is no longer processable, ask task-manager to give it another
                 // task in the next iteration
