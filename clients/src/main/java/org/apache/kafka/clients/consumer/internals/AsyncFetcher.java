@@ -84,13 +84,17 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @param <V> Value type of the consumer record
  */
 public class AsyncFetcher<K, V> {
+    private final LogContext logContext;
+
+    public AsyncFetcher(LogContext logContext) {
+        this.logContext = logContext;
+    }
     public FetchBuffer createFetchBuffer() {
         return new FetchBuffer();
     }
 
     public FetchSender createFetchSender(
             Time time,
-            LogContext logContext,
             SubscriptionState subscriptions,
             ConsumerMetadata metadata,
             ConsumerNetworkClient client,
@@ -109,8 +113,7 @@ public class AsyncFetcher<K, V> {
                 checkCrcs, fetchBuffer, backgroundEventQueue);
     }
 
-    public FetchHandler<K, V> createFetchHandler(LogContext logContext,
-                                                 int maxPollRecords,
+    public FetchHandler<K, V> createFetchHandler(int maxPollRecords,
                                                  IsolationLevel isolationLevel,
                                                  FetchManagerMetrics sensors,
                                                  String fetchSize,
@@ -218,7 +221,7 @@ public class AsyncFetcher<K, V> {
          *
          * @return number of fetches sent
          */
-        public Queue<RequestFuture<ClientResponse>> sendFetches() {
+        public int sendFetches() {
             // Update metrics in case there was an assignment change
             sensors.maybeUpdateAssignment(subscriptions);
 
@@ -304,7 +307,7 @@ public class AsyncFetcher<K, V> {
                                         fetchBuffer.completedFetches.add(new CompletedFetch(partition, partitionData,
                                                 metricAggregator, batches,
                                                 fetchOffset, responseVersion,
-                                                checkCrcs));
+                                                chechCrcs));
                                         // TODO: to be implemented
                                         BackgroundEvent backgroundEvent =
                                                 new FetchResponseBackgroundEvent(response);
@@ -335,7 +338,7 @@ public class AsyncFetcher<K, V> {
                     }
                 });
             }
-            return futureResults;
+            return fetchRequestMap.size();
         }
 
         private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
@@ -1059,8 +1062,6 @@ public class AsyncFetcher<K, V> {
         }
     }
 
-
-
      private static class CompletedFetch<K, V> {
         private final TopicPartition partition;
         private final Iterator<? extends RecordBatch> batches;
@@ -1081,7 +1082,7 @@ public class AsyncFetcher<K, V> {
         private Exception cachedRecordException = null;
         private boolean corruptLastRecord = false;
         private boolean initialized = false;
-        private boolean checkCrcs;
+        private final boolean checkCrcs;
 
         CompletedFetch(TopicPartition partition,
                        FetchResponseData.PartitionData partitionData,
@@ -1271,7 +1272,6 @@ public class AsyncFetcher<K, V> {
              }
              return records;
          }
-
 
          private Record nextFetchedRecord(SubscriptionState subscriptions,
                                                     IsolationLevel isolationLevel,

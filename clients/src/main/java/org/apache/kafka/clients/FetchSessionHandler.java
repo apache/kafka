@@ -402,7 +402,7 @@ public class FetchSessionHandler {
      *
      * @param toFind    The items to look for.
      * @param toSearch  The set of items to search.
-     * @return          Empty set if all items were found; some of the missing ones in a set, if not.
+     * @return          Set of missing items. Empty set if all is found.
      */
     static <T> Set<T> findMissing(Set<T> toFind, Set<T> toSearch) {
         Set<T> ret = new LinkedHashSet<>();
