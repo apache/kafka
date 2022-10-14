@@ -119,11 +119,11 @@ public interface ConsumerPartitionAssignor {
         }
 
         public Subscription(List<String> topics, ByteBuffer userData) {
-            this(topics, userData, Collections.emptyList());
+            this(topics, userData, Collections.emptyList(), DEFAULT_GENERATION);
         }
 
         public Subscription(List<String> topics) {
-            this(topics, null, Collections.emptyList());
+            this(topics, null, Collections.emptyList(), DEFAULT_GENERATION);
         }
 
         public List<String> topics() {

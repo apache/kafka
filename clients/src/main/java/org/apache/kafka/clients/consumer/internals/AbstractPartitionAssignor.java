@@ -71,7 +71,7 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
             }
 
             Optional<Integer> generation = Optional.of(subscription.generationId());
-            List<TopicPartition> ownedPartitionsInMetadata = subscription.ownedPartitions();;
+            List<TopicPartition> ownedPartitionsInMetadata = subscription.ownedPartitions();
 
             // Only consider this consumer's owned partitions as valid if it is a member of the current highest
             // generation, or it's generation is not present but we have not seen any known generation so far
@@ -89,7 +89,7 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
                         log.error("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
                                 + "same generation {}, this will be invalidated and removed from their previous assignment.",
                             consumer, otherConsumer, tp, maxGeneration);
-                        throw new IllegalArgumentException("Found multiple consumers claiming the same topic partitions");
+                        throw new IllegalStateException("Found multiple consumers claiming the same topic partitions");
                     }
                 }
             }
