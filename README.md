@@ -83,14 +83,16 @@ fail due to code changes. You can just run:
  
     ./gradlew processMessages processTestMessages
 
+### Running a Kafka broker in KRaft mode
+
+    KAFKA_CLUSTER_ID="$(./bin/kafka-storage.sh random-uuid)"
+    ./bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/server.properties
+    ./bin/kafka-server-start.sh config/kraft/server.properties
+
 ### Running a Kafka broker in ZooKeeper mode
 
     ./bin/zookeeper-server-start.sh config/zookeeper.properties
     ./bin/kafka-server-start.sh config/server.properties
-
-### Running a Kafka broker in KRaft (Kafka Raft metadata) mode
-
-See [config/kraft/README.md](https://github.com/apache/kafka/blob/trunk/config/kraft/README.md).
 
 ### Cleaning the build ###
     ./gradlew clean
