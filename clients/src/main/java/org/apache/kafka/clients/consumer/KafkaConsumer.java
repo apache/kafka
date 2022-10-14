@@ -1581,6 +1581,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * is invoked for the same partition more than once, the latest offset will be used on the next poll(). Note that
      * you may lose data if this API is arbitrarily used in the middle of consumption, to reset the fetch offsets
      *
+     * Note that, since messages are 0-indexed, {@link #seekToBeginning(Collection)} should be used to retrieve
+     * the message at offset 0.
+     *
+     * @param offset the last offset which was consumed. The next message received will have a higher offset number than this
      * @throws IllegalArgumentException if the provided offset is negative
      * @throws IllegalStateException if the provided TopicPartition is not assigned to this consumer
      */
