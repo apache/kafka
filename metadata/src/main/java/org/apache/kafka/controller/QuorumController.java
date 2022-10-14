@@ -1211,7 +1211,7 @@ public final class QuorumController implements Controller {
         long offset,
         int epoch,
         long timestamp,
-        int bytesSinceLastSnapshot
+        long bytesSinceLastSnapshot
     ) {
         lastCommittedOffset = offset;
         lastCommittedEpoch = epoch;
@@ -1676,7 +1676,7 @@ public final class QuorumController implements Controller {
     /**
      * Number of bytes processed through handling commits since the last snapshot was generated.
      */
-    private int committedBytesSinceLastSnapshot = 0;
+    private long committedBytesSinceLastSnapshot = 0;
 
     /**
      * How long to delay partition leader balancing operations.
