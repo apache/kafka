@@ -25,7 +25,12 @@ import java.time.Duration;
 public interface TaskExecutor {
 
     /**
-     * Starts the task processor.
+     * @return ID name string of the task executor.
+     */
+    String name();
+
+    /**
+     * Starts the task executor.
      */
     void start();
 

@@ -1,4 +1,20 @@
-package org.apache.kafka.streams.processor.internals;
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.streams.processor.internals.tasks;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -6,9 +22,11 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskExecutor;
-import org.apache.kafka.streams.processor.internals.tasks.TaskExecutor;
-import org.apache.kafka.streams.processor.internals.tasks.TaskManager;
+import org.apache.kafka.streams.processor.internals.DefaultStateUpdater;
+import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
+import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.TasksRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -26,15 +44,15 @@ import java.util.stream.Collectors;
  * An active task could only be in one of the following status:
  *
  * 1. It's assigned to one of the executors for processing.
- * 2. It's locked by the stream thread for committing, removal, other manipulations etc.
- * 3. Neither 1 or 2, i.e. it's not locked but also not assigned to any executors. It's possible
- * that we do not have enough executors or because those tasks are not processible yet.
+ * 2. It's locked for committing, removal, other manipulations etc.
+ * 3. Neither 1 or 2, i.e. it stays idle. This is possible if we do not have enough executors or because those tasks
+ *    are not processable (e.g. because no records fetched) yet.
  */
 public class DefaultTaskManager implements TaskManager {
 
     private final Time time;
     private final Logger log;
-    private final Tasks tasks;
+    private final TasksRegistry tasks;
 
     private final Lock tasksLock = new ReentrantLock();
     private final List<TaskId> lockedTasks = new ArrayList<>();
@@ -43,10 +61,10 @@ public class DefaultTaskManager implements TaskManager {
     private final List<TaskExecutor> taskExecutors;
 
     public DefaultTaskManager(final Time time,
-                              final Tasks tasks,
+                              final TasksRegistry tasks,
                               final StreamsConfig config,
-                              final String threadName) {
-        final String logPrefix = String.format("%s ", threadName);
+                              final String clientId) {
+        final String logPrefix = String.format("%s ", clientId);
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(DefaultStateUpdater.class);
         this.time = time;
@@ -55,22 +73,28 @@ public class DefaultTaskManager implements TaskManager {
         final int numExecutors = config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
         taskExecutors = new ArrayList<>(numExecutors);
         for (int i = 1; i <= numExecutors; i++) {
-            taskExecutors.add(new DefaultTaskExecutor(this, time));
+            final String name = clientId + "-TaskExecutor-" + i;
+            taskExecutors.add(new DefaultTaskExecutor(this, name, time));
         }
     }
 
+    @Override
     public StreamTask assignNextTask(final TaskExecutor executor) {
         return returnWithTasksLocked(() -> {
             if (!taskExecutors.contains(executor)) {
                 throw new IllegalArgumentException("The requested executor for getting next task to assign is unrecognized");
             }
 
-            // the most naive scheduling algorithm for now: give the next unlocked, unassigned, and  processible task
+            // the most naive scheduling algorithm for now: give the next unlocked, unassigned, and  processable task
             for (final Task task : tasks.activeTasks()) {
                 if (!assignedTasks.containsKey(task.id()) &&
                     !lockedTasks.contains(task.id()) &&
                     ((StreamTask) task).isProcessable(time.milliseconds())) {
+
                     assignedTasks.put(task.id(), executor);
+
+                    log.info("Assigned {} to executor {}", task.id(), executor.name());
+
                     return (StreamTask) task;
                 }
             }
@@ -79,6 +103,7 @@ public class DefaultTaskManager implements TaskManager {
         });
     }
 
+    @Override
     public void unassignTask(final StreamTask task, final TaskExecutor executor) {
         executeWithTasksLocked(() -> {
             if (!taskExecutors.contains(executor)) {
@@ -91,9 +116,12 @@ public class DefaultTaskManager implements TaskManager {
             }
 
             assignedTasks.remove(task.id());
+
+            log.info("Unassigned {} from executor {}", task.id(), executor.name());
         });
     }
 
+    @Override
     public KafkaFuture<Void> lockTasks(final Set<TaskId> taskIds) {
         return returnWithTasksLocked(() -> {
             lockedTasks.addAll(taskIds);
@@ -133,20 +161,24 @@ public class DefaultTaskManager implements TaskManager {
         });
     }
 
+    @Override
     public KafkaFuture<Void> lockAllTasks() {
         return returnWithTasksLocked(() ->
             lockTasks(tasks.activeTasks().stream().map(Task::id).collect(Collectors.toSet()))
         );
     }
 
+    @Override
     public void unlockTasks(final Set<TaskId> taskIds) {
         executeWithTasksLocked(() -> lockedTasks.removeAll(taskIds));
     }
 
+    @Override
     public void unlockAllTasks() {
         executeWithTasksLocked(() -> unlockTasks(tasks.activeTasks().stream().map(Task::id).collect(Collectors.toSet())));
     }
 
+    @Override
     public void add(final Set<StreamTask> tasksToAdd) {
         executeWithTasksLocked(() -> {
             for (final StreamTask task : tasksToAdd) {
@@ -157,6 +189,7 @@ public class DefaultTaskManager implements TaskManager {
         log.info("Added tasks {} to the task manager to process", tasksToAdd);
     }
 
+    @Override
     public void remove(final TaskId taskId) {
         executeWithTasksLocked(() -> {
             if (assignedTasks.containsKey(taskId)) {
@@ -164,15 +197,20 @@ public class DefaultTaskManager implements TaskManager {
             }
 
             if (!lockedTasks.contains(taskId)) {
-                throw new IllegalArgumentException("The task to remove is not locked yet");
+                throw new IllegalArgumentException("The task to remove is not locked yet by the task manager");
             }
 
-            tasks.removeActiveTask(taskId);
+            if (!tasks.contains(taskId)) {
+                throw new IllegalArgumentException("The task to remove is not owned by the task manager");
+            }
+
+            tasks.removeTask(tasks.task(taskId));
         });
 
         log.info("Removed task {} from the task manager", taskId);
     }
 
+    @Override
     public Set<ReadOnlyTask> getTasks() {
         return returnWithTasksLocked(() -> tasks.activeTasks().stream().map(ReadOnlyTask::new).collect(Collectors.toSet()));
     }
@@ -195,3 +233,4 @@ public class DefaultTaskManager implements TaskManager {
         }
     }
 }
+
