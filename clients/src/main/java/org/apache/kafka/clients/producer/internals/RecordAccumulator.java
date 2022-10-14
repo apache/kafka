@@ -127,7 +127,9 @@ public class RecordAccumulator {
         this.closed = false;
         this.flushesInProgress = new AtomicInteger(0);
         this.appendsInProgress = new AtomicInteger(0);
-        this.batchSize = batchSize;
+        // As per Kafka producer configuration documentation batch.size may be set to 0 to explicitly disable
+        // batching which in practice actually means using a batch size of 1.
+        this.batchSize = Math.max(1, batchSize);
         this.compression = compression;
         this.lingerMs = lingerMs;
         this.retryBackoffMs = retryBackoffMs;
