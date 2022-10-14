@@ -357,22 +357,28 @@ public class ErrorHandlingTaskTest {
         Struct struct2 = new Struct(valSchema).put("val", 6789);
         SourceRecord record2 = new SourceRecord(emptyMap(), emptyMap(), TOPIC, PARTITION1, valSchema, struct2);
 
-        when(workerSourceTask.isStopping()).thenReturn(false);
-        when(workerSourceTask.isStopping()).thenReturn(false);
-        when(workerSourceTask.isStopping()).thenReturn(false);
+        when(workerSourceTask.isStopping())
+                .thenReturn(false)
+                .thenReturn(false)
+                .thenReturn(true);
 
         doReturn(true).when(workerSourceTask).commitOffsets();
 
-        when(sourceTask.poll()).thenReturn(singletonList(record1));
-        when(sourceTask.poll()).thenReturn(singletonList(record2));
+        when(sourceTask.poll())
+                .thenReturn(singletonList(record1))
+                .thenReturn(singletonList(record2));
 
         expectTopicCreation(TOPIC);
+
+        when(producer.send(any(), any()))
+                .thenReturn(null)
+                .thenReturn(null);
 
         workerSourceTask.initialize(TASK_CONFIG);
         workerSourceTask.initializeAndStart();
         workerSourceTask.execute();
 
-        verify(workerSourceTask).isStopping();
+        verify(workerSourceTask, times(3)).isStopping();
         verify(workerSourceTask).commitOffsets();
 
         verify(offsetStore).start();
@@ -380,10 +386,7 @@ public class ErrorHandlingTaskTest {
         verify(sourceTask).initialize(any());
         verify(sourceTask).start(any());
 
-        verify(sourceTask).poll();
-        verify(sourceTask).poll();
-        assertEquals(singletonList(record1), sourceTask.poll());
-        assertEquals(singletonList(record2), sourceTask.poll());
+        verify(sourceTask, times(2)).poll();
 
         verify(producer, times(2)).send(any(), any());
         assertEquals(null, producer.send(any()));
@@ -448,7 +451,6 @@ public class ErrorHandlingTaskTest {
         workerSourceTask.execute();
 
 
-        assertEquals(null, producer.send(any()));
         // two records were consumed from Kafka
         assertSourceMetricValue("source-record-poll-total", 2.0);
         // only one was written to the task
@@ -527,12 +529,12 @@ public class ErrorHandlingTaskTest {
         TransformationChain<SinkRecord> sinkTransforms =
                 new TransformationChain<>(singletonList(new FaultyPassthrough<SinkRecord>()), retryWithToleranceOperator);
 
-        workerSinkTask = spy(new WorkerSinkTask(
+        workerSinkTask = new WorkerSinkTask(
             taskId, sinkTask, statusListener, initialState, workerConfig,
             ClusterConfigState.EMPTY, metrics, converter, converter, errorHandlingMetrics,
             headerConverter, sinkTransforms, consumer, pluginLoader, time,
             retryWithToleranceOperator, workerErrantRecordReporter,
-                statusBackingStore));
+                statusBackingStore);
     }
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
