@@ -45,7 +45,7 @@ public class DefaultTaskExecutorTest {
     private final StreamTask task = mock(StreamTask.class);
     private final TaskManager taskManager = mock(TaskManager.class);
 
-    private final DefaultTaskExecutor taskExecutor = new DefaultTaskExecutor(taskManager, time);
+    private final DefaultTaskExecutor taskExecutor = new DefaultTaskExecutor(taskManager, "TaskExecutor", time);
 
     @BeforeEach
     public void setUp() {
