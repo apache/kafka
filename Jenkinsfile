@@ -19,7 +19,7 @@
 
 def doValidation() {
   sh """
-    ./retry_zinc ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
+    ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
         spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
         --profile --no-daemon --continue -PxmlSpotBugsReport=true
   """
