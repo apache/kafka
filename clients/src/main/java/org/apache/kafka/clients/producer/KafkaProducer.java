@@ -778,10 +778,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Asynchronously send a record to a topic and invoke the provided callback when the send has been acknowledged.
      * <p>
-     * The send is asynchronous and this method will return immediately (except for getting the topic metadata) once the record has been stored in the buffer of
+     * The send is asynchronous and this method will return immediately (except for getting the topic metadata if it 
+     * doesn't have the necessary information about the topic) once the record has been stored in the buffer of
      * records waiting to be sent. This allows sending many records in parallel without blocking to wait for the
      * response after each one.
-     * Note, that getting metadata part of a method is blocking. E.g, it will block (for up to maxBlockTimeMs) if Kafka cluster is unreachable.
+     * Note, that getting metadata part of a method is blocking. This happens for the first record being sent to 
+     * the cluster by this client for the given topic. In this case it will block (for up to maxBlockTimeMs) if 
+     * Kafka cluster is unreachable.
      * <p>
      * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to, the offset
      * it was assigned and the timestamp of the record. If
