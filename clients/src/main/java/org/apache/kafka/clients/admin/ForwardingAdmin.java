@@ -53,7 +53,7 @@ public class ForwardingAdmin implements Admin {
 
     @Override
     public void close(Duration timeout) {
-        delegate.close();
+        delegate.close(timeout);
     }
 
     @Override
