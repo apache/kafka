@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.util.Properties
+
 import kafka.server.metadata.ZkConfigRepository
 import kafka.utils.TestUtils
 import kafka.zk.{AdminZkClient, KafkaZkClient}

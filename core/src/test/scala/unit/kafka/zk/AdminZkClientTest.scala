@@ -360,53 +360,66 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
   }
 
   @Test
-  def testChangeConfigsWithUserAndClientId(): Unit = {
+  def testChangeUserOrUserClientIdConfigWithUserAndClientId(): Unit = {
     val config = new Properties()
     config.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerByteRate)
-    adminZkClient.changeConfigs(ConfigType.User, "user01/clients/client01", config, isUserClientId = true)
-    val props = zkClient.getEntityConfigs(ConfigType.User, "user01/clients/client01")
+    adminZkClient.changeUserOrUserClientIdConfig("user01/clients/client01", config, isUserClientId = true)
+    var props = zkClient.getEntityConfigs(ConfigType.User, "user01/clients/client01")
     assertEquals(props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), producerByteRate)
 
-    adminZkClient.changeConfigs(ConfigType.User, "user01/clients/client01", new Properties(), isUserClientId = true)
-    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.User))
+    // Children of clients and user01 should all be empty, so user01 should be deleted
+    adminZkClient.changeUserOrUserClientIdConfig("user01/clients/client01", new Properties(), isUserClientId = true)
+    var users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.User))
     assert(users.isEmpty)
+
+    adminZkClient.changeUserOrUserClientIdConfig("user01", config)
+    props = zkClient.getEntityConfigs(ConfigType.User, "user01")
+    assertEquals(props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), producerByteRate)
+    adminZkClient.changeUserOrUserClientIdConfig("user01/clients/client01", config, isUserClientId = true)
+    props = zkClient.getEntityConfigs(ConfigType.User, "user01/clients/client01")
+    assertEquals(props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), producerByteRate)
+
+    // Children of clients are empty but configs of user01 are not empty, so clients should be deleted, but user01 should not
+    adminZkClient.changeUserOrUserClientIdConfig("user01/clients/client01", new Properties(), isUserClientId = true)
+    users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.User))
+    assert(users == Seq("user01"))
   }
 
   @Test
-  def testChangeConfigsWithUser(): Unit = {
+  def testChangeUserOrUserClientIdConfigWithUser(): Unit = {
     val config = new Properties()
     config.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerByteRate)
-    adminZkClient.changeConfigs(ConfigType.User, "user01", config)
+    adminZkClient.changeUserOrUserClientIdConfig("user01", config)
     val props = zkClient.getEntityConfigs(ConfigType.User, "user01")
     assertEquals(props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), producerByteRate)
 
-    adminZkClient.changeConfigs(ConfigType.User, "user01", new Properties())
+    adminZkClient.changeUserOrUserClientIdConfig("user01", new Properties())
     val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.User))
     assert(users.isEmpty)
   }
 
   @Test
-  def testChangeConfigsWithClientId(): Unit = {
+  def testChangeClientIdConfig(): Unit = {
     val config = new Properties()
     config.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerByteRate)
-    adminZkClient.changeConfigs(ConfigType.Client, "client01", config)
+    adminZkClient.changeClientIdConfig("client01", config)
     val props = zkClient.getEntityConfigs(ConfigType.Client, "client01")
     assertEquals(props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG), producerByteRate)
 
-    adminZkClient.changeConfigs(ConfigType.Client, "client01", new Properties())
+    adminZkClient.changeClientIdConfig("client01", new Properties())
     val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.Client))
     assert(users.isEmpty)
   }
 
   @Test
-  def testChangeConfigsWithIp(): Unit = {
+  def testChangeIpConfig(): Unit = {
     val config = new Properties()
     config.put(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, ipConnectionRate)
-    adminZkClient.changeConfigs(ConfigType.Ip, "127.0.0.1", config)
+    adminZkClient.changeIpConfig("127.0.0.1", config)
     val props = zkClient.getEntityConfigs(ConfigType.Ip, "127.0.0.1")
     assertEquals(props.getProperty(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG), ipConnectionRate)
 
-    adminZkClient.changeConfigs(ConfigType.Ip, "127.0.0.1", new Properties())
+    adminZkClient.changeIpConfig("127.0.0.1", new Properties())
     val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.Ip))
     assert(users.isEmpty)
   }

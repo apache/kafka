@@ -360,34 +360,36 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     entityType match {
       case ConfigType.Topic => changeTopicConfig(entityName, configs)
       case ConfigType.Client => changeClientIdConfig(entityName, configs)
-      case ConfigType.User => changeUserOrUserClientIdConfig(entityName, configs)
+      case ConfigType.User => changeUserOrUserClientIdConfig(entityName, configs, isUserClientId)
       case ConfigType.Broker => changeBrokerConfig(parseBroker(entityName), configs)
       case ConfigType.Ip => changeIpConfig(entityName, configs)
       case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.all}")
     }
+  }
 
-    if ((ConfigType.Client.equals(entityType) || ConfigType.User.equals(entityType) || ConfigType.Ip.equals(entityType)) && configs.isEmpty) {
-      val currPath = ConfigEntityZNode.path(entityType, entityName)
-      if (zkClient.getChildren(currPath).isEmpty) {
-        var pathToDelete = currPath
-        if (isUserClientId) {
-          val user = entityName.substring(0, entityName.indexOf("/"))
-          val clientId = entityName.substring(entityName.lastIndexOf("/") + 1)
-          val clientsPath = ConfigEntityZNode.path(ConfigType.User, user + "/" + ConfigType.Client)
-          val clientsChildren = zkClient.getChildren(clientsPath)
-          if (clientsChildren.size == 1 && clientsChildren.head.equals(clientId)) {
-            pathToDelete = clientsPath
-            val userData = fetchEntityConfig(ConfigType.User, user)
-            val userPath = ConfigEntityZNode.path(ConfigType.User, user)
-            val userChildren = zkClient.getChildren(userPath)
-            if (userData.isEmpty && userChildren.size == 1 && userChildren.head.equals(ConfigType.Client)) {
-              pathToDelete = userPath
-            }
+  private def tryCleanQuotaNodes(entityType: String, entityName: String, isUserClientId: Boolean = false): Boolean = {
+    val currPath = ConfigEntityZNode.path(entityType, entityName)
+    if (zkClient.getChildren(currPath).isEmpty) {
+      var pathToDelete = currPath
+      if (isUserClientId) {
+        val user = entityName.substring(0, entityName.indexOf("/"))
+        val clientId = entityName.substring(entityName.lastIndexOf("/") + 1)
+        val clientsPath = ConfigEntityZNode.path(ConfigType.User, user + "/" + ConfigType.Client)
+        val clientsChildren = zkClient.getChildren(clientsPath)
+        if (clientsChildren == Seq(clientId)) {
+          pathToDelete = clientsPath
+          val userData = fetchEntityConfig(ConfigType.User, user)
+          val userPath = ConfigEntityZNode.path(ConfigType.User, user)
+          val userChildren = zkClient.getChildren(userPath)
+          if (userData.isEmpty && userChildren == Seq(ConfigType.Client)) {
+            pathToDelete = userPath
           }
         }
-        zkClient.deletePath(pathToDelete)
       }
-    }
+      zkClient.deletePath(pathToDelete)
+      true
+    } else
+      false
   }
 
   /**
@@ -415,12 +417,12 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    *                 existing configs need to be deleted, it should be done prior to invoking this API
    *
    */
-  def changeUserOrUserClientIdConfig(sanitizedEntityName: String, configs: Properties): Unit = {
+  def changeUserOrUserClientIdConfig(sanitizedEntityName: String, configs: Properties, isUserClientId: Boolean = false): Unit = {
     if (sanitizedEntityName == ConfigEntityName.Default || sanitizedEntityName.contains("/clients"))
       DynamicConfig.Client.validate(configs)
     else
       DynamicConfig.User.validate(configs)
-    changeEntityConfig(ConfigType.User, sanitizedEntityName, configs)
+    changeEntityConfig(ConfigType.User, sanitizedEntityName, configs, isUserClientId)
   }
 
   /**
@@ -506,9 +508,19 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     DynamicConfig.Broker.validate(configs)
   }
 
-  private def changeEntityConfig(rootEntityType: String, fullSanitizedEntityName: String, configs: Properties): Unit = {
+  private def changeEntityConfig(rootEntityType: String, fullSanitizedEntityName: String, configs: Properties, isUserClientId: Boolean = false): Unit = {
     val sanitizedEntityPath = rootEntityType + '/' + fullSanitizedEntityName
-    zkClient.setOrCreateEntityConfigs(rootEntityType, fullSanitizedEntityName, configs)
+    var needUpdateConfigs = true
+    // If the entityType is quota and node is empty, which means the configs are empty and no children left,
+    // we should try to clean up to avoid continuous increment of zk nodes.
+    if ((ConfigType.Client.equals(rootEntityType) || ConfigType.User.equals(rootEntityType) || ConfigType.Ip.equals(rootEntityType)) && configs.isEmpty) {
+      if (tryCleanQuotaNodes(rootEntityType, fullSanitizedEntityName, isUserClientId)) {
+        needUpdateConfigs = false
+      }
+    }
+    if (needUpdateConfigs) {
+      zkClient.setOrCreateEntityConfigs(rootEntityType, fullSanitizedEntityName, configs)
+    }
 
     // create the change notification
     zkClient.createConfigChangeNotification(sanitizedEntityPath)
