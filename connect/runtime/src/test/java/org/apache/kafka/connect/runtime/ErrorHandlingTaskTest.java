@@ -98,6 +98,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_F
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
 import static org.junit.Assert.assertEquals;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
@@ -141,8 +142,6 @@ public class ErrorHandlingTaskTest {
     @SuppressWarnings("unused")
     @Mock
     private SourceTask sourceTask;
-    @Captor
-    private ArgumentCaptor<WorkerSinkTaskContext> sinkTaskContext;
     private WorkerConfig workerConfig;
     private SourceConnectorConfig sourceConfig;
     @Mock
@@ -225,7 +224,6 @@ public class ErrorHandlingTaskTest {
         if (metrics != null) {
             metrics.stop();
         }
-
     }
 
     @Test
@@ -242,6 +240,8 @@ public class ErrorHandlingTaskTest {
         workerSinkTask.close();
 
         // verify if invocation happened exactly 1 time
+        verifyInitializeTask();
+        verify(reporter).close();
         verify(sinkTask).stop();
         verify(consumer).close();
         verify(headerConverter).close();
@@ -259,7 +259,7 @@ public class ErrorHandlingTaskTest {
 
         workerSourceTask.initialize(TASK_CONFIG);
         workerSourceTask.close();
-        expectClose();
+        verifyClose();
         verify(reporter).close();
     }
 
@@ -282,7 +282,7 @@ public class ErrorHandlingTaskTest {
 
         verify(reporterA).close();
         verify(reporterB).close();
-        expectClose();
+        verifyClose();
     }
 
     @Test
@@ -316,6 +316,7 @@ public class ErrorHandlingTaskTest {
 
         workerSinkTask.iteration();
 
+        verifyInitializeTask();
         verify(sinkTask, times(2)).put(any());
         verify(sinkTask).start(TASK_PROPS);
 
@@ -338,7 +339,6 @@ public class ErrorHandlingTaskTest {
                 SYSTEM, errorHandlingMetrics);
     }
 
-//    @Ignore
     @Test
     public void testErrorHandlingInSourceTasks() throws Exception {
         Map<String, String> reportProps = new HashMap<>();
@@ -482,6 +482,13 @@ public class ErrorHandlingTaskTest {
         assertEquals(expected, measured, 0.001d);
     }
 
+    private void verifyInitializeTask() {
+        verify(sinkTask).start(TASK_PROPS);
+        verify(sinkTask).initialize(any(WorkerSinkTaskContext.class));
+        verify(consumer).subscribe(eq(singletonList(TOPIC)),
+                any(ConsumerRebalanceListener.class));
+    }
+
     private void assertSourceMetricValue(String name, double expected) {
         ConnectMetrics.MetricGroup sinkTaskGroup = workerSourceTask.sourceTaskMetricsGroup().metricGroup();
         double measured = metrics.currentMetricValueAsDouble(sinkTaskGroup, name);
@@ -494,7 +501,7 @@ public class ErrorHandlingTaskTest {
         assertEquals(expected, measured, 0.001d);
     }
 
-    private void expectClose() throws IOException {
+    private void verifyClose() throws IOException {
 
         verify(producer).close(any(Duration.class));
         verify(admin).close(any(Duration.class));
