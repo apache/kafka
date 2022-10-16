@@ -60,7 +60,8 @@ public class MirrorClientConfig extends AbstractConfig {
         DefaultReplicationPolicy.SEPARATOR_DEFAULT;
 
     public static final String FORWARDING_ADMIN_CLASS = "forwarding.admin.class";
-    public static final String FORWARDING_ADMIN_CLASS_DOC = "Class which extends ForwardingAdmin to define custom cluster resource management (topics, configs, etc).";
+    public static final String FORWARDING_ADMIN_CLASS_DOC = "Class which extends ForwardingAdmin to define custom cluster resource management (topics, configs, etc). " +
+            "The class must have a contractor that accept configuration (Map<String, Object> config) to configure KafkaAdminClient and any other needed clients.";
     public static final Class<?> FORWARDING_ADMIN_CLASS_DEFAULT = ForwardingAdmin.class;
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
     public static final String CONSUMER_CLIENT_PREFIX = "consumer.";
