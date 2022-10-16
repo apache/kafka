@@ -721,6 +721,10 @@ public class StreamThread extends Thread {
         subscribeConsumer();
     }
 
+    public long getCacheSize() {
+        return cacheResizeSize.get();
+    }
+
     private void subscribeConsumer() {
         if (topologyMetadata.usesPatternSubscription()) {
             mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
