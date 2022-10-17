@@ -116,7 +116,6 @@ public final class SnapshotFileReader implements AutoCloseable {
         });
     }
 
-    // visible for testing
     private void handleControlBatch(FileChannelRecordBatch batch) {
         for (Iterator<Record> iter = batch.iterator(); iter.hasNext(); ) {
             Record record = iter.next();
