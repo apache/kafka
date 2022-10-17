@@ -1359,7 +1359,7 @@ public class TransactionManager {
                     fatalError(error.exception());
                     return;
                 } else if (error == Errors.INVALID_TXN_STATE) {
-                    fatalError(new KafkaException(error.exception()));
+                    fatalError(error.exception());
                     return;
                 } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                     unauthorizedTopics.add(topicPartition.topic());
@@ -1582,6 +1582,8 @@ public class TransactionManager {
                 fatalError(Errors.PRODUCER_FENCED.exception());
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
+            } else if (error == Errors.INVALID_TXN_STATE) {
+                fatalError(error.exception());
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
             } else {
@@ -1644,6 +1646,10 @@ public class TransactionManager {
                         || error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                     // If the topic is unknown or the coordinator is loading, retry with the current coordinator
                     continue;
+                } else if (error == Errors.INVALID_PRODUCER_EPOCH
+                        || error == Errors.PRODUCER_FENCED) {
+                    // Treat INVALID_PRODUCER_EPOCH as PRODUCE_FENCED, since it is fatal here.
+                    fatalError(Errors.PRODUCER_FENCED.exception());
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
                     break;
@@ -1655,7 +1661,8 @@ public class TransactionManager {
                     abortableError(new CommitFailedException("Transaction offset Commit failed " +
                         "due to consumer group metadata mismatch: " + error.exception().getMessage()));
                     break;
-                } else if (isFatalException(error)) {
+                } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
+                        || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) {
                     fatalError(error.exception());
                     break;
                 } else {
@@ -1673,13 +1680,6 @@ public class TransactionManager {
                 reenqueue();
             }
         }
-    }
-
-    private boolean isFatalException(Errors error) {
-        return error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
-                   || error == Errors.INVALID_PRODUCER_EPOCH
-                   || error == Errors.PRODUCER_FENCED
-                   || error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT;
     }
 
     private static final class PendingStateTransition {
