@@ -65,8 +65,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.slf4j.Logger;
@@ -166,8 +164,6 @@ public class ErrorHandlingTaskTest {
     OffsetStorageWriter offsetWriter;
     @Mock
     private ConnectorOffsetBackingStore offsetStore;
-    @Captor
-    private ArgumentCaptor<ConsumerRebalanceListener> rebalanceListener;
     @SuppressWarnings("unused")
     @Mock
     private TaskStatus.Listener statusListener;
@@ -178,9 +174,8 @@ public class ErrorHandlingTaskTest {
     private WorkerErrantRecordReporter workerErrantRecordReporter;
 
     private ErrorHandlingMetrics errorHandlingMetrics;
-
     private boolean enableTopicCreation;
-
+    
     @ParameterizedTest.Parameters
     public static Collection<Boolean> parameters() {
         return Arrays.asList(false, true);
@@ -245,7 +240,6 @@ public class ErrorHandlingTaskTest {
         verify(sinkTask).stop();
         verify(consumer).close();
         verify(headerConverter).close();
-        verify(sinkTask).start(TASK_PROPS);
     }
 
     @Test
@@ -318,7 +312,6 @@ public class ErrorHandlingTaskTest {
 
         verifyInitializeTask();
         verify(sinkTask, times(2)).put(any());
-        verify(sinkTask).start(TASK_PROPS);
 
         // two records were consumed from Kafka
         assertSinkMetricValue("sink-record-read-total", 2.0);
