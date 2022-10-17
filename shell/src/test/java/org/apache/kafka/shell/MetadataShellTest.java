@@ -103,7 +103,7 @@ public class MetadataShellTest {
 
         // The output should not contain error messages during parsing snapshot content
         String expectedOutput = "Loading...\nStarting...\n";
-        assertTrue(outContent.toString().startsWith(expectedOutput));
+        assertTrue(outContent.toString().startsWith(expectedOutput), "console output is not expected: " + outContent);
     }
 
     private void generateSnapshotFile() {
