@@ -1821,7 +1821,11 @@ project(':shell') {
     implementation libs.jacksonJaxrsJsonProvider
 
     testImplementation project(':clients')
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':core')
+    testImplementation project(':core').sourceSets.test.output
     testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
 
     testRuntimeOnly libs.slf4jlog4j
   }
