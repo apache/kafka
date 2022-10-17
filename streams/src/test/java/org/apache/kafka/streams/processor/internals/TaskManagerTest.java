@@ -1432,7 +1432,7 @@ public class TaskManagerTest {
         );
 
         assertEquals(mkSet(taskId00, taskId01), thrown.corruptedTasks());
-        assertEquals("Tasks [0_1, 0_0] are corrupted and hence needs to be re-initialized", thrown.getMessage());
+        assertEquals("Tasks [0_1, 0_0] are corrupted and hence need to be re-initialized", thrown.getMessage());
     }
 
     @Test
@@ -1457,7 +1457,7 @@ public class TaskManagerTest {
         Mockito.verify(tasks).addTask(statefulTask0);
         Mockito.verify(tasks).addTask(statefulTask1);
         assertEquals(mkSet(taskId00, taskId01), thrown.corruptedTasks());
-        assertEquals("Tasks [0_1, 0_0] are corrupted and hence needs to be re-initialized", thrown.getMessage());
+        assertEquals("Tasks [0_1, 0_0] are corrupted and hence need to be re-initialized", thrown.getMessage());
     }
 
     @Test
