@@ -17,6 +17,8 @@
 
 package org.apache.kafka.metadata;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
@@ -26,6 +28,7 @@ import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.util.MockRandom;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -54,6 +57,14 @@ public class RecordTestUtils {
      */
     public static void replayAll(Object target,
                                  List<ApiMessageAndVersion> recordsAndVersions) {
+        if (target instanceof MetadataDelta) {
+            MetadataDelta delta = (MetadataDelta) target;
+            replayAll(delta,
+                    delta.image().highestOffsetAndEpoch().offset,
+                    delta.image().highestOffsetAndEpoch().epoch,
+                    recordsAndVersions);
+            return;
+        }
         for (ApiMessageAndVersion recordAndVersion : recordsAndVersions) {
             ApiMessage record = recordAndVersion.message();
             try {
@@ -247,5 +258,12 @@ public class RecordTestUtils {
             size += MetadataRecordSerde.INSTANCE.recordSize(record, cache);
         }
         return size;
+    }
+
+    public static ApiMessageAndVersion testRecord(int index) {
+        MockRandom random = new MockRandom(index);
+        return new ApiMessageAndVersion(
+            new TopicRecord().setName("test" + index).
+            setTopicId(new Uuid(random.nextLong(), random.nextLong())), (short) 0);
     }
 }

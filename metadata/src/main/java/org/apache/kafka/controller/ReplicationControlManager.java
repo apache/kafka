@@ -1440,7 +1440,7 @@ public class ReplicationControlManager {
      * Attempt to elect a preferred leader for all topic partitions which have a leader that is not the preferred replica.
      *
      * The response() method in the return object is true if this method returned without electing all possible preferred replicas.
-     * The quorum controlller should reschedule this operation immediately if it is true.
+     * The quorum controller should reschedule this operation immediately if it is true.
      *
      * @return All of the election records and if there may be more available preferred replicas to elect as leader
      */

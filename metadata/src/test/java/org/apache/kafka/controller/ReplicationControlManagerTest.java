@@ -74,7 +74,6 @@ import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.LeaderRecoveryState;
-import org.apache.kafka.metadata.MockRandom;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
@@ -83,6 +82,7 @@ import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
+import org.apache.kafka.server.util.MockRandom;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -809,9 +809,9 @@ public class ReplicationControlManagerTest {
         ReplicationControlManager.validateNewTopicNames(topicErrors, topics, Collections.emptyMap());
         Map<String, ApiError> expectedTopicErrors = new HashMap<>();
         expectedTopicErrors.put("", new ApiError(INVALID_TOPIC_EXCEPTION,
-            "Topic name is illegal, it can't be empty"));
+            "Topic name is invalid: the empty string is not allowed"));
         expectedTopicErrors.put(".", new ApiError(INVALID_TOPIC_EXCEPTION,
-            "Topic name cannot be \".\" or \"..\""));
+            "Topic name is invalid: '.' is not allowed"));
         assertEquals(expectedTopicErrors, topicErrors);
     }
 

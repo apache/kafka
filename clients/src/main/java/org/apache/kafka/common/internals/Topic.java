@@ -43,17 +43,31 @@ public class Topic {
         });
     }
 
-    public static void validate(String name, String logPrefix, Consumer<String> throwableConsumer) {
+    private static String detectInvalidTopic(String name) {
         if (name.isEmpty())
-            throwableConsumer.accept(logPrefix + " is illegal, it can't be empty");
-        if (".".equals(name) || "..".equals(name))
-            throwableConsumer.accept(logPrefix + " cannot be \".\" or \"..\"");
+            return "the empty string is not allowed";
+        if (".".equals(name))
+            return "'.' is not allowed";
+        if ("..".equals(name))
+            return "'..' is not allowed";
         if (name.length() > MAX_NAME_LENGTH)
-            throwableConsumer.accept(logPrefix + " is illegal, it can't be longer than " + MAX_NAME_LENGTH +
-                    " characters, " + logPrefix + ": " + name);
+            return "the length of '" + name + "' is longer than the max allowed length " + MAX_NAME_LENGTH;
         if (!containsValidPattern(name))
-            throwableConsumer.accept(logPrefix + " \"" + name + "\" is illegal, it contains a character other than " +
-                    "ASCII alphanumerics, '.', '_' and '-'");
+            return "'" + name + "' contains one or more characters other than " +
+                "ASCII alphanumerics, '.', '_' and '-'";
+        return null;
+    }
+
+    public static boolean isValid(String name) {
+        String reasonInvalid = detectInvalidTopic(name);
+        return reasonInvalid == null;
+    }
+
+    public static void validate(String name, String logPrefix, Consumer<String> throwableConsumer) {
+        String reasonInvalid = detectInvalidTopic(name);
+        if (reasonInvalid != null) {
+            throwableConsumer.accept(logPrefix + " is invalid: " +  reasonInvalid);
+        }
     }
 
     public static boolean isInternal(String topic) {

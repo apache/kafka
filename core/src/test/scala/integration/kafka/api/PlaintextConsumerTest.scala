@@ -637,7 +637,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0L, consumer.position(tp), "position() on a partition that we are subscribed to should reset the offset")
     consumer.commitSync()
     assertEquals(0L, consumer.committed(Set(tp).asJava).get(tp).offset)
-    
     consumeAndVerifyRecords(consumer = consumer, numRecords = 5, startingOffset = 0, startingTimestamp = startingTimestamp)
     assertEquals(5L, consumer.position(tp), "After consuming 5 records, position should be 5")
     consumer.commitSync()
@@ -1642,12 +1641,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, producerClientId))
     servers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, consumerClientId))
     servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, consumerClientId))
-
-    def assertNoExemptRequestMetric(broker: KafkaServer): Unit = {
-        val metricName = broker.metrics.metricName("exempt-request-time", QuotaType.Request.toString, "")
-        assertNull(broker.metrics.metric(metricName), "Metric should not have been created " + metricName)
-    }
-    servers.foreach(assertNoExemptRequestMetric)
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {

@@ -14,21 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.kafka.metadata;
-
-import java.util.Random;
-
+package org.apache.kafka.clients.consumer.internals.events;
 
 /**
- * A subclass of Random with a fixed seed and generation algorithm.
+ * This is the abstract definition of the events created by the KafkaConsumer API
  */
-public class MockRandom extends Random {
-    private long state = 17;
-
-    @Override
-    protected int next(int bits) {
-        state = (state * 2862933555777941757L) + 3037000493L;
-        return (int) (state >>> (64 - bits));
-    }
+abstract public class ApplicationEvent {
 }

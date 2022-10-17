@@ -17,13 +17,11 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.image.writer.ImageWriter;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.util.List;
 import java.util.Objects;
-import java.util.function.Consumer;
-import org.apache.kafka.server.common.MetadataVersion;
 
 
 /**
@@ -120,22 +118,22 @@ public final class MetadataImage {
         return acls;
     }
 
-    public void write(Consumer<List<ApiMessageAndVersion>> out) {
-        MetadataVersion metadataVersion = features.metadataVersion();
+    public void write(ImageWriter writer, ImageWriterOptions options) {
         // Features should be written out first so we can include the metadata.version at the beginning of the
         // snapshot
-        features.write(out);
-        cluster.write(out, metadataVersion);
-        topics.write(out);
-        configs.write(out);
-        clientQuotas.write(out);
-        producerIds.write(out);
-        acls.write(out);
+        features.write(writer, options);
+        cluster.write(writer, options);
+        topics.write(writer, options);
+        configs.write(writer, options);
+        clientQuotas.write(writer, options);
+        producerIds.write(writer, options);
+        acls.write(writer, options);
+        writer.close(true);
     }
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof MetadataImage)) return false;
+        if (o == null || !o.getClass().equals(this.getClass())) return false;
         MetadataImage other = (MetadataImage) o;
         return highestOffsetAndEpoch.equals(other.highestOffsetAndEpoch) &&
             features.equals(other.features) &&

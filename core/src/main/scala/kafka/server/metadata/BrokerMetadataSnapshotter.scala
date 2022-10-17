@@ -20,37 +20,16 @@ import java.util.concurrent.RejectedExecutionException
 import kafka.utils.Logging
 import org.apache.kafka.image.MetadataImage
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.image.writer.{ImageWriterOptions, RaftSnapshotWriter}
 import org.apache.kafka.metadata.util.SnapshotReason
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.SnapshotWriter
 
-import java.util.function.Consumer
-
 trait SnapshotWriterBuilder {
   def build(committedOffset: Long,
             committedEpoch: Int,
             lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]]
-}
-
-/**
- * The RecordListConsumer takes as input a potentially long list of records, and feeds the
- * SnapshotWriter a series of smaller lists of records.
- *
- * Note: from the perspective of Kafka, the snapshot file is really just a list of records,
- * and we don't care about batches. Batching is irrelevant to the meaning of the snapshot.
- */
-class RecordListConsumer(
-  val maxRecordsInBatch: Int,
-  val writer: SnapshotWriter[ApiMessageAndVersion]
-) extends Consumer[java.util.List[ApiMessageAndVersion]] {
-  override def accept(messages: java.util.List[ApiMessageAndVersion]): Unit = {
-    var i = 0
-    while (i < messages.size()) {
-      writer.append(messages.subList(i, Math.min(i + maxRecordsInBatch, messages.size())));
-      i += maxRecordsInBatch
-    }
-  }
 }
 
 class BrokerMetadataSnapshotter(
@@ -108,15 +87,18 @@ class BrokerMetadataSnapshotter(
     }
   }
 
-  class CreateSnapshotEvent(image: MetadataImage,
-                            writer: SnapshotWriter[ApiMessageAndVersion])
-        extends EventQueue.Event {
+  class CreateSnapshotEvent(
+    image: MetadataImage,
+    snapshotWriter: SnapshotWriter[ApiMessageAndVersion]
+  ) extends EventQueue.Event {
 
     override def run(): Unit = {
+      val writer = new RaftSnapshotWriter(snapshotWriter, maxRecordsInBatch)
+      val options = new ImageWriterOptions.Builder().
+        setMetadataVersion(image.features().metadataVersion()).
+        build()
       try {
-        val consumer = new RecordListConsumer(maxRecordsInBatch, writer)
-        image.write(consumer)
-        writer.freeze()
+        image.write(writer, options)
       } finally {
         try {
           writer.close()
@@ -134,7 +116,6 @@ class BrokerMetadataSnapshotter(
           info("Not processing CreateSnapshotEvent because the event queue is closed.")
         case _ => error("Unexpected error handling CreateSnapshotEvent", e)
       }
-      writer.close()
     }
   }
 
