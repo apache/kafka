@@ -75,18 +75,22 @@ public class MetadataShellTest {
         if (logDir != null) {
             try {
                 Utils.delete(logDir);
-            } catch (Exception e) { }
+            } catch (Exception e) {
+                System.err.println("error while deleting:" + logDir.getAbsolutePath());
+            }
         }
 
         if (tmpDir != null) {
             try {
                 Utils.delete(tmpDir.toFile());
-            } catch (Exception e) { }
+            } catch (Exception e) {
+                System.err.println("error while deleting:" + tmpDir.toAbsolutePath());
+            }
         }
     }
 
     @Test
-    public void testHeaderFooterControlRecord() throws Exception {
+    public void shouldParseSnapshotContentWithoutError() throws Exception {
         String snapshotPath = logDir.getAbsolutePath() + "/00000000000000000000-0000000000.checkpoint";
 
         generateSnapshotFile();
