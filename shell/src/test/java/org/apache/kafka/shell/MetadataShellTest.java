@@ -39,7 +39,6 @@ import kafka.raft.MetadataLogConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
 
 
 import java.io.ByteArrayOutputStream;
@@ -76,13 +75,13 @@ public class MetadataShellTest {
         if (logDir != null) {
             try {
                 Utils.delete(logDir);
-            } catch (Exception e) {}
+            } catch (Exception e) { }
         }
 
         if (tmpDir != null) {
             try {
                 Utils.delete(tmpDir.toFile());
-            } catch (Exception e) {}
+            } catch (Exception e) { }
         }
     }
 
