@@ -1282,28 +1282,6 @@ public class RecordAccumulatorTest {
         }
     }
 
-    @Test
-    public void testAppendWithBatchSizeZero() throws Exception {
-        int batchSize = 0;
-        RecordAccumulator accum = createTestRecordAccumulator(batchSize, 1024, CompressionType.NONE, 10);
-        AtomicInteger setPartitionCalls = new AtomicInteger(0);
-        RecordAccumulator.AppendCallbacks callbacks = new RecordAccumulator.AppendCallbacks() {
-            @Override
-            public void onCompletion(RecordMetadata metadata, Exception exception) {}
-            @Override
-            public void setPartition(int p) {
-                if (setPartitionCalls.addAndGet(1) > 5) {
-                    fail("setPartition called too many times");
-                }
-            }
-        };
-
-        accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0, key, new byte[32], Record.EMPTY_HEADERS,
-                callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-
-        assertTrue(setPartitionCalls.get() > 0, "setPartition was never called");
-    }
-
     private int prepareSplitBatches(RecordAccumulator accum, long seed, int recordSize, int numRecords)
         throws InterruptedException {
         Random random = new Random();
