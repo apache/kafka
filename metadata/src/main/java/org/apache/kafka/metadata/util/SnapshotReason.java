@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.metadata.util;
 
+// TODO: Document this type
 public enum SnapshotReason {
     UnknownReason("unknown reason"),
     MaxBytesExceeded("max bytes were exceeded"),
+    MaxIntervalExceeded("max snapshot interval was exceeded"),
     MetadataVersionChanged("metadata version was changed");
 
     private final String snapshotReason;

@@ -81,6 +81,7 @@ object Defaults {
   val BrokerHeartbeatIntervalMs = 2000
   val BrokerSessionTimeoutMs = 9000
   val MetadataSnapshotMaxNewRecordBytes = 20 * 1024 * 1024
+  val MetadataMaxSnapshotIntervalMs = TimeUnit.HOURS.toMillis(1);
   val MetadataMaxIdleIntervalMs = 500
 
   /** KRaft mode configs */
@@ -400,6 +401,7 @@ object KafkaConfig {
   val NodeIdProp = "node.id"
   val MetadataLogDirProp = "metadata.log.dir"
   val MetadataSnapshotMaxNewRecordBytesProp = "metadata.log.max.record.bytes.between.snapshots"
+  val MetadataMaxSnapshotIntervalMsProp = "metadata.log.max.snapshot.interval.ms"
   val ControllerListenerNamesProp = "controller.listener.names"
   val SaslMechanismControllerProtocolProp = "sasl.mechanism.controller.protocol"
   val MetadataLogSegmentMinBytesProp = "metadata.log.segment.min.bytes"
@@ -725,7 +727,12 @@ object KafkaConfig {
     "This is required configuration when running in KRaft mode."
   val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
     "If it is not set, the metadata log is placed in the first log directory from log.dirs."
-  val MetadataSnapshotMaxNewRecordBytesDoc = "This is the maximum number of bytes in the log between the latest snapshot and the high-watermark needed before generating a new snapshot."
+  val MetadataSnapshotMaxNewRecordBytesDoc = "This is the maximum number of bytes in the log between the latest " +
+    "snapshot and the high-watermark needed before generating a new snapshot. The default value is " +
+    Defaults.MetadataSnapshotMaxNewRecordBytes
+  val MetadataMaxSnapshotIntervalMsDoc = "This is the maximum number of milliseconds to wait to generate a snapshot " +
+    "if there are records in the log that are not included in the lastest snapshot. A value of zero disables time based " +
+    s"snapshot generation. The default value is ${Defaults.MetadataMaxSnapshotIntervalMs}."
   val MetadataMaxIdleIntervalMsDoc = "This configuration controls how often the active " +
     "controller should write no-op records to the metadata partition. If the value is 0, no-op records " +
     s"are not appended to the metadata partition. The default value is ${Defaults.MetadataMaxIdleIntervalMs}";
@@ -1157,6 +1164,7 @@ object KafkaConfig {
        * KRaft mode configs.
        */
       .define(MetadataSnapshotMaxNewRecordBytesProp, LONG, Defaults.MetadataSnapshotMaxNewRecordBytes, atLeast(1), HIGH, MetadataSnapshotMaxNewRecordBytesDoc)
+      .define(MetadataMaxSnapshotIntervalMsProp, LONG, Defaults.MetadataMaxSnapshotIntervalMs, atLeast(0), HIGH, MetadataMaxSnapshotIntervalMsDoc)
 
       /*
        * KRaft mode private configs. Note that these configs are defined as internal. We will make them public in the 3.0.0 release.
@@ -1697,6 +1705,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   /************* Metadata Configuration ***********/
   val metadataSnapshotMaxNewRecordBytes = getLong(KafkaConfig.MetadataSnapshotMaxNewRecordBytesProp)
+  val metadataMaxSnapshotIntervalMs = getLong(KafkaConfig.MetadataMaxSnapshotIntervalMsProp)
   val metadataMaxIdleIntervalNs: Option[Long] = {
     val value = TimeUnit.NANOSECONDS.convert(getInt(KafkaConfig.MetadataMaxIdleIntervalMsProp).toLong, TimeUnit.MILLISECONDS)
     if (value > 0) Some(value) else None

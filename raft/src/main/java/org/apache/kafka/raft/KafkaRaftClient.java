@@ -2358,6 +2358,11 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
+    public Optional<OffsetAndEpoch> latestSnapshotId() {
+        return log.latestSnapshotId();
+    }
+
+    @Override
     public void close() {
         log.flush(true);
         if (kafkaRaftMetrics != null) {

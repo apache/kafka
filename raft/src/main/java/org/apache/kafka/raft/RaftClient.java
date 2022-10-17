@@ -229,4 +229,10 @@ public interface RaftClient<T> extends AutoCloseable {
      *         or less than the log start offset.
      */
     Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch, long lastContainedLogTime);
+
+
+    /**
+     * TODO: Document this and implement this in KafkaRaftClient
+     */
+    Optional<OffsetAndEpoch> latestSnapshotId();
 }
