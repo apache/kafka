@@ -16,22 +16,21 @@
  */
 package org.apache.kafka.streams.integration;
 
-import java.util.stream.Stream;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
+import org.apache.kafka.test.IntegrationTest;
+import org.junit.AfterClass;
 import org.junit.Assert;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.BeforeClass;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -43,18 +42,18 @@ import java.util.Set;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.verify;
 
-@Timeout(600)
-@Tag("integration")
+@Category(IntegrationTest.class)
 public class SmokeTestDriverIntegrationTest {
-
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
-    @BeforeAll
+    @BeforeClass
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterAll
+    @AfterClass
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -95,20 +94,12 @@ public class SmokeTestDriverIntegrationTest {
 
     }
 
-    private static Stream<Boolean> parameters() {
-        return Stream.of(
-            Boolean.TRUE,
-            Boolean.FALSE
-          );
-    }
-
     // In this test, we try to keep creating new stream, and closing the old one, to maintain only 3 streams alive.
     // During the new stream added and old stream left, the stream process should still complete without issue.
     // We set 2 timeout condition to fail the test before passing the verification:
     // (1) 6 min timeout, (2) 30 tries of polling without getting any data
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void shouldWorkWithRebalance(final boolean stateUpdaterEnabled) throws InterruptedException {
+    @Test
+    public void shouldWorkWithRebalance() throws InterruptedException {
         Exit.setExitProcedure((statusCode, message) -> {
             throw new AssertionError("Test called exit(). code:" + statusCode + " message:" + message);
         });
@@ -128,7 +119,6 @@ public class SmokeTestDriverIntegrationTest {
 
         final Properties props = new Properties();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
         // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
 
