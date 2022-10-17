@@ -15,24 +15,37 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.image;
+package org.apache.kafka.image.writer;
 
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 
 
-public class MockSnapshotConsumer implements Consumer<List<ApiMessageAndVersion>> {
-    private final List<List<ApiMessageAndVersion>> batches = new ArrayList<>();
+/**
+ * Writes a metadata image to a list of records.
+ */
+public class RecordListWriter implements ImageWriter {
+    private final List<ApiMessageAndVersion> records = new ArrayList<>();
+    private boolean closed = false;
 
     @Override
-    public void accept(List<ApiMessageAndVersion> batch) {
-        batches.add(batch);
+    public void write(ApiMessageAndVersion record) {
+        if (closed) throw new ImageWriterClosedException();
+        records.add(record);
     }
 
-    public List<List<ApiMessageAndVersion>> batches() {
-        return batches;
+    public List<ApiMessageAndVersion> records() {
+        return records;
+    }
+
+    @Override
+    public void close(boolean complete) {
+        if (closed) return;
+        closed = true;
+        if (!complete) {
+            records.clear();
+        }
     }
 }

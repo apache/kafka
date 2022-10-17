@@ -1177,6 +1177,7 @@ project(':metadata') {
     implementation libs.metrics
     compileOnly libs.log4j
     testImplementation libs.junitJupiter
+    testImplementation libs.jqwik
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoInline
@@ -1273,6 +1274,7 @@ project(':clients') {
 
     testImplementation libs.bcpkix
     testImplementation libs.junitJupiter
+    testImplementation libs.log4j
     testImplementation libs.mockitoInline
 
     testRuntimeOnly libs.slf4jlog4j
@@ -1280,6 +1282,7 @@ project(':clients') {
     testRuntimeOnly libs.jacksonJDK8Datatypes
     testImplementation libs.jose4j
     testImplementation libs.jacksonJaxrsJsonProvider
+    testImplementation libs.log4j
 
     generator project(':generator')
   }
@@ -1926,7 +1929,7 @@ project(':streams') {
   }
 
   task createStreamsVersionFile() {
-    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    def receiptFile = file("$buildDir/kafka/$buildStreamsVersionFileName")
     inputs.property "commitId", commitId
     inputs.property "version", version
     outputs.file receiptFile

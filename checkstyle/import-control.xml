@@ -36,6 +36,7 @@
   <allow pkg="javax.net.ssl" />
   <allow pkg="javax.security" />
   <allow pkg="org.ietf.jgss" />
+  <allow pkg="net.jqwik.api" />
 
   <!-- no one depends on the server -->
   <disallow pkg="kafka" />
@@ -201,6 +202,7 @@
 
     <subpackage name="utils">
       <allow pkg="org.apache.kafka.common" />
+      <allow pkg="org.apache.log4j" />
     </subpackage>
 
     <subpackage name="quotas">
@@ -237,6 +239,7 @@
     <allow pkg="org.apache.kafka.server.fault" />
     <allow pkg="org.apache.kafka.server.metrics" />
     <allow pkg="org.apache.kafka.server.policy"/>
+    <allow pkg="org.apache.kafka.server.util"/>
     <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.kafka.test" />
     <allow pkg="org.apache.kafka.timeline" />
@@ -248,11 +251,15 @@
     <allow pkg="org.apache.kafka.common.metadata" />
     <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.common.quota" />
-    <allow pkg="org.apache.kafka.raft" />
+    <allow pkg="org.apache.kafka.common.resource" />
     <allow pkg="org.apache.kafka.common.requests" />
+    <allow pkg="org.apache.kafka.image" />
+    <allow pkg="org.apache.kafka.image.writer" />
     <allow pkg="org.apache.kafka.metadata" />
+    <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.util" />
+    <allow pkg="org.apache.kafka.snapshot" />
   </subpackage>
 
   <subpackage name="metadata">
@@ -272,6 +279,7 @@
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.authorizer" />
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.util"/>
     <allow pkg="org.apache.kafka.test" />
     <allow pkg="org.apache.log4j" />
     <subpackage name="authorizer">
@@ -280,6 +288,7 @@
       <allow pkg="org.apache.kafka.common.resource" />
       <allow pkg="org.apache.kafka.controller" />
       <allow pkg="org.apache.kafka.metadata" />
+      <allow pkg="org.apache.kafka.common.internals" />
     </subpackage>
     <subpackage name="bootstrap">
       <allow pkg="org.apache.kafka.snapshot" />
@@ -458,9 +467,6 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="kafka.utils" />
         <allow pkg="org.apache.zookeeper" />
-        <subpackage name="testutil">
-          <allow pkg="org.apache.log4j" />
-        </subpackage>
       </subpackage>
     </subpackage>
   </subpackage>

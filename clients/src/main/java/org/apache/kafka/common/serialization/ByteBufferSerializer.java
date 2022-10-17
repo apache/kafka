@@ -21,8 +21,7 @@ import org.apache.kafka.common.utils.Utils;
 import java.nio.ByteBuffer;
 
 /**
- * ByteBufferSerializer will not change ByteBuffer's mark, position and limit.
- * And do not need to flip before call <i>serialize(String, ByteBuffer)</i>. For example:
+ * Do not need to flip before call <i>serialize(String, ByteBuffer)</i>. For example:
  *
  * <blockquote>
  * <pre>
@@ -48,8 +47,7 @@ public class ByteBufferSerializer implements Serializer<ByteBuffer> {
             }
         }
 
-        final ByteBuffer copyData = data.asReadOnlyBuffer();
-        copyData.flip();
-        return Utils.toArray(copyData);
+        data.flip();
+        return Utils.toArray(data);
     }
 }

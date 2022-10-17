@@ -20,11 +20,11 @@ package org.apache.kafka.metadata;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerFeature;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.Collection;
@@ -160,7 +160,7 @@ public class BrokerRegistration {
         return inControlledShutdown;
     }
 
-    public ApiMessageAndVersion toRecord(MetadataVersion metadataVersion) {
+    public ApiMessageAndVersion toRecord(ImageWriterOptions options) {
         RegisterBrokerRecord registrationRecord = new RegisterBrokerRecord().
             setBrokerId(id).
             setRack(rack.orElse(null)).
@@ -168,8 +168,12 @@ public class BrokerRegistration {
             setIncarnationId(incarnationId).
             setFenced(fenced);
 
-        if (metadataVersion.isInControlledShutdownStateSupported()) {
-            registrationRecord.setInControlledShutdown(inControlledShutdown);
+        if (inControlledShutdown) {
+            if (options.metadataVersion().isInControlledShutdownStateSupported()) {
+                registrationRecord.setInControlledShutdown(true);
+            } else {
+                options.handleLoss("the inControlledShutdown state of one or more brokers");
+            }
         }
 
         for (Entry<String, Endpoint> entry : listeners.entrySet()) {
@@ -189,7 +193,7 @@ public class BrokerRegistration {
         }
 
         return new ApiMessageAndVersion(registrationRecord,
-            metadataVersion.registerBrokerRecordVersion());
+            options.metadataVersion().registerBrokerRecordVersion());
     }
 
     @Override

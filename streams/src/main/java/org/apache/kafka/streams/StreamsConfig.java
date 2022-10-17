@@ -239,7 +239,9 @@ public class StreamsConfig extends AbstractConfig {
     private static final String CONFIG_ERROR_MSG = "Acceptable values are:"
         + " \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
         + "or a comma separated list of specific optimizations: "
-        + "(\"+REUSE_KTABLE_SOURCE_TOPICS+\", \"+MERGE_REPARTITION_TOPICS+\").";
+        + "(\"+REUSE_KTABLE_SOURCE_TOPICS+\", \"+MERGE_REPARTITION_TOPICS+\" + "
+        + "\"SINGLE_STORE_SELF_JOIN+\").";
+
 
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka "
@@ -270,8 +272,16 @@ public class StreamsConfig extends AbstractConfig {
      */
     public static final String MERGE_REPARTITION_TOPICS = "merge.repartition.topics";
 
+    /**
+     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"}
+     * for enabling the optimization that optimizes inner stream-stream joins into self-joins when
+     * both arguments are the same stream.
+     */
+    public static final String SINGLE_STORE_SELF_JOIN = "single.store.self.join";
+
     private static final List<String> TOPOLOGY_OPTIMIZATION_CONFIGS = Arrays.asList(
-        OPTIMIZE, NO_OPTIMIZATION, REUSE_KTABLE_SOURCE_TOPICS, MERGE_REPARTITION_TOPICS);
+        OPTIMIZE, NO_OPTIMIZATION, REUSE_KTABLE_SOURCE_TOPICS, MERGE_REPARTITION_TOPICS,
+        SINGLE_STORE_SELF_JOIN);
 
     /**
      * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 0.10.0.x}.
@@ -1698,6 +1708,7 @@ public class StreamsConfig extends AbstractConfig {
         if (configs.contains(OPTIMIZE)) {
             verifiedConfigs.add(REUSE_KTABLE_SOURCE_TOPICS);
             verifiedConfigs.add(MERGE_REPARTITION_TOPICS);
+            verifiedConfigs.add(SINGLE_STORE_SELF_JOIN);
         } else if (!configs.contains(NO_OPTIMIZATION)) {
             verifiedConfigs.addAll(configs);
         }
