@@ -980,11 +980,15 @@ public final class QuorumController implements Controller {
                                 i++;
                             }
                         }
-                        updateLastCommittedState(offset, epoch, batch.appendTimestamp());
-                        processedRecordsSize += batch.sizeInBytes();
+                        updateLastCommittedState(
+                            offset,
+                            epoch,
+                            batch.appendTimestamp(),
+                            committedBytesSinceLastSnapshot + batch.sizeInBytes()
+                        );
                     }
 
-                    maybeGenerateSnapshot(processedRecordsSize);
+                    maybeGenerateSnapshot();
                 } finally {
                     reader.close();
                 }
@@ -1039,10 +1043,10 @@ public final class QuorumController implements Controller {
                     updateLastCommittedState(
                         reader.lastContainedLogOffset(),
                         reader.lastContainedLogEpoch(),
-                        reader.lastContainedLogTimestamp()
+                        reader.lastContainedLogTimestamp(),
+                        0
                     );
                     snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
-                    newBytesSinceLastSnapshot = 0L;
                     authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
                 } finally {
                     reader.close();
@@ -1194,10 +1198,16 @@ public final class QuorumController implements Controller {
         }
     }
 
-    private void updateLastCommittedState(long offset, int epoch, long timestamp) {
+    private void updateLastCommittedState(
+        long offset,
+        int epoch,
+        long timestamp,
+        long bytesSinceLastSnapshot
+    ) {
         lastCommittedOffset = offset;
         lastCommittedEpoch = epoch;
         lastCommittedTimestamp = timestamp;
+        committedBytesSinceLastSnapshot = bytesSinceLastSnapshot;
 
         controllerMetrics.setLastCommittedRecordOffset(offset);
         if (!isActiveController()) {
@@ -1223,7 +1233,6 @@ public final class QuorumController implements Controller {
             }
             snapshotRegistry.revertToSnapshot(lastCommittedOffset);
             authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
-            newBytesSinceLastSnapshot = 0L;
             updateWriteOffset(-1);
             clusterControl.deactivate();
             cancelMaybeFenceReplicas();
@@ -1445,9 +1454,8 @@ public final class QuorumController implements Controller {
         }
     }
 
-    private void maybeGenerateSnapshot(long batchSizeInBytes) {
-        newBytesSinceLastSnapshot += batchSizeInBytes;
-        if (newBytesSinceLastSnapshot >= snapshotMaxNewRecordBytes &&
+    private void maybeGenerateSnapshot() {
+        if (committedBytesSinceLastSnapshot >= snapshotMaxNewRecordBytes &&
             snapshotGeneratorManager.generator == null
         ) {
             if (!isActiveController()) {
@@ -1457,11 +1465,20 @@ public final class QuorumController implements Controller {
                 snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
             }
 
-            log.info("Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot because, {}.",
-                lastCommittedEpoch, lastCommittedOffset, newBytesSinceLastSnapshot, SnapshotReason.MaxBytesExceeded);
+            log.info(
+                "Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot because, {}.",
+                lastCommittedEpoch,
+                lastCommittedOffset,
+                committedBytesSinceLastSnapshot,
+                SnapshotReason.MaxBytesExceeded
+            );
 
-            snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset, lastCommittedEpoch, lastCommittedTimestamp);
-            newBytesSinceLastSnapshot = 0;
+            snapshotGeneratorManager.createSnapshotGenerator(
+                lastCommittedOffset,
+                lastCommittedEpoch,
+                lastCommittedTimestamp
+            );
+            committedBytesSinceLastSnapshot = 0;
         }
     }
 
@@ -1472,8 +1489,7 @@ public final class QuorumController implements Controller {
         snapshotGeneratorManager.cancel();
         snapshotRegistry.reset();
 
-        newBytesSinceLastSnapshot = 0;
-        updateLastCommittedState(-1, -1, -1);
+        updateLastCommittedState(-1, -1, -1, 0);
     }
 
     /**
@@ -1646,7 +1662,7 @@ public final class QuorumController implements Controller {
     /**
      * Number of bytes processed through handling commits since the last snapshot was generated.
      */
-    private long newBytesSinceLastSnapshot = 0;
+    private long committedBytesSinceLastSnapshot = 0;
 
     /**
      * How long to delay partition leader balancing operations.
@@ -2101,8 +2117,13 @@ public final class QuorumController implements Controller {
         CompletableFuture<Long> future = new CompletableFuture<>();
         appendControlEvent("beginWritingSnapshot", () -> {
             if (snapshotGeneratorManager.generator == null) {
-                log.info("Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot because, {}.",
-                    lastCommittedEpoch, lastCommittedOffset, newBytesSinceLastSnapshot, SnapshotReason.UnknownReason);
+                log.info(
+                    "Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot because, {}.",
+                    lastCommittedEpoch,
+                    lastCommittedOffset,
+                    committedBytesSinceLastSnapshot,
+                    SnapshotReason.UnknownReason
+                );
                 snapshotGeneratorManager.createSnapshotGenerator(
                     lastCommittedOffset,
                     lastCommittedEpoch,

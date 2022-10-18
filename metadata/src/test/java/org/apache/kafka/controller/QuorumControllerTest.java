@@ -821,6 +821,73 @@ public class QuorumControllerTest {
         }
     }
 
+    @Test
+    public void testSnapshotAfterRepeatedResign() throws Throwable {
+        final int numBrokers = 4;
+        final int maxNewRecordBytes = 1000;
+        Map<Integer, Long> brokerEpochs = new HashMap<>();
+        try (
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).
+                build();
+            QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
+                setControllerBuilderInitializer(controllerBuilder -> {
+                    controllerBuilder.setConfigSchema(SCHEMA);
+                    controllerBuilder.setSnapshotMaxNewRecordBytes(maxNewRecordBytes);
+                }).
+                build();
+        ) {
+            QuorumController active = controlEnv.activeController();
+            for (int i = 0; i < numBrokers; i++) {
+                BrokerRegistrationReply reply = active.registerBroker(ANONYMOUS_CONTEXT,
+                    new BrokerRegistrationRequestData().
+                        setBrokerId(i).
+                        setRack(null).
+                        setClusterId(active.clusterId()).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                        setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
+                        setListeners(new ListenerCollection(Arrays.asList(new Listener().
+                            setName("PLAINTEXT").setHost("localhost").
+                            setPort(9092 + i)).iterator()))).get();
+                brokerEpochs.put(i, reply.epoch());
+                assertEquals(new BrokerHeartbeatReply(true, false, false, false),
+                    active.processBrokerHeartbeat(ANONYMOUS_CONTEXT, new BrokerHeartbeatRequestData().
+                        setWantFence(false).setBrokerEpoch(brokerEpochs.get(i)).
+                        setBrokerId(i).setCurrentMetadataOffset(100000L)).get());
+            }
+
+            assertTrue(logEnv.appendedBytes() < maxNewRecordBytes,
+                String.format("%s appended bytes is not less than %s max new record bytes",
+                    logEnv.appendedBytes(),
+                    maxNewRecordBytes));
+
+            // Keep creating topic and resign leader until we reached the max bytes limit
+            int counter = 0;
+            while (logEnv.appendedBytes() < maxNewRecordBytes) {
+                active = controlEnv.activeController();
+
+                counter += 1;
+                String topicName = String.format("foo-%s", counter);
+                active.createTopics(ANONYMOUS_CONTEXT, new CreateTopicsRequestData().setTopics(
+                        new CreatableTopicCollection(Collections.singleton(
+                            new CreatableTopic().setName(topicName).setNumPartitions(-1).
+                                setReplicationFactor((short) -1).
+                                setAssignments(new CreatableReplicaAssignmentCollection(
+                                    Arrays.asList(new CreatableReplicaAssignment().
+                                        setPartitionIndex(0).
+                                        setBrokerIds(Arrays.asList(0, 1, 2)),
+                                    new CreatableReplicaAssignment().
+                                        setPartitionIndex(1).
+                                        setBrokerIds(Arrays.asList(1, 2, 0))).
+                                            iterator()))).iterator())),
+                    Collections.singleton(topicName)).get(60, TimeUnit.SECONDS);
+
+                LocalLogManager activeLocalLogManager = logEnv.logManagers().get(active.nodeId());
+                activeLocalLogManager.resign(activeLocalLogManager.leaderAndEpoch().epoch());
+            }
+            logEnv.waitForLatestSnapshot();
+        }
+    }
+
     private SnapshotReader<ApiMessageAndVersion> createSnapshotReader(RawSnapshotReader reader) {
         return RecordsSnapshotReader.of(
             reader,

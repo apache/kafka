@@ -406,7 +406,10 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
 
         void handleLeaderChange(long offset, LeaderAndEpoch leader) {
+            // Simulate KRaft implementation by first bumping the epoch before assigning a leader
+            listener.handleLeaderChange(new LeaderAndEpoch(OptionalInt.empty(), leader.epoch()));
             listener.handleLeaderChange(leader);
+
             notifiedLeader = leader;
             this.offset = offset;
         }

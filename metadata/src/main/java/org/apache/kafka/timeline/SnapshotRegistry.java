@@ -237,7 +237,7 @@ public class SnapshotRegistry {
         } else {
             snapshot.erase();
         }
-        log.debug("Deleting snapshot {}", snapshot.epoch());
+        log.debug("Deleting in-memory snapshot {}", snapshot.epoch());
         snapshots.remove(snapshot.epoch(), snapshot);
     }
 
