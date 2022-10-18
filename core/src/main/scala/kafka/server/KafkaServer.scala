@@ -21,7 +21,6 @@ import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException}
 import kafka.controller.KafkaController
@@ -46,7 +45,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
-import org.apache.kafka.common.{Endpoint, Node}
+import org.apache.kafka.common.{Endpoint, Node, Uuid}
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion._
@@ -79,6 +78,19 @@ object KafkaServer {
     // The zk sasl is enabled by default so it can produce false error when broker does not intend to use SASL.
     if (!JaasUtils.isZkSaslEnabled) clientConfig.setProperty(JaasUtils.ZK_SASL_CLIENT, "false")
     clientConfig
+  }
+
+  def zkClient(name: String, time: Time, config: KafkaConfig, zkClientConfig: ZKClientConfig): KafkaZkClient = {
+    val secureAclsEnabled = config.zkEnableSecureAcls
+    val isZkSecurityEnabled = JaasUtils.isZkSaslEnabled || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig)
+
+    if (secureAclsEnabled && !isZkSecurityEnabled)
+      throw new java.lang.SecurityException(s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but ZooKeeper client TLS configuration identifying at least $KafkaConfig.ZkSslClientEnableProp, $KafkaConfig.ZkClientCnxnSocketProp, and $KafkaConfig.ZkSslKeyStoreLocationProp was not present and the " +
+        s"verification of the JAAS login file failed ${JaasUtils.zkSecuritySysConfigString}")
+
+    KafkaZkClient(config.zkConnect, secureAclsEnabled, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
+      config.zkMaxInFlightRequests, time, name = name, zkClientConfig = zkClientConfig,
+      createChrootIfNecessary = true)
   }
 
   val MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS: Long = 120000
@@ -331,7 +343,7 @@ class KafkaServer(
         _replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
 
-        val brokerInfo = createBrokerInfo
+        val brokerInfo = createBrokerInfo(Uuid.fromString(clusterId))
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
 
         // Now that the broker is successfully registered, checkpoint its metadata
@@ -490,17 +502,7 @@ class KafkaServer(
 
   private def initZkClient(time: Time): Unit = {
     info(s"Connecting to zookeeper on ${config.zkConnect}")
-
-    val secureAclsEnabled = config.zkEnableSecureAcls
-    val isZkSecurityEnabled = JaasUtils.isZkSaslEnabled() || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig)
-
-    if (secureAclsEnabled && !isZkSecurityEnabled)
-      throw new java.lang.SecurityException(s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but ZooKeeper client TLS configuration identifying at least $KafkaConfig.ZkSslClientEnableProp, $KafkaConfig.ZkClientCnxnSocketProp, and $KafkaConfig.ZkSslKeyStoreLocationProp was not present and the " +
-        s"verification of the JAAS login file failed ${JaasUtils.zkSecuritySysConfigString}")
-
-    _zkClient = KafkaZkClient(config.zkConnect, secureAclsEnabled, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
-      config.zkMaxInFlightRequests, time, name = "Kafka server", zkClientConfig = zkClientConfig,
-      createChrootIfNecessary = true)
+    _zkClient = KafkaServer.zkClient("Kafka server", time, config, zkClientConfig)
     _zkClient.createTopLevelPaths()
   }
 
@@ -508,7 +510,11 @@ class KafkaServer(
     zkClient.getClusterId.getOrElse(zkClient.createOrGetClusterId(CoreUtils.generateUuidAsBase64()))
   }
 
-  def createBrokerInfo: BrokerInfo = {
+  def createBrokerInfo(): BrokerInfo = {
+    throw new UnsupportedOperationException("Remove this after fixing tests") // TODO
+  }
+
+  def createBrokerInfo(clusterId: Uuid): BrokerInfo = {
     val endPoints = config.effectiveAdvertisedListeners.map(e => s"${e.host}:${e.port}")
     zkClient.getAllBrokersInCluster.filter(_.id != config.brokerId).foreach { broker =>
       val commonEndPoints = broker.endPoints.map(e => s"${e.host}:${e.port}").intersect(endPoints)
@@ -531,6 +537,7 @@ class KafkaServer(
     )
 
     val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
+
     BrokerInfo(
       Broker(config.brokerId, updatedEndpoints, config.rack, brokerFeatures.supportedFeatures),
       config.interBrokerProtocolVersion,

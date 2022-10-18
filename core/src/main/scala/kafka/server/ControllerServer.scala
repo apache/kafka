@@ -46,6 +46,7 @@ import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
+import org.apache.kafka.migration.KRaftMigrationDriver
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
@@ -70,6 +71,7 @@ class ControllerServer(
   val bootstrapMetadata: BootstrapMetadata,
   val metadataFaultHandler: FaultHandler,
   val fatalFaultHandler: FaultHandler,
+  val kraftMigrationDriver: Option[KRaftMigrationDriver] = None
 ) extends Logging with KafkaMetricsGroup {
   import kafka.server.Server._
 
@@ -189,7 +191,6 @@ class ControllerServer(
         }
 
         val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.fold(OptionalLong.empty)(OptionalLong.of)
-
         new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
           setTime(time).
           setThreadNamePrefix(threadNamePrefixAsString).
@@ -211,16 +212,22 @@ class ControllerServer(
           setBootstrapMetadata(bootstrapMetadata).
           setFatalFaultHandler(fatalFaultHandler)
       }
+      kraftMigrationDriver.foreach(driver => controllerBuilder.setListener(driver.listener()))
       authorizer match {
         case Some(a: ClusterMetadataAuthorizer) => controllerBuilder.setAuthorizer(a)
         case _ => // nothing to do
       }
       controller = controllerBuilder.build()
+      // TODO clean this up
+      kraftMigrationDriver.foreach(driver => driver.setMigrationCallback(controller.asInstanceOf[QuorumController].migrationListener))
 
       // Perform any setup that is done only when this node is a controller-only node.
       if (!config.processRoles.contains(BrokerRole)) {
         doRemoteKraftSetup()
       }
+
+      // Start the migration manager
+      kraftMigrationDriver.foreach(_.start())
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,

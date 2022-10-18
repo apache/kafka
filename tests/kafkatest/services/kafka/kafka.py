@@ -203,6 +203,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  remote_kafka=None,
                  controller_num_nodes_override=0,
                  allow_zk_with_kraft=False,
+                 quorum_info_provider=None
                  ):
         """
         :param context: test context
@@ -262,13 +263,16 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param KafkaService remote_kafka: process.roles=controller for this cluster when not None; ignored when using ZooKeeper
         :param int controller_num_nodes_override: the number of nodes to use in the cluster, instead of 5, 3, or 1 based on num_nodes, if positive, not using ZooKeeper, and remote_kafka is not None; ignored otherwise
         :param bool allow_zk_with_kraft: if True, then allow a KRaft broker or controller to also use ZooKeeper
-
+        :param quorum_info_provider: A function that takes this KafkaService as an argument and returns a ServiceQuorumInfo. If this is None, then the ServiceQuorumInfo is generated from the test context
         """
 
         self.zk = zk
         self.remote_kafka = remote_kafka
         self.allow_zk_with_kraft = allow_zk_with_kraft
-        self.quorum_info = quorum.ServiceQuorumInfo(self, context)
+        if quorum_info_provider is None:
+            self.quorum_info = quorum.ServiceQuorumInfo.from_test_context(self, context)
+        else:
+            self.quorum_info = quorum_info_provider(self)
         self.controller_quorum = None # will define below if necessary
         self.remote_controller_quorum = None # will define below if necessary
 
@@ -427,6 +431,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.colocated_nodes_started = 0
         self.nodes_to_start = self.nodes
 
+    def reconfigure_zk_as_kraft(self, kraft_quorum):
+        self.quorum_info = quorum.ServiceQuorumInfo(quorum.remote_kraft, self)
+        self.remote_controller_quorum = kraft_quorum
+        self.controller_quorum = kraft_quorum
+
     def num_kraft_controllers(self, num_nodes_broker_role, controller_num_nodes_override):
         if controller_num_nodes_override < 0:
             raise Exception("controller_num_nodes_override must not be negative: %i" % controller_num_nodes_override)
@@ -567,7 +576,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def alive(self, node):
         return len(self.pids(node)) > 0
 
-    def start(self, add_principals="", nodes_to_skip=[], timeout_sec=60):
+    def start(self, add_principals="", nodes_to_skip=[], timeout_sec=60, **kwargs):
         """
         Start the Kafka broker and wait until it registers its ID in ZooKeeper
         Startup will be skipped for any nodes in nodes_to_skip. These nodes can be started later via add_broker
@@ -606,7 +615,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         if self.remote_controller_quorum:
             self.remote_controller_quorum.start()
-        Service.start(self)
+        Service.start(self, **kwargs)
         if self.concurrent_start:
             # We didn't wait while starting each individual node, so wait for them all now
             for node in self.nodes_to_start:
@@ -775,7 +784,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 self.controller_quorum.intercontroller_security_protocol != self.controller_quorum.controller_security_protocol) \
             else [broker_to_controller_listener_name]
 
-    def start_node(self, node, timeout_sec=60):
+    def start_node(self, node, timeout_sec=60, **kwargs):
         if node not in self.nodes_to_start:
             return
         node.account.mkdirs(KafkaService.PERSISTENT_ROOT)

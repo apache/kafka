@@ -18,7 +18,6 @@
 package kafka.cluster
 
 import java.util
-
 import kafka.common.BrokerEndPointNotAvailableException
 import kafka.server.KafkaConfig
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}

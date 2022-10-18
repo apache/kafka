@@ -204,7 +204,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         raftManager.apiVersions(),
                         bootstrapMetadata,
                         metadataFaultHandler,
-                        fatalFaultHandler
+                        fatalFaultHandler,
+                        Option.empty()
                     );
                     controllers.put(node.id(), controller);
                     controller.socketServerFirstBoundPortFuture().whenComplete((port, e) -> {

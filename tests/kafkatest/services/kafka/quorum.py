@@ -78,9 +78,23 @@ class ServiceQuorumInfo:
         True iff quorum_type==COLOCATED_KRAFT
     """
 
-    def __init__(self, kafka, context):
-        """
+    def __init__(self, quorum_type, kafka):
+        if quorum_type != zk and kafka.zk and not kafka.allow_zk_with_kraft:
+            raise Exception("Cannot use ZooKeeper while specifying a KRaft metadata quorum unless explicitly allowing it")
+        if kafka.remote_kafka and quorum_type != remote_kraft:
+            raise Exception("Cannot specify a remote Kafka service unless using a remote KRaft metadata quorum (should not happen)")
 
+        self.kafka = kafka
+        self.quorum_type = quorum_type
+        self.using_zk = quorum_type == zk
+        self.using_kraft = not self.using_zk
+        self.has_brokers = self.using_kraft and not kafka.remote_kafka
+        self.has_controllers = quorum_type == colocated_kraft or kafka.remote_kafka
+        self.has_brokers_and_controllers = quorum_type == colocated_kraft
+
+    @staticmethod
+    def from_test_context(kafka, context):
+        """
         :param kafka : KafkaService
             The service for which this instance exposes quorum-related
             information
@@ -90,17 +104,8 @@ class ServiceQuorumInfo:
         """
 
         quorum_type = for_test(context)
-        if quorum_type != zk and kafka.zk and not kafka.allow_zk_with_kraft:
-            raise Exception("Cannot use ZooKeeper while specifying a KRaft metadata quorum unless explicitly allowing it")
-        if kafka.remote_kafka and quorum_type != remote_kraft:
-            raise Exception("Cannot specify a remote Kafka service unless using a remote KRaft metadata quorum (should not happen)")
-        self.kafka = kafka
-        self.quorum_type = quorum_type
-        self.using_zk = quorum_type == zk
-        self.using_kraft = not self.using_zk
-        self.has_brokers = self.using_kraft and not kafka.remote_kafka
-        self.has_controllers = quorum_type == colocated_kraft or kafka.remote_kafka
-        self.has_brokers_and_controllers = quorum_type == colocated_kraft
+        ServiceQuorumInfo(quorum_type, kafka)
+
 
 class NodeQuorumInfo:
     """

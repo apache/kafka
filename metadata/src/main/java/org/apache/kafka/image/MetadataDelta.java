@@ -75,6 +75,14 @@ public final class MetadataDelta {
         this.highestEpoch = image.highestOffsetAndEpoch().epoch();
     }
 
+    public long highestOffset() {
+        return highestOffset;
+    }
+
+    public int highestEpoch() {
+        return highestEpoch;
+    }
+
     public MetadataImage image() {
         return image;
     }

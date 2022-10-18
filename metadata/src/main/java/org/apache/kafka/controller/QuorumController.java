@@ -81,6 +81,8 @@ import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
+import org.apache.kafka.migration.KRaftMetadataListener;
+import org.apache.kafka.migration.ZkMetadataConsumer;
 import org.apache.kafka.queue.EventQueue.EarliestDeadlineFunction;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
@@ -178,6 +180,7 @@ public final class QuorumController implements Controller {
         private Optional<ClusterMetadataAuthorizer> authorizer = Optional.empty();
         private Map<String, Object> staticConfig = Collections.emptyMap();
         private BootstrapMetadata bootstrapMetadata = null;
+        private KRaftMetadataListener listener = null;
         private int maxRecordsPerBatch = MAX_RECORDS_PER_BATCH;
 
         public Builder(int nodeId, String clusterId) {
@@ -299,6 +302,11 @@ public final class QuorumController implements Controller {
             return this;
         }
 
+        public Builder setListener(KRaftMetadataListener listener) {
+            this.listener = listener;
+            return this;
+        }
+
         @SuppressWarnings("unchecked")
         public QuorumController build() throws Exception {
             if (raftClient == null) {
@@ -321,6 +329,20 @@ public final class QuorumController implements Controller {
                 controllerMetrics = (ControllerMetrics) Class.forName(
                     "org.apache.kafka.controller.MockControllerMetrics").getConstructor().newInstance();
             }
+            if (listener == null) {
+                listener = new KRaftMetadataListener() {
+                    @Override
+                    public void handleLeaderChange(boolean isActive, int epoch) {
+
+                    }
+
+                    @Override
+                    public void handleRecord(long offset, int epoch, ApiMessage record) {
+
+                    }
+                };
+            }
+
 
             KafkaEventQueue queue = null;
             try {
@@ -349,7 +371,8 @@ public final class QuorumController implements Controller {
                     authorizer,
                     staticConfig,
                     bootstrapMetadata,
-                    maxRecordsPerBatch
+                    maxRecordsPerBatch,
+                    listener
                 );
             } catch (Exception e) {
                 Utils.closeQuietly(queue, "event queue");
@@ -1064,21 +1087,25 @@ public final class QuorumController implements Controller {
                         log.warn("We were the leader in epoch {}, and are still the leader " +
                                 "in the new epoch {}.", curClaimEpoch, newLeader.epoch());
                         curClaimEpoch = newLeader.epoch();
+                        listener.handleLeaderChange(true, newLeader.epoch());
                     } else {
                         log.warn("Renouncing the leadership due to a metadata log event. " +
                             "We were the leader at epoch {}, but in the new epoch {}, " +
                             "the leader is {}. Reverting to last committed offset {}.",
                             curClaimEpoch, newLeader.epoch(), newLeaderName, lastCommittedOffset);
                         renounce();
+                        listener.handleLeaderChange(false, newLeader.epoch());
                     }
                 } else if (newLeader.isLeader(nodeId)) {
                     log.info("Becoming the active controller at epoch {}, committed offset {}, " +
                         "committed epoch {}", newLeader.epoch(), lastCommittedOffset,
                         lastCommittedEpoch);
                     claim(newLeader.epoch());
+                    listener.handleLeaderChange(true, newLeader.epoch());
                 } else {
                     log.info("In the new epoch {}, the leader is {}.",
                         newLeader.epoch(), newLeaderName);
+                    listener.handleLeaderChange(false, newLeader.epoch());
                 }
             });
         }
@@ -1100,6 +1127,43 @@ public final class QuorumController implements Controller {
                     }
                 }
             });
+        }
+    }
+
+    class MigrationListener implements ZkMetadataConsumer {
+        private volatile long lastWriteOffset;
+
+        @Override
+        public void beginMigration() {
+
+        }
+
+        @Override
+        public CompletableFuture<?> acceptBatch(List<ApiMessageAndVersion> recordBatch) {
+            ControllerWriteEvent<Void> batchEvent = new ControllerWriteEvent<>("migration", new ControllerWriteOperation<Void>() {
+                @Override
+                public ControllerResult<Void> generateRecordsAndResult() throws Exception {
+                    log.info("Migrating batch {}", recordBatch);
+                    return ControllerResult.atomicOf(new ArrayList<>(recordBatch), null);
+                }
+
+                @Override
+                public void processBatchEndOffset(long offset) {
+                    lastWriteOffset = offset;
+                }
+            });
+            queue.append(batchEvent);
+            return batchEvent.future;
+        }
+
+        @Override
+        public OffsetAndEpoch completeMigration() {
+            return new OffsetAndEpoch(lastWriteOffset, curClaimEpoch); // TODO not sure this curClaimEpoch read is safe
+        }
+
+        @Override
+        public void abortMigration() {
+
         }
     }
 
@@ -1399,6 +1463,7 @@ public final class QuorumController implements Controller {
     private void replay(ApiMessage message, Optional<OffsetAndEpoch> snapshotId, long batchLastOffset) {
         logReplayTracker.replay(message);
         MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
+        listener.handleRecord(lastCommittedOffset, lastCommittedEpoch, message); // TODO this is wrong
         switch (type) {
             case REGISTER_BROKER_RECORD:
                 clusterControl.replay((RegisterBrokerRecord) message, batchLastOffset);
@@ -1573,6 +1638,10 @@ public final class QuorumController implements Controller {
      */
     private final FeatureControlManager featureControl;
 
+    private final KRaftMetadataListener listener;
+
+    public final MigrationListener migrationListener = new MigrationListener(); // TODO clean this up
+
     /**
      * An object which stores the controller's view of the latest producer ID
      * that has been generated. This must be accessed only by the event queue thread.
@@ -1727,7 +1796,8 @@ public final class QuorumController implements Controller {
         Optional<ClusterMetadataAuthorizer> authorizer,
         Map<String, Object> staticConfig,
         BootstrapMetadata bootstrapMetadata,
-        int maxRecordsPerBatch
+        int maxRecordsPerBatch,
+        KRaftMetadataListener listener
     ) {
         this.fatalFaultHandler = fatalFaultHandler;
         this.logContext = logContext;
@@ -1788,6 +1858,7 @@ public final class QuorumController implements Controller {
             setCreateTopicPolicy(createTopicPolicy).
             setFeatureControl(featureControl).
             build();
+        this.listener = listener;
         this.authorizer = authorizer;
         authorizer.ifPresent(a -> a.setAclMutator(this));
         this.aclControlManager = new AclControlManager(snapshotRegistry, authorizer);

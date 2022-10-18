@@ -51,7 +51,7 @@
     },
     { "name": "Rack", "type": "string", "versions": "0+", "nullableVersions": "0+",
       "about": "The rack which this broker is in." },
-    { "name": "InterBrokerProtocolVersion", "type": "string", "versions": "1+", "taggedVersions": "1+", "tag": 1, "ignorable": true,
+    { "name": "InterBrokerProtocolVersion", "type": "string", "versions": "1+", "taggedVersions": "1+", "tag": 0, "ignorable": true,
       "about": "The static IBP that the broker was started with. This is only used by ZK brokers during a migration."}
   ]
 }

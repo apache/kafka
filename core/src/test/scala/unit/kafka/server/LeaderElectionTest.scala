@@ -138,9 +138,9 @@ class LeaderElectionTest extends QuorumTestHarness {
     val controllerContext = new ControllerContext
     controllerContext.setLiveBrokers(brokerAndEpochs)
     val metrics = new Metrics
-    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
+    val controllerChannelManager = new ControllerChannelManager(() => controllerContext.epoch, controllerConfig, Time.SYSTEM,
       metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
-    controllerChannelManager.startup()
+    controllerChannelManager.startup(controllerContext.liveOrShuttingDownBrokers)
     try {
       val staleControllerEpoch = 0
       val partitionStates = Seq(

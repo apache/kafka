@@ -19,19 +19,23 @@ package kafka.server
 import java.io.File
 import java.util.concurrent.CompletableFuture
 import kafka.common.InconsistentNodeIdException
+import kafka.controller.{ControllerChannelManager, StateChangeLogger}
 import kafka.log.{LogConfig, UnifiedLog}
 import kafka.metrics.KafkaMetricsReporter
+import kafka.migration.ZkMigrationClient
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.server.metadata.BrokerServerMetrics
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.controller.QuorumControllerMetrics
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.metadata.{KafkaConfigSchema, MetadataRecordSerde}
+import org.apache.kafka.migration.KRaftMigrationDriver
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{LoggingFaultHandler, ProcessExitingFaultHandler}
@@ -107,6 +111,13 @@ class KafkaRaftServer(
   }
 
   private val controller: Option[ControllerServer] = if (config.processRoles.contains(ControllerRole)) {
+    // TODO clean these up
+    val zkClient = KafkaServer.zkClient("KRaft migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
+    val stateChangeLogger = new StateChangeLogger(-1, inControllerContext = false, None)
+    val channelManager = new ControllerChannelManager(() => -1, config, Time.SYSTEM, new Metrics(), stateChangeLogger)
+    val migrationClient = new ZkMigrationClient(zkClient, channelManager)
+    val migrationDriver = new KRaftMigrationDriver(config.nodeId, migrationClient)
+
     val controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)
     val metadataFaultHandler = new LoggingFaultHandler("controller metadata",
       () => controllerMetrics.incrementMetadataErrorCount())
@@ -124,7 +135,8 @@ class KafkaRaftServer(
       raftManager.apiVersions,
       bootstrapMetadata,
       metadataFaultHandler,
-      fatalFaultHandler
+      fatalFaultHandler,
+      Some(migrationDriver)
     ))
   } else {
     None
