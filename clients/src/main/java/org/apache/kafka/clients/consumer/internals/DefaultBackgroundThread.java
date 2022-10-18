@@ -122,7 +122,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     @Override
     public void run() {
         try {
-            log.debug("{} started", getClass());
+            log.debug("Background thread started");
             while (running) {
                 try {
                     runOnce();
