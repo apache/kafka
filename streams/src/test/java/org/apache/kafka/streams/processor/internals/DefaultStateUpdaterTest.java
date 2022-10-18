@@ -658,6 +658,7 @@ class DefaultStateUpdaterTest {
         orderVerifier.verify(changelogReader, atLeast(1)).enforceRestoreActive();
         orderVerifier.verify(changelogReader).transitToUpdateStandby();
     }
+    
     @Test
     public void shouldNotTransitToStandbyAgainAfterStandbyTaskFailed() throws Exception {
         final StandbyTask task1 = standbyTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
