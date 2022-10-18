@@ -2927,7 +2927,9 @@ public class StreamThreadTest {
 
     @Test
     public void shouldCheckStateUpdater() {
-        final StreamThread streamThread = setUpThreadWithStateUpdater(StreamsTestUtils.getStreamsConfig());
+        final Properties streamsConfigProps = StreamsTestUtils.getStreamsConfig();
+        streamsConfigProps.put(InternalConfig.STATE_UPDATER_ENABLED, true);
+        final StreamThread streamThread = setUpThread(streamsConfigProps);
         final TaskManager taskManager = streamThread.taskManager();
         streamThread.setState(State.STARTING);
 
@@ -2940,8 +2942,9 @@ public class StreamThreadTest {
     @Test
     public void shouldRespectPollTimeInPartitionsAssignedStateWithStateUpdater() {
         final Properties streamsConfigProps = StreamsTestUtils.getStreamsConfig();
+        streamsConfigProps.put(InternalConfig.STATE_UPDATER_ENABLED, true);
         final Duration pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
-        final StreamThread streamThread = setUpThreadWithStateUpdater(streamsConfigProps);
+        final StreamThread streamThread = setUpThread(streamsConfigProps);
         streamThread.setState(State.STARTING);
         streamThread.setState(State.PARTITIONS_ASSIGNED);
 
@@ -2950,13 +2953,24 @@ public class StreamThreadTest {
         Mockito.verify(mainConsumer).poll(pollTime);
     }
 
-    private StreamThread setUpThreadWithStateUpdater(final Properties streamsConfigProps) {
+    @Test
+    public void shouldNotBlockWhenPollingInPartitionsAssignedStateWithoutStateUpdater() {
+        final Properties streamsConfigProps = StreamsTestUtils.getStreamsConfig();
+        final StreamThread streamThread = setUpThread(streamsConfigProps);
+        streamThread.setState(State.STARTING);
+        streamThread.setState(State.PARTITIONS_ASSIGNED);
+
+        streamThread.runOnce();
+
+        Mockito.verify(mainConsumer).poll(Duration.ZERO);
+    }
+
+    private StreamThread setUpThread(final Properties streamsConfigProps) {
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Collections.emptyMap()));
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final TaskManager taskManager = Mockito.mock(TaskManager.class);
-        streamsConfigProps.put(InternalConfig.STATE_UPDATER_ENABLED, true);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         return new StreamThread(
