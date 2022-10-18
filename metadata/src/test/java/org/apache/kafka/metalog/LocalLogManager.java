@@ -347,7 +347,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
 
         /**
-         * TODO: document this
+         * Returns the snapshot id of the latest snapshot if there is one.
+         *
+         * If a snapshot doesn't exists, it return an empty Optional.
          */
         synchronized Optional<OffsetAndEpoch> latestSnapshotId() {
             return Optional.ofNullable(snapshots.lastEntry()).map(entry -> entry.getValue().snapshotId());

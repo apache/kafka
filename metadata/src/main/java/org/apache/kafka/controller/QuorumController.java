@@ -1440,8 +1440,8 @@ public final class QuorumController implements Controller {
     }
 
     private void cancelNextGenerateSnapshot() {
-        generateSnapshotScheduled = false;
         queue.cancelDeferred(MAYBE_GENERATE_SNAPSHOT);
+        generateSnapshotScheduled = false;
     }
 
     private void handleFeatureControlChange() {
@@ -1568,9 +1568,11 @@ public final class QuorumController implements Controller {
                 cancelNextGenerateSnapshot();
             }
         } else {
-            // TODO: Document why it is safe to skip snapshotting if there is a snapshot in progress.
-            // This has to do with the fact that the controller checks if a new snapshot is required after the current
-            // snapshot completes
+            /* Skip snapshot generation if there is a snaphshot in progress.
+             *
+             * When the in-progress snapshot completes it will call this method to check if the controller should generate
+             * another snapshot due to any of the reasons supported by this method.
+             */
         }
     }
 
@@ -1762,7 +1764,7 @@ public final class QuorumController implements Controller {
     private final long maxSnapshotIntervalMs;
 
     /**
-     * TODO: document this
+     * Timestamp for the oldest record that was committed but not included in a snapshot.
      */
     private long oldestCommittedLogOnlyAppendTimestamp = Long.MAX_VALUE;
 
@@ -1796,7 +1798,7 @@ public final class QuorumController implements Controller {
     private boolean noOpRecordScheduled = false;
 
     /**
-     * TODO: Document this
+     * Tracks if a snapshot generate was scheduled.
      */
     private boolean generateSnapshotScheduled = false;
 

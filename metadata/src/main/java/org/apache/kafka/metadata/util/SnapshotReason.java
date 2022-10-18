@@ -20,7 +20,9 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.kafka.server.common.MetadataVersion;
 
-// TODO: Document this type
+/**
+ * Reason for generating a snapshot.
+ */
 public final class SnapshotReason {
     static public final SnapshotReason UNKNOWN = new SnapshotReason("unknown reason");
 
@@ -38,6 +40,9 @@ public final class SnapshotReason {
         return new SnapshotReason(String.format("metadata version was changed to %s", metadataVersion));
     }
 
+    /**
+     * Converts a collection of reasons into a string.
+     */
     static public String stringFromReasons(Iterable<SnapshotReason> reasons) {
         return StreamSupport
             .stream(reasons.spliterator(), false)

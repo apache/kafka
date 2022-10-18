@@ -232,7 +232,12 @@ public interface RaftClient<T> extends AutoCloseable {
 
 
     /**
-     * TODO: Document this and implement this in KafkaRaftClient
+     * The snapshot id for the lastest snapshot.
+     *
+     * Returns the snapshot id of the latest snapshot, if it exists. If a snapshot doesn't exists, returns an
+     * {@link Optional#empty()}.
+     *
+     * @return the snapshot of the latest snaphost, if it exists
      */
     Optional<OffsetAndEpoch> latestSnapshotId();
 }
