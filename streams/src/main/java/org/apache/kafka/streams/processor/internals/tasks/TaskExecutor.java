@@ -25,7 +25,12 @@ import java.time.Duration;
 public interface TaskExecutor {
 
     /**
-     * Starts the task processor.
+     * @return ID name string of the task executor.
+     */
+    String name();
+
+    /**
+     * Starts the task executor.
      */
     void start();
 
@@ -49,9 +54,20 @@ public interface TaskExecutor {
     /**
      * Unassign the current processing task from the task processor and give it back to the state manager.
      *
-     * The paused task must be flushed since it may be committed or closed by the task manager next.
+     * Note there is an asymmetry between assignment and unassignment between {@link TaskManager} and {@link TaskExecutor},
+     * since assigning a task from task manager to task executor is always initiated by the task executor itself, by calling
+     * {@link TaskManager#assignNextTask(TaskExecutor)},
+     * while unassigning a task and returning it to task manager could be triggered either by the task executor proactively
+     * when it finds the task not processable anymore, or by the task manager when it needs to commit / close it.
+     * This function is used for the second case, where task manager will call this function asking the task executor
+     * to give back the task.
      *
-     * This method does not block, instead a future is returned.
+     * The task must be flushed before being unassigned, since it may be committed or closed by the task manager next.
+     *
+     * This method does not block, instead a future is returned; when the task executor finishes
+     * unassigning the task this future will then complete.
+     *
+     * @return the future capturing the completion of the unassign process
      */
     KafkaFuture<StreamTask> unassign();
 }

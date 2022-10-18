@@ -2928,15 +2928,52 @@ public class StreamThreadTest {
     @Test
     public void shouldCheckStateUpdater() {
         final Properties streamsConfigProps = StreamsTestUtils.getStreamsConfig();
+        streamsConfigProps.put(InternalConfig.STATE_UPDATER_ENABLED, true);
+        final StreamThread streamThread = setUpThread(streamsConfigProps);
+        final TaskManager taskManager = streamThread.taskManager();
+        streamThread.setState(State.STARTING);
+
+        streamThread.runOnce();
+
+        Mockito.verify(taskManager).checkStateUpdater(Mockito.anyLong(), Mockito.any());
+        Mockito.verify(taskManager).process(Mockito.anyInt(), Mockito.any());
+    }
+
+    @Test
+    public void shouldRespectPollTimeInPartitionsAssignedStateWithStateUpdater() {
+        final Properties streamsConfigProps = StreamsTestUtils.getStreamsConfig();
+        streamsConfigProps.put(InternalConfig.STATE_UPDATER_ENABLED, true);
+        final Duration pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
+        final StreamThread streamThread = setUpThread(streamsConfigProps);
+        streamThread.setState(State.STARTING);
+        streamThread.setState(State.PARTITIONS_ASSIGNED);
+
+        streamThread.runOnce();
+
+        Mockito.verify(mainConsumer).poll(pollTime);
+    }
+
+    @Test
+    public void shouldNotBlockWhenPollingInPartitionsAssignedStateWithoutStateUpdater() {
+        final Properties streamsConfigProps = StreamsTestUtils.getStreamsConfig();
+        final StreamThread streamThread = setUpThread(streamsConfigProps);
+        streamThread.setState(State.STARTING);
+        streamThread.setState(State.PARTITIONS_ASSIGNED);
+
+        streamThread.runOnce();
+
+        Mockito.verify(mainConsumer).poll(Duration.ZERO);
+    }
+
+    private StreamThread setUpThread(final Properties streamsConfigProps) {
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Collections.emptyMap()));
         when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         final TaskManager taskManager = Mockito.mock(TaskManager.class);
-        streamsConfigProps.put(InternalConfig.STATE_UPDATER_ENABLED, true);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
-        final StreamThread streamThread = new StreamThread(
+        return new StreamThread(
             mockTime,
             new StreamsConfig(streamsConfigProps.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))),
@@ -2957,12 +2994,6 @@ public class StreamThreadTest {
             null,
             null
         );
-        streamThread.setState(State.STARTING);
-
-        streamThread.runOnce();
-
-        Mockito.verify(taskManager).checkStateUpdater(Mockito.anyLong(), Mockito.any());
-        Mockito.verify(taskManager).process(Mockito.anyInt(), Mockito.any());
     }
 
     private TaskManager mockTaskManagerPurge(final int numberOfPurges) {
