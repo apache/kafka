@@ -16,21 +16,44 @@
  */
 package org.apache.kafka.metadata.util;
 
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
+import org.apache.kafka.server.common.MetadataVersion;
+
 // TODO: Document this type
-public enum SnapshotReason {
-    UnknownReason("unknown reason"),
-    MaxBytesExceeded("max bytes were exceeded"),
-    MaxIntervalExceeded("max snapshot interval was exceeded"),
-    MetadataVersionChanged("metadata version was changed");
+// TODO: Write tests for this
+public final class SnapshotReason {
+    static public final SnapshotReason UNKNOWN_REASON = new SnapshotReason("unknown reason");
 
-    private final String snapshotReason;
+    static public SnapshotReason maxBytesExceeded(long bytes, long maxBytes) {
+        return new SnapshotReason(String.format("%s bytes exceeded the max bytes of %s", bytes, maxBytes));
+    }
 
-    SnapshotReason(String snapshotReason) {
-        this.snapshotReason = snapshotReason;
+    static public SnapshotReason maxIntervalExceeded(long interval, long maxInterval) {
+        return new SnapshotReason(
+            String.format("%s ms exceeded the max snapshot interval of %s ms", interval, maxInterval)
+        );
+    }
+
+    static public SnapshotReason metadataVersionChanged(MetadataVersion metadataVersion) {
+        return new SnapshotReason(String.format("metadata version was changed to %s", metadataVersion));
+    }
+
+    static public String stringFromReasons(Iterable<SnapshotReason> reasons) {
+        return StreamSupport
+            .stream(reasons.spliterator(), false)
+            .map(SnapshotReason::toString)
+            .collect(Collectors.joining(", "));
+    }
+
+    private final String reason;
+
+    private SnapshotReason(String reason) {
+        this.reason = reason;
     }
 
     @Override
     public String toString() {
-        return snapshotReason;
+        return reason;
     }
 }

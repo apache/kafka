@@ -98,26 +98,7 @@ class BrokerMetadataSnapshotterTest {
     
     try {
       val blockingEvent = new BlockingEvent()
-      val reasons = Set(SnapshotReason.UnknownReason)
-
-      snapshotter.eventQueue.append(blockingEvent)
-      assertTrue(snapshotter.maybeStartSnapshot(10000L, MetadataImageTest.IMAGE1, reasons))
-      assertFalse(snapshotter.maybeStartSnapshot(11000L, MetadataImageTest.IMAGE2, reasons))
-      blockingEvent.latch.countDown()
-      assertEquals(MetadataImageTest.IMAGE1, writerBuilder.image.get())
-    } finally {
-      snapshotter.close()
-    }
-  }
-
-  @Test
-  def testCreateSnapshotMultipleReasons(): Unit = {
-    val writerBuilder = new MockSnapshotWriterBuilder()
-    val snapshotter = new BrokerMetadataSnapshotter(0, Time.SYSTEM, None, writerBuilder)
-    
-    try {
-      val blockingEvent = new BlockingEvent()
-      val reasons = Set(SnapshotReason.MaxBytesExceeded, SnapshotReason.MetadataVersionChanged)
+      val reasons = Set(SnapshotReason.UNKNOWN_REASON)
 
       snapshotter.eventQueue.append(blockingEvent)
       assertTrue(snapshotter.maybeStartSnapshot(10000L, MetadataImageTest.IMAGE1, reasons))
