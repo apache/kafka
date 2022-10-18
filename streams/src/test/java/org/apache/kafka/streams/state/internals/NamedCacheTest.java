@@ -56,8 +56,6 @@ public class NamedCacheTest {
 
     @Before
     public void setUp() {
-        final Metrics innerMetrics = new Metrics();
-        final StreamsMetricsImpl metrics = new MockStreamsMetrics(innerMetrics);
         cache = new NamedCache("dummy-name", metrics);
     }
 
