@@ -29,6 +29,7 @@ import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -280,7 +281,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             connector,
             config,
             configState.tasks(connector),
-            connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG))
+            connectorTypeForConfig(config)
         );
     }
 
@@ -318,8 +319,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Collections.sort(taskStates);
 
         Map<String, String> conf = rawConfig(connName);
-        return new ConnectorStateInfo(connName, connectorState, taskStates,
-            conf == null ? ConnectorType.UNKNOWN : connectorTypeForClass(conf.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
+        return new ConnectorStateInfo(connName, connectorState, taskStates, connectorTypeForConfig(conf));
     }
 
     @Override
@@ -419,7 +419,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 connectorName,
                 connectorInfoState,
                 taskStates,
-                conf == null ? ConnectorType.UNKNOWN : connectorTypeForClass(conf.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG))
+                connectorTypeForConfig(conf)
         );
         return Optional.of(new RestartPlan(request, stateInfo));
     }
@@ -691,7 +691,14 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
      * @param connClass class of the connector
      */
     public ConnectorType connectorTypeForClass(String connClass) {
-        return ConnectorType.from(getConnector(connClass).getClass());
+        if (connClass == null) {
+            return ConnectorType.UNKNOWN;
+        }
+        try {
+            return ConnectorType.from(getConnector(connClass).getClass());
+        } catch (ConnectException e) {
+            return ConnectorType.UNKNOWN;
+        }
     }
 
     /**
@@ -700,6 +707,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
      * @return the {@link ConnectorType} of the connector
      */
     public ConnectorType connectorTypeForConfig(Map<String, String> connConfig) {
+        if (connConfig == null) {
+            return ConnectorType.UNKNOWN;
+        }
         return connectorTypeForClass(connConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
     }
 

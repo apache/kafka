@@ -31,6 +31,7 @@ import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverrid
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.PrincipalConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -442,6 +443,7 @@ public class AbstractHerderTest {
         config.put("required", "value"); // connector required config
         ConfigInfos result = herder.validateConnectorConfig(config, false);
         assertEquals(herder.connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)), ConnectorType.SOURCE);
+        assertEquals(herder.connectorTypeForConfig(config), ConnectorType.SOURCE);
 
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
@@ -499,6 +501,7 @@ public class AbstractHerderTest {
 
         ConfigInfos result = herder.validateConnectorConfig(config, false);
         assertEquals(ConnectorType.SOURCE, herder.connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
+        assertEquals(ConnectorType.SOURCE, herder.connectorTypeForConfig(config));
 
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
@@ -566,6 +569,7 @@ public class AbstractHerderTest {
 
         ConfigInfos result = herder.validateConnectorConfig(config, false);
         assertEquals(herder.connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)), ConnectorType.SOURCE);
+        assertEquals(herder.connectorTypeForConfig(config), ConnectorType.SOURCE);
 
         // We expect there to be errors due to now allowed override policy for ACKS.... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
@@ -626,6 +630,7 @@ public class AbstractHerderTest {
 
         ConfigInfos result = herder.validateConnectorConfig(config, false);
         assertEquals(herder.connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)), ConnectorType.SOURCE);
+        assertEquals(herder.connectorTypeForConfig(config), ConnectorType.SOURCE);
 
         Map<String, String> validatedOverriddenClientConfigs = new HashMap<>();
         for (ConfigInfo configInfo : result.values()) {
@@ -891,6 +896,33 @@ public class AbstractHerderTest {
         when(worker.getPlugins()).thenReturn(plugins);
         when(plugins.newPlugin(anyString())).thenReturn(new DirectoryConfigProvider());
         herder.connectorPluginConfig(connName);
+    }
+
+    @Test
+    public void testGetConnectorTypeWithMissingPlugin() {
+        String connName = "AnotherPlugin";
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
+        when(worker.getPlugins()).thenReturn(plugins);
+        when(plugins.newConnector(anyString())).thenThrow(new ConnectException("No class found"));
+        assertEquals(ConnectorType.UNKNOWN, herder.connectorTypeForClass(connName));
+    }
+
+    @Test
+    public void testGetConnectorTypeWithNullConfig() {
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
+        assertEquals(ConnectorType.UNKNOWN, herder.connectorTypeForConfig(null));
+    }
+
+    @Test
+    public void testGetConnectorTypeWithEmptyConfig() {
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
+        assertEquals(ConnectorType.UNKNOWN, herder.connectorTypeForConfig(Collections.emptyMap()));
     }
 
     protected void addConfigKey(Map<String, ConfigDef.ConfigKey> keys, String name, String group) {
