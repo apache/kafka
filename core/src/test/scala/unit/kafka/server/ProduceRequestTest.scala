@@ -23,7 +23,6 @@ import java.util.{Collections, Properties}
 import kafka.log.LogConfig
 import kafka.message.ZStdCompressionCodec
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.protocol.Errors
@@ -31,9 +30,8 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{Test, Timeout}
+import org.junit.jupiter.api.Test
 
-import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters._
 
 /**
@@ -246,18 +244,6 @@ class ProduceRequestTest extends BaseRequestTest {
     val tp2 = new TopicPartition(topicProduceResponse2.name, partitionProduceResponse2.index)
     assertEquals(topicPartition, tp2)
     assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE, Errors.forCode(partitionProduceResponse2.errorCode))
-  }
-
-  @Test
-  @Timeout(value = 3, unit = TimeUnit.SECONDS)
-  def testSendWithBatchSizeZeroAndNoRecordKey(): Unit = {
-    createTopic("topic")
-    val overrides = new Properties
-    overrides.put(ProducerConfig.BATCH_SIZE_CONFIG, 0)
-    val producer = createProducer(configOverrides = overrides)
-    val record = new ProducerRecord[Array[Byte], Array[Byte]]("topic", null, "value".getBytes)
-    val future = producer.send(record)
-    future.get()
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {

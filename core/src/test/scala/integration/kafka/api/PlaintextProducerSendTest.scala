@@ -27,8 +27,12 @@ import org.apache.kafka.common.errors.{InvalidTimestampException, RecordTooLarge
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch, Records, TimestampType}
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+
+import java.nio.charset.StandardCharsets
+import java.time.Duration
 
 
 class PlaintextProducerSendTest extends BaseProducerSendTest {
@@ -53,6 +57,32 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
       deliveryTimeoutMs = Int.MaxValue,
       batchSize = 0)
     sendAndVerify(producer)
+  }
+
+  @Timeout(value = 10, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testBatchSizeZeroNoPartitionNoRecordKey(quorum: String): Unit = {
+    val producer = createProducer(
+      lingerMs = Int.MaxValue,
+      deliveryTimeoutMs = Int.MaxValue,
+      batchSize = 0)
+    val numRecords = 10;
+    try {
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, 2, 2)
+      val futures = for (i <- 1 to numRecords) yield {
+        val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, null, s"value$i".getBytes(StandardCharsets.UTF_8))
+        producer.send(record)
+      }
+      val lastOffset = futures.foldLeft(0) { (offset, future) =>
+        val recordMetadata = future.get
+        assertEquals(topic, recordMetadata.topic)
+        offset + 1
+      }
+      assertEquals(numRecords, lastOffset)
+    } finally {
+      producer.close()
+    }
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
