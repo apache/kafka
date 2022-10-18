@@ -149,6 +149,7 @@ public class FileBasedStateStore implements QuorumStateStore {
             writer.write(jsonState.toString());
             writer.flush();
             fileOutputStream.getFD().sync();
+            fileOutputStream.close();
             Utils.atomicMoveWithFallback(temp.toPath(), stateFile.toPath());
         } catch (IOException e) {
             throw new UncheckedIOException(
