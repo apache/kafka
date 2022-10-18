@@ -95,7 +95,7 @@ class BrokerMetadataSnapshotterTest {
   def testCreateSnapshot(): Unit = {
     val writerBuilder = new MockSnapshotWriterBuilder()
     val snapshotter = new BrokerMetadataSnapshotter(0, Time.SYSTEM, None, writerBuilder)
-    
+
     try {
       val blockingEvent = new BlockingEvent()
       val reasons = Set(SnapshotReason.UNKNOWN_REASON)

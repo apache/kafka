@@ -21,17 +21,16 @@ import java.util.stream.StreamSupport;
 import org.apache.kafka.server.common.MetadataVersion;
 
 // TODO: Document this type
-// TODO: Write tests for this
 public final class SnapshotReason {
-    static public final SnapshotReason UNKNOWN_REASON = new SnapshotReason("unknown reason");
+    static public final SnapshotReason UNKNOWN = new SnapshotReason("unknown reason");
 
     static public SnapshotReason maxBytesExceeded(long bytes, long maxBytes) {
-        return new SnapshotReason(String.format("%s bytes exceeded the max bytes of %s", bytes, maxBytes));
+        return new SnapshotReason(String.format("%s bytes exceeded the maximum bytes of %s", bytes, maxBytes));
     }
 
     static public SnapshotReason maxIntervalExceeded(long interval, long maxInterval) {
         return new SnapshotReason(
-            String.format("%s ms exceeded the max snapshot interval of %s ms", interval, maxInterval)
+            String.format("%s ms exceeded the maximum snapshot interval of %s ms", interval, maxInterval)
         );
     }
 

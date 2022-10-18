@@ -1558,6 +1558,10 @@ public final class QuorumController implements Controller {
                 // Starting a snapshot invalidates any scheduled snapshot generation
                 cancelNextGenerateSnapshot();
             }
+        } else {
+            // TODO: Document why it is safe to skip snapshotting if there is a snapshot in progress.
+            // This has to do with the fact that the controller checks if a new snapshot is required after the current
+            // snapshot completes
         }
     }
 
@@ -2218,7 +2222,7 @@ public final class QuorumController implements Controller {
                     "Generating a snapshot that includes (epoch={}, offset={}) because, {}.",
                     lastCommittedEpoch,
                     lastCommittedOffset,
-                    SnapshotReason.UNKNOWN_REASON
+                    SnapshotReason.UNKNOWN
                 );
                 snapshotGeneratorManager.createSnapshotGenerator(
                     lastCommittedOffset,
