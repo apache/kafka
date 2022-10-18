@@ -1482,6 +1482,36 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldPauseAllTopicsWithoutStateUpdaterOnRebalanceComplete() {
+        final Set<TopicPartition> assigned = mkSet(t1p0, t1p1);
+        expect(consumer.assignment()).andReturn(assigned);
+        consumer.pause(assigned);
+        replay(consumer);
+
+        taskManager.handleRebalanceComplete();
+
+        verify(consumer);
+    }
+
+    @Test
+    public void shouldNotPauseReadyTasksWithStateUpdaterOnRebalanceComplete() {
+        final StreamTask statefulTask0 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.allTasks()).thenReturn(mkSet(statefulTask0));
+        final Set<TopicPartition> assigned = mkSet(t1p0, t1p1);
+        expect(consumer.assignment()).andReturn(assigned);
+        consumer.pause(mkSet(t1p1));
+        replay(consumer);
+
+        taskManager.handleRebalanceComplete();
+
+        verify(consumer);
+    }
+
+    @Test
     public void shouldReleaseLockForUnassignedTasksAfterRebalance() throws Exception {
         expectLockObtainedFor(taskId00, taskId01, taskId02);
         expectUnlockFor(taskId02);

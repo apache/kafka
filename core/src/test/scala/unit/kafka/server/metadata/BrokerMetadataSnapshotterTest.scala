@@ -98,7 +98,7 @@ class BrokerMetadataSnapshotterTest {
 
     try {
       val blockingEvent = new BlockingEvent()
-      val reasons = Set(SnapshotReason.UNKNOWN_REASON)
+      val reasons = Set(SnapshotReason.UNKNOWN)
 
       snapshotter.eventQueue.append(blockingEvent)
       assertTrue(snapshotter.maybeStartSnapshot(10000L, MetadataImageTest.IMAGE1, reasons))
