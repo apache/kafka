@@ -667,10 +667,8 @@ class DefaultStateUpdaterTest {
                 mkEntry(task1.id(), task1),
                 mkEntry(task2.id(), task2)
         );
-        final TaskCorruptedException taskCorruptedException =
-                new TaskCorruptedException(mkSet(task1.id()));
-        final ExceptionAndTasks expectedExceptionAndTasks =
-                new ExceptionAndTasks(mkSet(task1), taskCorruptedException);
+        final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(mkSet(task1.id()));
+        final ExceptionAndTasks expectedExceptionAndTasks = new ExceptionAndTasks(mkSet(task1), taskCorruptedException);
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
         doThrow(taskCorruptedException).doNothing().when(changelogReader).restore(updatingTasks);
 
