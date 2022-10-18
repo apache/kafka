@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.time.Duration;
 import java.util.Optional;
 
 /**
@@ -29,14 +28,6 @@ public interface EventHandler {
      * @return an Optional of {@link BackgroundEvent} if the value is present. Otherwise, an empty Optional.
      */
     Optional<BackgroundEvent> poll();
-
-    /**
-     * Retrieves and removes a {@link BackgroundEvent}, waiting up to the {@code
-     * timeout} for an event to become available;
-     * @return an Optional of {@link BackgroundEvent} if the value is present
-     * . Otherwise, an empty Optional.
-     */
-    Optional<BackgroundEvent> poll(Duration timeout);
 
     /**
      * Check whether there are pending {@code BackgroundEvent} await to be consumed.

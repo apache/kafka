@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -33,11 +32,9 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
 import java.net.InetSocketAddress;
-import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.TimeUnit;
 
 /**
  * An {@code EventHandler} that uses a single background thread to consume {@code ApplicationEvent} and produce
@@ -151,16 +148,6 @@ public class DefaultEventHandler implements EventHandler {
     }
 
     @Override
-    public Optional<BackgroundEvent> poll(Duration timeout) {
-        try {
-            return Optional.ofNullable(backgroundEventQueue.poll(timeout.toMillis(),
-                    TimeUnit.MILLISECONDS));
-        } catch (InterruptedException e) {
-            throw new InterruptException(e);
-        }
-    }
-
-    @Override
     public boolean isEmpty() {
         return backgroundEventQueue.isEmpty();
     }
@@ -168,10 +155,12 @@ public class DefaultEventHandler implements EventHandler {
     @Override
     public boolean add(ApplicationEvent event) {
         backgroundThread.wakeup();
-        boolean res = applicationEventQueue.add(event);
-        return res;
+        return applicationEventQueue.add(event);
     }
 
+    // bootstrap a metadata object with the bootstrap server IP address,
+    // which will be used once for the subsequent metadata refresh once the
+    // background thread has started up.
     private ConsumerMetadata bootstrapMetadata(
             LogContext logContext,
             ClusterResourceListeners clusterResourceListeners,

@@ -127,7 +127,7 @@ public class DefaultBackgroundThreadTest {
         runnable.runOnce();
 
         when(applicationEventsQueue.isEmpty()).thenReturn(false);
-        when(applicationEventsQueue.poll()).thenReturn(new NoopApplicationEvent("nothing"));
+        when(applicationEventsQueue.poll()).thenReturn(new NoopApplicationEvent(backgroundEventsQueue, "nothing"));
         InOrder inOrder = Mockito.inOrder(applicationEventsQueue, this.consumerClient);
         assertFalse(inOrder.verify(applicationEventsQueue).isEmpty());
         inOrder.verify(applicationEventsQueue).poll();

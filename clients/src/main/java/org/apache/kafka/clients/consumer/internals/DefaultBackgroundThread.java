@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -127,10 +126,11 @@ public class DefaultBackgroundThread extends KafkaThread {
             while (running) {
                 try {
                     runOnce();
-                } catch (WakeupException | InterruptException e) {
+                } catch (WakeupException e) {
                     log.debug("Exception thrown, background thread won't " +
                             "terminate", e);
-                    // swallow
+                    // swallow the wakeup exception to prevent killing the
+                    // background thread.
                 }
             }
         } catch (Throwable t) {
@@ -151,7 +151,9 @@ public class DefaultBackgroundThread extends KafkaThread {
      */
     void runOnce() {
         this.inflightEvent = maybePollEvent();
-        log.debug("processing application event: {}", this.inflightEvent);
+        if (this.inflightEvent.isPresent()) {
+            log.debug("processing application event: {}", this.inflightEvent);
+        }
         if (this.inflightEvent.isPresent() && maybeConsumeInflightEvent(this.inflightEvent.get())) {
             // clear inflight event upon successful consumption
             this.inflightEvent = Optional.empty();
@@ -188,15 +190,7 @@ public class DefaultBackgroundThread extends KafkaThread {
      */
     private boolean maybeConsumeInflightEvent(ApplicationEvent event) {
         log.debug("try consuming event: {}", Optional.ofNullable(event));
-        switch (event.type) {
-            case NOOP:
-                process((NoopApplicationEvent) event);
-                return true;
-            default:
-                inflightEvent = Optional.empty();
-                log.warn("unsupported event type: {}", event.type);
-                return true;
-        }
+        return event.process();
     }
 
     /**
@@ -218,9 +212,9 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     public void close() {
-        this.wakeup();
         this.running = false;
+        this.wakeup();
         Utils.closeQuietly(networkClient, "consumer network client");
-        Utils.closeQuietly(metadata, "consumer network client");
+        Utils.closeQuietly(metadata, "consumer metadata client");
     }
 }

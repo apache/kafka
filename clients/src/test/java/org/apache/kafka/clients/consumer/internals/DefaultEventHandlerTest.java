@@ -74,7 +74,8 @@ public class DefaultEventHandlerTest {
                 consumerClient);
         assertTrue(client.active());
         assertTrue(handler.isEmpty());
-        handler.add(new NoopApplicationEvent("testBasicPollAndAddWithNoopEvent"));
+        handler.add(new NoopApplicationEvent(bq,
+                "testBasicPollAndAddWithNoopEvent"));
         while (handler.isEmpty()) {
             time.sleep(100);
         }

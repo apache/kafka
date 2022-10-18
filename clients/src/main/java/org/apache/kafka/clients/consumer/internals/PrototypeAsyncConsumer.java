@@ -124,7 +124,11 @@ public abstract class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         CompletableFuture<Void> commitFuture = new CompletableFuture<>();
 
         public CommitApplicationEvent() {
-            super(EventType.NOOP);
+        }
+
+        @Override
+        public boolean process() {
+            return true;
         }
     }
 }
