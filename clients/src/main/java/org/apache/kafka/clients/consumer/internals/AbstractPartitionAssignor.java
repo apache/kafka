@@ -30,8 +30,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
-
 /**
  * Abstract assignor implementation which does some common grunt work (in particular collecting
  * partition counts which are always needed in assignors).
@@ -48,53 +46,6 @@ public abstract class AbstractPartitionAssignor implements ConsumerPartitionAssi
      */
     public abstract Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                              Map<String, Subscription> subscriptions);
-
-    /**
-     * validate that ownedPartitions do not have overlaps partitions
-     *
-     * @param subscriptions Map from the member id to their respective topic subscription
-     * @throws IllegalArgumentException when finding multiple consumers claiming the same topic partition
-     */
-    public void validateSubscription(Map<String, Subscription> subscriptions) {
-        int maxGeneration = DEFAULT_GENERATION;
-        // keep track of all previously owned partitions so we can invalidate them if invalid input is
-        // detected, eg two consumers somehow claiming the same partition in the same/current generation
-        Map<TopicPartition, String> allPreviousPartitionsToOwner = new HashMap<>();
-
-        for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
-            String consumer = subscriptionEntry.getKey();
-            Subscription subscription = subscriptionEntry.getValue();
-
-            if (subscription.ownedPartitions().isEmpty() || subscription.generationId() == DEFAULT_GENERATION) {
-                // Only validate ConsumerProtocolSubscription v2 or higher metadata
-                continue;
-            }
-
-            Optional<Integer> generation = Optional.of(subscription.generationId());
-            List<TopicPartition> ownedPartitionsInMetadata = subscription.ownedPartitions();
-
-            // Only consider this consumer's owned partitions as valid if it is a member of the current highest
-            // generation, or it's generation is not present but we have not seen any known generation so far
-            if (generation.isPresent() && generation.get() >= maxGeneration
-                || !generation.isPresent() && maxGeneration == DEFAULT_GENERATION) {
-
-                // If the current member's generation is higher, all the previously owned partitions are invalid
-                if (generation.isPresent() && generation.get() > maxGeneration) {
-                    allPreviousPartitionsToOwner.clear();
-                    maxGeneration = generation.get();
-                }
-                for (final TopicPartition tp : ownedPartitionsInMetadata) {
-                    String otherConsumer = allPreviousPartitionsToOwner.put(tp, consumer);
-                    if (otherConsumer != null) {
-                        log.error("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
-                                + "same generation {}, this will be invalidated and removed from their previous assignment.",
-                            consumer, otherConsumer, tp, maxGeneration);
-                        throw new IllegalStateException("Found multiple consumers claiming the same topic partitions");
-                    }
-                }
-            }
-        }
-    }
 
     @Override
     public GroupAssignment assign(Cluster metadata, GroupSubscription groupSubscription) {

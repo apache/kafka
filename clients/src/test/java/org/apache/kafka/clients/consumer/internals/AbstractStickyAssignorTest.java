@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -23,9 +24,12 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -55,6 +59,10 @@ public abstract class AbstractStickyAssignorTest {
     protected String topic1 = "topic1";
     protected String topic2 = "topic2";
     protected String topic3 = "topic3";
+    protected TopicPartition tp0 = tp(topic, 0);
+    protected TopicPartition tp1 = tp(topic, 1);
+    protected TopicPartition tp2 = tp(topic, 2);
+    protected String groupId = "group";
 
     protected abstract AbstractStickyAssignor createAssignor();
 
@@ -136,6 +144,44 @@ public abstract class AbstractStickyAssignorTest {
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
+    }
+
+    @Test
+    public void testAssignorShouldHonorSubscriptionOwnedPartitionAndGeneration() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 3);
+
+        subscriptions.put(consumer1, new Subscription(topics(topic), null, Collections.singletonList(tp0), 1));
+        subscriptions.put(consumer2, new Subscription(topics(topic), null, Collections.singletonList(tp2), 1));
+        subscriptions.put(consumer3, new Subscription(topics(topic), null, Collections.singletonList(tp1), 1));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(partitions(tp0), assignment.get(consumer1));
+        assertEquals(partitions(tp2), assignment.get(consumer2));
+        assertEquals(partitions(tp1), assignment.get(consumer3));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
+    }
+
+    @Test
+    public void testAssignorShouldTakeSubscriptionOwnedPartitionAndGenerationOverUserdata() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 3);
+        int higherGenerationId = 2;
+        int lowerGenerationId = 1;
+
+        assignor.onAssignment(new ConsumerPartitionAssignor.Assignment(partitions(tp0, tp1, tp2)), new ConsumerGroupMetadata(groupId, higherGenerationId, consumer1, Optional.empty()));
+        ByteBuffer userDataWithHigherGenerationId = assignor.subscriptionUserData(new HashSet<>(topics(topic)));
+
+        subscriptions.put(consumer1, new Subscription(topics(topic), userDataWithHigherGenerationId, Collections.singletonList(tp0), lowerGenerationId));
+        subscriptions.put(consumer2, new Subscription(topics(topic), userDataWithHigherGenerationId, Collections.singletonList(tp2), lowerGenerationId));
+        subscriptions.put(consumer3, new Subscription(topics(topic), userDataWithHigherGenerationId, Collections.singletonList(tp1), lowerGenerationId));
+
+        // assignor should honor subscription owned partitions and generation instead of the one in user data
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(partitions(tp0), assignment.get(consumer1));
+        assertEquals(partitions(tp2), assignment.get(consumer2));
+        assertEquals(partitions(tp1), assignment.get(consumer3));
+        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
     }
 
     @Test

@@ -73,8 +73,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                                     Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> consumerToOwnedPartitions = new HashMap<>();
         Set<TopicPartition> partitionsWithMultiplePreviousOwners = new HashSet<>();
-        if (validateSubscriptionAndCheckSubscriptionsEqual(
-            partitionsPerTopic.keySet(), subscriptions, consumerToOwnedPartitions, partitionsWithMultiplePreviousOwners)) {
+        if (allSubscriptionsEqual(partitionsPerTopic.keySet(), subscriptions, consumerToOwnedPartitions, partitionsWithMultiplePreviousOwners)) {
             log.debug("Detected that all consumers were subscribed to same set of topics, invoking the "
                           + "optimized assignment algorithm");
             partitionsTransferringOwnership = new HashMap<>();
@@ -89,14 +88,14 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     }
 
     /**
-     * Returns true iff all consumers have an identical subscription. Also validate the subscription and fills out the passed in
+     * Returns true iff all consumers have an identical subscription. Also fills out the passed in
      * {@code consumerToOwnedPartitions} with each consumer's previously owned and still-subscribed partitions,
      * and the {@code partitionsWithMultiplePreviousOwners} with any partitions claimed by multiple previous owners
      */
-    private boolean validateSubscriptionAndCheckSubscriptionsEqual(Set<String> allTopics,
-                                                                   Map<String, Subscription> subscriptions,
-                                                                   Map<String, List<TopicPartition>> consumerToOwnedPartitions,
-                                                                   Set<TopicPartition> partitionsWithMultiplePreviousOwners) {
+    private boolean allSubscriptionsEqual(Set<String> allTopics,
+                                          Map<String, Subscription> subscriptions,
+                                          Map<String, List<TopicPartition>> consumerToOwnedPartitions,
+                                          Set<TopicPartition> partitionsWithMultiplePreviousOwners) {
         Set<String> membersOfCurrentHighestGeneration = new HashSet<>();
         boolean isAllSubscriptionsEqual = true;
 
@@ -160,7 +159,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                             // this partition is not owned by other consumer in the same generation
                             ownedPartitions.add(tp);
                         } else {
-                            // don't throw exception since we'll handle the situation by ourselves
                             log.error("Found multiple consumers {} and {} claiming the same TopicPartition {} in the "
                                 + "same generation {}, this will be invalidated and removed from their previous assignment.",
                                      consumer, otherConsumer, tp, maxGeneration);

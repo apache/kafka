@@ -26,6 +26,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -59,6 +60,26 @@ public class StickyAssignorTest extends AbstractStickyAssignorTest {
     public Subscription buildSubscriptionWithGeneration(List<String> topics, List<TopicPartition> partitions, int generation) {
         return new Subscription(topics,
                                 serializeTopicPartitionAssignment(new MemberData(partitions, Optional.of(generation))));
+    }
+
+    @Test
+    public void testStickyAssignorHonorSubscriptionUserdataIfNoGenerationIdInField() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 2);
+        int higherGenerationId = 2;
+        int lowerGenerationId = 1;
+
+        assignor.onAssignment(new ConsumerPartitionAssignor.Assignment(partitions(tp1)), new ConsumerGroupMetadata(groupId, higherGenerationId, consumer1, Optional.empty()));
+        ByteBuffer userDataWithHigherGenerationId = assignor.subscriptionUserData(new HashSet<>(topics(topic)));
+
+        // subscription provides no generation id in stickyAssignor, so we'll honor the generation id and owned partitions in userData,
+        // and get rid of the owned partition for consumer2 due to lower generation id
+        subscriptions.put(consumer1, new Subscription(topics(topic), userDataWithHigherGenerationId, Collections.singletonList(tp0)));
+        subscriptions.put(consumer2, new Subscription(topics(topic), null, Collections.singletonList(tp1), lowerGenerationId));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(partitions(tp1), assignment.get(consumer1));
+        assertEquals(partitions(tp0), assignment.get(consumer2));
     }
 
     @Test
