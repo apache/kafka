@@ -27,9 +27,9 @@ public class NoopApplicationEvent extends ApplicationEvent {
     public final String message;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
 
-    public NoopApplicationEvent(
-            BlockingQueue<BackgroundEvent> backgroundEventQueue,
-            String message) {
+    public NoopApplicationEvent(final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                final String message) {
+
         this.message = message;
         this.backgroundEventQueue = backgroundEventQueue;
     }

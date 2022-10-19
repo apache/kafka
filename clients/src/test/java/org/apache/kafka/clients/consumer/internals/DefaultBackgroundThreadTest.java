@@ -67,10 +67,8 @@ public class DefaultBackgroundThreadTest {
         this.context = new LogContext();
         this.consumerClient = mock(ConsumerNetworkClient.class);
         this.metrics = mock(Metrics.class);
-        this.applicationEventsQueue =
-                (BlockingQueue<ApplicationEvent>) mock(BlockingQueue.class);
-        this.backgroundEventsQueue =
-                (BlockingQueue<BackgroundEvent>) mock(BlockingQueue.class);
+        this.applicationEventsQueue = (BlockingQueue<ApplicationEvent>) mock(BlockingQueue.class);
+        this.backgroundEventsQueue = (BlockingQueue<BackgroundEvent>) mock(BlockingQueue.class);
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(RETRY_BACKOFF_MS_CONFIG, REFRESH_BACK_OFF_MS);
@@ -78,11 +76,18 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     public void testStartupAndTearDown() throws InterruptedException {
-        MockClient client = new MockClient(time, metadata);
-        this.consumerClient = new ConsumerNetworkClient(context, client, metadata, time,
-                100, 1000, 100);
+        final MockClient client = new MockClient(time, metadata);
+        this.consumerClient = new ConsumerNetworkClient(
+            context,
+            client,
+            metadata,
+            time,
+            100,
+            1000,
+            100
+        );
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
-        DefaultBackgroundThread backgroundThread = setupMockHandler();
+        final DefaultBackgroundThread backgroundThread = setupMockHandler();
         backgroundThread.start();
         assertTrue(client.active());
         backgroundThread.close();
@@ -91,11 +96,18 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     public void testInterruption() throws InterruptedException {
-        MockClient client = new MockClient(time, metadata);
-        this.consumerClient = new ConsumerNetworkClient(context, client, metadata, time,
-                100, 1000, 100);
+        final MockClient client = new MockClient(time, metadata);
+        this.consumerClient = new ConsumerNetworkClient(
+            context,
+            client,
+            metadata,
+            time,
+            100,
+            1000,
+            100
+        );
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
-        DefaultBackgroundThread backgroundThread = setupMockHandler();
+        final DefaultBackgroundThread backgroundThread = setupMockHandler();
         backgroundThread.start();
         assertTrue(client.active());
         backgroundThread.close();
@@ -105,16 +117,23 @@ public class DefaultBackgroundThreadTest {
     @Test
     void testWakeup() {
         this.time = new MockTime(0);
-        MockClient client = new MockClient(time, metadata);
-        this.consumerClient = new ConsumerNetworkClient(context, client, metadata, time,
-                100, 1000, 100);
+        final MockClient client = new MockClient(time, metadata);
+        this.consumerClient = new ConsumerNetworkClient(
+            context,
+            client,
+            metadata,
+            time,
+            100,
+            1000,
+            100
+        );
         when(applicationEventsQueue.isEmpty()).thenReturn(true);
         when(applicationEventsQueue.isEmpty()).thenReturn(true);
-        DefaultBackgroundThread runnable = setupMockHandler();
+        final DefaultBackgroundThread runnable = setupMockHandler();
         client.poll(0, time.milliseconds());
         runnable.wakeup();
 
-        assertThrows(WakeupException.class, () -> runnable.runOnce());
+        assertThrows(WakeupException.class, runnable::runOnce);
         runnable.close();
     }
 
@@ -123,12 +142,13 @@ public class DefaultBackgroundThreadTest {
         // ensure network poll and application queue poll will happen in a
         // single iteration
         this.time = new MockTime(100);
-        DefaultBackgroundThread runnable = setupMockHandler();
+        final DefaultBackgroundThread runnable = setupMockHandler();
         runnable.runOnce();
 
         when(applicationEventsQueue.isEmpty()).thenReturn(false);
-        when(applicationEventsQueue.poll()).thenReturn(new NoopApplicationEvent(backgroundEventsQueue, "nothing"));
-        InOrder inOrder = Mockito.inOrder(applicationEventsQueue, this.consumerClient);
+        when(applicationEventsQueue.poll())
+            .thenReturn(new NoopApplicationEvent(backgroundEventsQueue, "nothing"));
+        final InOrder inOrder = Mockito.inOrder(applicationEventsQueue, this.consumerClient);
         assertFalse(inOrder.verify(applicationEventsQueue).isEmpty());
         inOrder.verify(applicationEventsQueue).poll();
         inOrder.verify(this.consumerClient).poll(any(Timer.class));
@@ -137,14 +157,15 @@ public class DefaultBackgroundThreadTest {
 
     private DefaultBackgroundThread setupMockHandler() {
         return new DefaultBackgroundThread(
-                this.time,
-                new ConsumerConfig(properties),
-                new LogContext(),
-                applicationEventsQueue,
-                backgroundEventsQueue,
-                this.subscriptions,
-                this.metadata,
-                this.consumerClient,
-                this.metrics);
+            this.time,
+            new ConsumerConfig(properties),
+            new LogContext(),
+            applicationEventsQueue,
+            backgroundEventsQueue,
+            this.subscriptions,
+            this.metadata,
+            this.consumerClient,
+            this.metrics
+        );
     }
 }

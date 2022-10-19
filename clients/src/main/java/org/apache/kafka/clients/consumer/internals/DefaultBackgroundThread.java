@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
@@ -38,13 +39,13 @@ import java.util.concurrent.atomic.AtomicReference;
  * Background thread runnable that consumes {@code ApplicationEvent} and
  * produces {@code BackgroundEvent}. It uses an event loop to consume and
  * produce events, and poll the network client to handle network IO.
- *
+ * <p>
  * It holds a reference to the {@link SubscriptionState}, which is
  * initialized by the polling thread.
  */
 public class DefaultBackgroundThread extends KafkaThread {
     private static final String BACKGROUND_THREAD_NAME =
-            "consumer_background_thread";
+        "consumer_background_thread";
     private final Time time;
     private final Logger log;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
@@ -61,36 +62,38 @@ public class DefaultBackgroundThread extends KafkaThread {
     private boolean running;
     private Optional<ApplicationEvent> inflightEvent = Optional.empty();
     private final AtomicReference<Optional<RuntimeException>> exception =
-            new AtomicReference<>(Optional.empty());
+        new AtomicReference<>(Optional.empty());
 
-    public DefaultBackgroundThread(ConsumerConfig config,
-                                   LogContext logContext,
-                                   BlockingQueue<ApplicationEvent> applicationEventQueue,
-                                   BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                   SubscriptionState subscriptions,
-                                   ConsumerMetadata metadata,
-                                   ConsumerNetworkClient networkClient,
-                                   Metrics metrics) {
-        this(Time.SYSTEM,
-                config,
-                logContext,
-                applicationEventQueue,
-                backgroundEventQueue,
-                subscriptions,
-                metadata,
-                networkClient,
-                metrics);
+    public DefaultBackgroundThread(final ConsumerConfig config,
+                                   final LogContext logContext,
+                                   final BlockingQueue<ApplicationEvent> applicationEventQueue,
+                                   final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                   final SubscriptionState subscriptions,
+                                   final ConsumerMetadata metadata,
+                                   final ConsumerNetworkClient networkClient,
+                                   final Metrics metrics) {
+        this(
+            Time.SYSTEM,
+            config,
+            logContext,
+            applicationEventQueue,
+            backgroundEventQueue,
+            subscriptions,
+            metadata,
+            networkClient,
+            metrics
+        );
     }
 
-    public DefaultBackgroundThread(Time time,
-                                   ConsumerConfig config,
-                                   LogContext logContext,
-                                   BlockingQueue<ApplicationEvent> applicationEventQueue,
-                                   BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                   SubscriptionState subscriptions,
-                                   ConsumerMetadata metadata,
-                                   ConsumerNetworkClient networkClient,
-                                   Metrics metrics) {
+    public DefaultBackgroundThread(final Time time,
+                                   final ConsumerConfig config,
+                                   final LogContext logContext,
+                                   final BlockingQueue<ApplicationEvent> applicationEventQueue,
+                                   final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                   final SubscriptionState subscriptions,
+                                   final ConsumerMetadata metadata,
+                                   final ConsumerNetworkClient networkClient,
+                                   final Metrics metrics) {
         super(BACKGROUND_THREAD_NAME, true);
         try {
             this.time = time;
@@ -106,7 +109,7 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.networkClient = networkClient;
             this.metrics = metrics;
             this.running = true;
-        } catch (Exception e) {
+        } catch (final Exception e) {
             // now propagate the exception
             close();
             throw new KafkaException("Failed to construct background processor", e);
@@ -126,16 +129,20 @@ public class DefaultBackgroundThread extends KafkaThread {
             while (running) {
                 try {
                     runOnce();
-                } catch (WakeupException e) {
-                    log.debug("Exception thrown, background thread won't " +
-                            "terminate", e);
+                } catch (final WakeupException e) {
+                    log.debug(
+                        "Exception thrown, background thread won't terminate",
+                        e
+                    );
                     // swallow the wakeup exception to prevent killing the
                     // background thread.
                 }
             }
-        } catch (Throwable t) {
-            log.error("The background thread failed due to unexpected error",
-                    t);
+        } catch (final Throwable t) {
+            log.error(
+                "The background thread failed due to unexpected error",
+                t
+            );
             if (t instanceof RuntimeException)
                 this.exception.set(Optional.of((RuntimeException) t));
             else
@@ -171,7 +178,7 @@ public class DefaultBackgroundThread extends KafkaThread {
         networkClient.poll(time.timer(timeToNextHeartbeatMs(time.milliseconds())));
     }
 
-    private long timeToNextHeartbeatMs(long nowMs) {
+    private long timeToNextHeartbeatMs(final long nowMs) {
         // TODO: implemented when heartbeat is added to the impl
         return 100;
     }
@@ -185,11 +192,13 @@ public class DefaultBackgroundThread extends KafkaThread {
 
     /**
      * ApplicationEvent are consumed here.
+     *
      * @param event an {@link ApplicationEvent}
      * @return true when successfully consumed the event.
      */
-    private boolean maybeConsumeInflightEvent(ApplicationEvent event) {
+    private boolean maybeConsumeInflightEvent(final ApplicationEvent event) {
         log.debug("try consuming event: {}", Optional.ofNullable(event));
+        Objects.requireNonNull(event);
         return event.process();
     }
 
@@ -197,9 +206,10 @@ public class DefaultBackgroundThread extends KafkaThread {
      * Processes {@link NoopApplicationEvent} and equeue a
      * {@link NoopBackgroundEvent}. This is intentionally left here for
      * demonstration purpose.
+     *
      * @param event a {@link NoopApplicationEvent}
      */
-    private void process(NoopApplicationEvent event) {
+    private void process(final NoopApplicationEvent event) {
         backgroundEventQueue.add(new NoopBackgroundEvent(event.message));
     }
 

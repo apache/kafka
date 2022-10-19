@@ -31,6 +31,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -54,39 +55,62 @@ public class DefaultEventHandlerTest {
     @Test
     @Timeout(1)
     public void testBasicPollAndAddWithNoopEvent() {
-        Time time = new MockTime(1);
-        LogContext logContext = new LogContext();
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
-        ConsumerMetadata metadata = newConsumerMetadata(false, subscriptions);
-        MockClient client = new MockClient(time, metadata);
-        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time,
-                100, 1000, 100);
-        BlockingQueue<ApplicationEvent> aq = new LinkedBlockingQueue<>();
-        BlockingQueue<BackgroundEvent> bq = new LinkedBlockingQueue<>();
-        DefaultEventHandler handler = new DefaultEventHandler(
-                time,
-                new ConsumerConfig(properties),
-                logContext,
-                aq,
-                bq,
-                subscriptions,
-                metadata,
-                consumerClient);
+        final Time time = new MockTime(1);
+        final LogContext logContext = new LogContext();
+        final SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        final ConsumerMetadata metadata = newConsumerMetadata(false, subscriptions);
+        final MockClient client = new MockClient(time, metadata);
+        final ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(
+            logContext,
+            client,
+            metadata,
+            time,
+            100,
+            1000,
+            100
+        );
+        final BlockingQueue<ApplicationEvent> aq = new LinkedBlockingQueue<>();
+        final BlockingQueue<BackgroundEvent> bq = new LinkedBlockingQueue<>();
+        final DefaultEventHandler handler = new DefaultEventHandler(
+            time,
+            new ConsumerConfig(properties),
+            logContext,
+            aq,
+            bq,
+            subscriptions,
+            metadata,
+            consumerClient
+        );
         assertTrue(client.active());
         assertTrue(handler.isEmpty());
-        handler.add(new NoopApplicationEvent(bq,
-                "testBasicPollAndAddWithNoopEvent"));
+        handler.add(
+            new NoopApplicationEvent(
+                bq,
+                "testBasicPollAndAddWithNoopEvent"
+            )
+        );
         while (handler.isEmpty()) {
             time.sleep(100);
         }
-        assertTrue(handler.poll().get() instanceof NoopBackgroundEvent);
+        final Optional<BackgroundEvent> poll = handler.poll();
+        assertTrue(poll.isPresent());
+        assertTrue(poll.get() instanceof NoopBackgroundEvent);
+
         assertFalse(client.hasInFlightRequests()); // noop does not send network request
     }
 
-    private static ConsumerMetadata newConsumerMetadata(boolean includeInternalTopics, SubscriptionState subscriptions) {
-        long refreshBackoffMs = 50;
-        long expireMs = 50000;
-        return new ConsumerMetadata(refreshBackoffMs, expireMs, includeInternalTopics, false,
-                subscriptions, new LogContext(), new ClusterResourceListeners());
+    private static ConsumerMetadata newConsumerMetadata(final boolean includeInternalTopics,
+                                                        final SubscriptionState subscriptions) {
+        final long refreshBackoffMs = 50;
+        final long expireMs = 50000;
+        return new ConsumerMetadata(
+            refreshBackoffMs,
+            expireMs,
+            includeInternalTopics,
+            false,
+            subscriptions,
+            new LogContext(),
+            new ClusterResourceListeners()
+        );
     }
 }
