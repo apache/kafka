@@ -92,14 +92,14 @@ public class MockLog implements ReplicatedLog {
     public boolean truncateToLatestSnapshot() {
         AtomicBoolean truncated = new AtomicBoolean(false);
         latestSnapshotId().ifPresent(snapshotId -> {
-            if (snapshotId.epoch > logLastFetchedEpoch().orElse(0) ||
-                (snapshotId.epoch == logLastFetchedEpoch().orElse(0) &&
-                 snapshotId.offset > endOffset().offset)) {
+            if (snapshotId.epoch() > logLastFetchedEpoch().orElse(0) ||
+                (snapshotId.epoch() == logLastFetchedEpoch().orElse(0) &&
+                 snapshotId.offset() > endOffset().offset)) {
 
                 batches.clear();
                 epochStartOffsets.clear();
                 snapshots.headMap(snapshotId, false).clear();
-                updateHighWatermark(new LogOffsetMetadata(snapshotId.offset));
+                updateHighWatermark(new LogOffsetMetadata(snapshotId.offset()));
                 flush(false);
 
                 truncated.set(true);
@@ -188,7 +188,7 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public int lastFetchedEpoch() {
-        return logLastFetchedEpoch().orElseGet(() -> latestSnapshotId().map(id -> id.epoch).orElse(0));
+        return logLastFetchedEpoch().orElseGet(() -> latestSnapshotId().map(OffsetAndEpoch::epoch).orElse(0));
     }
 
     @Override
@@ -201,7 +201,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     private OffsetAndEpoch lastOffsetAndEpochFiltered(Predicate<EpochStartOffset> predicate) {
-        int epochLowerBound = earliestSnapshotId().map(id -> id.epoch).orElse(0);
+        int epochLowerBound = earliestSnapshotId().map(OffsetAndEpoch::epoch).orElse(0);
         for (EpochStartOffset epochStartOffset : epochStartOffsets) {
             if (!predicate.test(epochStartOffset)) {
                 return new OffsetAndEpoch(epochStartOffset.startOffset, epochLowerBound);
@@ -230,7 +230,7 @@ public class MockLog implements ReplicatedLog {
             .map(entry -> entry.offset + 1)
             .orElse(
                 latestSnapshotId()
-                    .map(id -> id.offset)
+                    .map(OffsetAndEpoch::offset)
                     .orElse(0L)
             );
         return new LogOffsetMetadata(nextOffset, Optional.of(new MockOffsetMetadata(nextId)));
@@ -242,7 +242,7 @@ public class MockLog implements ReplicatedLog {
             .map(entry -> entry.offset)
             .orElse(
                 earliestSnapshotId()
-                    .map(id -> id.offset)
+                    .map(OffsetAndEpoch::offset)
                     .orElse(0L)
             );
     }
@@ -436,7 +436,7 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public Optional<RawSnapshotWriter> createNewSnapshot(OffsetAndEpoch snapshotId) {
-        if (snapshotId.offset < startOffset()) {
+        if (snapshotId.offset() < startOffset()) {
             logger.info(
                 "Cannot create a snapshot with an id ({}) less than the log start offset ({})",
                 snapshotId,
@@ -447,7 +447,7 @@ public class MockLog implements ReplicatedLog {
         }
 
         long highWatermarkOffset = highWatermark().offset;
-        if (snapshotId.offset > highWatermarkOffset) {
+        if (snapshotId.offset() > highWatermarkOffset) {
             throw new IllegalArgumentException(
                 String.format(
                     "Cannot create a snapshot with an id (%s) greater than the high-watermark (%s)",
@@ -457,7 +457,7 @@ public class MockLog implements ReplicatedLog {
             );
         }
 
-        ValidOffsetAndEpoch validOffsetAndEpoch = validateOffsetAndEpoch(snapshotId.offset, snapshotId.epoch);
+        ValidOffsetAndEpoch validOffsetAndEpoch = validateOffsetAndEpoch(snapshotId.offset(), snapshotId.epoch());
         if (validOffsetAndEpoch.kind() != ValidOffsetAndEpoch.Kind.VALID) {
             throw new IllegalArgumentException(
                 String.format(
@@ -511,7 +511,7 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public boolean deleteBeforeSnapshot(OffsetAndEpoch snapshotId) {
-        if (startOffset() > snapshotId.offset) {
+        if (startOffset() > snapshotId.offset()) {
             throw new OffsetOutOfRangeException(
                 String.format(
                     "New log start (%s) is less than the curent log start offset (%s)",
@@ -520,7 +520,7 @@ public class MockLog implements ReplicatedLog {
                 )
             );
         }
-        if (highWatermark.offset < snapshotId.offset) {
+        if (highWatermark.offset < snapshotId.offset()) {
             throw new OffsetOutOfRangeException(
                 String.format(
                     "New log start (%s) is greater than the high watermark (%s)",
@@ -534,11 +534,11 @@ public class MockLog implements ReplicatedLog {
         if (snapshots.containsKey(snapshotId)) {
             snapshots.headMap(snapshotId, false).clear();
 
-            batches.removeIf(entry -> entry.lastOffset() < snapshotId.offset);
+            batches.removeIf(entry -> entry.lastOffset() < snapshotId.offset());
 
             AtomicReference<Optional<EpochStartOffset>> last = new AtomicReference<>(Optional.empty());
             epochStartOffsets.removeIf(epochStartOffset -> {
-                if (epochStartOffset.startOffset <= snapshotId.offset) {
+                if (epochStartOffset.startOffset <= snapshotId.offset()) {
                     last.set(Optional.of(epochStartOffset));
                     return true;
                 }
@@ -549,7 +549,7 @@ public class MockLog implements ReplicatedLog {
             last.get().ifPresent(epochStartOffset -> {
                 epochStartOffsets.add(
                     0,
-                    new EpochStartOffset(epochStartOffset.epoch, snapshotId.offset)
+                    new EpochStartOffset(epochStartOffset.epoch, snapshotId.offset())
                 );
             });
 

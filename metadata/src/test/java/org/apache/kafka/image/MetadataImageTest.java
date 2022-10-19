@@ -91,8 +91,8 @@ public class MetadataImageTest {
         image.write(writer, new ImageWriterOptions.Builder().build());
         MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
         RecordTestUtils.replayAll(delta,
-                image.highestOffsetAndEpoch().offset,
-                image.highestOffsetAndEpoch().epoch,
+                image.highestOffsetAndEpoch().offset(),
+                image.highestOffsetAndEpoch().epoch(),
                 writer.records());
         MetadataImage nextImage = delta.apply();
         assertEquals(image, nextImage);
