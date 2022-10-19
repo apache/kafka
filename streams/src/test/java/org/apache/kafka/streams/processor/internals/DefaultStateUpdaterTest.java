@@ -658,6 +658,27 @@ class DefaultStateUpdaterTest {
         orderVerifier.verify(changelogReader, atLeast(1)).enforceRestoreActive();
         orderVerifier.verify(changelogReader).transitToUpdateStandby();
     }
+    
+    @Test
+    public void shouldNotTransitToStandbyAgainAfterStandbyTaskFailed() throws Exception {
+        final StandbyTask task1 = standbyTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        final StandbyTask task2 = standbyTask(TASK_1_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
+        final Map<TaskId, Task> updatingTasks = mkMap(
+                mkEntry(task1.id(), task1),
+                mkEntry(task2.id(), task2)
+        );
+        final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(mkSet(task1.id()));
+        final ExceptionAndTasks expectedExceptionAndTasks = new ExceptionAndTasks(mkSet(task1), taskCorruptedException);
+        when(changelogReader.allChangelogsCompleted()).thenReturn(false);
+        doThrow(taskCorruptedException).doNothing().when(changelogReader).restore(updatingTasks);
+
+        stateUpdater.start();
+        stateUpdater.add(task1);
+        stateUpdater.add(task2);
+
+        verifyExceptionsAndFailedTasks(expectedExceptionAndTasks);
+        verify(changelogReader, times(1)).transitToUpdateStandby();
+    }
 
     @Test
     public void shouldUpdateStandbyTaskAfterAllActiveStatefulTasksRemoved() throws Exception {
@@ -859,6 +880,22 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks(task2);
         verifyExceptionsAndFailedTasks();
         verify(changelogReader, times(1)).enforceRestoreActive();
+        verify(changelogReader, times(1)).transitToUpdateStandby();
+    }
+
+    @Test
+    public void shouldPauseStandbyTaskAndNotTransitToUpdateStandbyAgain() throws Exception {
+        final StandbyTask task1 = standbyTask(TASK_A_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        final StandbyTask task2 = standbyTask(TASK_B_0_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
+
+        stateUpdater.start();
+        stateUpdater.add(task1);
+        stateUpdater.add(task2);
+        verifyUpdatingTasks(task1, task2);
+
+        when(topologyMetadata.isPaused("A")).thenReturn(true);
+
+        verifyPausedTasks(task1);
         verify(changelogReader, times(1)).transitToUpdateStandby();
     }
 
