@@ -196,8 +196,8 @@ public final class RaftClientTestContext {
         }
 
         Builder deleteBeforeSnapshot(OffsetAndEpoch snapshotId) throws IOException {
-            if (snapshotId.offset > log.highWatermark().offset) {
-                log.updateHighWatermark(new LogOffsetMetadata(snapshotId.offset));
+            if (snapshotId.offset() > log.highWatermark().offset) {
+                log.updateHighWatermark(new LogOffsetMetadata(snapshotId.offset()));
             }
             log.deleteBeforeSnapshot(snapshotId);
 

@@ -53,7 +53,7 @@ public final class Snapshots {
     }
 
     static String filenameFromSnapshotId(OffsetAndEpoch snapshotId) {
-        return String.format("%s-%s", OFFSET_FORMATTER.format(snapshotId.offset), EPOCH_FORMATTER.format(snapshotId.epoch));
+        return String.format("%s-%s", OFFSET_FORMATTER.format(snapshotId.offset()), EPOCH_FORMATTER.format(snapshotId.epoch()));
     }
 
     static Path moveRename(Path source, OffsetAndEpoch snapshotId) {
