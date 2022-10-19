@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.HashSet;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.FixedOrderMap;
@@ -220,6 +221,32 @@ public class ProcessorStateManager implements StateManager {
             }
             log.trace("Registered state store {}", store.name());
         }
+        checkMixedTxnStores();
+    }
+
+    private void checkMixedTxnStores() {
+        final Set<String> nonTxnStores = new HashSet<>();
+        final Set<String> txnStores = new HashSet<>();
+        final Collection<StateStore> stateStores = stores
+            .values()
+            .stream()
+            .map(sm -> sm.stateStore)
+            .collect(Collectors.toList());
+        for (final StateStore store : stateStores) {
+            if (store.transactional()) {
+                txnStores.add(store.name());
+            } else {
+                nonTxnStores.add(store.name());
+            }
+        }
+        if (!nonTxnStores.isEmpty() && !txnStores.isEmpty()) {
+            log.warn("Some state stores are transactional while others are not for task {}. "
+                    + "Mixing transactional and non-transactional state stores will lead to wiping all "
+                    + "task's data in the case of data corruption, even for transactional state stores. "
+                    + "It is recommended to configure all state stores for a task with the same transactionality. "
+                    + "Transactional state stores: {}. Non-transactional state stores: {}",
+                taskId, txnStores, nonTxnStores);
+        }
     }
 
     void registerGlobalStateStores(final List<StateStore> stateStores) {
@@ -360,6 +387,7 @@ public class ProcessorStateManager implements StateManager {
         }
 
         log.debug("Registered state store {} to its state manager", storeName);
+        checkMixedTxnStores();
     }
 
     @Override

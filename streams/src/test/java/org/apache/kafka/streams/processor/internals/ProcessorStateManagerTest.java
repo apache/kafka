@@ -315,6 +315,7 @@ public class ProcessorStateManagerTest {
         expect(storeMetadata.changelogPartition()).andStubReturn(persistentStorePartition);
         expect(storeMetadata.store()).andStubReturn(store);
         expect(store.name()).andStubReturn(persistentStoreName);
+        expect(store.transactional()).andStubReturn(false);
 
         context.uninitialize();
         store.init((StateStoreContext) context, store);
@@ -345,6 +346,7 @@ public class ProcessorStateManagerTest {
         expect(storeMetadata.changelogPartition()).andStubReturn(persistentStorePartition);
         expect(storeMetadata.store()).andStubReturn(store);
         expect(store.name()).andStubReturn(persistentStoreName);
+        expect(store.transactional()).andStubReturn(true);
 
         context.uninitialize();
         store.init((StateStoreContext) context, store);
@@ -363,6 +365,7 @@ public class ProcessorStateManagerTest {
         reset(context, store);
         context.uninitialize();
         expect(store.name()).andStubReturn(persistentStoreName);
+        expect(store.transactional()).andStubReturn(true);
         replay(context, store);
 
         stateMgr.registerStateStores(singletonList(store), context);
@@ -1111,11 +1114,6 @@ public class ProcessorStateManagerTest {
             StoreQueryUtils.checkpointPosition(checkpointFile, position);
         }
     };
-
-
-
-
-
 
     private ProcessorStateManager getStateManager(final Task.TaskType taskType, final boolean eosEnabled) {
         return new ProcessorStateManager(
