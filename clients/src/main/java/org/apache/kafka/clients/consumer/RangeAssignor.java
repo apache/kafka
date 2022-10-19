@@ -87,8 +87,6 @@ public class RangeAssignor extends AbstractPartitionAssignor {
     @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
-        validateSubscription(subscriptions);
-
         Map<String, List<MemberInfo>> consumersPerTopic = consumersPerTopic(subscriptions);
 
         Map<String, List<TopicPartition>> assignment = new HashMap<>();
