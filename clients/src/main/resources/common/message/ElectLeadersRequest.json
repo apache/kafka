@@ -26,6 +26,8 @@
   "fields": [
     { "name": "ElectionType", "type": "int8", "versions": "1+",
       "about": "Type of elections to conduct for the partition. A value of '0' elects the preferred replica. A value of '1' elects the first live replica if there are no in-sync replica." },
+    { "name": "BrokerEpoch", "type": "int64", "versions": "2+", "default": "-1", "tag": 0, "taggedVersions": "2+",
+      "about": "The epoch of the requesting broker" },
     { "name": "TopicPartitions", "type": "[]TopicPartitions", "versions": "0+", "nullableVersions": "0+",
       "about": "The topic partitions to elect leaders.",
       "fields": [

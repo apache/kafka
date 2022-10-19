@@ -31,7 +31,7 @@ class DelayedElectLeader(
   expectedLeaders: Map[TopicPartition, Int],
   results: Map[TopicPartition, ApiError],
   replicaManager: ReplicaManager,
-  responseCallback: Map[TopicPartition, ApiError] => Unit
+  responseCallback: Either[Map[TopicPartition, ApiError], Errors] => Unit
 ) extends DelayedOperation(delayMs) {
 
   import DelayedOperation._
@@ -55,7 +55,7 @@ class DelayedElectLeader(
     val timedOut = waitingPartitions.map {
       case (tp, _) => tp -> new ApiError(Errors.REQUEST_TIMED_OUT, null)
     }
-    responseCallback(timedOut ++ fullResults)
+    responseCallback(Left(timedOut ++ fullResults))
   }
 
   /**

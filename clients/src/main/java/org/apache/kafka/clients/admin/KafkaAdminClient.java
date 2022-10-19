@@ -3468,7 +3468,11 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             public ElectLeadersRequest.Builder createRequest(int timeoutMs) {
-                return new ElectLeadersRequest.Builder(electionType, topicPartitions, recommendedLeaders, timeoutMs);
+                if (recommendedLeaders.isEmpty()) {
+                    return new ElectLeadersRequest.Builder(electionType, topicPartitions, timeoutMs);
+                } else {
+                    return new ElectLeadersRequest.Builder(-1, recommendedLeaders, timeoutMs);
+                }
             }
 
             @Override

@@ -2222,15 +2222,19 @@ class ReplicaManager(val config: KafkaConfig,
     partitions: Set[TopicPartition],
     partitionRecommendedLeaders: Map[TopicPartition, Int],
     electionType: ElectionType,
-    responseCallback: Map[TopicPartition, ApiError] => Unit,
+    responseCallback: Either[Map[TopicPartition, ApiError], Errors] => Unit,
     requestTimeout: Int
   ): Unit = {
 
     val deadline = time.milliseconds() + requestTimeout
 
-    def electionCallback(results: Map[TopicPartition, Either[ApiError, Int]]): Unit = {
+    def electionCallback(topResults: Either[Map[TopicPartition, Either[ApiError, Int]], Errors]): Unit = {
       val expectedLeaders = mutable.Map.empty[TopicPartition, Int]
       val failures = mutable.Map.empty[TopicPartition, ApiError]
+      topResults match {
+        case Right(error) =>
+          responseCallback(Right(error))
+        case Left(results) => // To make the rebasing with upstream kafka easier, we don't indent the following block
       results.foreach {
         case (partition, Right(leader)) => expectedLeaders += partition -> leader
         case (partition, Left(error)) => failures += partition -> error
@@ -2251,9 +2255,12 @@ class ReplicaManager(val config: KafkaConfig,
           watchKeys
         )
       } else {
-          // There are no partitions actually being elected, so return immediately
-          responseCallback(failures)
+        // There are no partitions actually being elected, so return immediately
+        responseCallback(Left(failures))
       }
+      }
+
+
     }
 
     controller.electLeaders(partitions, partitionRecommendedLeaders, electionType, electionCallback)

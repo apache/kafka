@@ -3044,11 +3044,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     val electionRequest = request.body[ElectLeadersRequest]
 
     def sendResponseCallback(
-      error: ApiError
-    )(
-      results: Map[TopicPartition, ApiError]
+      topResults: Either[Map[TopicPartition, ApiError], Errors]
     ): Unit = {
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+        topResults match {
+          case Right(error) =>
+            new ElectLeadersResponse(
+              requestThrottleMs,
+              error.code,
+              Collections.emptyList(),
+              electionRequest.version
+            )
+          case Left(results) => // To make the rebasing with upstream kafka easier, we don't indent the following block
         val adjustedResults = if (electionRequest.data.topicPartitions == null) {
           /* When performing elections across all of the partitions we should only return
            * partitions for which there was an eleciton or resulted in an error. In other
@@ -3080,19 +3087,16 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         new ElectLeadersResponse(
           requestThrottleMs,
-          error.error.code,
+          ApiError.NONE.error.code,
           electionResults,
           electionRequest.version
         )
+        }
       })
     }
 
     if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
-      val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null)
-      val partitionErrors: Map[TopicPartition, ApiError] =
-        electionRequest.topicPartitions.iterator.map(partition => partition -> error).toMap
-
-      sendResponseCallback(error)(partitionErrors)
+      sendResponseCallback(Right(Errors.CLUSTER_AUTHORIZATION_FAILED))
     } else {
       val partitions = if (electionRequest.data.topicPartitions == null) {
         metadataCache.getAllTopics().flatMap(metadataCache.getTopicPartitions)
@@ -3105,7 +3109,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         partitions,
         electionRequest.partitionRecommendedLeaders,
         electionRequest.electionType,
-        sendResponseCallback(ApiError.NONE),
+        sendResponseCallback,
         electionRequest.data.timeoutMs
       )
     }

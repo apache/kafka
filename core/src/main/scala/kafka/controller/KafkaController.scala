@@ -61,7 +61,7 @@ object KafkaController extends Logging {
   val InitialControllerEpoch = 0
   val InitialControllerEpochZkVersion = 0
   val topicNameBytesOverheadOnZk = 4
-  type ElectLeadersCallback = Map[TopicPartition, Either[ApiError, Int]] => Unit
+  type ElectLeadersCallback = Either[Map[TopicPartition, Either[ApiError, Int]], Errors] => Unit
   type ListReassignmentsCallback = Either[Map[TopicPartition, ReplicaAssignment], ApiError] => Unit
   type AlterReassignmentsCallback = Either[Map[TopicPartition, ApiError], ApiError] => Unit
   type AlterIsrCallback = Either[Map[TopicPartition, Either[Errors, LeaderAndIsr]], Errors] => Unit
@@ -2619,13 +2619,27 @@ class KafkaController(val config: KafkaConfig,
     partitionRecommendedLeadersFromAdminClientOpt: Option[Map[TopicPartition, Int]],
     electionType: ElectionType,
     electionTrigger: ElectionTrigger,
-    callback: ElectLeadersCallback
+    callback: ElectLeadersCallback,
+    brokerId: Int,
+    brokerEpoch: Long
   ): Unit = {
     if (!isActive) {
-      callback(partitionsFromAdminClientOpt.fold(Map.empty[TopicPartition, Either[ApiError, Int]]) { partitions =>
-        partitions.iterator.map(partition => partition -> Left(new ApiError(Errors.NOT_CONTROLLER, null))).toMap
-      })
+      callback(Right(Errors.NOT_CONTROLLER))
     } else {
+      if (brokerId != -1) {
+        val brokerEpochOpt = controllerContext.liveBrokerIdAndEpochs.get(brokerId)
+        if (brokerEpochOpt.isEmpty) {
+          info(s"Ignoring ElectLeaders due to unknown broker $brokerId")
+          callback.apply(Right(Errors.STALE_BROKER_EPOCH))
+          return
+        }
+        if (!brokerEpochOpt.contains(brokerEpoch)) {
+          info(s"Ignoring ElectLeaders due to stale broker epoch in request $brokerEpoch and local broker epoch $brokerEpochOpt for broker $brokerId")
+          callback.apply(Right(Errors.STALE_BROKER_EPOCH))
+          return
+        }
+      }
+
       // We need to register the watcher if the path doesn't exist in order to detect future preferred replica
       // leader elections and we get the `path exists` check for free
       if (electionTrigger == AdminClientTriggered || zkClient.registerZNodeChangeHandlerAndCheckExistence(preferredReplicaElectionHandler)) {
@@ -2709,7 +2723,7 @@ class KafkaController(val config: KafkaConfig,
         )
 
         debug(s"Waiting for any successful result for election type ($electionType) by $electionTrigger for partitions: $results")
-        callback(results)
+        callback(Left(results))
       }
     }
   }
@@ -2999,8 +3013,8 @@ class KafkaController(val config: KafkaConfig,
           error("Received a ShutdownEventThread event. This type of event is supposed to be handle by ControllerEventThread")
         case AutoPreferredReplicaLeaderElection =>
           processAutoPreferredReplicaLeaderElection()
-        case ReplicaLeaderElection(partitions, partitionRecommendedLeaders, electionType, electionTrigger, callback) =>
-          processReplicaLeaderElection(partitions, partitionRecommendedLeaders, electionType, electionTrigger, callback)
+        case ReplicaLeaderElection(partitions, partitionRecommendedLeaders, electionType, electionTrigger, callback, brokerId, brokerEpoch) =>
+          processReplicaLeaderElection(partitions, partitionRecommendedLeaders, electionType, electionTrigger, callback, brokerId, brokerEpoch)
         case UncleanLeaderElectionEnable =>
           processUncleanLeaderElectionEnable()
         case TopicUncleanLeaderElectionEnable(topic) =>
@@ -3370,15 +3384,13 @@ case class ReplicaLeaderElection(
   partitionRecommendedLeadersFromAdminClientOpt: Option[Map[TopicPartition, Int]],
   electionType: ElectionType,
   electionTrigger: ElectionTrigger,
-  callback: ElectLeadersCallback = _ => {}
+  callback: ElectLeadersCallback = _ => {},
+  brokerId: Int = -1, // brokerId and epoch are only used for broker initiated leader election
+  brokerEpoch: Long = -1
 ) extends ControllerEvent {
   override def state: ControllerState = ControllerState.ManualLeaderBalance
 
-  override def preempt(): Unit = callback(
-    partitionsFromAdminClientOpt.fold(Map.empty[TopicPartition, Either[ApiError, Int]]) { partitions =>
-      partitions.iterator.map(partition => partition -> Left(new ApiError(Errors.NOT_CONTROLLER, null))).toMap
-    }
-  )
+  override def preempt(): Unit = callback(Right(Errors.NOT_CONTROLLER))
 }
 
 /**
