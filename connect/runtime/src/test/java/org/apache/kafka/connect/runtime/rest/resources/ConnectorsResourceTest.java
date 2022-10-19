@@ -313,7 +313,7 @@ public class ConnectorsResourceTest {
         herder.putConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(body.config()), EasyMock.eq(false), EasyMock.capture(cb));
         expectAndCallbackNotLeaderException(cb);
         // Should forward request
-        EasyMock.expect(RestClient.httpRequest(EasyMock.eq("http://leader:8083/connectors?forward=false"), EasyMock.eq("POST"), EasyMock.isNull(), EasyMock.eq(body), EasyMock.anyObject(), EasyMock.anyObject(WorkerConfig.class)))
+        EasyMock.expect(RestClient.httpRequest(EasyMock.eq(LEADER_URL + "connectors?forward=false"), EasyMock.eq("POST"), EasyMock.isNull(), EasyMock.eq(body), EasyMock.anyObject(), EasyMock.anyObject(WorkerConfig.class)))
                 .andReturn(new RestClient.HttpResponse<>(201, new HashMap<>(), new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES,
                     ConnectorType.SOURCE)));
 
@@ -334,8 +334,11 @@ public class ConnectorsResourceTest {
         EasyMock.expect(httpHeaders.getHeaderString("Authorization")).andReturn("Basic YWxhZGRpbjpvcGVuc2VzYW1l").times(1);
         EasyMock.replay(httpHeaders);
         herder.putConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(body.config()), EasyMock.eq(false), EasyMock.capture(cb));
-        expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG,
-            CONNECTOR_TASK_NAMES, ConnectorType.SOURCE)));
+        expectAndCallbackNotLeaderException(cb);
+
+        EasyMock.expect(RestClient.httpRequest(EasyMock.eq(LEADER_URL + "connectors?forward=false"),
+            EasyMock.eq("POST"), EasyMock.eq(httpHeaders), EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject(WorkerConfig.class)))
+                .andReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
 
         PowerMock.replayAll();
 
@@ -354,8 +357,11 @@ public class ConnectorsResourceTest {
         EasyMock.expect(httpHeaders.getHeaderString("Authorization")).andReturn(null).times(1);
         EasyMock.replay(httpHeaders);
         herder.putConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(body.config()), EasyMock.eq(false), EasyMock.capture(cb));
-        expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG,
-            CONNECTOR_TASK_NAMES, ConnectorType.SOURCE)));
+        expectAndCallbackNotLeaderException(cb);
+
+        EasyMock.expect(RestClient.httpRequest(EasyMock.eq(LEADER_URL + "connectors?forward=false"),
+            EasyMock.eq("POST"), EasyMock.eq(httpHeaders), EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject(WorkerConfig.class)))
+                .andReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
 
         PowerMock.replayAll();
 
@@ -455,7 +461,7 @@ public class ConnectorsResourceTest {
         herder.deleteConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
         expectAndCallbackNotLeaderException(cb);
         // Should forward request
-        EasyMock.expect(RestClient.httpRequest("http://leader:8083/connectors/" + CONNECTOR_NAME + "?forward=false", "DELETE", NULL_HEADERS, null, null, workerConfig))
+        EasyMock.expect(RestClient.httpRequest(LEADER_URL + "connectors/" + CONNECTOR_NAME + "?forward=false", "DELETE", NULL_HEADERS, null, null, workerConfig))
                 .andReturn(new RestClient.HttpResponse<>(204, new HashMap<>(), null));
 
         PowerMock.replayAll();
@@ -797,7 +803,7 @@ public class ConnectorsResourceTest {
         herder.restartConnectorAndTasks(EasyMock.eq(restartRequest), EasyMock.capture(cb));
         expectAndCallbackNotLeaderException(cb);
 
-        EasyMock.expect(RestClient.httpRequest(EasyMock.eq("http://leader:8083/connectors/" + CONNECTOR_NAME + "/restart?forward=true&includeTasks=" + restartRequest.includeTasks() + "&onlyFailed=" + restartRequest.onlyFailed()),
+        EasyMock.expect(RestClient.httpRequest(EasyMock.eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/restart?forward=true&includeTasks=" + restartRequest.includeTasks() + "&onlyFailed=" + restartRequest.onlyFailed()),
                 EasyMock.eq("POST"), EasyMock.isNull(), EasyMock.isNull(), EasyMock.anyObject(), EasyMock.anyObject(WorkerConfig.class)))
                 .andReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
 
@@ -933,7 +939,7 @@ public class ConnectorsResourceTest {
         herder.restartConnector(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
         expectAndCallbackNotLeaderException(cb);
 
-        EasyMock.expect(RestClient.httpRequest(EasyMock.eq("http://leader:8083/connectors/" + CONNECTOR_NAME + "/restart?forward=true"),
+        EasyMock.expect(RestClient.httpRequest(EasyMock.eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/restart?forward=true"),
                 EasyMock.eq("POST"), EasyMock.isNull(), EasyMock.isNull(), EasyMock.anyObject(), EasyMock.anyObject(WorkerConfig.class)))
                 .andReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
 
@@ -988,7 +994,7 @@ public class ConnectorsResourceTest {
         herder.restartTask(EasyMock.eq(taskId), EasyMock.capture(cb));
         expectAndCallbackNotLeaderException(cb);
 
-        EasyMock.expect(RestClient.httpRequest(EasyMock.eq("http://leader:8083/connectors/" + CONNECTOR_NAME + "/tasks/0/restart?forward=true"),
+        EasyMock.expect(RestClient.httpRequest(EasyMock.eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/tasks/0/restart?forward=true"),
                 EasyMock.eq("POST"), EasyMock.isNull(), EasyMock.isNull(), EasyMock.anyObject(), EasyMock.anyObject(WorkerConfig.class)))
                 .andReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
 

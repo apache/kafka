@@ -113,7 +113,7 @@ object FeatureCommand {
       .help("The level to which we should upgrade the metadata. For example, 3.3-IV3.")
       .action(store())
     upgradeParser.addArgument("--feature")
-      .help("A feature upgrade we should perform, in key=value format. For example metadata.version=3.3-IV3.")
+      .help("A feature upgrade we should perform, in feature=level format. For example: `metadata.version=5`.")
       .action(append())
     upgradeParser.addArgument("--dry-run")
       .help("Validate this upgrade, but do not perform it.")
@@ -127,8 +127,7 @@ object FeatureCommand {
       .help("The level to which we should downgrade the metadata. For example, 3.3-IV0.")
       .action(store())
     downgradeParser.addArgument("--feature")
-      .help("A feature downgrade we should perform, in key=value format. " +
-        "For example metadata.version=3.3-IV0.")
+      .help("A feature downgrade we should perform, in feature=level format. For example: `metadata.version=5`.")
       .action(append())
     downgradeParser.addArgument("--unsafe")
       .help("Perform this downgrade even if it may irreversibly destroy metadata.")

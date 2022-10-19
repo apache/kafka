@@ -18,10 +18,10 @@ package kafka.server.metadata
 
 import java.util
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-import java.util.function.Consumer
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.image.writer.{ImageWriterOptions, RecordListWriter}
 import org.apache.kafka.metadata.util.SnapshotReason
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
@@ -390,15 +390,18 @@ class BrokerMetadataListener(
   }
 
   class GetImageRecordsEvent(future: CompletableFuture[util.List[ApiMessageAndVersion]])
-      extends EventQueue.FailureLoggingEvent(log) with Consumer[util.List[ApiMessageAndVersion]] {
-    val records = new util.ArrayList[ApiMessageAndVersion]()
-    override def accept(batch: util.List[ApiMessageAndVersion]): Unit = {
-      records.addAll(batch)
-    }
-
+      extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
-      _image.write(this)
-      future.complete(records)
+      val writer = new RecordListWriter()
+      val options = new ImageWriterOptions.Builder().
+        setMetadataVersion(_image.features().metadataVersion()).
+        build()
+      try {
+        _image.write(writer, options)
+      } finally {
+        writer.close()
+      }
+      future.complete(writer.records())
     }
   }
 }

@@ -389,22 +389,18 @@ public class StreamsMetadataState {
                         standbyStoresOnHost.addAll(getStoresOnHost(storeToSourceTopics, standbyPartitionsOnHost));
                     }
 
-                    if (!(activeStoresOnHost.isEmpty() && activePartitionsOnHost.isEmpty() && standbyStoresOnHost.isEmpty() && standbyPartitionsOnHost.isEmpty())) {
-                        final StreamsMetadata metadata = new StreamsMetadataImpl(
-                            hostInfo,
-                            activeStoresOnHost,
-                            activePartitionsOnHost,
-                            standbyStoresOnHost,
-                            standbyPartitionsOnHost,
-                            topologyName
-                        );
+                    final StreamsMetadata metadata = new StreamsMetadataImpl(
+                        hostInfo,
+                        activeStoresOnHost,
+                        activePartitionsOnHost,
+                        standbyStoresOnHost,
+                        standbyPartitionsOnHost,
+                        topologyName
+                    );
 
-                        rebuiltMetadata.add(metadata);
-                        if (hostInfo.equals(thisHost)) {
-                            localMetadata.set(metadata);
-                        }
-                    } else {
-                        log.debug("Host {} has no tasks for topology {} at the moment, this metadata will not be built", hostInfo, topologyName);
+                    rebuiltMetadata.add(metadata);
+                    if (hostInfo.equals(thisHost)) {
+                        localMetadata.set(metadata);
                     }
                 }
 

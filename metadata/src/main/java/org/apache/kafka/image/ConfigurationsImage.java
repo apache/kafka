@@ -18,15 +18,14 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.image.writer.ImageWriter;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 
@@ -62,11 +61,11 @@ public final class ConfigurationsImage {
         }
     }
 
-    public void write(Consumer<List<ApiMessageAndVersion>> out) {
+    public void write(ImageWriter writer, ImageWriterOptions options) {
         for (Entry<ConfigResource, ConfigurationImage> entry : data.entrySet()) {
             ConfigResource configResource = entry.getKey();
             ConfigurationImage configImage = entry.getValue();
-            configImage.write(configResource, out);
+            configImage.write(configResource, writer, options);
         }
     }
 
