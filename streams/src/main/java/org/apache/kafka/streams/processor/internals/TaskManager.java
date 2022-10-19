@@ -23,8 +23,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
@@ -96,6 +94,7 @@ public class TaskManager {
     private final ActiveTaskCreator activeTaskCreator;
     private final StandbyTaskCreator standbyTaskCreator;
     private final StateUpdater stateUpdater;
+    private final StreamsProducer threadProducer;
 
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
@@ -103,6 +102,7 @@ public class TaskManager {
                 final String logPrefix,
                 final ActiveTaskCreator activeTaskCreator,
                 final StandbyTaskCreator standbyTaskCreator,
+                final StreamsProducer streamsProducer,
                 final TasksRegistry tasks,
                 final TopologyMetadata topologyMetadata,
                 final Admin adminClient,
@@ -117,6 +117,7 @@ public class TaskManager {
         this.topologyMetadata = topologyMetadata;
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
+        this.threadProducer = streamsProducer;
         this.processingMode = topologyMetadata.processingMode();
 
         final LogContext logContext = new LogContext(logPrefix);
@@ -137,7 +138,7 @@ public class TaskManager {
     }
 
     public double totalProducerBlockedTime() {
-        return activeTaskCreator.totalProducerBlockedTime();
+        return threadProducer.totalBlockedTime();
     }
 
     public UUID processId() {
@@ -152,12 +153,8 @@ public class TaskManager {
         return mainConsumer;
     }
 
-    StreamsProducer streamsProducerForTask(final TaskId taskId) {
-        return activeTaskCreator.streamsProducerForTask(taskId);
-    }
-
     StreamsProducer threadProducer() {
-        return activeTaskCreator.threadProducer();
+        return threadProducer;
     }
 
     boolean isRebalanceInProgress() {
@@ -388,7 +385,7 @@ public class TaskManager {
 
     private void createNewTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                                 final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
-        final Collection<Task> newActiveTasks = activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate);
+        final Collection<Task> newActiveTasks = activeTaskCreator.createTasks(mainConsumer, threadProducer, activeTasksToCreate);
         final Collection<Task> newStandbyTask = standbyTaskCreator.createTasks(standbyTasksToCreate);
 
         if (stateUpdater == null) {
@@ -648,13 +645,11 @@ public class TaskManager {
     }
 
     private StandbyTask convertActiveToStandby(final StreamTask activeTask, final Set<TopicPartition> partitions) {
-        final StandbyTask standbyTask = standbyTaskCreator.createStandbyTaskFromActive(activeTask, partitions);
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(activeTask.id());
-        return standbyTask;
+        return standbyTaskCreator.createStandbyTaskFromActive(activeTask, partitions);
     }
 
     private StreamTask convertStandbyToActive(final StandbyTask standbyTask, final Set<TopicPartition> partitions) {
-        return activeTaskCreator.createActiveTaskFromStandby(standbyTask, partitions, mainConsumer);
+        return activeTaskCreator.createActiveTaskFromStandby(standbyTask, partitions, mainConsumer, threadProducer);
     }
 
     /**
@@ -774,9 +769,6 @@ public class TaskManager {
         try {
             task.suspend();
             task.closeClean();
-            if (task.isActive()) {
-                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-            }
         } catch (final RuntimeException e) {
             final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
                 "Attempting to close remaining tasks before re-throwing:", task.id());
@@ -936,38 +928,52 @@ public class TaskManager {
 
         prepareCommitAndAddOffsetsToMap(revokedActiveTasks, consumedOffsetsPerTask);
 
-        // if we need to commit any revoking task then we just commit all of those needed committing together
-        final boolean shouldCommitAdditionalTasks = !consumedOffsetsPerTask.isEmpty();
-        if (shouldCommitAdditionalTasks) {
-            prepareCommitAndAddOffsetsToMap(commitNeededActiveTasks, consumedOffsetsPerTask);
-        }
-
         // even if commit failed, we should still continue and complete suspending those tasks, so we would capture
         // any exception and rethrow it at the end. some exceptions may be handled immediately and then swallowed,
         // as such we just need to skip those dirty tasks in the checkpoint
         final Set<Task> dirtyTasks = new HashSet<>();
-        try {
-            // in handleRevocation we must call commitOffsetsOrTransaction() directly rather than
-            // commitAndFillInConsumedOffsetsAndMetadataPerTaskMap() to make sure we don't skip the
-            // offset commit because we are in a rebalance
-            taskExecutor.commitOffsetsOrTransaction(consumedOffsetsPerTask);
-        } catch (final TaskCorruptedException e) {
-            log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
-                     e.corruptedTasks());
 
-            // If we hit a TaskCorruptedException it must be EOS, just handle the cleanup for those corrupted tasks right here
-            dirtyTasks.addAll(tasks.tasks(e.corruptedTasks()));
-            closeDirtyAndRevive(dirtyTasks, true);
-        } catch (final TimeoutException e) {
-            log.warn("Timed out while trying to commit all tasks during revocation, these will be cleaned and revived");
+        if (!consumedOffsetsPerTask.isEmpty()) {
+            // if we need to commit any revoking task then we just commit all of those needed committing together
+            prepareCommitAndAddOffsetsToMap(commitNeededActiveTasks, consumedOffsetsPerTask);
 
-            // If we hit a TimeoutException it must be ALOS, just close dirty and revive without wiping the state
-            dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
-            closeDirtyAndRevive(dirtyTasks, false);
-        } catch (final RuntimeException e) {
-            log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
-            firstException.compareAndSet(null, e);
-            dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
+            try {
+                // in handleRevocation we must call commitOffsetsOrTransaction() directly rather than
+                // commitAndFillInConsumedOffsetsAndMetadataPerTaskMap() to make sure we don't skip the
+                // offset commit because we are in a rebalance
+                taskExecutor.commitOffsetsOrTransaction(consumedOffsetsPerTask);
+            } catch (final TaskCorruptedException e) {
+                log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
+                    e.corruptedTasks());
+
+                // If we hit a TaskCorruptedException it must be EOS, just handle the cleanup for those corrupted tasks right here
+                dirtyTasks.addAll(tasks.tasks(e.corruptedTasks()));
+                closeDirtyAndRevive(dirtyTasks, true);
+            } catch (final TimeoutException e) {
+                log.warn("Timed out while trying to commit all tasks during revocation, these will be cleaned and revived");
+
+                // If we hit a TimeoutException it must be ALOS, just close dirty and revive without wiping the state
+                dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
+                closeDirtyAndRevive(dirtyTasks, false);
+            } catch (final RuntimeException e) {
+                log.error("Exception caught while committing those revoked tasks " + revokedActiveTasks, e);
+                firstException.compareAndSet(null, e);
+                dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
+            }
+
+            for (final Task task : commitNeededActiveTasks) {
+                if (!dirtyTasks.contains(task)) {
+                    try {
+                        // for non-revoking active tasks, we should not enforce checkpoint
+                        // since if it is EOS enabled, no checkpoint should be written while
+                        // the task is in RUNNING state
+                        task.postCommit(false);
+                    } catch (final RuntimeException e) {
+                        log.error("Exception caught while post-committing task " + task.id(), e);
+                        maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
+                    }
+                }
+            }
         }
 
         // we enforce checkpointing upon suspending a task: if it is resumed later we just proceed normally, if it is
@@ -979,22 +985,6 @@ public class TaskManager {
                 } catch (final RuntimeException e) {
                     log.error("Exception caught while post-committing task " + task.id(), e);
                     maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
-                }
-            }
-        }
-
-        if (shouldCommitAdditionalTasks) {
-            for (final Task task : commitNeededActiveTasks) {
-                if (!dirtyTasks.contains(task)) {
-                    try {
-                        // for non-revoking active tasks, we should not enforce checkpoint
-                        // since if it is EOS enabled, no checkpoint should be written while
-                        // the task is in RUNNING tate
-                        task.postCommit(false);
-                    } catch (final RuntimeException e) {
-                        log.error("Exception caught while post-committing task " + task.id(), e);
-                        maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
-                    }
                 }
             }
         }
@@ -1057,7 +1047,7 @@ public class TaskManager {
         removeLostActiveTasksFromStateUpdater();
 
         if (processingMode == EXACTLY_ONCE_V2) {
-            activeTaskCreator.reInitializeThreadProducer();
+            threadProducer.resetProducer();
         }
     }
 
@@ -1226,10 +1216,6 @@ public class TaskManager {
             if (removeFromTasksRegistry) {
                 tasks.removeTask(task);
             }
-
-            if (task.isActive()) {
-                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-            }
         } catch (final RuntimeException swallow) {
             log.error("Error removing dirty task {}: {}", task.id(), swallow.getMessage());
         }
@@ -1238,9 +1224,6 @@ public class TaskManager {
     private void closeTaskClean(final Task task) {
         task.closeClean();
         tasks.removeTask(task);
-        if (task.isActive()) {
-            activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-        }
     }
 
     void shutdown(final boolean clean) {
@@ -1261,7 +1244,7 @@ public class TaskManager {
 
         executeAndMaybeSwallow(
             clean,
-            activeTaskCreator::closeThreadProducerIfNeeded,
+            this::closeThreadProducer,
             e -> firstException.compareAndSet(null, e),
             e -> log.warn("Ignoring an exception while closing thread producer.", e)
         );
@@ -1280,6 +1263,14 @@ public class TaskManager {
         final RuntimeException fatalException = firstException.get();
         if (fatalException != null) {
             throw fatalException;
+        }
+    }
+
+    private void closeThreadProducer() {
+        try {
+            threadProducer.close();
+        } catch (final RuntimeException e) {
+            throw new StreamsException("Thread producer encounter error trying to close.", e);
         }
     }
 
@@ -1312,14 +1303,6 @@ public class TaskManager {
             }
 
             task.closeDirty();
-
-            try {
-                if (task.isActive()) {
-                    activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-                }
-            } catch (final RuntimeException swallow) {
-                log.error("Error closing dirty task {}: {}", task.id(), swallow.getMessage());
-            }
         }
     }
 
@@ -1740,14 +1723,6 @@ public class TaskManager {
                          .append('(').append(task.isActive() ? "active" : "standby").append(')');
         }
         return stringBuilder.toString();
-    }
-
-    Map<MetricName, Metric> producerMetrics() {
-        return activeTaskCreator.producerMetrics();
-    }
-
-    Set<String> producerClientIds() {
-        return activeTaskCreator.producerClientIds();
     }
 
     Set<TaskId> lockedTaskDirectories() {

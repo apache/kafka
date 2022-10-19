@@ -73,6 +73,7 @@ import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
+import static org.apache.kafka.streams.processor.internals.ClientUtils.getThreadProducerClientId;
 
 public class StreamThread extends Thread {
 
@@ -374,9 +375,7 @@ public class StreamThread extends Thread {
             changelogReader,
             cache,
             time,
-            clientSupplier,
             threadId,
-            processId,
             log,
             stateUpdaterEnabled);
         final StandbyTaskCreator standbyTaskCreator = new StandbyTaskCreator(
@@ -389,6 +388,15 @@ public class StreamThread extends Thread {
             log,
             stateUpdaterEnabled);
 
+        log.info("Creating thread producer client");
+        final StreamsProducer threadProducer = new StreamsProducer(
+            config,
+            threadId,
+            clientSupplier,
+            processId,
+            logContext,
+            time);
+
         final TaskManager taskManager = new TaskManager(
             time,
             changelogReader,
@@ -396,6 +404,7 @@ public class StreamThread extends Thread {
             logPrefix,
             activeTaskCreator,
             standbyTaskCreator,
+            threadProducer,
             new Tasks(new LogContext(logPrefix)),
             topologyMetadata,
             adminClient,
@@ -588,7 +597,6 @@ public class StreamThread extends Thread {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException      if the store's change log does not contain the partition
      */
-    @SuppressWarnings("deprecation") // Needed to include StreamsConfig.EXACTLY_ONCE_BETA in error log for UnsupportedVersionException
     boolean runLoop() {
         subscribeConsumer();
 
@@ -637,9 +645,9 @@ public class StreamThread extends Thread {
                     errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
 
                     log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
-                              "Setting {}=\"{}\"/\"{}\" requires broker version 2.5 or higher.",
-                          StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
-                          StreamsConfig.EXACTLY_ONCE_V2, StreamsConfig.EXACTLY_ONCE_BETA);
+                            "Setting {}=\"{}\" requires broker version 2.5 or higher.",
+                        StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
+                        StreamsConfig.EXACTLY_ONCE_V2);
                 }
                 failedStreamThreadSensor.record();
                 this.streamsUncaughtExceptionHandler.accept(new StreamsException(e), false);
@@ -1214,7 +1222,7 @@ public class StreamThread extends Thread {
             state().name(),
             getConsumerClientId(getName()),
             getRestoreConsumerClientId(getName()),
-            taskManager.producerClientIds(),
+            getThreadProducerClientId(getName()),
             adminClientId,
             Collections.emptySet(),
             Collections.emptySet());
@@ -1251,7 +1259,7 @@ public class StreamThread extends Thread {
             state().name(),
             getConsumerClientId(getName()),
             getRestoreConsumerClientId(getName()),
-            taskManager.producerClientIds(),
+            getThreadProducerClientId(getName()),
             adminClientId,
             activeTasksMetadata,
             standbyTasksMetadata
@@ -1299,8 +1307,8 @@ public class StreamThread extends Thread {
         leaveGroupRequested.set(true);
     }
 
-    public Map<MetricName, Metric> producerMetrics() {
-        return taskManager.producerMetrics();
+    public Map<MetricName, ? extends Metric> producerMetrics() {
+        return taskManager.threadProducer().metrics();
     }
 
     public Map<MetricName, Metric> consumerMetrics() {

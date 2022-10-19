@@ -375,8 +375,8 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG), 1);</code></pre>
           <tr class="row-even"><td>processing.guarantee</td>
             <td>Medium</td>
             <td colspan="2">The processing mode. Can be either <code class="docutils literal"><span class="pre">"at_least_once"</span></code> (default)
-              or <code class="docutils literal"><span class="pre">"exactly_once_v2"</span></code> (for EOS version 2, requires broker version 2.5+). Deprecated config options are
-              <code class="docutils literal"><span class="pre">"exactly_once"</span></code> (for EOS version 1) and <code class="docutils literal"><span class="pre">"exactly_once_beta"</span></code> (for EOS version 2, requires broker version 2.5+)</td>.
+              or <code class="docutils literal"><span class="pre">"exactly_once_v2"</span></code> (for EOS version 2, requires broker version 2.5+). Config options
+              <code class="docutils literal"><span class="pre">"exactly_once"</span></code> and <code class="docutils literal"><span class="pre">"exactly_once_beta"</span></code> are not supported anymore since 4.0.</td>.
             <td>See <a class="reference internal" href="#streams-developer-guide-processing-guarantee"><span class="std std-ref">Processing Guarantee</span></a></td>
           </tr>
           <tr class="row-odd"><td>poll.ms</td>

@@ -217,7 +217,6 @@ public class KeyValueStoreTestDriver<K, V> {
                 "threadId",
                 new MockClientSupplier(),
                 null,
-                null,
                 logContext,
                 Time.SYSTEM),
             new DefaultProductionExceptionHandler(),

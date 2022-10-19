@@ -16,19 +16,19 @@
  */
 package org.apache.kafka.streams.tests;
 
+import java.io.IOException;
+import java.util.Properties;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-
-import java.io.IOException;
-import java.util.Properties;
 
 public class StreamsEosTest {
 
     /**
      *  args ::= kafka propFileName command
-     *  command := "run" | "process" | "verify"
+     *  command := "process" | "process-complex"
      */
+    @SuppressWarnings("deprecation")
     public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("StreamsEosTest are expecting two parameters: propFile, command; but only see " + args.length + " parameter");
@@ -40,19 +40,10 @@ public class StreamsEosTest {
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
         final String kafka = streamsProperties.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
-        final String processingGuarantee = streamsProperties.getProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG);
 
         if (kafka == null) {
             System.err.println("No bootstrap kafka servers specified in " + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
             Exit.exit(1);
-        }
-
-        if ("process".equals(command) || "process-complex".equals(command)) {
-            if (!StreamsConfig.EXACTLY_ONCE_V2.equals(processingGuarantee)) {
-
-                System.err.println("processingGuarantee must be " + StreamsConfig.EXACTLY_ONCE_V2);
-                Exit.exit(1);
-            }
         }
 
         System.out.println("StreamsTest instance started");
@@ -66,20 +57,11 @@ public class StreamsEosTest {
         }
 
         switch (command) {
-            case "run":
-                EosTestDriver.generate(kafka);
-                break;
             case "process":
                 new EosTestClient(streamsProperties, false).start();
                 break;
             case "process-complex":
                 new EosTestClient(streamsProperties, true).start();
-                break;
-            case "verify":
-                EosTestDriver.verify(kafka, false);
-                break;
-            case "verify-complex":
-                EosTestDriver.verify(kafka, true);
                 break;
             default:
                 System.out.println("unknown command: " + command);

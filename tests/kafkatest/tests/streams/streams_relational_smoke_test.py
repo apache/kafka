@@ -86,15 +86,14 @@ class StreamsRelationalSmokeTest(KafkaTest):
 
     @cluster(num_nodes=8)
     @matrix(crash=[False, True],
-            processing_guarantee=['exactly_once', 'exactly_once_v2'],
             metadata_quorum=[quorum.remote_kraft])
-    def test_streams(self, crash, processing_guarantee, metadata_quorum):
+    def test_streams(self, crash, metadata_quorum):
         driver = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "driver", "ignored", "ignored")
 
         LOG_FILE = driver.LOG_FILE  # this is the same for all instances of the service, so we can just declare a "constant"
 
-        processor1 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor1", processing_guarantee)
-        processor2 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor2", processing_guarantee)
+        processor1 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor1", 'exactly_once_v2')
+        processor2 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor2", 'exactly_once_v2')
 
         processor1.start()
         processor2.start()
@@ -109,7 +108,7 @@ class StreamsRelationalSmokeTest(KafkaTest):
 
         processor1.stop_nodes(not crash)
 
-        processor3 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor3", processing_guarantee)
+        processor3 = StreamsRelationalSmokeTestService(self.test_context, self.kafka, "application", "processor3", 'exactly_once_v2')
         processor3.start()
         processor3.await_command("grep -q 'Streams has started' %s" % LOG_FILE)
 

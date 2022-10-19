@@ -16,9 +16,10 @@
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from kafkatest.tests.kafka_test import KafkaTest
-from kafkatest.services.kafka import quorum
 from kafkatest.services.streams import StreamsEosTestDriverService, StreamsEosTestJobRunnerService, \
     StreamsComplexEosTestJobRunnerService, StreamsEosTestVerifyRunnerService, StreamsComplexEosTestVerifyRunnerService
+
+from kafkatest.tests.streams.utils.util import wait_for
 
 class StreamsEosTest(KafkaTest):
     """
@@ -39,21 +40,17 @@ class StreamsEosTest(KafkaTest):
         self.test_context = test_context
 
     @cluster(num_nodes=9)
-    @matrix(processing_guarantee=["exactly_once", "exactly_once_v2"],
-            metadata_quorum=[quorum.remote_kraft])
-    def test_rebalance_simple(self, processing_guarantee, metadata_quorum):
-        self.run_rebalance(StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                           StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                           StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+    def test_rebalance_simple(self):
+        self.run_rebalance(StreamsEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once_v2"),
+                           StreamsEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once_v2"),
+                           StreamsEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once_v2"),
                            StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
 
     @cluster(num_nodes=9)
-    @matrix(processing_guarantee=["exactly_once", "exactly_once_v2"],
-            metadata_quorum=[quorum.remote_kraft])
-    def test_rebalance_complex(self, processing_guarantee, metadata_quorum):
-        self.run_rebalance(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+    def test_rebalance_complex(self):
+        self.run_rebalance(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once_v2"),
+                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once_v2"),
+                           StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once_v2"),
                            StreamsComplexEosTestVerifyRunnerService(self.test_context, self.kafka))
 
     def run_rebalance(self, processor1, processor2, processor3, verifier):
@@ -83,21 +80,17 @@ class StreamsEosTest(KafkaTest):
         verifier.node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % verifier.STDOUT_FILE, allow_fail=False)
 
     @cluster(num_nodes=9)
-    @matrix(processing_guarantee=["exactly_once", "exactly_once_v2"],
-            metadata_quorum=[quorum.remote_kraft])
-    def test_failure_and_recovery(self, processing_guarantee, metadata_quorum):
-        self.run_failure_and_recovery(StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+    def test_failure_and_recovery(self):
+        self.run_failure_and_recovery(StreamsEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once_v2"),
+                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once_v2"),
+                                      StreamsEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once_v2"),
                                       StreamsEosTestVerifyRunnerService(self.test_context, self.kafka))
 
     @cluster(num_nodes=9)
-    @matrix(processing_guarantee=["exactly_once", "exactly_once_v2"],
-            metadata_quorum=[quorum.remote_kraft])
-    def test_failure_and_recovery_complex(self, processing_guarantee, metadata_quorum):
-        self.run_failure_and_recovery(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
-                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, processing_guarantee),
+    def test_failure_and_recovery_complex(self):
+        self.run_failure_and_recovery(StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once_v2"),
+                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once_v2"),
+                                      StreamsComplexEosTestJobRunnerService(self.test_context, self.kafka, "exactly_once_v2"),
                                       StreamsComplexEosTestVerifyRunnerService(self.test_context, self.kafka))
 
     def run_failure_and_recovery(self, processor1, processor2, processor3, verifier):
@@ -146,7 +139,7 @@ class StreamsEosTest(KafkaTest):
     def stop_streams(self, processor_to_be_stopped):
         with processor_to_be_stopped.node.account.monitor_log(processor_to_be_stopped.STDOUT_FILE) as monitor2:
             processor_to_be_stopped.stop()
-            self.wait_for(monitor2, processor_to_be_stopped, "StateChange: PENDING_SHUTDOWN -> NOT_RUNNING")
+            wait_for(monitor2, processor_to_be_stopped, "StateChange: PENDING_SHUTDOWN -> NOT_RUNNING")
 
     def stop_streams2(self, keep_alive_processor, processor_to_be_stopped):
         with keep_alive_processor.node.account.monitor_log(keep_alive_processor.STDOUT_FILE) as monitor:
@@ -166,10 +159,5 @@ class StreamsEosTest(KafkaTest):
         self.wait_for_startup(monitor1, keep_alive_processor1)
 
     def wait_for_startup(self, monitor, processor):
-        self.wait_for(monitor, processor, "StateChange: REBALANCING -> RUNNING")
-        self.wait_for(monitor, processor, "processed [0-9]* records from topic")
-
-    def wait_for(self, monitor, processor, output):
-        monitor.wait_until(output,
-                           timeout_sec=480,
-                           err_msg=("Never saw output '%s' on " % output) + str(processor.node.account))
+        wait_for(monitor, processor, "StateChange: REBALANCING -> RUNNING", timeout_sec = 480)
+        wait_for(monitor, processor, "processed [0-9]* records from topic", timeout_sec = 480)

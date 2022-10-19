@@ -34,7 +34,6 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,10 +79,6 @@ public class ClientUtils {
         return threadClientId + "-producer";
     }
 
-    public static String getTaskProducerClientId(final String threadClientId, final TaskId taskId) {
-        return threadClientId + "-" + taskId + "-producer";
-    }
-
     public static Map<MetricName, Metric> consumerMetrics(final Consumer<byte[], byte[]> mainConsumer,
                                                           final Consumer<byte[], byte[]> restoreConsumer) {
         final Map<MetricName, ? extends Metric> consumerMetrics = mainConsumer.metrics();
@@ -97,17 +92,6 @@ public class ClientUtils {
     public static Map<MetricName, Metric> adminClientMetrics(final Admin adminClient) {
         final Map<MetricName, ? extends Metric> adminClientMetrics = adminClient.metrics();
         return new LinkedHashMap<>(adminClientMetrics);
-    }
-
-    public static Map<MetricName, Metric> producerMetrics(final Collection<StreamsProducer> producers) {
-        final Map<MetricName, Metric> result = new LinkedHashMap<>();
-        for (final StreamsProducer producer : producers) {
-            final Map<MetricName, ? extends Metric> producerMetrics = producer.metrics();
-            if (producerMetrics != null) {
-                result.putAll(producerMetrics);
-            }
-        }
-        return result;
     }
 
     /**

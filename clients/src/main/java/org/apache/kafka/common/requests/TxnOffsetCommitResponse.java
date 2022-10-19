@@ -40,6 +40,7 @@ import java.util.Map;
  *   - {@link Errors#GROUP_AUTHORIZATION_FAILED}
  *   - {@link Errors#INVALID_COMMIT_OFFSET_SIZE}
  *   - {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
+ *   - {@link Errors#UNSUPPORTED_FOR_MESSAGE_FORMAT}
  *   - {@link Errors#REQUEST_TIMED_OUT}
  *   - {@link Errors#UNKNOWN_MEMBER_ID}
  *   - {@link Errors#FENCED_INSTANCE_ID}

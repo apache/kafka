@@ -56,12 +56,9 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -71,7 +68,6 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-@RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
 public class GlobalKTableEOSIntegrationTest {
     @Rule
@@ -97,18 +93,6 @@ public class GlobalKTableEOSIntegrationTest {
     public static void closeCluster() {
         CLUSTER.stop();
     }
-
-    @SuppressWarnings("deprecation")
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<String[]> data() {
-        return Arrays.asList(new String[][] {
-            {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_V2}
-        });
-    }
-
-    @Parameterized.Parameter
-    public String eosConfig;
 
     private final MockTime mockTime = CLUSTER.time;
     private final KeyValueMapper<String, Long, Long> keyMapper = (key, value) -> value;
@@ -138,7 +122,7 @@ public class GlobalKTableEOSIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0L);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
-        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         streamsConfiguration.put(StreamsConfig.TASK_TIMEOUT_MS_CONFIG, 1L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);

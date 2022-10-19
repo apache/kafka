@@ -49,13 +49,10 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -72,7 +69,6 @@ import static org.junit.Assert.assertTrue;
  * An integration test to verify the conversion of a dirty-closed EOS
  * task towards a standby task is safe across restarts of the application.
  */
-@RunWith(Parameterized.class)
 @Category(IntegrationTest.class)
 public class StandbyTaskEOSIntegrationTest {
     @Rule
@@ -80,18 +76,6 @@ public class StandbyTaskEOSIntegrationTest {
     private final static long REBALANCE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
     private final static int KEY_0 = 0;
     private final static int KEY_1 = 1;
-
-    @SuppressWarnings("deprecation")
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<String[]> data() {
-        return asList(new String[][] {
-            {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_V2}
-        });
-    }
-
-    @Parameterized.Parameter
-    public String eosConfig;
 
     private final AtomicBoolean skipRecord = new AtomicBoolean(false);
 
@@ -406,7 +390,7 @@ public class StandbyTaskEOSIntegrationTest {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, stateDirPath);
         streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);

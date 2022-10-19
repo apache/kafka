@@ -41,13 +41,9 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -65,23 +61,10 @@ import static org.junit.Assert.assertTrue;
 /**
  * Test the unclean shutdown behavior around state store cleanup.
  */
-@RunWith(Parameterized.class)
 @Category(IntegrationTest.class)
 public class EOSUncleanShutdownIntegrationTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);
-
-    @SuppressWarnings("deprecation")
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<String[]> data() {
-        return Arrays.asList(new String[][] {
-            {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_V2}
-        });
-    }
-
-    @Parameterized.Parameter
-    public String eosConfig;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
@@ -114,7 +97,7 @@ public class EOSUncleanShutdownIntegrationTest {
     public void shouldWorkWithUncleanShutdownWipeOutStateStore() throws InterruptedException {
         final String appId = "shouldWorkWithUncleanShutdownWipeOutStateStore";
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
-        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
 
         final String input = "input-topic";
         cleanStateBeforeTest(CLUSTER, input);
