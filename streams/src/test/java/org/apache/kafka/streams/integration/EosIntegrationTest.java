@@ -22,8 +22,10 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -149,7 +151,7 @@ public class EosIntegrationTest {
     private String stateTmpDir;
 
     @SuppressWarnings("deprecation")
-    @Parameters(name = "{0} {1}")
+    @Parameters(name = "semantics={0} txnStateStores={1}")
     public static Collection<Object[]> data() {
         final List<String> eosConfigs = Arrays.asList(
             StreamsConfig.AT_LEAST_ONCE,
@@ -186,11 +188,14 @@ public class EosIntegrationTest {
 
     @Test
     public void shouldBeAbleToRunWithEosEnabled() throws Exception {
+        if (stateStoreTransactional) return;  // this is a stateless test, no reason to run it with txn state stores
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @Test
     public void shouldCommitCorrectOffsetIfInputTopicIsTransactional() throws Exception {
+        if (stateStoreTransactional) return;  // this is a stateless test, no reason to run it with txn state stores
+
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, true, eosConfig);
 
         try (final Admin adminClient = Admin.create(mkMap(mkEntry(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())));
@@ -218,26 +223,31 @@ public class EosIntegrationTest {
 
     @Test
     public void shouldBeAbleToRestartAfterClose() throws Exception {
+        if (stateStoreTransactional) return;  // this is a stateless test, no reason to run it with txn state stores
         runSimpleCopyTest(2, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @Test
     public void shouldBeAbleToCommitToMultiplePartitions() throws Exception {
+        if (stateStoreTransactional) return;  // this is a stateless test, no reason to run it with txn state stores
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, MULTI_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @Test
     public void shouldBeAbleToCommitMultiplePartitionOffsets() throws Exception {
+        if (stateStoreTransactional) return;  // this is a stateless test, no reason to run it with txn state stores
         runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @Test
     public void shouldBeAbleToRunWithTwoSubtopologies() throws Exception {
+        if (stateStoreTransactional) return;  // this is a stateless test, no reason to run it with txn state stores
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
     @Test
     public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions() throws Exception {
+        if (stateStoreTransactional) return;  // this is a stateless test, no reason to run it with txn state stores
         runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, MULTI_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
@@ -247,8 +257,6 @@ public class EosIntegrationTest {
                                    final String outputTopic,
                                    final boolean inputTopicTransactional,
                                    final String eosConfig) throws Exception {
-        if (stateStoreTransactional) return;  // this is a stateless test, no reason to run it with txn state stores
-
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<Long, Long> input = builder.stream(inputTopic);
         KStream<Long, Long> output = input;
@@ -382,7 +390,6 @@ public class EosIntegrationTest {
     @Test
     public void shouldNotViolateEosIfOneTaskFails() throws Exception {
         if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
-        if (stateStoreTransactional) return;  // this is a stateless test, no reason to run it with txn state stores
 
         // this test writes 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to copy all 40 records into the output topic
@@ -604,7 +611,6 @@ public class EosIntegrationTest {
     @Test
     public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances() throws Exception {
         if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
-        if (stateStoreTransactional) return;  // this is a stateless test, no reason to run it with txn state stores
 
         // this test writes 10 + 5 + 5 + 10 records per partition (running with 2 partitions)
         // the app is supposed to copy all 60 records into the output topic
@@ -861,7 +867,7 @@ public class EosIntegrationTest {
         if (withState) {
             storeNames = new String[] {storeName};
             final StoreBuilder<KeyValueStore<Long, Long>> storeBuilder = Stores
-                .keyValueStoreBuilder(Stores.persistentKeyValueStore(storeName), Serdes.Long(), Serdes.Long())
+                .keyValueStoreBuilder(Stores.persistentKeyValueStore(storeName, stateStoreTransactional), Serdes.Long(), Serdes.Long())
                 .withCachingEnabled();
 
             builder.addStateStore(storeBuilder);
@@ -881,7 +887,7 @@ public class EosIntegrationTest {
                         this.context = context;
 
                         if (withState) {
-                            state = (KeyValueStore<Long, Long>) context.getStateStore(storeName);
+                            state = context.getStateStore(storeName);
                         }
                     }
 
