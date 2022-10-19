@@ -198,7 +198,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         public SharedLogData(Optional<RawSnapshotReader> snapshot) {
             if (snapshot.isPresent()) {
                 RawSnapshotReader initialSnapshot = snapshot.get();
-                prevOffset = initialSnapshot.snapshotId().offset - 1;
+                prevOffset = initialSnapshot.snapshotId().offset() - 1;
                 snapshots.put(prevOffset, initialSnapshot);
             } else {
                 prevOffset = -1;
@@ -305,14 +305,14 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
          * Stores a new snapshot and notifies all threads waiting for a snapshot.
          */
         synchronized void addSnapshot(RawSnapshotReader newSnapshot) {
-            if (newSnapshot.snapshotId().offset - 1 > prevOffset) {
+            if (newSnapshot.snapshotId().offset() - 1 > prevOffset) {
                 log.error(
                     "Ignored attempt to add a snapshot {} that is greater than the latest offset {}",
                     newSnapshot,
                     prevOffset
                 );
             } else {
-                snapshots.put(newSnapshot.snapshotId().offset - 1, newSnapshot);
+                snapshots.put(newSnapshot.snapshotId().offset() - 1, newSnapshot);
                 this.notifyAll();
             }
         }

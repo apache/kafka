@@ -60,8 +60,8 @@ public class RecordTestUtils {
         if (target instanceof MetadataDelta) {
             MetadataDelta delta = (MetadataDelta) target;
             replayAll(delta,
-                    delta.image().highestOffsetAndEpoch().offset,
-                    delta.image().highestOffsetAndEpoch().epoch,
+                    delta.image().highestOffsetAndEpoch().offset(),
+                    delta.image().highestOffsetAndEpoch().epoch(),
                     recordsAndVersions);
             return;
         }

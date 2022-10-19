@@ -17,8 +17,8 @@
 package org.apache.kafka.raft;
 
 public class OffsetAndEpoch implements Comparable<OffsetAndEpoch> {
-    public final long offset;
-    public final int epoch;
+    private final long offset;
+    private final int epoch;
 
     public OffsetAndEpoch(long offset, int epoch) {
         this.offset = offset;

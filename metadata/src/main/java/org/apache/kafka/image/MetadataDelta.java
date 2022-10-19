@@ -71,8 +71,8 @@ public final class MetadataDelta {
 
     public MetadataDelta(MetadataImage image) {
         this.image = image;
-        this.highestOffset = image.highestOffsetAndEpoch().offset;
-        this.highestEpoch = image.highestOffsetAndEpoch().epoch;
+        this.highestOffset = image.highestOffsetAndEpoch().offset();
+        this.highestEpoch = image.highestOffsetAndEpoch().epoch();
     }
 
     public MetadataImage image() {
