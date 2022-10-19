@@ -25,6 +25,7 @@ import kafka.cluster.EndPoint
 import kafka.log.{LogCleaner, LogConfig, LogManager, ProducerStateManagerConfig}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.server.DynamicBrokerConfig._
+import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -267,6 +268,26 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     addBrokerReconfigurable(new DynamicListenerConfig(kafkaServer))
     addBrokerReconfigurable(kafkaServer.socketServer)
     addBrokerReconfigurable(kafkaServer.logManager.producerStateManagerConfig)
+  }
+
+  /**
+   * Add reconfigurables to be notified when a dynamic controller config is updated.
+   */
+  def addReconfigurables(controller: ControllerServer): Unit = {
+    controller.authorizer match {
+      case Some(authz: Reconfigurable) => addReconfigurable(authz)
+      case _ =>
+    }
+    if (!kafkaConfig.processRoles.contains(BrokerRole)) {
+      // In combined mode, these elements are shared between broker and controller, and therefore
+      // don't need to be updated here (since the broker will do it.)
+      addReconfigurable(controller.kafkaYammerMetrics)
+      addReconfigurable(new DynamicMetricsReporters(
+        kafkaConfig.brokerId, controller.config, controller.metrics, controller.clusterId))
+    }
+    // TODO: add dynamic thread pool resizing here
+    // TODO: add dynamic listener reconfiguration here
+    addBrokerReconfigurable(controller.socketServer)
   }
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {

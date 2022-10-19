@@ -28,6 +28,15 @@ import org.apache.kafka.common.utils.Exit;
  */
 public class ProcessExitingFaultHandler implements FaultHandler {
     private static final Logger log = LoggerFactory.getLogger(ProcessExitingFaultHandler.class);
+    private final Runnable action;
+
+    public ProcessExitingFaultHandler() {
+        this.action = () -> { };
+    }
+
+    public ProcessExitingFaultHandler(Runnable action) {
+        this.action = action;
+    }
 
     @Override
     public RuntimeException handleFault(String failureMessage, Throwable cause) {
@@ -35,6 +44,11 @@ public class ProcessExitingFaultHandler implements FaultHandler {
             log.error("Encountered fatal fault: {}", failureMessage);
         } else {
             log.error("Encountered fatal fault: {}", failureMessage, cause);
+        }
+        try {
+            action.run();
+        } catch (Throwable e) {
+            log.error("Failed to run ProcessExitingFaultHandler action.", e);
         }
         Exit.exit(1);
         return null;

@@ -30,7 +30,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV0;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
@@ -49,6 +51,10 @@ public class FeaturesImageTest {
         IMAGE1 = new FeaturesImage(map1, MetadataVersion.latest());
 
         DELTA1_RECORDS = new ArrayList<>();
+        DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(MetadataVersion.FEATURE_NAME).
+                setFeatureLevel(MetadataVersion.latest().featureLevel()),
+                (short) 0));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
             setName("foo").setFeatureLevel((short) 3),
             (short) 0));
@@ -94,5 +100,30 @@ public class FeaturesImageTest {
         RecordTestUtils.replayAll(delta, writer.records());
         FeaturesImage nextImage = delta.apply();
         assertEquals(image, nextImage);
+    }
+
+    private static final FeatureLevelRecord MV_LATEST_RECORD = new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(MetadataVersion.latest().featureLevel());
+
+    private static final FeatureLevelRecord MV_3_3_IV0_RECORD = new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(IBP_3_3_IV0.featureLevel());
+
+    @Test
+    public void testCalculateMetadataVersionChange() throws Throwable {
+        FeaturesDelta delta = new FeaturesDelta(IMAGE1);
+        assertEquals(Optional.empty(), delta.calculateMetadataVersionChange(MV_LATEST_RECORD));
+        assertEquals(Optional.of(new MetadataVersionChange(
+                MetadataVersion.latest(), IBP_3_3_IV0)), delta.calculateMetadataVersionChange(MV_3_3_IV0_RECORD));
+    }
+
+    @Test
+    public void testReplayMetadataVersionChangeRecord() throws Throwable {
+        FeaturesDelta delta = new FeaturesDelta(IMAGE1);
+        delta.replay(MV_LATEST_RECORD);
+        assertEquals(MetadataVersion.latest(), delta.apply().metadataVersion());
+        delta.replay(MV_3_3_IV0_RECORD);
+        assertEquals(IBP_3_3_IV0, delta.apply().metadataVersion());
     }
 }

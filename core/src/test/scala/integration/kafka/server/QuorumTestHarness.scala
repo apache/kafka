@@ -24,7 +24,6 @@ import java.util.{Collections, Properties}
 import java.util.concurrent.CompletableFuture
 import javax.security.auth.login.Configuration
 import kafka.raft.KafkaRaftManager
-import kafka.server.metadata.BrokerServerMetrics
 import kafka.tools.StorageTool
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
@@ -34,6 +33,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
 import org.apache.kafka.controller.QuorumControllerMetrics
+import org.apache.kafka.image.loader.MetadataLoader
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
@@ -99,21 +99,35 @@ class KRaftQuorumImplementation(
     startup: Boolean,
     threadNamePrefix: Option[String],
   ): KafkaBroker = {
-    val metrics = new Metrics()
-    val broker = new BrokerServer(config = config,
-      metaProps = new MetaProperties(clusterId, config.nodeId),
-      raftManager = raftManager,
-      time = time,
-      metrics = metrics,
-      brokerMetrics = BrokerServerMetrics(metrics),
-      threadNamePrefix = Some("Broker%02d_".format(config.nodeId)),
-      initialOfflineDirs = Seq(),
-      controllerQuorumVotersFuture = controllerQuorumVotersFuture,
-      fatalFaultHandler = faultHandler,
-      metadataLoadingFaultHandler = faultHandler,
-      metadataPublishingFaultHandler = faultHandler)
-    if (startup) broker.startup()
-    broker
+    val threadNamePrefix = "Broker%02d_".format(config.nodeId)
+    var metadataLoader: MetadataLoader = null
+    var broker: BrokerServer = null
+    try {
+      metadataLoader = new MetadataLoader.Builder().
+        setNodeId(config.nodeId).
+        setTime(time).
+        setThreadNamePrefix(threadNamePrefix).
+        build()
+      broker = new BrokerServer(config = config,
+        metaProps = new MetaProperties(clusterId, config.nodeId),
+        raftManager = raftManager,
+        time = time,
+        metrics = new Metrics(),
+        threadNamePrefix = Some(threadNamePrefix),
+        initialOfflineDirs = Seq(),
+        controllerQuorumVotersFuture = controllerQuorumVotersFuture,
+        fatalFaultHandler = faultHandler,
+        metadataPublishingFaultHandler = faultHandler,
+        metadataLoader = metadataLoader)
+      if (startup) broker.startup()
+      broker
+    } catch {
+      case e: Throwable => {
+        if (metadataLoader != null) CoreUtils.swallow(metadataLoader.close(), log)
+        if (broker != null) CoreUtils.swallow(broker.shutdown(), log)
+        throw e
+      }
+    }
   }
 
   override def shutdown(): Unit = {
@@ -308,13 +322,20 @@ abstract class QuorumTestHarness extends Logging {
       metrics = controllerMetrics,
       threadNamePrefixOpt = Option(threadNamePrefix),
       controllerQuorumVotersFuture = controllerQuorumVotersFuture)
+    val time: Time = Time.SYSTEM
+    var metadataLoader: MetadataLoader = null
     var controllerServer: ControllerServer = null
     try {
+      metadataLoader = new MetadataLoader.Builder().
+        setNodeId(config.nodeId).
+        setTime(time).
+        setThreadNamePrefix(threadNamePrefix).
+        build()
       controllerServer = new ControllerServer(
         metaProperties = metaProperties,
         config = config,
         raftManager = raftManager,
-        time = Time.SYSTEM,
+        time = time,
         metrics = controllerMetrics,
         controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), Time.SYSTEM),
         threadNamePrefix = Option(threadNamePrefix),
@@ -323,7 +344,8 @@ abstract class QuorumTestHarness extends Logging {
         raftApiVersions = raftManager.apiVersions,
         bootstrapMetadata = BootstrapMetadata.fromVersion(metadataVersion, "test harness"),
         metadataFaultHandler = faultHandler,
-        fatalFaultHandler = faultHandler
+        fatalFaultHandler = faultHandler,
+        metadataLoader = metadataLoader,
       )
       controllerServer.socketServerFirstBoundPortFuture.whenComplete((port, e) => {
         if (e != null) {
@@ -338,8 +360,9 @@ abstract class QuorumTestHarness extends Logging {
       raftManager.startup()
     } catch {
       case e: Throwable =>
-        CoreUtils.swallow(raftManager.shutdown(), this)
         if (controllerServer != null) CoreUtils.swallow(controllerServer.shutdown(), this)
+        if (metadataLoader != null) CoreUtils.swallow(metadataLoader.close(), this)
+        CoreUtils.swallow(raftManager.shutdown(), this)
         throw e
     }
     new KRaftQuorumImplementation(raftManager,

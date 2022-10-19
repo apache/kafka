@@ -43,10 +43,14 @@ public final class ImageWriterOptions {
             return this;
         }
 
-        // Package-private for testing
+        // Visible for testing
         public Builder setRawMetadataVersion(MetadataVersion metadataVersion) {
             this.metadataVersion = metadataVersion;
             return this;
+        }
+
+        public MetadataVersion metadataVersion() {
+            return metadataVersion;
         }
 
         public Builder setLossHandler(Consumer<UnwritableMetadataException> lossHandler) {

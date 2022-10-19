@@ -14,21 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.metadata.util;
 
-public enum SnapshotReason {
-    UnknownReason("unknown reason"),
-    MaxBytesExceeded("max bytes were exceeded"),
-    MetadataVersionChanged("metadata version was changed");
+package org.apache.kafka.image;
 
-    private final String snapshotReason;
 
-    SnapshotReason(String snapshotReason) {
-        this.snapshotReason = snapshotReason;
+/**
+ * Indicates that the metadata version has changed.
+ */
+public final class MetadataVersionChangeException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+    private final MetadataVersionChange change;
+
+    public MetadataVersionChangeException(MetadataVersionChange change) {
+        super("The metadata version is changing from " + change.oldVersion() + " to " +
+                change.newVersion());
+        this.change = change;
     }
 
-    @Override
-    public String toString() {
-        return snapshotReason;
+    public MetadataVersionChange change() {
+        return change;
     }
 }

@@ -34,26 +34,37 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
-import java.util.Iterator;
-import java.util.List;
 import java.util.Optional;
 
 
 /**
  * A change to the broker metadata image.
- *
- * This class is thread-safe.
  */
 public final class MetadataDelta {
+    public static class Builder {
+        private MetadataImage image = MetadataImage.EMPTY;
+        private MetadataVersion metadataVersion = null;
+
+        public Builder setImage(MetadataImage image) {
+            this.image = image;
+            return this;
+        }
+
+        public Builder setMetadataVersion(MetadataVersion metadataVersion) {
+            this.metadataVersion = metadataVersion;
+            return this;
+        }
+
+        public MetadataDelta build() {
+            if (metadataVersion == null) metadataVersion = image.features().metadataVersion();
+            return new MetadataDelta(image,
+                    metadataVersion);
+        }
+    }
+
     private final MetadataImage image;
-
-    private long highestOffset;
-
-    private int highestEpoch;
 
     private FeaturesDelta featuresDelta = null;
 
@@ -69,10 +80,24 @@ public final class MetadataDelta {
 
     private AclsDelta aclsDelta = null;
 
-    public MetadataDelta(MetadataImage image) {
+    private MetadataDelta(
+        MetadataImage image,
+        MetadataVersion metadataVersion
+    ) {
         this.image = image;
-        this.highestOffset = image.highestOffsetAndEpoch().offset();
-        this.highestEpoch = image.highestOffsetAndEpoch().epoch();
+        if (!image.features().metadataVersion().equals(metadataVersion)) {
+            getOrCreateFeaturesDelta().replayMetadataVersionChange(metadataVersion);
+        }
+    }
+
+    public void clear() {
+        this.featuresDelta = null;
+        this.clusterDelta = null;
+        this.topicsDelta = null;
+        this.configsDelta = null;
+        this.clientQuotasDelta = null;
+        this.producerIdsDelta = null;
+        this.aclsDelta = null;
     }
 
     public MetadataImage image() {
@@ -144,27 +169,7 @@ public final class MetadataDelta {
         return aclsDelta;
     }
 
-    public Optional<MetadataVersion> metadataVersionChanged() {
-        if (featuresDelta == null) {
-            return Optional.empty();
-        } else {
-            return featuresDelta.metadataVersionChange();
-        }
-    }
-
-    public void read(long highestOffset, int highestEpoch, Iterator<List<ApiMessageAndVersion>> reader) {
-        while (reader.hasNext()) {
-            List<ApiMessageAndVersion> batch = reader.next();
-            for (ApiMessageAndVersion messageAndVersion : batch) {
-                replay(highestOffset, highestEpoch, messageAndVersion.message());
-            }
-        }
-    }
-
-    public void replay(long offset, int epoch, ApiMessage record) {
-        highestOffset = offset;
-        highestEpoch = epoch;
-
+    public void replay(ApiMessage record) {
         MetadataRecordType type = MetadataRecordType.fromId(record.apiKey());
         switch (type) {
             case REGISTER_BROKER_RECORD:
@@ -223,13 +228,11 @@ public final class MetadataDelta {
     }
 
     public void replay(RegisterBrokerRecord record) {
-        if (clusterDelta == null) clusterDelta = new ClusterDelta(image.cluster());
-        clusterDelta.replay(record);
+        getOrCreateClusterDelta().replay(record);
     }
 
     public void replay(UnregisterBrokerRecord record) {
-        if (clusterDelta == null) clusterDelta = new ClusterDelta(image.cluster());
-        clusterDelta.replay(record);
+        getOrCreateClusterDelta().replay(record);
     }
 
     public void replay(TopicRecord record) {
@@ -261,17 +264,32 @@ public final class MetadataDelta {
         getOrCreateConfigsDelta().replay(record, topicName);
     }
 
+    public void setMetadataVersion(MetadataVersion metadataVersion) {
+        getOrCreateFeaturesDelta().replay(new FeatureLevelRecord().
+                setName(MetadataVersion.FEATURE_NAME).
+                setFeatureLevel(metadataVersion.featureLevel()));
+    }
+
     public void replay(FeatureLevelRecord record) {
-        getOrCreateFeaturesDelta().replay(record);
-        featuresDelta.metadataVersionChange().ifPresent(changedMetadataVersion -> {
-            // If any feature flags change, need to immediately check if any metadata needs to be downgraded.
-            getOrCreateClusterDelta().handleMetadataVersionChange(changedMetadataVersion);
-            getOrCreateConfigsDelta().handleMetadataVersionChange(changedMetadataVersion);
-            getOrCreateTopicsDelta().handleMetadataVersionChange(changedMetadataVersion);
-            getOrCreateClientQuotasDelta().handleMetadataVersionChange(changedMetadataVersion);
-            getOrCreateProducerIdsDelta().handleMetadataVersionChange(changedMetadataVersion);
-            getOrCreateAclsDelta().handleMetadataVersionChange(changedMetadataVersion);
-        });
+        FeaturesDelta delta = getOrCreateFeaturesDelta();
+        Optional<MetadataVersionChange> change = delta.calculateMetadataVersionChange(record);
+        if (change.isPresent()) {
+            //
+            // If this record would change the metadata version, and the base image is not empty,
+            // we throw an exception here. The caller is expected to handle this exception by saving
+            // the image to a series of records with the new metadata version, and then reloading it.
+            //
+            // The rationale for handling it "out-of-band" like this is that:
+            // 1) the broker and controller need to trigger a save of the metadata image right
+            // before any version change, so we need to interrupt the normal control flow anyway.
+            // 2) it is easier to maintain one downgrade/upgrade code path in the image write
+            // functions than to try to handle every conceivable change that a metadata version
+            // could bring in an event-driven fashion.
+            // 3) metadata version changes are rare so the overhead of this is not a problem.
+            //
+            throw new MetadataVersionChangeException(change.get());
+        }
+        delta.replay(record);
     }
 
     public void replay(BrokerRegistrationChangeRecord record) {
@@ -308,7 +326,7 @@ public final class MetadataDelta {
         getOrCreateAclsDelta().finishSnapshot();
     }
 
-    public MetadataImage apply() {
+    public MetadataImage apply(MetadataProvenance provenance) {
         FeaturesImage newFeatures;
         if (featuresDelta == null) {
             newFeatures = image.features();
@@ -352,7 +370,7 @@ public final class MetadataDelta {
             newAcls = aclsDelta.apply();
         }
         return new MetadataImage(
-            new OffsetAndEpoch(highestOffset, highestEpoch),
+            provenance,
             newFeatures,
             newCluster,
             newTopics,
@@ -366,9 +384,7 @@ public final class MetadataDelta {
     @Override
     public String toString() {
         return "MetadataDelta(" +
-            "highestOffset=" + highestOffset +
-            ", highestEpoch=" + highestEpoch +
-            ", featuresDelta=" + featuresDelta +
+            "featuresDelta=" + featuresDelta +
             ", clusterDelta=" + clusterDelta +
             ", topicsDelta=" + topicsDelta +
             ", configsDelta=" + configsDelta +

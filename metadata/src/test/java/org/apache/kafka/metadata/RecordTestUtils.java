@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
-import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
@@ -57,14 +56,6 @@ public class RecordTestUtils {
      */
     public static void replayAll(Object target,
                                  List<ApiMessageAndVersion> recordsAndVersions) {
-        if (target instanceof MetadataDelta) {
-            MetadataDelta delta = (MetadataDelta) target;
-            replayAll(delta,
-                    delta.image().highestOffsetAndEpoch().offset(),
-                    delta.image().highestOffsetAndEpoch().epoch(),
-                    recordsAndVersions);
-            return;
-        }
         for (ApiMessageAndVersion recordAndVersion : recordsAndVersions) {
             ApiMessage record = recordAndVersion.message();
             try {
@@ -97,26 +88,6 @@ public class RecordTestUtils {
     }
 
     /**
-     * Replay a list of records to the metadata delta.
-     *
-     * @param delta the metadata delta on which to replay the records
-     * @param highestOffset highest offset from the list of records
-     * @param highestEpoch highest epoch from the list of records
-     * @param recordsAndVersions list of records
-     */
-    public static void replayAll(
-        MetadataDelta delta,
-        long highestOffset,
-        int highestEpoch,
-        List<ApiMessageAndVersion> recordsAndVersions
-    ) {
-        for (ApiMessageAndVersion recordAndVersion : recordsAndVersions) {
-            ApiMessage record = recordAndVersion.message();
-            delta.replay(highestOffset, highestEpoch, record);
-        }
-    }
-
-    /**
      * Replay a list of record batches.
      *
      * @param target        The object to invoke the replay function on.
@@ -126,25 +97,6 @@ public class RecordTestUtils {
                                         List<List<ApiMessageAndVersion>> batches) {
         for (List<ApiMessageAndVersion> batch : batches) {
             replayAll(target, batch);
-        }
-    }
-
-    /**
-     * Replay a list of record batches to the metadata delta.
-     *
-     * @param delta the metadata delta on which to replay the records
-     * @param highestOffset highest offset from the list of record batches
-     * @param highestEpoch highest epoch from the list of record batches
-     * @param batches list of batches of records
-     */
-    public static void replayAllBatches(
-        MetadataDelta delta,
-        long highestOffset,
-        int highestEpoch,
-        List<List<ApiMessageAndVersion>> batches
-    ) {
-        for (List<ApiMessageAndVersion> batch : batches) {
-            replayAll(delta, highestOffset, highestEpoch, batch);
         }
     }
 

@@ -29,6 +29,7 @@ import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
 import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.ControllerMetadataPublisher
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.clients.ApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -44,12 +45,14 @@ import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.image.loader.MetadataLoader
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 
+import scala.collection.{Map, immutable}
 import scala.jdk.CollectionConverters._
 import scala.compat.java8.OptionConverters._
 
@@ -70,6 +73,7 @@ class ControllerServer(
   val bootstrapMetadata: BootstrapMetadata,
   val metadataFaultHandler: FaultHandler,
   val fatalFaultHandler: FaultHandler,
+  val metadataLoader: MetadataLoader,
 ) extends Logging with KafkaMetricsGroup {
   import kafka.server.Server._
 
@@ -91,6 +95,9 @@ class ControllerServer(
   var quotaManagers: QuotaManagers = _
   var controllerApis: ControllerApis = _
   var controllerApisHandlerPool: KafkaRequestHandlerPool = _
+  var dynamicConfigHandlers: immutable.Map[String, ConfigHandler] = _
+  var controllerMetadataPublisher: ControllerMetadataPublisher = _
+  def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -200,7 +207,6 @@ class ControllerServer(
           setDefaultNumPartitions(config.numPartitions.intValue()).
           setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
             TimeUnit.MILLISECONDS)).
-          setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
           setMaxIdleIntervalNs(maxIdleIntervalNs).
           setMetrics(controllerMetrics).
@@ -258,6 +264,14 @@ class ControllerServer(
         shutdown()
         throw e
     }
+    config.dynamicConfig.addReconfigurables(this)
+    dynamicConfigHandlers = immutable.Map[String, ConfigHandler](
+      ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
+    controllerMetadataPublisher = new ControllerMetadataPublisher(
+      config,
+      dynamicConfigHandlers,
+      fatalFaultHandler)
+    metadataLoader.installPublishers(List().asJava)
   }
 
   def shutdown(): Unit = {
@@ -266,8 +280,10 @@ class ControllerServer(
       info("shutting down")
       if (socketServer != null)
         CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
-      if (controller != null)
+      if (controller != null) {
         controller.beginShutdown()
+      }
+      metadataLoader.beginShutdown()
       if (socketServer != null)
         CoreUtils.swallow(socketServer.shutdown(), this)
       if (controllerApisHandlerPool != null)
@@ -278,6 +294,7 @@ class ControllerServer(
         CoreUtils.swallow(quotaManagers.shutdown(), this)
       if (controller != null)
         controller.close()
+      CoreUtils.swallow(metadataLoader.close(), this)
       CoreUtils.swallow(authorizer.foreach(_.close()), this)
       createTopicPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
       alterConfigPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))

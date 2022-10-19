@@ -133,9 +133,11 @@ public class ImageDowngradeTest {
         List<ApiMessageAndVersion> expectedOutputs
     ) {
         MockLossConsumer lossConsumer = new MockLossConsumer(metadataVersion);
-        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        MetadataDelta delta = new MetadataDelta.Builder().
+                setMetadataVersion(findMetadataVersion(inputs)).
+                build();
         RecordTestUtils.replayAll(delta, inputs);
-        MetadataImage image = delta.apply();
+        MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().
                 setRawMetadataVersion(metadataVersion).
@@ -143,5 +145,17 @@ public class ImageDowngradeTest {
                 build());
         assertEquals(expectedLosses, lossConsumer.losses, "Failed to get expected metadata losses.");
         assertEquals(expectedOutputs, writer.records(), "Failed to get expected output records.");
+    }
+
+    private static MetadataVersion findMetadataVersion(List<ApiMessageAndVersion> records) {
+        for (ApiMessageAndVersion messageAndVersion : records) {
+            if (messageAndVersion.message() instanceof FeatureLevelRecord) {
+                FeatureLevelRecord record = (FeatureLevelRecord) messageAndVersion.message();
+                if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
+                    return MetadataVersion.fromFeatureLevel(record.featureLevel());
+                }
+            }
+        }
+        return MetadataVersion.MINIMUM_KRAFT_VERSION;
     }
 }

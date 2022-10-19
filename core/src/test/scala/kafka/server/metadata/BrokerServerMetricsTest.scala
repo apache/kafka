@@ -22,12 +22,38 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.MockTime
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.apache.kafka.image.MetadataProvenance
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
+
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 final class BrokerServerMetricsTest {
+  @Test
+  def testYammerMetrics(): Unit = {
+    val expectedYammerMetrics = Set(
+      "kafka.server:type=BrokerMetadataListener,name=MetadataBatchProcessingTimeUs"
+    )
+    TestUtils.resource(BrokerServerMetrics(new Metrics())) { brokerMetrics =>
+      val notFound = new mutable.HashSet[String] ++ expectedYammerMetrics
+      KafkaYammerMetrics.defaultRegistry.allMetrics.keySet().forEach(bean => {
+        expectedYammerMetrics.foreach(expected => {
+          if (bean.getMBeanName().equals(expected)) {
+            notFound -= expected
+          }
+        })
+      })
+      assertEquals(Set.empty, notFound, "Failed to find some Yammer metrics")
+    }
+    KafkaYammerMetrics.defaultRegistry.allMetrics.keySet().forEach(bean => {
+      expectedYammerMetrics.foreach(expected => {
+        assertFalse(bean.getMBeanName().equals(expected), s"${expected} did not get cleaned up.")
+      })
+    })
+  }
+
   @Test
   def testMetricsExported(): Unit = {
     val metrics = new Metrics()
@@ -59,11 +85,11 @@ final class BrokerServerMetricsTest {
     val metrics = new Metrics()
     TestUtils.resource(BrokerServerMetrics(metrics)) { brokerMetrics =>
       val offsetMetric = metrics.metrics().get(brokerMetrics.lastAppliedRecordOffsetName)
-      assertEquals(0, offsetMetric.metricValue.asInstanceOf[Long])
+      assertEquals(-1L, offsetMetric.metricValue.asInstanceOf[Long])
 
       // Update metric value and check
       val expectedValue = 1000
-      brokerMetrics.lastAppliedRecordOffset.set(expectedValue)
+      brokerMetrics.lastAppliedImageProvenance.set(new MetadataProvenance(expectedValue, 0, 0L))
       assertEquals(expectedValue, offsetMetric.metricValue.asInstanceOf[Long])
     }
   }
@@ -82,7 +108,7 @@ final class BrokerServerMetricsTest {
 
       // Update metric value and check
       val timestamp = 500
-      brokerMetrics.lastAppliedRecordTimestamp.set(timestamp)
+      brokerMetrics.lastAppliedImageProvenance.set(new MetadataProvenance(0L, 0, timestamp))
       assertEquals(timestamp, timestampMetric.metricValue.asInstanceOf[Long])
       assertEquals(time.milliseconds - timestamp, lagMetric.metricValue.asInstanceOf[Long])
     }

@@ -17,7 +17,7 @@
 package kafka.server
 
 import java.io.File
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import kafka.common.InconsistentNodeIdException
 import kafka.log.{LogConfig, UnifiedLog}
 import kafka.metrics.KafkaMetricsReporter
@@ -30,6 +30,8 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.controller.QuorumControllerMetrics
+import org.apache.kafka.image.loader.MetadataLoader
+import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.metadata.{KafkaConfigSchema, MetadataRecordSerde}
 import org.apache.kafka.raft.RaftConfig
@@ -81,26 +83,69 @@ class KafkaRaftServer(
     controllerQuorumVotersFuture
   )
 
+  private val snapshotEmitter: SnapshotEmitter = new SnapshotEmitter.Builder().
+    setNodeId(config.nodeId).
+    setRaftClient(raftManager.client).
+    build()
+
+  private val snapshotGenerator: SnapshotGenerator = new SnapshotGenerator.Builder().
+    setTime(Time.SYSTEM).
+    setNodeId(config.nodeId).
+    setFaultHandler(new LoggingFaultHandler("snapshot generation", () => { })).
+    setEmitter(snapshotEmitter).
+    setMinBytesSinceLastSnapshot(config.metadataSnapshotMaxNewRecordBytes).
+    setMinTimeSinceLastSnapshotNs(TimeUnit.MILLISECONDS.toNanos(config.metadataSnapshotMaxIntervalMsProp)).
+    build()
+
+  private val brokerMetrics: Option[BrokerServerMetrics] = if (config.processRoles.contains(BrokerRole)) {
+    Some(BrokerServerMetrics(metrics))
+  } else {
+    None
+  }
+
+  private val metadataLoader: MetadataLoader = {
+    val builder = new MetadataLoader.Builder().
+      setTime(Time.SYSTEM).
+      setNodeId(config.nodeId)
+    if (config.processRoles.contains(ControllerRole)) {
+      // Controllers and combined nodes must exit immediately if there is a metadata loading error.
+      // We disable snapshot generation here so that we don't create a snapshot while exiting.
+      builder.setFaultHandler(new ProcessExitingFaultHandler(() => {
+        snapshotGenerator.disable("there was a metadata loading error")
+      }))
+    } else {
+      // Broker-only nodes disable snapshot creation and increment a metric if there is a metadata
+      // loading error.
+      builder.setFaultHandler(new LoggingFaultHandler("metadata loading", () => {
+        snapshotGenerator.disable("there was a metadata loading error")
+        brokerMetrics.get.metadataLoadErrorCount.getAndIncrement()
+      }))
+    }
+    if (config.processRoles.contains(BrokerRole)) {
+      // In broker-only mode or combined mode, we want to expose the broker metrics.
+      builder.setMetadataLoaderMetrics(brokerMetrics.get)
+    }
+    builder.build()
+  }
+
+  raftManager.register(metadataLoader)
+
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
-    val brokerMetrics = BrokerServerMetrics(metrics)
     val fatalFaultHandler = new ProcessExitingFaultHandler()
-    val metadataLoadingFaultHandler = new LoggingFaultHandler("metadata loading",
-        () => brokerMetrics.metadataLoadErrorCount.getAndIncrement())
     val metadataApplyingFaultHandler = new LoggingFaultHandler("metadata application",
-      () => brokerMetrics.metadataApplyErrorCount.getAndIncrement())
+      () => brokerMetrics.get.metadataApplyErrorCount.getAndIncrement())
     Some(new BrokerServer(
       config,
       metaProps,
       raftManager,
       time,
       metrics,
-      brokerMetrics,
       threadNamePrefix,
       offlineDirs,
       controllerQuorumVotersFuture,
       fatalFaultHandler,
-      metadataLoadingFaultHandler,
-      metadataApplyingFaultHandler
+      metadataApplyingFaultHandler,
+      metadataLoader,
     ))
   } else {
     None
@@ -124,7 +169,8 @@ class KafkaRaftServer(
       raftManager.apiVersions,
       bootstrapMetadata,
       metadataFaultHandler,
-      fatalFaultHandler
+      fatalFaultHandler,
+      metadataLoader,
     ))
   } else {
     None

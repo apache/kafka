@@ -22,7 +22,6 @@ import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
-
 import kafka.cluster.Broker.ServerInfo
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
@@ -30,9 +29,7 @@ import kafka.log.LogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
-import kafka.server.KafkaRaftServer.ControllerRole
-import kafka.server.metadata.BrokerServerMetrics
-import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, KRaftMetadataCache, SnapshotWriterBuilder}
+import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, KRaftMetadataCache}
 import kafka.utils.{CoreUtils, KafkaScheduler}
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -44,29 +41,19 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
+import org.apache.kafka.image.loader.MetadataLoader
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.raft.RaftConfig.AddressSpec
-import org.apache.kafka.raft.{RaftClient, RaftConfig}
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.snapshot.SnapshotWriter
 
 import scala.collection.{Map, Seq}
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
-
-class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
-    extends SnapshotWriterBuilder {
-  override def build(committedOffset: Long,
-                     committedEpoch: Int,
-                     lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]] = {
-    raftClient.createSnapshot(committedOffset, committedEpoch, lastContainedLogTime).asScala
-  }
-}
 
 /**
  * A Kafka broker that runs in KRaft (Kafka Raft) mode.
@@ -77,14 +64,15 @@ class BrokerServer(
   val raftManager: RaftManager[ApiMessageAndVersion],
   val time: Time,
   val metrics: Metrics,
-  val brokerMetrics: BrokerServerMetrics,
   val threadNamePrefix: Option[String],
   val initialOfflineDirs: Seq[String],
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
   val fatalFaultHandler: FaultHandler,
-  val metadataLoadingFaultHandler: FaultHandler,
-  val metadataPublishingFaultHandler: FaultHandler
+  val metadataPublishingFaultHandler: FaultHandler,
+  val metadataLoader: MetadataLoader,
 ) extends KafkaBroker {
+
+  class Builder
 
   override def brokerState: BrokerState = Option(lifecycleManager).
     flatMap(m => Some(m.state)).getOrElse(BrokerState.NOT_RUNNING)
@@ -145,10 +133,6 @@ class BrokerServer(
   @volatile var brokerTopicStats: BrokerTopicStats = _
 
   val clusterId: String = metaProps.clusterId
-
-  var metadataSnapshotter: Option[BrokerMetadataSnapshotter] = None
-
-  var metadataListener: BrokerMetadataListener = _
 
   var metadataPublisher: BrokerMetadataPublisher = _
 
@@ -304,25 +288,6 @@ class BrokerServer(
         ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, None),
         ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
 
-      if (!config.processRoles.contains(ControllerRole)) {
-        // If no controller is defined, we rely on the broker to generate snapshots.
-        metadataSnapshotter = Some(new BrokerMetadataSnapshotter(
-          config.nodeId,
-          time,
-          threadNamePrefix,
-          new BrokerSnapshotWriterBuilder(raftManager.client)
-        ))
-      }
-
-      metadataListener = new BrokerMetadataListener(
-        config.nodeId,
-        time,
-        threadNamePrefix,
-        config.metadataSnapshotMaxNewRecordBytes,
-        metadataSnapshotter,
-        brokerMetrics,
-        metadataLoadingFaultHandler)
-
       val networkListeners = new ListenerCollection()
       config.effectiveAdvertisedListeners.foreach { ep =>
         networkListeners.add(new Listener().
@@ -347,15 +312,12 @@ class BrokerServer(
         config.brokerSessionTimeoutMs.toLong
       )
       lifecycleManager.start(
-        () => metadataListener.highestMetadataOffset,
+        () => metadataLoader.lastAppliedOffset(),
         brokerLifecycleChannelManager,
         metaProps.clusterId,
         networkListeners,
         featuresRemapped
       )
-
-      // Register a listener with the Raft layer to receive metadata event notifications
-      raftManager.register(metadataListener)
 
       val endpoints = new util.ArrayList[Endpoint](networkListeners.size())
       var interBrokerListener: Endpoint = null
@@ -426,7 +388,12 @@ class BrokerServer(
         DataPlaneAcceptor.ThreadPrefix)
 
       // Block until we've caught up with the latest metadata from the controller quorum.
-      lifecycleManager.initialCatchUpFuture.get()
+      try {
+        lifecycleManager.initialCatchUpFuture.get()
+      } catch {
+        case t: Throwable => throw new RuntimeException("Received a fatal error while " +
+          "waiting for the broker to catch up with the current cluster metadata.", t)
+      }
 
       // Apply the metadata log changes that we've accumulated.
       metadataPublisher = new BrokerMetadataPublisher(config,
@@ -446,10 +413,10 @@ class BrokerServer(
       // replicaManager, groupCoordinator, and txnCoordinator. The log manager may perform
       // a potentially lengthy recovery-from-unclean-shutdown operation here, if required.
       try {
-        metadataListener.startPublishing(metadataPublisher).get()
+        metadataLoader.installPublishers(List(metadataPublisher).asJava).get()
       } catch {
         case t: Throwable => throw new RuntimeException("Received a fatal error while " +
-          "waiting for the broker to catch up with the current cluster metadata.", t)
+          "publishing the initial metadata update.", t)
       }
 
       // Log static broker configurations.
@@ -506,8 +473,7 @@ class BrokerServer(
         }
       }
 
-      if (metadataListener != null)
-        metadataListener.beginShutdown()
+      metadataLoader.beginShutdown()
 
       lifecycleManager.beginShutdown()
 
@@ -523,10 +489,7 @@ class BrokerServer(
       if (controlPlaneRequestProcessor != null)
         CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
       CoreUtils.swallow(authorizer.foreach(_.close()), this)
-      if (metadataListener != null) {
-        CoreUtils.swallow(metadataListener.close(), this)
-      }
-      metadataSnapshotter.foreach(snapshotter => CoreUtils.swallow(snapshotter.close(), this))
+      CoreUtils.swallow(metadataLoader.close(), this)
 
       /**
        * We must shutdown the scheduler early because otherwise, the scheduler could touch other

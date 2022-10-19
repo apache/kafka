@@ -340,6 +340,17 @@ public final class KafkaEventQueue implements EventQueue {
                 lock.unlock();
             }
         }
+
+        boolean isEmpty() {
+            lock.lock();
+            try {
+                if (head != head.next) return false;
+                if (!deadlineMap.isEmpty()) return false;
+                return true;
+            } finally {
+                lock.unlock();
+            }
+        }
     }
 
     private final Time time;
@@ -410,6 +421,11 @@ public final class KafkaEventQueue implements EventQueue {
         } finally {
             lock.unlock();
         }
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return eventHandler.isEmpty();
     }
 
     @Override

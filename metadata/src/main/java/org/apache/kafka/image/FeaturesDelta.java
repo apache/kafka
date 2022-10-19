@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 
 /**
@@ -34,7 +35,7 @@ public final class FeaturesDelta {
 
     private final Map<String, Optional<Short>> changes = new HashMap<>();
 
-    private MetadataVersion metadataVersionChange = null;
+    private Optional<MetadataVersionChange> metadataVersionChange = Optional.empty();
 
     public FeaturesDelta(FeaturesImage image) {
         this.image = image;
@@ -44,8 +45,8 @@ public final class FeaturesDelta {
         return changes;
     }
 
-    public Optional<MetadataVersion> metadataVersionChange() {
-        return Optional.ofNullable(metadataVersionChange);
+    public Optional<MetadataVersionChange> metadataVersionChange() {
+        return metadataVersionChange;
     }
 
     public void finishSnapshot() {
@@ -54,17 +55,39 @@ public final class FeaturesDelta {
                 changes.put(featureName, Optional.empty());
             }
         }
+        // Note: we do not need to do anything for metadataVersionChange here, since that is
+        // handled in the constructor of MetadataDelta.
+    }
+
+    public Optional<MetadataVersionChange> calculateMetadataVersionChange(FeatureLevelRecord record) {
+        // Check if the record alters the metadata version.
+        if (!record.name().equals(MetadataVersion.FEATURE_NAME)) {
+            return Optional.empty();
+        }
+        // Check if the new version is the same as the previous one.
+        MetadataVersion oldVersion = metadataVersionChange.isPresent() ?
+                metadataVersionChange.get().newVersion() : image.metadataVersion();
+        MetadataVersion newVersion = MetadataVersion.fromFeatureLevel(record.featureLevel());
+        if (oldVersion.equals(newVersion)) return Optional.empty();
+        return Optional.of(new MetadataVersionChange(oldVersion, newVersion));
+    }
+
+    public void replayMetadataVersionChange(MetadataVersion newVersion) {
+        if (image.metadataVersion().equals(newVersion)) {
+            metadataVersionChange = Optional.empty();
+        } else {
+            metadataVersionChange = Optional.of(
+                    new MetadataVersionChange(image.metadataVersion(), newVersion));
+        }
     }
 
     public void replay(FeatureLevelRecord record) {
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
-            metadataVersionChange = MetadataVersion.fromFeatureLevel(record.featureLevel());
+            replayMetadataVersionChange(MetadataVersion.fromFeatureLevel(record.featureLevel()));
+        } else if (record.featureLevel() == 0) {
+            changes.put(record.name(), Optional.empty());
         } else {
-            if (record.featureLevel() == 0) {
-                changes.put(record.name(), Optional.empty());
-            } else {
-                changes.put(record.name(), Optional.of(record.featureLevel()));
-            }
+            changes.put(record.name(), Optional.of(record.featureLevel()));
         }
     }
 
@@ -89,21 +112,18 @@ public final class FeaturesDelta {
                 }
             }
         }
-
-        final MetadataVersion metadataVersion;
-        if (metadataVersionChange == null) {
-            metadataVersion = image.metadataVersion();
-        } else {
-            metadataVersion = metadataVersionChange;
-        }
-        return new FeaturesImage(newFinalizedVersions, metadataVersion);
+        return new FeaturesImage(newFinalizedVersions, metadataVersionChange.isPresent() ?
+                metadataVersionChange.get().newVersion() : image.metadataVersion());
     }
 
     @Override
     public String toString() {
         return "FeaturesDelta(" +
-            "changes=" + changes +
-            ", metadataVersionChange=" + metadataVersionChange +
-            ')';
+            "changes=" + changes.keySet().stream().
+                sorted().
+                map(k -> "k=" + changes.get(k)).
+                collect(Collectors.joining(", ")) +
+            ", metadataVersionChange=" + metadataVersionChange.toString() +
+            ")";
     }
 }

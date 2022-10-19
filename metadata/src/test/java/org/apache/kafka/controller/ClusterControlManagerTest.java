@@ -34,12 +34,12 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
-import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.placement.ClusterDescriber;
 import org.apache.kafka.metadata.placement.PlacementSpec;
@@ -425,7 +425,7 @@ public class ClusterControlManagerTest {
 
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class, names = {"IBP_3_3_IV2", "IBP_3_3_IV3"})
-    public void testIterator(MetadataVersion metadataVersion) throws Exception {
+    public void testRegistrationsToRecords(MetadataVersion metadataVersion) throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
@@ -467,8 +467,12 @@ public class ClusterControlManagerTest {
                     IN_CONTROLLED_SHUTDOWN.value());
         clusterControl.replay(registrationChangeRecord);
         short expectedVersion = metadataVersion.registerBrokerRecordVersion();
-        RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
-            Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+
+        ImageWriterOptions options = new ImageWriterOptions.Builder().
+                setMetadataVersion(metadataVersion).
+                setLossHandler(__ -> { }).
+                build();
+        assertEquals(new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerEpoch(100).setBrokerId(0).setRack(null).
                 setEndPoints(new BrokerEndpointCollection(Collections.singleton(
                     new BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
@@ -476,26 +480,27 @@ public class ClusterControlManagerTest {
                         setName("PLAINTEXT").
                         setHost("example.com")).iterator())).
                 setInControlledShutdown(metadataVersion.isInControlledShutdownStateSupported()).
-                setFenced(false), expectedVersion)),
-            Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setFenced(false), expectedVersion),
+            clusterControl.brokerRegistrations().get(0).toRecord(options));
+        assertEquals(new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerEpoch(100).setBrokerId(1).setRack(null).
                 setEndPoints(new BrokerEndpointCollection(Collections.singleton(
                     new BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
                         setPort((short) 9093).
                         setName("PLAINTEXT").
                         setHost("example.com")).iterator())).
-                setFenced(false), expectedVersion)),
-            Arrays.asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setFenced(false), expectedVersion),
+            clusterControl.brokerRegistrations().get(1).toRecord(options));
+        assertEquals(new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerEpoch(100).setBrokerId(2).setRack(null).
                 setEndPoints(new BrokerEndpointCollection(Collections.singleton(
                     new BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
                         setPort((short) 9094).
                         setName("PLAINTEXT").
                         setHost("example.com")).iterator())).
-                setFenced(true), expectedVersion))),
-                clusterControl.iterator(Long.MAX_VALUE));
+                    setFenced(true), expectedVersion),
+            clusterControl.brokerRegistrations().get(2).toRecord(options));
     }
-
 
     @Test
     public void testRegistrationWithUnsupportedMetadataVersion() {

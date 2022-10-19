@@ -49,6 +49,7 @@
     <allow pkg="kafka.tools"/>
     <allow pkg="org.apache.kafka.clients"/>
     <allow pkg="org.apache.kafka.controller"/>
+    <allow pkg="org.apache.kafka.image"/>
     <allow pkg="org.apache.kafka.raft"/>
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="org.apache.kafka.metadata" />

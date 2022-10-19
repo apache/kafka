@@ -18,7 +18,7 @@
 package kafka.server.metadata
 
 import java.util.Collections.{singleton, singletonList, singletonMap}
-import java.util.Properties
+import java.util.{Collections, Properties}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import kafka.log.UnifiedLog
 import kafka.server.{BrokerServer, KafkaConfig}
@@ -213,7 +213,8 @@ class BrokerMetadataPublisherTest {
         thenAnswer(new Answer[Unit]() {
           override def answer(invocation: InvocationOnMock): Unit = numTimesReloadCalled.addAndGet(1)
         })
-      broker.metadataListener.alterPublisher(publisher).get()
+      broker.metadataLoader.removeAndClosePublisher(broker.metadataPublisher).get()
+      broker.metadataLoader.installPublishers(Collections.singletonList(publisher)).get()
       val admin = Admin.create(cluster.clientProperties())
       try {
         assertEquals(0, numTimesReloadCalled.get())
@@ -256,7 +257,8 @@ class BrokerMetadataPublisherTest {
       }
       val publisher = Mockito.spy(broker.metadataPublisher)
       doThrow(new RuntimeException("injected failure")).when(publisher).updateCoordinator(any(), any(), any(), any(), any())
-      broker.metadataListener.alterPublisher(publisher).get()
+      broker.metadataLoader.removeAndClosePublisher(broker.metadataPublisher).get()
+      broker.metadataLoader.installPublishers(Collections.singletonList(publisher)).get()
       val admin = Admin.create(cluster.clientProperties())
       try {
         admin.createTopics(singletonList(new NewTopic("foo", 1, 1.toShort))).all().get()

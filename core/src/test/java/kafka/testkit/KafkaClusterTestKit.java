@@ -24,7 +24,6 @@ import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaRaftServer;
 import kafka.server.MetaProperties;
-import kafka.server.metadata.BrokerServerMetrics$;
 import kafka.tools.StorageTool;
 import kafka.utils.Logging;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -37,6 +36,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.Controller;
 import org.apache.kafka.controller.MockControllerMetrics;
+import org.apache.kafka.image.loader.MetadataLoader;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.raft.RaftConfig;
@@ -191,21 +191,36 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     KafkaRaftManager<ApiMessageAndVersion> raftManager = new KafkaRaftManager<>(
                         metaProperties, config, new MetadataRecordSerde(), metadataPartition, KafkaRaftServer.MetadataTopicId(),
                         Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix), connectFutureManager.future);
-                    ControllerServer controller = new ControllerServer(
-                        nodes.controllerProperties(node.id()),
-                        config,
-                        raftManager,
-                        Time.SYSTEM,
-                        new Metrics(),
-                        new MockControllerMetrics(),
-                        Option.apply(threadNamePrefix),
-                        connectFutureManager.future,
-                        KafkaRaftServer.configSchema(),
-                        raftManager.apiVersions(),
-                        bootstrapMetadata,
-                        metadataFaultHandler,
-                        fatalFaultHandler
-                    );
+                    MetadataLoader metadataLoader = null;
+                    ControllerServer controller = null;
+                    try {
+                        metadataLoader = new MetadataLoader.Builder().
+                                setNodeId(node.id()).
+                                setTime(Time.SYSTEM).
+                                setThreadNamePrefix(threadNamePrefix).
+                                setFaultHandler(fatalFaultHandler).
+                                build();
+                        controller = new ControllerServer(
+                                nodes.controllerProperties(node.id()),
+                                config,
+                                raftManager,
+                                Time.SYSTEM,
+                                new Metrics(),
+                                new MockControllerMetrics(),
+                                Option.apply(threadNamePrefix),
+                                connectFutureManager.future,
+                                KafkaRaftServer.configSchema(),
+                                raftManager.apiVersions(),
+                                bootstrapMetadata,
+                                metadataFaultHandler,
+                                fatalFaultHandler,
+                                metadataLoader);
+                    } catch (Throwable e) {
+                        log.error("Error creating controller {}", node.id(), e);
+                        metadataLoader.close();
+                        controller.shutdown();
+                        throw e;
+                    }
                     controllers.put(node.id(), controller);
                     controller.socketServerFirstBoundPortFuture().whenComplete((port, e) -> {
                         if (e != null) {
@@ -255,20 +270,33 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         raftManagers.put(node.id(), raftManager);
                     }
                     Metrics metrics = new Metrics();
-                    BrokerServer broker = new BrokerServer(
-                        config,
-                        nodes.brokerProperties(node.id()),
-                        raftManager,
-                        Time.SYSTEM,
-                        metrics,
-                        BrokerServerMetrics$.MODULE$.apply(metrics),
-                        Option.apply(threadNamePrefix),
-                        JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toSeq(),
-                        connectFutureManager.future,
-                        fatalFaultHandler,
-                        metadataFaultHandler,
-                        metadataFaultHandler
-                    );
+                    MetadataLoader metadataLoader = null;
+                    BrokerServer broker = null;
+                    try {
+                        metadataLoader = new MetadataLoader.Builder().
+                                setNodeId(node.id()).
+                                setTime(Time.SYSTEM).
+                                setThreadNamePrefix(threadNamePrefix).
+                                setFaultHandler(fatalFaultHandler).
+                                build();
+                        broker = new BrokerServer(
+                                config,
+                                nodes.brokerProperties(node.id()),
+                                raftManager,
+                                Time.SYSTEM,
+                                metrics,
+                                Option.apply(threadNamePrefix),
+                                JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toSeq(),
+                                connectFutureManager.future,
+                                fatalFaultHandler,
+                                metadataFaultHandler,
+                                metadataLoader);
+                    } catch (Throwable e) {
+                        log.error("Error creating broker {}", node.id(), e);
+                        metadataLoader.close();
+                        broker.shutdown();
+                        throw e;
+                    }
                     brokers.put(node.id(), broker);
                 }
             } catch (Exception e) {
