@@ -31,6 +31,7 @@ import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
+import kafka.server.TransferLeaderManager;
 import kafka.server.ZkMetadataCache;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.ConfigRepository;
@@ -96,6 +97,7 @@ public class PartitionCreationBench {
     private LogDirFailureChannel failureChannel;
     private LogManager logManager;
     private AlterIsrManager alterIsrManager;
+    private TransferLeaderManager transferLeaderManager;
     private List<TopicPartition> topicPartitions;
 
     @SuppressWarnings("deprecation")
@@ -156,6 +158,7 @@ public class PartitionCreationBench {
             }
         };
         this.alterIsrManager = TestUtils.createAlterIsrManager();
+        this.transferLeaderManager = TestUtils.createTransferLeaderManager();
         this.replicaManager = new ReplicaManager(
                 this.brokerProperties,
                 this.metrics,
@@ -170,6 +173,7 @@ public class PartitionCreationBench {
                 metadataCache,
                 this.failureChannel,
                 alterIsrManager,
+                transferLeaderManager,
                 Option.empty());
         replicaManager.startup();
         replicaManager.checkpointHighWatermarks();

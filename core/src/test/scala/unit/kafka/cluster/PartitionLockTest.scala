@@ -258,6 +258,7 @@ class PartitionLockTest extends Logging {
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
     val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
     val alterIsrManager: AlterIsrManager = mock(classOf[AlterIsrManager])
+    val transferLeaderManager: TransferLeaderManager = mock(classOf[TransferLeaderManager])
 
     logManager.startup(Set.empty)
     val partition = new Partition(topicPartition,
@@ -269,7 +270,8 @@ class PartitionLockTest extends Logging {
       delayedOperations,
       metadataCache,
       logManager,
-      alterIsrManager) {
+      alterIsrManager,
+      transferLeaderManager) {
 
       override def shrinkIsr(newIsr: Set[Int]): Unit = {
         shrinkIsrSemaphore.acquire()

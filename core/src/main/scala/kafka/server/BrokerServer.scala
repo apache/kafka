@@ -134,6 +134,8 @@ class BrokerServer(
 
   var alterIsrManager: AlterIsrManager = null
 
+  var transferLeaderManager: TransferLeaderManager = null
+
   var autoTopicCreationManager: AutoTopicCreationManager = null
 
   var kafkaScheduler: KafkaScheduler = null
@@ -262,9 +264,21 @@ class BrokerServer(
       )
       alterIsrManager.start()
 
+      transferLeaderManager = TransferLeaderManager(
+        config = config,
+        metadataCache = metadataCache,
+        scheduler = kafkaScheduler,
+        time = time,
+        metrics = metrics,
+        threadNamePrefix = threadNamePrefix,
+        brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
+        config.brokerId
+      )
+      transferLeaderManager.start()
+
       this._replicaManager = new ReplicaManager(config, metrics, time, None,
         kafkaScheduler, logManager, Option.apply(remoteLogManager), isShuttingDown, quotaManagers,
-        brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager,
+        brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager, transferLeaderManager,
         threadNamePrefix)
 
       /* start token manager */
@@ -513,6 +527,9 @@ class BrokerServer(
 
       if (alterIsrManager != null)
         CoreUtils.swallow(alterIsrManager.shutdown(), this)
+
+      if (transferLeaderManager != null)
+        CoreUtils.swallow(transferLeaderManager.shutdown(), this)
 
       if (clientToControllerChannelManager != null)
         CoreUtils.swallow(clientToControllerChannelManager.shutdown(), this)

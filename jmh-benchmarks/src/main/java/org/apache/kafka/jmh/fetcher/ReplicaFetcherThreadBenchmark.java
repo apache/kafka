@@ -40,6 +40,7 @@ import kafka.server.OffsetTruncationState;
 import kafka.server.ReplicaFetcherThread;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
+import kafka.server.TransferLeaderManager;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
 import kafka.utils.KafkaScheduler;
@@ -162,9 +163,10 @@ public class ReplicaFetcherThreadBenchmark {
             OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
             Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
             AlterIsrManager isrChannelManager = Mockito.mock(AlterIsrManager.class);
+            TransferLeaderManager transferLeaderManager = Mockito.mock(TransferLeaderManager.class);
             Partition partition = new Partition(tp, 100, ApiVersion$.MODULE$.latestVersion(),
                     0, Time.SYSTEM, isrChangeListener, new DelayedOperationsMock(tp),
-                    Mockito.mock(MetadataCache.class), logManager, isrChannelManager);
+                    Mockito.mock(MetadataCache.class), logManager, isrChannelManager, transferLeaderManager);
 
             partition.makeFollower(partitionState, offsetCheckpoints, topicId);
             pool.put(tp, partition);

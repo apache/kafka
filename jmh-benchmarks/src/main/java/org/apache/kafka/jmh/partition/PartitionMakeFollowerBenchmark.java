@@ -30,6 +30,7 @@ import kafka.server.AlterIsrManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
+import kafka.server.TransferLeaderManager;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
 import kafka.utils.KafkaScheduler;
@@ -128,10 +129,11 @@ public class PartitionMakeFollowerBenchmark {
         Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
         IsrChangeListener isrChangeListener = Mockito.mock(IsrChangeListener.class);
         AlterIsrManager alterIsrManager = Mockito.mock(AlterIsrManager.class);
+        TransferLeaderManager transferLeaderManager = Mockito.mock(TransferLeaderManager.class);
         partition = new Partition(tp, 100,
             ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
             isrChangeListener, delayedOperations,
-            Mockito.mock(MetadataCache.class), logManager, alterIsrManager);
+            Mockito.mock(MetadataCache.class), logManager, alterIsrManager, transferLeaderManager);
         partition.createLogIfNotExists(true, false, offsetCheckpoints, topicId);
         executorService.submit((Runnable) () -> {
             SimpleRecord[] simpleRecords = new SimpleRecord[] {

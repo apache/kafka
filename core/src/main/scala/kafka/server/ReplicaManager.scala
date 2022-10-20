@@ -203,7 +203,8 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
                      val delayedRemoteFetchPurgatory: DelayedOperationPurgatory[DelayedRemoteFetch],
                      threadNamePrefix: Option[String],
-                     val alterIsrManager: AlterIsrManager) extends Logging with KafkaMetricsGroup {
+                     val alterIsrManager: AlterIsrManager,
+                     val transferLeaderManager: TransferLeaderManager) extends Logging with KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
            metrics: Metrics,
@@ -218,6 +219,7 @@ class ReplicaManager(val config: KafkaConfig,
            metadataCache: MetadataCache,
            logDirFailureChannel: LogDirFailureChannel,
            alterIsrManager: AlterIsrManager,
+           transferLeaderManager: TransferLeaderManager,
            threadNamePrefix: Option[String] = None) = {
     this(config, metrics, time, zkClient, scheduler, logManager, remoteLogManager, isShuttingDown,
       quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel,
@@ -234,7 +236,7 @@ class ReplicaManager(val config: KafkaConfig,
         purgatoryName = "ElectLeader", brokerId = config.brokerId),
       DelayedOperationPurgatory[DelayedRemoteFetch](
         purgatoryName = "RemoteFetch", brokerId = config.brokerId),
-      threadNamePrefix, alterIsrManager)
+      threadNamePrefix, alterIsrManager, transferLeaderManager)
   }
 
   /* epoch of the controller that last changed the leader */

@@ -48,6 +48,8 @@ class HighwatermarkPersistenceTest {
 
   val alterIsrManager = TestUtils.createAlterIsrManager()
 
+  val transferLeaderManager = TestUtils.createTransferLeaderManager()
+
   @AfterEach
   def teardown(): Unit = {
     for (manager <- logManagers; dir <- manager.liveLogDirs)
@@ -65,7 +67,7 @@ class HighwatermarkPersistenceTest {
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, metrics, time, None, scheduler,
       logManagers.head, None, new AtomicBoolean(false), quotaManager,
-      new BrokerTopicStats, MetadataCache.zkMetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager)
+      new BrokerTopicStats, MetadataCache.zkMetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager, transferLeaderManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -114,7 +116,7 @@ class HighwatermarkPersistenceTest {
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, metrics, time, None,
       scheduler, logManagers.head, None, new AtomicBoolean(false), quotaManager,
-      new BrokerTopicStats, MetadataCache.zkMetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager)
+      new BrokerTopicStats, MetadataCache.zkMetadataCache(configs.head.brokerId), logDirFailureChannels.head, alterIsrManager, transferLeaderManager)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()

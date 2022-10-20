@@ -54,7 +54,7 @@ class IsrExpirationTest {
 
   var quotaManager: QuotaManagers = null
   var replicaManager: ReplicaManager = null
-
+  var transferLeaderManager: TransferLeaderManager = TestUtils.createTransferLeaderManager()
   var alterIsrManager: MockAlterIsrManager = _
 
   @BeforeEach
@@ -68,7 +68,7 @@ class IsrExpirationTest {
     replicaManager = new ReplicaManager(configs.head, metrics, time, None, null, logManager, None,
       new AtomicBoolean(false), quotaManager, new BrokerTopicStats,
       MetadataCache.zkMetadataCache(configs.head.brokerId), new LogDirFailureChannel(configs.head.logDirs.size),
-      alterIsrManager)
+      alterIsrManager, transferLeaderManager)
   }
 
   @AfterEach

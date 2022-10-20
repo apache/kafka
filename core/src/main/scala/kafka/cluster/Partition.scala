@@ -97,7 +97,8 @@ object Partition extends KafkaMetricsGroup {
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
       logManager = replicaManager.logManager,
-      alterIsrManager = replicaManager.alterIsrManager)
+      alterIsrManager = replicaManager.alterIsrManager,
+      transferLeaderManager = replicaManager.transferLeaderManager)
   }
 
   def removeMetrics(topicPartition: TopicPartition): Unit = {
@@ -219,7 +220,8 @@ class Partition(val topicPartition: TopicPartition,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
                 logManager: LogManager,
-                alterIsrManager: AlterIsrManager) extends Logging with KafkaMetricsGroup {
+                alterIsrManager: AlterIsrManager,
+                transferLeaderManager: TransferLeaderManager) extends Logging with KafkaMetricsGroup {
 
   def topic: String = topicPartition.topic
   def partitionId: Int = topicPartition.partition

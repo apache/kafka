@@ -18,7 +18,7 @@ package kafka.cluster
 
 import kafka.api.ApiVersion
 import kafka.log.{CleanerConfig, LogConfig, LogManager}
-import kafka.server.{Defaults, MetadataCache}
+import kafka.server.{Defaults, MetadataCache, TransferLeaderManager}
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils.{MockAlterIsrManager, MockIsrChangeListener}
@@ -33,7 +33,6 @@ import org.mockito.Mockito.{mock, when}
 
 import java.io.File
 import java.util.Properties
-
 import scala.jdk.CollectionConverters._
 
 object AbstractPartitionTest {
@@ -50,6 +49,7 @@ class AbstractPartitionTest {
   var logDir2: File = _
   var logManager: LogManager = _
   var alterIsrManager: MockAlterIsrManager = _
+  var transferLeaderManager: TransferLeaderManager = _
   var isrChangeListener: MockIsrChangeListener = _
   var logConfig: LogConfig = _
   var configRepository: MockConfigRepository = _
@@ -74,6 +74,7 @@ class AbstractPartitionTest {
     logManager.startup(Set.empty)
 
     alterIsrManager = TestUtils.createAlterIsrManager()
+    transferLeaderManager = TestUtils.createTransferLeaderManager()
     isrChangeListener = TestUtils.createIsrChangeListener()
     partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
@@ -84,7 +85,8 @@ class AbstractPartitionTest {
       delayedOperations,
       metadataCache,
       logManager,
-      alterIsrManager)
+      alterIsrManager,
+      transferLeaderManager)
 
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
       .thenReturn(None)

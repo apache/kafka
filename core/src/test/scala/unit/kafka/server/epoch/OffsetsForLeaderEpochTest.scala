@@ -41,6 +41,7 @@ class OffsetsForLeaderEpochTest {
   private val time = new MockTime
   private val metrics = new Metrics
   private val alterIsrManager = TestUtils.createAlterIsrManager()
+  private val transferLeaderManager = TestUtils.createTransferLeaderManager()
   private val tp = new TopicPartition("topic", 1)
   private var replicaManager: ReplicaManager = _
   private var quotaManager: QuotaManagers = _
@@ -67,7 +68,7 @@ class OffsetsForLeaderEpochTest {
     // create a replica manager with 1 partition that has 1 replica
     replicaManager = new ReplicaManager(config, metrics, time, None, null, logManager, None, new AtomicBoolean(false),
       quotaManager, new BrokerTopicStats,
-      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
+      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, transferLeaderManager)
     val partition = replicaManager.createPartition(tp)
     partition.setLog(mockLog, isFutureLog = false)
     partition.leaderReplicaIdOpt = Some(config.brokerId)
@@ -90,7 +91,7 @@ class OffsetsForLeaderEpochTest {
     //create a replica manager with 1 partition that has 0 replica
     replicaManager = new ReplicaManager(config, metrics, time, None, null, logManager, None, new AtomicBoolean(false),
       quotaManager, new BrokerTopicStats,
-      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
+      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, transferLeaderManager)
     replicaManager.createPartition(tp)
 
     //Given
@@ -115,7 +116,7 @@ class OffsetsForLeaderEpochTest {
     //create a replica manager with 0 partition
     replicaManager = new ReplicaManager(config, metrics, time, None, null, logManager, None, new AtomicBoolean(false),
       quotaManager, new BrokerTopicStats,
-      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager)
+      MetadataCache.zkMetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size), alterIsrManager, transferLeaderManager)
 
     //Given
     val epochRequested: Integer = 5

@@ -1182,8 +1182,16 @@ object TestUtils extends Logging {
     }
   }
 
+  class MockTransferLeaderManager extends TransferLeaderManager {
+    override def submit(transferLeaderItem: TransferLeaderItem): Unit = ???
+  }
+
   def createAlterIsrManager(): MockAlterIsrManager = {
     new MockAlterIsrManager()
+  }
+
+  def createTransferLeaderManager(): MockTransferLeaderManager = {
+    new MockTransferLeaderManager()
   }
 
   class MockIsrChangeListener extends IsrChangeListener {

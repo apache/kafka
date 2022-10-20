@@ -205,7 +205,8 @@ class PartitionTest extends AbstractPartitionTest {
       delayedOperations,
       metadataCache,
       logManager,
-      alterIsrManager) {
+      alterIsrManager,
+      transferLeaderManager) {
 
       override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Log = {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints, None)
@@ -1596,7 +1597,8 @@ class PartitionTest extends AbstractPartitionTest {
       delayedOperations,
       metadataCache,
       logManager,
-      zkIsrManager)
+      zkIsrManager,
+      transferLeaderManager)
 
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
@@ -1696,7 +1698,8 @@ class PartitionTest extends AbstractPartitionTest {
       delayedOperations,
       metadataCache,
       logManager,
-      alterIsrManager)
+      alterIsrManager,
+      transferLeaderManager)
 
     // partition2 should not yet be associated with the log, but should be able to get ID
     assertTrue(partition2.topicId.isDefined)
@@ -1740,7 +1743,8 @@ class PartitionTest extends AbstractPartitionTest {
       delayedOperations,
       metadataCache,
       logManager,
-      alterIsrManager)
+      alterIsrManager,
+      transferLeaderManager)
 
     // partition2 should not yet be associated with the log, but should be able to get ID
     assertTrue(partition2.topicId.isDefined)
@@ -1817,7 +1821,7 @@ class PartitionTest extends AbstractPartitionTest {
     val partition = new Partition(
       topicPartition, 1000, ApiVersion.latestVersion, 0,
       new SystemTime(), mock(classOf[IsrChangeListener]), mock(classOf[DelayedOperations]),
-      mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterIsrManager]))
+      mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterIsrManager]), mock(classOf[TransferLeaderManager]))
 
     val replicas = Seq(0, 1, 2, 3)
     val isr = Set(0, 1, 2, 3)
@@ -1865,7 +1869,8 @@ class PartitionTest extends AbstractPartitionTest {
       delayedOperations,
       metadataCache,
       spyLogManager,
-      alterIsrManager)
+      alterIsrManager,
+      transferLeaderManager)
 
     partition.createLog(isNew = true, isFutureReplica = false, offsetCheckpoints, topicId = None)
 
@@ -1903,7 +1908,8 @@ class PartitionTest extends AbstractPartitionTest {
       delayedOperations,
       metadataCache,
       spyLogManager,
-      alterIsrManager)
+      alterIsrManager,
+      transferLeaderManager)
 
     partition.createLog(isNew = true, isFutureReplica = false, offsetCheckpoints, topicId = None)
 
@@ -1944,7 +1950,8 @@ class PartitionTest extends AbstractPartitionTest {
       delayedOperations,
       metadataCache,
       spyLogManager,
-      alterIsrManager)
+      alterIsrManager,
+      transferLeaderManager)
 
     partition.createLog(isNew = true, isFutureReplica = false, offsetCheckpoints, topicId = None)
 
