@@ -210,8 +210,8 @@ public class PartitionRegistration {
 
     @Override
     public int hashCode() {
-        return Objects.hash(replicas, isr, removingReplicas, addingReplicas, leader, leaderRecoveryState,
-            leaderEpoch, partitionEpoch);
+        return Objects.hash(Arrays.hashCode(replicas), Arrays.hashCode(isr), Arrays.hashCode(removingReplicas),
+            Arrays.hashCode(addingReplicas), leader, leaderRecoveryState, leaderEpoch, partitionEpoch);
     }
 
     @Override
