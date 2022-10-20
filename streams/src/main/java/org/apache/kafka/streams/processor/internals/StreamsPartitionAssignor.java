@@ -54,9 +54,6 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -961,7 +958,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             } else if (shouldEncodeProbingRebalance) {
                 final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
                 log.info("Requesting followup rebalance be scheduled by {} {} for to probe for caught-up replica tasks.",
-                        consumer, formatInstantTime(nextRebalanceTimeMs));
+                        consumer, Utils.toLogDateTimeFormat(nextRebalanceTimeMs));
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
                 shouldEncodeProbingRebalance = false;
             }
@@ -1361,7 +1358,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         } else if (encodedNextScheduledRebalanceMs < Long.MAX_VALUE) {
             log.info(
                 "Requested to schedule next probing rebalance at {} to try for a more balanced assignment.",
-                formatInstantTime(encodedNextScheduledRebalanceMs)
+                Utils.toLogDateTimeFormat(encodedNextScheduledRebalanceMs)
             );
             nextScheduledRebalanceMs.set(encodedNextScheduledRebalanceMs);
         } else {
@@ -1448,11 +1445,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 minSupportedMetadataVersion, supportedVersion);
             return minSupportedMetadataVersion;
         }
-    }
-
-    private String formatInstantTime(final long instant) {
-        final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss,SSS");
-        return Instant.ofEpochMilli(instant).atZone(ZoneId.systemDefault()).format(dateTimeFormatter);
     }
 
     // following functions are for test only

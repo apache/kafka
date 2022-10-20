@@ -33,6 +33,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -55,9 +56,6 @@ import java.util.function.BiConsumer;
 import org.slf4j.Logger;
 
 import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -613,7 +611,7 @@ public class StreamThread extends Thread {
                 }
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
-                    log.info("Triggering the followup rebalance scheduled for {}.", formatInstantTime(nextProbingRebalanceMs.get()));
+                    log.info("Triggering the followup rebalance scheduled for {}.", Utils.toLogDateTimeFormat(nextProbingRebalanceMs.get()));
                     mainConsumer.enforceRebalance("Scheduled probing rebalance");
                     nextProbingRebalanceMs.set(Long.MAX_VALUE);
                 }
@@ -1270,11 +1268,6 @@ public class StreamThread extends Thread {
 
     public Map<TaskId, Task> allTasks() {
         return taskManager.allTasks();
-    }
-
-    private String formatInstantTime(final long instant) {
-        final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss,SSS");
-        return Instant.ofEpochMilli(instant).atZone(ZoneId.systemDefault()).format(dateTimeFormatter);
     }
 
     /**
