@@ -90,6 +90,7 @@ public class ConsumerProtocol {
             partition.partitions().add(tp.partition());
         }
 
+        data.setGenerationId(subscription.generationId());
         return MessageUtil.toVersionPrefixedByteBuffer(version, data);
     }
 
