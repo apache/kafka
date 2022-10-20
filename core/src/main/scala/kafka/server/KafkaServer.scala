@@ -185,6 +185,9 @@ class KafkaServer(
 
   @volatile private var poisonPill: PoisonPill = null
 
+  // populate the global flag
+  GlobalConfig.liDropCorruptedFilesEnable = config.liDropCorruptedFilesEnable
+
   private def haltIfNotHealthy(): Unit = {
     // This relies on io-thread to receive request from RequestChannel with 300 ms timeout, so that lastDequeueTimeMs
     // will keep increasing even if there is no incoming request

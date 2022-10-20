@@ -16,12 +16,17 @@
   */
 package kafka.server.checkpoints
 
-import java.io.File
-
 import kafka.server.epoch.EpochEntry
+import kafka.server.{GlobalConfig, LogDirFailureChannel}
 import kafka.utils.Logging
+import org.apache.kafka.common.errors.KafkaStorageException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+
+import java.io.{BufferedWriter, File, FileOutputStream, OutputStreamWriter}
+import java.nio.file.Files
 
 class LeaderEpochCheckpointFileTest extends Logging {
 
@@ -66,5 +71,78 @@ class LeaderEpochCheckpointFileTest extends Logging {
 
     //The data should still be there
     assertEquals(epochs, checkpoint2.read())
+  }
+
+
+  @ParameterizedTest
+  @ValueSource(booleans =  Array(true, false))
+  def testCheckpointFileWithCorruptedVersion(liDropCorruptedFilesEnable: Boolean): Unit = {
+    testCheckpointFileWithCorruption(liDropCorruptedFilesEnable, bw => {
+      bw.write("100")
+      bw.newLine()
+    })
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans =  Array(true, false))
+  def testCheckpointFileWithIncorrectNumberOfEntries(liDropCorruptedFilesEnable: Boolean): Unit = {
+    testCheckpointFileWithCorruption(liDropCorruptedFilesEnable, bw => {
+      bw.write(0.toString)
+      bw.newLine()
+
+      bw.write(3.toString)
+      bw.newLine()
+    })
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans =  Array(true, false))
+  def testCheckpointFileWithCorruptedEntries(liDropCorruptedFilesEnable: Boolean): Unit = {
+    testCheckpointFileWithCorruption(liDropCorruptedFilesEnable, bw => {
+      bw.write(0.toString)
+      bw.newLine()
+
+      bw.write(1.toString)
+      bw.newLine()
+
+      val epoch = 100
+      bw.write(epoch.toString) // this line is malformed since there is only epoch without the starting offset
+    })
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans =  Array(true, false))
+  def testCheckpointFileWithNumberFormatExceptions(liDropCorruptedFilesEnable: Boolean): Unit = {
+    testCheckpointFileWithCorruption(liDropCorruptedFilesEnable, bw => {
+      bw.write(0.toString)
+      bw.newLine()
+
+      bw.write(1.toString)
+      bw.newLine()
+
+      bw.write("not-a-number 3") // this line is malformed since the first field cannot be converted to a number
+    })
+  }
+
+  private def testCheckpointFileWithCorruption(liDropCorruptedFilesEnable: Boolean, testFunc: BufferedWriter => Unit): Unit = {
+    GlobalConfig.liDropCorruptedFilesEnable = liDropCorruptedFilesEnable
+    val file = File.createTempFile("temp-checkpoint-file", System.nanoTime().toString)
+    file.deleteOnExit()
+
+    // create a file with corrupted version number
+    val bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file)))
+    testFunc(bw)
+    bw.close()
+
+    val checkpoint = new LeaderEpochCheckpointFile(file, new LogDirFailureChannel(1))
+    if (liDropCorruptedFilesEnable) {
+      val epochs = checkpoint.read()
+      assertTrue(epochs.isEmpty, "reading from a corrupted leader-epoch-checkpoint file should have returned an empty list of EpochEntries")
+      // verify that the file no longer exists
+      assertTrue(file.exists(), "the file should still exists")
+      assertEquals(0, Files.size(file.toPath), "the content of the corrupted file should have been cleared")
+    } else {
+      assertThrows(classOf[KafkaStorageException], ()=> checkpoint.read())
+    }
   }
 }

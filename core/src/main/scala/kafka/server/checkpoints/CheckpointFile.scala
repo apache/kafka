@@ -19,9 +19,8 @@ package kafka.server.checkpoints
 import java.io._
 import java.nio.charset.StandardCharsets
 import java.nio.file.{FileAlreadyExistsException, Files, Paths}
-
-import kafka.server.LogDirFailureChannel
-import kafka.utils.Logging
+import kafka.server.{GlobalConfig, LogDirFailureChannel}
+import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.utils.Utils
 
@@ -60,17 +59,27 @@ class CheckpointReadBuffer[T](location: String,
               case Some(e) =>
                 entries += e
                 line = reader.readLine()
-              case _ => throw malformedLineException(line)
+              case _ => return dropCorruptedFileOrThrow(malformedLineException(line))
             }
           }
           if (entries.size != expectedSize)
-            throw new IOException(s"Expected $expectedSize entries in checkpoint file ($location), but found only ${entries.size}")
+            return dropCorruptedFileOrThrow(new IOException(s"Expected $expectedSize entries in checkpoint file ($location), but found only ${entries.size}"))
           entries
         case _ =>
-          throw new IOException(s"Unrecognized version of the checkpoint file ($location): " + version)
+          dropCorruptedFileOrThrow(new IOException(s"Unrecognized version of the checkpoint file ($location): " + line))
       }
     } catch {
-      case _: NumberFormatException => throw malformedLineException(line)
+      case _: NumberFormatException => dropCorruptedFileOrThrow(malformedLineException(line))
+    }
+  }
+
+  private def dropCorruptedFileOrThrow(e: Exception): Seq[T] = {
+    if (GlobalConfig.liDropCorruptedFilesEnable) {
+      // clear contents of the file and return an empty sequence
+      CoreUtils.truncateToZero(location)
+      Seq.empty[T]
+    } else {
+      throw e
     }
   }
 }

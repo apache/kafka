@@ -50,6 +50,8 @@ class KafkaRaftServer(
 
   KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
   KafkaYammerMetrics.INSTANCE.configure(config.originals)
+  // populate the global flag
+  GlobalConfig.liDropCorruptedFilesEnable = config.liDropCorruptedFilesEnable
 
   private val (metaProps, offlineDirs) = KafkaRaftServer.initializeLogDirs(config)
 
