@@ -125,4 +125,9 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStore extends AbstractRocksDB
         final SegmentIterator<Segment> segmentIterator) {
         return new WindowKeySchemaIndexToBaseStoreIterator(segmentIterator);
     }
+
+    @Override
+    public boolean recover(final Long changelogOffset) {
+        return segments.recover(changelogOffset);
+    }
 }

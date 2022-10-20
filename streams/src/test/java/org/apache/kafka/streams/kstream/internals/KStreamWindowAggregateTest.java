@@ -137,8 +137,8 @@ public class KStreamWindowAggregateTest {
 
         final Materialized<String, String, WindowStore<Bytes, byte[]>> materialized =
             Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized")
-                .withValueSerde(Serdes.String());
-        materialized.withStoreType(storeType);
+                .withValueSerde(Serdes.String())
+                .withStoreType(storeType);
         final KTable<Windowed<String>, String> table2 = builder.stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .windowedBy(TimeWindows.ofSizeAndGrace(ofMillis(10), ofMillis(100)).advanceBy(ofMillis(5)))

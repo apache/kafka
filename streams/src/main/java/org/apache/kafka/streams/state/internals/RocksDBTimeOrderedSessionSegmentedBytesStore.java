@@ -165,4 +165,9 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksD
         final SegmentIterator<Segment> segmentIterator) {
         return new SessionKeySchemaIndexToBaseStoreIterator(segmentIterator);
     }
+
+    @Override
+    public boolean recover(final Long changelogOffset) {
+        return segments.recover(changelogOffset);
+    }
 }
