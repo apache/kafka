@@ -957,7 +957,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 shouldEncodeProbingRebalance = false;
             } else if (shouldEncodeProbingRebalance) {
                 final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
-                log.info("Requesting followup rebalance be scheduled by {} {} for to probe for caught-up replica tasks.",
+                log.info("Requesting followup rebalance be scheduled by {} for {} to probe for caught-up replica tasks.",
                         consumer, Utils.toLogDateTimeFormat(nextRebalanceTimeMs));
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
                 shouldEncodeProbingRebalance = false;
