@@ -196,7 +196,7 @@ public abstract class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      * @return The set of topics currently subscribed to
      */
     public Set<String> subscription() {
-        return Collections.unmodifiableSet(new HashSet<>(this.subscriptions.subscription()));
+        return Collections.unmodifiableSet(this.subscriptions.subscription());
     }
 
     /**
