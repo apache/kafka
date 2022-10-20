@@ -992,6 +992,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertTrue(changelogReader.isEmpty());
         assertNull(changelogReader.changelogMetadata(tp1));
         assertNull(changelogReader.changelogMetadata(tp2));
+        assertEquals(changelogReader.state(), ACTIVE_RESTORING);
     }
 
     @Test
@@ -1070,6 +1071,11 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
         assertEquals(mkSet(tp, tp1, tp2), consumer.assignment());
         assertEquals(mkSet(tp1, tp2), consumer.paused());
+
+        changelogReader.transitToUpdateStandby();
+        changelogReader.unregister(mkSet(tp, tp1, tp2));
+        assertTrue(changelogReader.isEmpty());
+        assertEquals(ACTIVE_RESTORING, changelogReader.state());
     }
 
     @Test
