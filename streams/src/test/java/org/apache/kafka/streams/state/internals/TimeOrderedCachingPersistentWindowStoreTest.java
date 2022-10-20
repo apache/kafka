@@ -96,7 +96,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@RunWith(Parameterized.class)
 public class TimeOrderedCachingPersistentWindowStoreTest {
 
     private static final int MAX_CACHE_SIZE_BYTES = 300;
@@ -143,20 +143,7 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
 
     @After
     public void closeStore() {
-        try {
-            cachingStore.close();
-        } catch (final RuntimeException runtimeException) {
-           /*
-           It will reach here for the testcases like
-           shouldCloseCacheAndWrappedStoreAfterErrorDuringCacheFlush(),
-           shouldCloseWrappedStoreAfterErrorDuringCacheClose(),
-           shouldCloseCacheAfterErrorDuringStateStoreClose()
-
-           In these testcases we have set the doThrow for the cache#close
-           cache#flush, underlyingStore#close method.
-            */
-        }
-
+        cachingStore.close();
     }
 
     @SuppressWarnings("deprecation")
@@ -1185,39 +1172,37 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
         setUpCloseTests();
         reset(cache);
         doThrow(new RuntimeException("Simulating an error on flush2")).when(cache).flush(CACHE_NAMESPACE);
-        cache.close(CACHE_NAMESPACE);
         reset(underlyingStore);
-        underlyingStore.close();
         assertThrows(RuntimeException.class, cachingStore::close);
+        verifyAndTearDownCloseTests();
     }
 
     @Test
     public void shouldCloseWrappedStoreAfterErrorDuringCacheClose() {
         setUpCloseTests();
         reset(cache);
-        cache.flush(CACHE_NAMESPACE);
         doThrow(new RuntimeException("Simulating an error on close")).when(cache).close(CACHE_NAMESPACE);
         reset(underlyingStore);
-        underlyingStore.close();
         assertThrows(RuntimeException.class, cachingStore::close);
+        verifyAndTearDownCloseTests();
     }
 
     @Test
     public void shouldCloseCacheAfterErrorDuringStateStoreClose() {
         setUpCloseTests();
         reset(cache);
-        cache.flush(CACHE_NAMESPACE);
-        cache.close(CACHE_NAMESPACE);
         reset(underlyingStore);
         doThrow(new RuntimeException("Simulating an error on close")).when(underlyingStore).close();
         assertThrows(RuntimeException.class, cachingStore::close);
+        verifyAndTearDownCloseTests();
     }
 
     private void setUpCloseTests() {
         underlyingStore = mock(RocksDBTimeOrderedWindowStore.class);
         when(underlyingStore.name()).thenReturn("store-name");
-        cachingStore = spy(new TimeOrderedCachingWindowStore(underlyingStore,
-            WINDOW_SIZE, SEGMENT_INTERVAL));
+        when(underlyingStore.isOpen()).thenReturn(true);
+        cachingStore = new TimeOrderedCachingWindowStore(underlyingStore,
+            WINDOW_SIZE, SEGMENT_INTERVAL);
         cache = mock(ThreadCache.class);
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
@@ -1241,6 +1226,17 @@ public class TimeOrderedCachingPersistentWindowStoreTest {
                 4; // sequenceNumber
         }
         return i;
+    }
+
+    private void verifyAndTearDownCloseTests() {
+        verify(underlyingStore).close();
+        verify(cache).flush(CACHE_NAMESPACE);
+        verify(cache).close(CACHE_NAMESPACE);
+
+        // resets the mocks created in #setUpCloseTests(). It is necessary to
+        // ensure that @After works correctly.
+        reset(cache);
+        reset(underlyingStore);
     }
 
 }
