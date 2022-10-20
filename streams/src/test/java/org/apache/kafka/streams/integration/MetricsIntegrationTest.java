@@ -199,8 +199,6 @@ public class MetricsIntegrationTest {
     private static final String ACTIVE_PROCESS_RATIO = "active-process-ratio";
     private static final String ACTIVE_BUFFER_COUNT = "active-buffer-count";
 
-    private static final String CACHE_SIZE_BYTES_TOTAL = "cache-size-bytes-total";
-
     private static final String SKIPPED_RECORDS_RATE = "skipped-records-rate";
     private static final String SKIPPED_RECORDS_TOTAL = "skipped-records-total";
     private static final String RECORD_LATENESS_AVG = "record-lateness-avg";
@@ -261,7 +259,6 @@ public class MetricsIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.name);
-        streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 10 * 1024 * 1024L);
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
     }
@@ -538,7 +535,6 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricTask, PUNCTUATE_TOTAL, 4);
         checkMetricByName(listMetricTask, PROCESS_RATE, 4);
         checkMetricByName(listMetricTask, PROCESS_TOTAL, 4);
-        checkMetricByName(listMetricTask, CACHE_SIZE_BYTES_TOTAL, 3);
     }
 
     private void checkProcessorNodeLevelMetrics() {

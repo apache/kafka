@@ -34,8 +34,9 @@ import java.util.function.Supplier;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_DOC;
-import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_DOC;
+import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_DOC;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC;
@@ -67,6 +68,11 @@ public class TopologyConfig extends AbstractConfig {
                 null,
                 Importance.LOW,
                 BUFFERED_RECORDS_PER_PARTITION_DOC)
+            .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                    Type.LONG,
+                    null,
+                    Importance.MEDIUM,
+                    CACHE_MAX_BYTES_BUFFERING_DOC)
             .define(STATESTORE_CACHE_MAX_BYTES_CONFIG,
                 Type.LONG,
                 null,

@@ -106,6 +106,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsets;
 import static org.apache.kafka.streams.processor.internals.TopologyMetadata.UNNAMED_TOPOLOGY;
 
@@ -925,7 +926,7 @@ public class KafkaStreams implements AutoCloseable {
         streamsUncaughtExceptionHandler = this::defaultStreamsUncaughtExceptionHandler;
         delegatingStateRestoreListener = new DelegatingStateRestoreListener();
 
-        totalCacheSize = applicationConfigs.getLong(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG);
+        totalCacheSize = getTotalCacheSize(applicationConfigs);
         final int numStreamThreads = topologyMetadata.getNumStreamThreads(applicationConfigs);
         final long cacheSizePerThread = getCacheSizePerThread(numStreamThreads);
 
