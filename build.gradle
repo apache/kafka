@@ -1273,6 +1273,8 @@ project(':clients') {
     compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
 
     testImplementation libs.bcpkix
+    testImplementation libs.jacksonJaxrsJsonProvider
+    testImplementation libs.jose4j
     testImplementation libs.junitJupiter
     testImplementation libs.log4j
     testImplementation libs.mockitoInline
@@ -1280,9 +1282,6 @@ project(':clients') {
     testRuntimeOnly libs.slf4jlog4j
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
-    testImplementation libs.jose4j
-    testImplementation libs.jacksonJaxrsJsonProvider
-    testImplementation libs.log4j
 
     generator project(':generator')
   }
