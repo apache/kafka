@@ -16,14 +16,31 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.internals.NoopBackgroundEvent;
+
+import java.util.concurrent.BlockingQueue;
+
 /**
- * This is the abstract definition of the events created by the KafkaConsumer API
+ * The event is NoOp. This is intentionally left here for demonstration purpose.
  */
-abstract public class ApplicationEvent {
-    /**
-     * process the application event. Return true upon succesful execution,
-     * false otherwise.
-     * @return true if the event was successfully executed; false otherwise.
-     */
-    public abstract boolean process();
+public class NoopApplicationEvent extends ApplicationEvent {
+    public final String message;
+    private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
+
+    public NoopApplicationEvent(final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                final String message) {
+
+        this.message = message;
+        this.backgroundEventQueue = backgroundEventQueue;
+    }
+
+    @Override
+    public boolean process() {
+        return backgroundEventQueue.add(new NoopBackgroundEvent(message));
+    }
+
+    @Override
+    public String toString() {
+        return getClass() + "_" + this.message;
+    }
 }

@@ -49,6 +49,7 @@ public abstract class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      *  another type of event, process it.
      *  2. Send fetches if needed.
      *  If the timeout expires, return an empty ConsumerRecord.
+     *
      * @param timeout timeout of the poll loop
      * @return ConsumerRecord.  It can be empty if time timeout expires.
      */
@@ -57,7 +58,7 @@ public abstract class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         try {
             do {
                 if (!eventHandler.isEmpty()) {
-                    Optional<BackgroundEvent> backgroundEvent = eventHandler.poll();
+                    final Optional<BackgroundEvent> backgroundEvent = eventHandler.poll();
                     // processEvent() may process 3 types of event:
                     // 1. Errors
                     // 2. Callback Invocation
@@ -76,7 +77,7 @@ public abstract class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 }
                 // We will wait for retryBackoffMs
             } while (time.timer(timeout).notExpired());
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new RuntimeException(e);
         }
 
@@ -84,7 +85,9 @@ public abstract class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     }
 
     abstract void processEvent(BackgroundEvent backgroundEvent, Duration timeout);
+
     abstract ConsumerRecords<K, V> processFetchResults(Fetch<K, V> fetch);
+
     abstract Fetch<K, V> collectFetches();
 
     /**
@@ -92,25 +95,26 @@ public abstract class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitAsync() {
-        ApplicationEvent commitEvent = new CommitApplicationEvent();
+        final ApplicationEvent commitEvent = new CommitApplicationEvent();
         eventHandler.add(commitEvent);
     }
 
     /**
      * This method sends a commit event to the EventHandler and waits for the event to finish.
+     *
      * @param timeout max wait time for the blocking operation.
      */
     @Override
-    public void commitSync(Duration timeout) {
-        CommitApplicationEvent commitEvent = new CommitApplicationEvent();
+    public void commitSync(final Duration timeout) {
+        final CommitApplicationEvent commitEvent = new CommitApplicationEvent();
         eventHandler.add(commitEvent);
 
-        CompletableFuture<Void> commitFuture = commitEvent.commitFuture;
+        final CompletableFuture<Void> commitFuture = commitEvent.commitFuture;
         try {
             commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (TimeoutException e) {
+        } catch (final TimeoutException e) {
             throw new org.apache.kafka.common.errors.TimeoutException("timeout");
-        } catch (Exception e) {
+        } catch (final Exception e) {
             // handle exception here
             throw new RuntimeException(e);
         }
@@ -122,5 +126,13 @@ public abstract class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private class CommitApplicationEvent extends ApplicationEvent {
         // this is the stubbed commitAsyncEvents
         CompletableFuture<Void> commitFuture = new CompletableFuture<>();
+
+        public CommitApplicationEvent() {
+        }
+
+        @Override
+        public boolean process() {
+            return true;
+        }
     }
 }

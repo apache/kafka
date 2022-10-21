@@ -48,12 +48,12 @@ public class RaftSnapshotWriterTest {
 
         @Override
         public long lastContainedLogOffset() {
-            return snapshotId().offset;
+            return snapshotId().offset();
         }
 
         @Override
         public int lastContainedLogEpoch() {
-            return snapshotId().epoch;
+            return snapshotId().epoch();
         }
 
         @Override

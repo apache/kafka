@@ -14,16 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.clients.consumer.internals;
+
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 
 /**
- * This is the abstract definition of the events created by the KafkaConsumer API
+ * Noop event. Intentionally left it here for demonstration purpose.
  */
-abstract public class ApplicationEvent {
-    /**
-     * process the application event. Return true upon succesful execution,
-     * false otherwise.
-     * @return true if the event was successfully executed; false otherwise.
-     */
-    public abstract boolean process();
+public class NoopBackgroundEvent extends BackgroundEvent {
+    public final String message;
+
+    public NoopBackgroundEvent(final String message) {
+        super(EventType.NOOP);
+        this.message = message;
+    }
+
+    @Override
+    public String toString() {
+        return getClass() + "_" + this.message;
+    }
 }
