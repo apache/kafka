@@ -487,6 +487,7 @@ class WorkerSinkTask extends WorkerTask {
     private void convertMessages(ConsumerRecords<byte[], byte[]> msgs) {
         long start = time.milliseconds();
         long oldestBatchTimestamp = Long.MAX_VALUE;
+        long maxConvertTransformLatency = 0;
         for (ConsumerRecord<byte[], byte[]> msg : msgs) {
             sinkTaskMetricsGroup.recordLatency(start, msg.timestamp());
             if (msg.timestamp() < oldestBatchTimestamp) oldestBatchTimestamp = msg.timestamp();
@@ -498,6 +499,8 @@ class WorkerSinkTask extends WorkerTask {
 
             long startConvert = time.milliseconds();
             SinkRecord transRecord = convertAndTransformRecord(msg);
+            if (time.milliseconds() - startConvert > maxConvertTransformLatency)
+                maxConvertTransformLatency = time.milliseconds() - startConvert;
             sinkTaskMetricsGroup.recordConvert(time.milliseconds() - startConvert);
 
             origOffsets.put(
@@ -519,6 +522,7 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private SinkRecord convertAndTransformRecord(final ConsumerRecord<byte[], byte[]> msg) {
+        // TODO start measuring convert
         SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(() -> keyConverter.toConnectData(msg.topic(), msg.headers(), msg.key()),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
 
@@ -544,9 +548,12 @@ class WorkerSinkTask extends WorkerTask {
         if (isTopicTrackingEnabled) {
             recordActiveTopic(origRecord.topic());
         }
+        // TODO end convert measure
 
         // Apply the transformations
+        // TODO start transform measure
         SinkRecord transformedRecord = transformationChain.apply(origRecord);
+        // TODO end transform measure
         if (transformedRecord == null) {
             return null;
         }

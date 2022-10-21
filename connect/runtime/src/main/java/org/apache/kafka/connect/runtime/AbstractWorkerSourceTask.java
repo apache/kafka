@@ -387,8 +387,12 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         for (final SourceRecord preTransformRecord : toSend) {
             long start = time.milliseconds();
             retryWithToleranceOperator.sourceRecord(preTransformRecord);
+            // TODO start measure transform
             final SourceRecord record = transformationChain.apply(preTransformRecord);
+            // TODO end measure transform
+            // TODO start measure convert
             final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);
+            // TODO end measure convert
             sourceTaskMetricsGroup.recordConvert(time.milliseconds() - start);
             if (producerRecord == null || retryWithToleranceOperator.failed()) {
                 counter.skipRecord();
