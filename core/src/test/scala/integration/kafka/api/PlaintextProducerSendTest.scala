@@ -68,11 +68,12 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
       batchSize = 0)
     val numRecords = 10;
     try {
-      TestUtils.createTopicWithAdmin(admin, topic, brokers, 2, 2)
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, 2)
       val futures = for (i <- 1 to numRecords) yield {
         val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, null, s"value$i".getBytes(StandardCharsets.UTF_8))
         producer.send(record)
       }
+      producer.flush()
       val lastOffset = futures.foldLeft(0) { (offset, future) =>
         val recordMetadata = future.get
         assertEquals(topic, recordMetadata.topic)
