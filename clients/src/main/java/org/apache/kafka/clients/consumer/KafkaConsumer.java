@@ -1582,8 +1582,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * you may lose data if this API is arbitrarily used in the middle of consumption, to reset the fetch offsets
      *
      * The next Consumer Record which will be retrieved when poll() is invoked will either have the offset specified or
-     * a higher numbered offset, if there is no consumer record with the offset specified, but there is one with a
-     * higher offset. seek(0) is equivalent to seek to beginning for a topic with beginning offset 0.
+     * a higher numbered offset. A higher numbered offset will be returned if there is no consumer record with the offset
+     * specified but there is one with a higher offset.
+     * seek(0) is equivalent to seek to beginning for a topic with beginning offset 0.
+     *
+     * Seeking past the end of the highest known offset means that all consumer records between the highest known offset
+     * and the offset passed to seek will be skipped by poll(), which will only return records once the offset passed
+     * to poll() has been reached.
+     * seekToEnd() is equivalent to seeking to the highest known offset + 1.
      *
      * for an exhaustive list of tests illustrating behaviour see the tests for {@link MockConsumer}
      *
