@@ -58,14 +58,11 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     sendAndVerify(producer)
   }
 
-  @Timeout(value = 10, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+  @Timeout(value = 30, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testBatchSizeZeroNoPartitionNoRecordKey(quorum: String): Unit = {
-    val producer = createProducer(
-      lingerMs = Int.MaxValue,
-      deliveryTimeoutMs = Int.MaxValue,
-      batchSize = 0)
+    val producer = createProducer(batchSize = 0)
     val numRecords = 10;
     try {
       TestUtils.createTopicWithAdmin(admin, topic, brokers, 2)
