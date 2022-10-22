@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -32,22 +33,28 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 public class NamedCacheTest {
 
     private final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
     private NamedCache cache;
 
+    private final Metrics innerMetrics = new Metrics();
+    private final StreamsMetricsImpl metrics = new MockStreamsMetrics(innerMetrics);
+    private final MetricName cacheSizeBytesTotal = new MetricName("cache-size-bytes-total", "stream-task-metrics", "", mkMap(mkEntry("thread-id", "Test worker"), mkEntry("task-id", "dummy")));
+
     @Before
     public void setUp() {
-        final Metrics innerMetrics = new Metrics();
-        final StreamsMetricsImpl metrics = new MockStreamsMetrics(innerMetrics);
         cache = new NamedCache("dummy-name", metrics);
     }
 
@@ -84,6 +91,7 @@ public class NamedCacheTest {
         final long size = cache.sizeInBytes();
         // 1 byte key + 24 bytes overhead
         assertEquals((value.size() + 25) * 3, size);
+        assertThat(metrics.metrics().get(cacheSizeBytesTotal).metricValue(), is((double) size));
     }
 
     @Test
@@ -114,6 +122,7 @@ public class NamedCacheTest {
         final LRUCacheEntry deleted = cache.delete(Bytes.wrap(new byte[]{0}));
         assertArrayEquals(new byte[] {10}, deleted.value());
         assertEquals(0, cache.sizeInBytes());
+        assertThat(metrics.metrics().get(cacheSizeBytesTotal).metricValue(), is((double) 0));
     }
 
     @Test
