@@ -214,6 +214,7 @@ public class StateManagerUtilTest {
 
     @Test
     public void testCloseStateManagerWithStateStoreWipeOut() {
+        expect(stateManager.transactional()).andReturn(false);
         expect(stateManager.taskId()).andReturn(taskId);
         expect(stateDirectory.lock(taskId)).andReturn(true);
 
@@ -240,6 +241,7 @@ public class StateManagerUtilTest {
         final File randomFile = new File("/random/path");
         mockStatic(Utils.class);
 
+        expect(stateManager.transactional()).andReturn(false);
         expect(stateManager.taskId()).andReturn(taskId);
         expect(stateDirectory.lock(taskId)).andReturn(true);
 
@@ -269,6 +271,7 @@ public class StateManagerUtilTest {
         final File unknownFile = new File("/unknown/path");
         mockStatic(Utils.class);
 
+        expect(stateManager.transactional()).andReturn(false);
         expect(stateManager.taskId()).andReturn(taskId);
         expect(stateDirectory.lock(taskId)).andReturn(true);
 
@@ -318,6 +321,7 @@ public class StateManagerUtilTest {
     @Test
     public void shouldNotWipeStateStoresIfUnableToLockTaskDirectory() throws IOException {
         final File unknownFile = new File("/unknown/path");
+        expect(stateManager.transactional()).andReturn(false);
         expect(stateManager.taskId()).andReturn(taskId);
         expect(stateDirectory.lock(taskId)).andReturn(false);
 
