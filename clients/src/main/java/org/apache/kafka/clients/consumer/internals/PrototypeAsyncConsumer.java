@@ -215,7 +215,7 @@ public abstract class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    private ClusterResourceListeners configureClusterResourceListeners(
+    private static <K, V> ClusterResourceListeners configureClusterResourceListeners(
             final Deserializer<K> keyDeserializer,
             final Deserializer<V> valueDeserializer,
             final List<?>... candidateLists) {
