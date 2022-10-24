@@ -74,7 +74,6 @@ import java.util.Set;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ALLOW_RESET_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.any;
@@ -718,12 +717,10 @@ public class ConnectorsResourceTest {
     @Test
     public void testFenceZombiesNoInternalRequestSignature() throws Throwable {
         final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
-        final ArgumentCaptor<InternalRequestSignature> signatureCapture = ArgumentCaptor.forClass(InternalRequestSignature.class);
         expectAndCallbackResult(cb, null)
-            .when(herder).fenceZombieSourceTasks(eq(CONNECTOR_NAME), cb.capture(), signatureCapture.capture());
+            .when(herder).fenceZombieSourceTasks(eq(CONNECTOR_NAME), cb.capture(), isNull());
 
         connectorsResource.fenceZombies(CONNECTOR_NAME, NULL_HEADERS, FORWARD, serializeAsBytes(null));
-        assertNull(signatureCapture.getValue());
     }
 
     @Test
