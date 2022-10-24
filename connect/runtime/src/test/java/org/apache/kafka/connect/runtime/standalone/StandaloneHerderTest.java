@@ -100,7 +100,6 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
@@ -282,7 +281,6 @@ public class StandaloneHerderTest {
         expectConfigValidation(connectorMock, true, config);
 
         worker.stopAndAwaitConnector(CONNECTOR_NAME);
-        verify(worker).stopAndAwaitConnector(CONNECTOR_NAME);
 
         final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
