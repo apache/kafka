@@ -904,8 +904,6 @@ public class ConnectorsResourceTest {
 
     @Test
     public void testResetConnectorActiveTopics() {
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).thenReturn(true);
-        when(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).thenReturn(true);
         HttpHeaders headers = mock(HttpHeaders.class);
         herder.resetConnectorActiveTopics(CONNECTOR_NAME);
         verify(herder).resetConnectorActiveTopics(CONNECTOR_NAME);
