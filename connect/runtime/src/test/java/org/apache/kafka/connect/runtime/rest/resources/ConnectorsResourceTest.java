@@ -296,12 +296,11 @@ public class ConnectorsResourceTest {
         expectAndCallbackNotLeaderException(cb).when(herder)
             .putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), eq(false), cb.capture());
 
-        // Should forward request
-        restClientStatic.when(() ->
-            RestClient.httpRequest(eq(LEADER_URL + "connectors?forward=false"), eq("POST"), isNull(), eq(body), any(), any(WorkerConfig.class))
-        ).thenReturn(new RestClient.HttpResponse<>(201, new HashMap<>(), new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES, ConnectorType.SOURCE)));
-
-        connectorsResource.createConnector(FORWARD, NULL_HEADERS, body);
+        verifyRestRequestWithCall(
+            () -> RestClient.httpRequest(eq(LEADER_URL + "connectors?forward=false"), eq("POST"), isNull(), eq(body), any(), any(WorkerConfig.class)),
+            new RestClient.HttpResponse<>(201, new HashMap<>(), new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES, ConnectorType.SOURCE)),
+            () -> connectorsResource.createConnector(FORWARD, NULL_HEADERS, body)
+        );
     }
 
     @Test
@@ -312,11 +311,11 @@ public class ConnectorsResourceTest {
         expectAndCallbackNotLeaderException(cb)
             .when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), eq(false), cb.capture());
 
-        restClientStatic.when(() ->
-            RestClient.httpRequest(eq(LEADER_URL + "connectors?forward=false"), eq("POST"), eq(httpHeaders), any(), any(), any(WorkerConfig.class))
-        ).thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
-
-        connectorsResource.createConnector(FORWARD, httpHeaders, body);
+        verifyRestRequestWithCall(
+            () -> RestClient.httpRequest(eq(LEADER_URL + "connectors?forward=false"), eq("POST"), eq(httpHeaders), any(), any(), any(WorkerConfig.class)),
+            new RestClient.HttpResponse<>(202, new HashMap<>(), null),
+            () -> connectorsResource.createConnector(FORWARD, httpHeaders, body)
+        );
     }
 
 
@@ -329,11 +328,11 @@ public class ConnectorsResourceTest {
         expectAndCallbackNotLeaderException(cb)
             .when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), eq(false), cb.capture());
 
-        restClientStatic.when(() ->
-            RestClient.httpRequest(eq(LEADER_URL + "connectors?forward=false"), eq("POST"), eq(httpHeaders), any(), any(), any(WorkerConfig.class))
-        ).thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
-
-        connectorsResource.createConnector(FORWARD, httpHeaders, body);
+        verifyRestRequestWithCall(
+            () -> RestClient.httpRequest(eq(LEADER_URL + "connectors?forward=false"), eq("POST"), eq(httpHeaders), any(), any(), any(WorkerConfig.class)),
+            new RestClient.HttpResponse<>(202, new HashMap<>(), null),
+            () -> connectorsResource.createConnector(FORWARD, httpHeaders, body)
+        );
     }
 
     @Test
@@ -408,11 +407,14 @@ public class ConnectorsResourceTest {
         expectAndCallbackNotLeaderException(cb).when(herder)
             .deleteConnectorConfig(eq(CONNECTOR_NAME), cb.capture());
         // Should forward request
-        restClientStatic.when(() ->
-            RestClient.httpRequest(LEADER_URL + "connectors/" + CONNECTOR_NAME + "?forward=false", "DELETE", NULL_HEADERS, null, null, workerConfig)
-        ).thenReturn(new RestClient.HttpResponse<>(204, new HashMap<>(), null));
-
-        connectorsResource.destroyConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        verifyRestRequestWithCall(
+            () -> RestClient.httpRequest(LEADER_URL + "connectors/" + CONNECTOR_NAME + "?forward=false", "DELETE", NULL_HEADERS, null, null, workerConfig),
+            new RestClient.HttpResponse<>(204, new HashMap<>(), null),
+            () -> {
+                connectorsResource.destroyConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+                return null;
+            }
+        );
     }
 
     // Not found exceptions should pass through to caller so they can be processed for 404s
@@ -670,12 +672,12 @@ public class ConnectorsResourceTest {
         expectAndCallbackNotLeaderException(cb).when(herder)
             .restartConnectorAndTasks(eq(restartRequest), cb.capture());
 
-        restClientStatic.when(() ->
-            RestClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/restart?forward=true&includeTasks=" + restartRequest.includeTasks() + "&onlyFailed=" + restartRequest.onlyFailed()),
-                eq("POST"), isNull(), isNull(), any(), any(WorkerConfig.class))
-        ).thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
-
-        Response response = connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), null);
+        Response response = verifyRestRequestWithCall(
+            () -> RestClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/restart?forward=true&includeTasks=" + restartRequest.includeTasks() + "&onlyFailed=" + restartRequest.onlyFailed()),
+                    eq("POST"), isNull(), isNull(), any(), any(WorkerConfig.class)),
+            new RestClient.HttpResponse<>(202, new HashMap<>(), null),
+            () -> connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), null)
+        );
         assertEquals(Response.Status.ACCEPTED.getStatusCode(), response.getStatus());
     }
 
@@ -780,12 +782,11 @@ public class ConnectorsResourceTest {
         expectAndCallbackNotLeaderException(cb).when(herder)
             .restartConnector(eq(CONNECTOR_NAME), cb.capture());
 
-        restClientStatic.when(() ->
-            RestClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/restart?forward=true"),
-                eq("POST"), isNull(), isNull(), any(), any(WorkerConfig.class))
-        ).thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
-
-        Response response = connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, false, false, null);
+        Response response = verifyRestRequestWithCall(
+            () -> RestClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/restart?forward=true"), eq("POST"), isNull(), isNull(), any(), any(WorkerConfig.class)),
+            new RestClient.HttpResponse<>(202, new HashMap<>(), null),
+            () -> connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, false, false, null)
+        );
         assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
     }
 
@@ -795,13 +796,11 @@ public class ConnectorsResourceTest {
         String ownerUrl = "http://owner:8083";
         expectAndCallbackException(cb, new NotAssignedException("not owner test", ownerUrl))
             .when(herder).restartConnector(eq(CONNECTOR_NAME), cb.capture());
-
-        restClientStatic.when(() ->
-            RestClient.httpRequest(eq("http://owner:8083/connectors/" + CONNECTOR_NAME + "/restart?forward=false"),
-                eq("POST"), isNull(), isNull(), any(), any(WorkerConfig.class))
-        ).thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
-
-        Response response = connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, false, false, true);
+        Response response = verifyRestRequestWithCall(
+            () -> RestClient.httpRequest(eq("http://owner:8083/connectors/" + CONNECTOR_NAME + "/restart?forward=false"), eq("POST"), isNull(), isNull(), any(), any(WorkerConfig.class)),
+            new RestClient.HttpResponse<>(202, new HashMap<>(), null),
+            () -> connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, false, false, true)
+        );
         assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
     }
 
@@ -823,12 +822,14 @@ public class ConnectorsResourceTest {
         expectAndCallbackNotLeaderException(cb).when(herder)
             .restartTask(eq(taskId), cb.capture());
 
-        restClientStatic.when(() ->
-            RestClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/tasks/0/restart?forward=true"),
-                eq("POST"), isNull(), isNull(), any(), any(WorkerConfig.class))
-        ).thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
-
-        connectorsResource.restartTask(CONNECTOR_NAME, 0, NULL_HEADERS, null);
+        verifyRestRequestWithCall(
+            () -> RestClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/tasks/0/restart?forward=true"), eq("POST"), isNull(), isNull(), any(), any(WorkerConfig.class)),
+            new RestClient.HttpResponse<>(202, new HashMap<>(), null),
+            () -> {
+                connectorsResource.restartTask(CONNECTOR_NAME, 0, NULL_HEADERS, null);
+                return null;
+            }
+        );
     }
 
     @Test
@@ -840,12 +841,14 @@ public class ConnectorsResourceTest {
         expectAndCallbackException(cb, new NotAssignedException("not owner test", ownerUrl))
             .when(herder).restartTask(eq(taskId), cb.capture());
 
-        restClientStatic.when(() ->
-            RestClient.httpRequest(eq("http://owner:8083/connectors/" + CONNECTOR_NAME + "/tasks/0/restart?forward=false"),
-                eq("POST"), isNull(), isNull(), any(), any(WorkerConfig.class))
-        ).thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
-
-        connectorsResource.restartTask(CONNECTOR_NAME, 0, NULL_HEADERS, true);
+        verifyRestRequestWithCall(
+            () -> RestClient.httpRequest(eq("http://owner:8083/connectors/" + CONNECTOR_NAME + "/tasks/0/restart?forward=false"), eq("POST"), isNull(), isNull(), any(), any(WorkerConfig.class)),
+            new RestClient.HttpResponse<>(202, new HashMap<>(), null),
+            () -> {
+                connectorsResource.restartTask(CONNECTOR_NAME, 0, NULL_HEADERS, true);
+                return null;
+            }
+        );
     }
 
     @Test
@@ -944,5 +947,26 @@ public class ConnectorsResourceTest {
 
     private <T> Stubber expectAndCallbackNotLeaderException(final ArgumentCaptor<Callback<T>> cb) {
         return expectAndCallbackException(cb, new NotLeaderException("not leader test", LEADER_URL));
+    }
+
+    @FunctionalInterface
+    public interface RunnableWithThrowable<T> {
+        T run() throws Throwable;
+    }
+
+    /**
+     * Used to verify that a provided restCall actually gets executed with a given RestClient verification
+     * @param verification The RestClient method being mocked
+     * @param mockReturn What the mocked method returns
+     * @param restCall The call against the RestClient to execute
+     * @return The return value of restCall
+     */
+    private <T> T verifyRestRequestWithCall(MockedStatic.Verification verification,
+                                            RestClient.HttpResponse<Object> mockReturn,
+                                            RunnableWithThrowable<T> restCall) throws Throwable {
+        restClientStatic.when(verification).thenReturn(mockReturn);
+        final T value = restCall.run();
+        restClientStatic.verify(verification);
+        return value;
     }
 }
