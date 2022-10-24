@@ -280,8 +280,6 @@ public class StandaloneHerderTest {
         Connector connectorMock = mock(SourceConnector.class);
         expectConfigValidation(connectorMock, true, config);
 
-        worker.stopAndAwaitConnector(CONNECTOR_NAME);
-
         final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
             onStart.getValue().onCompletion(null, TargetState.STARTED);
@@ -301,6 +299,7 @@ public class StandaloneHerderTest {
 
         FutureCallback<Void> restartCallback = new FutureCallback<>();
         herder.restartConnector(CONNECTOR_NAME, restartCallback);
+        worker.stopAndAwaitConnector(CONNECTOR_NAME);
         restartCallback.get(1000L, TimeUnit.MILLISECONDS);
     }
 
