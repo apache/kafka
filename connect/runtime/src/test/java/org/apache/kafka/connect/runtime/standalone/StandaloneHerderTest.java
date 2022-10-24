@@ -40,7 +40,6 @@ import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
-import org.apache.kafka.connect.runtime.WorkerConnector;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
@@ -136,8 +135,6 @@ public class StandaloneHerderTest {
 
     private MockedStatic<Plugins> pluginsStatic;
 
-    private MockedStatic<WorkerConnector> workerConnectorStatic;
-
     @Before
     public void setup() {
         worker = mock(Worker.class);
@@ -149,7 +146,6 @@ public class StandaloneHerderTest {
         pluginLoader = mock(PluginClassLoader.class);
         delegatingLoader = mock(DelegatingClassLoader.class);
         pluginsStatic = mockStatic(Plugins.class);
-        workerConnectorStatic = mockStatic(WorkerConnector.class);
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
     }
@@ -157,7 +153,6 @@ public class StandaloneHerderTest {
     @After
     public void tearDown() {
         pluginsStatic.close();
-        workerConnectorStatic.close();
     }
 
     @Test
