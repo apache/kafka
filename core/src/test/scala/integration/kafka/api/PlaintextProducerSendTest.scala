@@ -58,7 +58,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     sendAndVerify(producer)
   }
 
-  @Timeout(value = 30, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+  @Timeout(value = 15, unit = TimeUnit.SECONDS, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testBatchSizeZeroNoPartitionNoRecordKey(quorum: String): Unit = {
