@@ -24,7 +24,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ElectLeadersRequest, ElectLeadersResponse}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{ElectionType, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean

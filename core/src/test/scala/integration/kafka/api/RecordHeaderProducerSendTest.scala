@@ -35,7 +35,7 @@ class RecordHeaderProducerSendTest extends BaseProducerSendTest {
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
     producerProps.put(ProducerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, "true")
     val producer = new KafkaProducer[String, String](producerProps)
-    var invalidRecordHeaders = new RecordHeaders()
+    val invalidRecordHeaders = new RecordHeaders()
     invalidRecordHeaders.add("RecordHeaderKey", "RecordHeaderValue".getBytes)
     // The record is invalid because it contain header with keys that doesn't start with a "_"
     // Keys that do start with a "_" are internal to the clients and are dropped at the producer.

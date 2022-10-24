@@ -18,17 +18,15 @@
 package integration.kafka.api
 
 import kafka.controller.OfflinePartition
-import kafka.server.{KafkaConfig, KafkaServer, ReplicaManager}
-import kafka.utils.Implicits.PropertiesOps
+import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.utils.TestUtils
 import kafka.utils.TestUtils.getBrokerListStrFromServers
-import kafka.utils.{Exit, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 

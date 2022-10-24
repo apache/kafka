@@ -19,7 +19,7 @@ package kafka.server
 import java.util
 import java.util.Properties
 
-import kafka.admin.{AdminOperationException, AdminUtils}
+import kafka.admin.AdminOperationException
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.controller.KafkaController
 import kafka.log.LogConfig

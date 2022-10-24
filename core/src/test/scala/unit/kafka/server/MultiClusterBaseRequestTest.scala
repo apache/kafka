@@ -21,7 +21,6 @@ import java.io.{DataInputStream, DataOutputStream}
 import java.net.Socket
 import java.nio.ByteBuffer
 import java.util.{EnumSet, Properties}
-
 import kafka.api.MultiClusterIntegrationTestHarness
 import kafka.network.SocketServer
 import kafka.utils.NotNothing
@@ -31,6 +30,7 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, Requ
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.BrokerState
 
+import scala.annotation.nowarn
 import scala.collection.Seq
 import scala.reflect.ClassTag
 
@@ -135,7 +135,7 @@ abstract class MultiClusterBaseRequestTest extends MultiClusterIntegrationTestHa
   }
 
   def receive[T <: AbstractResponse](socket: Socket, apiKey: ApiKeys, version: Short)
-                                    (implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
+                                    (implicit classTag: ClassTag[T], @nowarn("cat=unused") nn: NotNothing[T]): T = {
     val incoming = new DataInputStream(socket.getInputStream)
     val len = incoming.readInt()
 

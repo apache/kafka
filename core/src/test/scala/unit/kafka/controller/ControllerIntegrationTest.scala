@@ -1662,7 +1662,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
         }
         case _ => false
       }
-    }, "broker 0 never gets the metadata for the topic $topic")
+    }, s"broker 0 never gets the metadata for the topic $topic")
 
     info(s"original topic id $originalTopicId")
     // delete and then immediately recreate the topic

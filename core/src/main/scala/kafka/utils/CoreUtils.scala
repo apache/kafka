@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
 
-import java.nio.file.{Files, Paths, StandardOpenOption}
+import java.nio.file.{Paths, StandardOpenOption}
 import java.util.concurrent.TimeUnit
 import scala.annotation.nowarn
 

@@ -31,7 +31,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   // package private for test
   private[server] val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, T]
   private val lock = new Object
-  private var numFetchersPerBroker = numFetchers
+  private val numFetchersPerBroker = numFetchers
   val failedPartitions = new FailedPartitions
   this.logIdent = "[" + name + "] "
 

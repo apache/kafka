@@ -30,8 +30,6 @@ import scala.util.Random
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.InvalidOffsetException
 
-import scala.annotation.nowarn
-
 class OffsetIndexTest {
   
   var idx: OffsetIndex = null
@@ -49,7 +47,6 @@ class OffsetIndexTest {
       this.idx.file.delete()
   }
 
-  @nowarn("cat=deprecation")
   @Test
   def randomLookupTest(): Unit = {
     assertEquals(OffsetPosition(idx.baseOffset, 0), idx.lookup(92L),

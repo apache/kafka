@@ -17,7 +17,7 @@
 package kafka.controller
 
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Test
 
 class PartitionLeaderElectionAlgorithmsTest {
 

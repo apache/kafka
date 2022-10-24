@@ -1585,7 +1585,7 @@ class ReplicaManagerTest {
                                                  localLogOffset: Option[Long] = None,
                                                  offsetFromLeader: Long = 5,
                                                  leaderEpochFromLeader: Int = 3,
-                                                 extraProps: Properties = new Properties(),
+                                                 extraProps: Properties,
                                                  topicId: Option[Uuid] = None) : (ReplicaManager, LogManager) = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)

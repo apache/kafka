@@ -181,7 +181,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    * the log manager maintains. Compared with {@link grabFilthiestCompactedLogWithFineGrainedLock() grabFilthiestCompactedLogWithFineGrainedLock},
    * this method holds the lock while iterating through the logs to check which one is the filthiest.
    */
-  private def grabFilthiestCompactedLogWithLongLastingLock(time: Time, preCleanStats: PreCleanStats = new PreCleanStats()): Option[LogToClean] = {
+  private def grabFilthiestCompactedLogWithLongLastingLock(time: Time, preCleanStats: PreCleanStats): Option[LogToClean] = {
     inLock(lock) {
       val now = time.milliseconds
       this.timeOfLastRun = now
@@ -233,7 +233,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     * the log manager maintains. Compared with {@link grabFilthiestCompactedLogWithLongLastingLock() grabFilthiestCompactedLogWithLongLastingLock},
    * this method does NOT hold the lock while iterating through the logs to check which one is the filthiest.
     */
-  private def grabFilthiestCompactedLogWithFineGrainedLock(time: Time, preCleanStats: PreCleanStats = new PreCleanStats()): Option[LogToClean] = {
+  private def grabFilthiestCompactedLogWithFineGrainedLock(time: Time, preCleanStats: PreCleanStats): Option[LogToClean] = {
       info(s"Grabbing filthiest compacted log with fine grained lock")
       val now = time.milliseconds
       this.timeOfLastRun = now

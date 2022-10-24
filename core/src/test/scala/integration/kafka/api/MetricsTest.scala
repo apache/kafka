@@ -16,7 +16,7 @@ import java.util.{Locale, Properties}
 import kafka.log.LogConfig
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{JaasTestUtils, TestUtils}
-import com.yammer.metrics.core.{Gauge, Histogram, Meter}
+import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.metrics.KafkaYammerMetrics
 import kafka.utils.TestUtils.{sendRecords, verifyYammerMetricRecorded, yammerMetricValue}
 import org.apache.kafka.clients.consumer.KafkaConsumer
