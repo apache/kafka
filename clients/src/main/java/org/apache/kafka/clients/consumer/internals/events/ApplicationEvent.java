@@ -20,10 +20,20 @@ package org.apache.kafka.clients.consumer.internals.events;
  * This is the abstract definition of the events created by the KafkaConsumer API
  */
 abstract public class ApplicationEvent {
+    public final Type type;
+
+    ApplicationEvent(Type type) {
+        this.type = type;
+    }
     /**
      * process the application event. Return true upon succesful execution,
      * false otherwise.
      * @return true if the event was successfully executed; false otherwise.
      */
     public abstract boolean process();
+
+    public enum Type {
+        NOOP,
+        COMMIT,
+    }
 }

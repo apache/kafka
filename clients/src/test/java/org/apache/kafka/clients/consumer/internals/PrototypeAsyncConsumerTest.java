@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -47,9 +49,20 @@ public class PrototypeAsyncConsumerTest {
     private LogContext logContext;
     private Metrics metrics;
     private ClusterResourceListeners clusterResourceListeners;
-    private Optional<String> groupId;
-    private String clientId;
+
     private EventHandler eventHandler;
+
+    /* default config values */
+    private int sessionTimeoutMs = 10000;
+    private int rebalanceTimeoutMs = 60000;
+    private int heartbeatIntervalMs = 1000;
+    private Optional<String> groupInstanceId = Optional.of("mock-instance");
+    private String groupId;
+    private String clientId;
+
+    private long retryBackoffMs = 100;
+    private ConsumerInterceptors<String, String> interceptors =
+            new ConsumerInterceptors<>(Collections.emptyList());
 
     @BeforeEach
     public void setup() {
@@ -58,7 +71,7 @@ public class PrototypeAsyncConsumerTest {
         this.logContext = new LogContext();
         this.time = new MockTime();
         this.metrics = new Metrics(time);
-        this.groupId = Optional.empty();
+        this.groupId = "";
         this.clientId = "client-1";
         this.clusterResourceListeners = new ClusterResourceListeners();
         this.properties = new HashMap<>();
@@ -89,6 +102,7 @@ public class PrototypeAsyncConsumerTest {
 
     public PrototypeAsyncConsumer<String, String> setupConsumerWithDefault() {
         ConsumerConfig config = new ConsumerConfig(properties);
+
         return new PrototypeAsyncConsumer<>(
                 this.time,
                 this.logContext,
@@ -97,9 +111,17 @@ public class PrototypeAsyncConsumerTest {
                 this.eventHandler,
                 this.metrics,
                 this.clusterResourceListeners,
-                this.groupId,
+                this.interceptors,
+                Optional.ofNullable(this.groupId),
                 this.clientId,
-                0);
+                0,
+                new GroupRebalanceConfig(sessionTimeoutMs,
+                        rebalanceTimeoutMs,
+                        heartbeatIntervalMs,
+                        groupId,
+                        groupInstanceId,
+                        retryBackoffMs,
+                        true));
 
     }
 }

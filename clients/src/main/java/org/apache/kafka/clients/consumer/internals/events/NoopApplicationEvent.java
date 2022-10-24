@@ -29,7 +29,7 @@ public class NoopApplicationEvent extends ApplicationEvent {
 
     public NoopApplicationEvent(final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                 final String message) {
-
+        super(Type.NOOP);
         this.message = message;
         this.backgroundEventQueue = backgroundEventQueue;
     }

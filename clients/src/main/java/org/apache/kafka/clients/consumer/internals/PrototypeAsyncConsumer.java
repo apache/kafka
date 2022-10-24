@@ -29,14 +29,17 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
+import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -55,12 +58,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 /**
@@ -75,6 +79,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     private final LogContext logContext;
     private final EventHandler eventHandler;
+    private final ConcurrentLinkedQueue<OffsetCommitCompletion> completedOffsetCommits;
+    private final ConsumerInterceptors<?, ?> interceptors;
+    private final OffsetCommitCallback defaultOffsetCommitCallback = new DefaultOffsetCommitCallback();
+
     private final Time time;
     private final Optional<String> groupId;
     private final String clientId;
@@ -82,6 +90,8 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final SubscriptionState subscriptions;
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
+    private final GroupRebalanceConfig groupRebalanceConfig;
+    private AtomicBoolean asyncCommitFenced;
 
     @SuppressWarnings("unchecked")
     public PrototypeAsyncConsumer(final Time time,
@@ -89,7 +99,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                                   final Deserializer<K> keyDeserializer,
                                   final Deserializer<V> valueDeserializer) {
         this.time = time;
-        GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
+        this.groupRebalanceConfig = new GroupRebalanceConfig(config,
                 GroupRebalanceConfig.ProtocolType.CONSUMER);
         this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
         this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
@@ -109,8 +119,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
                 ConsumerInterceptor.class,
                 Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
+        this.interceptors = new ConsumerInterceptors<>(interceptorList);
         ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keyDeserializer,
                 valueDeserializer, metrics.reporters(), interceptorList);
+        this.asyncCommitFenced = new AtomicBoolean();
+        this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
         this.eventHandler = new DefaultEventHandler(
                 config,
                 logContext,
@@ -131,9 +144,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
             EventHandler eventHandler,
             Metrics metrics,
             ClusterResourceListeners clusterResourceListeners,
+            ConsumerInterceptors<K, V> interceptors,
             Optional<String> groupId,
             String clientId,
-            int defaultApiTimeoutMs) {
+            int defaultApiTimeoutMs,
+            GroupRebalanceConfig groupRebalanceConfig) {
         this.time = time;
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
@@ -143,6 +158,10 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.clientId = clientId;
         this.eventHandler = eventHandler;
+        this.groupRebalanceConfig = groupRebalanceConfig;
+        this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
+        this.interceptors = Objects.requireNonNull(interceptors);
+
     }
 
 
@@ -214,18 +233,39 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      * This method sends a commit event to the EventHandler and return.
      */
     @Override
-    public void commitAsync() {
-        final ApplicationEvent commitEvent = new CommitApplicationEvent();
+    public void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
+        final CommitApplicationEvent commitEvent =
+                new CommitApplicationEvent(null, null);
+        invokeCompletedOffsetCommitCallbacks();
+        final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
+        commitEvent.commitFuture.addListener(new RequestFutureListener<Void>() {
+            @Override
+            public void onSuccess(Void value) {
+                if (interceptors != null)
+                    interceptors.onCommit(offsets);
+                completedOffsetCommits.add(new OffsetCommitCompletion(cb,
+                        offsets, null));
+            }
+
+            @Override
+            public void onFailure(RuntimeException e) {
+                Exception commitException = e;
+
+                if (e instanceof RetriableException) {
+                    commitException = new RetriableCommitFailedException(e);
+                }
+                completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, commitException));
+                if (commitException instanceof FencedInstanceIdException) {
+                    asyncCommitFenced.set(true);
+                }
+            }
+        });
+
         eventHandler.add(commitEvent);
     }
 
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         throw new KafkaException("method not implemented");
     }
 
@@ -386,6 +426,46 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         throw new KafkaException("method not implemented");
     }
 
+    void invokeCompletedOffsetCommitCallbacks() {
+        if (asyncCommitFenced.get()) {
+            throw new FencedInstanceIdException("Get fenced exception for group.instance.id "
+                    + this.groupRebalanceConfig.groupInstanceId.orElse("unset_instance_id"));
+        }
+        while (true) {
+            OffsetCommitCompletion completion = completedOffsetCommits.poll();
+            if (completion == null) {
+                break;
+            }
+            completion.invoke();
+        }
+    }
+
+    private static class OffsetCommitCompletion {
+        private final OffsetCommitCallback callback;
+        private final Map<TopicPartition, OffsetAndMetadata> offsets;
+        private final Exception exception;
+
+        private OffsetCommitCompletion(OffsetCommitCallback callback, Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+            this.callback = callback;
+            this.offsets = offsets;
+            this.exception = exception;
+        }
+
+        public void invoke() {
+            if (callback != null)
+                callback.onComplete(offsets, exception);
+        }
+    }
+
+    private class DefaultOffsetCommitCallback implements OffsetCommitCallback {
+        @Override
+        public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+            if (exception != null) {
+                // log.error("Offset commit with offsets {} failed", offsets, exception);
+            }
+        }
+    }
+
     /**
      * This method sends a commit event to the EventHandler and waits for
      * the event to finish.
@@ -394,15 +474,13 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitSync(final Duration timeout) {
-        final CommitApplicationEvent commitEvent = new CommitApplicationEvent();
+        final CommitApplicationEvent commitEvent =
+                new CommitApplicationEvent(null, null);
         eventHandler.add(commitEvent);
 
-        final CompletableFuture<Void> commitFuture = commitEvent.commitFuture;
+        final RequestFuture<Void> commitFuture = commitEvent.commitFuture;
         try {
-            commitFuture.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (final TimeoutException e) {
-            throw new org.apache.kafka.common.errors.TimeoutException(
-                     "timeout");
+            commitFuture.awaitDone(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (final Exception e) {
             // handle exception here
             throw new RuntimeException(e);
@@ -417,6 +495,11 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
         throw new KafkaException("method not implemented");
+    }
+
+    @Override
+    public void commitAsync() {
+
     }
 
     @Override
@@ -470,21 +553,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         throw new KafkaException("method not implemented");
     }
 
-    /**
-     * A stubbed ApplicationEvent for demonstration purpose
-     */
-    private class CommitApplicationEvent extends ApplicationEvent {
-        // this is the stubbed commitAsyncEvents
-        CompletableFuture<Void> commitFuture = new CompletableFuture<>();
-
-        public CommitApplicationEvent() {
-        }
-
-        @Override
-        public boolean process() {
-            return true;
-        }
-    }
 
     private static <K, V> ClusterResourceListeners configureClusterResourceListeners(
             final Deserializer<K> keyDeserializer,

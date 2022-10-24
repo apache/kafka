@@ -17,11 +17,16 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -30,9 +35,11 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -46,6 +53,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class DefaultBackgroundThread extends KafkaThread {
     private static final String BACKGROUND_THREAD_NAME =
         "consumer_background_thread";
+    private static final String METRIC_GRP_PREFIX =
+            "consumer";
     private final Time time;
     private final Logger log;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
@@ -55,6 +64,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final ConsumerMetadata metadata;
     private final Metrics metrics;
     private final ConsumerConfig config;
+    private final DefaultAsyncCoordinator coordinator;
 
     private String clientId;
     private long retryBackoffMs;
@@ -63,6 +73,28 @@ public class DefaultBackgroundThread extends KafkaThread {
     private Optional<ApplicationEvent> inflightEvent = Optional.empty();
     private final AtomicReference<Optional<RuntimeException>> exception =
         new AtomicReference<>(Optional.empty());
+    private AtomicInteger pendingAsyncCommits;
+
+    public DefaultBackgroundThread(final ConsumerConfig config,
+                                   final LogContext logContext,
+                                   final BlockingQueue<ApplicationEvent> applicationEventQueue,
+                                   final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                   final SubscriptionState subscriptions,
+                                   final ConsumerMetadata metadata,
+                                   final ConsumerNetworkClient networkClient,
+                                   final Metrics metrics) {
+        this(
+            Time.SYSTEM,
+            config,
+            logContext,
+            applicationEventQueue,
+            backgroundEventQueue,
+            subscriptions,
+            metadata,
+            networkClient,
+            metrics
+        );
+    }
 
     public DefaultBackgroundThread(final Time time,
                                    final ConsumerConfig config,
@@ -87,6 +119,16 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.metadata = metadata;
             this.networkClient = networkClient;
             this.metrics = metrics;
+            final GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
+                    GroupRebalanceConfig.ProtocolType.CONSUMER);
+            this.coordinator = new DefaultAsyncCoordinator(
+                    time,
+                    logContext,
+                    groupRebalanceConfig,
+                    networkClient,
+                    subscriptions,
+                    metrics,
+                    METRIC_GRP_PREFIX);
             this.running = true;
         } catch (final Exception e) {
             // now propagate the exception
@@ -169,6 +211,14 @@ public class DefaultBackgroundThread extends KafkaThread {
         return Optional.ofNullable(this.applicationEventQueue.poll());
     }
 
+    private boolean findCoordinator() {
+        if (!coordinator.coordinatorUnknown()) {
+            return true;
+        }
+
+        return coordinator.ensureCoordinatorReadyAsync();
+    }
+
     /**
      * ApplicationEvent are consumed here.
      *
@@ -178,7 +228,20 @@ public class DefaultBackgroundThread extends KafkaThread {
     private boolean maybeConsumeInflightEvent(final ApplicationEvent event) {
         log.debug("try consuming event: {}", Optional.ofNullable(event));
         Objects.requireNonNull(event);
-        return event.process();
+        switch (event.type) {
+            case NOOP:
+                return process((NoopApplicationEvent) event);
+            case COMMIT:
+                return process((CommitApplicationEvent) event);
+        }
+        return false;
+    }
+
+    private boolean process(CommitApplicationEvent event) {
+        Map<TopicPartition, OffsetAndMetadata> offsets = event.offsets;
+        Optional<OffsetCommitCallback> callback = event.callback;
+        coordinator.commitOffsets(offsets, event.commitFuture);
+        return true;
     }
 
     /**
@@ -188,8 +251,8 @@ public class DefaultBackgroundThread extends KafkaThread {
      *
      * @param event a {@link NoopApplicationEvent}
      */
-    private void process(final NoopApplicationEvent event) {
-        backgroundEventQueue.add(new NoopBackgroundEvent(event.message));
+    private boolean process(final NoopApplicationEvent event) {
+        return backgroundEventQueue.add(new NoopBackgroundEvent(event.message));
     }
 
     public boolean isRunning() {
