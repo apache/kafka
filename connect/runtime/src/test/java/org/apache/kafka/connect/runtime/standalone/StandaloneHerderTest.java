@@ -312,7 +312,6 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
-        ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
         Connector connectorMock = mock(SourceConnector.class);
         expectConfigValidation(connectorMock, true, config);
 
