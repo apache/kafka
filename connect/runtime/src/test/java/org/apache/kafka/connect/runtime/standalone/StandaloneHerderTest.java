@@ -253,13 +253,12 @@ public class StandaloneHerderTest {
         statusBackingStore.put(new ConnectorStatus(CONNECTOR_NAME, AbstractStatus.State.DESTROYED, WORKER_ID, 0));
         statusBackingStore.put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), TaskStatus.State.DESTROYED, WORKER_ID, 0));
 
-        expectDestroy();
-
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         FutureCallback<Herder.Created<ConnectorInfo>> deleteCallback = new FutureCallback<>();
+        expectDestroy();
         herder.deleteConnectorConfig(CONNECTOR_NAME, deleteCallback);
         deleteCallback.get(1000L, TimeUnit.MILLISECONDS);
 
