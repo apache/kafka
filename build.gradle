@@ -700,6 +700,8 @@ subprojects {
 
   configure(checkstyleTest) {
     group = 'Verification'
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    configProperties = checkstyleConfigProperties("import-control-test.xml")
     description = 'Run checkstyle on all test Java sources'
   }
 

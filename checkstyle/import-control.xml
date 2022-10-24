@@ -26,17 +26,10 @@
   <allow pkg="java" />
   <allow pkg="javax.management" />
   <allow pkg="org.slf4j" />
-  <allow pkg="org.junit" />
-  <allow pkg="org.opentest4j" />
-  <allow pkg="org.hamcrest" />
-  <allow pkg="org.mockito" />
-  <allow pkg="org.easymock" />
-  <allow pkg="org.powermock" />
   <allow pkg="java.security" />
   <allow pkg="javax.net.ssl" />
   <allow pkg="javax.security" />
   <allow pkg="org.ietf.jgss" />
-  <allow pkg="net.jqwik.api" />
 
   <!-- no one depends on the server -->
   <disallow pkg="kafka" />
@@ -57,7 +50,6 @@
     <allow pkg="org.apache.kafka.common.annotation" />
     <allow pkg="org.apache.kafka.common.config" exact-match="true" />
     <allow pkg="org.apache.kafka.common.internals" exact-match="true" />
-    <allow pkg="org.apache.kafka.test" />
 
     <subpackage name="acl">
       <allow pkg="org.apache.kafka.common.annotation" />
@@ -67,8 +59,6 @@
 
     <subpackage name="config">
       <allow pkg="org.apache.kafka.common.config" />
-      <!-- for testing -->
-      <allow pkg="org.apache.kafka.common.metrics" />
     </subpackage>
 
     <!-- Third-party compression libraries should only be references from this package -->
@@ -186,8 +176,6 @@
       <allow pkg="org.apache.kafka.server.authorizer" />
       <!-- for IncrementalAlterConfigsRequest Builder -->
       <allow pkg="org.apache.kafka.clients.admin" />
-      <!-- for testing -->
-      <allow pkg="org.apache.kafka.common.errors" />
     </subpackage>
 
     <subpackage name="serialization">
@@ -237,7 +225,6 @@
     <allow pkg="org.apache.kafka.server.policy"/>
     <allow pkg="org.apache.kafka.server.util"/>
     <allow pkg="org.apache.kafka.snapshot" />
-    <allow pkg="org.apache.kafka.test" />
     <allow pkg="org.apache.kafka.timeline" />
   </subpackage>
 
@@ -275,7 +262,6 @@
     <allow pkg="org.apache.kafka.server.authorizer" />
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.util"/>
-    <allow pkg="org.apache.kafka.test" />
     <subpackage name="authorizer">
       <allow pkg="org.apache.kafka.common.acl" />
       <allow pkg="org.apache.kafka.common.requests" />
@@ -302,13 +288,11 @@
     <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.kafka.queue" />
     <allow pkg="org.apache.kafka.server.common" />
-    <allow pkg="org.apache.kafka.test" />
   </subpackage>
 
   <subpackage name="clients">
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.clients" exact-match="true"/>
-    <allow pkg="org.apache.kafka.test" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.clients.consumer" />
@@ -329,8 +313,6 @@
   <subpackage name="server">
     <allow pkg="org.apache.kafka.common" />
 
-    <!-- This is required to make AlterConfigPolicyTest work. -->
-    <allow pkg="org.apache.kafka.server.policy" />
 
     <subpackage name="common">
       <allow pkg="org.apache.kafka.server.common" />
@@ -347,7 +329,6 @@
       <allow pkg="org.apache.kafka.clients" />
       <allow pkg="org.apache.kafka.server.common" />
       <allow pkg="org.apache.kafka.server.log" />
-      <allow pkg="org.apache.kafka.test" />
 
       <subpackage name="remote">
         <allow pkg="scala.collection" />
@@ -396,7 +377,6 @@
     <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
     <allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
     <allow pkg="org.apache.kafka.common" />
-    <allow pkg="org.apache.kafka.test"/>
     <allow pkg="org.apache.kafka.trogdor" />
     <allow pkg="org.eclipse.jetty" />
     <allow pkg="org.glassfish.jersey" />
@@ -411,7 +391,6 @@
 
   <subpackage name="streams">
     <allow pkg="org.apache.kafka.common"/>
-    <allow pkg="org.apache.kafka.test"/>
     <allow pkg="org.apache.kafka.clients"/>
     <allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
     <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
@@ -444,10 +423,6 @@
       <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 
-    <subpackage name="test">
-      <allow pkg="kafka.admin" />
-    </subpackage>
-
     <subpackage name="tools">
       <allow pkg="kafka.tools" />
     </subpackage>
@@ -469,13 +444,6 @@
     <allow pkg="org.apache.log4j" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.common" />
-    <allow pkg="org.apache.kafka.test" />
-  </subpackage>
-
-  <subpackage name="test">
-    <allow pkg="org.apache.kafka" />
-    <allow pkg="org.bouncycastle" />
-    <allow pkg="org.rocksdb" />
   </subpackage>
 
   <subpackage name="raft">
@@ -492,7 +460,6 @@
     <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.common.serialization" />
-    <allow pkg="org.apache.kafka.test"/>
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="net.jqwik"/>
   </subpackage>
@@ -502,7 +469,6 @@
     <allow pkg="org.apache.kafka.common.message" />
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.common" />
-    <allow pkg="org.apache.kafka.test"/>
   </subpackage>
 
   <subpackage name="connect">
@@ -512,7 +478,6 @@
     <allow pkg="org.apache.kafka.connect.header" />
     <allow pkg="org.apache.kafka.connect.components"/>
     <allow pkg="org.apache.kafka.clients" />
-    <allow pkg="org.apache.kafka.test"/>
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.connect.connector" />
@@ -532,8 +497,6 @@
     <subpackage name="connector.policy">
       <allow pkg="org.apache.kafka.connect.health" />
       <allow pkg="org.apache.kafka.connect.connector" />
-      <!-- for testing -->
-      <allow pkg="org.apache.kafka.connect.runtime" />
     </subpackage>
 
     <subpackage name="rest">
@@ -556,8 +519,6 @@
       <allow pkg="org.apache.kafka.connect.util" />
       <allow pkg="org.apache.kafka.connect.converters" />
       <allow pkg="net.sourceforge.argparse4j" />
-      <!-- for tests -->
-      <allow pkg="org.apache.kafka.connect.integration" />
       <allow pkg="org.apache.kafka.connect.mirror" />
       <allow pkg="kafka.server" />
     </subpackage>
@@ -642,9 +603,6 @@
     <subpackage name="file">
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.clients.consumer" />
-      <!-- for tests -->
-      <allow pkg="org.easymock" />
-      <allow pkg="org.powermock" />
     </subpackage>
 
     <subpackage name="tools">
