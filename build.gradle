@@ -178,7 +178,7 @@ apply from: file('wrapper.gradle')
 
 if (file('.git').exists()) {
   rat {
-    verbose = true
+    verbose.set(true)
     reportDir.set(project.file('build/rat'))
     stylesheet.set(file('gradle/resources/rat-output-to-html.xsl'))
 
