@@ -122,6 +122,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         );
     }
 
+    // Visible for testing
     PrototypeAsyncConsumer(
             Time time,
             LogContext logContext,
