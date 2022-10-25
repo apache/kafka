@@ -331,7 +331,7 @@ class StreamsUpgradeTest(Test):
                 monitor.wait_until(self.processed_data_msg,
                                    timeout_sec=60,
                                    err_msg="Never saw output '%s' on " % self.processed_data_msg + str(node1.account))
-                if 'test.run_fk_join' in extra_properties:
+                if extra_properties.get('test.run_fk_join', False):
                     monitor.wait_until(self.processed_fk_msg,
                     timeout_sec=60,
                     err_msg="Never saw output '%s' on " % self.processed_fk_msg + str(node1.account))
@@ -353,7 +353,7 @@ class StreamsUpgradeTest(Test):
                     second_monitor.wait_until(self.processed_data_msg,
                                               timeout_sec=60,
                                               err_msg="Never saw output '%s' on " % self.processed_data_msg + str(node2.account))
-                    if 'test.run_fk_join' in extra_properties:
+                    if extra_properties.get('test.run_fk_join', False):
                         second_monitor.wait_until(self.processed_fk_msg,
                         timeout_sec=60,
                         err_msg="Never saw output '%s' on " % self.processed_fk_msg + str(node2.account))
@@ -378,7 +378,7 @@ class StreamsUpgradeTest(Test):
                         third_monitor.wait_until(self.processed_data_msg,
                                                  timeout_sec=60,
                                                  err_msg="Never saw output '%s' on " % self.processed_data_msg + str(node3.account))
-                        if 'test.run_fk_join' in extra_properties:
+                        if extra_properties.get('test.run_fk_join', False):
                             third_monitor.wait_until(self.processed_fk_msg,
                             timeout_sec=60,
                             err_msg="Never saw output '%s' on " % self.processed_fk_msg + str(node2.account))
@@ -470,7 +470,7 @@ class StreamsUpgradeTest(Test):
                                            timeout_sec=60,
                                            err_msg="Never saw output '%s' on " % self.processed_data_msg + str(node.account))
 
-                        if "test.run_fk_join" in extra_properties:
+                        if extra_properties.get('test.run_fk_join', False):
                             monitor.wait_until(self.processed_fk_msg,
                                                      timeout_sec=60,
                                                      err_msg="Never saw output '%s' on " % self.processed_fk_msg + str(node.account))
