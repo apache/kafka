@@ -267,13 +267,6 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     numCompleted
   }
 
-  def checkAndComplete(keys: List[Any]): Int = {
-    val wls: ArrayBuffer[WatcherList] = ArrayBuffer.empty
-    for (key <- keys) {
-      wls += watcherList(key)
-    }
-  }
-
   /**
    * Return the total size of watch lists the purgatory. Since an operation may be watched
    * on multiple lists, and some of its watched entries may still be in the watch lists
