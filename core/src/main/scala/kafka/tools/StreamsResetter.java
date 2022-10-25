@@ -326,8 +326,8 @@ public class StreamsResetter {
                                                                     final boolean dryRun)
         throws IOException, ParseException {
 
-        final List<String> inputTopics = options.valuesOf(inputTopicsOption);
-        final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
+        final List<String> inputTopics = options.valuesOf(inputTopicsOption).stream().map(String::trim).collect(Collectors.toList());
+        final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption).stream().map(String::trim).collect(Collectors.toList());
         int topicNotFound = EXIT_CODE_SUCCESS;
 
         final List<String> notFoundInputTopics = new ArrayList<>();
