@@ -394,7 +394,6 @@ class StreamsUpgradeTest(Test):
             processor.set_version(version)
 
     def do_stop_start_bounce(self, processor, upgrade_from, new_version, counter, extra_properties = None):
-
         if extra_properties is None:
             extra_properties = {}
 
@@ -472,8 +471,8 @@ class StreamsUpgradeTest(Test):
 
                         if extra_properties.get('test.run_fk_join', False):
                             monitor.wait_until(self.processed_fk_msg,
-                                                     timeout_sec=60,
-                                                     err_msg="Never saw output '%s' on " % self.processed_fk_msg + str(node.account))
+                                               timeout_sec=60,
+                                               err_msg="Never saw output '%s' on " % self.processed_fk_msg + str(node.account))
 
 
     def do_rolling_bounce(self, processor, counter, current_generation):
