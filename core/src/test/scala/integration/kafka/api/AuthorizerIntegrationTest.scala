@@ -2237,28 +2237,28 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-    @ValueSource(strings = Array("zk", "kraft"))
-    def testRetryProducerInitializationAfterPermissionFix(quorum: String): Unit = {
-        createTopicWithBrokerPrincipal(topic)
-        val wildcard = new ResourcePattern(TOPIC, ResourcePattern.WILDCARD_RESOURCE, LITERAL)
-        val prefixed = new ResourcePattern(TOPIC, "t", PREFIXED)
-        val literal = new ResourcePattern(TOPIC, topic, LITERAL)
-        val allowWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)
-        val denyWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, DENY)
-        val producer = buildIdempotentProducer()
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testRetryProducerInitializationAfterPermissionFix(quorum: String): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+    val wildcard = new ResourcePattern(TOPIC, ResourcePattern.WILDCARD_RESOURCE, LITERAL)
+    val prefixed = new ResourcePattern(TOPIC, "t", PREFIXED)
+    val literal = new ResourcePattern(TOPIC, topic, LITERAL)
+    val allowWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)
+    val denyWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, DENY)
+    val producer = buildIdempotentProducer()
 
-        addAndVerifyAcls(Set(denyWriteAce), wildcard)
-        assertThrows(classOf[Exception], () => {
-            val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
-            future.get()
-          })
-        removeAndVerifyAcls(Set(denyWriteAce), wildcard)
-        addAndVerifyAcls(Set(allowWriteAce), prefixed)
-        addAndVerifyAcls(Set(allowWriteAce), literal)
-        val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
-        assertDoesNotThrow(() => future.get())
-          producer.close()
-      }
+    addAndVerifyAcls(Set(denyWriteAce), wildcard)
+    assertThrows(classOf[Exception], () => {
+      val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
+      future.get()
+    })
+    removeAndVerifyAcls(Set(denyWriteAce), wildcard)
+    addAndVerifyAcls(Set(allowWriteAce), prefixed)
+    addAndVerifyAcls(Set(allowWriteAce), literal)
+    val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
+    assertDoesNotThrow(() => future.get())
+    producer.close()
+  }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
