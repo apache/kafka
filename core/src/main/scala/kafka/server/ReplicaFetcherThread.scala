@@ -23,6 +23,8 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.common.MetadataVersion
 
+import scala.collection.mutable
+
 class ReplicaFetcherThread(name: String,
                            leader: LeaderEndPoint,
                            brokerConfig: KafkaConfig,
@@ -40,6 +42,8 @@ class ReplicaFetcherThread(name: String,
                                 replicaMgr.brokerTopicStats) {
 
   this.logIdent = logPrefix
+
+  private val partitionsWithNewRecords = mutable.Buffer[TopicPartition]()
 
   override protected val isOffsetForLeaderEpochSupported: Boolean = metadataVersionSupplier().isOffsetForLeaderEpochSupported
 
@@ -88,6 +92,11 @@ class ReplicaFetcherThread(name: String,
     }
   }
 
+  override def doWork(): Unit = {
+    super.doWork()
+    completeDelayedFetchRequests()
+  }
+
   // process fetched data
   override def processPartitionData(topicPartition: TopicPartition,
                                     fetchOffset: Long,
@@ -132,7 +141,15 @@ class ReplicaFetcherThread(name: String,
 
     brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
 
+    logAppendInfo.foreach { _ => partitionsWithNewRecords += topicPartition }
     logAppendInfo
+  }
+
+  private def completeDelayedFetchRequests(): Unit = {
+    if (partitionsWithNewRecords.nonEmpty) {
+      replicaMgr.completeDelayedFetchRequests(partitionsWithNewRecords.toSeq)
+      partitionsWithNewRecords.clear()
+    }
   }
 
   def maybeWarnIfOversizedRecords(records: MemoryRecords, topicPartition: TopicPartition): Unit = {

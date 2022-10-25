@@ -214,14 +214,14 @@ object TestUtils extends Logging {
     enableToken: Boolean = false,
     numPartitions: Int = 1,
     defaultReplicationFactor: Short = 1,
-    startingIdNumber: Int = 0
-  ): Seq[Properties] = {
+    startingIdNumber: Int = 0,
+    enableFetchFromFollower: Boolean = false): Seq[Properties] = {
     val endingIdNumber = startingIdNumber + numConfigs - 1
     (startingIdNumber to endingIdNumber).map { node =>
       createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, RandomPort,
         interBrokerSecurityProtocol, trustStoreFile, saslProperties, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
         enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl, rack = rackInfo.get(node), logDirCount = logDirCount, enableToken = enableToken,
-        numPartitions = numPartitions, defaultReplicationFactor = defaultReplicationFactor)
+        numPartitions = numPartitions, defaultReplicationFactor = defaultReplicationFactor, enableFetchFromFollower = enableFetchFromFollower)
     }
   }
 
@@ -280,7 +280,8 @@ object TestUtils extends Logging {
                          logDirCount: Int = 1,
                          enableToken: Boolean = false,
                          numPartitions: Int = 1,
-                         defaultReplicationFactor: Short = 1): Properties = {
+                         defaultReplicationFactor: Short = 1,
+                         enableFetchFromFollower: Boolean = false): Properties = {
     def shouldEnable(protocol: SecurityProtocol) = interBrokerSecurityProtocol.fold(false)(_ == protocol)
 
     val protocolAndPorts = ArrayBuffer[(SecurityProtocol, Int)]()
@@ -361,6 +362,11 @@ object TestUtils extends Logging {
 
     props.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
     props.put(KafkaConfig.DefaultReplicationFactorProp, defaultReplicationFactor.toString)
+
+    if (enableFetchFromFollower) {
+      props.put(KafkaConfig.RackProp, nodeId.toString)
+      props.put(KafkaConfig.ReplicaSelectorClassProp, "org.apache.kafka.common.replica.RackAwareReplicaSelector")
+    }
 
     props
   }
@@ -818,7 +824,9 @@ object TestUtils extends Logging {
                            trustStoreFile: Option[File] = None,
                            saslProperties: Option[Properties] = None,
                            keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
-                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer): KafkaConsumer[K, V] = {
+                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
+                           rackId: String = null,
+                           fetchMaxWaitMs: Int = 500): KafkaConsumer[K, V] = {
     val consumerProps = new Properties
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset)
@@ -827,6 +835,10 @@ object TestUtils extends Logging {
     consumerProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
     consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, if (readCommitted) "read_committed" else "read_uncommitted")
     consumerProps ++= consumerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
+    if (rackId != null) {
+      consumerProps.put(ConsumerConfig.CLIENT_RACK_CONFIG, rackId)
+    }
+    consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, fetchMaxWaitMs)
     new KafkaConsumer[K, V](consumerProps, keyDeserializer, valueDeserializer)
   }
 
@@ -1719,11 +1731,15 @@ object TestUtils extends Logging {
       groupId: String = "group",
       securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
       trustStoreFile: Option[File] = None,
-      waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
+      waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS,
+      rackId: String = null,
+      fetchMaxWaitMs: Int = 500): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
     val consumer = createConsumer(bootstrapServers(brokers, ListenerName.forSecurityProtocol(securityProtocol)),
       groupId = groupId,
       securityProtocol = securityProtocol,
-      trustStoreFile = trustStoreFile)
+      trustStoreFile = trustStoreFile,
+      rackId = rackId,
+      fetchMaxWaitMs = fetchMaxWaitMs)
     try {
       consumer.subscribe(Collections.singleton(topic))
       consumeRecords(consumer, numMessages, waitTime)
