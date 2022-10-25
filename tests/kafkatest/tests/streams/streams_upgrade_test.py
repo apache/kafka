@@ -393,7 +393,7 @@ class StreamsUpgradeTest(Test):
         else:
             processor.set_version(version)
 
-    def do_stop_start_bounce(self, processor, upgrade_from, new_version, counter, extra_properties=None):
+    def do_stop_start_bounce(self, processor, upgrade_from, new_version, counter, extra_properties = None):
 
         if extra_properties is None:
             extra_properties = {}
