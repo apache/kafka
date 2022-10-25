@@ -141,9 +141,6 @@ public class StandaloneHerderTest {
             .useConstructor(worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy)
             .defaultAnswer(CALLS_REAL_METHODS));
         createCallback = new FutureCallback<>();
-        plugins = mock(Plugins.class);
-        pluginLoader = mock(PluginClassLoader.class);
-        delegatingLoader = mock(DelegatingClassLoader.class);
         pluginsStatic = mockStatic(Plugins.class);
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
