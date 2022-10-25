@@ -99,6 +99,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
@@ -308,9 +309,6 @@ public class StandaloneHerderTest {
         Connector connectorMock = mock(SourceConnector.class);
         expectConfigValidation(connectorMock, true, config);
 
-        worker.stopAndAwaitConnector(CONNECTOR_NAME);
-        doNothing().when(worker).stopAndAwaitConnector(CONNECTOR_NAME);
-
         final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
             onStart.getValue().onCompletion(null, TargetState.STARTED);
@@ -335,6 +333,7 @@ public class StandaloneHerderTest {
         FutureCallback<Void> restartCallback = new FutureCallback<>();
         herder.restartConnector(CONNECTOR_NAME, restartCallback);
         restartCallback.get(1000L, TimeUnit.MILLISECONDS);
+        verify(worker).stopAndAwaitConnector(CONNECTOR_NAME);
     }
 
     @Test
