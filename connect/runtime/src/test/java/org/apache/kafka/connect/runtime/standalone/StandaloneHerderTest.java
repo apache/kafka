@@ -188,7 +188,7 @@ public class StandaloneHerderTest {
 
         ConfigValue validatedValue = new ConfigValue("foo.bar");
         when(connectorMock.validate(config)).thenReturn(new Config(singletonList(validatedValue)));
-        when(Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
+        pluginsStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
 
@@ -212,7 +212,7 @@ public class StandaloneHerderTest {
         when(worker.getPlugins()).thenReturn(plugins);
         when(plugins.compareAndSwapLoaders(connectorMock)).thenReturn(delegatingLoader);
         // No new connector is created
-        when(Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
+        pluginsStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
@@ -804,7 +804,7 @@ public class StandaloneHerderTest {
         when(worker.getPlugins()).thenReturn(plugins);
         when(plugins.newConnector(anyString())).thenReturn(connectorMock);
         when(connectorMock.config()).thenReturn(configDef);
-        when(Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
+        pluginsStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, true, createCallback);
         try {
@@ -941,7 +941,7 @@ public class StandaloneHerderTest {
 
         for (Map<String, String> config : configs)
             when(connectorMock.validate(config)).thenReturn(new Config(Collections.emptyList()));
-        when(Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
+        pluginsStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
     }
 
     // We need to use a real class here due to some issue with mocking java.lang.Class
