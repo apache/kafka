@@ -221,7 +221,7 @@ subprojects {
   task allDeps(type: DependencyReportTask) {}
   // enable running :dependencyInsight task recursively on all subprojects
   // eg: ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
-  task allDepInsight(type: DependencyInsightReportTask) doLast {}
+  task allDepInsight(type: DependencyInsightReportTask) {showingAllVariants = false} doLast {}
 
   apply plugin: 'java-library'
   apply plugin: 'checkstyle'
