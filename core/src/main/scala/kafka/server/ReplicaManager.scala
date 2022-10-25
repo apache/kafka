@@ -322,7 +322,7 @@ class ReplicaManager(val config: KafkaConfig,
   def startup(): Unit = {
     // start ISR expiration thread
     // A follower can lag behind leader for up to config.replicaLagTimeMaxMs x 1.5 before it is removed from ISR
-    scheduler.schedule("isr-expiration", maybeShrinkIsr _, period = config.replicaLagTimeMaxMs / 2, unit = TimeUnit.MILLISECONDS)
+    scheduler.schedule("isr-expiration", maybeShrinkIsrOrTransferToNewLeader _, period = config.replicaLagTimeMaxMs / 2, unit = TimeUnit.MILLISECONDS)
     // scheduler.schedule("shutdown-idle-replica-alter-log-dirs-thread", shutdownIdleReplicaAlterLogDirsThread _, period = 10000L, unit = TimeUnit.MILLISECONDS)
 
     // If inter-broker protocol (IBP) < 1.0, the controller will send LeaderAndIsrRequest V0 which does not include isNew field.
@@ -1983,12 +1983,17 @@ class ReplicaManager(val config: KafkaConfig,
       log.highWatermark
   }
 
-  private def maybeShrinkIsr(): Unit = {
+  private def maybeShrinkIsrOrTransferToNewLeader(): Unit = {
     trace("Evaluating ISR list of partitions to see which replicas can be removed from the ISR")
 
     // Shrink ISRs for non offline partitions
     allPartitions.keys.foreach { topicPartition =>
       onlinePartition(topicPartition).foreach(_.maybeShrinkIsr())
+    }
+
+    // Transfer leadership for non offline partitions
+    allPartitions.keys.foreach { topicPartition =>
+      onlinePartition(topicPartition).foreach(_.maybeTransferToNewLeader())
     }
   }
 

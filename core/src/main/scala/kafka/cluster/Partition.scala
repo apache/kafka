@@ -970,8 +970,39 @@ class Partition(val topicPartition: TopicPartition,
       tryCompleteDelayedRequests()
   }
 
+  /**
+   * We should only shrink the ISR if the ISR set is >= minISR after the shrinking.
+   * When ISR set needs to be dropped under MinISR, a leadership switch would be triggered.
+   */
   private def needsShrinkIsr(): Boolean = {
-    leaderLogIfLocal.exists { _ => getOutOfSyncReplicas(replicaLagTimeMaxMs).nonEmpty }
+    leaderLogIfLocal.exists { log =>
+      val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
+      outOfSyncReplicaIds.nonEmpty && (inSyncReplicaIds -- outOfSyncReplicaIds).size >= log.config.minInSyncReplicas
+    }
+  }
+
+  def maybeTransferToNewLeader(): Unit = {
+    val recommendedNewLeader = inReadLock(leaderIsrUpdateLock) {
+      needsLeadershipTransfer()
+    }
+
+    recommendedNewLeader match {
+      case Some(newLeader) =>
+        transferToNewLeader(newLeader)
+      case None => // do nothing
+    }
+  }
+  /**
+   * We should transfer the leadership if the ISR needs to be dropped to be below MinISR
+   * @return the recommended new leader for the partition, which is the first broker in the ISR
+   */
+  private def needsLeadershipTransfer(): Option[Int] = {
+    leaderLogIfLocal.flatMap { log =>
+      val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
+      if ((inSyncReplicaIds -- outOfSyncReplicaIds).size < log.config.minInSyncReplicas) {
+        inSyncReplicaIds.find(_ != localBrokerId)
+      } else None
+    }
   }
 
   private def isFollowerOutOfSync(replicaId: Int,
@@ -1355,6 +1386,19 @@ class Partition(val topicPartition: TopicPartition,
       sendAlterIsrRequest(PendingShrinkIsr(isrState.isr, outOfSyncReplicas))
     } else {
       trace(s"ISR update in-flight, not removing out-of-sync replicas $outOfSyncReplicas")
+    }
+  }
+
+  private[cluster] def transferToNewLeader(newLeader: Int): Unit = {
+    transferLeaderManager.submit(TransferLeaderItem(topicPartition, newLeader, handleTransferLeaderResponse))
+  }
+
+  private def handleTransferLeaderResponse(response: Either[Errors, TopicPartition]): Unit = {
+    response match {
+      case Right(tp) =>
+        info(s"Successfully transferred the leadership for $topicPartition")
+      case Left(e) =>
+        error(s"Received error when transferring leadership for $topicPartition", e.exception())
     }
   }
 

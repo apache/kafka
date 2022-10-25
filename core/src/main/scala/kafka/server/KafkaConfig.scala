@@ -323,6 +323,7 @@ object Defaults {
   /** Linkedin Internal states */
   val LiCombinedControlRequestEnabled = false
   val LiUpdateMetadataDelayMs = 0
+  val LiDropFetchFollowerEnable = false
   val LiAlterIsrEnabled = true
   val LiAsyncFetcherEnabled = false
   val LiNumControllerInitThreads = 1
@@ -441,6 +442,7 @@ object KafkaConfig {
   val LiAsyncFetcherEnableProp = "li.async.fetcher.enable"
   val LiCombinedControlRequestEnableProp = "li.combined.control.request.enable"
   val LiUpdateMetadataDelayMsProp = "li.update.metadata.delay.ms"
+  val LiDropFetchFollowerEnableProp = "li.stop.replication.enable"
   val LiAlterIsrEnableProp = "li.alter.isr.enable"
   val LiNumControllerInitThreadsProp = "li.num.controller.init.threads"
   val LiLogCleanerFineGrainedLockEnableProp = "li.log.cleaner.fine.grained.lock.enable"
@@ -781,6 +783,7 @@ object KafkaConfig {
   val LiCombinedControlRequestEnableDoc = "Specifies whether the controller should use the LiCombinedControlRequest."
   val LiUpdateMetadataDelayMsDoc = "Specifies how long a UpdateMetadata request with partitions should be delayed before its processing can start. This config is purely for testing the LiCombinedControl feature and should not be enabled in a production environment."
   val LiDropCorruptedFilesEnableDoc = "Specifies whether the broker should delete corrupted files during startup."
+  val LiDropFetchFollowerEnableDoc = "Specifies whether a leader should drop Fetch requests from followers. This config is used to simulate a slow leader and test the leader initiated leadership transfer"
   val LiAlterIsrEnabledDoc = "Specifies whether the brokers should use the AlterISR request to propagate ISR changes to the controller. If set to false, brokers will propagate the updates via Zookeeper."
   val LiNumControllerInitThreadsDoc = "Number of threads (and Zookeeper clients + connections) to be used while recursing the topic-partitions tree in Zookeeper during controller startup/failover."
   val LiLogCleanerFineGrainedLockEnableDoc = "Specifies whether the log cleaner should use fine grained locks when calculating the filthiest log to clean"
@@ -1222,6 +1225,7 @@ object KafkaConfig {
       .define(LiAsyncFetcherEnableProp, BOOLEAN, Defaults.LiAsyncFetcherEnabled, HIGH, LiAsyncFetcherEnableDoc)
       .define(LiCombinedControlRequestEnableProp, BOOLEAN, Defaults.LiCombinedControlRequestEnabled, HIGH, LiCombinedControlRequestEnableDoc)
       .define(LiUpdateMetadataDelayMsProp, LONG, Defaults.LiUpdateMetadataDelayMs, atLeast(0), LOW, LiUpdateMetadataDelayMsDoc)
+      .define(LiDropFetchFollowerEnableProp, BOOLEAN, Defaults.LiDropFetchFollowerEnable, LOW, LiDropFetchFollowerEnableDoc)
       .define(LiAlterIsrEnableProp, BOOLEAN, Defaults.LiAlterIsrEnabled, HIGH, LiAlterIsrEnabledDoc)
       .define(LiNumControllerInitThreadsProp, INT, Defaults.LiNumControllerInitThreads, atLeast(1), LOW, LiNumControllerInitThreadsDoc)
       .define(LiLogCleanerFineGrainedLockEnableProp, BOOLEAN, Defaults.LiLogCleanerFineGrainedLockEnabled, LOW, LiLogCleanerFineGrainedLockEnableDoc)
@@ -1734,6 +1738,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val liAsyncFetcherEnable = getBoolean(KafkaConfig.LiAsyncFetcherEnableProp)
   def liCombinedControlRequestEnable = getBoolean(KafkaConfig.LiCombinedControlRequestEnableProp)
   def liUpdateMetadataDelayMs = getLong(KafkaConfig.LiUpdateMetadataDelayMsProp)
+  def liDropFetchFollowerEnable = getBoolean(KafkaConfig.LiDropFetchFollowerEnableProp)
   def liAlterIsrEnable = getBoolean(KafkaConfig.LiAlterIsrEnableProp)
   def liNumControllerInitThreads = getInt(KafkaConfig.LiNumControllerInitThreadsProp)
   def liLogCleanerFineGrainedLockEnable = getBoolean(KafkaConfig.LiLogCleanerFineGrainedLockEnableProp)

@@ -435,6 +435,12 @@ object TestUtils extends Logging {
       server.groupCoordinator.offsetsTopicConfigs)
   }
 
+  def createAdminClient(servers: Seq[KafkaServer], props: Properties = new Properties): Admin = {
+    val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName("PLAINTEXT"))
+    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+    AdminClient.create(props)
+  }
+
   /**
    * Wrap a single record log buffer.
    */
