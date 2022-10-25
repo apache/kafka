@@ -1129,11 +1129,14 @@ class ReplicaFetcherThreadTest {
     when(mockBlockingSend.brokerEndPoint()).thenReturn(brokerEndPoint)
 
     val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val records = MemoryRecords.withRecords(CompressionType.NONE,
+      new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
 
     val partition: Partition = mock(classOf[Partition])
     when(partition.localLogOrException).thenReturn(log)
     when(partition.isReassigning).thenReturn(isReassigning)
     when(partition.isAddingLocalReplica).thenReturn(isReassigning)
+    when(partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false)).thenReturn(None)
 
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     when(replicaManager.getPartitionOrException(any[TopicPartition])).thenReturn(partition)
@@ -1152,8 +1155,6 @@ class ReplicaFetcherThreadTest {
       mockBlockingSend
     )
 
-    val records = MemoryRecords.withRecords(CompressionType.NONE,
-      new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
     val partitionData: thread.FetchData = new FetchResponseData.PartitionData()
       .setPartitionIndex(t1p0.partition)
       .setLastStableOffset(0)
