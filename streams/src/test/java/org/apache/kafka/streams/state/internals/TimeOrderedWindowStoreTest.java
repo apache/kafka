@@ -1164,7 +1164,6 @@ public class TimeOrderedWindowStoreTest {
     @Test
     public void shouldCloseCacheAndWrappedStoreAfterErrorDuringCacheFlush() {
         setUpCloseTests();
-        reset(cache);
         doThrow(new RuntimeException(
                 "Simulating an error on flush"))
                 .when(cache).flush(CACHE_NAMESPACE);
@@ -1177,7 +1176,6 @@ public class TimeOrderedWindowStoreTest {
     @Test
     public void shouldCloseWrappedStoreAfterErrorDuringCacheClose() {
         setUpCloseTests();
-        reset(cache);
         doThrow(new RuntimeException("Simulating an error on close"))
                 .when(cache).close(CACHE_NAMESPACE);
 
@@ -1189,8 +1187,6 @@ public class TimeOrderedWindowStoreTest {
     @Test
     public void shouldCloseCacheAfterErrorDuringStateStoreClose() {
         setUpCloseTests();
-        reset(cache);
-        reset(underlyingStore);
         doThrow(new RuntimeException("Simulating an error on close"))
                 .when(underlyingStore).close();
 
