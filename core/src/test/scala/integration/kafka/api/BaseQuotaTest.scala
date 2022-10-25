@@ -295,7 +295,7 @@ abstract class QuotaTestClients(topic: String,
     def yammerMetricValue(name: String): Double = {
       val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
       val (_, metric) = allMetrics.find { case (metricName, _) =>
-        metricName.getMBeanName.startsWith(name)
+        metricName.getMBeanName == name
       }.getOrElse(fail(s"Unable to find broker metric $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
       metric match {
         case m: Meter => m.count.toDouble

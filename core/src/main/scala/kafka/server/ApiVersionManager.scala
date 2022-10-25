@@ -32,7 +32,7 @@ trait ApiVersionManager {
   def enabledApis: collection.Set[ApiKeys]
   def apiVersionResponse(throttleTimeMs: Int): ApiVersionsResponse
   def isApiEnabled(apiKey: ApiKeys): Boolean = enabledApis.contains(apiKey)
-  def newRequestMetrics: RequestChannel.Metrics = new network.RequestChannel.Metrics(enabledApis)
+  def newRequestMetrics(config: KafkaConfig): RequestChannel.Metrics = new network.RequestChannel.Metrics(enabledApis, config)
 }
 
 object ApiVersionManager {

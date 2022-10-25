@@ -18,9 +18,8 @@ package kafka.server
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import java.util.Optional
+import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.AtomicReference
-
 import kafka.network
 import kafka.network.RequestChannel
 import kafka.utils.MockTime
@@ -232,13 +231,17 @@ class ForwardingManagerTest {
       Optional.of(principalBuilder)
     )
 
+    val props = new Properties()
+    props.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
+    props.put(KafkaConfig.RequestMetricsSizeBucketsProp, "0, 10, 20, 200")
+    val config = KafkaConfig.fromProps(props)
     new network.RequestChannel.Request(
       processor = 1,
       context = requestContext,
       startTimeNanos = time.nanoseconds(),
       memoryPool = MemoryPool.NONE,
       buffer = requestBuffer,
-      metrics = new RequestChannel.Metrics(ListenerType.CONTROLLER),
+      metrics = new RequestChannel.Metrics(ListenerType.CONTROLLER, config),
       envelope = None
     )
   }

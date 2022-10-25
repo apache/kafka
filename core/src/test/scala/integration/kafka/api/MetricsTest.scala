@@ -129,7 +129,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     val producer = createProducer()
     sendRecords(producer, numRecords, recordSize, tp)
 
-    val requestRateWithoutVersionMeter = yammerMeterWithPrefix("kafka.network:type=RequestMetrics,name=RequestsPerSecAcrossVersions,request=Produce")
+    val requestRateWithoutVersionMeter = yammerMeterWithName("kafka.network:type=RequestMetrics,name=RequestsPerSecAcrossVersions,request=Produce")
     assertTrue(requestRateWithoutVersionMeter.count() > 0, "The Produce RequestsPerSecAcrossVersions metric is not recorded")
   }
 
@@ -305,8 +305,18 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
   private def yammerMeterWithPrefix(prefix: String): Meter = {
     val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
-    val (_, metric) = allMetrics.find { case (n, _) => n.getMBeanName.startsWith(prefix) }
+    val (_, metric) = allMetrics.find { case (n, _) =>  n.getMBeanName.startsWith(prefix) }
       .getOrElse(fail(s"Unable to find broker metric with prefix $prefix: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
+    metric match {
+      case m: Meter => m
+      case m => fail(s"Unexpected broker metric of class ${m.getClass}")
+    }
+  }
+
+  private def yammerMeterWithName(name: String): Meter = {
+    val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+    val (_, metric) = allMetrics.find { case (n, _) =>  n.getMBeanName == name}
+      .getOrElse(fail(s"Unable to find broker metric with name $name: allMetrics: ${allMetrics.keySet.map(_.getMBeanName)}"))
     metric match {
       case m: Meter => m
       case m => fail(s"Unexpected broker metric of class ${m.getClass}")

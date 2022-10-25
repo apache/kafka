@@ -25,7 +25,7 @@ import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network
-import kafka.server.{BrokerMetadataStats, KafkaConfig, Observer}
+import kafka.server.{BrokerMetadataStats, Defaults, KafkaConfig, Observer}
 import kafka.utils.{Logging, NotNothing, Pool}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
 
+import java.util
 import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -59,23 +60,85 @@ object RequestChannel extends Logging {
     val sanitizedUser: String = Sanitizer.sanitize(principal.getName)
   }
 
-  class Metrics(enabledApis: Iterable[ApiKeys]) {
-    def this(scope: ListenerType) = {
-      this(ApiKeys.apisForListener(scope).asScala)
+  class Metrics(enabledApis: Iterable[ApiKeys], config: KafkaConfig) {
+    def this(scope: ListenerType, config: KafkaConfig) = {
+      this(ApiKeys.apisForListener(scope).asScala, config)
     }
 
     private val metricsMap = mutable.Map[String, RequestMetrics]()
 
+    // map[acks, map[requestSize, metricName]]
+    // this is used to create metrics for produce requests of different size and acks
+    val produceRequestAcksSizeMetricNameMap = getProduceRequestAcksSizeMetricNameMap()
+    // map[responseSize, metricName]
+    // this is used to create metrics for fetch requests of different response size
+    val consumerFetchRequestSizeMetricNameMap = getConsumerFetchRequestAcksSizeMetricNameMap
+
     (enabledApis.map(_.name) ++
       Seq(RequestMetrics.MetadataAllTopics) ++
-      Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName)).foreach { name =>
-      metricsMap.put(name, new RequestMetrics(name))
+      Seq(RequestMetrics.consumerFetchMetricName, RequestMetrics.followFetchMetricName) ++
+      getConsumerFetchRequestSizeMetricNames ++
+      getProduceRequestAcksSizeMetricNames)
+      .foreach { name => metricsMap.put(name, new RequestMetrics(name))
     }
 
     def apply(metricName: String): RequestMetrics = metricsMap(metricName)
 
     def close(): Unit = {
        metricsMap.values.foreach(_.removeMetrics())
+    }
+
+    // generate map[request/responseSize, metricName] for requests of different size
+    def getRequestSizeMetricNameMap(requestType: String):util.TreeMap[Int, String] = {
+      val buckets = config.requestMetricsSizeBuckets
+      // get size and corresponding term to be used in metric name
+      // [0,1,10,50,100] => requestSizeBuckets:Seq((0, "0To1Mb"), (1, "1To10Mb"), (10, "10To50Mb"), (50, "50To100Mb"),
+      // (100, "100MbGreater"))
+      val requestSizeBuckets = for (i <- 0 until buckets.length) yield {
+        val size = buckets(i)
+        if (i == buckets.length - 1) (size, s"${size}MbGreater")
+        else (size, s"${size}To${buckets(i + 1)}Mb")
+      }
+      val treeMap = new util.TreeMap[Int, String]
+      requestSizeBuckets.map(bucket => (bucket._1, s"${requestType}${bucket._2}")).toMap
+        .foreach{case (size, bucket) => treeMap.put(size, bucket)}
+      treeMap
+    }
+
+    // generate map[acks, map[requestSize, metricName]] for produce requests of different request size and acks
+    private def getProduceRequestAcksSizeMetricNameMap():Map[Int, util.TreeMap[Int, String]] = {
+      val produceRequestAcks = Seq((0, "0"), (1, "1"), (-1, "All"))
+      val requestSizeMetricNameMap = getRequestSizeMetricNameMap(ApiKeys.PRODUCE.name)
+
+      val ackSizeMetricNames = for(ack <- produceRequestAcks) yield {
+        val treeMap = new util.TreeMap[Int, String]
+        requestSizeMetricNameMap.asScala.map({case(size, name) => treeMap.put(size, s"${name}Acks${ack._2}")})
+        (ack._1, treeMap)
+      }
+      ackSizeMetricNames.toMap
+    }
+
+    // generate map[responseSize, metricName] for consumerFetch requests of different request size and acks
+    private def getConsumerFetchRequestAcksSizeMetricNameMap():util.TreeMap[Int, String] = {
+      getRequestSizeMetricNameMap(RequestMetrics.consumerFetchMetricName)
+    }
+
+    // get all the metric names for produce requests of different acks and size
+    def getProduceRequestAcksSizeMetricNames : Seq[String] = {
+      produceRequestAcksSizeMetricNameMap.values.toSeq.map(a => a.values.asScala.toSeq).flatten
+    }
+
+    // get all the metric names for fetch requests of different size
+    def getConsumerFetchRequestSizeMetricNames : Seq[String] = {
+      consumerFetchRequestSizeMetricNameMap.values.asScala.toSeq
+    }
+
+    // get the metric name for a given request/response size
+    // the bucket is [left, right)
+    def getRequestSizeBucketMetricName(sizeMetricNameMap: util.TreeMap[Int, String], sizeBytes: Long): String = {
+      val sizeMb = sizeBytes / 1024 / 1024
+      if(sizeMb < sizeMetricNameMap.firstKey()) sizeMetricNameMap.firstEntry().getValue
+      else sizeMetricNameMap.floorEntry(sizeMb.toInt).getValue
     }
   }
 
@@ -207,6 +270,29 @@ object RequestChannel extends Logging {
       math.max(apiLocalCompleteTimeNanos - requestDequeueTimeNanos, 0L)
     }
 
+    def getConsumerFetchSizeBucketMetricName: Option[String] = {
+      if (header.apiKey != ApiKeys.FETCH)
+        None
+      else {
+        val isFromFollower = body[FetchRequest].isFromFollower
+        if (isFromFollower) None
+        else Some(metrics.getRequestSizeBucketMetricName(metrics.consumerFetchRequestSizeMetricNameMap, responseBytes))
+      }
+    }
+
+    def getProduceAckSizeBucketMetricName: Option[String] = {
+      if (header.apiKey != ApiKeys.PRODUCE)
+        None
+      else {
+        var acks = body[ProduceRequest].acks()
+        if(!metrics.produceRequestAcksSizeMetricNameMap.contains(acks)) {
+          error(s"metrics.produceRequestAcksSizeMetricNameMap does not contain key acks '${acks}', use -1 instead.")
+          acks = -1
+        }
+        Some(metrics.getRequestSizeBucketMetricName(metrics.produceRequestAcksSizeMetricNameMap(acks), sizeOfBodyInBytes))
+      }
+    }
+
     def updateRequestMetrics(networkThreadTimeNanos: Long, response: Response): Unit = {
       val endTimeNanos = Time.SYSTEM.nanoseconds
 
@@ -240,7 +326,9 @@ object RequestChannel extends Logging {
         if (header.apiKey() == ApiKeys.METADATA && body[MetadataRequest].isAllTopics) {
           Seq(RequestMetrics.MetadataAllTopics)
         } else Seq.empty
-      val metricNames =  (fetchMetricNames ++ metadataMetricNames) :+ header.apiKey.name
+
+      val metricNames =  (fetchMetricNames ++ metadataMetricNames ++ getConsumerFetchSizeBucketMetricName.toSeq ++
+        getProduceAckSizeBucketMetricName.toSeq) :+ header.apiKey.name
       metricNames.foreach { metricName =>
         val m = metrics(metricName)
         m.requestRate(header.apiVersion).mark()
