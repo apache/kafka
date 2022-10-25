@@ -173,8 +173,8 @@ public class OffsetFetchResponse extends AbstractResponse {
      * @param responseData Fetched offset information grouped by topic-partition and by group
      */
     public OffsetFetchResponse(int throttleTimeMs,
-                               Map<String, Errors> errors, Map<String,
-                               Map<TopicPartition, PartitionData>> responseData) {
+                               Map<String, Errors> errors,
+                               Map<String, Map<TopicPartition, PartitionData>> responseData) {
         super(ApiKeys.OFFSET_FETCH);
         List<OffsetFetchResponseGroup> groupList = new ArrayList<>();
         for (Entry<String, Map<TopicPartition, PartitionData>> entry : responseData.entrySet()) {
@@ -245,12 +245,21 @@ public class OffsetFetchResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
     public boolean hasError() {
         return error != Errors.NONE;
     }
 
     public boolean groupHasError(String groupId) {
-        return groupLevelErrors.get(groupId) != Errors.NONE;
+        Errors error = groupLevelErrors.get(groupId);
+        if (error == null) {
+            return this.error != null && this.error != Errors.NONE;
+        }
+        return error != Errors.NONE;
     }
 
     public Errors error() {

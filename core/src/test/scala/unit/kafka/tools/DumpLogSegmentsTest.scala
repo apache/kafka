@@ -22,23 +22,28 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.Properties
 
-import kafka.log.{AppendOrigin, UnifiedLog, LogConfig, LogManager, LogTestUtils}
-import kafka.server.{BrokerTopicStats, FetchLogEnd, LogDirFailureChannel}
+import kafka.log.{AppendOrigin, Defaults, LogConfig, LogTestUtils, ProducerStateManagerConfig, UnifiedLog}
+import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
+import kafka.server.{BrokerTopicStats, FetchLogEnd, KafkaRaftServer, LogDirFailureChannel}
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordVersion, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch}
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.snapshot.RecordsSnapshotWriter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
+import scala.util.matching.Regex
 
 case class BatchInfo(records: Seq[SimpleRecord], hasKeys: Boolean, hasValues: Boolean)
 
@@ -48,6 +53,7 @@ class DumpLogSegmentsTest {
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val segmentName = "00000000000000000000"
   val logFilePath = s"$logDir/$segmentName.log"
+  val snapshotPath = s"$logDir/00000000000000000000-0000000000.checkpoint"
   val indexFilePath = s"$logDir/$segmentName.index"
   val timeIndexFilePath = s"$logDir/$segmentName.timeindex"
   val time = new MockTime(0, 0)
@@ -59,10 +65,21 @@ class DumpLogSegmentsTest {
   def setUp(): Unit = {
     val props = new Properties
     props.setProperty(LogConfig.IndexIntervalBytesProp, "128")
-    log = UnifiedLog(logDir, LogConfig(props), logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
-      time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10), topicId = None, keepPartitionMetadataFile = true)
+    log = UnifiedLog(
+      dir = logDir,
+      config = LogConfig(props),
+      logStartOffset = 0L,
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      time = time,
+      brokerTopicStats = new BrokerTopicStats,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
+      producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs),
+      producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true
+    )
   }
 
   def addSimpleRecords(): Unit = {
@@ -81,7 +98,7 @@ class DumpLogSegmentsTest {
         leaderEpoch = 0)
     }
     // Flush, but don't close so that the indexes are not trimmed and contain some zero entries
-    log.flush()
+    log.flush(false)
   }
 
   @AfterEach
@@ -130,13 +147,13 @@ class DumpLogSegmentsTest {
     def verifyRecordsInOutput(checkKeysAndValues: Boolean, args: Array[String]): Unit = {
       def isBatch(index: Int): Boolean = {
         var i = 0
-        batches.zipWithIndex.foreach { case (batch, batchIndex) =>
+        batches.zipWithIndex.foreach { case (batch, _) =>
           if (i == index)
             return true
 
           i += 1
 
-          batch.records.indices.foreach { recordIndex =>
+          batch.records.indices.foreach { _ =>
             if (i == index)
               return false
             i += 1
@@ -207,8 +224,7 @@ class DumpLogSegmentsTest {
   def testDumpTimeIndexErrors(): Unit = {
     addSimpleRecords()
     val errors = new TimeIndexDumpErrors
-    DumpLogSegments.dumpTimeIndex(new File(timeIndexFilePath), indexSanityOnly = false, verifyOnly = true, errors,
-      Int.MaxValue)
+    DumpLogSegments.dumpTimeIndex(new File(timeIndexFilePath), false, true, errors)
     assertEquals(Map.empty, errors.misMatchesForTimeIndexFilesMap)
     assertEquals(Map.empty, errors.outOfOrderTimestamp)
     assertEquals(Map.empty, errors.shallowOffsetNotFound)
@@ -243,15 +259,16 @@ class DumpLogSegmentsTest {
       new SimpleRecord(null, buf.array)
     }).toArray
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 1)
-    log.flush()
+    log.flush(false)
 
-    var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "false", "--files", logFilePath))
-    assert(output.contains("TOPIC_RECORD"))
-    assert(output.contains("BROKER_RECORD"))
+    var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--files", logFilePath))
+    assertTrue(output.contains("Log starting offset: 0"))
+    assertTrue(output.contains("TOPIC_RECORD"))
+    assertTrue(output.contains("BROKER_RECORD"))
 
-    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "false", "--files", logFilePath))
-    assert(output.contains("TOPIC_RECORD"))
-    assert(output.contains("BROKER_RECORD"))
+    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "--files", logFilePath))
+    assertTrue(output.contains("TOPIC_RECORD"))
+    assertTrue(output.contains("BROKER_RECORD"))
 
     // Bogus metadata record
     val buf = ByteBuffer.allocate(4)
@@ -261,10 +278,77 @@ class DumpLogSegmentsTest {
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(null, buf.array)), leaderEpoch = 2)
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 2)
 
-    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "false", "--files", logFilePath))
-    assert(output.contains("TOPIC_RECORD"))
-    assert(output.contains("BROKER_RECORD"))
-    assert(output.contains("skipping"))
+    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "--files", logFilePath))
+    assertTrue(output.contains("TOPIC_RECORD"))
+    assertTrue(output.contains("BROKER_RECORD"))
+    assertTrue(output.contains("skipping"))
+  }
+
+  @Test
+  def testDumpMetadataSnapshot(): Unit = {
+    val metadataRecords = Seq(
+      new ApiMessageAndVersion(
+        new RegisterBrokerRecord().setBrokerId(0).setBrokerEpoch(10), 0.toShort),
+      new ApiMessageAndVersion(
+        new RegisterBrokerRecord().setBrokerId(1).setBrokerEpoch(20), 0.toShort),
+      new ApiMessageAndVersion(
+        new TopicRecord().setName("test-topic").setTopicId(Uuid.randomUuid()), 0.toShort),
+      new ApiMessageAndVersion(
+        new PartitionChangeRecord().setTopicId(Uuid.randomUuid()).setLeader(1).
+          setPartitionId(0).setIsr(util.Arrays.asList(0, 1, 2)), 0.toShort)
+    )
+
+    val metadataLog = KafkaMetadataLog(
+      KafkaRaftServer.MetadataPartition,
+      KafkaRaftServer.MetadataTopicId,
+      logDir,
+      time,
+      time.scheduler,
+      MetadataLogConfig(
+        logSegmentBytes = 100 * 1024,
+        logSegmentMinBytes = 100 * 1024,
+        logSegmentMillis = 10 * 1000,
+        retentionMaxBytes = 100 * 1024,
+        retentionMillis = 60 * 1000,
+        maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+        maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+        fileDeleteDelayMs = Defaults.FileDeleteDelayMs,
+        nodeId = 1
+      )
+    )
+
+    val lastContainedLogTimestamp = 10000
+
+    TestUtils.resource(
+      RecordsSnapshotWriter.createWithHeader(
+        () => metadataLog.createNewSnapshot(new OffsetAndEpoch(0, 0)),
+        1024,
+        MemoryPool.NONE,
+        new MockTime,
+        lastContainedLogTimestamp,
+        CompressionType.NONE,
+        new MetadataRecordSerde
+      ).get()
+    ) { snapshotWriter =>
+      snapshotWriter.append(metadataRecords.asJava)
+      snapshotWriter.freeze()
+    }
+
+    var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--files", snapshotPath))
+    assertTrue(output.contains("Snapshot end offset: 0, epoch: 0"))
+    assertTrue(output.contains("TOPIC_RECORD"))
+    assertTrue(output.contains("BROKER_RECORD"))
+    assertTrue(output.contains("SnapshotHeader"))
+    assertTrue(output.contains("SnapshotFooter"))
+    assertTrue(output.contains(s""""lastContainedLogTimestamp":$lastContainedLogTimestamp"""))
+
+    output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "--files", snapshotPath))
+    assertTrue(output.contains("Snapshot end offset: 0, epoch: 0"))
+    assertTrue(output.contains("TOPIC_RECORD"))
+    assertTrue(output.contains("BROKER_RECORD"))
+    assertFalse(output.contains("SnapshotHeader"))
+    assertFalse(output.contains("SnapshotFooter"))
+    assertFalse(output.contains(s""""lastContainedLogTimestamp": $lastContainedLogTimestamp"""))
   }
 
   @Test
@@ -288,6 +372,29 @@ class DumpLogSegmentsTest {
     outContent.toString
   }
 
+  @Test
+  def testPrintDataLogPartialBatches(): Unit = {
+    addSimpleRecords()
+    val totalBatches = batches.size
+    val partialBatches = totalBatches / 2
+
+    // Get all the batches
+    val output = runDumpLogSegments(Array("--files", logFilePath))
+    val lines = util.Arrays.asList(output.split("\n"): _*).listIterator()
+
+    // Get total bytes of the partial batches
+    val partialBatchesBytes = readPartialBatchesBytes(lines, partialBatches)
+
+    // Request only the partial batches by bytes
+    val partialOutput = runDumpLogSegments(Array("--max-bytes", partialBatchesBytes.toString, "--files", logFilePath))
+    val partialLines = util.Arrays.asList(partialOutput.split("\n"): _*).listIterator()
+
+    // Count the total of partial batches limited by bytes
+    val partialBatchesCount = countBatches(partialLines)
+
+    assertEquals(partialBatches, partialBatchesCount)
+  }
+
   private def readBatchMetadata(lines: util.ListIterator[String]): Option[String] = {
     while (lines.hasNext) {
       val line = lines.next()
@@ -298,6 +405,38 @@ class DumpLogSegmentsTest {
       }
     }
     None
+  }
+
+  // Returns the total bytes of the batches specified
+  private def readPartialBatchesBytes(lines: util.ListIterator[String], limit: Int): Int = {
+    val sizePattern: Regex = raw".+?size:\s(\d+).+".r
+    var batchesBytes = 0
+    var batchesCounter = 0
+    while (lines.hasNext) {
+      if (batchesCounter >= limit){
+        return batchesBytes
+      }
+      val line = lines.next()
+      if (line.startsWith("baseOffset")) {
+        line match {
+          case sizePattern(size) => batchesBytes += size.toInt
+          case _ => throw new IllegalStateException(s"Failed to parse and find size value for batch line: $line")
+        }
+        batchesCounter += 1
+      }
+    }
+    batchesBytes
+  }
+
+  private def countBatches(lines: util.ListIterator[String]): Int = {
+    var countBatches = 0
+    while (lines.hasNext) {
+      val line = lines.next()
+      if (line.startsWith("baseOffset")) {
+        countBatches += 1
+      }
+    }
+    countBatches
   }
 
   private def readBatchRecords(lines: util.ListIterator[String]): Seq[String] = {

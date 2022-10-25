@@ -19,10 +19,12 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
@@ -53,7 +55,7 @@ class CachingSessionStore
         "Note that the built-in numerical serdes do not follow this for negative numbers";
 
     private String cacheName;
-    private InternalProcessorContext context;
+    private InternalProcessorContext<?, ?> context;
     private CacheFlushListener<byte[], byte[]> flushListener;
     private boolean sendOldValues;
 
@@ -80,7 +82,7 @@ class CachingSessionStore
         super.init(context, root);
     }
 
-    private void initInternal(final InternalProcessorContext context) {
+    private void initInternal(final InternalProcessorContext<?, ?> context) {
         this.context = context;
 
         cacheName = context.taskId() + "-" + name();
@@ -91,7 +93,7 @@ class CachingSessionStore
         });
     }
 
-    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
+    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext<?, ?> context) {
         final Bytes binaryKey = cacheFunction.key(entry.key());
         final Windowed<Bytes> bytesKey = SessionKeySchema.from(binaryKey);
         if (flushListener != null) {
@@ -103,22 +105,29 @@ class CachingSessionStore
             // we can skip flushing to downstream as well as writing to underlying store
             if (newValueBytes != null || oldValueBytes != null) {
                 // we need to get the old values if needed, and then put to store, and then flush
-                wrapped().put(bytesKey, entry.newValue());
 
                 final ProcessorRecordContext current = context.recordContext();
-                context.setRecordContext(entry.entry().context());
                 try {
+                    context.setRecordContext(entry.entry().context());
+                    wrapped().put(bytesKey, entry.newValue());
                     flushListener.apply(
-                        binaryKey.get(),
-                        newValueBytes,
-                        sendOldValues ? oldValueBytes : null,
-                        entry.entry().context().timestamp());
+                        new Record<>(
+                            binaryKey.get(),
+                            new Change<>(newValueBytes, sendOldValues ? oldValueBytes : null),
+                            entry.entry().context().timestamp(),
+                            entry.entry().context().headers()));
                 } finally {
                     context.setRecordContext(current);
                 }
             }
         } else {
-            wrapped().put(bytesKey, entry.newValue());
+            final ProcessorRecordContext current = context.recordContext();
+            try {
+                context.setRecordContext(entry.entry().context());
+                wrapped().put(bytesKey, entry.newValue());
+            } finally {
+                context.setRecordContext(current);
+            }
         }
     }
 
@@ -174,7 +183,8 @@ class CachingSessionStore
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key,
                                                                              key,
                                                                              earliestSessionEndTime,
-                                                                             latestSessionStartTime);
+                                                                             latestSessionStartTime,
+                                                                             true);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction, true);
@@ -204,7 +214,8 @@ class CachingSessionStore
             key,
             key,
             earliestSessionEndTime,
-            latestSessionStartTime
+            latestSessionStartTime,
+            false
         );
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
@@ -233,7 +244,8 @@ class CachingSessionStore
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom,
                                                                              keyTo,
                                                                              earliestSessionEndTime,
-                                                                             latestSessionStartTime);
+                                                                             latestSessionStartTime,
+                                                                     true);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction, true);
@@ -261,7 +273,8 @@ class CachingSessionStore
             keyFrom,
             keyTo,
             earliestSessionEndTime,
-            latestSessionStartTime
+            latestSessionStartTime,
+            false
         );
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);

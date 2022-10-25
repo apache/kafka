@@ -734,7 +734,7 @@ class AdminApiDriverTest {
         }
     }
 
-    private static class MockAdminApiHandler<K, V> implements AdminApiHandler<K, V> {
+    private static class MockAdminApiHandler<K, V> extends AdminApiHandler.Batched<K, V> {
         private final Map<Set<K>, ApiResult<K, V>> expectedRequests = new HashMap<>();
         private final MockLookupStrategy<K> lookupStrategy;
 
@@ -757,7 +757,7 @@ class AdminApiDriverTest {
         }
 
         @Override
-        public AbstractRequest.Builder<?> buildRequest(int brokerId, Set<K> keys) {
+        public AbstractRequest.Builder<?> buildBatchedRequest(int brokerId, Set<K> keys) {
             // The request is just a placeholder in these tests
             assertTrue(expectedRequests.containsKey(keys), "Unexpected fulfillment request for keys " + keys);
             return new MetadataRequest.Builder(Collections.emptyList(), false);

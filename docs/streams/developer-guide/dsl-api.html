@@ -956,7 +956,7 @@ KGroupedTable&lt;byte[], String&gt; groupedTable = ...;
 KTable&lt;byte[], Long&gt; aggregatedStream = groupedStream.aggregate(
     () -&gt; 0L, /* initializer */
     (aggKey, newValue, aggValue) -&gt; aggValue + newValue.length(), /* adder */
-    Materialized.as(&quot;aggregated-stream-store&quot;) /* state store name */
+    Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as(&quot;aggregated-stream-store&quot;) /* state store name */
         .withValueSerde(Serdes.Long()); /* serde for aggregate value */
 
 // Aggregating a KGroupedTable (note how the value type changes from String to Long)
@@ -964,7 +964,7 @@ KTable&lt;byte[], Long&gt; aggregatedTable = groupedTable.aggregate(
     () -&gt; 0L, /* initializer */
     (aggKey, newValue, aggValue) -&gt; aggValue + newValue.length(), /* adder */
     (aggKey, oldValue, aggValue) -&gt; aggValue - oldValue.length(), /* subtractor */
-    Materialized.as(&quot;aggregated-table-store&quot;) /* state store name */
+    Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as(&quot;aggregated-table-store&quot;) /* state store name */
 	.withValueSerde(Serdes.Long()) /* serde for aggregate value */
 
 
@@ -1732,7 +1732,7 @@ KTable&lt;String, Integer&gt; aggregated = groupedTable.aggregate(
                             You may follow a procedure such as outlined below.
                             It is recommended to repartition the topic with fewer partitions to match the larger partition number of avoid bottlenecks.
                             Technically it would also be possible to repartition the topic with more partitions to the smaller partition number.
-                            For stream-table joins, it's recommended to repartition the KStream because repartitioning a KTable might result is a second state store.
+                            For stream-table joins, it's recommended to repartition the KStream because repartitioning a KTable might result in a second state store.
                             For table-table joins, you might also consider to size of the KTables and repartition the smaller KTable.</p>
                         <ol class="arabic">
                             <li><p class="first">Identify the input KStream/KTable in the join whose underlying Kafka topic has the smaller number of partitions.

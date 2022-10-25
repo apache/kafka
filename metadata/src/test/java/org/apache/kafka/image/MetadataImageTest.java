@@ -17,6 +17,8 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.image.writer.ImageWriterOptions;
+import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.junit.jupiter.api.Test;
@@ -40,7 +42,9 @@ public class MetadataImageTest {
             ClusterImageTest.IMAGE1,
             TopicsImageTest.IMAGE1,
             ConfigurationsImageTest.IMAGE1,
-            ClientQuotasImageTest.IMAGE1);
+            ClientQuotasImageTest.IMAGE1,
+            ProducerIdsImageTest.IMAGE1,
+            AclsImageTest.IMAGE1);
 
         DELTA1 = new MetadataDelta(IMAGE1);
         RecordTestUtils.replayAll(DELTA1, 200, 5, FeaturesImageTest.DELTA1_RECORDS);
@@ -48,6 +52,8 @@ public class MetadataImageTest {
         RecordTestUtils.replayAll(DELTA1, 200, 5, TopicsImageTest.DELTA1_RECORDS);
         RecordTestUtils.replayAll(DELTA1, 200, 5, ConfigurationsImageTest.DELTA1_RECORDS);
         RecordTestUtils.replayAll(DELTA1, 200, 5, ClientQuotasImageTest.DELTA1_RECORDS);
+        RecordTestUtils.replayAll(DELTA1, 200, 5, ProducerIdsImageTest.DELTA1_RECORDS);
+        RecordTestUtils.replayAll(DELTA1, 200, 5, AclsImageTest.DELTA1_RECORDS);
 
         IMAGE2 = new MetadataImage(
             new OffsetAndEpoch(200, 5),
@@ -55,7 +61,9 @@ public class MetadataImageTest {
             ClusterImageTest.IMAGE2,
             TopicsImageTest.IMAGE2,
             ConfigurationsImageTest.IMAGE2,
-            ClientQuotasImageTest.IMAGE2);
+            ClientQuotasImageTest.IMAGE2,
+            ProducerIdsImageTest.IMAGE2,
+            AclsImageTest.IMAGE2);
     }
 
     @Test
@@ -79,11 +87,13 @@ public class MetadataImageTest {
     }
 
     private void testToImageAndBack(MetadataImage image) throws Throwable {
-        MockSnapshotConsumer writer = new MockSnapshotConsumer();
-        image.write(writer);
+        RecordListWriter writer = new RecordListWriter();
+        image.write(writer, new ImageWriterOptions.Builder().build());
         MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
-        RecordTestUtils.replayAllBatches(
-            delta, image.highestOffsetAndEpoch().offset, image.highestOffsetAndEpoch().epoch, writer.batches());
+        RecordTestUtils.replayAll(delta,
+                image.highestOffsetAndEpoch().offset(),
+                image.highestOffsetAndEpoch().epoch(),
+                writer.records());
         MetadataImage nextImage = delta.apply();
         assertEquals(image, nextImage);
     }

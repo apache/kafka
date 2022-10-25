@@ -20,12 +20,14 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -54,7 +56,7 @@ class CachingWindowStore
 
     private String cacheName;
     private boolean sendOldValues;
-    private InternalProcessorContext context;
+    private InternalProcessorContext<?, ?> context;
     private StateSerdes<Bytes, byte[]> bytesSerdes;
     private CacheFlushListener<byte[], byte[]> flushListener;
 
@@ -72,22 +74,22 @@ class CachingWindowStore
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
+        initInternal(asInternalProcessorContext(context), changelogTopic);
         super.init(context, root);
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        initInternal(asInternalProcessorContext(context));
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, name(), Boolean.TRUE);
+        initInternal(asInternalProcessorContext(context), changelogTopic);
         super.init(context, root);
     }
 
-    private void initInternal(final InternalProcessorContext context) {
+    private void initInternal(final InternalProcessorContext<?, ?> context, final String changelogTopic) {
         this.context = context;
-        final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), name(),  context.taskId().topologyName());
-
         bytesSerdes = new StateSerdes<>(
-            topic,
+            changelogTopic,
             Serdes.Bytes(),
             Serdes.ByteArray());
         cacheName = context.taskId() + "-" + name();
@@ -100,7 +102,7 @@ class CachingWindowStore
     }
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,
-                                    final InternalProcessorContext context) {
+                                    final InternalProcessorContext<?, ?> context) {
         final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
         final Windowed<Bytes> windowedKeyBytes = WindowKeySchema.fromStoreBytesKey(binaryWindowKey, windowSize);
         final long windowStartTimestamp = windowedKeyBytes.window().start();
@@ -114,22 +116,29 @@ class CachingWindowStore
             // we can skip flushing to downstream as well as writing to underlying store
             if (rawNewValue != null || rawOldValue != null) {
                 // we need to get the old values if needed, and then put to store, and then flush
-                wrapped().put(binaryKey, entry.newValue(), windowStartTimestamp);
 
                 final ProcessorRecordContext current = context.recordContext();
-                context.setRecordContext(entry.entry().context());
                 try {
+                    context.setRecordContext(entry.entry().context());
+                    wrapped().put(binaryKey, entry.newValue(), windowStartTimestamp);
                     flushListener.apply(
-                        binaryWindowKey,
-                        rawNewValue,
-                        sendOldValues ? rawOldValue : null,
-                        entry.entry().context().timestamp());
+                        new Record<>(
+                            binaryWindowKey,
+                            new Change<>(rawNewValue, sendOldValues ? rawOldValue : null),
+                            entry.entry().context().timestamp(),
+                            entry.entry().context().headers()));
                 } finally {
                     context.setRecordContext(current);
                 }
             }
         } else {
-            wrapped().put(binaryKey, entry.newValue(), windowStartTimestamp);
+            final ProcessorRecordContext current = context.recordContext();
+            try {
+                context.setRecordContext(entry.entry().context());
+                wrapped().put(binaryKey, entry.newValue(), windowStartTimestamp);
+            } finally {
+                context.setRecordContext(current);
+            }
         }
     }
 
@@ -204,7 +213,7 @@ class CachingWindowStore
                 cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo))
             );
 
-        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key, key, timeFrom, timeTo);
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key, key, timeFrom, timeTo, true);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
 
@@ -232,7 +241,7 @@ class CachingWindowStore
                 cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo))
             );
 
-        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key, key, timeFrom, timeTo);
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key, key, timeFrom, timeTo, false);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
 
@@ -270,7 +279,7 @@ class CachingWindowStore
                 keyTo == null ? null : cacheFunction.cacheKey(keySchema.upperRange(keyTo, timeTo))
             );
 
-        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom, keyTo, timeFrom, timeTo);
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom, keyTo, timeFrom, timeTo, true);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
 
@@ -314,7 +323,7 @@ class CachingWindowStore
                 keyTo == null ? null : cacheFunction.cacheKey(keySchema.upperRange(keyTo, timeTo))
             );
 
-        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom, keyTo, timeFrom, timeTo);
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom, keyTo, timeFrom, timeTo, false);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
 
@@ -336,7 +345,7 @@ class CachingWindowStore
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrapped().fetchAll(timeFrom, timeTo);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().all(cacheName);
 
-        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, timeFrom, timeTo);
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, timeFrom, timeTo, true);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheWindowStoreKeyValueIterator(
@@ -357,7 +366,7 @@ class CachingWindowStore
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrapped().backwardFetchAll(timeFrom, timeTo);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().reverseAll(cacheName);
 
-        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, timeFrom, timeTo);
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, timeFrom, timeTo, false);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
 

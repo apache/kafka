@@ -71,7 +71,7 @@ trait Scheduler {
 class KafkaScheduler(val threads: Int, 
                      val threadNamePrefix: String = "kafka-scheduler-", 
                      daemon: Boolean = true) extends Scheduler with Logging {
-  private var executor: ScheduledThreadPoolExecutor = null
+  private var executor: ScheduledThreadPoolExecutor = _
   private val schedulerThreadId = new AtomicInteger(0)
 
   override def startup(): Unit = {
@@ -135,7 +135,7 @@ class KafkaScheduler(val threads: Int,
    * Package private for testing.
    */
   private[kafka] def taskRunning(task: ScheduledFuture[_]): Boolean = {
-    executor.getQueue().contains(task)
+    executor.getQueue.contains(task)
   }
 
   def resizeThreadPool(newSize: Int): Unit = {

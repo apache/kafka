@@ -365,7 +365,8 @@ class FetchRequestTest extends BaseFetchRequestTest {
 
     val msgValueLen = 100 * 1000
     val batchSize = 4 * msgValueLen
-    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+    val producer = TestUtils.createProducer(
+      bootstrapServers(),
       lingerMs = Int.MaxValue,
       deliveryTimeoutMs = Int.MaxValue,
       batchSize = batchSize,
@@ -426,7 +427,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
   @Test
   def testDownConversionFromBatchedToUnbatchedRespectsOffset(): Unit = {
     // Increase linger so that we have control over the batches created
-    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+    producer = TestUtils.createProducer(bootstrapServers(),
       retries = 5,
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer,
@@ -518,7 +519,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val foo1 = new TopicPartition("foo", 1)
     // topicNames can be empty because we are using old requests
     val topicNames = Map[Uuid, String]().asJava
-    createTopic("foo", Map(0 -> List(0, 1), 1 -> List(0, 2)))
+    createTopicWithAssignment("foo", Map(0 -> List(0, 1), 1 -> List(0, 2)))
     val bar0 = new TopicPartition("bar", 0)
     val req1 = createFetchRequest(List(foo0, foo1, bar0), JFetchMetadata.INITIAL, Nil)
     val resp1 = sendFetchRequest(0, req1)
@@ -542,7 +543,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertFalse(responseData2.containsKey(foo1))
     assertTrue(responseData2.containsKey(bar0))
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, responseData2.get(bar0).errorCode)
-    createTopic("bar", Map(0 -> List(0, 1)))
+    createTopicWithAssignment("bar", Map(0 -> List(0, 1)))
     val req3 = createFetchRequest(Nil, new JFetchMetadata(resp1.sessionId(), 2), Nil)
     val resp3 = sendFetchRequest(0, req3)
     assertEquals(Errors.NONE, resp3.error())
@@ -576,7 +577,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
 
     val foo0 = new TopicPartition("foo", 0)
     val foo1 = new TopicPartition("foo", 1)
-    createTopic("foo", Map(0 -> List(0, 1), 1 -> List(0, 2)))
+    createTopicWithAssignment("foo", Map(0 -> List(0, 1), 1 -> List(0, 2)))
     val topicIds = getTopicIds()
     val topicIdsWithUnknown = topicIds ++ Map("bar" -> Uuid.randomUuid())
     val bar0 = new TopicPartition("bar", 0)
@@ -614,7 +615,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val topicNames = topicIds.asScala.map(_.swap).asJava
 
     // Produce messages (v2)
-    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+    producer = TestUtils.createProducer(bootstrapServers(),
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer)
     producer.send(new ProducerRecord(topicPartition.topic, topicPartition.partition,
@@ -661,7 +662,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val topicNames = topicIds.asScala.map(_.swap).asJava
 
     // Produce GZIP compressed messages (v2)
-    val producer1 = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+    val producer1 = TestUtils.createProducer(bootstrapServers(),
       compressionType = GZIPCompressionCodec.name,
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer)
@@ -669,7 +670,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
       "key1", "value1")).get
     producer1.close()
     // Produce ZSTD compressed messages (v2)
-    val producer2 = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+    val producer2 = TestUtils.createProducer(bootstrapServers(),
       compressionType = ZStdCompressionCodec.name,
       keySerializer = new StringSerializer,
       valueSerializer = new StringSerializer)

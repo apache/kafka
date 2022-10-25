@@ -28,15 +28,6 @@ public interface CacheFlushListener<K, V> {
 
     /**
      * Called when records are flushed from the {@link ThreadCache}
-     * @param key         key of the entry
-     * @param newValue    current value
-     * @param oldValue    previous value
-     * @param timestamp   timestamp of new value
-     */
-    void apply(final K key, final V newValue, final V oldValue, final long timestamp);
-
-    /**
-     * Called when records are flushed from the {@link ThreadCache}
      */
     void apply(final Record<K, Change<V>> record);
 }

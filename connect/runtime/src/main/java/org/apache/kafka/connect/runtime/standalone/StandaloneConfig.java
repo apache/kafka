@@ -28,7 +28,7 @@ public class StandaloneConfig extends WorkerConfig {
      * <code>offset.storage.file.filename</code>
      */
     public static final String OFFSET_STORAGE_FILE_FILENAME_CONFIG = "offset.storage.file.filename";
-    private static final String OFFSET_STORAGE_FILE_FILENAME_DOC = "File to store offset data in";
+    private static final String OFFSET_STORAGE_FILE_FILENAME_DOC = "File to store source connector offsets";
 
     static {
         CONFIG = baseConfigDef()

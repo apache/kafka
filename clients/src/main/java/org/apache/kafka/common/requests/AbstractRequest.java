@@ -279,8 +279,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return EndQuorumEpochRequest.parse(buffer, apiVersion);
             case DESCRIBE_QUORUM:
                 return DescribeQuorumRequest.parse(buffer, apiVersion);
-            case ALTER_ISR:
-                return AlterIsrRequest.parse(buffer, apiVersion);
+            case ALTER_PARTITION:
+                return AlterPartitionRequest.parse(buffer, apiVersion);
             case UPDATE_FEATURES:
                 return UpdateFeaturesRequest.parse(buffer, apiVersion);
             case ENVELOPE:

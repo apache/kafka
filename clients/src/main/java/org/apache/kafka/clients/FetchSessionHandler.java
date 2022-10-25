@@ -402,7 +402,7 @@ public class FetchSessionHandler {
      *
      * @param toFind    The items to look for.
      * @param toSearch  The set of items to search.
-     * @return          null if all items were found; some of the missing ones in a set, if not.
+     * @return          Empty set if all items were found; some of the missing ones in a set, if not.
      */
     static <T> Set<T> findMissing(Set<T> toFind, Set<T> toSearch) {
         Set<T> ret = new LinkedHashSet<>();
@@ -420,7 +420,7 @@ public class FetchSessionHandler {
      * @param topicPartitions  The topicPartitions from the FetchResponse.
      * @param ids              The topic IDs from the FetchResponse.
      * @param version          The version of the FetchResponse.
-     * @return                 True if the full fetch response partitions are valid.
+     * @return                 null if the full fetch response partitions are valid; human-readable problem description otherwise.
      */
     String verifyFullFetchResponsePartitions(Set<TopicPartition> topicPartitions, Set<Uuid> ids, short version) {
         StringBuilder bld = new StringBuilder();
@@ -454,7 +454,7 @@ public class FetchSessionHandler {
      * @param topicPartitions  The topicPartitions from the FetchResponse.
      * @param ids              The topic IDs from the FetchResponse.
      * @param version          The version of the FetchResponse.
-     * @return                 True if the incremental fetch response partitions are valid.
+     * @return                 null if the incremental fetch response partitions are valid; human-readable problem description otherwise.
      */
     String verifyIncrementalFetchResponsePartitions(Set<TopicPartition> topicPartitions, Set<Uuid> ids, short version) {
         Set<Uuid> extraIds = new HashSet<>();
@@ -464,9 +464,9 @@ public class FetchSessionHandler {
         Set<TopicPartition> extra =
             findMissing(topicPartitions, sessionPartitions.keySet());
         StringBuilder bld = new StringBuilder();
-        if (extra.isEmpty())
+        if (!extra.isEmpty())
             bld.append("extraPartitions=(").append(Utils.join(extra, ", ")).append("), ");
-        if (extraIds.isEmpty())
+        if (!extraIds.isEmpty())
             bld.append("extraIds=(").append(Utils.join(extraIds, ", ")).append("), ");
         if ((!extra.isEmpty()) || (!extraIds.isEmpty())) {
             bld.append("response=(").append(Utils.join(topicPartitions, ", ")).append(")");

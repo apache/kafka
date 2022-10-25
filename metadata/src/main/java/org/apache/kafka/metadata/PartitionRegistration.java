@@ -28,7 +28,6 @@ import org.slf4j.Logger;
 import java.util.Arrays;
 import java.util.Objects;
 
-import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECORD;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
@@ -39,6 +38,7 @@ public class PartitionRegistration {
     public final int[] removingReplicas;
     public final int[] addingReplicas;
     public final int leader;
+    public final LeaderRecoveryState leaderRecoveryState;
     public final int leaderEpoch;
     public final int partitionEpoch;
 
@@ -52,18 +52,20 @@ public class PartitionRegistration {
             Replicas.toArray(record.removingReplicas()),
             Replicas.toArray(record.addingReplicas()),
             record.leader(),
+            LeaderRecoveryState.of(record.leaderRecoveryState()),
             record.leaderEpoch(),
             record.partitionEpoch());
     }
 
     public PartitionRegistration(int[] replicas, int[] isr, int[] removingReplicas,
-                                 int[] addingReplicas, int leader, int leaderEpoch,
-                                 int partitionEpoch) {
+                                 int[] addingReplicas, int leader, LeaderRecoveryState leaderRecoveryState,
+                                 int leaderEpoch, int partitionEpoch) {
         this.replicas = replicas;
         this.isr = isr;
         this.removingReplicas = removingReplicas;
         this.addingReplicas = addingReplicas;
         this.leader = leader;
+        this.leaderRecoveryState = leaderRecoveryState;
         this.leaderEpoch = leaderEpoch;
         this.partitionEpoch = partitionEpoch;
     }
@@ -76,6 +78,7 @@ public class PartitionRegistration {
             removingReplicas : Replicas.toArray(record.removingReplicas());
         int[] newAddingReplicas = (record.addingReplicas() == null) ?
             addingReplicas : Replicas.toArray(record.addingReplicas());
+
         int newLeader;
         int newLeaderEpoch;
         if (record.leader() == NO_LEADER_CHANGE) {
@@ -85,11 +88,15 @@ public class PartitionRegistration {
             newLeader = record.leader();
             newLeaderEpoch = leaderEpoch + 1;
         }
+
+        LeaderRecoveryState newLeaderRecoveryState = leaderRecoveryState.changeTo(record.leaderRecoveryState());
+
         return new PartitionRegistration(newReplicas,
             newIsr,
             newRemovingReplicas,
             newAddingReplicas,
             newLeader,
+            newLeaderRecoveryState,
             newLeaderEpoch,
             partitionEpoch + 1);
     }
@@ -124,6 +131,11 @@ public class PartitionRegistration {
         if (leader != prev.leader) {
             builder.append(prefix).append("leader: ").
                 append(prev.leader).append(" -> ").append(leader);
+            prefix = ", ";
+        }
+        if (leaderRecoveryState != prev.leaderRecoveryState) {
+            builder.append(prefix).append("leaderRecoveryState: ").
+                append(prev.leaderRecoveryState).append(" -> ").append(leaderRecoveryState);
             prefix = ", ";
         }
         if (leaderEpoch != prev.leaderEpoch) {
@@ -167,8 +179,9 @@ public class PartitionRegistration {
             setRemovingReplicas(Replicas.toList(removingReplicas)).
             setAddingReplicas(Replicas.toList(addingReplicas)).
             setLeader(leader).
+            setLeaderRecoveryState(leaderRecoveryState.value()).
             setLeaderEpoch(leaderEpoch).
-            setPartitionEpoch(partitionEpoch), PARTITION_RECORD.highestSupportedVersion());
+            setPartitionEpoch(partitionEpoch), (short) 0);
     }
 
     public LeaderAndIsrPartitionState toLeaderAndIsrPartitionState(TopicPartition tp,
@@ -180,10 +193,11 @@ public class PartitionRegistration {
             setLeader(leader).
             setLeaderEpoch(leaderEpoch).
             setIsr(Replicas.toList(isr)).
-            setZkVersion(partitionEpoch).
+            setPartitionEpoch(partitionEpoch).
             setReplicas(Replicas.toList(replicas)).
             setAddingReplicas(Replicas.toList(addingReplicas)).
             setRemovingReplicas(Replicas.toList(removingReplicas)).
+            setLeaderRecoveryState(leaderRecoveryState.value()).
             setIsNew(isNew);
     }
 
@@ -196,8 +210,8 @@ public class PartitionRegistration {
 
     @Override
     public int hashCode() {
-        return Objects.hash(replicas, isr, removingReplicas, addingReplicas, leader,
-            leaderEpoch, partitionEpoch);
+        return Objects.hash(Arrays.hashCode(replicas), Arrays.hashCode(isr), Arrays.hashCode(removingReplicas),
+            Arrays.hashCode(addingReplicas), leader, leaderRecoveryState, leaderEpoch, partitionEpoch);
     }
 
     @Override
@@ -209,6 +223,7 @@ public class PartitionRegistration {
             Arrays.equals(removingReplicas, other.removingReplicas) &&
             Arrays.equals(addingReplicas, other.addingReplicas) &&
             leader == other.leader &&
+            leaderRecoveryState == other.leaderRecoveryState &&
             leaderEpoch == other.leaderEpoch &&
             partitionEpoch == other.partitionEpoch;
     }
@@ -221,6 +236,7 @@ public class PartitionRegistration {
         builder.append(", removingReplicas=").append(Arrays.toString(removingReplicas));
         builder.append(", addingReplicas=").append(Arrays.toString(addingReplicas));
         builder.append(", leader=").append(leader);
+        builder.append(", leaderRecoveryState=").append(leaderRecoveryState);
         builder.append(", leaderEpoch=").append(leaderEpoch);
         builder.append(", partitionEpoch=").append(partitionEpoch);
         builder.append(")");

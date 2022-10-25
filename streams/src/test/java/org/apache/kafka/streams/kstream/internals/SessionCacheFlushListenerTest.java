@@ -43,10 +43,10 @@ public class SessionCacheFlushListenerTest {
         replay(context);
 
         new SessionCacheFlushListener<>(context).apply(
-            new Windowed<>("key", new SessionWindow(21L, 73L)),
-            "newValue",
-            "oldValue",
-            42L);
+            new Record<>(
+                new Windowed<>("key", new SessionWindow(21L, 73L)),
+                new Change<>("newValue", "oldValue"),
+                42L));
 
         verify(context);
     }

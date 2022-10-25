@@ -142,7 +142,7 @@ public class BatchBuilder<T> {
         );
 
         if (!isOpenForAppends) {
-            return OptionalInt.of(batchHeaderSizeInBytes() + bytesNeeded);
+            return OptionalInt.of(Math.addExact(batchHeaderSizeInBytes(), bytesNeeded));
         }
 
         int approxUnusedSizeInBytes = maxBytes - approximateSizeInBytes();
@@ -157,7 +157,7 @@ public class BatchBuilder<T> {
             }
         }
 
-        return OptionalInt.of(batchHeaderSizeInBytes() + bytesNeeded);
+        return OptionalInt.of(Math.addExact(batchHeaderSizeInBytes(), bytesNeeded));
     }
 
     private int flushedSizeInBytes() {

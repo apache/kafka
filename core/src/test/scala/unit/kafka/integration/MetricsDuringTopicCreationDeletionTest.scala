@@ -25,7 +25,7 @@ import kafka.utils.{Logging, TestUtils}
 import scala.jdk.CollectionConverters._
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import com.yammer.metrics.core.Gauge
-import kafka.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with Logging {
 

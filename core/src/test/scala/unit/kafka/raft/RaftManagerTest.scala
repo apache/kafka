@@ -18,7 +18,6 @@ package kafka.raft
 
 import java.util.concurrent.CompletableFuture
 import java.util.Properties
-
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.{KafkaConfig, MetaProperties}
 import kafka.tools.TestRaftServer.ByteArraySerde
@@ -43,18 +42,18 @@ class RaftManagerTest {
       props.setProperty(KafkaConfig.MetadataLogDirProp, logDir.getPath)
       props.setProperty(KafkaConfig.ProcessRolesProp, processRoles)
       props.setProperty(KafkaConfig.NodeIdProp, nodeId)
-      props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9093")
-      props.setProperty(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
+      props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
       if (processRoles.contains("broker")) {
         props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "PLAINTEXT")
-        props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092")
-        if (!processRoles.contains("controller")) {
+        if (processRoles.contains("controller")) { // co-located
+          props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
+          props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
+        } else { // broker-only
           val voterId = (nodeId.toInt + 1)
           props.setProperty(KafkaConfig.QuorumVotersProp, s"${voterId}@localhost:9093")
         }
-      } 
-
-      if (processRoles.contains("controller")) {
+      } else if (processRoles.contains("controller")) { // controller-only
+        props.setProperty(KafkaConfig.ListenersProp, "SSL://localhost:9093")
         props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
       }
 
@@ -83,23 +82,23 @@ class RaftManagerTest {
   }
 
   @Test
-  def testSentinelNodeIdIfBrokerRoleOnly(): Unit = {
+  def testNodeIdPresentIfBrokerRoleOnly(): Unit = {
     val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "broker", "1")
-    assertFalse(raftManager.client.nodeId.isPresent)
+    assertEquals(1, raftManager.client.nodeId.getAsInt)
     raftManager.shutdown()
   }
 
   @Test
   def testNodeIdPresentIfControllerRoleOnly(): Unit = {
     val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "controller", "1")
-    assertTrue(raftManager.client.nodeId.getAsInt == 1)
+    assertEquals(1, raftManager.client.nodeId.getAsInt)
     raftManager.shutdown()
   }
 
   @Test
   def testNodeIdPresentIfColocated(): Unit = {
     val raftManager = instantiateRaftManagerWithConfigs(new TopicPartition("__raft_id_test", 0), "controller,broker", "1")
-    assertTrue(raftManager.client.nodeId.getAsInt == 1)
+    assertEquals(1, raftManager.client.nodeId.getAsInt)
     raftManager.shutdown()
   }
 

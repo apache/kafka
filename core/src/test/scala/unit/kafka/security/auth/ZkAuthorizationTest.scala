@@ -18,6 +18,7 @@
 package kafka.security.auth
 
 import java.nio.charset.StandardCharsets
+
 import kafka.admin.ZkSecurityMigrator
 import kafka.server.QuorumTestHarness
 import kafka.utils.{Logging, TestUtils}
@@ -30,12 +31,12 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.util.{Failure, Success, Try}
 import javax.security.auth.login.Configuration
-import kafka.api.ApiVersion
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.ReplicaAssignment
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.jdk.CollectionConverters._
@@ -136,7 +137,7 @@ class ZkAuthorizationTest extends QuorumTestHarness with Logging {
   private def createBrokerInfo(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol,
                                rack: Option[String] = None): BrokerInfo =
     BrokerInfo(Broker(id, Seq(new EndPoint(host, port, ListenerName.forSecurityProtocol
-    (securityProtocol), securityProtocol)), rack = rack), ApiVersion.latestVersion, jmxPort = port + 10)
+    (securityProtocol), securityProtocol)), rack = rack), MetadataVersion.latest, jmxPort = port + 10)
 
   private def newKafkaZkClient(connectionString: String, isSecure: Boolean) =
     KafkaZkClient(connectionString, isSecure, 6000, 6000, Int.MaxValue, Time.SYSTEM, "ZkAuthorizationTest",

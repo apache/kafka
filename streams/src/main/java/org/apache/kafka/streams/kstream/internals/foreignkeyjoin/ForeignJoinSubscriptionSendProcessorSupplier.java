@@ -103,6 +103,7 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                 null :
                 Murmur3.hash128(valueSerializer.serialize(valueSerdeTopic, record.value().newValue));
 
+            final int partition = context().recordMetadata().get().partition();
             if (record.value().oldValue != null) {
                 final KO oldForeignKey = foreignKeyExtractor.apply(record.value().oldValue);
                 if (oldForeignKey == null) {
@@ -149,19 +150,34 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                         //Delete it from the oldKey's state store
                         context().forward(
                             record.withKey(oldForeignKey)
-                                .withValue(new SubscriptionWrapper<>(currentHash, DELETE_KEY_NO_PROPAGATE, record.key())));
+                                .withValue(new SubscriptionWrapper<>(
+                                    currentHash,
+                                    DELETE_KEY_NO_PROPAGATE,
+                                    record.key(),
+                                    partition
+                                )));
                         //Add to the newKey's state store. Additionally, propagate null if no FK is found there,
                         //since we must "unset" any output set by the previous FK-join. This is true for both INNER
                         //and LEFT join.
                     }
                     context().forward(
                         record.withKey(newForeignKey)
-                            .withValue(new SubscriptionWrapper<>(currentHash, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, record.key())));
+                            .withValue(new SubscriptionWrapper<>(
+                                currentHash,
+                                PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE,
+                                record.key(),
+                                partition
+                            )));
                 } else {
                     //A simple propagatable delete. Delete from the state store and propagate the delete onwards.
                     context().forward(
                         record.withKey(oldForeignKey)
-                           .withValue(new SubscriptionWrapper<>(currentHash, DELETE_KEY_AND_PROPAGATE, record.key())));
+                           .withValue(new SubscriptionWrapper<>(
+                               currentHash,
+                               DELETE_KEY_AND_PROPAGATE,
+                               record.key(),
+                               partition
+                           )));
                 }
             } else if (record.value().newValue != null) {
                 //change.oldValue is null, which means it was deleted at least once before, or it is brand new.
@@ -193,7 +209,11 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                 } else {
                     context().forward(
                         record.withKey(newForeignKey)
-                            .withValue(new SubscriptionWrapper<>(currentHash, instruction, record.key())));
+                            .withValue(new SubscriptionWrapper<>(
+                                currentHash,
+                                instruction,
+                                record.key(),
+                                partition)));
                 }
             }
         }

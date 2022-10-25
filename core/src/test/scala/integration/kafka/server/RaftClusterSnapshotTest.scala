@@ -21,9 +21,10 @@ import java.util.Collections
 import kafka.testkit.KafkaClusterTestKit
 import kafka.testkit.TestKitNodes
 import kafka.utils.TestUtils
-import org.apache.kafka.common.utils.BufferSupplier;
+import kafka.server.KafkaConfig.{MetadataMaxIdleIntervalMsProp, MetadataSnapshotMaxNewRecordBytesProp}
+import org.apache.kafka.common.utils.BufferSupplier
 import org.apache.kafka.metadata.MetadataRecordSerde
-import org.apache.kafka.snapshot.SnapshotReader
+import org.apache.kafka.snapshot.RecordsSnapshotReader
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -38,7 +39,6 @@ class RaftClusterSnapshotTest {
   def testSnapshotsGenerated(): Unit = {
     val numberOfBrokers = 3
     val numberOfControllers = 3
-    val metadataSnapshotMaxNewRecordBytes = 100
 
     TestUtils.resource(
       new KafkaClusterTestKit
@@ -48,10 +48,8 @@ class RaftClusterSnapshotTest {
             .setNumControllerNodes(numberOfControllers)
             .build()
         )
-        .setConfigProp(
-          KafkaConfig.MetadataSnapshotMaxNewRecordBytesProp,
-          metadataSnapshotMaxNewRecordBytes.toString
-        )
+        .setConfigProp(MetadataSnapshotMaxNewRecordBytesProp, "10")
+        .setConfigProp(MetadataMaxIdleIntervalMsProp, "0")
         .build()
     ) { cluster =>
       cluster.format()
@@ -76,18 +74,19 @@ class RaftClusterSnapshotTest {
       // For every controller and broker perform some sanity checks against the lastest snapshot
       for ((_, raftManager) <- cluster.raftManagers().asScala) {
         TestUtils.resource(
-          SnapshotReader.of(
+          RecordsSnapshotReader.of(
             raftManager.replicatedLog.latestSnapshot.get(),
             new MetadataRecordSerde(),
             BufferSupplier.create(),
-            1
+            1,
+            true
           )
         ) { snapshot =>
           // Check that the snapshot is non-empty
-          assertTrue(snapshot.hasNext())
+          assertTrue(snapshot.hasNext)
 
           // Check that we can read the entire snapshot
-          while (snapshot.hasNext()) {
+          while (snapshot.hasNext) {
             val batch = snapshot.next()
             assertTrue(batch.sizeInBytes > 0)
             assertNotEquals(Collections.emptyList(), batch.records())

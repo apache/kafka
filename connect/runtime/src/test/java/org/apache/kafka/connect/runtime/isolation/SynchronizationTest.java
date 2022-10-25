@@ -367,7 +367,7 @@ public class SynchronizationTest {
         }
     }
 
-    private void dumpThreads(String msg) throws InterruptedException {
+    private void dumpThreads(String msg) {
         if (log.isDebugEnabled()) {
             log.debug("{}:\n{}",
                 msg,

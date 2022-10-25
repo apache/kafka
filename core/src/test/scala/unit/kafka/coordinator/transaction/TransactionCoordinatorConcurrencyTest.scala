@@ -23,20 +23,23 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
-import kafka.log.{UnifiedLog, LogConfig}
+import kafka.log.{LogConfig, UnifiedLog}
 import kafka.server.{FetchDataInfo, FetchLogEnd, KafkaConfig, LogOffsetMetadata, MetadataCache, RequestLocal}
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.easymock.{EasyMock, IAnswer}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.{ArgumentCaptor, ArgumentMatchers}
+import org.mockito.ArgumentMatchers.{any, anyInt, anyString}
+import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
@@ -60,17 +63,15 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   private val txnRecordsByPartition: Map[Int, mutable.ArrayBuffer[SimpleRecord]] =
     (0 until numPartitions).map { i => (i, mutable.ArrayBuffer[SimpleRecord]()) }.toMap
 
-  val producerId = 11
+  val producerId: Long = 11
   private var bumpProducerId = false
 
   @BeforeEach
   override def setUp(): Unit = {
     super.setUp()
 
-    EasyMock.expect(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
-      .andReturn(Some(numPartitions))
-      .anyTimes()
-    EasyMock.replay(zkClient)
+    when(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
+      .thenReturn(Some(numPartitions))
 
     txnStateManager = new TransactionStateManager(0, scheduler, replicaManager, txnConfig, time,
       new Metrics())
@@ -79,18 +80,17 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
-    val pidGenerator: ProducerIdManager = EasyMock.createNiceMock(classOf[ProducerIdManager])
-    EasyMock.expect(pidGenerator.generateProducerId())
-      .andAnswer(() => if (bumpProducerId) producerId + 1 else producerId)
-      .anyTimes()
+    val pidGenerator: ProducerIdManager = mock(classOf[ProducerIdManager])
+    when(pidGenerator.generateProducerId())
+      .thenAnswer(_ => if (bumpProducerId) producerId + 1 else producerId)
     val brokerNode = new Node(0, "host", 10)
-    val metadataCache: MetadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
-    EasyMock.expect(metadataCache.getPartitionLeaderEndpoint(
-      EasyMock.anyString(),
-      EasyMock.anyInt(),
-      EasyMock.anyObject())
-    ).andReturn(Some(brokerNode)).anyTimes()
-    val networkClient: NetworkClient = EasyMock.createNiceMock(classOf[NetworkClient])
+    val metadataCache: MetadataCache = mock(classOf[MetadataCache])
+    when(metadataCache.getPartitionLeaderEndpoint(
+      anyString,
+      anyInt,
+      any[ListenerName])
+    ).thenReturn(Some(brokerNode))
+    val networkClient: NetworkClient = mock(classOf[NetworkClient])
     txnMarkerChannelManager = new TransactionMarkerChannelManager(
       KafkaConfig.fromProps(serverProps),
       metadataCache,
@@ -98,7 +98,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       txnStateManager,
       time)
 
-    transactionCoordinator = new TransactionCoordinator(brokerId = 0,
+    transactionCoordinator = new TransactionCoordinator(
       txnConfig,
       scheduler,
       () => pidGenerator,
@@ -106,15 +106,11 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       txnMarkerChannelManager,
       time,
       new LogContext)
-    EasyMock.replay(pidGenerator)
-    EasyMock.replay(metadataCache)
-    EasyMock.replay(networkClient)
   }
 
   @AfterEach
   override def tearDown(): Unit = {
     try {
-      EasyMock.reset(zkClient, replicaManager)
       transactionCoordinator.shutdown()
     } finally {
       super.tearDown()
@@ -458,36 +454,31 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   }
 
   private def prepareTxnLog(partitionId: Int): Unit = {
-    val logMock: UnifiedLog =  EasyMock.mock(classOf[UnifiedLog])
-    EasyMock.expect(logMock.config).andStubReturn(new LogConfig(Collections.emptyMap()))
+    val logMock: UnifiedLog = mock(classOf[UnifiedLog])
+    when(logMock.config).thenReturn(new LogConfig(Collections.emptyMap()))
 
-    val fileRecordsMock: FileRecords = EasyMock.mock(classOf[FileRecords])
+    val fileRecordsMock: FileRecords = mock(classOf[FileRecords])
 
     val topicPartition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId)
     val startOffset = replicaManager.getLogEndOffset(topicPartition).getOrElse(20L)
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecordsByPartition(partitionId).toArray: _*)
     val endOffset = startOffset + records.records.asScala.size
 
-    EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
-    EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
-      maxLength = EasyMock.anyInt(),
-      isolation = EasyMock.eq(FetchLogEnd),
-      minOneMessage = EasyMock.eq(true)))
-      .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
+    when(logMock.logStartOffset).thenReturn(startOffset)
+    when(logMock.read(ArgumentMatchers.eq(startOffset),
+      maxLength = anyInt,
+      isolation = ArgumentMatchers.eq(FetchLogEnd),
+      minOneMessage = ArgumentMatchers.eq(true)))
+      .thenReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
 
-    EasyMock.expect(fileRecordsMock.sizeInBytes()).andStubReturn(records.sizeInBytes)
-
-    val bufferCapture = EasyMock.newCapture[ByteBuffer]
-    fileRecordsMock.readInto(EasyMock.capture(bufferCapture), EasyMock.anyInt())
-    EasyMock.expectLastCall().andAnswer(new IAnswer[Unit] {
-      override def answer: Unit = {
-        val buffer = bufferCapture.getValue
-        buffer.put(records.buffer.duplicate)
-        buffer.flip()
-      }
+    when(fileRecordsMock.sizeInBytes()).thenReturn(records.sizeInBytes)
+    val bufferCaptor: ArgumentCaptor[ByteBuffer] = ArgumentCaptor.forClass(classOf[ByteBuffer])
+    when(fileRecordsMock.readInto(bufferCaptor.capture(), anyInt)).thenAnswer(_ => {
+      val buffer = bufferCaptor.getValue
+      buffer.put(records.buffer.duplicate)
+      buffer.flip()
     })
 
-    EasyMock.replay(logMock, fileRecordsMock)
     synchronized {
       replicaManager.updateLog(topicPartition, logMock, endOffset)
     }

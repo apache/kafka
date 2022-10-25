@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.test.MockMetricsReporter;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -325,6 +328,33 @@ public class MirrorConnectorConfigTest {
         connectorProps.put("offset-syncs.topic.location", "target");
         config = new MirrorConnectorConfig(connectorProps);
         assertEquals(config.targetAdminConfig(), config.offsetSyncsTopicAdminConfig());
+    }
+
+    @Test
+    public void testInvalidSecurityProtocol() {
+        ConfigException ce = assertThrows(ConfigException.class,
+                () -> new MirrorConnectorConfig(makeProps(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc")));
+        assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testMetricsReporters() {
+        Map<String, String> connectorProps = makeProps("metric.reporters", MockMetricsReporter.class.getName());
+        MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
+        assertEquals(2, config.metricsReporters().size());
+
+        connectorProps.put(CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        config = new MirrorConnectorConfig(connectorProps);
+        assertEquals(1, config.metricsReporters().size());
+    }
+
+    @Test
+    public void testExplicitlyEnableJmxReporter() {
+        String reporters = MockMetricsReporter.class.getName() + "," + JmxReporter.class.getName();
+        Map<String, String> connectorProps = makeProps("metric.reporters", reporters);
+        MirrorConnectorConfig config = new MirrorConnectorConfig(connectorProps);
+        assertEquals(2, config.metricsReporters().size());
     }
 
 }

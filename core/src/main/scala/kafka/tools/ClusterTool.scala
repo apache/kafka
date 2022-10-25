@@ -52,6 +52,7 @@ object ClusterTool extends Logging {
       unregisterParser.addArgument("--id", "-i").
         `type`(classOf[Integer]).
         action(store()).
+        required(true).
         help("The ID of the broker to unregister.")
 
       val namespace = parser.parseArgsOrFail(args)

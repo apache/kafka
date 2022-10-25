@@ -19,6 +19,7 @@ package kafka.log
 
 import java.io.File
 import java.util.Properties
+
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchIsolation, FetchLogEnd, LogDirFailureChannel}
 import kafka.utils.{Scheduler, TestUtils}
@@ -26,6 +27,10 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
+import java.nio.file.Files
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
+
+import kafka.log
 
 import scala.collection.Iterable
 import scala.jdk.CollectionConverters._
@@ -77,24 +82,30 @@ object LogTestUtils {
                 time: Time,
                 logStartOffset: Long = 0L,
                 recoveryPoint: Long = 0L,
-                maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
-                producerIdExpirationCheckIntervalMs: Int = LogManager.ProducerIdExpirationCheckIntervalMs,
+                maxTransactionTimeoutMs: Int = 5 * 60 * 1000,
+                producerStateManagerConfig: ProducerStateManagerConfig = new log.ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs),
+                producerIdExpirationCheckIntervalMs: Int = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
                 lastShutdownClean: Boolean = true,
                 topicId: Option[Uuid] = None,
-                keepPartitionMetadataFile: Boolean = true): UnifiedLog = {
-    UnifiedLog(dir = dir,
+                keepPartitionMetadataFile: Boolean = true,
+                numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]): UnifiedLog = {
+    UnifiedLog(
+      dir = dir,
       config = config,
       logStartOffset = logStartOffset,
       recoveryPoint = recoveryPoint,
       scheduler = scheduler,
       brokerTopicStats = brokerTopicStats,
       time = time,
-      maxProducerIdExpirationMs = maxProducerIdExpirationMs,
+      maxTransactionTimeoutMs = maxTransactionTimeoutMs,
+      producerStateManagerConfig = producerStateManagerConfig,
       producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
       lastShutdownClean = lastShutdownClean,
       topicId = topicId,
-      keepPartitionMetadataFile = keepPartitionMetadataFile)
+      keepPartitionMetadataFile = keepPartitionMetadataFile,
+      numRemainingSegments = numRemainingSegments
+    )
   }
 
   /**
@@ -138,8 +149,8 @@ object LogTestUtils {
       segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
         record(baseOffset + Int.MaxValue - 1)))
       // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
-      UnifiedLog.offsetIndexFile(logDir, baseOffset).createNewFile()
-      UnifiedLog.timeIndexFile(logDir, baseOffset).createNewFile()
+      Files.createFile(UnifiedLog.offsetIndexFile(logDir, baseOffset).toPath)
+      Files.createFile(UnifiedLog.timeIndexFile(logDir, baseOffset).toPath)
       baseOffset + Int.MaxValue
     }
 

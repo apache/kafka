@@ -18,15 +18,18 @@ package kafka.server.metadata
 
 import java.util
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-import java.util.function.Consumer
-
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.image.writer.{ImageWriterOptions, RecordListWriter}
+import org.apache.kafka.metadata.util.SnapshotReason
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient}
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.snapshot.SnapshotReader
+
+import java.util.concurrent.atomic.AtomicBoolean
 
 
 object BrokerMetadataListener {
@@ -39,9 +42,25 @@ class BrokerMetadataListener(
   time: Time,
   threadNamePrefix: Option[String],
   val maxBytesBetweenSnapshots: Long,
-  val snapshotter: Option[MetadataSnapshotter]
+  val snapshotter: Option[MetadataSnapshotter],
+  brokerMetrics: BrokerServerMetrics,
+  _metadataLoadingFaultHandler: FaultHandler
 ) extends RaftClient.Listener[ApiMessageAndVersion] with KafkaMetricsGroup {
-  private val logContext = new LogContext(s"[BrokerMetadataListener id=${brokerId}] ")
+
+  private val metadataFaultOccurred = new AtomicBoolean(false)
+  private val metadataLoadingFaultHandler: FaultHandler = new FaultHandler() {
+    override def handleFault(failureMessage: String, cause: Throwable): RuntimeException = {
+      // If the broker has any kind of error handling metadata records or publishing a new image
+      // we will disable taking new snapshots in order to preserve the local metadata log. Once we
+      // encounter a metadata processing error, the broker will be in an undetermined state.
+      if (metadataFaultOccurred.compareAndSet(false, true)) {
+        error("Disabling metadata snapshots until this broker is restarted.")
+      }
+      _metadataLoadingFaultHandler.handleFault(failureMessage, cause)
+    }
+  }
+
+  private val logContext = new LogContext(s"[BrokerMetadataListener id=$brokerId] ")
   private val log = logContext.logger(classOf[BrokerMetadataListener])
   logIdent = logContext.logPrefix()
 
@@ -108,29 +127,62 @@ class BrokerMetadataListener(
       extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
       val results = try {
-        val loadResults = loadBatches(_delta, reader, None, None, None)
+        val loadResults = loadBatches(_delta, reader, None, None, None, None)
         if (isDebugEnabled) {
-          debug(s"Loaded new commits: ${loadResults}")
+          debug(s"Loaded new commits: $loadResults")
         }
         loadResults
+      } catch {
+        case e: Throwable =>
+          metadataLoadingFaultHandler.handleFault(s"Unable to load metadata commits " +
+            s"from the BatchReader starting at base offset ${reader.baseOffset()}", e)
+          return
       } finally {
         reader.close()
       }
-      _publisher.foreach(publish)
 
-      snapshotter.foreach { snapshotter =>
-        _bytesSinceLastSnapshot = _bytesSinceLastSnapshot + results.numBytes
-        if (shouldSnapshot()) {
-          if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply())) {
-            _bytesSinceLastSnapshot = 0L
-          }
-        }
+      _bytesSinceLastSnapshot = _bytesSinceLastSnapshot + results.numBytes
+      
+      val shouldTakeSnapshot: Set[SnapshotReason] = shouldSnapshot()
+      if (shouldTakeSnapshot.nonEmpty) {
+        maybeStartSnapshot(shouldTakeSnapshot)
       }
+
+      _publisher.foreach(publish)
     }
   }
 
-  private def shouldSnapshot(): Boolean = {
-    _bytesSinceLastSnapshot >= maxBytesBetweenSnapshots
+  private def shouldSnapshot(): Set[SnapshotReason] = {
+    val metadataVersionHasChanged = metadataVersionChanged()
+    val maxBytesHaveExceeded = (_bytesSinceLastSnapshot >= maxBytesBetweenSnapshots)
+
+    if (maxBytesHaveExceeded && metadataVersionHasChanged) {
+      Set(SnapshotReason.MetadataVersionChanged, SnapshotReason.MaxBytesExceeded)
+    } else if (maxBytesHaveExceeded) {
+      Set(SnapshotReason.MaxBytesExceeded)
+    } else if (metadataVersionHasChanged) {
+      Set(SnapshotReason.MetadataVersionChanged)
+    } else {
+      Set()
+    }
+  }
+
+  private def metadataVersionChanged(): Boolean = {
+    // The _publisher is empty before starting publishing, and we won't compute feature delta
+    // until we starting publishing
+    _publisher.nonEmpty && Option(_delta.featuresDelta()).exists { featuresDelta =>
+      featuresDelta.metadataVersionChange().isPresent
+    }
+  }
+
+  private def maybeStartSnapshot(reason: Set[SnapshotReason]): Unit = {
+    snapshotter.foreach { snapshotter =>
+      if (metadataFaultOccurred.get()) {
+        trace("Not starting metadata snapshot since we previously had an error")
+      } else if (snapshotter.maybeStartSnapshot(_highestTimestamp, _delta.apply(), reason)) {
+        _bytesSinceLastSnapshot = 0L
+      }
+    }
   }
 
   /**
@@ -142,19 +194,26 @@ class BrokerMetadataListener(
   class HandleSnapshotEvent(reader: SnapshotReader[ApiMessageAndVersion])
     extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
+      val snapshotName = s"${reader.snapshotId().offset}-${reader.snapshotId().epoch}"
       try {
-        info(s"Loading snapshot ${reader.snapshotId().offset}-${reader.snapshotId().epoch}.")
+        info(s"Loading snapshot ${snapshotName}")
         _delta = new MetadataDelta(_image) // Discard any previous deltas.
-        val loadResults = loadBatches(
-          _delta,
+        val loadResults = loadBatches(_delta,
           reader,
           Some(reader.lastContainedLogTimestamp),
           Some(reader.lastContainedLogOffset),
-          Some(reader.lastContainedLogEpoch)
-        )
-        _delta.finishSnapshot()
-        info(s"Loaded snapshot ${reader.snapshotId().offset}-${reader.snapshotId().epoch}: " +
-          s"${loadResults}")
+          Some(reader.lastContainedLogEpoch),
+          Some(snapshotName))
+        try {
+          _delta.finishSnapshot()
+        } catch {
+          case e: Throwable => metadataLoadingFaultHandler.handleFault(
+              s"Error finishing snapshot ${snapshotName}", e)
+        }
+        info(s"Loaded snapshot ${snapshotName}: ${loadResults}")
+      } catch {
+        case t: Throwable => metadataLoadingFaultHandler.handleFault("Uncaught exception while " +
+          s"loading broker metadata from Metadata snapshot ${snapshotName}", t)
       } finally {
         reader.close()
       }
@@ -163,9 +222,9 @@ class BrokerMetadataListener(
   }
 
   case class BatchLoadResults(numBatches: Int, numRecords: Int, elapsedUs: Long, numBytes: Long) {
-    override def toString(): String = {
-      s"${numBatches} batch(es) with ${numRecords} record(s) in ${numBytes} bytes " +
-        s"ending at offset ${highestMetadataOffset} in ${elapsedUs} microseconds"
+    override def toString: String = {
+      s"$numBatches batch(es) with $numRecords record(s) in $numBytes bytes " +
+        s"ending at offset $highestMetadataOffset in $elapsedUs microseconds"
     }
   }
 
@@ -187,14 +246,15 @@ class BrokerMetadataListener(
     iterator: util.Iterator[Batch[ApiMessageAndVersion]],
     lastAppendTimestamp: Option[Long],
     lastCommittedOffset: Option[Long],
-    lastCommittedEpoch: Option[Int]
+    lastCommittedEpoch: Option[Int],
+    snapshotName: Option[String]
   ): BatchLoadResults = {
     val startTimeNs = time.nanoseconds()
     var numBatches = 0
     var numRecords = 0
     var numBytes = 0L
 
-    while (iterator.hasNext()) {
+    while (iterator.hasNext) {
       val batch = iterator.next()
 
       val epoch = lastCommittedEpoch.getOrElse(batch.epoch())
@@ -203,15 +263,23 @@ class BrokerMetadataListener(
       var index = 0
       batch.records().forEach { messageAndVersion =>
         if (isTraceEnabled) {
-          trace("Metadata batch %d: processing [%d/%d]: %s.".format(batch.lastOffset, index + 1,
-            batch.records().size(), messageAndVersion.message().toString()))
+          trace(s"Metadata batch ${batch.lastOffset}: processing [${index + 1}/${batch.records.size}]:" +
+            s" ${messageAndVersion.message}")
         }
-
-        _highestOffset  = lastCommittedOffset.getOrElse(batch.baseOffset() + index)
-
-        delta.replay(highestMetadataOffset, epoch, messageAndVersion.message())
-        numRecords += 1
-        index += 1
+        _highestOffset = lastCommittedOffset.getOrElse(batch.baseOffset() + index)
+        try {
+          delta.replay(highestMetadataOffset, epoch, messageAndVersion.message())
+        } catch {
+          case e: Throwable => snapshotName match {
+            case None => metadataLoadingFaultHandler.handleFault(
+              s"Error replaying metadata log record at offset ${_highestOffset}", e)
+            case Some(name) => metadataLoadingFaultHandler.handleFault(
+              s"Error replaying record ${index} from snapshot ${name} at offset ${_highestOffset}", e)
+          }
+        } finally {
+          numRecords += 1
+          index += 1
+        }
       }
       numBytes = numBytes + batch.sizeInBytes()
       metadataBatchSizeHist.update(batch.records().size())
@@ -236,8 +304,11 @@ class BrokerMetadataListener(
 
     override def run(): Unit = {
       _publisher = Some(publisher)
-      log.info(s"Starting to publish metadata events at offset ${highestMetadataOffset}.")
+      log.info(s"Starting to publish metadata events at offset $highestMetadataOffset.")
       try {
+        if (metadataVersionChanged()) {
+          maybeStartSnapshot(Set(SnapshotReason.MetadataVersionChanged))
+        }
         publish(publisher)
         future.complete(null)
       } catch {
@@ -248,11 +319,46 @@ class BrokerMetadataListener(
     }
   }
 
+  // This is used in tests to alter the publisher that is in use by the broker.
+  def alterPublisher(publisher: MetadataPublisher): CompletableFuture[Void] = {
+    val event = new AlterPublisherEvent(publisher)
+    eventQueue.append(event)
+    event.future
+  }
+
+  class AlterPublisherEvent(publisher: MetadataPublisher)
+    extends EventQueue.FailureLoggingEvent(log) {
+    val future = new CompletableFuture[Void]()
+
+    override def run(): Unit = {
+      _publisher = Some(publisher)
+      log.info(s"Set publisher to ${publisher}")
+      future.complete(null)
+    }
+  }
+
   private def publish(publisher: MetadataPublisher): Unit = {
     val delta = _delta
-    _image = _delta.apply()
+    try {
+      _image = _delta.apply()
+    } catch {
+      case t: Throwable =>
+        // If we cannot apply the delta, this publish event will throw and we will not publish a new image.
+        // The broker will continue applying metadata records and attempt to publish again.
+        throw metadataLoadingFaultHandler.handleFault(s"Error applying metadata delta $delta", t)
+    }
+
     _delta = new MetadataDelta(_image)
+    if (isDebugEnabled) {
+      debug(s"Publishing new metadata delta $delta at offset ${_image.highestOffsetAndEpoch().offset}.")
+    }
+
+    // This publish call is done with its own try-catch and fault handler
     publisher.publish(delta, _image)
+
+    // Update the metrics since the publisher handled the lastest image
+    brokerMetrics.lastAppliedRecordOffset.set(_highestOffset)
+    brokerMetrics.lastAppliedRecordTimestamp.set(_highestTimestamp)
   }
 
   override def handleLeaderChange(leaderAndEpoch: LeaderAndEpoch): Unit = {
@@ -263,8 +369,9 @@ class BrokerMetadataListener(
     eventQueue.beginShutdown("beginShutdown", new ShutdownEvent())
   }
 
-  class ShutdownEvent() extends EventQueue.FailureLoggingEvent(log) {
+  class ShutdownEvent extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
+      brokerMetrics.close()
       removeMetric(BrokerMetadataListener.MetadataBatchProcessingTimeUs)
       removeMetric(BrokerMetadataListener.MetadataBatchSizes)
     }
@@ -283,15 +390,18 @@ class BrokerMetadataListener(
   }
 
   class GetImageRecordsEvent(future: CompletableFuture[util.List[ApiMessageAndVersion]])
-      extends EventQueue.FailureLoggingEvent(log) with Consumer[util.List[ApiMessageAndVersion]] {
-    val records = new util.ArrayList[ApiMessageAndVersion]()
-    override def accept(batch: util.List[ApiMessageAndVersion]): Unit = {
-      records.addAll(batch)
-    }
-
+      extends EventQueue.FailureLoggingEvent(log) {
     override def run(): Unit = {
-      _image.write(this)
-      future.complete(records)
+      val writer = new RecordListWriter()
+      val options = new ImageWriterOptions.Builder().
+        setMetadataVersion(_image.features().metadataVersion()).
+        build()
+      try {
+        _image.write(writer, options)
+      } finally {
+        writer.close()
+      }
+      future.complete(writer.records())
     }
   }
 }

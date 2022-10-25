@@ -33,7 +33,7 @@ import scala.jdk.CollectionConverters._
 
 class BaseFetchRequestTest extends BaseRequestTest {
 
-  protected var producer: KafkaProducer[String, String] = null
+  protected var producer: KafkaProducer[String, String] = _
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.FetchMaxBytes, Int.MaxValue.toString)
@@ -69,7 +69,7 @@ class BaseFetchRequestTest extends BaseRequestTest {
   }
 
   protected def initProducer(): Unit = {
-    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+    producer = TestUtils.createProducer(bootstrapServers(),
       keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
   }
 

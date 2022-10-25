@@ -41,7 +41,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<CoordinatorKey, Map<TopicPartition, Errors>> {
+public class AlterConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<TopicPartition, Errors>> {
 
     private final CoordinatorKey groupId;
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
@@ -83,7 +83,7 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
     }
 
     @Override
-    public OffsetCommitRequest.Builder buildRequest(
+    public OffsetCommitRequest.Builder buildBatchedRequest(
         int coordinatorId,
         Set<CoordinatorKey> groupIds
     ) {
@@ -179,6 +179,8 @@ public class AlterConsumerGroupOffsetsHandler implements AdminApiHandler<Coordin
             case INVALID_GROUP_ID:
             case INVALID_COMMIT_OFFSET_SIZE:
             case GROUP_AUTHORIZATION_FAILED:
+            // Member level errors.
+            case UNKNOWN_MEMBER_ID:
                 log.debug("OffsetCommit request for group id {} failed due to error {}.",
                     groupId.idValue, error);
                 partitionResults.put(topicPartition, error);

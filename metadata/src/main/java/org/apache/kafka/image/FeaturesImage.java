@@ -18,8 +18,9 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
-import org.apache.kafka.metadata.VersionRange;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.image.writer.ImageWriter;
+import org.apache.kafka.image.writer.ImageWriterOptions;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -27,10 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
-
-import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_RECORD;
 
 
 /**
@@ -39,36 +37,70 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_
  * This class is thread-safe.
  */
 public final class FeaturesImage {
-    public static final FeaturesImage EMPTY = new FeaturesImage(Collections.emptyMap());
+    public static final FeaturesImage EMPTY = new FeaturesImage(Collections.emptyMap(), MetadataVersion.MINIMUM_KRAFT_VERSION);
 
-    private final Map<String, VersionRange> finalizedVersions;
+    private final Map<String, Short> finalizedVersions;
 
-    public FeaturesImage(Map<String, VersionRange> finalizedVersions) {
+    private final MetadataVersion metadataVersion;
+
+    public FeaturesImage(Map<String, Short> finalizedVersions, MetadataVersion metadataVersion) {
         this.finalizedVersions = Collections.unmodifiableMap(finalizedVersions);
+        this.metadataVersion = metadataVersion;
     }
 
     public boolean isEmpty() {
         return finalizedVersions.isEmpty();
     }
 
-    Map<String, VersionRange> finalizedVersions() {
+    public MetadataVersion metadataVersion() {
+        return metadataVersion;
+    }
+
+    public Map<String, Short> finalizedVersions() {
         return finalizedVersions;
     }
 
-    private Optional<VersionRange> finalizedVersion(String feature) {
+    private Optional<Short> finalizedVersion(String feature) {
         return Optional.ofNullable(finalizedVersions.get(feature));
     }
 
-    public void write(Consumer<List<ApiMessageAndVersion>> out) {
-        List<ApiMessageAndVersion> batch = new ArrayList<>();
-        for (Entry<String, VersionRange> entry : finalizedVersions.entrySet()) {
-            batch.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-                setName(entry.getKey()).
-                setMinFeatureLevel(entry.getValue().min()).
-                setMaxFeatureLevel(entry.getValue().max()),
-                FEATURE_LEVEL_RECORD.highestSupportedVersion()));
+    public void write(ImageWriter writer, ImageWriterOptions options) {
+        if (options.metadataVersion().isLessThan(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION)) {
+            handleFeatureLevelNotSupported(options);
+        } else {
+            writeFeatureLevels(writer, options);
         }
-        out.accept(batch);
+    }
+
+    private void handleFeatureLevelNotSupported(ImageWriterOptions options) {
+        // If the metadata version is older than 3.3-IV0, we can't represent any feature flags,
+        // because the FeatureLevel record is not supported.
+        if (!finalizedVersions.isEmpty()) {
+            List<String> features = new ArrayList<>(finalizedVersions.keySet());
+            features.sort(String::compareTo);
+            options.handleLoss("feature flag(s): " +
+                    features.stream().collect(Collectors.joining(", ")));
+        }
+    }
+
+    private void writeFeatureLevels(ImageWriter writer, ImageWriterOptions options) {
+        // It is important to write out the metadata.version record first, because it may have an
+        // impact on how we decode records that come after it.
+        //
+        // Note: it's important that this initial FeatureLevelRecord be written with version 0 and
+        // not any later version, so that any modern reader can process it.
+        writer.write(0, new FeatureLevelRecord().
+                setName(MetadataVersion.FEATURE_NAME).
+                setFeatureLevel(options.metadataVersion().featureLevel()));
+
+        // Write out the metadata versions for other features.
+        for (Entry<String, Short> entry : finalizedVersions.entrySet()) {
+            if (!entry.getKey().equals(MetadataVersion.FEATURE_NAME)) {
+                writer.write(0, new FeatureLevelRecord().
+                        setName(entry.getKey()).
+                        setFeatureLevel(entry.getValue()));
+            }
+        }
     }
 
     @Override
@@ -83,9 +115,12 @@ public final class FeaturesImage {
         return finalizedVersions.equals(other.finalizedVersions);
     }
 
+
     @Override
     public String toString() {
-        return finalizedVersions.entrySet().stream().
-            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", "));
+        return "FeaturesImage{" +
+                "finalizedVersions=" + finalizedVersions +
+                ", metadataVersion=" + metadataVersion +
+                '}';
     }
 }

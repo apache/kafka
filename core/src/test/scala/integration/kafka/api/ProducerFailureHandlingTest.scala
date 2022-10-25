@@ -51,10 +51,10 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   def generateConfigs =
     TestUtils.createBrokerConfigs(numServers, zkConnect, false).map(KafkaConfig.fromProps(_, overridingProps))
 
-  private var producer1: KafkaProducer[Array[Byte], Array[Byte]] = null
-  private var producer2: KafkaProducer[Array[Byte], Array[Byte]] = null
-  private var producer3: KafkaProducer[Array[Byte], Array[Byte]] = null
-  private var producer4: KafkaProducer[Array[Byte], Array[Byte]] = null
+  private var producer1: KafkaProducer[Array[Byte], Array[Byte]] = _
+  private var producer2: KafkaProducer[Array[Byte], Array[Byte]] = _
+  private var producer3: KafkaProducer[Array[Byte], Array[Byte]] = _
+  private var producer4: KafkaProducer[Array[Byte], Array[Byte]] = _
 
   private val topic1 = "topic-1"
   private val topic2 = "topic-2"
@@ -63,11 +63,11 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
 
-    producer1 = TestUtils.createProducer(brokerList, acks = 0, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
+    producer1 = TestUtils.createProducer(bootstrapServers(), acks = 0, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
       bufferSize = producerBufferSize)
-    producer2 = TestUtils.createProducer(brokerList, acks = 1, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
+    producer2 = TestUtils.createProducer(bootstrapServers(), acks = 1, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
       bufferSize = producerBufferSize)
-    producer3 = TestUtils.createProducer(brokerList, acks = -1, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
+    producer3 = TestUtils.createProducer(bootstrapServers(), acks = -1, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
       bufferSize = producerBufferSize)
   }
 

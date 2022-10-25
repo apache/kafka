@@ -84,19 +84,14 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   private def insertControllerListenersIfNeeded(props: Seq[Properties]): Unit = {
     if (isKRaftTest()) {
       props.foreach { config =>
-        // Add the CONTROLLER listener to "listeners" if it is not already there.
-        // But do not add it to advertised.listeners.
-        val listeners = config.getProperty(KafkaConfig.ListenersProp, "").split(",")
-        val listenerNames = listeners.map(_.replaceFirst(":.*", ""))
-        if (!listenerNames.contains("CONTROLLER")) {
-          config.setProperty(KafkaConfig.ListenersProp,
-            (listeners ++ Seq("CONTROLLER://localhost:0")).mkString(","))
-        }
-        // Add a security protocol for the CONTROLLER endpoint, if one is not already set.
+        // Add a security protocol for the controller endpoints, if one is not already set.
         val securityPairs = config.getProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "").split(",")
-        if (!securityPairs.exists(_.startsWith("CONTROLLER:"))) {
-          config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp,
-            (securityPairs ++ Seq(s"CONTROLLER:${controllerListenerSecurityProtocol.toString}")).mkString(","))
+        val toAdd = config.getProperty(KafkaConfig.ControllerListenerNamesProp, "").split(",").filter{
+          case e => !securityPairs.exists(_.startsWith(s"${e}:"))
+        }
+        if (toAdd.nonEmpty) {
+          config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, (securityPairs ++
+            toAdd.map(e => s"${e}:${controllerListenerSecurityProtocol.toString}")).mkString(","))
         }
       }
     }
@@ -116,25 +111,21 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
     super.setUp(testInfo)
 
-    producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     producerConfig.putIfAbsent(ProducerConfig.ACKS_CONFIG, "-1")
     producerConfig.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)
     producerConfig.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)
 
-    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     consumerConfig.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     consumerConfig.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group")
     consumerConfig.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
     consumerConfig.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
 
-    adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
 
     if (createOffsetsTopic) {
-      if (isKRaftTest()) {
-        TestUtils.createOffsetsTopicWithAdmin(brokers, adminClientConfig)
-      } else {
-        TestUtils.createOffsetsTopic(zkClient, servers)
-      }
+      super.createOffsetsTopic(listenerName, adminClientConfig)
     }
   }
 
@@ -167,13 +158,16 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumer
   }
 
-  def createAdminClient(configOverrides: Properties = new Properties): Admin = {
+  def createAdminClient(
+    listenerName: ListenerName = listenerName,
+    configOverrides: Properties = new Properties
+  ): Admin = {
     val props = new Properties
     props ++= adminClientConfig
     props ++= configOverrides
-    val adminClient = Admin.create(props)
-    adminClients += adminClient
-    adminClient
+    val admin = TestUtils.createAdminClient(brokers, listenerName, props)
+    adminClients += admin
+    admin
   }
 
   @AfterEach

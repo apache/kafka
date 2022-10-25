@@ -39,7 +39,7 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
 
   @Test
   def testGroupCoordinatorPropagatesOffsetsTopicCompressionCodec(): Unit = {
-    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers))
+    val consumer = TestUtils.createConsumer(bootstrapServers())
     val offsetMap = Map(
       new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0) -> new OffsetAndMetadata(10, "")
     ).asJava

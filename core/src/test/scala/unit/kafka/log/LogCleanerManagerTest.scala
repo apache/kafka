@@ -36,19 +36,20 @@ import scala.collection.mutable
   */
 class LogCleanerManagerTest extends Logging {
 
-  val tmpDir = TestUtils.tempDir()
-  val tmpDir2 = TestUtils.tempDir()
-  val logDir = TestUtils.randomPartitionLogDir(tmpDir)
-  val logDir2 = TestUtils.randomPartitionLogDir(tmpDir)
+  val tmpDir: File = TestUtils.tempDir()
+  val tmpDir2: File = TestUtils.tempDir()
+  val logDir: File = TestUtils.randomPartitionLogDir(tmpDir)
+  val logDir2: File = TestUtils.randomPartitionLogDir(tmpDir)
   val topicPartition = new TopicPartition("log", 0)
   val topicPartition2 = new TopicPartition("log2", 0)
   val logProps = new Properties()
   logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
   logProps.put(LogConfig.SegmentIndexBytesProp, 1024: java.lang.Integer)
   logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-  val logConfig = LogConfig(logProps)
+  val logConfig: LogConfig = LogConfig(logProps)
   val time = new MockTime(1400000000000L, 1000L)  // Tue May 13 16:53:20 UTC 2014 for `currentTimeMs`
   val offset = 999
+  val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs)
 
   val cleanerCheckpoints: mutable.Map[TopicPartition, Long] = mutable.Map[TopicPartition, Long]()
 
@@ -98,11 +99,12 @@ class LogCleanerManagerTest extends Logging {
     Files.createDirectories(tpDir.toPath)
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val config = createLowRetentionLogConfig(logSegmentSize, LogConfig.Compact)
-    val maxProducerIdExpirationMs = 60 * 60 * 1000
+    val maxTransactionTimeoutMs = 5 * 60 * 1000
+    val producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs
     val segments = new LogSegments(tp)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(tpDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
-    val producerStateManager = new ProducerStateManager(topicPartition, tpDir, maxProducerIdExpirationMs, time)
-    val offsets = LogLoader.load(LoadLogParams(
+    val producerStateManager = new ProducerStateManager(topicPartition, tpDir, maxTransactionTimeoutMs, producerStateManagerConfig, time)
+    val offsets = new LogLoader(
       tpDir,
       tp,
       config,
@@ -113,14 +115,14 @@ class LogCleanerManagerTest extends Logging {
       segments,
       0L,
       0L,
-      maxProducerIdExpirationMs,
       leaderEpochCache,
-      producerStateManager))
+      producerStateManager
+    ).load()
     val localLog = new LocalLog(tpDir, config, segments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, time.scheduler, time, tp, logDirFailureChannel)
     // the exception should be caught and the partition that caused it marked as uncleanable
     class LogMock extends UnifiedLog(offsets.logStartOffset, localLog, new BrokerTopicStats,
-        LogManager.ProducerIdExpirationCheckIntervalMs, leaderEpochCache,
+        producerIdExpirationCheckIntervalMs, leaderEpochCache,
         producerStateManager, _topicId = None, keepPartitionMetadataFile = true) {
       // Throw an error in getFirstBatchTimestampForSegments since it is called in grabFilthiestLog()
       override def getFirstBatchTimestampForSegments(segments: Iterable[LogSegment]): Iterable[Long] =
@@ -393,7 +395,7 @@ class LogCleanerManagerTest extends Logging {
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
     // expect the checkpoint offset is not the expectedOffset before doing updateCheckpoints
-    assertNotEquals(offset, cleanerManager.allCleanerCheckpoints.get(topicPartition).getOrElse(0))
+    assertNotEquals(offset, cleanerManager.allCleanerCheckpoints.getOrElse(topicPartition, 0))
 
     cleanerManager.updateCheckpoints(logDir, partitionToUpdateOrAdd = Option(topicPartition, offset))
     // expect the checkpoint offset is now updated to the expected offset after doing updateCheckpoints
@@ -412,7 +414,7 @@ class LogCleanerManagerTest extends Logging {
 
     // updateCheckpoints should remove the topicPartition data in the logDir
     cleanerManager.updateCheckpoints(logDir, partitionToRemove = Option(topicPartition))
-    assertTrue(cleanerManager.allCleanerCheckpoints.get(topicPartition).isEmpty)
+    assertFalse(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
   }
 
   @Test
@@ -430,7 +432,7 @@ class LogCleanerManagerTest extends Logging {
     cleanerManager.handleLogDirFailure(logDir.getAbsolutePath)
     // verify the partition data in logDir is gone, and data in logDir2 is still there
     assertEquals(offset, cleanerManager.allCleanerCheckpoints(topicPartition2))
-    assertTrue(cleanerManager.allCleanerCheckpoints.get(topicPartition).isEmpty)
+    assertFalse(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
   }
 
   @Test
@@ -470,7 +472,7 @@ class LogCleanerManagerTest extends Logging {
 
     // force delete the logDir2 from checkpoints, so that the partition data should also be deleted
     cleanerManager.handleLogDirFailure(logDir2.getAbsolutePath)
-    assertTrue(cleanerManager.allCleanerCheckpoints.get(topicPartition).isEmpty)
+    assertFalse(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
   }
 
   /**
@@ -709,14 +711,16 @@ class LogCleanerManagerTest extends Logging {
     assertThrows(classOf[IllegalStateException], () => cleanerManager.doneCleaning(topicPartition, log.dir, 1))
 
     cleanerManager.setCleaningState(topicPartition, LogCleaningInProgress)
-    cleanerManager.doneCleaning(topicPartition, log.dir, 1)
+    val endOffset = 1L
+    cleanerManager.doneCleaning(topicPartition, log.dir, endOffset)
     assertTrue(cleanerManager.cleaningState(topicPartition).isEmpty)
-    assertTrue(cleanerManager.allCleanerCheckpoints.get(topicPartition).nonEmpty)
+    assertTrue(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
+    assertEquals(Some(endOffset), cleanerManager.allCleanerCheckpoints.get(topicPartition))
 
     cleanerManager.setCleaningState(topicPartition, LogCleaningAborted)
-    cleanerManager.doneCleaning(topicPartition, log.dir, 1)
+    cleanerManager.doneCleaning(topicPartition, log.dir, endOffset)
     assertEquals(LogCleaningPaused(1), cleanerManager.cleaningState(topicPartition).get)
-    assertTrue(cleanerManager.allCleanerCheckpoints.get(topicPartition).nonEmpty)
+    assertTrue(cleanerManager.allCleanerCheckpoints.contains(topicPartition))
   }
 
   @Test
@@ -754,7 +758,7 @@ class LogCleanerManagerTest extends Logging {
 
     val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time)
     assertEquals(None, filthiestLog, "Log should not be selected for cleaning")
-    assertEquals(20L, cleanerCheckpoints.get(tp).get, "Unselected log should have checkpoint offset updated")
+    assertEquals(20L, cleanerCheckpoints(tp), "Unselected log should have checkpoint offset updated")
   }
 
   /**
@@ -776,7 +780,7 @@ class LogCleanerManagerTest extends Logging {
 
     val filthiestLog = cleanerManager.grabFilthiestCompactedLog(time).get
     assertEquals(tp1, filthiestLog.topicPartition, "Dirtier log should be selected")
-    assertEquals(15L, cleanerCheckpoints.get(tp0).get, "Unselected log should have checkpoint offset updated")
+    assertEquals(15L, cleanerCheckpoints(tp0), "Unselected log should have checkpoint offset updated")
   }
 
   private def createCleanerManager(log: UnifiedLog): LogCleanerManager = {
@@ -795,15 +799,17 @@ class LogCleanerManagerTest extends Logging {
     val config = createLowRetentionLogConfig(segmentSize, cleanupPolicy)
     val partitionDir = new File(logDir, UnifiedLog.logDirName(topicPartition))
 
-    UnifiedLog(partitionDir,
-      config,
+    UnifiedLog(
+      dir = partitionDir,
+      config = config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
       scheduler = time.scheduler,
       time = time,
       brokerTopicStats = new BrokerTopicStats,
-      maxProducerIdExpirationMs = 60 * 60 * 1000,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
+      producerStateManagerConfig = producerStateManagerConfig,
+      producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
       keepPartitionMetadataFile = true)
@@ -846,11 +852,23 @@ class LogCleanerManagerTest extends Logging {
     log.maybeIncrementHighWatermark(log.logEndOffsetMetadata)
   }
 
-  private def makeLog(dir: File = logDir, config: LogConfig) =
-    UnifiedLog(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
-      time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10), topicId = None, keepPartitionMetadataFile = true)
+  private def makeLog(dir: File = logDir, config: LogConfig) = {
+    UnifiedLog(
+      dir = dir,
+      config = config,
+      logStartOffset = 0L,
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      time = time,
+      brokerTopicStats = new BrokerTopicStats,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
+      producerStateManagerConfig = producerStateManagerConfig,
+      producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true
+    )
+  }
 
   private def records(key: Int, value: Int, timestamp: Long) =
     MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))

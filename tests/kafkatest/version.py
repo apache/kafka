@@ -106,6 +106,9 @@ class KafkaVersion(LooseVersion):
         # Self-managed clusters always support topic ID, so this method only applies to ZK clusters.
         return self >= V_2_8_0
 
+    def supports_fk_joins(self):
+        return hasattr(self, "version") and self >= V_2_4_0
+
 def get_version(node=None):
     """Return the version attached to the given node.
     Default to DEV_BRANCH if node or node.version is undefined (aka None)
@@ -116,7 +119,9 @@ def get_version(node=None):
         return DEV_BRANCH
 
 DEV_BRANCH = KafkaVersion("dev")
-DEV_VERSION = KafkaVersion("3.2.0-SNAPSHOT")
+DEV_VERSION = KafkaVersion("3.4.0-SNAPSHOT")
+
+LATEST_METADATA_VERSION = "3.3"
 
 # 0.8.2.x versions
 V_0_8_2_1 = KafkaVersion("0.8.2.1")
@@ -210,16 +215,33 @@ LATEST_2_7 = V_2_7_1
 # 2.8.x versions
 V_2_8_0 = KafkaVersion("2.8.0")
 V_2_8_1 = KafkaVersion("2.8.1")
-LATEST_2_8 = V_2_8_1
+V_2_8_2 = KafkaVersion("2.8.2")
+LATEST_2_8 = V_2_8_2
 
 # 3.0.x versions
 V_3_0_0 = KafkaVersion("3.0.0")
-LATEST_3_0 = V_3_0_0
+V_3_0_1 = KafkaVersion("3.0.1")
+V_3_0_2 = KafkaVersion("3.0.2")
+LATEST_3_0 = V_3_0_2
 
 # 3.1.x versions
 V_3_1_0 = KafkaVersion("3.1.0")
-LATEST_3_1 = V_3_1_0
+V_3_1_1 = KafkaVersion("3.1.1")
+V_3_1_2 = KafkaVersion("3.1.2")
+LATEST_3_1 = V_3_1_2
 
 # 3.2.x versions
 V_3_2_0 = KafkaVersion("3.2.0")
-LATEST_3_2 = V_3_2_0
+V_3_2_1 = KafkaVersion("3.2.1")
+V_3_2_2 = KafkaVersion("3.2.2")
+V_3_2_3 = KafkaVersion("3.2.3")
+LATEST_3_2 = V_3_2_3
+
+# 3.3.x versions
+V_3_3_0 = KafkaVersion("3.3.0")
+V_3_3_1 = KafkaVersion("3.3.1")
+LATEST_3_3 = V_3_3_1
+
+# 3.4.x versions
+V_3_4_0 = KafkaVersion("3.4.0")
+LATEST_3_4 = V_3_4_0

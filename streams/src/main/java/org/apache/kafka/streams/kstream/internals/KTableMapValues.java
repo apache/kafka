@@ -129,7 +129,7 @@ class KTableMapValues<KIn, VIn, VOut> implements KTableProcessorSupplier<KIn, VI
 
             if (queryableName != null) {
                 store.put(record.key(), ValueAndTimestamp.make(newValue, record.timestamp()));
-                tupleForwarder.maybeForward(record.key(), newValue, oldValue);
+                tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue)));
             } else {
                 context.forward(record.withValue(new Change<>(newValue, oldValue)));
             }

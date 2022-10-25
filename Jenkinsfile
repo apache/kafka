@@ -19,7 +19,7 @@
 
 def doValidation() {
   sh """
-    ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
+    ./retry_zinc ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
         spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
         --profile --no-daemon --continue -PxmlSpotBugsReport=true
   """
@@ -29,15 +29,10 @@ def isChangeRequest(env) {
   env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
 }
 
-def retryFlagsString(env) {
-    if (isChangeRequest(env)) " -PmaxTestRetries=1 -PmaxTestRetryFailures=5"
-    else ""
-}
-
 def doTest(env, target = "unitTest integrationTest") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
       --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
-      -PignoreFailures=true -PmaxParallelForks=2""" + retryFlagsString(env)
+      -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
   junit '**/build/test-results/**/TEST-*.xml'
 }
 
@@ -96,7 +91,7 @@ pipeline {
   agent none
   
   options {
-    disableConcurrentBuilds()
+    disableConcurrentBuilds(abortPrevious: isChangeRequest(env))
   }
   
   stages {
@@ -158,24 +153,6 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 17'
-          }
-        }
-
-        stage('ARM') {
-          agent { label 'arm4' }
-          options {
-            timeout(time: 2, unit: 'HOURS') 
-            timestamps()
-          }
-          environment {
-            SCALA_VERSION=2.12
-          }
-          steps {
-            doValidation()
-            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-              doTest(env, 'unitTest')
-            }
-            echo 'Skipping Kafka Streams archetype test for ARM build'
           }
         }
         

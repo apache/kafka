@@ -131,7 +131,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     adminZkClient.deleteTopic(topic)
     // verify that a partition from the topic cannot be reassigned
     val props = new Properties()
-    props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
+    props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(servers))
     val adminClient = Admin.create(props)
     try {
       waitUntilTopicGone(adminClient, "test")
@@ -222,7 +222,7 @@ class DeleteTopicTest extends QuorumTestHarness {
 
     // increase the partition count for topic
     val props = new Properties()
-    props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
+    props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(servers))
     val adminClient = Admin.create(props)
     try {
       adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()

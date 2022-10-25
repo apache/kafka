@@ -426,7 +426,7 @@ public class Selector implements Selectable, AutoCloseable {
      * buffers. If there are channels with buffered data that can by processed, we set "timeout" to 0 and process the data even
      * if there is no more data to read from the socket.
      *
-     * Atmost one entry is added to "completedReceives" for a channel in each poll. This is necessary to guarantee that
+     * At most one entry is added to "completedReceives" for a channel in each poll. This is necessary to guarantee that
      * requests from a channel are processed on the broker in the order they are sent. Since outstanding requests added
      * by SocketServer to the request queue may be processed by different request handler threads, requests on each
      * channel must be processed one-at-a-time to guarantee ordering.
@@ -601,7 +601,7 @@ public class Selector implements Selectable, AutoCloseable {
                     close(channel, CloseMode.GRACEFUL);
 
             } catch (Exception e) {
-                String desc = channel.socketDescription();
+                String desc = String.format("%s (channelId=%s)", channel.socketDescription(), channel.id());
                 if (e instanceof IOException) {
                     log.debug("Connection with {} disconnected", desc, e);
                 } else if (e instanceof AuthenticationException) {
@@ -757,6 +757,7 @@ public class Selector implements Selectable, AutoCloseable {
             explicitlyMutedChannels.remove(channel);
             if (channel.hasBytesBuffered()) {
                 keysWithBufferedRead.add(channel.selectionKey());
+                madeReadProgressLastPoll = true;
             }
         }
     }
@@ -845,7 +846,7 @@ public class Selector implements Selectable, AutoCloseable {
             boolean hasPending = false;
             if (!sendFailed)
                 hasPending = maybeReadFromClosingChannel(channel);
-            if (!hasPending || sendFailed) {
+            if (!hasPending) {
                 doClose(channel, true);
                 it.remove();
             }

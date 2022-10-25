@@ -34,9 +34,9 @@ import org.apache.kafka.test.TestUtils.isValidClusterId
 
 
 class ServerGenerateClusterIdTest extends QuorumTestHarness {
-  var config1: KafkaConfig = null
-  var config2: KafkaConfig = null
-  var config3: KafkaConfig = null
+  var config1: KafkaConfig = _
+  var config2: KafkaConfig = _
+  var config3: KafkaConfig = _
   var servers: Seq[KafkaServer] = Seq()
   val brokerMetaPropsFile = "meta.properties"
 

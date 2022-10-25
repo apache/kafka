@@ -207,51 +207,62 @@ License Version 2.0:
 
 audience-annotations-0.5.0
 commons-cli-1.4
-commons-lang3-3.8.1
-jackson-annotations-2.12.3
-jackson-core-2.12.3
-jackson-databind-2.12.3
-jackson-dataformat-csv-2.12.3
-jackson-datatype-jdk8-2.12.3
-jackson-jaxrs-base-2.12.3
-jackson-jaxrs-json-provider-2.12.3
-jackson-module-jaxb-annotations-2.12.3
-jackson-module-paranamer-2.10.5
-jackson-module-scala_2.13-2.12.3
+commons-lang3-3.12.0
+jackson-annotations-2.13.3
+jackson-core-2.13.3
+jackson-databind-2.13.3
+jackson-dataformat-csv-2.13.3
+jackson-dataformat-yaml-2.13.3
+jackson-datatype-jdk8-2.13.3
+jackson-datatype-jsr310-2.13.3
+jackson-jaxrs-base-2.13.3
+jackson-jaxrs-json-provider-2.13.3
+jackson-module-jaxb-annotations-2.13.3
+jackson-module-scala_2.13-2.13.3
+jackson-module-scala_2.12-2.13.3
 jakarta.validation-api-2.0.2
 javassist-3.27.0-GA
-jetty-client-9.4.43.v20210629
-jetty-continuation-9.4.43.v20210629
-jetty-http-9.4.43.v20210629
-jetty-io-9.4.43.v20210629
-jetty-security-9.4.43.v20210629
-jetty-server-9.4.43.v20210629
-jetty-servlet-9.4.43.v20210629
-jetty-servlets-9.4.43.v20210629
-jetty-util-9.4.43.v20210629
-jetty-util-ajax-9.4.43.v20210629
+jetty-client-9.4.48.v20220622
+jetty-continuation-9.4.48.v20220622
+jetty-http-9.4.48.v20220622
+jetty-io-9.4.48.v20220622
+jetty-security-9.4.48.v20220622
+jetty-server-9.4.48.v20220622
+jetty-servlet-9.4.48.v20220622
+jetty-servlets-9.4.48.v20220622
+jetty-util-9.4.48.v20220622
+jetty-util-ajax-9.4.48.v20220622
 jersey-common-2.34
 jersey-server-2.34
-log4j-1.2.17
-lz4-java-1.7.1
-maven-artifact-3.8.1
+jose4j-0.7.9
+lz4-java-1.8.0
+maven-artifact-3.8.4
 metrics-core-4.1.12.1
-netty-buffer-4.1.62.Final
-netty-codec-4.1.62.Final
-netty-common-4.1.62.Final
-netty-handler-4.1.62.Final
-netty-resolver-4.1.62.Final
-netty-transport-4.1.62.Final
-netty-transport-native-epoll-4.1.62.Final
-netty-transport-native-unix-common-4.1.62.Final
-plexus-utils-3.2.1
-rocksdbjni-6.19.3
-scala-collection-compat_2.13-2.4.4
-scala-library-2.13.6
-scala-logging_2.13-3.9.3
-scala-reflect-2.13.6
-scala-java8-compat_2.13-1.0.0
-snappy-java-1.1.8.1
+metrics-core-2.2.0
+netty-buffer-4.1.78.Final
+netty-codec-4.1.78.Final
+netty-common-4.1.78.Final
+netty-handler-4.1.78.Final
+netty-resolver-4.1.78.Final
+netty-transport-4.1.78.Final
+netty-transport-classes-epoll-4.1.78.Final
+netty-transport-native-epoll-4.1.78.Final
+netty-transport-native-unix-common-4.1.78.Final
+plexus-utils-3.3.0
+reload4j-1.2.19
+rocksdbjni-6.29.4.1
+scala-collection-compat_2.13-2.6.0
+scala-library-2.13.8
+scala-logging_2.13-3.9.4
+scala-reflect-2.13.8
+scala-java8-compat_2.13-1.0.2
+snakeyaml-1.30
+snappy-java-1.1.8.4
+swagger-annotations-2.2.0
+swagger-core-2.2.0
+swagger-integration-2.2.0
+swagger-jaxrs2-2.2.0
+swagger-models-2.2.0
 zookeeper-3.6.3
 zookeeper-jute-3.6.3
 
@@ -264,8 +275,8 @@ See licenses/ for text of these licenses.
 Eclipse Distribution License - v 1.0
 see: licenses/eclipse-distribution-license-1.0
 
-jakarta.activation-api-1.2.1
-jakarta.xml.bind-api-2.3.2
+jakarta.activation-api-1.2.2
+jakarta.xml.bind-api-2.3.3
 
 ---------------------------------------
 Eclipse Public License - v 2.0
@@ -299,18 +310,19 @@ MIT License
 
 argparse4j-0.7.0, see: licenses/argparse-MIT
 jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
-slf4j-api-1.7.30, see: licenses/slf4j-MIT
-slf4j-log4j12-1.7.30, see: licenses/slf4j-MIT
+slf4j-api-1.7.36, see: licenses/slf4j-MIT
+slf4j-reload4j-1.7.36, see: licenses/slf4j-MIT
+classgraph-4.8.138, see: license/classgraph-MIT
 
 ---------------------------------------
 BSD 2-Clause
 
-zstd-jni-1.5.0-2 see: licenses/zstd-jni-BSD-2-clause
+zstd-jni-1.5.2-1 see: licenses/zstd-jni-BSD-2-clause
 
 ---------------------------------------
 BSD 3-Clause
 
-jline-3.12.1, see: licenses/jline-BSD-3-clause
+jline-3.21.0, see: licenses/jline-BSD-3-clause
 paranamer-2.8, see: licenses/paranamer-BSD-3-clause
 
 ---------------------------------------

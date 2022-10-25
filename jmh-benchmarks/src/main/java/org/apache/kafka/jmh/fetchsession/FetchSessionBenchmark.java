@@ -99,7 +99,7 @@ public class FetchSessionBenchmark {
             if (updatedPercentage != 0 && counter % (100 / updatedPercentage) == 0) {
                 // reorder in fetch session, and update log start offset
                 fetches.remove(topicPartition);
-                fetches.put(topicPartition, new FetchRequest.PartitionData(Uuid.ZERO_UUID, 50, 40, 200,
+                fetches.put(topicPartition, new FetchRequest.PartitionData(id, 50, 40, 200,
                         Optional.empty()));
             }
             counter++;
@@ -115,7 +115,6 @@ public class FetchSessionBenchmark {
         else
             builder = handler.newBuilder();
 
-        // Should we keep lookup to mimic how adding really works?
         for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry: fetches.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
             builder.add(topicPartition, entry.getValue());

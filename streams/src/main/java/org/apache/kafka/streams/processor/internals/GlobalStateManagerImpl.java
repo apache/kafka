@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
@@ -167,7 +168,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
-    public void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+    public void registerStore(final StateStore store,
+                              final StateRestoreCallback stateRestoreCallback,
+                              final CommitCallback ignored) {
         log.info("Restoring state for global store {}", store.name());
 
         // TODO (KAFKA-12887): we should not trigger user's exception handler for illegal-argument but always

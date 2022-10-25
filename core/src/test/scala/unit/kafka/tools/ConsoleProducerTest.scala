@@ -67,6 +67,46 @@ class ConsoleProducerTest {
     "--producer-property",
     "client.id=producer-1"
   )
+  val batchSizeOverriddenByMaxPartitionMemoryBytesValue: Array[String] = Array(
+    "--broker-list",
+    "localhost:1001",
+    "--bootstrap-server",
+    "localhost:1002",
+    "--topic",
+    "t3",
+    "--batch-size",
+    "123",
+    "--max-partition-memory-bytes",
+    "456"
+  )
+  val btchSizeSetAndMaxPartitionMemoryBytesNotSet: Array[String] = Array(
+    "--broker-list",
+    "localhost:1001",
+    "--bootstrap-server",
+    "localhost:1002",
+    "--topic",
+    "t3",
+    "--batch-size",
+    "123"
+  )
+  val batchSizeNotSetAndMaxPartitionMemoryBytesSet: Array[String] = Array(
+    "--broker-list",
+    "localhost:1001",
+    "--bootstrap-server",
+    "localhost:1002",
+    "--topic",
+    "t3",
+    "--max-partition-memory-bytes",
+    "456"
+  )
+  val batchSizeDefault: Array[String] = Array(
+    "--broker-list",
+    "localhost:1001",
+    "--bootstrap-server",
+    "localhost:1002",
+    "--topic",
+    "t3"
+  )
 
   @Test
   def testValidConfigsBrokerList(): Unit = {
@@ -123,4 +163,37 @@ class ConsoleProducerTest {
     assertEquals("console-producer",
       producerConfig.getString(ProducerConfig.CLIENT_ID_CONFIG))
   }
+
+  @Test
+  def testBatchSizeOverriddenByMaxPartitionMemoryBytesValue(): Unit = {
+    val config = new ConsoleProducer.ProducerConfig(batchSizeOverriddenByMaxPartitionMemoryBytesValue)
+    val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
+    assertEquals(456,
+      producerConfig.getInt(ProducerConfig.BATCH_SIZE_CONFIG))
+  }
+
+  @Test
+  def testBatchSizeSetAndMaxPartitionMemoryBytesNotSet(): Unit = {
+    val config = new ConsoleProducer.ProducerConfig(btchSizeSetAndMaxPartitionMemoryBytesNotSet)
+    val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
+    assertEquals(123,
+      producerConfig.getInt(ProducerConfig.BATCH_SIZE_CONFIG))
+  }
+
+  @Test
+  def testDefaultBatchSize(): Unit = {
+    val config = new ConsoleProducer.ProducerConfig(batchSizeDefault)
+    val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
+    assertEquals(16*1024,
+      producerConfig.getInt(ProducerConfig.BATCH_SIZE_CONFIG))
+  }
+
+  @Test
+  def testBatchSizeNotSetAndMaxPartitionMemoryBytesSet (): Unit = {
+    val config = new ConsoleProducer.ProducerConfig(batchSizeNotSetAndMaxPartitionMemoryBytesSet)
+    val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
+    assertEquals(456,
+      producerConfig.getInt(ProducerConfig.BATCH_SIZE_CONFIG))
+  }
+
 }

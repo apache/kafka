@@ -31,6 +31,8 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Stack;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -48,7 +50,9 @@ public class SerializationTest {
             put(Float.class, Arrays.asList(5678567.12312f, -5678567.12341f));
             put(Double.class, Arrays.asList(5678567.12312d, -5678567.12341d));
             put(byte[].class, Arrays.asList("my string".getBytes()));
-            put(ByteBuffer.class, Arrays.asList(ByteBuffer.allocate(10).put("my string".getBytes())));
+            put(ByteBuffer.class, Arrays.asList(ByteBuffer.wrap("my string".getBytes()),
+                    ByteBuffer.allocate(10).put("my string".getBytes()),
+                    ByteBuffer.allocateDirect(10).put("my string".getBytes())));
             put(Bytes.class, Arrays.asList(new Bytes("my string".getBytes())));
             put(UUID.class, Arrays.asList(UUID.randomUUID()));
         }
@@ -367,5 +371,22 @@ public class SerializationTest {
         deserializer.configure(deserializerConfigs, true);
 
         return Serdes.serdeFrom(serializer, deserializer);
+    }
+
+    @Test
+    public void testByteBufferSerializer() {
+        final byte[] bytes = "Hello".getBytes(UTF_8);
+        final ByteBuffer heapBuffer0 = ByteBuffer.allocate(bytes.length + 1).put(bytes);
+        final ByteBuffer heapBuffer1 = ByteBuffer.allocate(bytes.length).put(bytes);
+        final ByteBuffer heapBuffer2 = ByteBuffer.wrap(bytes);
+        final ByteBuffer directBuffer0 = ByteBuffer.allocateDirect(bytes.length + 1).put(bytes);
+        final ByteBuffer directBuffer1 = ByteBuffer.allocateDirect(bytes.length).put(bytes);
+        try (final ByteBufferSerializer serializer = new ByteBufferSerializer()) {
+            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer0));
+            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer1));
+            assertArrayEquals(bytes, serializer.serialize(topic, heapBuffer2));
+            assertArrayEquals(bytes, serializer.serialize(topic, directBuffer0));
+            assertArrayEquals(bytes, serializer.serialize(topic, directBuffer1));
+        }
     }
 }

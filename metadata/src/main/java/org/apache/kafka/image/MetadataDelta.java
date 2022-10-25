@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.metadata.AccessControlEntryRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
@@ -25,8 +26,9 @@ import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
-import org.apache.kafka.common.metadata.RemoveFeatureLevelRecord;
+import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
@@ -34,9 +36,11 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 
 
 /**
@@ -61,10 +65,14 @@ public final class MetadataDelta {
 
     private ClientQuotasDelta clientQuotasDelta = null;
 
+    private ProducerIdsDelta producerIdsDelta = null;
+
+    private AclsDelta aclsDelta = null;
+
     public MetadataDelta(MetadataImage image) {
         this.image = image;
-        this.highestOffset = image.highestOffsetAndEpoch().offset;
-        this.highestEpoch = image.highestOffsetAndEpoch().epoch;
+        this.highestOffset = image.highestOffsetAndEpoch().offset();
+        this.highestEpoch = image.highestOffsetAndEpoch().epoch();
     }
 
     public MetadataImage image() {
@@ -75,7 +83,17 @@ public final class MetadataDelta {
         return featuresDelta;
     }
 
+    public FeaturesDelta getOrCreateFeaturesDelta() {
+        if (featuresDelta == null) featuresDelta = new FeaturesDelta(image.features());
+        return featuresDelta;
+    }
+
     public ClusterDelta clusterDelta() {
+        return clusterDelta;
+    }
+
+    public ClusterDelta getOrCreateClusterDelta() {
+        if (clusterDelta == null) clusterDelta = new ClusterDelta(image.cluster());
         return clusterDelta;
     }
 
@@ -83,12 +101,55 @@ public final class MetadataDelta {
         return topicsDelta;
     }
 
+    public TopicsDelta getOrCreateTopicsDelta() {
+        if (topicsDelta == null) topicsDelta = new TopicsDelta(image.topics());
+        return topicsDelta;
+    }
+
     public ConfigurationsDelta configsDelta() {
+        return configsDelta;
+    }
+
+    public ConfigurationsDelta getOrCreateConfigsDelta() {
+        if (configsDelta == null) configsDelta = new ConfigurationsDelta(image.configs());
         return configsDelta;
     }
 
     public ClientQuotasDelta clientQuotasDelta() {
         return clientQuotasDelta;
+    }
+
+    public ClientQuotasDelta getOrCreateClientQuotasDelta() {
+        if (clientQuotasDelta == null) clientQuotasDelta = new ClientQuotasDelta(image.clientQuotas());
+        return clientQuotasDelta;
+    }
+
+    public ProducerIdsDelta producerIdsDelta() {
+        return producerIdsDelta;
+    }
+
+    public ProducerIdsDelta getOrCreateProducerIdsDelta() {
+        if (producerIdsDelta == null) {
+            producerIdsDelta = new ProducerIdsDelta(image.producerIds());
+        }
+        return producerIdsDelta;
+    }
+
+    public AclsDelta aclsDelta() {
+        return aclsDelta;
+    }
+
+    public AclsDelta getOrCreateAclsDelta() {
+        if (aclsDelta == null) aclsDelta = new AclsDelta(image.acls());
+        return aclsDelta;
+    }
+
+    public Optional<MetadataVersion> metadataVersionChanged() {
+        if (featuresDelta == null) {
+            return Optional.empty();
+        } else {
+            return featuresDelta.metadataVersionChange();
+        }
     }
 
     public void read(long highestOffset, int highestEpoch, Iterator<List<ApiMessageAndVersion>> reader) {
@@ -140,13 +201,21 @@ public final class MetadataDelta {
                 replay((ClientQuotaRecord) record);
                 break;
             case PRODUCER_IDS_RECORD:
-                // Nothing to do.
-                break;
-            case REMOVE_FEATURE_LEVEL_RECORD:
-                replay((RemoveFeatureLevelRecord) record);
+                replay((ProducerIdsRecord) record);
                 break;
             case BROKER_REGISTRATION_CHANGE_RECORD:
                 replay((BrokerRegistrationChangeRecord) record);
+                break;
+            case ACCESS_CONTROL_ENTRY_RECORD:
+                replay((AccessControlEntryRecord) record);
+                break;
+            case REMOVE_ACCESS_CONTROL_ENTRY_RECORD:
+                replay((RemoveAccessControlEntryRecord) record);
+                break;
+            case NO_OP_RECORD:
+                /* NoOpRecord is an empty record and doesn't need to be replayed beyond
+                 * updating the highest offset and epoch.
+                 */
                 break;
             default:
                 throw new RuntimeException("Unknown metadata record type " + type);
@@ -164,60 +233,65 @@ public final class MetadataDelta {
     }
 
     public void replay(TopicRecord record) {
-        if (topicsDelta == null) topicsDelta = new TopicsDelta(image.topics());
-        topicsDelta.replay(record);
+        getOrCreateTopicsDelta().replay(record);
     }
 
     public void replay(PartitionRecord record) {
-        if (topicsDelta == null) topicsDelta = new TopicsDelta(image.topics());
-        topicsDelta.replay(record);
+        getOrCreateTopicsDelta().replay(record);
     }
 
     public void replay(ConfigRecord record) {
-        if (configsDelta == null) configsDelta = new ConfigurationsDelta(image.configs());
-        configsDelta.replay(record);
+        getOrCreateConfigsDelta().replay(record);
     }
 
     public void replay(PartitionChangeRecord record) {
-        if (topicsDelta == null) topicsDelta = new TopicsDelta(image.topics());
-        topicsDelta.replay(record);
+        getOrCreateTopicsDelta().replay(record);
     }
 
     public void replay(FenceBrokerRecord record) {
-        if (clusterDelta == null) clusterDelta = new ClusterDelta(image.cluster());
-        clusterDelta.replay(record);
+        getOrCreateClusterDelta().replay(record);
     }
 
     public void replay(UnfenceBrokerRecord record) {
-        if (clusterDelta == null) clusterDelta = new ClusterDelta(image.cluster());
-        clusterDelta.replay(record);
+        getOrCreateClusterDelta().replay(record);
     }
 
     public void replay(RemoveTopicRecord record) {
-        if (topicsDelta == null) topicsDelta = new TopicsDelta(image.topics());
-        String topicName = topicsDelta.replay(record);
-        if (configsDelta == null) configsDelta = new ConfigurationsDelta(image.configs());
-        configsDelta.replay(record, topicName);
+        String topicName = getOrCreateTopicsDelta().replay(record);
+        getOrCreateConfigsDelta().replay(record, topicName);
     }
 
     public void replay(FeatureLevelRecord record) {
-        if (featuresDelta == null) featuresDelta = new FeaturesDelta(image.features());
-        featuresDelta.replay(record);
+        getOrCreateFeaturesDelta().replay(record);
+        featuresDelta.metadataVersionChange().ifPresent(changedMetadataVersion -> {
+            // If any feature flags change, need to immediately check if any metadata needs to be downgraded.
+            getOrCreateClusterDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateConfigsDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateTopicsDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateClientQuotasDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateProducerIdsDelta().handleMetadataVersionChange(changedMetadataVersion);
+            getOrCreateAclsDelta().handleMetadataVersionChange(changedMetadataVersion);
+        });
     }
 
     public void replay(BrokerRegistrationChangeRecord record) {
-        if (clusterDelta == null) clusterDelta = new ClusterDelta(image.cluster());
-        clusterDelta.replay(record);
+        getOrCreateClusterDelta().replay(record);
     }
 
     public void replay(ClientQuotaRecord record) {
-        if (clientQuotasDelta == null) clientQuotasDelta = new ClientQuotasDelta(image.clientQuotas());
-        clientQuotasDelta.replay(record);
+        getOrCreateClientQuotasDelta().replay(record);
     }
 
-    public void replay(RemoveFeatureLevelRecord record) {
-        if (featuresDelta == null) featuresDelta = new FeaturesDelta(image.features());
-        featuresDelta.replay(record);
+    public void replay(ProducerIdsRecord record) {
+        getOrCreateProducerIdsDelta().replay(record);
+    }
+
+    public void replay(AccessControlEntryRecord record) {
+        getOrCreateAclsDelta().replay(record);
+    }
+
+    public void replay(RemoveAccessControlEntryRecord record) {
+        getOrCreateAclsDelta().replay(record);
     }
 
     /**
@@ -225,11 +299,13 @@ public final class MetadataDelta {
      * referenced in the snapshot records we just applied.
      */
     public void finishSnapshot() {
-        if (featuresDelta != null) featuresDelta.finishSnapshot();
-        if (clusterDelta != null) clusterDelta.finishSnapshot();
-        if (topicsDelta != null) topicsDelta.finishSnapshot();
-        if (configsDelta != null) configsDelta.finishSnapshot();
-        if (clientQuotasDelta != null) clientQuotasDelta.finishSnapshot();
+        getOrCreateFeaturesDelta().finishSnapshot();
+        getOrCreateClusterDelta().finishSnapshot();
+        getOrCreateTopicsDelta().finishSnapshot();
+        getOrCreateConfigsDelta().finishSnapshot();
+        getOrCreateClientQuotasDelta().finishSnapshot();
+        getOrCreateProducerIdsDelta().finishSnapshot();
+        getOrCreateAclsDelta().finishSnapshot();
     }
 
     public MetadataImage apply() {
@@ -263,13 +339,27 @@ public final class MetadataDelta {
         } else {
             newClientQuotas = clientQuotasDelta.apply();
         }
+        ProducerIdsImage newProducerIds;
+        if (producerIdsDelta == null) {
+            newProducerIds = image.producerIds();
+        } else {
+            newProducerIds = producerIdsDelta.apply();
+        }
+        AclsImage newAcls;
+        if (aclsDelta == null) {
+            newAcls = image.acls();
+        } else {
+            newAcls = aclsDelta.apply();
+        }
         return new MetadataImage(
             new OffsetAndEpoch(highestOffset, highestEpoch),
             newFeatures,
             newCluster,
             newTopics,
             newConfigs,
-            newClientQuotas
+            newClientQuotas,
+            newProducerIds,
+            newAcls
         );
     }
 
@@ -283,6 +373,8 @@ public final class MetadataDelta {
             ", topicsDelta=" + topicsDelta +
             ", configsDelta=" + configsDelta +
             ", clientQuotasDelta=" + clientQuotasDelta +
+            ", producerIdsDelta=" + producerIdsDelta +
+            ", aclsDelta=" + aclsDelta +
             ')';
     }
 }

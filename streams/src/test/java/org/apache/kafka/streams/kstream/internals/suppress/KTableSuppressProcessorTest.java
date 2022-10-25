@@ -37,11 +37,12 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 import org.apache.kafka.test.MockInternalNewProcessorContext;
-import org.easymock.EasyMock;
 import org.hamcrest.BaseMatcher;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -61,7 +62,9 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class KTableSuppressProcessorTest {
     private static final long ARBITRARY_LONG = 5L;
 
@@ -82,7 +85,8 @@ public class KTableSuppressProcessorTest {
                 .withLoggingDisabled()
                 .build();
 
-            final KTableImpl<K, ?, V> parent = EasyMock.mock(KTableImpl.class);
+            @SuppressWarnings("unchecked")
+            final KTableImpl<K, ?, V> parent = mock(KTableImpl.class);
             final Processor<K, Change<V>, K, Change<V>> processor =
                 new KTableSuppressProcessorSupplier<>((SuppressedInternal<K>) suppressed, storeName, parent).get();
 

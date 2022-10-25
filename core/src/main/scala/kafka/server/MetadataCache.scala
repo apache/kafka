@@ -22,8 +22,15 @@ import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import org.apache.kafka.common.message.{MetadataResponseData, UpdateMetadataRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.{Cluster, Node, TopicPartition, Uuid}
+import org.apache.kafka.server.common.MetadataVersion
 
 import java.util
+
+case class FinalizedFeaturesAndEpoch(features: Map[String, Short], epoch: Long) {
+  override def toString(): String = {
+    s"FinalizedFeaturesAndEpoch(features=$features, epoch=$epoch)"
+  }
+}
 
 trait MetadataCache {
 
@@ -92,11 +99,17 @@ trait MetadataCache {
   def contains(topic: String): Boolean
 
   def contains(tp: TopicPartition): Boolean
+
+  def metadataVersion(): MetadataVersion
+
+  def features(): FinalizedFeaturesAndEpoch
 }
 
 object MetadataCache {
-  def zkMetadataCache(brokerId: Int): ZkMetadataCache = {
-    new ZkMetadataCache(brokerId)
+  def zkMetadataCache(brokerId: Int,
+                      metadataVersion: MetadataVersion,
+                      brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty()): ZkMetadataCache = {
+    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures)
   }
 
   def kRaftMetadataCache(brokerId: Int): KRaftMetadataCache = {

@@ -20,20 +20,22 @@ package kafka.server.metadata
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CountDownLatch}
-
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.protocol.ByteBufferAccessor
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest}
 import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.metadata.util.SnapshotReason
 import org.apache.kafka.queue.EventQueue
 import org.apache.kafka.raft.OffsetAndEpoch
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.snapshot.{MockRawSnapshotWriter, SnapshotWriter}
+import org.apache.kafka.snapshot.{MockRawSnapshotWriter, RecordsSnapshotWriter, SnapshotWriter}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
+import java.util
+import scala.compat.java8.OptionConverters._
 
 class BrokerMetadataSnapshotterTest {
   @Test
@@ -48,9 +50,9 @@ class BrokerMetadataSnapshotterTest {
 
     override def build(committedOffset: Long,
                        committedEpoch: Int,
-                       lastContainedLogTime: Long): SnapshotWriter[ApiMessageAndVersion] = {
+                       lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]] = {
       val offsetAndEpoch = new OffsetAndEpoch(committedOffset, committedEpoch)
-      SnapshotWriter.createWithHeader(
+      RecordsSnapshotWriter.createWithHeader(
         () => {
           Optional.of(
             new MockRawSnapshotWriter(offsetAndEpoch, consumeSnapshotBuffer(committedOffset, committedEpoch))
@@ -62,7 +64,7 @@ class BrokerMetadataSnapshotterTest {
         lastContainedLogTime,
         CompressionType.NONE,
         MetadataRecordSerde.INSTANCE
-      ).get();
+      ).asScala
     }
 
     def consumeSnapshotBuffer(committedOffset: Long, committedEpoch: Int)(buffer: ByteBuffer): Unit = {
@@ -93,15 +95,48 @@ class BrokerMetadataSnapshotterTest {
   def testCreateSnapshot(): Unit = {
     val writerBuilder = new MockSnapshotWriterBuilder()
     val snapshotter = new BrokerMetadataSnapshotter(0, Time.SYSTEM, None, writerBuilder)
+    
     try {
       val blockingEvent = new BlockingEvent()
+      val reasons = Set(SnapshotReason.UnknownReason)
+
       snapshotter.eventQueue.append(blockingEvent)
-      assertTrue(snapshotter.maybeStartSnapshot(10000L, MetadataImageTest.IMAGE1))
-      assertFalse(snapshotter.maybeStartSnapshot(11000L, MetadataImageTest.IMAGE2))
+      assertTrue(snapshotter.maybeStartSnapshot(10000L, MetadataImageTest.IMAGE1, reasons))
+      assertFalse(snapshotter.maybeStartSnapshot(11000L, MetadataImageTest.IMAGE2, reasons))
       blockingEvent.latch.countDown()
       assertEquals(MetadataImageTest.IMAGE1, writerBuilder.image.get())
     } finally {
       snapshotter.close()
     }
+  }
+
+  @Test
+  def testCreateSnapshotMultipleReasons(): Unit = {
+    val writerBuilder = new MockSnapshotWriterBuilder()
+    val snapshotter = new BrokerMetadataSnapshotter(0, Time.SYSTEM, None, writerBuilder)
+    
+    try {
+      val blockingEvent = new BlockingEvent()
+      val reasons = Set(SnapshotReason.MaxBytesExceeded, SnapshotReason.MetadataVersionChanged)
+
+      snapshotter.eventQueue.append(blockingEvent)
+      assertTrue(snapshotter.maybeStartSnapshot(10000L, MetadataImageTest.IMAGE1, reasons))
+      assertFalse(snapshotter.maybeStartSnapshot(11000L, MetadataImageTest.IMAGE2, reasons))
+      blockingEvent.latch.countDown()
+      assertEquals(MetadataImageTest.IMAGE1, writerBuilder.image.get())
+    } finally {
+      snapshotter.close()
+    }
+  }
+
+  class MockSnapshotWriter extends SnapshotWriter[ApiMessageAndVersion] {
+    val batches = new util.ArrayList[util.List[ApiMessageAndVersion]]
+    override def snapshotId(): OffsetAndEpoch = new OffsetAndEpoch(0, 0)
+    override def lastContainedLogOffset(): Long = 0
+    override def lastContainedLogEpoch(): Int = 0
+    override def isFrozen: Boolean = false
+    override def append(batch: util.List[ApiMessageAndVersion]): Unit = batches.add(batch)
+    override def freeze(): Unit = {}
+    override def close(): Unit = {}
   }
 }

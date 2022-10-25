@@ -294,7 +294,7 @@ public class GlobalStreamThread extends Thread {
             setState(State.PENDING_SHUTDOWN);
             setState(State.DEAD);
 
-            log.warn("Error happened during initialization of the global state store; this thread has shutdown");
+            log.error("Error happened during initialization of the global state store; this thread has shutdown.");
             streamsMetrics.removeAllThreadLevelSensors(getName());
             streamsMetrics.removeAllThreadLevelMetrics(getName());
 
@@ -323,6 +323,7 @@ public class GlobalStreamThread extends Thread {
             );
             this.streamsUncaughtExceptionHandler.accept(e);
         } catch (final Exception e) {
+            log.error("Error happened while maintaining global state store. The streams application or client will now close to ERROR.", e);
             this.streamsUncaughtExceptionHandler.accept(e);
         } finally {
             // set the state to pending shutdown first as it may be called due to error;

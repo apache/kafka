@@ -19,6 +19,7 @@ package kafka.test.junit;
 
 import kafka.api.IntegrationTestHarness;
 import kafka.network.SocketServer;
+import kafka.server.BrokerFeatures;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.test.ClusterConfig;
@@ -41,7 +42,10 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -105,7 +109,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                     @Override
                     public Properties serverConfig() {
                         Properties props = clusterConfig.serverProperties();
-                        clusterConfig.ibp().ifPresent(ibp -> props.put(KafkaConfig.InterBrokerProtocolVersionProp(), ibp));
+                        props.put(KafkaConfig.InterBrokerProtocolVersionProp(), metadataVersion().version());
                         return props;
                     }
 
@@ -205,6 +209,12 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
             return clusterReference.get().listenerName();
         }
 
+
+        @Override
+        public Optional<ListenerName> controlPlaneListenerName() {
+            return OptionConverters.toJava(clusterReference.get().servers().head().config().controlPlaneListenerName());
+        }
+
         @Override
         public Collection<SocketServer> controllerSocketServers() {
             return servers()
@@ -231,6 +241,14 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         @Override
+        public Map<Integer, BrokerFeatures> brokerFeatures() {
+            return servers().collect(Collectors.toMap(
+                brokerServer -> brokerServer.config().nodeId(),
+                KafkaServer::brokerFeatures
+            ));
+        }
+
+        @Override
         public ClusterType clusterType() {
             return ClusterType.ZK;
         }
@@ -241,13 +259,25 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         @Override
+        public Set<Integer> controllerIds() {
+            return brokerIds();
+        }
+
+        @Override
+        public Set<Integer> brokerIds() {
+            return servers()
+                .map(brokerServer -> brokerServer.config().nodeId())
+                .collect(Collectors.toSet());
+        }
+
+        @Override
         public IntegrationTestHarness getUnderlying() {
             return clusterReference.get();
         }
 
         @Override
         public Admin createAdminClient(Properties configOverrides) {
-            return clusterReference.get().createAdminClient(configOverrides);
+            return clusterReference.get().createAdminClient(clientListener(), configOverrides);
         }
 
         @Override

@@ -18,7 +18,7 @@
 package kafka.admin
 
 import java.time.{Duration, Instant}
-import java.util.Properties
+import java.util.{Collections, Properties}
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import kafka.utils._
@@ -753,9 +753,9 @@ object ConsumerGroupCommand extends Logging {
 
     private def getCommittedOffsets(groupId: String): Map[TopicPartition, OffsetAndMetadata] = {
       adminClient.listConsumerGroupOffsets(
-        groupId,
-        withTimeoutMs(new ListConsumerGroupOffsetsOptions)
-      ).partitionsToOffsetAndMetadata.get.asScala
+        Collections.singletonMap(groupId, new ListConsumerGroupOffsetsSpec),
+        withTimeoutMs(new ListConsumerGroupOffsetsOptions())
+      ).partitionsToOffsetAndMetadata(groupId).get().asScala
     }
 
     type GroupMetadata = immutable.Map[String, immutable.Map[TopicPartition, OffsetAndMetadata]]
@@ -988,8 +988,8 @@ object ConsumerGroupCommand extends Logging {
     val ResetOffsetsDoc = "Reset offsets of consumer group. Supports one consumer group at the time, and instances should be inactive" + nl +
       "Has 2 execution options: --dry-run (the default) to plan which offsets to reset, and --execute to update the offsets. " +
       "Additionally, the --export option is used to export the results to a CSV format." + nl +
-      "You must choose one of the following reset specifications: --to-datetime, --by-period, --to-earliest, " +
-      "--to-latest, --shift-by, --from-file, --to-current." + nl +
+      "You must choose one of the following reset specifications: --to-datetime, --by-duration, --to-earliest, " +
+      "--to-latest, --shift-by, --from-file, --to-current, --to-offset." + nl +
       "To define the scope use --all-topics or --topic. One scope must be specified unless you use '--from-file'."
     val DryRunDoc = "Only show results without executing changes on Consumer Groups. Supported operations: reset-offsets."
     val ExecuteDoc = "Execute operation. Supported operations: reset-offsets."

@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils
 
 import scala.jdk.CollectionConverters._
@@ -294,9 +295,9 @@ object ConsoleConsumer extends Logging {
     val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
 
     // topic must be specified.
-    var topicArg: String = null
-    var includedTopicsArg: String = null
-    var filterSpec: TopicFilter = null
+    var topicArg: String = _
+    var includedTopicsArg: String = _
+    var filterSpec: TopicFilter = _
     val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt).asScala)
     val consumerProps = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))
@@ -406,8 +407,15 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  private[tools] class ConsumerWrapper(topic: Option[String], partitionId: Option[Int], offset: Option[Long], includedTopics: Option[String],
-                                       consumer: Consumer[Array[Byte], Array[Byte]], val timeoutMs: Long = Long.MaxValue) {
+  private[tools] class ConsumerWrapper(
+    topic: Option[String],
+    partitionId: Option[Int],
+    offset: Option[Long],
+    includedTopics: Option[String],
+    consumer: Consumer[Array[Byte], Array[Byte]],
+    timeoutMs: Long = Long.MaxValue,
+    time: Time = Time.SYSTEM
+  ) {
     consumerInit()
     var recordIter = Collections.emptyList[ConsumerRecord[Array[Byte], Array[Byte]]]().iterator()
 
@@ -452,10 +460,12 @@ object ConsoleConsumer extends Logging {
     }
 
     def receive(): ConsumerRecord[Array[Byte], Array[Byte]] = {
-      if (!recordIter.hasNext) {
+      val startTimeMs = time.milliseconds
+      while (!recordIter.hasNext) {
         recordIter = consumer.poll(Duration.ofMillis(timeoutMs)).iterator
-        if (!recordIter.hasNext)
+        if (!recordIter.hasNext && (time.milliseconds - startTimeMs > timeoutMs)) {
           throw new TimeoutException()
+        }
       }
 
       recordIter.next

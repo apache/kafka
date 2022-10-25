@@ -86,18 +86,13 @@ public class RepartitionWithMergeOptimizingTest {
     @Before
     public void setUp() {
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-        streamsConfiguration.setProperty(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, Integer.toString(1024 * 10));
+        streamsConfiguration.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, Integer.toString(1024 * 10));
         streamsConfiguration.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(5000));
     }
 
     @After
     public void tearDown() {
-        try {
-            topologyTestDriver.close();
-        } catch (final RuntimeException e) {
-            log.warn("The following exception was thrown while trying to close the TopologyTestDriver (note that " +
-                "KAFKA-6647 causes this when running on Windows):", e);
-        }
+        topologyTestDriver.close();
     }
 
     @Test

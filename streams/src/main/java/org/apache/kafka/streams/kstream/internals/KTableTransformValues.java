@@ -122,7 +122,7 @@ class KTableTransformValues<K, V, VOut> implements KTableProcessorSupplier<K, V,
             } else {
                 final VOut oldValue = sendOldValues ? getValueOrNull(store.get(record.key())) : null;
                 store.put(record.key(), ValueAndTimestamp.make(newValue, record.timestamp()));
-                tupleForwarder.maybeForward(record.key(), newValue, oldValue);
+                tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue)));
             }
         }
 

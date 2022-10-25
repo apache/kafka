@@ -121,10 +121,17 @@ object RequestChannel extends Logging {
 
     def isForwarded: Boolean = envelope.isDefined
 
+    private def shouldReturnNotController(response: AbstractResponse): Boolean = {
+      response match {
+        case describeQuorumResponse: DescribeQuorumResponse => response.errorCounts.containsKey(Errors.NOT_LEADER_OR_FOLLOWER)
+        case _ => response.errorCounts.containsKey(Errors.NOT_CONTROLLER)
+      }
+    }
+
     def buildResponseSend(abstractResponse: AbstractResponse): Send = {
       envelope match {
         case Some(request) =>
-          val envelopeResponse = if (abstractResponse.errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
+          val envelopeResponse = if (shouldReturnNotController(abstractResponse)) {
             // Since it's a NOT_CONTROLLER error response, we need to make envelope response with NOT_CONTROLLER error
             // to notify the requester (i.e. BrokerToControllerRequestThread) to update active controller
             new EnvelopeResponse(new EnvelopeResponseData()
@@ -530,13 +537,13 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   Errors.values.foreach(error => errorMeters.put(error, new ErrorMeter(name, error)))
 
   def requestRate(version: Short): Meter = {
-    requestRateInternal.getAndMaybePut(version, newMeter("RequestsPerSec", "requests", TimeUnit.SECONDS, tags + ("version" -> version.toString)))
+    requestRateInternal.getAndMaybePut(version, newMeter(RequestsPerSec, "requests", TimeUnit.SECONDS, tags + ("version" -> version.toString)))
   }
 
   class ErrorMeter(name: String, error: Errors) {
     private val tags = Map("request" -> name, "error" -> error.name)
 
-    @volatile private var meter: Meter = null
+    @volatile private var meter: Meter = _
 
     def getOrCreateMeter(): Meter = {
       if (meter != null)
@@ -575,7 +582,6 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
     removeMetric(TotalTimeMs, tags)
     removeMetric(ResponseSendTimeMs, tags)
     removeMetric(RequestBytes, tags)
-    removeMetric(ResponseSendTimeMs, tags)
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name) {
       removeMetric(MessageConversionsTimeMs, tags)
       removeMetric(TemporaryMemoryBytes, tags)

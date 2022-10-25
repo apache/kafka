@@ -97,6 +97,12 @@ public class Field {
         }
     }
 
+    public static class Uint32 extends Field {
+        public Uint32(String name, String docString) {
+            super(name, Type.UNSIGNED_INT32, docString, false, null);
+        }
+    }
+
     public static class Float64 extends Field {
         public Float64(String name, String docString) {
             super(name, Type.FLOAT64, docString, false, null);

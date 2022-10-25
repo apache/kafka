@@ -28,6 +28,7 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -75,6 +76,8 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
 
     // settable record metadata ================================================
     private MockRecordMetadata recordMetadata;
+    private Long currentSystemTimeMs;
+    private Long currentStreamTimeMs;
 
     // mocks ================================================
     private final Map<String, StateStore> stateStores = new HashMap<>();
@@ -284,6 +287,22 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
     }
 
     @Override
+    public long currentSystemTimeMs() {
+        if (currentSystemTimeMs == null) {
+            throw new IllegalStateException("System time must be set before use via setCurrentSystemTimeMs().");
+        }
+        return currentSystemTimeMs;
+    }
+
+    @Override
+    public long currentStreamTimeMs() {
+        if (currentStreamTimeMs == null) {
+            throw new IllegalStateException("Stream time must be set before use via setCurrentStreamTimeMs().");
+        }
+        return currentStreamTimeMs;
+    }
+
+    @Override
     public Serde<?> keySerde() {
         return config.defaultKeySerde();
     }
@@ -323,6 +342,14 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
                                   final int partition,
                                   final long offset) {
         recordMetadata = new MockRecordMetadata(topic, partition, offset);
+    }
+
+    public void setCurrentSystemTimeMs(final long currentSystemTimeMs) {
+        this.currentSystemTimeMs = currentSystemTimeMs;
+    }
+
+    public void setCurrentStreamTimeMs(final long currentStreamTimeMs) {
+        this.currentStreamTimeMs = currentStreamTimeMs;
     }
 
     @Override
@@ -460,6 +487,11 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
             }
 
             @Override
+            public Optional<RecordMetadata> recordMetadata() {
+                return MockProcessorContext.this.recordMetadata();
+            }
+
+            @Override
             public Serde<?> keySerde() {
                 return MockProcessorContext.this.keySerde();
             }
@@ -480,7 +512,15 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
             }
 
             @Override
-            public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+            public void register(final StateStore store,
+                                 final StateRestoreCallback stateRestoreCallback) {
+                register(store, stateRestoreCallback, () -> { });
+            }
+
+            @Override
+            public void register(final StateStore store,
+                                 final StateRestoreCallback stateRestoreCallback,
+                                 final CommitCallback checkpoint) {
                 stateStores.put(store.name(), store);
             }
 

@@ -41,6 +41,9 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
     @Override
     public Bytes upperRange(final Bytes key, final long to) {
+        if (key == null) {
+            return null;
+        }
         final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)
             .putLong(to)
             .putInt(Integer.MAX_VALUE)
@@ -51,6 +54,9 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
     @Override
     public Bytes lowerRange(final Bytes key, final long from) {
+        if (key == null) {
+            return null;
+        }
         return OrderedBytes.lowerRange(key, MIN_SUFFIX);
     }
 
@@ -73,7 +79,8 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom,
                                              final Bytes binaryKeyTo,
                                              final long from,
-                                             final long to) {
+                                             final long to,
+                                             final boolean forward) {
         return iterator -> {
             while (iterator.hasNext()) {
                 final Bytes bytes = iterator.peekNextKey();

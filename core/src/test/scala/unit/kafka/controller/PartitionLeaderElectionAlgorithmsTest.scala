@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 
 class PartitionLeaderElectionAlgorithmsTest {
-  private var controllerContext: ControllerContext = null
+  private var controllerContext: ControllerContext = _
 
   @BeforeEach
   def setUp(): Unit = {

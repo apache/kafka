@@ -18,14 +18,18 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +41,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 
 import org.eclipse.jetty.util.StringUtil;
@@ -110,7 +115,8 @@ public class WorkerConfig extends AbstractConfig {
     private static final String OFFSET_COMMIT_TIMEOUT_MS_DOC
             = "Maximum number of milliseconds to wait for records to flush and partition offset data to be"
             + " committed to offset storage before cancelling the process and restoring the offset "
-            + "data to be committed in a future attempt.";
+            + "data to be committed in a future attempt. This property has no effect for source connectors "
+            + "running with exactly-once support.";
     public static final long OFFSET_COMMIT_TIMEOUT_MS_DEFAULT = 5000L;
 
     public static final String LISTENERS_CONFIG = "listeners";
@@ -186,7 +192,7 @@ public class WorkerConfig extends AbstractConfig {
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_CONFIG = "connector.client.config.override.policy";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DOC =
         "Class name or alias of implementation of <code>ConnectorClientConfigOverridePolicy</code>. Defines what client configurations can be "
-        + "overriden by the connector. The default implementation is `All`, meaning connector configurations can override all client properties. "
+        + "overridden by the connector. The default implementation is `All`, meaning connector configurations can override all client properties. "
         + "The other possible policies in the framework include `None` to disallow connectors from overriding client properties, "
         + "and `Principal` to allow connectors to override only client principals.";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT = "All";
@@ -196,6 +202,9 @@ public class WorkerConfig extends AbstractConfig {
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
+
+    @Deprecated
+    public static final String AUTO_INCLUDE_JMX_REPORTER_CONFIG = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG;
 
     public static final String TOPIC_TRACKING_ENABLE_CONFIG = "topic.tracking.enable";
     protected static final String TOPIC_TRACKING_ENABLE_DOC = "Enable tracking the set of active "
@@ -278,8 +287,13 @@ public class WorkerConfig extends AbstractConfig {
                 .define(METRIC_REPORTER_CLASSES_CONFIG, Type.LIST,
                         "", Importance.LOW,
                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
+                .define(AUTO_INCLUDE_JMX_REPORTER_CONFIG,
+                        Type.BOOLEAN,
+                        true,
+                        Importance.LOW,
+                        CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC)
                 .define(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
-                        ConfigDef.Type.STRING, "none", ConfigDef.Importance.LOW, BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC)
+                        ConfigDef.Type.STRING, SslClientAuth.NONE.toString(), in(Utils.enumOptions(SslClientAuth.class)), ConfigDef.Importance.LOW, BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         HEADER_CONVERTER_CLASS_DEFAULT,
                         Importance.LOW, HEADER_CONVERTER_CLASS_DOC)
@@ -304,6 +318,35 @@ public class WorkerConfig extends AbstractConfig {
                 .withClientSslSupport();
     }
 
+    private String kafkaClusterId;
+
+    public static String lookupKafkaClusterId(WorkerConfig config) {
+        log.info("Creating Kafka admin client");
+        try (Admin adminClient = Admin.create(config.originals())) {
+            return lookupKafkaClusterId(adminClient);
+        }
+    }
+
+    static String lookupKafkaClusterId(Admin adminClient) {
+        log.debug("Looking up Kafka cluster ID");
+        try {
+            KafkaFuture<String> clusterIdFuture = adminClient.describeCluster().clusterId();
+            if (clusterIdFuture == null) {
+                log.info("Kafka cluster version is too old to return cluster ID");
+                return null;
+            }
+            log.debug("Fetching Kafka cluster ID");
+            String kafkaClusterId = clusterIdFuture.get();
+            log.info("Kafka cluster ID: {}", kafkaClusterId);
+            return kafkaClusterId;
+        } catch (InterruptedException e) {
+            throw new ConnectException("Unexpectedly interrupted when looking up Kafka cluster info", e);
+        } catch (ExecutionException e) {
+            throw new ConnectException("Failed to connect to and describe Kafka cluster. "
+                                       + "Check worker's broker connection and security properties.", e);
+        }
+    }
+
     private void logInternalConverterRemovalWarnings(Map<String, String> props) {
         List<String> removedProperties = new ArrayList<>();
         for (String property : Arrays.asList("internal.key.converter", "internal.value.converter")) {
@@ -319,7 +362,7 @@ public class WorkerConfig extends AbstractConfig {
                             + "and specifying them will have no effect. "
                             + "Instead, an instance of the JsonConverter with schemas.enable "
                             + "set to false will be used. For more information, please visit "
-                            + "http://kafka.apache.org/documentation/#upgrade and consult the upgrade notes"
+                            + "https://kafka.apache.org/documentation/#upgrade and consult the upgrade notes"
                             + "for the 3.0 release.",
                     removedProperties);
         }
@@ -342,12 +385,76 @@ public class WorkerConfig extends AbstractConfig {
         }
     }
 
+    /**
+     * @return the {@link CommonClientConfigs#BOOTSTRAP_SERVERS_CONFIG bootstrap servers} property
+     * used by the worker when instantiating Kafka clients for connectors and tasks (unless overridden)
+     * and its internal topics (if running in distributed mode)
+     */
+    public String bootstrapServers() {
+        return String.join(",", getList(BOOTSTRAP_SERVERS_CONFIG));
+    }
+
     public Integer getRebalanceTimeout() {
         return null;
     }
 
     public boolean topicCreationEnable() {
         return getBoolean(TOPIC_CREATION_ENABLE_CONFIG);
+    }
+
+    /**
+     * Whether this worker is configured with exactly-once support for source connectors.
+     * The default implementation returns {@code false} and should be overridden by subclasses
+     * if the worker mode for the subclass provides exactly-once support for source connectors.
+     * @return whether exactly-once support is enabled for source connectors on this worker
+     */
+    public boolean exactlyOnceSourceEnabled() {
+        return false;
+    }
+
+    /**
+     * Get the internal topic used by this worker to store source connector offsets.
+     * The default implementation returns {@code null} and should be overridden by subclasses
+     * if the worker mode for the subclass uses an internal offsets topic.
+     * @return the name of the internal offsets topic, or {@code null} if the worker does not use
+     * an internal offsets topic
+     */
+    public String offsetsTopic() {
+        return null;
+    }
+
+    /**
+     * Determine whether this worker supports per-connector source offsets topics.
+     * The default implementation returns {@code false} and should be overridden by subclasses
+     * if the worker mode for the subclass supports per-connector offsets topics.
+     * @return whether the worker supports per-connector offsets topics
+     */
+    public boolean connectorOffsetsTopicsPermitted() {
+        return false;
+    }
+
+    /**
+     * @return the offset commit interval for tasks created by this worker
+     */
+    public long offsetCommitInterval() {
+        return getLong(OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+    }
+
+    /**
+     * Get the {@link CommonClientConfigs#GROUP_ID_CONFIG group ID} used by this worker to form a cluster.
+     * The default implementation returns {@code null} and should be overridden by subclasses
+     * if the worker mode for the subclass is capable of forming a cluster using Kafka's group coordination API.
+     * @return the group ID for the worker's cluster, or {@code null} if the worker is not capable of forming a cluster.
+     */
+    public String groupId() {
+        return null;
+    }
+
+    public String kafkaClusterId() {
+        if (kafkaClusterId == null) {
+            kafkaClusterId = lookupKafkaClusterId(this);
+        }
+        return kafkaClusterId;
     }
 
     @Override
@@ -374,8 +481,8 @@ public class WorkerConfig extends AbstractConfig {
             // validate format
             String[] configTokens = config.trim().split("\\s+", 2);
             if (configTokens.length != 2) {
-                throw new ConfigException(String.format("Invalid format of header config '%s\'. "
-                        + "Expected: '[ation] [header name]:[header value]'", config));
+                throw new ConfigException(String.format("Invalid format of header config '%s'. "
+                        + "Expected: '[action] [header name]:[header value]'", config));
             }
 
             // validate action
@@ -404,7 +511,7 @@ public class WorkerConfig extends AbstractConfig {
 
     // Visible for testing
     static void validateHeaderConfigAction(String action) {
-        if (!HEADER_ACTIONS.stream().anyMatch(action::equalsIgnoreCase)) {
+        if (HEADER_ACTIONS.stream().noneMatch(action::equalsIgnoreCase)) {
             throw new ConfigException(String.format("Invalid header config action: '%s'. "
                     + "Expected one of %s", action, HEADER_ACTIONS));
         }

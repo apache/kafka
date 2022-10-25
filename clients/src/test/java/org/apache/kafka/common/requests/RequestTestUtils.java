@@ -149,7 +149,9 @@ public class RequestTestUtils {
     public static MetadataResponse metadataUpdateWithIds(final int numNodes,
                                                          final Map<String, Integer> topicPartitionCounts,
                                                          final Map<String, Uuid> topicIds) {
-        return metadataUpdateWithIds("kafka-cluster", numNodes, topicPartitionCounts, topicIds);
+        return metadataUpdateWith("kafka-cluster", numNodes, Collections.emptyMap(),
+                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion(),
+                topicIds);
     }
 
     public static MetadataResponse metadataUpdateWithIds(final int numNodes,
@@ -173,34 +175,6 @@ public class RequestTestUtils {
         return metadataUpdateWith("kafka-cluster", numNodes, Collections.emptyMap(),
                 topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion(),
                 topicIds);
-    }
-
-    public static MetadataResponse metadataUpdateWithIds(final String clusterId,
-                                                         final int numNodes,
-                                                         final Map<String, Integer> topicPartitionCounts,
-                                                         final Map<String, Uuid> topicIds) {
-        return metadataUpdateWith(clusterId, numNodes, Collections.emptyMap(),
-                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion(),
-                topicIds);
-    }
-
-    public static MetadataResponse metadataUpdateWithIds(final String clusterId,
-                                                         final int numNodes,
-                                                         final Map<String, Errors> topicErrors,
-                                                         final Map<String, Integer> topicPartitionCounts,
-                                                         final Map<String, Uuid> topicIds) {
-        return metadataUpdateWith(clusterId, numNodes, topicErrors,
-                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, ApiKeys.METADATA.latestVersion(), topicIds);
-    }
-
-    public static MetadataResponse metadataUpdateWithIds(final String clusterId,
-                                                         final int numNodes,
-                                                         final Map<String, Errors> topicErrors,
-                                                         final Map<String, Integer> topicPartitionCounts,
-                                                         final short responseVersion,
-                                                         final Map<String, Uuid> topicIds) {
-        return metadataUpdateWith(clusterId, numNodes, topicErrors,
-                topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new, responseVersion, topicIds);
     }
 
     public static MetadataResponse metadataUpdateWithIds(final String clusterId,

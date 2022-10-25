@@ -89,7 +89,8 @@ public class DirectoryConfigProvider implements ConfigProvider {
                             p -> p.getFileName().toString(),
                             p -> read(p)));
                 } catch (IOException e) {
-                    throw new ConfigException("Could not list directory " + dir, e);
+                    log.error("Could not list directory {}", dir, e);
+                    throw new ConfigException("Could not list directory " + dir);
                 }
             }
         }
@@ -100,7 +101,8 @@ public class DirectoryConfigProvider implements ConfigProvider {
         try {
             return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new ConfigException("Could not read file " + path + " for property " + path.getFileName(), e);
+            log.error("Could not read file {} for property {}", path, path.getFileName(), e);
+            throw new ConfigException("Could not read file " + path + " for property " + path.getFileName());
         }
     }
 

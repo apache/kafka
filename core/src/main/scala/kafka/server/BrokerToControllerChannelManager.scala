@@ -19,12 +19,11 @@ package kafka.server
 
 import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.atomic.AtomicReference
-
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.raft.RaftManager
 import kafka.utils.Logging
 import org.apache.kafka.clients._
-import org.apache.kafka.common.Node
+import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
@@ -78,11 +77,13 @@ class MetadataCacheControllerNodeProvider(
 }
 
 object RaftControllerNodeProvider {
-  def apply(raftManager: RaftManager[ApiMessageAndVersion],
-            config: KafkaConfig,
-            controllerQuorumVoterNodes: Seq[Node]): RaftControllerNodeProvider = {
+  def apply(
+    raftManager: RaftManager[ApiMessageAndVersion],
+    config: KafkaConfig,
+    controllerQuorumVoterNodes: Seq[Node]
+  ): RaftControllerNodeProvider = {
     val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
-    val controllerSecurityProtocol = config.listenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
+    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
     val controllerSaslMechanism = config.saslMechanismControllerProtocol
     new RaftControllerNodeProvider(
       raftManager,
@@ -98,12 +99,13 @@ object RaftControllerNodeProvider {
  * Finds the controller node by checking the metadata log manager.
  * This provider is used when we are using a Raft-based metadata quorum.
  */
-class RaftControllerNodeProvider(val raftManager: RaftManager[ApiMessageAndVersion],
-                                 controllerQuorumVoterNodes: Seq[Node],
-                                 val listenerName: ListenerName,
-                                 val securityProtocol: SecurityProtocol,
-                                 val saslMechanism: String
-                                ) extends ControllerNodeProvider with Logging {
+class RaftControllerNodeProvider(
+  val raftManager: RaftManager[ApiMessageAndVersion],
+  controllerQuorumVoterNodes: Seq[Node],
+  val listenerName: ListenerName,
+  val securityProtocol: SecurityProtocol,
+  val saslMechanism: String
+) extends ControllerNodeProvider with Logging {
   val idToNode = controllerQuorumVoterNodes.map(node => node.id() -> node).toMap
 
   override def get(): Option[Node] = {
@@ -133,7 +135,6 @@ object BrokerToControllerChannelManager {
   }
 }
 
-
 trait BrokerToControllerChannelManager {
   def start(): Unit
   def shutdown(): Unit
@@ -143,7 +144,6 @@ trait BrokerToControllerChannelManager {
     callback: ControllerRequestCompletionHandler
   ): Unit
 }
-
 
 /**
  * This class manages the connection between a broker and the controller. It runs a single
@@ -164,7 +164,6 @@ class BrokerToControllerChannelManagerImpl(
   private val logContext = new LogContext(s"[BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
-  private val currentNodeApiVersions = NodeApiVersions.create()
   private val requestThread = newRequestThread
 
   def start(): Unit = {
@@ -188,6 +187,10 @@ class BrokerToControllerChannelManagerImpl(
         config.saslInterBrokerHandshakeRequestEnable,
         logContext
       )
+      channelBuilder match {
+        case reconfigurable: Reconfigurable => config.addReconfigurable(reconfigurable)
+        case _ =>
+      }
       val selector = new Selector(
         NetworkReceive.UNLIMITED,
         Selector.NO_IDLE_TIMEOUT_MS,
@@ -250,13 +253,11 @@ class BrokerToControllerChannelManagerImpl(
     ))
   }
 
-  def controllerApiVersions(): Option[NodeApiVersions] =
-    requestThread.activeControllerAddress().flatMap(
-      activeController => if (activeController.id() == config.brokerId)
-        Some(currentNodeApiVersions)
-      else
-        Option(apiVersions.get(activeController.idString()))
-  )
+  def controllerApiVersions(): Option[NodeApiVersions] = {
+    requestThread.activeControllerAddress().flatMap { activeController =>
+      Option(apiVersions.get(activeController.idString))
+    }
+  }
 }
 
 abstract class ControllerRequestCompletionHandler extends RequestCompletionHandler {
@@ -351,10 +352,10 @@ class BrokerToControllerRequestThread(
       requestQueue.putFirst(queueItem)
     } else if (response.responseBody().errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
       // just close the controller connection and wait for metadata cache update in doWork
-      activeControllerAddress().foreach { controllerAddress => {
+      activeControllerAddress().foreach { controllerAddress =>
         networkClient.disconnect(controllerAddress.idString)
         updateControllerAddress(null)
-      }}
+      }
 
       requestQueue.putFirst(queueItem)
     } else {
@@ -369,7 +370,7 @@ class BrokerToControllerRequestThread(
       debug("Controller isn't cached, looking for local metadata changes")
       controllerNodeProvider.get() match {
         case Some(controllerNode) =>
-          info(s"Recorded new controller, from now on will use broker $controllerNode")
+          info(s"Recorded new controller, from now on will use node $controllerNode")
           updateControllerAddress(controllerNode)
           metadataUpdater.setNodes(Seq(controllerNode).asJava)
         case None =>

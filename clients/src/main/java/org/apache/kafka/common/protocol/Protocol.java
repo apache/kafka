@@ -112,7 +112,7 @@ public class Protocol {
             b.append("</td>");
             b.append("</tr>\n");
         }
-        b.append("</table>\n");
+        b.append("</tbody></table>\n");
     }
 
     public static String toHtml() {
@@ -133,7 +133,7 @@ public class Protocol {
             b.append("</pre>\n");
             schemaToFieldTableHtml(ResponseHeaderData.SCHEMAS[i], b);
         }
-        for (ApiKeys key : ApiKeys.zkBrokerApis()) {
+        for (ApiKeys key : ApiKeys.clientApis()) {
             // Key
             b.append("<h5>");
             b.append("<a name=\"The_Messages_" + key.name + "\">");
@@ -148,7 +148,7 @@ public class Protocol {
                 Schema schema = requests[i];
                 // Schema
                 if (schema != null) {
-                    b.append("<p>");
+                    b.append("<div>");
                     // Version header
                     b.append("<pre>");
                     b.append(key.name);
@@ -159,7 +159,7 @@ public class Protocol {
                     b.append("</pre>");
                     schemaToFieldTableHtml(requests[i], b);
                 }
-                b.append("</p>\n");
+                b.append("</div>\n");
             }
 
             // Responses
@@ -169,7 +169,7 @@ public class Protocol {
                 Schema schema = responses[i];
                 // Schema
                 if (schema != null) {
-                    b.append("<p>");
+                    b.append("<div>");
                     // Version header
                     b.append("<pre>");
                     b.append(key.name);
@@ -180,7 +180,7 @@ public class Protocol {
                     b.append("</pre>");
                     schemaToFieldTableHtml(responses[i], b);
                 }
-                b.append("</p>\n");
+                b.append("</div>\n");
             }
         }
 

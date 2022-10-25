@@ -251,7 +251,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setLeader(brokerId)
               .setLeaderEpoch(Int.MaxValue)
               .setIsr(List(brokerId).asJava)
-              .setZkVersion(2)
+              .setPartitionEpoch(2)
               .setReplicas(Seq(brokerId).asJava)
               .setIsNew(true)).asJava,
             getTopicIds().asJava,
@@ -263,7 +263,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setTopicName(tp.topic())
               .setPartitionStates(Seq(new StopReplicaPartitionState()
                 .setPartitionIndex(tp.partition())
-                .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+                .setLeaderEpoch(LeaderAndIsr.InitialLeaderEpoch + 2)
                 .setDeletePartition(true)).asJava)
           ).asJava
           new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion, brokerId,
@@ -320,7 +320,7 @@ class RequestQuotaTest extends BaseRequestTest {
               )
           )
         case ApiKeys.OFFSET_FETCH =>
-          new OffsetFetchRequest.Builder("test-group", false, List(tp).asJava, false)
+          new OffsetFetchRequest.Builder(Map("test-group"-> List(tp).asJava).asJava, false, false)
 
         case ApiKeys.FIND_COORDINATOR =>
           new FindCoordinatorRequest.Builder(
@@ -598,8 +598,8 @@ class RequestQuotaTest extends BaseRequestTest {
           new EndQuorumEpochRequest.Builder(EndQuorumEpochRequest.singletonRequest(
             tp, 10, 5, Collections.singletonList(3)))
 
-        case ApiKeys.ALTER_ISR =>
-          new AlterIsrRequest.Builder(new AlterIsrRequestData())
+        case ApiKeys.ALTER_PARTITION =>
+          new AlterPartitionRequest.Builder(new AlterPartitionRequestData(), true)
 
         case ApiKeys.UPDATE_FEATURES =>
           new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())
@@ -763,7 +763,7 @@ class RequestQuotaTest extends BaseRequestTest {
 
 object RequestQuotaTest {
   val ClusterActions = ApiKeys.zkBrokerApis.asScala.filter(_.clusterAction).toSet
-  val ClusterActionsWithThrottle = Set(ApiKeys.ALLOCATE_PRODUCER_IDS)
+  val ClusterActionsWithThrottle = Set(ApiKeys.ALLOCATE_PRODUCER_IDS, ApiKeys.UPDATE_FEATURES)
   val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
   val ClientActions = ApiKeys.zkBrokerApis.asScala.toSet -- ClusterActions -- SaslActions
 

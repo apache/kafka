@@ -23,6 +23,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -87,6 +88,11 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     @Override
     public boolean isOpen() {
         return !closed;
+    }
+
+    @Override
+    public Position getPosition() {
+        throw new UnsupportedOperationException("Position handling not implemented");
     }
 
     public final StateRestoreCallback stateRestoreCallback = new StateRestoreCallback() {

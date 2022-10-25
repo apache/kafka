@@ -23,9 +23,8 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
 import java.util.Properties
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-
 import kafka.common._
-import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
+import kafka.server.{BrokerTopicStats, KafkaConfig, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.CorruptRecordException
@@ -54,6 +53,7 @@ class LogCleanerTest {
   val throttler = new Throttler(desiredRatePerSec = Double.MaxValue, checkIntervalMs = Long.MaxValue, time = time)
   val tombstoneRetentionMs = 86400000
   val largeTimestamp = Long.MaxValue - tombstoneRetentionMs - 1
+  val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs)
 
   @AfterEach
   def teardown(): Unit = {
@@ -105,11 +105,13 @@ class LogCleanerTest {
     val config = LogConfig.fromProps(logConfig.originals, logProps)
     val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
-    val maxProducerIdExpirationMs = 60 * 60 * 1000
+    val maxTransactionTimeoutMs = 5 * 60 * 1000
+    val producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs
     val logSegments = new LogSegments(topicPartition)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.recordVersion, "")
-    val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs, time)
-    val offsets = LogLoader.load(LoadLogParams(
+    val producerStateManager = new ProducerStateManager(topicPartition, dir,
+      maxTransactionTimeoutMs, producerStateManagerConfig, time)
+    val offsets = new LogLoader(
       dir,
       topicPartition,
       config,
@@ -120,15 +122,15 @@ class LogCleanerTest {
       logSegments,
       0L,
       0L,
-      maxProducerIdExpirationMs,
       leaderEpochCache,
-      producerStateManager))
+      producerStateManager
+    ).load()
     val localLog = new LocalLog(dir, config, logSegments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, time.scheduler, time, topicPartition, logDirFailureChannel)
     val log = new UnifiedLog(offsets.logStartOffset,
                       localLog,
                       brokerTopicStats = new BrokerTopicStats,
-                      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
+                      producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
                       leaderEpochCache = leaderEpochCache,
                       producerStateManager = producerStateManager,
                       _topicId = None,
@@ -266,6 +268,111 @@ class LogCleanerTest {
     logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch)(Seq(1, 2, 3))
     assertEquals(0L, logAppendInfo.firstOffset.get.messageOffset)
     assertEquals(2L, logAppendInfo.lastOffset)
+  }
+
+  private def assertAllAbortedTxns(
+    expectedAbortedTxns: List[AbortedTxn],
+    log: UnifiedLog
+  ): Unit= {
+    val abortedTxns = log.collectAbortedTransactions(startOffset = 0L, upperBoundOffset = log.logEndOffset)
+    assertEquals(expectedAbortedTxns, abortedTxns)
+  }
+
+  private def assertAllTransactionsComplete(log: UnifiedLog): Unit = {
+    assertTrue(log.activeProducers.forall(_.currentTxnStartOffset() == -1))
+  }
+
+  @Test
+  def testMultiPassSegmentCleaningWithAbortedTransactions(): Unit = {
+    // Verify that the log cleaner preserves aborted transaction state (including the index)
+    // even if the cleaner cannot clean the whole segment in one pass.
+
+    val deleteRetentionMs = 50000
+    val offsetMapSlots = 4
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    logProps.put(LogConfig.DeleteRetentionMsProp, deleteRetentionMs.toString)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val producerEpoch = 0.toShort
+    val producerId1 = 1
+    val producerId2 = 2
+
+    val appendProducer1 = appendTransactionalAsLeader(log, producerId1, producerEpoch)
+    val appendProducer2 = appendTransactionalAsLeader(log, producerId2, producerEpoch)
+
+    def abort(producerId: Long): Unit = {
+      log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Replication)
+    }
+
+    def commit(producerId: Long): Unit = {
+      log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Replication)
+    }
+
+    // Append some transaction data (offset range in parenthesis)
+    appendProducer1(Seq(1, 2))  // [0, 1]
+    appendProducer2(Seq(2, 3))  // [2, 3]
+    appendProducer1(Seq(3, 4))  // [4, 5]
+    commit(producerId1)         // [6, 6]
+    commit(producerId2)         // [7, 7]
+    appendProducer1(Seq(2, 3))  // [8, 9]
+    abort(producerId1)          // [10, 10]
+    appendProducer2(Seq(4, 5))  // [11, 12]
+    appendProducer1(Seq(5, 6))  // [13, 14]
+    commit(producerId1)         // [15, 15]
+    abort(producerId2)          // [16, 16]
+    appendProducer2(Seq(6, 7))  // [17, 18]
+    commit(producerId2)         // [19, 19]
+
+    log.roll()
+    assertEquals(20L, log.logEndOffset)
+
+    val expectedAbortedTxns = List(
+      new AbortedTxn(producerId=producerId1, firstOffset=8, lastOffset=10, lastStableOffset=11),
+      new AbortedTxn(producerId=producerId2, firstOffset=11, lastOffset=16, lastStableOffset=17)
+    )
+
+    assertAllTransactionsComplete(log)
+    assertAllAbortedTxns(expectedAbortedTxns, log)
+
+    var dirtyOffset = 0L
+    def cleanSegments(): Unit = {
+      val offsetMap = new FakeOffsetMap(slots = offsetMapSlots)
+      val segments = log.logSegments(0, log.activeSegment.baseOffset).toSeq
+      val stats = new CleanerStats(time)
+      cleaner.buildOffsetMap(log, dirtyOffset, log.activeSegment.baseOffset, offsetMap, stats)
+      cleaner.cleanSegments(log, segments, offsetMap, time.milliseconds(), stats, new CleanedTransactionMetadata, Long.MaxValue)
+      dirtyOffset = offsetMap.latestOffset + 1
+    }
+
+    // On the first pass, we should see the data from the aborted transactions deleted,
+    // but the markers should remain until the deletion retention time has passed.
+    cleanSegments()
+    assertEquals(4L, dirtyOffset)
+    assertEquals(List(0, 2, 4, 6, 7, 10, 13, 15, 16, 17, 19), batchBaseOffsetsInLog(log))
+    assertEquals(List(0, 2, 3, 4, 5, 6, 7, 10, 13, 14, 15, 16, 17, 18, 19), offsetsInLog(log))
+    assertAllTransactionsComplete(log)
+    assertAllAbortedTxns(expectedAbortedTxns, log)
+
+    // On the second pass, no data from the aborted transactions remains. The markers
+    // still cannot be removed from the log due to the retention time, but we do not
+    // need to record them in the transaction index since they are empty.
+    cleanSegments()
+    assertEquals(14, dirtyOffset)
+    assertEquals(List(0, 2, 4, 6, 7, 10, 13, 15, 16, 17, 19), batchBaseOffsetsInLog(log))
+    assertEquals(List(0, 2, 4, 5, 6, 7, 10, 13, 14, 15, 16, 17, 18, 19), offsetsInLog(log))
+    assertAllTransactionsComplete(log)
+    assertAllAbortedTxns(List(), log)
+
+    // On the last pass, wait for the retention time to expire. The abort markers
+    // (offsets 10 and 16) should be deleted.
+    time.sleep(deleteRetentionMs)
+    cleanSegments()
+    assertEquals(20L, dirtyOffset)
+    assertEquals(List(0, 2, 4, 6, 7, 13, 15, 17, 19), batchBaseOffsetsInLog(log))
+    assertEquals(List(0, 2, 4, 5, 6, 7, 13, 15, 17, 18, 19), offsetsInLog(log))
+    assertAllTransactionsComplete(log)
+    assertAllAbortedTxns(List(), log)
   }
 
   @Test
@@ -924,6 +1031,50 @@ class LogCleanerTest {
     assertEquals(List(3, 4, 5), offsetsInLog(log))
   }
 
+
+  @Test
+  def testCleaningWithKeysConflictingWithTxnMarkerKeys(): Unit = {
+    val cleaner = makeCleaner(10)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+    val leaderEpoch = 5
+    val producerEpoch = 0.toShort
+
+    // First we append one committed transaction
+    val producerId1 = 1L
+    val appendProducer = appendTransactionalAsLeader(log, producerId1, producerEpoch, leaderEpoch)
+    appendProducer(Seq(1))
+    log.appendAsLeader(commitMarker(producerId1, producerEpoch), leaderEpoch, origin = AppendOrigin.Coordinator)
+
+    // Now we append one transaction with a key which conflicts with the COMMIT marker appended above
+    def commitRecordKey(): ByteBuffer = {
+      val keySize = ControlRecordType.COMMIT.recordKey().sizeOf()
+      val key = ByteBuffer.allocate(keySize)
+      ControlRecordType.COMMIT.recordKey().writeTo(key)
+      key.flip()
+      key
+    }
+
+    val producerId2 = 2L
+    val records = MemoryRecords.withTransactionalRecords(
+      CompressionType.NONE,
+      producerId2,
+      producerEpoch,
+      0,
+      new SimpleRecord(time.milliseconds(), commitRecordKey(), ByteBuffer.wrap("foo".getBytes))
+    )
+    log.appendAsLeader(records, leaderEpoch, origin = AppendOrigin.Client)
+    log.appendAsLeader(commitMarker(producerId2, producerEpoch), leaderEpoch, origin = AppendOrigin.Coordinator)
+    log.roll()
+    assertEquals(List(0, 1, 2, 3), offsetsInLog(log))
+
+    // After cleaning, the marker should not be removed
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
+    assertEquals(List(0, 1, 2, 3), lastOffsetsPerBatchInLog(log))
+    assertEquals(List(0, 1, 2, 3), offsetsInLog(log))
+  }
+
   @Test
   def testPartialSegmentClean(): Unit = {
     // because loadFactor is 0.75, this means we can fit 1 message in the map
@@ -1076,6 +1227,11 @@ class LogCleanerTest {
     assertEquals(0, unkeyedMessageCountInLog(log), "Log should only contain keyed messages after cleaning.")
     assertEquals(expectedSizeAfterCleaning, log.size, "Log should only contain keyed messages after cleaning.")
     assertEquals(numInvalidMessages, stats.invalidMessagesRead, "Cleaner should have seen %d invalid messages.")
+  }
+
+  private def batchBaseOffsetsInLog(log: UnifiedLog): Iterable[Long] = {
+    for (segment <- log.logSegments; batch <- segment.log.batches.asScala)
+      yield batch.baseOffset
   }
 
   def lastOffsetsPerBatchInLog(log: UnifiedLog): Iterable[Long] = {
@@ -1742,6 +1898,35 @@ class LogCleanerTest {
     } finally logCleaner.shutdown()
   }
 
+  @Test
+  def testReconfigureLogCleanerIoMaxBytesPerSecond(): Unit = {
+    val oldKafkaProps = TestUtils.createBrokerConfig(1, "localhost:2181")
+    oldKafkaProps.setProperty(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, "10000000")
+
+    val logCleaner = new LogCleaner(LogCleaner.cleanerConfig(new KafkaConfig(oldKafkaProps)),
+      logDirs = Array(TestUtils.tempDir()),
+      logs = new Pool[TopicPartition, UnifiedLog](),
+      logDirFailureChannel = new LogDirFailureChannel(1),
+      time = time) {
+      // shutdown() and startup() are called in LogCleaner.reconfigure().
+      // Empty startup() and shutdown() to ensure that no unnecessary log cleaner threads remain after this test.
+      override def startup(): Unit = {}
+      override def shutdown(): Unit = {}
+    }
+
+    try {
+      assertEquals(10000000, logCleaner.throttler.desiredRatePerSec, s"Throttler.desiredRatePerSec should be initialized from initial `${KafkaConfig.LogCleanerIoMaxBytesPerSecondProp}` config.")
+
+      val newKafkaProps = TestUtils.createBrokerConfig(1, "localhost:2181")
+      newKafkaProps.setProperty(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, "20000000")
+
+      logCleaner.reconfigure(new KafkaConfig(oldKafkaProps), new KafkaConfig(newKafkaProps))
+
+      assertEquals(20000000, logCleaner.throttler.desiredRatePerSec, s"Throttler.desiredRatePerSec should be updated with new `${KafkaConfig.LogCleanerIoMaxBytesPerSecondProp}` config.")
+    } finally {
+      logCleaner.shutdown()
+    }
+  }
 
   private def writeToLog(log: UnifiedLog, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for(((key, value), offset) <- keysAndValues.zip(offsetSeq))
@@ -1778,11 +1963,23 @@ class LogCleanerTest {
   private def messageWithOffset(key: Int, value: Int, offset: Long): MemoryRecords =
     messageWithOffset(key.toString.getBytes, value.toString.getBytes, offset)
 
-  private def makeLog(dir: File = dir, config: LogConfig = logConfig, recoveryPoint: Long = 0L) =
-    UnifiedLog(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = recoveryPoint, scheduler = time.scheduler,
-      time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
-      producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
-      logDirFailureChannel = new LogDirFailureChannel(10), topicId = None, keepPartitionMetadataFile = true)
+  private def makeLog(dir: File = dir, config: LogConfig = logConfig, recoveryPoint: Long = 0L) = {
+    UnifiedLog(
+      dir = dir,
+      config = config,
+      logStartOffset = 0L,
+      recoveryPoint = recoveryPoint,
+      scheduler = time.scheduler,
+      time = time,
+      brokerTopicStats = new BrokerTopicStats,
+      maxTransactionTimeoutMs = 5 * 60 * 1000,
+      producerStateManagerConfig = producerStateManagerConfig,
+      producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
+      logDirFailureChannel = new LogDirFailureChannel(10),
+      topicId = None,
+      keepPartitionMetadataFile = true
+    )
+  }
 
   private def makeCleaner(capacity: Int, checkDone: TopicPartition => Unit = _ => (), maxMessageSize: Int = 64*1024) =
     new Cleaner(id = 0,
@@ -1810,20 +2007,31 @@ class LogCleanerTest {
       partitionLeaderEpoch, new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
   }
 
-  private def appendTransactionalAsLeader(log: UnifiedLog,
-                                          producerId: Long,
-                                          producerEpoch: Short,
-                                          leaderEpoch: Int = 0,
-                                          origin: AppendOrigin = AppendOrigin.Client): Seq[Int] => LogAppendInfo = {
-    appendIdempotentAsLeader(log, producerId, producerEpoch, isTransactional = true, origin = origin)
+  private def appendTransactionalAsLeader(
+    log: UnifiedLog,
+    producerId: Long,
+    producerEpoch: Short,
+    leaderEpoch: Int = 0,
+    origin: AppendOrigin = AppendOrigin.Client
+  ): Seq[Int] => LogAppendInfo = {
+    appendIdempotentAsLeader(
+      log,
+      producerId,
+      producerEpoch,
+      isTransactional = true,
+      leaderEpoch = leaderEpoch,
+      origin = origin
+    )
   }
 
-  private def appendIdempotentAsLeader(log: UnifiedLog,
-                                       producerId: Long,
-                                       producerEpoch: Short,
-                                       isTransactional: Boolean = false,
-                                       leaderEpoch: Int = 0,
-                                       origin: AppendOrigin = AppendOrigin.Client): Seq[Int] => LogAppendInfo = {
+  private def appendIdempotentAsLeader(
+    log: UnifiedLog,
+    producerId: Long,
+    producerEpoch: Short,
+    isTransactional: Boolean = false,
+    leaderEpoch: Int = 0,
+    origin: AppendOrigin = AppendOrigin.Client
+  ): Seq[Int] => LogAppendInfo = {
     var sequence = 0
     keys: Seq[Int] => {
       val simpleRecords = keys.map { key =>

@@ -164,12 +164,18 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         if (this.statusTopic == null || this.statusTopic.trim().length() == 0)
             throw new ConfigException("Must specify topic for connector status.");
 
-        String clusterId = ConnectUtils.lookupKafkaClusterId(config);
+        String clusterId = config.kafkaClusterId();
         Map<String, Object> originals = config.originals();
         Map<String, Object> producerProps = new HashMap<>(originals);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.RETRIES_CONFIG, 0); // we handle retries in this class
+        // By default, Connect disables idempotent behavior for all producers, even though idempotence became
+        // default for Kafka producers. This is to ensure Connect continues to work with many Kafka broker versions, including older brokers that do not support
+        // idempotent producers or require explicit steps to enable them (e.g. adding the IDEMPOTENT_WRITE ACL to brokers older than 2.8).
+        // These settings might change when https://cwiki.apache.org/confluence/display/KAFKA/KIP-318%3A+Make+Kafka+Connect+Source+idempotent
+        // gets approved and scheduled for release.
+        producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false"); // disable idempotence since retries is force to 0
         ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
 
         Map<String, Object> consumerProps = new HashMap<>(originals);
@@ -539,7 +545,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     private void readConnectorStatus(String key, byte[] value) {
         String connector = parseConnectorStatusKey(key);
-        if (connector == null || connector.isEmpty()) {
+        if (connector.isEmpty()) {
             log.warn("Discarding record with invalid connector status key {}", key);
             return;
         }

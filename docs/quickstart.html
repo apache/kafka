@@ -28,12 +28,12 @@
         </h4>
 
         <p>
-            <a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/2.8.0/kafka_2.13-2.8.0.tgz">Download</a>
+            <a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/{{fullDotVersion}}/kafka_{{scalaVersion}}-{{fullDotVersion}}.tgz">Download</a>
             the latest Kafka release and extract it:
         </p>
 
-        <pre class="line-numbers"><code class="language-bash">$ tar -xzf kafka_2.13-2.8.0.tgz
-$ cd kafka_2.13-2.8.0</code></pre>
+        <pre class="line-numbers"><code class="language-bash">$ tar -xzf kafka_{{scalaVersion}}-{{fullDotVersion}}.tgz
+$ cd kafka_{{scalaVersion}}-{{fullDotVersion}}</code></pre>
     </div>
 
     <div class="quickstart-step">
@@ -47,11 +47,18 @@ $ cd kafka_2.13-2.8.0</code></pre>
         </p>
 
         <p>
+            Apache Kafka can be started using ZooKeeper or KRaft. To get started with either configuration follow one the sections below but not both.
+        </p>
+
+        <h5>
+            Kafka with ZooKeeper
+        </h5>
+
+        <p>
             Run the following commands in order to start all services in the correct order:
         </p>
 
         <pre class="line-numbers"><code class="language-bash"># Start the ZooKeeper service
-# Note: Soon, ZooKeeper will no longer be required by Apache Kafka.
 $ bin/zookeeper-server-start.sh config/zookeeper.properties</code></pre>
 
         <p>
@@ -63,6 +70,32 @@ $ bin/kafka-server-start.sh config/server.properties</code></pre>
 
         <p>
             Once all services have successfully launched, you will have a basic Kafka environment running and ready to use.
+        </p>
+
+        <h5>
+            Kafka with KRaft
+        </h5>
+
+        <p>
+            Generate a Cluster UUID
+        </p>
+
+        <pre class="line-numbers"><code class="language-bash">$ KAFKA_CLUSTER_ID="$(bin/kafka-storage.sh random-uuid)"</code></pre>
+
+        <p>
+            Format Log Directories
+        </p>
+
+        <pre class="line-numbers"><code class="language-bash">$ bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/server.properties</code></pre>
+
+        <p>
+            Start the Kafka Server
+        </p>
+
+        <pre class="line-numbers"><code class="language-bash">$ bin/kafka-server-start.sh config/kraft/server.properties</code></pre>
+
+        <p>
+            Once the Kafka server has successfully launched, you will have a basic Kafka environment running and ready to use.
         </p>
     </div>
 
@@ -100,7 +133,7 @@ $ bin/kafka-server-start.sh config/server.properties</code></pre>
         </p>
 
         <pre class="line-numbers"><code class="language-bash">$ bin/kafka-topics.sh --describe --topic quickstart-events --bootstrap-server localhost:9092
-Topic:quickstart-events  PartitionCount:1    ReplicationFactor:1 Configs:
+Topic: quickstart-events        TopicId: NPmZHyhbR9y00wMglMH2sg PartitionCount: 1       ReplicationFactor: 1	Configs:
     Topic: quickstart-events Partition: 0    Leader: 0   Replicas: 0 Isr: 0</code></pre>
     </div>
 
@@ -161,12 +194,90 @@ This is my second event</code></pre>
             You probably have lots of data in existing systems like relational databases or traditional messaging systems,
             along with many applications that already use these systems.
             <a href="/documentation/#connect">Kafka Connect</a> allows you to continuously ingest
-            data from external systems into Kafka, and vice versa.  It is thus very easy to integrate existing systems with
-            Kafka. To make this process even easier, there are hundreds of such connectors readily available.
+            data from external systems into Kafka, and vice versa. It is an extensible tool that runs
+            <i>connectors</i>, which implement the custom logic for interacting with an external system.
+            It is thus very easy to integrate existing systems with Kafka. To make this process even easier,
+            there are hundreds of such connectors readily available.
         </p>
 
-        <p>Take a look at the <a href="/documentation/#connect">Kafka Connect section</a>
-            to learn more about how to continuously import/export your data into and out of Kafka.</p>
+        <p>
+            In this quickstart we'll see how to run Kafka Connect with simple connectors that import data
+            from a file to a Kafka topic and export data from a Kafka topic to a file.
+        </p>
+
+        <p>
+            First, make sure to add <code class="language-bash">connect-file-{{fullDotVersion}}.jar</code> to the <code>plugin.path</code> property in the Connect worker's configuration.
+            For the purpose of this quickstart we'll use a relative path and consider the connectors' package as an uber jar, which works when the quickstart commands are run from the installation directory.
+            However, it's worth noting that for production deployments using absolute paths is always preferable. See <a href="/documentation/#connectconfigs_plugin.path">plugin.path</a> for a detailed description of how to set this config.
+        </p>
+
+        <p>
+            Edit the <code class="language-bash">config/connect-standalone.properties</code> file, add or change the <code>plugin.path</code> configuration property match the following, and save the file:
+        </p>
+
+        <pre class="brush: bash;">
+&gt; echo "plugin.path=libs/connect-file-{{fullDotVersion}}.jar"</pre>
+
+        <p>
+            Then, start by creating some seed data to test with:
+        </p>
+
+        <pre class="brush: bash;">
+&gt; echo -e "foo\nbar" > test.txt</pre>
+        Or on Windows:
+        <pre class="brush: bash;">
+&gt; echo foo> test.txt
+&gt; echo bar>> test.txt</pre>
+
+        <p>
+            Next, we'll start two connectors running in <i>standalone</i> mode, which means they run in a single, local, dedicated
+            process. We provide three configuration files as parameters. The first is always the configuration for the Kafka Connect
+            process, containing common configuration such as the Kafka brokers to connect to and the serialization format for data.
+            The remaining configuration files each specify a connector to create. These files include a unique connector name, the connector
+            class to instantiate, and any other configuration required by the connector.
+        </p>
+
+        <pre class="brush: bash;">
+&gt; bin/connect-standalone.sh config/connect-standalone.properties config/connect-file-source.properties config/connect-file-sink.properties</pre>
+
+        <p>
+            These sample configuration files, included with Kafka, use the default local cluster configuration you started earlier
+            and create two connectors: the first is a source connector that reads lines from an input file and produces each to a Kafka topic
+            and the second is a sink connector that reads messages from a Kafka topic and produces each as a line in an output file.
+        </p>
+
+        <p>
+            During startup you'll see a number of log messages, including some indicating that the connectors are being instantiated.
+            Once the Kafka Connect process has started, the source connector should start reading lines from <code>test.txt</code> and
+            producing them to the topic <code>connect-test</code>, and the sink connector should start reading messages from the topic <code>connect-test</code>
+            and write them to the file <code>test.sink.txt</code>. We can verify the data has been delivered through the entire pipeline
+            by examining the contents of the output file:
+        </p>
+
+
+        <pre class="brush: bash;">
+&gt; more test.sink.txt
+foo
+bar</pre>
+
+        <p>
+            Note that the data is being stored in the Kafka topic <code>connect-test</code>, so we can also run a console consumer to see the
+            data in the topic (or use custom consumer code to process it):
+        </p>
+
+
+        <pre class="brush: bash;">
+&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic connect-test --from-beginning
+{"schema":{"type":"string","optional":false},"payload":"foo"}
+{"schema":{"type":"string","optional":false},"payload":"bar"}
+...</pre>
+
+        <p>The connectors continue to process data, so we can add data to the file and see it move through the pipeline:</p>
+
+        <pre class="brush: bash;">
+&gt; echo Another line>> test.txt</pre>
+
+        <p>You should see the line appear in the console consumer output and in the sink file.</p>
 
     </div>
 
@@ -199,8 +310,8 @@ KTable&lt;String, Long&gt; wordCounts = textLines
 wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.Long()));</code></pre>
 
         <p>
-            The <a href="/25/documentation/streams/quickstart">Kafka Streams demo</a>
-            and the <a href="/25/documentation/streams/tutorial">app development tutorial</a>
+            The <a href="/documentation/streams/quickstart">Kafka Streams demo</a>
+            and the <a href="/{{version}}/documentation/streams/tutorial">app development tutorial</a>
             demonstrate how to code and run such a streaming application from start to finish.
         </p>
 
@@ -225,7 +336,7 @@ wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.L
                 Stop the Kafka broker with <code>Ctrl-C</code>.
             </li>
             <li>
-                Lastly, stop the ZooKeeper server with <code>Ctrl-C</code>.
+                Lastly, if the Kafka with ZooKeeper section was followed, stop the ZooKeeper server with <code>Ctrl-C</code>.
             </li>
         </ol>
 
@@ -234,7 +345,7 @@ wordCounts.toStream().to("output-topic", Produced.with(Serdes.String(), Serdes.L
             along the way, run the command:
         </p>
 
-        <pre class="line-numbers"><code class="language-bash">$ rm -rf /tmp/kafka-logs /tmp/zookeeper</code></pre>
+        <pre class="line-numbers"><code class="language-bash">$ rm -rf /tmp/kafka-logs /tmp/zookeeper /tmp/kraft-combined-logs</code></pre>
 
     </div>
 

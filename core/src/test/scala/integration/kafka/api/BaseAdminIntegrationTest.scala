@@ -48,12 +48,15 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
   def brokerCount = 3
   override def logDirCount = 2
 
+  var testInfo: TestInfo = _
+
   var client: Admin = _
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
+    this.testInfo = testInfo
     super.setUp(testInfo)
-    waitUntilBrokerMetadataIsPropagated(servers)
+    waitUntilBrokerMetadataIsPropagated(brokers)
   }
 
   @AfterEach
@@ -189,6 +192,15 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
 
   override def modifyConfigs(configs: Seq[Properties]): Unit = {
     super.modifyConfigs(configs)
+    // For testCreateTopicsReturnsConfigs, set some static broker configurations so that we can
+    // verify that they show up in the "configs" output of CreateTopics.
+    if (testInfo.getTestMethod.toString.contains("testCreateTopicsReturnsConfigs")) {
+      configs.foreach(config => {
+        config.setProperty(KafkaConfig.LogRollTimeHoursProp, "2")
+        config.setProperty(KafkaConfig.LogRetentionTimeMinutesProp, "240")
+        config.setProperty(KafkaConfig.LogRollTimeJitterMillisProp, "123")
+      })
+    }
     configs.foreach { config =>
       config.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
       config.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
@@ -201,9 +213,21 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     }
   }
 
+  override def kraftControllerConfigs(): Seq[Properties] = {
+    val controllerConfig = new Properties()
+    if (testInfo.getTestMethod.toString.contains("testCreateTopicsReturnsConfigs")) {
+      // For testCreateTopicsReturnsConfigs, set the controller's ID to 1 so that the dynamic
+      // config we set for node 1 will apply to it.
+      controllerConfig.setProperty(KafkaConfig.NodeIdProp, "1")
+    }
+    val controllerConfigs = Seq(controllerConfig)
+    modifyConfigs(controllerConfigs)
+    controllerConfigs
+  }
+
   def createConfig: util.Map[String, Object] = {
     val config = new util.HashMap[String, Object]
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
     val securityProps: util.Map[Object, Object] =
       adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)

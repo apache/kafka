@@ -88,6 +88,7 @@ public class ClientCompatibilityTest {
         final boolean createTopicsSupported;
         final boolean describeAclsSupported;
         final boolean describeConfigsSupported;
+        final boolean idempotentProducerSupported;
 
         TestConfig(Namespace res) {
             this.bootstrapServer = res.getString("bootstrapServer");
@@ -99,6 +100,7 @@ public class ClientCompatibilityTest {
             this.createTopicsSupported = res.getBoolean("createTopicsSupported");
             this.describeAclsSupported = res.getBoolean("describeAclsSupported");
             this.describeConfigsSupported = res.getBoolean("describeConfigsSupported");
+            this.idempotentProducerSupported = res.get("idempotentProducerSupported");
         }
     }
 
@@ -172,6 +174,13 @@ public class ClientCompatibilityTest {
             .dest("describeConfigsSupported")
             .metavar("DESCRIBE_CONFIGS_SUPPORTED")
             .help("Whether describeConfigs is supported in the AdminClient.");
+        parser.addArgument("--idempotent-producer-supported")
+            .action(store())
+            .required(true)
+            .type(Boolean.class)
+            .dest("idempotentProducerSupported")
+            .metavar("IDEMPOTENT_PRODUCER_SUPPORTED")
+            .help("Whether the producer supports idempotency.");
 
         Namespace res = null;
         try {
@@ -243,6 +252,9 @@ public class ClientCompatibilityTest {
     public void testProduce() throws Exception {
         Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, testConfig.bootstrapServer);
+        if (!testConfig.idempotentProducerSupported) {
+            producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+        }
         ByteArraySerializer serializer = new ByteArraySerializer();
         KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps, serializer, serializer);
         ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(testConfig.topic, message1);

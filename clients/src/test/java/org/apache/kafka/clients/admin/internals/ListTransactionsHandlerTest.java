@@ -52,7 +52,7 @@ public class ListTransactionsHandlerTest {
         BrokerKey brokerKey = new BrokerKey(OptionalInt.of(brokerId));
         ListTransactionsOptions options = new ListTransactionsOptions();
         ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
-        ListTransactionsRequest request = handler.buildRequest(brokerId, singleton(brokerKey)).build();
+        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build();
         assertEquals(Collections.emptyList(), request.data().producerIdFilters());
         assertEquals(Collections.emptyList(), request.data().stateFilters());
     }
@@ -65,7 +65,7 @@ public class ListTransactionsHandlerTest {
         ListTransactionsOptions options = new ListTransactionsOptions()
             .filterProducerIds(singleton(filteredProducerId));
         ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
-        ListTransactionsRequest request = handler.buildRequest(brokerId, singleton(brokerKey)).build();
+        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build();
         assertEquals(Collections.singletonList(filteredProducerId), request.data().producerIdFilters());
         assertEquals(Collections.emptyList(), request.data().stateFilters());
     }
@@ -78,7 +78,7 @@ public class ListTransactionsHandlerTest {
         ListTransactionsOptions options = new ListTransactionsOptions()
             .filterStates(singleton(filteredState));
         ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
-        ListTransactionsRequest request = handler.buildRequest(brokerId, singleton(brokerKey)).build();
+        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build();
         assertEquals(Collections.singletonList(filteredState.toString()), request.data().stateFilters());
         assertEquals(Collections.emptyList(), request.data().producerIdFilters());
     }

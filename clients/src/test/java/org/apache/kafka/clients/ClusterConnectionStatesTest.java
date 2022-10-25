@@ -231,20 +231,8 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testExponentialReconnectBackoff() {
-        double reconnectBackoffMaxExp = Math.log(reconnectBackoffMax / (double) Math.max(reconnectBackoffMs, 1))
-            / Math.log(reconnectBackoffExpBase);
-
-        // Run through 10 disconnects and check that reconnect backoff value is within expected range for every attempt
-        for (int i = 0; i < 10; i++) {
-            connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
-            connectionStates.disconnected(nodeId1, time.milliseconds());
-            // Calculate expected backoff value without jitter
-            long expectedBackoff = Math.round(Math.pow(reconnectBackoffExpBase, Math.min(i, reconnectBackoffMaxExp))
-                * reconnectBackoffMs);
-            long currentBackoff = connectionStates.connectionDelay(nodeId1, time.milliseconds());
-            assertEquals(expectedBackoff, currentBackoff, reconnectBackoffJitter * expectedBackoff);
-            time.sleep(connectionStates.connectionDelay(nodeId1, time.milliseconds()) + 1);
-        }
+        verifyReconnectExponentialBackoff(false);
+        verifyReconnectExponentialBackoff(true);
     }
 
     @Test
@@ -425,5 +413,27 @@ public class ClusterConnectionStatesTest {
     private void setupMultipleIPs() {
         this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax,
                 connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext(), this.multipleIPHostResolver);
+    }
+
+    private void verifyReconnectExponentialBackoff(boolean enterCheckingApiVersionState) {
+        double reconnectBackoffMaxExp = Math.log(reconnectBackoffMax / (double) Math.max(reconnectBackoffMs, 1))
+            / Math.log(reconnectBackoffExpBase);
+
+        connectionStates.remove(nodeId1);
+        // Run through 10 disconnects and check that reconnect backoff value is within expected range for every attempt
+        for (int i = 0; i < 10; i++) {
+            connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
+            if (enterCheckingApiVersionState) {
+                connectionStates.checkingApiVersions(nodeId1);
+            }
+
+            connectionStates.disconnected(nodeId1, time.milliseconds());
+            // Calculate expected backoff value without jitter
+            long expectedBackoff = Math.round(Math.pow(reconnectBackoffExpBase, Math.min(i, reconnectBackoffMaxExp))
+                * reconnectBackoffMs);
+            long currentBackoff = connectionStates.connectionDelay(nodeId1, time.milliseconds());
+            assertEquals(expectedBackoff, currentBackoff, reconnectBackoffJitter * expectedBackoff);
+            time.sleep(connectionStates.connectionDelay(nodeId1, time.milliseconds()) + 1);
+        }
     }
 }

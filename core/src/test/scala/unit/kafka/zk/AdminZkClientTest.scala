@@ -33,9 +33,9 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.test.{TestUtils => JTestUtils}
-import org.easymock.EasyMock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
+import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, immutable}
@@ -140,11 +140,10 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
 
   @Test
   def testMarkedDeletionTopicCreation(): Unit = {
-    val zkMock: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    val zkMock: KafkaZkClient = mock(classOf[KafkaZkClient])
     val topicPartition = new TopicPartition("test", 0)
     val topic = topicPartition.topic
-    EasyMock.expect(zkMock.isTopicMarkedForDeletion(topic)).andReturn(true);
-    EasyMock.replay(zkMock)
+    when(zkMock.isTopicMarkedForDeletion(topic)).thenReturn(true)
     val adminZkClient = new AdminZkClient(zkMock)
 
     assertThrows(classOf[TopicExistsException], () => adminZkClient.validateTopicCreate(topic, Map.empty, new Properties))
@@ -155,10 +154,9 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     val topic = "test.topic"
 
     // simulate the ZK interactions that can happen when a topic is concurrently created by multiple processes
-    val zkMock: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
-    EasyMock.expect(zkMock.topicExists(topic)).andReturn(false)
-    EasyMock.expect(zkMock.getAllTopicsInCluster(false)).andReturn(Set("some.topic", topic, "some.other.topic"))
-    EasyMock.replay(zkMock)
+    val zkMock: KafkaZkClient = mock(classOf[KafkaZkClient])
+    when(zkMock.topicExists(topic)).thenReturn(false)
+    when(zkMock.getAllTopicsInCluster(false)).thenReturn(Set("some.topic", topic, "some.other.topic"))
     val adminZkClient = new AdminZkClient(zkMock)
 
     assertThrows(classOf[TopicExistsException], () => adminZkClient.validateTopicCreate(topic, Map.empty, new Properties))

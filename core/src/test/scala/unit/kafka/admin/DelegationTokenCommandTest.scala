@@ -36,7 +36,7 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
   private val kafkaServerSaslMechanisms = List("PLAIN")
   protected override val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   protected override val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
-  var adminClient: Admin = null
+  var adminClient: Admin = _
 
   override def brokerCount = 1
 
@@ -57,7 +57,7 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
 
   private def createAdminConfig: util.Map[String, Object] = {
     val config = new util.HashMap[String, Object]
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     val securityProps: util.Map[Object, Object] =
       TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
     securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
@@ -110,27 +110,27 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
   }
 
   private def getCreateOpts(renewers: List[String]): DelegationTokenCommandOptions = {
-    val opts = ListBuffer("--bootstrap-server", brokerList, "--max-life-time-period", "-1",
+    val opts = ListBuffer("--bootstrap-server", bootstrapServers(), "--max-life-time-period", "-1",
       "--command-config", "testfile", "--create")
     renewers.foreach(renewer => opts ++= ListBuffer("--renewer-principal", renewer))
     new DelegationTokenCommandOptions(opts.toArray)
   }
 
   private def getDescribeOpts(owners: List[String]): DelegationTokenCommandOptions = {
-    val opts = ListBuffer("--bootstrap-server", brokerList, "--command-config", "testfile", "--describe")
+    val opts = ListBuffer("--bootstrap-server", bootstrapServers(), "--command-config", "testfile", "--describe")
     owners.foreach(owner => opts ++= ListBuffer("--owner-principal", owner))
     new DelegationTokenCommandOptions(opts.toArray)
   }
 
   private def getRenewOpts(hmac: String): DelegationTokenCommandOptions = {
-    val opts = Array("--bootstrap-server", brokerList, "--command-config", "testfile", "--renew",
+    val opts = Array("--bootstrap-server", bootstrapServers(), "--command-config", "testfile", "--renew",
       "--renew-time-period", "-1",
       "--hmac", hmac)
     new DelegationTokenCommandOptions(opts)
   }
 
   private def getExpireOpts(hmac: String): DelegationTokenCommandOptions = {
-    val opts = Array("--bootstrap-server", brokerList, "--command-config", "testfile", "--expire",
+    val opts = Array("--bootstrap-server", bootstrapServers(), "--command-config", "testfile", "--expire",
       "--expiry-time-period", "-1",
       "--hmac", hmac)
     new DelegationTokenCommandOptions(opts)

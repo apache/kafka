@@ -31,6 +31,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+import org.apache.kafka.clients.consumer.internals.Utils.PartitionComparator;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -490,7 +491,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
      *
      * We loop the sortedPartition, and compare the ith element in sortedAssignedPartitions(i start from 0):
      *   - if not equal to the ith element, add to unassignedPartitions
-     *   - if equal to the the ith element, get next element from sortedAssignedPartitions
+     *   - if equal to the ith element, get next element from sortedAssignedPartitions
      *
      * @param sortedAllPartitions:          sorted all partitions
      * @param sortedAssignedPartitions:     sorted partitions, all are included in the sortedPartitions
@@ -538,7 +539,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
      * We loop through the all sorted topics, and then iterate all partitions the topic has,
      * compared with the ith element in sortedAssignedPartitions(i starts from 0):
      *   - if not equal to the ith element, add to unassignedPartitions
-     *   - if equal to the the ith element, get next element from sortedAssignedPartitions
+     *   - if equal to the ith element, get next element from sortedAssignedPartitions
      *
      * @param totalPartitionsCount      all partitions counts in this assignment
      * @param partitionsPerTopic        the number of partitions for each subscribed topic.
@@ -588,7 +589,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     /**
      * update the prevAssignment with the partitions, consumer and generation in parameters
      *
-     * @param partitions:       The partitions to be updated the prevAssignement
+     * @param partitions:       The partitions to be updated the prevAssignment
      * @param consumer:         The consumer Id
      * @param prevAssignment:   The assignment contains the assignment with the 2nd largest generation
      * @param generation:       The generation of this assignment (partitions)
@@ -1013,26 +1014,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             int ret = map.get(o1).size() - map.get(o2).size();
             if (ret == 0) {
                 ret = o1.compareTo(o2);
-            }
-            return ret;
-        }
-    }
-
-    private static class PartitionComparator implements Comparator<TopicPartition>, Serializable {
-        private static final long serialVersionUID = 1L;
-        private Map<String, List<String>> map;
-
-        PartitionComparator(Map<String, List<String>> map) {
-            this.map = map;
-        }
-
-        @Override
-        public int compare(TopicPartition o1, TopicPartition o2) {
-            int ret = map.get(o1.topic()).size() - map.get(o2.topic()).size();
-            if (ret == 0) {
-                ret = o1.topic().compareTo(o2.topic());
-                if (ret == 0)
-                    ret = o1.partition() - o2.partition();
             }
             return ret;
         }

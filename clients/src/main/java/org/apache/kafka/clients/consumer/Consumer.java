@@ -259,6 +259,11 @@ public interface Consumer<K, V> extends Closeable {
     void enforceRebalance();
 
     /**
+     * @see KafkaConsumer#enforceRebalance(String)
+     */
+    void enforceRebalance(final String reason);
+
+    /**
      * @see KafkaConsumer#close()
      */
     void close();

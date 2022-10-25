@@ -17,374 +17,311 @@
 
 package kafka.admin
 
-import kafka.server.BrokerFeatures
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit}
+import kafka.tools.TerseFailure
+import kafka.utils.Exit
+import net.sourceforge.argparse4j.ArgumentParsers
+import net.sourceforge.argparse4j.impl.Arguments.{append, fileType, store, storeTrue}
+import net.sourceforge.argparse4j.inf.{ArgumentParserException, Namespace, Subparsers}
+import net.sourceforge.argparse4j.internal.HelpScreenException
 import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType
 import org.apache.kafka.clients.admin.{Admin, FeatureUpdate, UpdateFeaturesOptions}
-import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.common.MetadataVersion
+
+import java.io.{File, PrintStream}
 import java.util.Properties
-
-import scala.collection.Seq
-import scala.collection.immutable.ListMap
-import scala.jdk.CollectionConverters._
-import joptsimple.OptionSpec
-
 import scala.concurrent.ExecutionException
+import scala.jdk.CollectionConverters._
+import scala.compat.java8.OptionConverters._
 
 object FeatureCommand {
-
   def main(args: Array[String]): Unit = {
-    val opts = new FeatureCommandOptions(args)
-    val featureApis = new FeatureApis(opts)
-    var exitCode = 0
+    val res = mainNoExit(args, System.out)
+    Exit.exit(res)
+  }
+
+  // This is used for integration tests in order to avoid killing the test with Exit.exit,
+  // and in order to capture the command output.
+  def mainNoExit(
+    args: Array[String],
+    out: PrintStream
+  ): Int = {
+    val parser = ArgumentParsers.newArgumentParser("kafka-features")
+      .defaultHelp(true)
+      .description("This tool manages feature flags in Kafka.")
+    parser.addArgument("--bootstrap-server")
+      .help("A comma-separated list of host:port pairs to use for establishing the connection to the Kafka cluster.")
+      .required(true)
+
+    parser.addArgument("--command-config")
+      .`type`(fileType())
+      .help("Property file containing configs to be passed to Admin Client.")
+    val subparsers = parser.addSubparsers().dest("command")
+    addDescribeParser(subparsers)
+    addUpgradeParser(subparsers)
+    addDowngradeParser(subparsers)
+    addDisableParser(subparsers)
+
     try {
-      featureApis.execute()
+      val namespace = parser.parseArgs(args)
+      val command = namespace.getString("command")
+
+      val commandConfig = namespace.get[File]("command_config")
+      val props = if (commandConfig != null) {
+        if (!commandConfig.exists()) {
+          throw new TerseFailure(s"Properties file ${commandConfig.getPath} does not exists!")
+        }
+        Utils.loadProps(commandConfig.getPath)
+      } else {
+        new Properties()
+      }
+      props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, namespace.getString("bootstrap_server"))
+      val admin = Admin.create(props)
+      try {
+        command match {
+          case "describe" => handleDescribe(out, admin)
+          case "upgrade" => handleUpgrade(out, namespace, admin)
+          case "downgrade" => handleDowngrade(out, namespace, admin)
+          case "disable" => handleDisable(out, namespace, admin)
+        }
+      } finally {
+        admin.close()
+      }
+      0
     } catch {
-      case e: IllegalArgumentException =>
-        printException(e)
-        opts.parser.printHelpOn(System.err)
-        exitCode = 1
-      case _: UpdateFeaturesException =>
-        exitCode = 1
-      case e: ExecutionException =>
-        val cause = if (e.getCause == null) e else e.getCause
-        printException(cause)
-        exitCode = 1
-      case e: Throwable =>
-        printException(e)
-        exitCode = 1
-    } finally {
-      featureApis.close()
-      Exit.exit(exitCode)
+      case _: HelpScreenException =>
+        0
+      case e: ArgumentParserException =>
+        System.err.println(s"Command line error: ${e.getMessage}. Type --help for help.")
+        1
+      case e: TerseFailure =>
+        System.err.println(e.getMessage)
+        1
     }
   }
 
-  private def printException(exception: Throwable): Unit = {
-    System.err.println("\nError encountered when executing command: " + Utils.stackTrace(exception))
-  }
-}
-
-class UpdateFeaturesException(message: String) extends RuntimeException(message)
-
-/**
- * A class that provides necessary APIs to bridge feature APIs provided by the Admin client with
- * the requirements of the CLI tool.
- *
- * @param opts the CLI options
- */
-class FeatureApis(private var opts: FeatureCommandOptions) {
-  private var supportedFeatures = BrokerFeatures.createDefault().supportedFeatures
-  private var adminClient = FeatureApis.createAdminClient(opts)
-
-  private def pad(op: String): String = {
-    f"$op%11s"
+  def addDescribeParser(subparsers: Subparsers): Unit = {
+    subparsers.addParser("describe")
+      .help("Describes the current active feature flags.")
   }
 
-  private val addOp = pad("[Add]")
-  private val upgradeOp = pad("[Upgrade]")
-  private val deleteOp = pad("[Delete]")
-  private val downgradeOp = pad("[Downgrade]")
-
-  // For testing only.
-  private[admin] def setSupportedFeatures(newFeatures: Features[SupportedVersionRange]): Unit = {
-    supportedFeatures = newFeatures
+  def addUpgradeParser(subparsers: Subparsers): Unit = {
+    val upgradeParser = subparsers.addParser("upgrade")
+      .help("Upgrade one or more feature flags.")
+    upgradeParser.addArgument("--metadata")
+      .help("The level to which we should upgrade the metadata. For example, 3.3-IV3.")
+      .action(store())
+    upgradeParser.addArgument("--feature")
+      .help("A feature upgrade we should perform, in feature=level format. For example: `metadata.version=5`.")
+      .action(append())
+    upgradeParser.addArgument("--dry-run")
+      .help("Validate this upgrade, but do not perform it.")
+      .action(storeTrue())
   }
 
-  // For testing only.
-  private[admin] def setOptions(newOpts: FeatureCommandOptions): Unit = {
-    adminClient.close()
-    adminClient = FeatureApis.createAdminClient(newOpts)
-    opts = newOpts
+  def addDowngradeParser(subparsers: Subparsers): Unit = {
+    val downgradeParser = subparsers.addParser("downgrade")
+      .help("Downgrade one or more feature flags.")
+    downgradeParser.addArgument("--metadata")
+      .help("The level to which we should downgrade the metadata. For example, 3.3-IV0.")
+      .action(store())
+    downgradeParser.addArgument("--feature")
+      .help("A feature downgrade we should perform, in feature=level format. For example: `metadata.version=5`.")
+      .action(append())
+    downgradeParser.addArgument("--unsafe")
+      .help("Perform this downgrade even if it may irreversibly destroy metadata.")
+      .action(storeTrue())
+    downgradeParser.addArgument("--dry-run")
+      .help("Validate this downgrade, but do not perform it.")
+      .action(storeTrue())
   }
 
-  /**
-   * Describes the supported and finalized features. The request is issued to any of the provided
-   * bootstrap servers.
-   */
-  def describeFeatures(): Unit = {
-    val result = adminClient.describeFeatures.featureMetadata.get
-    val features = result.supportedFeatures.asScala.keys.toSet ++ result.finalizedFeatures.asScala.keys.toSet
-
-    features.toList.sorted.foreach {
-      feature =>
-        val output = new StringBuilder()
-        output.append(s"Feature: $feature")
-
-        val (supportedMinVersion, supportedMaxVersion) = {
-          val supportedVersionRange = result.supportedFeatures.get(feature)
-          if (supportedVersionRange == null) {
-            ("-", "-")
-          } else {
-            (supportedVersionRange.minVersion, supportedVersionRange.maxVersion)
-          }
-        }
-        output.append(s"\tSupportedMinVersion: $supportedMinVersion")
-        output.append(s"\tSupportedMaxVersion: $supportedMaxVersion")
-
-        val (finalizedMinVersionLevel, finalizedMaxVersionLevel) = {
-          val finalizedVersionRange = result.finalizedFeatures.get(feature)
-          if (finalizedVersionRange == null) {
-            ("-", "-")
-          } else {
-            (finalizedVersionRange.minVersionLevel, finalizedVersionRange.maxVersionLevel)
-          }
-        }
-        output.append(s"\tFinalizedMinVersionLevel: $finalizedMinVersionLevel")
-        output.append(s"\tFinalizedMaxVersionLevel: $finalizedMaxVersionLevel")
-
-        val epoch = {
-          if (result.finalizedFeaturesEpoch.isPresent) {
-            result.finalizedFeaturesEpoch.get.toString
-          } else {
-            "-"
-          }
-        }
-        output.append(s"\tEpoch: $epoch")
-
-        println(output)
-    }
+  def addDisableParser(subparsers: Subparsers): Unit = {
+    val disableParser = subparsers.addParser("disable")
+      .help("Disable one or more feature flags. This is the same as downgrading the version to zero.")
+    disableParser.addArgument("--feature")
+      .help("A feature flag to disable.")
+      .action(append())
+    disableParser.addArgument("--unsafe")
+      .help("Disable this feature flag even if it may irreversibly destroy metadata.")
+      .action(storeTrue())
+    disableParser.addArgument("--dry-run")
+      .help("Perform a dry-run of this disable operation.")
+      .action(storeTrue())
   }
 
-  /**
-   * Upgrades all features known to this tool to their highest max version levels. The method may
-   * add new finalized features if they were not finalized previously, but it does not delete
-   * any existing finalized feature. The results of the feature updates are written to STDOUT.
-   *
-   * NOTE: if the --dry-run CLI option is provided, this method only prints the expected feature
-   * updates to STDOUT, without applying them.
-   *
-   * @throws UpdateFeaturesException if at least one of the feature updates failed
-   */
-  def upgradeAllFeatures(): Unit = {
-    val metadata = adminClient.describeFeatures.featureMetadata.get
-    val existingFinalizedFeatures = metadata.finalizedFeatures
-    val updates = supportedFeatures.features.asScala.map {
-      case (feature, targetVersionRange) =>
-        val existingVersionRange = existingFinalizedFeatures.get(feature)
-        if (existingVersionRange == null) {
-          val updateStr =
-            addOp +
-            s"\tFeature: $feature" +
-            s"\tExistingFinalizedMaxVersion: -" +
-            s"\tNewFinalizedMaxVersion: ${targetVersionRange.max}"
-          (feature, Some((updateStr, new FeatureUpdate(targetVersionRange.max, false))))
-        } else {
-          if (targetVersionRange.max > existingVersionRange.maxVersionLevel) {
-            val updateStr =
-              upgradeOp +
-              s"\tFeature: $feature" +
-              s"\tExistingFinalizedMaxVersion: ${existingVersionRange.maxVersionLevel}" +
-              s"\tNewFinalizedMaxVersion: ${targetVersionRange.max}"
-            (feature, Some((updateStr, new FeatureUpdate(targetVersionRange.max, false))))
-          } else {
-            (feature, Option.empty)
-          }
-        }
-    }.filter {
-      case(_, updateInfo) => updateInfo.isDefined
-    }.map {
-      case(feature, updateInfo) => (feature, updateInfo.get)
-    }.toMap
-
-    if (updates.nonEmpty) {
-      maybeApplyFeatureUpdates(updates)
-    }
-  }
-
-  /**
-   * Downgrades existing finalized features to the highest max version levels known to this tool.
-   * The method may delete existing finalized features if they are no longer seen to be supported,
-   * but it does not add a feature that was not finalized previously. The results of the feature
-   * updates are written to STDOUT.
-   *
-   * NOTE: if the --dry-run CLI option is provided, this method only prints the expected feature
-   * updates to STDOUT, without applying them.
-   *
-   * @throws UpdateFeaturesException if at least one of the feature updates failed
-   */
-  def downgradeAllFeatures(): Unit = {
-    val metadata = adminClient.describeFeatures.featureMetadata.get
-    val existingFinalizedFeatures = metadata.finalizedFeatures
-    val supportedFeaturesMap = supportedFeatures.features
-    val updates = existingFinalizedFeatures.asScala.map {
-      case (feature, existingVersionRange) =>
-        val targetVersionRange = supportedFeaturesMap.get(feature)
-        if (targetVersionRange == null) {
-          val updateStr =
-            deleteOp +
-            s"\tFeature: $feature" +
-            s"\tExistingFinalizedMaxVersion: ${existingVersionRange.maxVersionLevel}" +
-            s"\tNewFinalizedMaxVersion: -"
-          (feature, Some(updateStr, new FeatureUpdate(0, true)))
-        } else {
-          if (targetVersionRange.max < existingVersionRange.maxVersionLevel) {
-            val updateStr =
-              downgradeOp +
-              s"\tFeature: $feature" +
-              s"\tExistingFinalizedMaxVersion: ${existingVersionRange.maxVersionLevel}" +
-              s"\tNewFinalizedMaxVersion: ${targetVersionRange.max}"
-            (feature, Some(updateStr, new FeatureUpdate(targetVersionRange.max, true)))
-          } else {
-            (feature, Option.empty)
-          }
-        }
-    }.filter {
-      case(_, updateInfo) => updateInfo.isDefined
-    }.map {
-      case(feature, updateInfo) => (feature, updateInfo.get)
-    }.toMap
-
-    if (updates.nonEmpty) {
-      maybeApplyFeatureUpdates(updates)
-    }
-  }
-
-  /**
-   * Applies the provided feature updates. If the --dry-run CLI option is provided, the method
-   * only prints the expected feature updates to STDOUT without applying them.
-   *
-   * @param updates the feature updates to be applied via the admin client
-   *
-   * @throws UpdateFeaturesException if at least one of the feature updates failed
-   */
-  private def maybeApplyFeatureUpdates(updates: Map[String, (String, FeatureUpdate)]): Unit = {
-    if (opts.hasDryRunOption) {
-      println("Expected feature updates:" + ListMap(
-        updates
-          .toSeq
-          .sortBy { case(feature, _) => feature} :_*)
-          .map { case(_, (updateStr, _)) => updateStr}
-          .mkString("\n"))
+  def levelToString(
+    feature: String,
+    level: Short
+  ): String = {
+    if (feature.equals(MetadataVersion.FEATURE_NAME)) {
+      try {
+        MetadataVersion.fromFeatureLevel(level).version()
+      } catch {
+        case e: Throwable => s"UNKNOWN [${level}]"
+      }
     } else {
-      val result = adminClient.updateFeatures(
-        updates
-          .map { case(feature, (_, update)) => (feature, update)}
-          .asJava,
-        new UpdateFeaturesOptions())
-      val resultSortedByFeature = ListMap(
-        result
-          .values
-          .asScala
-          .toSeq
-          .sortBy { case(feature, _) => feature} :_*)
-      val failures = resultSortedByFeature.map {
-        case (feature, updateFuture) =>
-          val (updateStr, _) = updates(feature)
-          try {
-            updateFuture.get
-            println(updateStr + "\tResult: OK")
-            0
-          } catch {
-            case e: ExecutionException =>
-              val cause = if (e.getCause == null) e else e.getCause
-              println(updateStr + "\tResult: FAILED due to " + cause)
-              1
-            case e: Throwable =>
-              println(updateStr + "\tResult: FAILED due to " + e)
-              1
-          }
-      }.sum
-      if (failures > 0) {
-        throw new UpdateFeaturesException(s"$failures feature updates failed!")
+      level.toString
+    }
+  }
+
+  def handleDescribe(
+    out: PrintStream,
+    admin: Admin
+  ): Unit = {
+    val featureMetadata = admin.describeFeatures().featureMetadata().get()
+    val featureList = new java.util.TreeSet[String](featureMetadata.supportedFeatures().keySet())
+      featureList.forEach {
+      case feature =>
+        val finalizedLevel = featureMetadata.finalizedFeatures().asScala.get(feature) match {
+          case None => 0.toShort
+          case Some(v) => v.maxVersionLevel()
+        }
+        val range = featureMetadata.supportedFeatures().get(feature)
+        out.printf("Feature: %s\tSupportedMinVersion: %s\tSupportedMaxVersion: %s\tFinalizedVersionLevel: %s\tEpoch: %s%n",
+          feature,
+          levelToString(feature, range.minVersion()),
+          levelToString(feature, range.maxVersion()),
+          levelToString(feature, finalizedLevel),
+          featureMetadata.finalizedFeaturesEpoch().asScala.flatMap(e => Some(e.toString)).getOrElse("-"))
+    }
+  }
+
+  def metadataVersionsToString(first: MetadataVersion, last: MetadataVersion): String = {
+    MetadataVersion.VERSIONS.toList.asJava.
+      subList(first.ordinal(), last.ordinal() + 1).
+      asScala.mkString(", ")
+  }
+
+  def handleUpgrade(out: PrintStream, namespace: Namespace, admin: Admin): Unit = {
+    handleUpgradeOrDowngrade("upgrade", out, namespace, admin, UpgradeType.UPGRADE)
+  }
+
+  def downgradeType(namespace: Namespace): UpgradeType = {
+    val unsafe = namespace.getBoolean("unsafe")
+    if (unsafe == null || !unsafe) {
+      UpgradeType.SAFE_DOWNGRADE
+    } else {
+      UpgradeType.UNSAFE_DOWNGRADE
+    }
+  }
+
+  def handleDowngrade(out: PrintStream, namespace: Namespace, admin: Admin): Unit = {
+    handleUpgradeOrDowngrade("downgrade", out, namespace, admin, downgradeType(namespace))
+  }
+
+  def parseNameAndLevel(input: String): (String, Short) = {
+    val equalsIndex = input.indexOf("=")
+    if (equalsIndex < 0) {
+      throw new TerseFailure(s"Can't parse feature=level string ${input}: equals sign not found.")
+    }
+    val name = input.substring(0, equalsIndex).trim
+    val levelString = input.substring(equalsIndex + 1).trim
+    val level = try {
+      levelString.toShort
+    } catch {
+      case e: Throwable => throw new TerseFailure(s"Can't parse feature=level string ${input}: " +
+        s"unable to parse ${levelString} as a short.")
+    }
+    (name, level)
+  }
+
+  def handleUpgradeOrDowngrade(
+    op: String,
+    out: PrintStream,
+    namespace: Namespace,
+    admin: Admin,
+    upgradeType: UpgradeType
+  ): Unit = {
+    val updates = new java.util.HashMap[String, FeatureUpdate]()
+    Option(namespace.getString("metadata")).foreach(metadata => {
+      val version = try {
+        MetadataVersion.fromVersionString(metadata)
+      } catch {
+        case e: Throwable => throw new TerseFailure("Unsupported metadata version " + metadata +
+          ". Supported metadata versions are " + metadataVersionsToString(
+          MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latest()))
+      }
+      updates.put(MetadataVersion.FEATURE_NAME, new FeatureUpdate(version.featureLevel(), upgradeType))
+    })
+    Option(namespace.getList[String]("feature")).foreach(features => {
+      features.forEach(feature => {
+        val (name, level) = parseNameAndLevel(feature)
+        if (updates.put(name, new FeatureUpdate(level, upgradeType)) != null) {
+          throw new TerseFailure(s"Feature ${name} was specified more than once.")
+        }
+      })
+    })
+    update(op, out, admin, updates, namespace.getBoolean("dry-run"))
+  }
+
+  def handleDisable(out: PrintStream, namespace: Namespace, admin: Admin): Unit = {
+    val upgradeType = downgradeType(namespace)
+    val updates = new java.util.HashMap[String, FeatureUpdate]()
+    Option(namespace.getList[String]("feature")).foreach(features => {
+      features.forEach(name =>
+        if (updates.put(name, new FeatureUpdate(0.toShort, upgradeType)) != null) {
+          throw new TerseFailure(s"Feature ${name} was specified more than once.")
+        })
+      }
+    )
+    update("disable", out, admin, updates, namespace.getBoolean("dry-run"))
+  }
+
+  def update(
+    op: String,
+    out: PrintStream,
+    admin: Admin,
+    updates: java.util.HashMap[String, FeatureUpdate],
+    dryRun: Boolean
+  ): Unit = {
+    if (updates.isEmpty) {
+      throw new TerseFailure(s"You must specify at least one feature to ${op}")
+    }
+    val result =  admin.updateFeatures(updates, new UpdateFeaturesOptions().validateOnly(dryRun))
+    val errors = result.values().asScala.map { case (feature, future) =>
+      try {
+        future.get()
+        feature -> None
+      } catch {
+        case e: ExecutionException => feature -> Some(e.getCause)
+        case t: Throwable => feature -> Some(t)
       }
     }
-  }
-
-  def execute(): Unit = {
-    if (opts.hasDescribeOption) {
-      describeFeatures()
-    } else if (opts.hasUpgradeAllOption) {
-      upgradeAllFeatures()
-    } else if (opts.hasDowngradeAllOption) {
-      downgradeAllFeatures()
-    } else {
-      throw new IllegalStateException("Unexpected state: no CLI command could be executed.")
+    var numFailures = 0
+    errors.keySet.toList.sorted.foreach { feature =>
+      val maybeThrowable = errors(feature)
+      val level = updates.get(feature).maxVersionLevel()
+      if (maybeThrowable.isDefined) {
+        val helper = if (dryRun) {
+          "Can not"
+        } else {
+          "Could not"
+        }
+        val suffix = if (op.equals("disable")) {
+          s"disable ${feature}"
+        } else {
+          s"${op} ${feature} to ${level}"
+        }
+        out.println(s"${helper} ${suffix}. ${maybeThrowable.get.getMessage}")
+        numFailures = numFailures + 1
+      } else {
+        val verb = if (dryRun) {
+          "can be"
+        } else {
+          "was"
+        }
+        val obj = if (op.equals("disable")) {
+          "disabled."
+        } else {
+          s"${op}d to ${level}."
+        }
+        out.println(s"${feature} ${verb} ${obj}")
+      }
     }
-  }
-
-  def close(): Unit = {
-    adminClient.close()
-  }
-}
-
-class FeatureCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
-  private val bootstrapServerOpt = parser.accepts(
-      "bootstrap-server",
-      "REQUIRED: A comma-separated list of host:port pairs to use for establishing the connection" +
-      " to the Kafka cluster.")
-      .withRequiredArg
-      .describedAs("server to connect to")
-      .ofType(classOf[String])
-  private val commandConfigOpt = parser.accepts(
-    "command-config",
-    "Property file containing configs to be passed to Admin Client." +
-    " This is used with --bootstrap-server option when required.")
-    .withOptionalArg
-    .describedAs("command config property file")
-    .ofType(classOf[String])
-  private val describeOpt = parser.accepts(
-    "describe",
-    "Describe supported and finalized features from a random broker.")
-  private val upgradeAllOpt = parser.accepts(
-    "upgrade-all",
-    "Upgrades all finalized features to the maximum version levels known to the tool." +
-    " This command finalizes new features known to the tool that were never finalized" +
-    " previously in the cluster, but it is guaranteed to not delete any existing feature.")
-  private val downgradeAllOpt = parser.accepts(
-    "downgrade-all",
-    "Downgrades all finalized features to the maximum version levels known to the tool." +
-    " This command deletes unknown features from the list of finalized features in the" +
-    " cluster, but it is guaranteed to not add a new feature.")
-  private val dryRunOpt = parser.accepts(
-    "dry-run",
-    "Performs a dry-run of upgrade/downgrade mutations to finalized feature without applying them.")
-
-  options = parser.parse(args : _*)
-
-  checkArgs()
-
-  def has(builder: OptionSpec[_]): Boolean = options.has(builder)
-
-  def hasDescribeOption: Boolean = has(describeOpt)
-
-  def hasDryRunOption: Boolean = has(dryRunOpt)
-
-  def hasUpgradeAllOption: Boolean = has(upgradeAllOpt)
-
-  def hasDowngradeAllOption: Boolean = has(downgradeAllOpt)
-
-  def commandConfig: Properties = {
-    if (has(commandConfigOpt))
-      Utils.loadProps(options.valueOf(commandConfigOpt))
-    else
-      new Properties()
-  }
-
-  def bootstrapServers: String = options.valueOf(bootstrapServerOpt)
-
-  def checkArgs(): Unit = {
-    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool describes and updates finalized features.")
-    val numActions = Seq(describeOpt, upgradeAllOpt, downgradeAllOpt).count(has)
-    if (numActions != 1) {
-      CommandLineUtils.printUsageAndDie(
-        parser,
-        "Command must include exactly one action: --describe, --upgrade-all, --downgrade-all.")
+    if (numFailures > 0) {
+      throw new TerseFailure(s"${numFailures} out of ${updates.size} operation(s) failed.")
     }
-    CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
-    if (hasDryRunOption && !hasUpgradeAllOption && !hasDowngradeAllOption) {
-      CommandLineUtils.printUsageAndDie(
-        parser,
-        "Command can contain --dry-run option only when either --upgrade-all or --downgrade-all actions are provided.")
-    }
-  }
-}
-
-object FeatureApis {
-  private def createAdminClient(opts: FeatureCommandOptions): Admin = {
-    val props = new Properties()
-    props.putAll(opts.commandConfig)
-    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.bootstrapServers)
-    Admin.create(props)
   }
 }

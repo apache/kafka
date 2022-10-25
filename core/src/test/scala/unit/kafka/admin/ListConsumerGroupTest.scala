@@ -18,21 +18,24 @@ package kafka.admin
 
 import joptsimple.OptionException
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
 import kafka.utils.TestUtils
 import org.apache.kafka.common.ConsumerGroupState
 import org.apache.kafka.clients.admin.ConsumerGroupListing
 import java.util.Optional
 
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+
 class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
-  @Test
-  def testListConsumerGroups(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testListConsumerGroups(quorum: String): Unit = {
     val simpleGroup = "simple-group"
     addSimpleGroupExecutor(group = simpleGroup)
     addConsumerGroupExecutor(numConsumers = 1)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--list")
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list")
     val service = getConsumerGroupService(cgcArgs)
 
     val expectedGroups = Set(group, simpleGroup)
@@ -43,19 +46,21 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected --list to show groups $expectedGroups, but found $foundGroups.")
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testListWithUnrecognizedNewConsumerOption(): Unit = {
-    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--list")
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", bootstrapServers(), "--list")
     assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }
 
-  @Test
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testListConsumerGroupsWithStates(): Unit = {
     val simpleGroup = "simple-group"
     addSimpleGroupExecutor(group = simpleGroup)
     addConsumerGroupExecutor(numConsumers = 1)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--list", "--state")
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state")
     val service = getConsumerGroupService(cgcArgs)
 
     val expectedListing = Set(
@@ -78,8 +83,9 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected to show groups $expectedListingStable, but found $foundListing")
   }
 
-  @Test
-  def testConsumerGroupStatesFromString(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testConsumerGroupStatesFromString(quorum: String): Unit = {
     var result = ConsumerGroupCommand.consumerGroupStatesFromString("Stable")
     assertEquals(Set(ConsumerGroupState.STABLE), result)
 
@@ -98,26 +104,27 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("   ,   ,"))
   }
 
-  @Test
-  def testListGroupCommand(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testListGroupCommand(quorum: String): Unit = {
     val simpleGroup = "simple-group"
     addSimpleGroupExecutor(group = simpleGroup)
     addConsumerGroupExecutor(numConsumers = 1)
     var out = ""
 
-    var cgcArgs = Array("--bootstrap-server", brokerList, "--list")
+    var cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       !out.contains("STATE") && out.contains(simpleGroup) && out.contains(group)
     }, s"Expected to find $simpleGroup, $group and no header, but found $out")
 
-    cgcArgs = Array("--bootstrap-server", brokerList, "--list", "--state")
+    cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       out.contains("STATE") && out.contains(simpleGroup) && out.contains(group)
     }, s"Expected to find $simpleGroup, $group and the header, but found $out")
 
-    cgcArgs = Array("--bootstrap-server", brokerList, "--list", "--state", "Stable")
+    cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state", "Stable")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       out.contains("STATE") && out.contains(group) && out.contains("Stable")

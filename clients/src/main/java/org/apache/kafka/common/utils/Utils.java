@@ -463,8 +463,7 @@ public final class Utils {
             throw new ClassNotFoundException(String.format("Unable to access " +
                 "constructor of %s", className), e);
         } catch (InvocationTargetException e) {
-            throw new ClassNotFoundException(String.format("Unable to invoke " +
-                "constructor of %s", className), e);
+            throw new KafkaException(String.format("The constructor of %s threw an exception", className), e.getCause());
         }
     }
 
@@ -912,7 +911,7 @@ public final class Utils {
      * Attempts to move source to target atomically and falls back to a non-atomic move if it fails.
      * This function also flushes the parent directory to guarantee crash consistency.
      *
-     * @throws IOException if both atomic and non-atomic moves fail
+     * @throws IOException if both atomic and non-atomic moves fail, or parent dir flush fails.
      */
     public static void atomicMoveWithFallback(Path source, Path target) throws IOException {
         atomicMoveWithFallback(source, target, true);
@@ -924,7 +923,8 @@ public final class Utils {
      * when a sequence of atomicMoveWithFallback is called for the same directory and we don't want
      * to repeatedly flush the same parent directory.
      *
-     * @throws IOException if both atomic and non-atomic moves fail
+     * @throws IOException if both atomic and non-atomic moves fail,
+     * or parent dir flush fails if needFlushParentDir is true.
      */
     public static void atomicMoveWithFallback(Path source, Path target, boolean needFlushParentDir) throws IOException {
         try {
@@ -953,7 +953,7 @@ public final class Utils {
      * @throws IOException if flushing the directory fails.
      */
     public static void flushDir(Path path) throws IOException {
-        if (path != null && !OperatingSystem.IS_WINDOWS) {
+        if (path != null && !OperatingSystem.IS_WINDOWS && !OperatingSystem.IS_ZOS) {
             try (FileChannel dir = FileChannel.open(path, StandardOpenOption.READ)) {
                 dir.force(true);
             }
@@ -997,6 +997,14 @@ public final class Utils {
 
     /**
      * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
+     * <b>Be cautious when passing method references as an argument.</b> For example:
+     * <p>
+     * {@code closeQuietly(task::stop, "source task");}
+     * <p>
+     * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
+     * reference from a null object will result in a {@link NullPointerException}. In the example code above,
+     * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
+     * use a method reference from it.
      */
     public static void closeQuietly(AutoCloseable closeable, String name) {
         if (closeable != null) {
@@ -1008,6 +1016,17 @@ public final class Utils {
         }
     }
 
+    /**
+    * Closes {@code closeable} and if an exception is thrown, it is registered to the firstException parameter.
+    * <b>Be cautious when passing method references as an argument.</b> For example:
+    * <p>
+    * {@code closeQuietly(task::stop, "source task");}
+    * <p>
+    * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
+    * reference from a null object will result in a {@link NullPointerException}. In the example code above,
+    * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
+    * use a method reference from it.
+    */
     public static void closeQuietly(AutoCloseable closeable, String name, AtomicReference<Throwable> firstException) {
         if (closeable != null) {
             try {
@@ -1037,7 +1056,7 @@ public final class Utils {
      *
      * Note: changing this method in the future will possibly cause partition selection not to be
      * compatible with the existing messages already placed on a partition since it is used
-     * in producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner}
+     * in producer's partition selection logic {@link org.apache.kafka.clients.producer.KafkaProducer}
      *
      * @param number a given number
      * @return a positive number.
@@ -1412,6 +1431,23 @@ public final class Utils {
         Map<K, V> res = new HashMap<>(keys.size());
         keys.forEach(key -> res.put(key, valueSupplier.get()));
         return res;
+    }
+
+    /**
+     * Get an array containing all of the {@link Object#toString string representations} of a given enumerable type.
+     * @param enumClass the enum class; may not be null
+     * @return an array with the names of every value for the enum class; never null, but may be empty
+     * if there are no values defined for the enum
+     */
+    public static String[] enumOptions(Class<? extends Enum<?>> enumClass) {
+        Objects.requireNonNull(enumClass);
+        if (!enumClass.isEnum()) {
+            throw new IllegalArgumentException("Class " + enumClass + " is not an enumerable type");
+        }
+
+        return Stream.of(enumClass.getEnumConstants())
+                .map(Object::toString)
+                .toArray(String[]::new);
     }
 
 }

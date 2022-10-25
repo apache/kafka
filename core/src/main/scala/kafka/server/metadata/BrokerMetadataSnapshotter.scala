@@ -17,19 +17,19 @@
 package kafka.server.metadata
 
 import java.util.concurrent.RejectedExecutionException
-
 import kafka.utils.Logging
 import org.apache.kafka.image.MetadataImage
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.image.writer.{ImageWriterOptions, RaftSnapshotWriter}
+import org.apache.kafka.metadata.util.SnapshotReason
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.SnapshotWriter
 
-
 trait SnapshotWriterBuilder {
   def build(committedOffset: Long,
             committedEpoch: Int,
-            lastContainedLogTime: Long): SnapshotWriter[ApiMessageAndVersion]
+            lastContainedLogTime: Long): Option[SnapshotWriter[ApiMessageAndVersion]]
 }
 
 class BrokerMetadataSnapshotter(
@@ -38,7 +38,17 @@ class BrokerMetadataSnapshotter(
   threadNamePrefix: Option[String],
   writerBuilder: SnapshotWriterBuilder
 ) extends Logging with MetadataSnapshotter {
-  private val logContext = new LogContext(s"[BrokerMetadataSnapshotter id=${brokerId}] ")
+  /**
+   * The maximum number of records we will put in each batch.
+   *
+   * From the perspective of the Raft layer, the limit on batch size is specified in terms of
+   * bytes, not number of records. @See {@link KafkaRaftClient#MAX_BATCH_SIZE_BYTES} for details.
+   * However, it's more convenient to limit the batch size here in terms of number of records.
+   * So we chose a low number that will not cause problems.
+   */
+  private val maxRecordsInBatch = 1024
+
+  private val logContext = new LogContext(s"[BrokerMetadataSnapshotter id=$brokerId] ")
   logIdent = logContext.logPrefix()
 
   /**
@@ -52,31 +62,43 @@ class BrokerMetadataSnapshotter(
    */
   val eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix.getOrElse(""))
 
-  override def maybeStartSnapshot(lastContainedLogTime: Long, image: MetadataImage): Boolean = synchronized {
-    if (_currentSnapshotOffset == -1L) {
+  override def maybeStartSnapshot(lastContainedLogTime: Long, image: MetadataImage, snapshotReasons: Set[SnapshotReason]): Boolean = synchronized {
+    if (_currentSnapshotOffset != -1) {
+      info(s"Declining to create a new snapshot at ${image.highestOffsetAndEpoch()} because " +
+        s"there is already a snapshot in progress at offset ${_currentSnapshotOffset}")
+      false
+    } else {
       val writer = writerBuilder.build(
         image.highestOffsetAndEpoch().offset,
         image.highestOffsetAndEpoch().epoch,
         lastContainedLogTime
       )
-      _currentSnapshotOffset = image.highestOffsetAndEpoch().offset
-      info(s"Creating a new snapshot at offset ${_currentSnapshotOffset}...")
-      eventQueue.append(new CreateSnapshotEvent(image, writer))
-      true
-    } else {
-      warn(s"Declining to create a new snapshot at ${image.highestOffsetAndEpoch()} because " +
-           s"there is already a snapshot in progress at offset ${_currentSnapshotOffset}")
-      false
+      if (writer.nonEmpty) {
+        _currentSnapshotOffset = image.highestOffsetAndEpoch().offset
+
+        info(s"Creating a new snapshot at offset ${_currentSnapshotOffset} because, ${snapshotReasons.mkString(" and ")}")
+        eventQueue.append(new CreateSnapshotEvent(image, writer.get))
+        true
+      } else {
+        info(s"Declining to create a new snapshot at ${image.highestOffsetAndEpoch()} because " +
+          s"there is already a snapshot at offset ${image.highestOffsetAndEpoch().offset}")
+        false
+      }
     }
   }
 
-  class CreateSnapshotEvent(image: MetadataImage,
-                            writer: SnapshotWriter[ApiMessageAndVersion])
-        extends EventQueue.Event {
+  class CreateSnapshotEvent(
+    image: MetadataImage,
+    snapshotWriter: SnapshotWriter[ApiMessageAndVersion]
+  ) extends EventQueue.Event {
+
     override def run(): Unit = {
+      val writer = new RaftSnapshotWriter(snapshotWriter, maxRecordsInBatch)
+      val options = new ImageWriterOptions.Builder().
+        setMetadataVersion(image.features().metadataVersion()).
+        build()
       try {
-        image.write(writer.append(_))
-        writer.freeze()
+        image.write(writer, options)
       } finally {
         try {
           writer.close()
@@ -94,7 +116,6 @@ class BrokerMetadataSnapshotter(
           info("Not processing CreateSnapshotEvent because the event queue is closed.")
         case _ => error("Unexpected error handling CreateSnapshotEvent", e)
       }
-      writer.close()
     }
   }
 

@@ -22,13 +22,15 @@ import org.apache.kafka.common.config.ConfigDef.ValidString;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.ConfigUtils;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -317,11 +319,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     List<MetricsReporter> metricsReporters() {
-        List<MetricsReporter> reporters = getConfiguredInstances(
-                CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
-        JmxReporter jmxReporter = new JmxReporter();
-        jmxReporter.configure(this.originals());
-        reporters.add(jmxReporter);
+        List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(this);
         MetricsContext metricsContext = new KafkaMetricsContext("kafka.connect.mirror");
 
         for (MetricsReporter reporter : reporters) {
@@ -370,11 +368,6 @@ public class MirrorConnectorConfig extends AbstractConfig {
 
     String heartbeatsTopic() {
         return replicationPolicy().heartbeatsTopic();
-    }
-
-    // e.g. source1.heartbeats
-    String targetHeartbeatsTopic() {
-        return replicationPolicy().formatRemoteTopic(sourceClusterAlias(), heartbeatsTopic());
     }
 
     String checkpointsTopic() {
@@ -480,6 +473,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
         }
     }
 
+    @SuppressWarnings("deprecation")
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = ConnectorConfig.configDef()
             .define(
                     ENABLED,
@@ -719,8 +713,16 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                     ConfigDef.Type.STRING,
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                    in(Utils.enumOptions(SecurityProtocol.class)),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .define(
+                    CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG,
+                    ConfigDef.Type.BOOLEAN,
+                    true,
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC
+            )
             .withClientSslSupport()
             .withClientSaslSupport();
 }

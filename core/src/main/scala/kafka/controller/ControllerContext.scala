@@ -327,9 +327,16 @@ class ControllerContext {
     }
   }
 
-  def queueTopicDeletion(topics: Set[String]): Unit = {
-    topicsToBeDeleted ++= topics
-    topics.foreach(cleanPreferredReplicaImbalanceMetric)
+  def queueTopicDeletion(topicToBeAddedIntoDeletionList: Set[String]): Unit = {
+    // queueTopicDeletion could be called multiple times for same topic.
+    // e.g. 1) delete topic-A => 2) delete topic-B before A's deletion completes.
+    // In this case, at 2), queueTopicDeletion will be called with Set(topic-A, topic-B).
+    // However we should call cleanPreferredReplicaImbalanceMetric only once for same topic
+    // because otherwise, preferredReplicaImbalanceCount could be decremented wrongly at 2nd call.
+    // So we need to take a diff with already queued topics here.
+    val newlyDeletedTopics = topicToBeAddedIntoDeletionList.diff(topicsToBeDeleted)
+    topicsToBeDeleted ++= newlyDeletedTopics
+    newlyDeletedTopics.foreach(cleanPreferredReplicaImbalanceMetric)
   }
 
   def beginTopicDeletion(topics: Set[String]): Unit = {

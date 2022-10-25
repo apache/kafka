@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
-import kafka.log.{AppendOrigin, UnifiedLog, LogConfig}
+import kafka.log.{AppendOrigin, LogConfig, UnifiedLog}
 import kafka.server._
 import kafka.utils._
 import kafka.utils.timer.MockTimer
@@ -32,8 +32,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordConversionStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.easymock.EasyMock
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.mockito.Mockito.{mock, withSettings, CALLS_REAL_METHODS}
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -54,15 +54,14 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   @BeforeEach
   def setUp(): Unit = {
 
-    replicaManager = EasyMock.partialMockBuilder(classOf[TestReplicaManager]).createMock()
+    replicaManager = mock(classOf[TestReplicaManager], withSettings().defaultAnswer(CALLS_REAL_METHODS))
     replicaManager.createDelayedProducePurgatory(timer)
 
-    zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    zkClient = mock(classOf[KafkaZkClient])
   }
 
   @AfterEach
   def tearDown(): Unit = {
-    EasyMock.reset(replicaManager)
     if (executor != null)
       executor.shutdownNow()
   }
@@ -79,7 +78,6 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
     * in a bad state. Operations in the normal sequence should continue to work as expected.
     */
   def verifyConcurrentRandomSequences(createMembers: String => Set[M], operations: Seq[Operation]): Unit = {
-    EasyMock.reset(replicaManager)
     for (i <- 0 to 10) {
       // Run some random operations
       RandomOperationSequence(createMembers(s"random$i"), operations).run()

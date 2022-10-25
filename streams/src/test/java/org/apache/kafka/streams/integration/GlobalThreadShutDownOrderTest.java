@@ -30,21 +30,22 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -55,7 +56,7 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
 /**
@@ -67,9 +68,9 @@ import static org.junit.Assert.assertEquals;
  * Otherwise if the GlobalStreamThread were to close underneath the StreamThread
  * an exception would be thrown as the GlobalStreamThread closes all global stores on closing.
  */
-@Category({IntegrationTest.class})
+@Timeout(600)
+@Tag("integration")
 public class GlobalThreadShutDownOrderTest {
-
     private static final int NUM_BROKERS = 1;
     private static final Properties BROKER_CONFIG;
 
@@ -83,12 +84,12 @@ public class GlobalThreadShutDownOrderTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -104,21 +105,17 @@ public class GlobalThreadShutDownOrderTest {
     private final List<Long> retrievedValuesList = new ArrayList<>();
     private boolean firstRecordProcessed;
 
-    @Rule
-    public TestName testName = new TestName();
-
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    @Before
-    public void before() throws Exception {
+    @BeforeEach
+    public void before(final TestInfo testInfo) throws Exception {
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
 
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
@@ -142,7 +139,7 @@ public class GlobalThreadShutDownOrderTest {
 
     }
 
-    @After
+    @AfterEach
     public void after() throws Exception {
         if (kafkaStreams != null) {
             kafkaStreams.close();
@@ -196,8 +193,7 @@ public class GlobalThreadShutDownOrderTest {
     }
 
 
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    private class GlobalStoreProcessor extends org.apache.kafka.streams.processor.AbstractProcessor<String, Long> {
+    private class GlobalStoreProcessor implements Processor<String, Long, Void, Void> {
 
         private KeyValueStore<String, Long> store;
         private final String storeName;
@@ -207,14 +203,12 @@ public class GlobalThreadShutDownOrderTest {
         }
 
         @Override
-        @SuppressWarnings("unchecked")
-        public void init(final ProcessorContext context) {
-            super.init(context);
-            store = (KeyValueStore<String, Long>) context.getStateStore(storeName);
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore(storeName);
         }
 
         @Override
-        public void process(final String key, final Long value) {
+        public void process(final Record<String, Long> record) {
             firstRecordProcessed = true;
         }
 

@@ -18,7 +18,7 @@
 package kafka.server.builders;
 
 import kafka.log.LogManager;
-import kafka.server.AlterIsrManager;
+import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.DelayedDeleteRecords;
 import kafka.server.DelayedElectLeader;
@@ -50,7 +50,7 @@ public class ReplicaManagerBuilder {
     private QuotaManagers quotaManagers = null;
     private MetadataCache metadataCache = null;
     private LogDirFailureChannel logDirFailureChannel = null;
-    private AlterIsrManager alterIsrManager = null;
+    private AlterPartitionManager alterPartitionManager = null;
     private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     private AtomicBoolean isShuttingDown = new AtomicBoolean(false);
     private Optional<KafkaZkClient> zkClient = Optional.empty();
@@ -100,8 +100,8 @@ public class ReplicaManagerBuilder {
         return this;
     }
 
-    public ReplicaManagerBuilder setAlterIsrManager(AlterIsrManager alterIsrManager) {
-        this.alterIsrManager = alterIsrManager;
+    public ReplicaManagerBuilder setAlterPartitionManager(AlterPartitionManager alterPartitionManager) {
+        this.alterPartitionManager = alterPartitionManager;
         return this;
     }
 
@@ -151,7 +151,7 @@ public class ReplicaManagerBuilder {
         if (logManager == null) throw new RuntimeException("You must set logManager");
         if (metadataCache == null) throw new RuntimeException("You must set metadataCache");
         if (logDirFailureChannel == null) throw new RuntimeException("You must set logDirFailureChannel");
-        if (alterIsrManager == null) throw new RuntimeException("You must set alterIsrManager");
+        if (alterPartitionManager == null) throw new RuntimeException("You must set alterIsrManager");
         return new ReplicaManager(config,
                              metrics,
                              time,
@@ -160,7 +160,7 @@ public class ReplicaManagerBuilder {
                              quotaManagers,
                              metadataCache,
                              logDirFailureChannel,
-                             alterIsrManager,
+                             alterPartitionManager,
                              brokerTopicStats,
                              isShuttingDown,
                              OptionConverters.toScala(zkClient),

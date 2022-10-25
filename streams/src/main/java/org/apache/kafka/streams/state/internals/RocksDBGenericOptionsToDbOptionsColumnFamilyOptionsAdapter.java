@@ -1553,6 +1553,17 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Override
+    public Options setPeriodicCompactionSeconds(final long periodicCompactionSeconds) {
+        columnFamilyOptions.setPeriodicCompactionSeconds(periodicCompactionSeconds);
+        return this;
+    }
+
+    @Override
+    public long periodicCompactionSeconds() {
+        return columnFamilyOptions.periodicCompactionSeconds();
+    }
+
+    @Override
     public Options setAtomicFlush(final boolean atomicFlush) {
         dbOptions.setAtomicFlush(atomicFlush);
         return this;
@@ -1662,15 +1673,102 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
         return columnFamilyOptions.compactionThreadLimiter();
     }
 
+    @Override
     public Options setCompactionFilter(final AbstractCompactionFilter<? extends AbstractSlice<?>> compactionFilter) {
         columnFamilyOptions.setCompactionFilter(compactionFilter);
         return this;
     }
 
+    @Override
     public Options setCompactionFilterFactory(final AbstractCompactionFilterFactory<? extends AbstractCompactionFilter<?>> compactionFilterFactory) {
         columnFamilyOptions.setCompactionFilterFactory(compactionFilterFactory);
         return this;
     }
+
+    //
+    // BEGIN options for blobs (integrated BlobDB)
+    //
+    
+    @Override
+    public Options setEnableBlobFiles(final boolean enableBlobFiles) {
+        columnFamilyOptions.setEnableBlobFiles(enableBlobFiles);
+        return this;
+    }
+
+    @Override
+    public boolean enableBlobFiles() {
+        return columnFamilyOptions.enableBlobFiles();
+    }
+
+    @Override
+    public Options setMinBlobSize(final long minBlobSize) {
+        columnFamilyOptions.setMinBlobSize(minBlobSize);
+        return this;
+    }
+
+    @Override
+    public long minBlobSize() {
+        return columnFamilyOptions.minBlobSize();
+    }
+
+    @Override
+    public Options setBlobFileSize(final long blobFileSize) {
+        columnFamilyOptions.setBlobFileSize(blobFileSize);
+        return this;
+    }
+
+    @Override
+    public long blobFileSize() {
+        return columnFamilyOptions.blobFileSize();
+    }
+
+    @Override
+    public Options setBlobCompressionType(final CompressionType compressionType) {
+        columnFamilyOptions.setBlobCompressionType(compressionType);
+        return this;
+    }
+
+    @Override
+    public CompressionType blobCompressionType() {
+        return columnFamilyOptions.blobCompressionType();
+    }
+
+    @Override
+    public Options setEnableBlobGarbageCollection(final boolean enableBlobGarbageCollection) {
+        columnFamilyOptions.setEnableBlobGarbageCollection(enableBlobGarbageCollection);
+        return this;
+    }
+
+    @Override
+    public boolean enableBlobGarbageCollection() {
+        return columnFamilyOptions.enableBlobGarbageCollection();
+    }
+
+    @Override
+    public Options setBlobGarbageCollectionAgeCutoff(final double blobGarbageCollectionAgeCutoff) {
+        columnFamilyOptions.setBlobGarbageCollectionAgeCutoff(blobGarbageCollectionAgeCutoff);
+        return this;
+    }
+
+    @Override
+    public double blobGarbageCollectionAgeCutoff() {
+        return columnFamilyOptions.blobGarbageCollectionAgeCutoff();
+    }
+
+    @Override
+    public Options setBlobGarbageCollectionForceThreshold(final double blobGarbageCollectionForceThreshold) {
+        columnFamilyOptions.setBlobGarbageCollectionForceThreshold(blobGarbageCollectionForceThreshold);
+        return this;
+    }
+
+    @Override
+    public double blobGarbageCollectionForceThreshold() {
+        return columnFamilyOptions.blobGarbageCollectionForceThreshold();
+    }
+
+    //
+    // END options for blobs (integrated BlobDB)
+    //
 
     @Override
     public void close() {

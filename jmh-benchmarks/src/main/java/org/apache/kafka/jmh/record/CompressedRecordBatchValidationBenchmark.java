@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.jmh.record;
 
-import kafka.api.ApiVersion;
 import kafka.common.LongRef;
 import kafka.log.AppendOrigin;
 import kafka.log.LogValidator;
@@ -26,6 +25,7 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
@@ -58,7 +58,7 @@ public class CompressedRecordBatchValidationBenchmark extends BaseRecordBatchBen
                 CompressionCodec.getCompressionCodec(compressionType.id),
                 false,  messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, 0,
                 new AppendOrigin.Client$(),
-                ApiVersion.latestVersion(),
+                MetadataVersion.latest(),
                 brokerTopicStats,
                 requestLocal);
     }

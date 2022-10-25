@@ -17,8 +17,6 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.connect.connector.Connector;
@@ -30,8 +28,14 @@ import org.apache.kafka.connect.source.SourceConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
 public final class ConnectUtils {
     private static final Logger log = LoggerFactory.getLogger(ConnectUtils.class);
@@ -45,31 +49,71 @@ public final class ConnectUtils {
             throw new InvalidRecordException(String.format("Invalid record timestamp %d", timestamp));
     }
 
-    public static String lookupKafkaClusterId(WorkerConfig config) {
-        log.info("Creating Kafka admin client");
-        try (Admin adminClient = Admin.create(config.originals())) {
-            return lookupKafkaClusterId(adminClient);
-        }
+    /**
+     * Ensure that the {@link Map properties} contain an expected value for the given key, inserting the
+     * expected value into the properties if necessary.
+     *
+     * <p>If there is a pre-existing value for the key in the properties, log a warning to the user
+     * that this value will be ignored, and the expected value will be used instead.
+     *
+     * @param props the configuration properties provided by the user; may not be null
+     * @param key the name of the property to check on; may not be null
+     * @param expectedValue the expected value for the property; may not be null
+     * @param justification the reason the property cannot be overridden.
+     *                      Will follow the phrase "The value... for the... property will be ignored as it cannot be overridden ".
+     *                      For example, one might supply the message "in connectors with the DLQ feature enabled" for this parameter.
+     *                      May be null (in which case, no justification is given to the user in the logged warning message)
+     * @param caseSensitive whether the value should match case-insensitively
+     */
+    public static void ensureProperty(
+            Map<String, ? super String> props,
+            String key,
+            String expectedValue,
+            String justification,
+            boolean caseSensitive
+    ) {
+        ensurePropertyAndGetWarning(props, key, expectedValue, justification, caseSensitive).ifPresent(log::warn);
     }
 
-    static String lookupKafkaClusterId(Admin adminClient) {
-        log.debug("Looking up Kafka cluster ID");
-        try {
-            KafkaFuture<String> clusterIdFuture = adminClient.describeCluster().clusterId();
-            if (clusterIdFuture == null) {
-                log.info("Kafka cluster version is too old to return cluster ID");
-                return null;
-            }
-            log.debug("Fetching Kafka cluster ID");
-            String kafkaClusterId = clusterIdFuture.get();
-            log.info("Kafka cluster ID: {}", kafkaClusterId);
-            return kafkaClusterId;
-        } catch (InterruptedException e) {
-            throw new ConnectException("Unexpectedly interrupted when looking up Kafka cluster info", e);
-        } catch (ExecutionException e) {
-            throw new ConnectException("Failed to connect to and describe Kafka cluster. "
-                                       + "Check worker's broker connection and security properties.", e);
+    // Visible for testing
+    /**
+     * Ensure that a given key has an expected value in the properties, inserting the expected value into the
+     * properties if necessary. If a user-supplied value is overridden, return a warning message that can
+     * be logged to the user notifying them of this fact.
+     *
+     * @return an {@link Optional} containing a warning that should be logged to the user if a value they
+     * supplied in the properties is being overridden, or {@link Optional#empty()} if no such override has
+     * taken place
+     */
+    static Optional<String> ensurePropertyAndGetWarning(
+            Map<String, ? super String> props,
+            String key,
+            String expectedValue,
+            String justification,
+            boolean caseSensitive) {
+        if (!props.containsKey(key)) {
+            // Insert the expected value
+            props.put(key, expectedValue);
+            // But don't issue a warning to the user
+            return Optional.empty();
         }
+
+        String value = Objects.toString(props.get(key));
+        boolean matchesExpectedValue = caseSensitive ? expectedValue.equals(value) : expectedValue.equalsIgnoreCase(value);
+        if (matchesExpectedValue) {
+            return Optional.empty();
+        }
+
+        // Insert the expected value
+        props.put(key, expectedValue);
+
+        justification = justification != null ? " " + justification : "";
+        // And issue a warning to the user
+        return Optional.of(String.format(
+                "The value '%s' for the '%s' property will be ignored as it cannot be overridden%s. "
+                        + "The value '%s' will be used instead.",
+                value, key, justification, expectedValue
+        ));
     }
 
     public static void addMetricsContextProperties(Map<String, Object> prop, WorkerConfig config, String clusterId) {
@@ -90,4 +134,41 @@ public final class ConnectUtils {
     public static boolean isSourceConnector(Connector connector) {
         return SourceConnector.class.isAssignableFrom(connector.getClass());
     }
+
+    public static <K, I, O> Map<K, O> transformValues(Map<K, I> map, Function<I, O> transformation) {
+        return map.entrySet().stream().collect(Collectors.toMap(
+                Map.Entry::getKey,
+                transformation.compose(Map.Entry::getValue)
+        ));
+    }
+
+    public static <I> List<I> combineCollections(Collection<Collection<I>> collections) {
+        return combineCollections(collections, Function.identity());
+    }
+
+    public static <I, T> List<T> combineCollections(Collection<I> collection, Function<I, Collection<T>> extractCollection) {
+        return combineCollections(collection, extractCollection, Collectors.toList());
+    }
+
+    public static <I, T, C> C combineCollections(
+            Collection<I> collection,
+            Function<I, Collection<T>> extractCollection,
+            Collector<T, ?, C> collector
+    ) {
+        return collection.stream()
+                .map(extractCollection)
+                .flatMap(Collection::stream)
+                .collect(collector);
+    }
+
+    public static ConnectException maybeWrap(Throwable t, String message) {
+        if (t == null) {
+            return null;
+        }
+        if (t instanceof ConnectException) {
+            return (ConnectException) t;
+        }
+        return new ConnectException(message, t);
+    }
+
 }

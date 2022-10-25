@@ -35,7 +35,7 @@ import scala.jdk.CollectionConverters._
 class FetchRequestMaxBytesTest extends BaseRequestTest {
   override def brokerCount: Int = 1
 
-  private var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
+  private var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
   private val testTopic = "testTopic"
   private val testTopicPartition = new TopicPartition(testTopic, 0)
   private val messages = IndexedSeq(
@@ -60,7 +60,7 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers))
+    producer = TestUtils.createProducer(bootstrapServers())
   }
 
   @AfterEach

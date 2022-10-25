@@ -17,7 +17,7 @@
 package kafka.log
 
 import java.nio.ByteBuffer
-import kafka.api.{ApiVersion, KAFKA_2_1_IV0}
+
 import kafka.common.{LongRef, RecordValidationException}
 import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.server.{BrokerTopicStats, RequestLocal}
@@ -29,6 +29,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_1_IV0
 
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -94,7 +96,7 @@ private[log] object LogValidator extends Logging {
                                                     timestampDiffMaxMs: Long,
                                                     partitionLeaderEpoch: Int,
                                                     origin: AppendOrigin,
-                                                    interBrokerProtocolVersion: ApiVersion,
+                                                    interBrokerProtocolVersion: MetadataVersion,
                                                     brokerTopicStats: BrokerTopicStats,
                                                     requestLocal: RequestLocal): ValidationAndOffsetAssignResult = {
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
@@ -365,11 +367,11 @@ private[log] object LogValidator extends Logging {
                                                  timestampDiffMaxMs: Long,
                                                  partitionLeaderEpoch: Int,
                                                  origin: AppendOrigin,
-                                                 interBrokerProtocolVersion: ApiVersion,
+                                                 interBrokerProtocolVersion: MetadataVersion,
                                                  brokerTopicStats: BrokerTopicStats,
                                                  requestLocal: RequestLocal): ValidationAndOffsetAssignResult = {
 
-    if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion < KAFKA_2_1_IV0)
+    if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion.isLessThan(IBP_2_1_IV0))
       throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " +
         "are not allowed to use ZStandard compression")
 
@@ -576,7 +578,8 @@ private[log] object LogValidator extends Logging {
           "One or more records have been rejected due to invalid timestamp"), errors)
       } else {
         throw new RecordValidationException(new InvalidRecordException(
-          "One or more records have been rejected"), errors)
+          "One or more records have been rejected due to " + errors.size + " record errors " +
+            "in total, and only showing the first three errors at most: " + errors.asJava.subList(0, math.min(errors.size, 3))), errors)
       }
     }
   }

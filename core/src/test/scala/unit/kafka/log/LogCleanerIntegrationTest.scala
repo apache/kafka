@@ -20,10 +20,11 @@ package kafka.log
 import java.io.PrintWriter
 
 import com.yammer.metrics.core.{Gauge, MetricName}
-import kafka.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
+import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 

@@ -22,8 +22,7 @@ import com.yammer.metrics.core.MetricName
 import java.io.{File, IOException}
 import java.nio.file.Files
 import java.util.Optional
-import java.util.concurrent.TimeUnit
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV0}
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, TimeUnit}
 import kafka.common.{LongRef, OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.AppendOrigin.RaftLeader
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
@@ -41,6 +40,8 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -146,7 +147,7 @@ case class LogOffsetSnapshot(logStartOffset: Long,
                              lastStableOffset: LogOffsetMetadata)
 
 /**
- * Another container which is used for lower level reads using  [[kafka.cluster.Partition.readRecords()]].
+ * Another container which is used for lower level reads using  [[kafka.cluster.Partition.fetchRecords()]].
  */
 case class LogReadInfo(fetchedData: FetchDataInfo,
                        divergingEpoch: Option[FetchResponseData.EpochEndOffset],
@@ -286,7 +287,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   @volatile private var highWatermarkMetadata: LogOffsetMetadata = LogOffsetMetadata(logStartOffset)
 
-  @volatile var partitionMetadataFile : PartitionMetadataFile = null
+  @volatile var partitionMetadataFile: Option[PartitionMetadataFile] = None
 
   locally {
     initializePartitionMetadata()
@@ -306,9 +307,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *   - Otherwise set _topicId to None
    */
   def initializeTopicId(): Unit =  {
-    if (partitionMetadataFile.exists()) {
+    val partMetadataFile = partitionMetadataFile.getOrElse(
+      throw new KafkaException("The partitionMetadataFile should have been initialized"))
+
+    if (partMetadataFile.exists()) {
       if (keepPartitionMetadataFile) {
-        val fileTopicId = partitionMetadataFile.read().topicId
+        val fileTopicId = partMetadataFile.read().topicId
         if (_topicId.isDefined && !_topicId.contains(fileTopicId))
           throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
             s"but log already contained topic ID $fileTopicId")
@@ -316,14 +320,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         _topicId = Some(fileTopicId)
 
       } else {
-        try partitionMetadataFile.delete()
+        try partMetadataFile.delete()
         catch {
           case e: IOException =>
-            error(s"Error while trying to delete partition metadata file ${partitionMetadataFile}", e)
+            error(s"Error while trying to delete partition metadata file ${partMetadataFile}", e)
         }
       }
     } else if (keepPartitionMetadataFile) {
-      _topicId.foreach(partitionMetadataFile.record)
+      _topicId.foreach(partMetadataFile.record)
       scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
     } else {
       // We want to keep the file and the in-memory topic ID in sync.
@@ -554,11 +558,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   private def initializePartitionMetadata(): Unit = lock synchronized {
     val partitionMetadata = PartitionMetadataFile.newFile(dir)
-    partitionMetadataFile = new PartitionMetadataFile(partitionMetadata, logDirFailureChannel)
+    partitionMetadataFile = Some(new PartitionMetadataFile(partitionMetadata, logDirFailureChannel))
   }
 
   private def maybeFlushMetadataFile(): Unit = {
-    partitionMetadataFile.maybeFlush()
+    partitionMetadataFile.foreach(_.maybeFlush())
   }
 
   /** Only used for ZK clusters when we update and start using topic IDs on existing topics */
@@ -573,9 +577,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       case None =>
         if (keepPartitionMetadataFile) {
           _topicId = Some(topicId)
-          if (!partitionMetadataFile.exists()) {
-            partitionMetadataFile.record(topicId)
-            scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
+          partitionMetadataFile match {
+            case Some(partMetadataFile) =>
+              if (!partMetadataFile.exists()) {
+                partMetadataFile.record(topicId)
+                scheduler.schedule("flush-metadata-file", maybeFlushMetadataFile)
+              }
+            case _ => warn(s"The topic id $topicId will not be persisted to the partition metadata file " +
+              "since the partition is deleted")
           }
         }
     }
@@ -612,6 +621,11 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     localLog.checkIfMemoryMappedBufferClosed()
     UnifiedLog.rebuildProducerState(producerStateManager, localLog.segments, logStartOffset, lastOffset, recordVersion, time,
       reloadFromCleanShutdown = false, logIdent)
+  }
+
+  @threadsafe
+  def hasLateTransaction(currentTimeMs: Long): Boolean = {
+    producerStateManager.hasLateTransaction(currentTimeMs)
   }
 
   def activeProducers: Seq[DescribeProducersResponseData.ProducerState] = {
@@ -669,21 +683,29 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   /**
-   * Rename the directory of the local log
+   * Rename the directory of the local log. If the log's directory is being renamed for async deletion due to a
+   * StopReplica request, then the shouldReinitialize parameter should be set to false, otherwise it should be set to true.
    *
+   * @param name The new name that this log's directory is being renamed to
+   * @param shouldReinitialize Whether the log's metadata should be reinitialized after renaming
    * @throws KafkaStorageException if rename fails
    */
-  def renameDir(name: String): Unit = {
+  def renameDir(name: String, shouldReinitialize: Boolean): Unit = {
     lock synchronized {
       maybeHandleIOException(s"Error while renaming dir for $topicPartition in log dir ${dir.getParent}") {
         // Flush partitionMetadata file before initializing again
         maybeFlushMetadataFile()
         if (localLog.renameDir(name)) {
           producerStateManager.updateParentDir(dir)
-          // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
-          // the checkpoint file in renamed log directory
-          initializeLeaderEpochCache()
-          initializePartitionMetadata()
+          if (shouldReinitialize) {
+            // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
+            // the checkpoint file in renamed log directory
+            initializeLeaderEpochCache()
+            initializePartitionMetadata()
+          } else {
+            leaderEpochCache = None
+            partitionMetadataFile = None
+          }
         }
       }
     }
@@ -712,7 +734,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def appendAsLeader(records: MemoryRecords,
                      leaderEpoch: Int,
                      origin: AppendOrigin = AppendOrigin.Client,
-                     interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion,
+                     interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
                      requestLocal: RequestLocal = RequestLocal.NoCaching): LogAppendInfo = {
     val validateAndAssignOffsets = origin != AppendOrigin.RaftLeader
     append(records, origin, interBrokerProtocolVersion, validateAndAssignOffsets, leaderEpoch, Some(requestLocal), ignoreRecordSize = false)
@@ -728,7 +750,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
     append(records,
       origin = AppendOrigin.Replication,
-      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      interBrokerProtocolVersion = MetadataVersion.latest,
       validateAndAssignOffsets = false,
       leaderEpoch = -1,
       None,
@@ -756,7 +778,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   private def append(records: MemoryRecords,
                      origin: AppendOrigin,
-                     interBrokerProtocolVersion: ApiVersion,
+                     interBrokerProtocolVersion: MetadataVersion,
                      validateAndAssignOffsets: Boolean,
                      leaderEpoch: Int,
                      requestLocal: Option[RequestLocal],
@@ -930,7 +952,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                 s"next offset: ${localLog.logEndOffset}, " +
                 s"and messages: $validRecords")
 
-              if (localLog.unflushedMessages >= config.flushInterval) flush()
+              if (localLog.unflushedMessages >= config.flushInterval) flush(false)
           }
           appendInfo
         }
@@ -1220,12 +1242,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
 
-      if (config.messageFormatVersion < KAFKA_0_10_0_IV0 &&
+      if (config.messageFormatVersion.isLessThan(IBP_0_10_0_IV0) &&
         targetTimestamp != ListOffsetsRequest.EARLIEST_TIMESTAMP &&
         targetTimestamp != ListOffsetsRequest.LATEST_TIMESTAMP)
         throw new UnsupportedForMessageFormatException(s"Cannot search offsets based on timestamp because message format version " +
           s"for partition $topicPartition is ${config.messageFormatVersion} which is earlier than the minimum " +
-          s"required version $KAFKA_0_10_0_IV0")
+          s"required version $IBP_0_10_0_IV0")
 
       // For the earliest and latest, we do not need to return the timestamp.
       if (targetTimestamp == ListOffsetsRequest.EARLIEST_TIMESTAMP) {
@@ -1350,15 +1372,19 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       val numToDelete = deletable.size
       if (numToDelete > 0) {
         // we must always have at least one segment, so if we are going to delete all the segments, create a new one first
-        if (localLog.segments.numberOfSegments == numToDelete)
-          roll()
-        lock synchronized {
-          localLog.checkIfMemoryMappedBufferClosed()
-          // remove the segments for lookups
-          localLog.removeAndDeleteSegments(deletable, asyncDelete = true, reason)
-          deleteProducerSnapshots(deletable, asyncDelete = true)
-          maybeIncrementLogStartOffset(localLog.segments.firstSegmentBaseOffset.get, SegmentDeletion)
+        var segmentsToDelete = deletable
+        if (localLog.segments.numberOfSegments == numToDelete) {
+          val newSegment = roll()
+          if (deletable.last.baseOffset == newSegment.baseOffset) {
+            warn(s"Empty active segment at ${deletable.last.baseOffset} was deleted and recreated due to $reason")
+            segmentsToDelete = deletable.dropRight(1)
+          }
         }
+        localLog.checkIfMemoryMappedBufferClosed()
+        // remove the segments for lookups
+        localLog.removeAndDeleteSegments(segmentsToDelete, asyncDelete = true, reason)
+        deleteProducerSnapshots(deletable, asyncDelete = true)
+        maybeIncrementLogStartOffset(localLog.segments.firstSegmentBaseOffset.get, SegmentDeletion)
       }
       numToDelete
     }
@@ -1498,28 +1524,47 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     producerStateManager.takeSnapshot()
     updateHighWatermarkWithLogEndOffset()
     // Schedule an asynchronous flush of the old segment
-    scheduler.schedule("flush-log", () => flush(newSegment.baseOffset))
+    scheduler.schedule("flush-log", () => flushUptoOffsetExclusive(newSegment.baseOffset))
     newSegment
   }
 
   /**
    * Flush all local log segments
+   *
+   * @param forceFlushActiveSegment should be true during a clean shutdown, and false otherwise. The reason is that
+   * we have to pass logEndOffset + 1 to the `localLog.flush(offset: Long): Unit` function to flush empty
+   * active segments, which is important to make sure we persist the active segment file during shutdown, particularly
+   * when it's empty.
    */
-  def flush(): Unit = flush(logEndOffset)
+  def flush(forceFlushActiveSegment: Boolean): Unit = flush(logEndOffset, forceFlushActiveSegment)
 
   /**
    * Flush local log segments for all offsets up to offset-1
    *
    * @param offset The offset to flush up to (non-inclusive); the new recovery point
    */
-  def flush(offset: Long): Unit = {
-    maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset") {
-      if (offset > localLog.recoveryPoint) {
-        debug(s"Flushing log up to offset $offset, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}, " +
+  def flushUptoOffsetExclusive(offset: Long): Unit = flush(offset, false)
+
+  /**
+   * Flush local log segments for all offsets up to offset-1 if includingOffset=false; up to offset
+   * if includingOffset=true. The recovery point is set to offset.
+   *
+   * @param offset The offset to flush up to; the new recovery point
+   * @param includingOffset Whether the flush includes the provided offset.
+   */
+  private def flush(offset: Long, includingOffset: Boolean): Unit = {
+    val flushOffset = if (includingOffset) offset + 1  else offset
+    val newRecoveryPoint = offset
+    val includingOffsetStr =  if (includingOffset) "inclusive" else "exclusive"
+    maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset " +
+      s"($includingOffsetStr) and recovery point $newRecoveryPoint") {
+      if (flushOffset > localLog.recoveryPoint) {
+        debug(s"Flushing log up to offset $offset ($includingOffsetStr)" +
+          s"with recovery point $newRecoveryPoint, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}," +
           s"unflushed: ${localLog.unflushedMessages}")
-        localLog.flush(offset)
+        localLog.flush(flushOffset)
         lock synchronized {
-          localLog.markFlushed(offset)
+          localLog.markFlushed(newRecoveryPoint)
         }
       }
     }
@@ -1751,13 +1796,15 @@ object UnifiedLog extends Logging {
             recoveryPoint: Long,
             scheduler: Scheduler,
             brokerTopicStats: BrokerTopicStats,
-            time: Time = Time.SYSTEM,
-            maxProducerIdExpirationMs: Int,
+            time: Time,
+            maxTransactionTimeoutMs: Int,
+            producerStateManagerConfig: ProducerStateManagerConfig,
             producerIdExpirationCheckIntervalMs: Int,
             logDirFailureChannel: LogDirFailureChannel,
             lastShutdownClean: Boolean = true,
             topicId: Option[Uuid],
-            keepPartitionMetadataFile: Boolean): UnifiedLog = {
+            keepPartitionMetadataFile: Boolean,
+            numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int]): UnifiedLog = {
     try {
       // create the log directory if it doesn't exist
       Files.createDirectories(dir.toPath)
@@ -1769,8 +1816,9 @@ object UnifiedLog extends Logging {
         logDirFailureChannel,
         config.recordVersion,
         s"[UnifiedLog partition=$topicPartition, dir=${dir.getParent}] ")
-      val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
-      val offsets = LogLoader.load(LoadLogParams(
+      val producerStateManager = new ProducerStateManager(topicPartition, dir,
+        maxTransactionTimeoutMs, producerStateManagerConfig, time)
+      val offsets = new LogLoader(
         dir,
         topicPartition,
         config,
@@ -1781,9 +1829,10 @@ object UnifiedLog extends Logging {
         segments,
         logStartOffset,
         recoveryPoint,
-        maxProducerIdExpirationMs,
         leaderEpochCache,
-        producerStateManager))
+        producerStateManager,
+        numRemainingSegments
+      ).load()
       val localLog = new LocalLog(dir, config, segments, offsets.recoveryPoint,
         offsets.nextOffsetMetadata, scheduler, time, topicPartition, logDirFailureChannel)
       new UnifiedLog(offsets.logStartOffset,

@@ -17,16 +17,14 @@
 
 package org.apache.kafka.jmh.partition;
 
-import kafka.api.ApiVersion;
-import kafka.api.ApiVersion$;
 import kafka.cluster.DelayedOperations;
-import kafka.cluster.IsrChangeListener;
+import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.Defaults;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
-import kafka.server.AlterIsrManager;
+import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
@@ -42,6 +40,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -110,8 +109,8 @@ public class PartitionMakeFollowerBenchmark {
             setFlushRecoveryOffsetCheckpointMs(10000L).
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
-            setMaxPidExpirationMs(60000).
-            setInterBrokerProtocolVersion(ApiVersion.latestVersion()).
+            setMaxProducerIdExpirationMs(60000).
+            setInterBrokerProtocolVersion(MetadataVersion.latest()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
@@ -122,12 +121,12 @@ public class PartitionMakeFollowerBenchmark {
         topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
 
         Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
-        IsrChangeListener isrChangeListener = Mockito.mock(IsrChangeListener.class);
-        AlterIsrManager alterIsrManager = Mockito.mock(AlterIsrManager.class);
+        AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
+        AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         partition = new Partition(tp, 100,
-            ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
-            isrChangeListener, delayedOperations,
-            Mockito.mock(MetadataCache.class), logManager, alterIsrManager);
+            MetadataVersion.latest(), 0, Time.SYSTEM,
+            alterPartitionListener, delayedOperations,
+            Mockito.mock(MetadataCache.class), logManager, alterPartitionManager);
         partition.createLogIfNotExists(true, false, offsetCheckpoints, topicId);
         executorService.submit((Runnable) () -> {
             SimpleRecord[] simpleRecords = new SimpleRecord[] {
@@ -158,7 +157,7 @@ public class PartitionMakeFollowerBenchmark {
             .setLeader(0)
             .setLeaderEpoch(0)
             .setIsr(replicas)
-            .setZkVersion(1)
+            .setPartitionEpoch(1)
             .setReplicas(replicas)
             .setIsNew(true);
         return partition.makeFollower(partitionState, offsetCheckpoints, topicId);

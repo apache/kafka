@@ -27,6 +27,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.internals.generated.SubscriptionInfoData;
+import org.apache.kafka.streams.internals.generated.SubscriptionInfoData.ClientTag;
 import org.apache.kafka.streams.internals.generated.SubscriptionInfoData.PartitionToOffsetSum;
 import org.apache.kafka.streams.internals.generated.SubscriptionInfoData.TaskOffsetSum;
 import org.apache.kafka.streams.processor.TaskId;
@@ -87,7 +88,8 @@ public class SubscriptionInfo {
                             final String userEndPoint,
                             final Map<TaskId, Long> taskOffsetSums,
                             final byte uniqueField,
-                            final int errorCode) {
+                            final int errorCode,
+                            final Map<String, String> clientTags) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
@@ -108,6 +110,9 @@ public class SubscriptionInfo {
         if (version >= 9) {
             data.setErrorCode(errorCode);
         }
+        if (version >= 11) {
+            data.setClientTags(buildClientTagsFromMap(clientTags));
+        }
 
         this.data = data;
 
@@ -125,8 +130,29 @@ public class SubscriptionInfo {
         this.data = subscriptionInfoData;
     }
 
+    public Map<String, String> clientTags() {
+        return data.clientTags().stream()
+            .collect(
+                Collectors.toMap(
+                    clientTag -> new String(clientTag.key(), StandardCharsets.UTF_8),
+                    clientTag -> new String(clientTag.value(), StandardCharsets.UTF_8)
+                )
+            );
+    }
+
     public int errorCode() {
         return data.errorCode();
+    }
+
+    private List<ClientTag> buildClientTagsFromMap(final Map<String, String> clientTags) {
+        return clientTags.entrySet().stream()
+            .map(clientTagEntry -> {
+                final ClientTag clientTag = new ClientTag();
+                clientTag.setKey(clientTagEntry.getKey().getBytes(StandardCharsets.UTF_8));
+                clientTag.setValue(clientTagEntry.getValue().getBytes(StandardCharsets.UTF_8));
+                return clientTag;
+            })
+            .collect(Collectors.toList());
     }
 
     // For version > MIN_NAMED_TOPOLOGY_VERSION

@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.api.{ApiVersion, KAFKA_2_8_IV0}
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import kafka.zk.ZkVersion
@@ -25,6 +24,8 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.MetadataRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV0
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -35,9 +36,9 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
   override def brokerCount: Int = 3
   override def generateConfigs: Seq[KafkaConfig] = {
     Seq(
-      createConfig(0, KAFKA_2_8_IV0),
-      createConfig(1, ApiVersion.latestVersion),
-      createConfig(2, ApiVersion.latestVersion)
+      createConfig(0, IBP_2_8_IV0),
+      createConfig(1, MetadataVersion.latest),
+      createConfig(2, MetadataVersion.latest)
     )
   }
 
@@ -47,7 +48,7 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
     // Kill controller and restart until broker with latest ibp become controller
     ensureControllerIn(Seq(1, 2))
-    createTopic(topic, Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1)))
+    createTopicWithAssignment(topic, Map(0 -> Seq(1, 2, 0), 1 -> Seq(2, 0, 1)))
 
     val resp1 = sendMetadataRequest(new MetadataRequest(requestData(topic, Uuid.ZERO_UUID), 12.toShort), controllerSocketServer)
     val topicId = resp1.topicMetadata.iterator().next().topicId()
@@ -58,7 +59,7 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
     assertEquals(topicId, topicMetadata.topicId())
     assertEquals(topic, topicMetadata.topic())
 
-    // Make the broker whose version=KAFKA_2_8_IV0 controller
+    // Make the broker whose version=IBP_2_8_IV0 controller
     ensureControllerIn(Seq(0))
 
     // Restart the broker whose ibp is higher, and the controller will send metadata request to it
@@ -77,7 +78,7 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
     }
   }
 
-  private def createConfig(nodeId: Int,interBrokerVersion: ApiVersion): KafkaConfig = {
+  private def createConfig(nodeId: Int, interBrokerVersion: MetadataVersion): KafkaConfig = {
     val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerVersion.version)
     KafkaConfig.fromProps(props)

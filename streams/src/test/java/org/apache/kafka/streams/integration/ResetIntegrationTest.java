@@ -27,13 +27,16 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.test.IntegrationTest;
 
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -55,7 +58,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
  */
 @Category({IntegrationTest.class})
 public class ResetIntegrationTest extends AbstractResetIntegrationTest {
-
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private static final String NON_EXISTING_TOPIC = "nonExistingTopic";
 
     public static final EmbeddedKafkaCluster CLUSTER;
@@ -100,7 +104,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
-            "--bootstrap-servers", cluster.bootstrapServers(),
+            "--bootstrap-server", cluster.bootstrapServers(),
             "--input-topics", NON_EXISTING_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
@@ -124,7 +128,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
-            "--bootstrap-servers", cluster.bootstrapServers(),
+            "--bootstrap-server", cluster.bootstrapServers(),
             "--input-topics", NON_EXISTING_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
@@ -140,7 +144,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
-            "--bootstrap-servers", cluster.bootstrapServers(),
+            "--bootstrap-server", cluster.bootstrapServers(),
             "--intermediate-topics", NON_EXISTING_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
@@ -156,7 +160,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
-            "--bootstrap-servers", cluster.bootstrapServers(),
+            "--bootstrap-server", cluster.bootstrapServers(),
             "--internal-topics", NON_EXISTING_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
@@ -172,7 +176,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
-            "--bootstrap-servers", cluster.bootstrapServers(),
+            "--bootstrap-server", cluster.bootstrapServers(),
             "--internal-topics", INPUT_TOPIC
         };
         final Properties cleanUpConfig = new Properties();
@@ -233,7 +237,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
 
         // RESET
-        final File resetFile = File.createTempFile("reset", ".csv");
+        final File resetFile = TestUtils.tempFile("reset", ".csv");
         try (final BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
             writer.write(INPUT_TOPIC + ",0,1");
         }
@@ -274,7 +278,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
 
         // RESET
-        final File resetFile = File.createTempFile("reset", ".csv");
+        final File resetFile = TestUtils.tempFile("reset", ".csv");
         try (final BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
             writer.write(INPUT_TOPIC + ",0,1");
         }
@@ -319,7 +323,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
 
         // RESET
-        final File resetFile = File.createTempFile("reset", ".csv");
+        final File resetFile = TestUtils.tempFile("reset", ".csv");
         try (final BufferedWriter writer = new BufferedWriter(new FileWriter(resetFile))) {
             writer.write(INPUT_TOPIC + ",0,1");
         }

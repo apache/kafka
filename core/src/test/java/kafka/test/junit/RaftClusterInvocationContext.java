@@ -18,6 +18,7 @@
 package kafka.test.junit;
 
 import kafka.network.SocketServer;
+import kafka.server.BrokerFeatures;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.test.ClusterConfig;
@@ -33,12 +34,15 @@ import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
+import scala.compat.java8.OptionConverters;
 
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -62,18 +66,20 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
     private final ClusterConfig clusterConfig;
     private final AtomicReference<KafkaClusterTestKit> clusterReference;
+    private final boolean isCoResident;
 
-    public RaftClusterInvocationContext(ClusterConfig clusterConfig) {
+    public RaftClusterInvocationContext(ClusterConfig clusterConfig, boolean isCoResident) {
         this.clusterConfig = clusterConfig;
         this.clusterReference = new AtomicReference<>();
+        this.isCoResident = isCoResident;
     }
 
     @Override
     public String getDisplayName(int invocationIndex) {
         String clusterDesc = clusterConfig.nameTags().entrySet().stream()
-                .map(Object::toString)
-                .collect(Collectors.joining(", "));
-        return String.format("[%d] Type=Raft, %s", invocationIndex, clusterDesc);
+            .map(Object::toString)
+            .collect(Collectors.joining(", "));
+        return String.format("[%d] Type=Raft-%s, %s", invocationIndex, isCoResident ? "CoReside" : "Distributed", clusterDesc);
     }
 
     @Override
@@ -82,6 +88,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         return Arrays.asList(
             (BeforeTestExecutionCallback) context -> {
                 TestKitNodes nodes = new TestKitNodes.Builder().
+                        setBootstrapMetadataVersion(clusterConfig.metadataVersion()).
+                        setCoResident(isCoResident).
                         setNumBrokerNodes(clusterConfig.numBrokers()).
                         setNumControllerNodes(clusterConfig.numControllers()).build();
                 nodes.brokerNodes().forEach((brokerId, brokerNode) -> {
@@ -140,6 +148,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
+        public Optional<ListenerName> controllerListenerName() {
+            return OptionConverters.toJava(controllers().findAny().get().config().controllerListenerNames().headOption().map(ListenerName::new));
+        }
+
+        @Override
         public Collection<SocketServer> controllerSocketServers() {
             return controllers()
                 .map(ControllerServer::socketServer)
@@ -163,6 +176,18 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
+        public Map<Integer, BrokerFeatures> brokerFeatures() {
+            return brokers().collect(Collectors.toMap(
+                brokerServer -> brokerServer.config().nodeId(),
+                BrokerServer::brokerFeatures
+            ));
+        }
+
+        public Collection<ControllerServer> controllerServers() {
+            return controllers().collect(Collectors.toList());
+        }
+
+        @Override
         public ClusterType clusterType() {
             return ClusterType.RAFT;
         }
@@ -173,13 +198,27 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
+        public Set<Integer> controllerIds() {
+            return controllers()
+                .map(controllerServer -> controllerServer.config().nodeId())
+                .collect(Collectors.toSet());
+        }
+
+        @Override
+        public Set<Integer> brokerIds() {
+            return brokers()
+                .map(brokerServer -> brokerServer.config().nodeId())
+                .collect(Collectors.toSet());
+        }
+
+        @Override
         public KafkaClusterTestKit getUnderlying() {
             return clusterReference.get();
         }
 
         @Override
         public Admin createAdminClient(Properties configOverrides) {
-            Admin admin = Admin.create(clusterReference.get().clientProperties());
+            Admin admin = Admin.create(clusterReference.get().clientProperties(configOverrides));
             admins.add(admin);
             return admin;
         }
@@ -232,11 +271,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
         }
 
-        private Stream<BrokerServer> brokers() {
+        public Stream<BrokerServer> brokers() {
             return clusterReference.get().brokers().values().stream();
         }
 
-        private Stream<ControllerServer> controllers() {
+        public Stream<ControllerServer> controllers() {
             return clusterReference.get().controllers().values().stream();
         }
 
