@@ -491,6 +491,29 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   }
 
   @Test
+  def testAutoPreferredReplicaLeaderElectionWithReassigningPartitions(): Unit = {
+    servers = makeServers(2, autoLeaderRebalanceEnable = true)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(1, 0))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+    val reassigningTp = new TopicPartition("reassigning", 0)
+    val reassigningAssignment = Map(reassigningTp.partition -> Seq(0))
+    TestUtils.createTopic(zkClient, reassigningTp.topic, partitionReplicaAssignment = reassigningAssignment, servers = servers)
+    servers(otherBrokerId).shutdown()
+    servers(otherBrokerId).awaitShutdown()
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
+      "failed to get expected partition state upon broker shutdown")
+
+    // Directly edit the controller context to simulate a reassigning partition
+    servers(controllerId).kafkaController.controllerContext.partitionsBeingReassigned.add(reassigningTp)
+    servers(otherBrokerId).startup()
+    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 2,
+      "failed to get expected partition state upon broker startup")
+  }
+
+  @Test
   def testLeaderAndIsrWhenEntireIsrOfflineAndUncleanLeaderElectionDisabled(): Unit = {
     servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
