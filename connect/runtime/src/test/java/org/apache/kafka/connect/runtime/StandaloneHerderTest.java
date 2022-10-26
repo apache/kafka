@@ -26,6 +26,8 @@ import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverri
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
+import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -79,6 +81,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
@@ -108,6 +111,11 @@ public class StandaloneHerderTest {
     protected Worker worker;
     @Mock protected WorkerConfigTransformer transformer;
     @Mock private Plugins plugins;
+
+    @Mock
+    private DelegatingClassLoader delegatingLoader;
+    @Mock
+    private PluginClassLoader pluginLoader;
     protected FutureCallback<Herder.Created<ConnectorInfo>> createCallback;
     @Mock protected StatusBackingStore statusBackingStore;
 
@@ -123,13 +131,10 @@ public class StandaloneHerderTest {
             .useConstructor(worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy)
             .defaultAnswer(CALLS_REAL_METHODS));
         createCallback = new FutureCallback<>();
-
-        // Since mockStatic is only ThreadLocal (see https://github.com/mockito/mockito/issues/2142) and Herder's uses
-        // an ExecutorService to submit tasks, we need to create the static mock on the same connectorExecutor
-        // that the herder submits the tasks on.
-        ((AbstractHerder) herder).connectorExecutor.submit(() ->
-            pluginsStatic = mockStatic(Plugins.class)
-        ).get();
+        runOnHerderConnectorExecutor(() -> {
+            pluginsStatic = mockStatic(Plugins.class);
+            pluginsStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
+        });
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
     }
@@ -151,10 +156,11 @@ public class StandaloneHerderTest {
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     @Test
-    public void testCreateConnectorFailedValidation() {
+    public void testCreateConnectorFailedValidation() throws ExecutionException, InterruptedException {
         // Basic validation should be performed and return an error, but should still evaluate the connector's config
         connector = mock(BogusSourceConnector.class);
 
@@ -166,6 +172,7 @@ public class StandaloneHerderTest {
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
         when(worker.getPlugins()).thenReturn(plugins);
+        when(plugins.compareAndSwapLoaders(connectorMock)).thenReturn(delegatingLoader);
         when(plugins.newConnector(anyString())).thenReturn(connectorMock);
 
         when(connectorMock.config()).thenReturn(new ConfigDef());
@@ -177,6 +184,7 @@ public class StandaloneHerderTest {
 
         ExecutionException exception = assertThrows(ExecutionException.class, () -> createCallback.get(1000L, TimeUnit.SECONDS));
         assertEquals(BadRequestException.class, exception.getCause().getClass());
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     @Test
@@ -193,6 +201,8 @@ public class StandaloneHerderTest {
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
         when(worker.getPlugins()).thenReturn(plugins);
+        when(plugins.compareAndSwapLoaders(connectorMock)).thenReturn(delegatingLoader);
+        // No new connector is created
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
@@ -203,6 +213,7 @@ public class StandaloneHerderTest {
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, failedCreateCallback);
         ExecutionException exception = assertThrows(ExecutionException.class, () -> failedCreateCallback.get(1000L, TimeUnit.SECONDS));
         assertEquals(AlreadyExistsException.class, exception.getCause().getClass());
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     @Test
@@ -217,6 +228,7 @@ public class StandaloneHerderTest {
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SINK), connectorInfo.result());
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     @Test
@@ -248,6 +260,7 @@ public class StandaloneHerderTest {
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof NotFoundException);
         }
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     @Test
@@ -279,6 +292,7 @@ public class StandaloneHerderTest {
         herder.restartConnector(CONNECTOR_NAME, restartCallback);
         worker.stopAndAwaitConnector(CONNECTOR_NAME);
         restartCallback.get(1000L, TimeUnit.MILLISECONDS);
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     @Test
@@ -314,6 +328,7 @@ public class StandaloneHerderTest {
         herder.restartConnector(CONNECTOR_NAME, restartCallback);
         restartCallback.get(1000L, TimeUnit.MILLISECONDS);
         verify(worker).stopAndAwaitConnector(CONNECTOR_NAME);
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     @Test
@@ -347,6 +362,7 @@ public class StandaloneHerderTest {
         } catch (ExecutionException e) {
             assertEquals(exception, e.getCause());
         }
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     @Test
@@ -383,6 +399,7 @@ public class StandaloneHerderTest {
         FutureCallback<Void> restartTaskCallback = new FutureCallback<>();
         herder.restartTask(taskId, restartTaskCallback);
         restartTaskCallback.get(1000L, TimeUnit.MILLISECONDS);
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     @Test
@@ -424,6 +441,7 @@ public class StandaloneHerderTest {
         } catch (ExecutionException exception) {
             assertEquals(ConnectException.class, exception.getCause().getClass());
         }
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     @Test
@@ -456,6 +474,7 @@ public class StandaloneHerderTest {
         ExecutionException ee = assertThrows(ExecutionException.class, () -> restartCallback.get(1000L, TimeUnit.MILLISECONDS));
         assertTrue(ee.getCause() instanceof NotFoundException);
         assertTrue(ee.getMessage().contains("Status for connector"));
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     @Test
@@ -482,6 +501,7 @@ public class StandaloneHerderTest {
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
         assertEquals(connectorStateInfo, restartCallback.get(1000L, TimeUnit.MILLISECONDS));
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     @Test
@@ -520,6 +540,7 @@ public class StandaloneHerderTest {
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
         assertEquals(connectorStateInfo, restartCallback.get(1000L, TimeUnit.MILLISECONDS));
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     @Test
@@ -570,6 +591,7 @@ public class StandaloneHerderTest {
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
         assertEquals(connectorStateInfo, restartCallback.get(1000L, TimeUnit.MILLISECONDS));
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     @Test
@@ -628,6 +650,7 @@ public class StandaloneHerderTest {
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
         assertEquals(connectorStateInfo, restartCallback.get(1000L, TimeUnit.MILLISECONDS));
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     @Test
@@ -652,6 +675,7 @@ public class StandaloneHerderTest {
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
+        verifyCompareAndSwapLoaders(connectorMock);
         herder.stop();
     }
 
@@ -698,6 +722,7 @@ public class StandaloneHerderTest {
         herder.connectorInfo(CONNECTOR_NAME, connectorInfoCb);
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
         herder.taskConfigs(CONNECTOR_NAME, taskConfigsCb);
+        verifyCompareAndSwapLoaders(connector);
     }
 
     @Test
@@ -779,6 +804,7 @@ public class StandaloneHerderTest {
         when(worker.configTransformer()).thenReturn(transformer);
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        when(plugins.compareAndSwapLoaders(connectorMock)).thenReturn(delegatingLoader);
         when(worker.getPlugins()).thenReturn(plugins);
         when(plugins.newConnector(anyString())).thenReturn(connectorMock);
         when(connectorMock.config()).thenReturn(configDef);
@@ -798,6 +824,7 @@ public class StandaloneHerderTest {
                     "You can also find the above list of errors at the endpoint `/connector-plugins/{connectorType}/config/validate`"
             );
         }
+        verifyCompareAndSwapLoaders(connectorMock);
     }
 
     private void expectAdd(SourceSink sourceSink) {
@@ -909,6 +936,7 @@ public class StandaloneHerderTest {
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
         when(worker.getPlugins()).thenReturn(plugins);
+        when(plugins.compareAndSwapLoaders(connectorMock)).thenReturn(delegatingLoader);
         if (shouldCreateConnector) {
             when(worker.getPlugins()).thenReturn(plugins);
             when(plugins.newConnector(anyString())).thenReturn(connectorMock);
@@ -930,6 +958,27 @@ public class StandaloneHerderTest {
     }
 
     private abstract class BogusSinkTask extends SourceTask {
+    }
+
+    /**
+     * Since mockStatic is only ThreadLocal (see https://github.com/mockito/mockito/issues/2142) and Herder's uses
+     * an ExecutorService to submit tasks, we need to create the static mock on the same connectorExecutor
+     * that the herder submits the tasks on.
+     * @param task The task to run on the test herders connectionExecutor
+     */
+    private void runOnHerderConnectorExecutor(Runnable task) throws ExecutionException, InterruptedException {
+        ((AbstractHerder) herder).connectorExecutor.submit(task).get();
+    }
+
+    /**
+     * Verifies that both Plugins::compareAndSwapLoaders and plugins.compareAndSwapLoaders are indirectly called
+     * @param connector The connector to verify when passed to plugins.compareAndSwapLoaders
+     */
+    private void verifyCompareAndSwapLoaders(Connector connector) throws ExecutionException, InterruptedException {
+        verify(plugins, atLeastOnce()).compareAndSwapLoaders(eq(connector));
+        runOnHerderConnectorExecutor(() ->
+                pluginsStatic.verify(() -> Plugins.compareAndSwapLoaders(eq(delegatingLoader)), atLeastOnce())
+        );
     }
 
 }
