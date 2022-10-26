@@ -1188,7 +1188,6 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
                 expectCall(sourceTask::commit).anyTimes();
                 break;
             case FAIL_FLUSH_CALLBACK:
-                expectCall(producer::commitTransaction);
                 offsetFlush.andAnswer(() -> {
                     flushCallback.getValue().onCompletion(new RecordTooLargeException(), null);
                     return null;
