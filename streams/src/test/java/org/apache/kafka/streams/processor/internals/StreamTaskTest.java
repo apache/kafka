@@ -314,6 +314,7 @@ public class StreamTaskTest {
         stateManager.registerGlobalStateStores(emptyList());
         EasyMock.expectLastCall();
 
+        EasyMock.expect(stateManager.transactional()).andReturn(false);
         EasyMock.expect(stateManager.taskId()).andReturn(taskId);
 
         EasyMock.expect(stateDirectory.lock(taskId)).andReturn(true);
