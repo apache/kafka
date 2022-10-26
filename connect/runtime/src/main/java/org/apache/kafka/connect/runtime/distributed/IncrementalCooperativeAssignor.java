@@ -264,21 +264,21 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         Map<String, ConnectorsAndTasks.Builder> toRevoke = new HashMap<>();
 
-        Map<String, ConnectorsAndTasks> deletedAndRevoked = intersection(deleted, memberAssignments);
-        log.debug("Deleted connectors and tasks to revoke from each worker: {}", deletedAndRevoked);
-        addAll(toRevoke, deletedAndRevoked);
+        Map<String, ConnectorsAndTasks> deletedToRevoke = intersection(deleted, memberAssignments);
+        log.debug("Deleted connectors and tasks to revoke from each worker: {}", deletedToRevoke);
+        addAll(toRevoke, deletedToRevoke);
 
         // Revoking redundant connectors/tasks if the workers have duplicate assignments
-        Map<String, ConnectorsAndTasks> duplicatedAndRevoked = intersection(duplicated, memberAssignments);
-        log.debug("Duplicated connectors and tasks to revoke from each worker: {}", duplicatedAndRevoked);
-        addAll(toRevoke, duplicatedAndRevoked);
+        Map<String, ConnectorsAndTasks> duplicatedToRevoke = intersection(duplicated, memberAssignments);
+        log.debug("Duplicated connectors and tasks to revoke from each worker: {}", duplicatedToRevoke);
+        addAll(toRevoke, duplicatedToRevoke);
 
         // Compute the assignment that will be applied across the cluster after this round of rebalance
         // Later on, new submissions and lost-and-reassigned connectors and tasks will be added to these assignments,
         // and load-balancing revocations will be removed from them.
         List<WorkerLoad> nextWorkerAssignment = workerLoads(memberAssignments);
-        removeAll(nextWorkerAssignment, deletedAndRevoked);
-        removeAll(nextWorkerAssignment, duplicatedAndRevoked);
+        removeAll(nextWorkerAssignment, deletedToRevoke);
+        removeAll(nextWorkerAssignment, duplicatedToRevoke);
 
         // Collect the lost assignments that are ready to be reassigned because the workers that were
         // originally responsible for them appear to have left the cluster instead of rejoining within
@@ -388,31 +388,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         );
     }
 
-    private Map<String, ConnectorsAndTasks> computeDeleted(ConnectorsAndTasks deleted,
-                                                           Map<String, Collection<String>> connectorAssignments,
-                                                           Map<String, Collection<ConnectorTaskId>> taskAssignments) {
-        // Connector to worker reverse lookup map
-        Map<String, String> connectorOwners = WorkerCoordinator.invertAssignment(connectorAssignments);
-        // Task to worker reverse lookup map
-        Map<ConnectorTaskId, String> taskOwners = WorkerCoordinator.invertAssignment(taskAssignments);
-
-        Map<String, ConnectorsAndTasks> toRevoke = new HashMap<>();
-        // Add the connectors that have been deleted to the revoked set
-        deleted.connectors().forEach(c ->
-                toRevoke.computeIfAbsent(
-                    connectorOwners.get(c),
-                    v -> new ConnectorsAndTasks.Builder().build()
-                ).connectors().add(c));
-        // Add the tasks that have been deleted to the revoked set
-        deleted.tasks().forEach(t ->
-                toRevoke.computeIfAbsent(
-                    taskOwners.get(t),
-                    v -> new ConnectorsAndTasks.Builder().build()
-                ).tasks().add(t));
-        log.debug("Connectors and tasks to delete assignments: {}", toRevoke);
-        return toRevoke;
-    }
-
     private ConnectorsAndTasks computePreviousAssignment(Map<String, ConnectorsAndTasks> toRevoke,
                                                          Map<String, Collection<String>> connectorAssignments,
                                                          Map<String, Collection<ConnectorTaskId>> taskAssignments,
@@ -461,42 +436,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 .collect(Collectors.toSet());
 
         return new ConnectorsAndTasks.Builder().with(duplicatedConnectors, duplicatedTasks).build();
-    }
-
-    private Map<String, ConnectorsAndTasks> computeDuplicatedAssignments(Map<String, ConnectorsAndTasks> memberAssignments,
-                                             Map<String, Collection<String>> connectorAssignments,
-                                             Map<String, Collection<ConnectorTaskId>> taskAssignment) {
-        ConnectorsAndTasks duplicatedAssignments = duplicatedAssignments(memberAssignments);
-        log.debug("Duplicated assignments: {}", duplicatedAssignments);
-
-        Map<String, ConnectorsAndTasks> toRevoke = new HashMap<>();
-        if (!duplicatedAssignments.connectors().isEmpty()) {
-            connectorAssignments.entrySet().stream()
-                    .forEach(entry -> {
-                        Set<String> duplicatedConnectors = new HashSet<>(duplicatedAssignments.connectors());
-                        duplicatedConnectors.retainAll(entry.getValue());
-                        if (!duplicatedConnectors.isEmpty()) {
-                            toRevoke.computeIfAbsent(
-                                entry.getKey(),
-                                v -> new ConnectorsAndTasks.Builder().build()
-                            ).connectors().addAll(duplicatedConnectors);
-                        }
-                    });
-        }
-        if (!duplicatedAssignments.tasks().isEmpty()) {
-            taskAssignment.entrySet().stream()
-                    .forEach(entry -> {
-                        Set<ConnectorTaskId> duplicatedTasks = new HashSet<>(duplicatedAssignments.tasks());
-                        duplicatedTasks.retainAll(entry.getValue());
-                        if (!duplicatedTasks.isEmpty()) {
-                            toRevoke.computeIfAbsent(
-                                entry.getKey(),
-                                v -> new ConnectorsAndTasks.Builder().build()
-                            ).tasks().addAll(duplicatedTasks);
-                        }
-                    });
-        }
-        return toRevoke;
     }
 
     // visible for testing
@@ -748,7 +687,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         int minAllocatedPerWorker = totalToAllocate / totalWorkers;
         // How many workers are going to have to be allocated exactly one extra instance
         // (since the total number to allocate may not be a perfect multiple of the number of workers)
-        int extrasToAllocate = totalToAllocate % totalWorkers;
+        int workersToAllocateExtra = totalToAllocate % totalWorkers;
         // Useful function to determine exactly how many instances of the resource a given worker is currently allocated
         Function<WorkerLoad, Integer> workerAllocationSize = workerAllocation.andThen(Collection::size);
 
@@ -760,7 +699,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 .map(workerAllocationSize)
                 .filter(n -> n == minAllocatedPerWorker + 1)
                 .count();
-        if (workersAllocatedSingleExtra == extrasToAllocate
+        if (workersAllocatedSingleExtra == workersToAllocateExtra
                 && workersAllocatedMinimum + workersAllocatedSingleExtra == totalWorkers) {
             log.trace(
                     "No load-balancing {} revocations required; the current allocations, when combined with any newly-created {}, should be balanced",
@@ -780,7 +719,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 continue;
             }
             int maxAllocationForWorker;
-            if (allocatedExtras < extrasToAllocate) {
+            if (allocatedExtras < workersToAllocateExtra) {
                 // We'll allocate one of the extra resource instances to this worker
                 allocatedExtras++;
                 if (currentAllocationSizeForWorker == minAllocatedPerWorker + 1) {
