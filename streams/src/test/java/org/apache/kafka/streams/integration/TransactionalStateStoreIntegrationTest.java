@@ -20,6 +20,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getRunningStreams;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
@@ -36,18 +37,18 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValueTimestamp;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -121,8 +122,6 @@ public class TransactionalStateStoreIntegrationTest {
 
     private static Properties producerConfig;
 
-    private static Properties consumerConfig;
-
     private static final long COMMIT_INTERVAL_MS = 100L;
 
     @BeforeClass
@@ -142,9 +141,12 @@ public class TransactionalStateStoreIntegrationTest {
             StringSerializer.class,
             StringSerializer.class
         );
-        consumerConfig = TestUtils.consumerConfig(
+    }
+
+    private Properties consumerConfig(final String groupId) {
+        return TestUtils.consumerConfig(
             CLUSTER.bootstrapServers(),
-            "anything",
+            groupId,
             StringDeserializer.class,
             StringDeserializer.class,
             Utils.mkProperties(Collections.singletonMap(
@@ -155,8 +157,9 @@ public class TransactionalStateStoreIntegrationTest {
     }
 
     @AfterClass
-    public static void closeCluster() {
+    public static void closeCluster() throws IOException {
         CLUSTER.stop();
+        purgeLocalStreamsState(STREAMS_CONFIG);
     }
 
     @ClassRule
@@ -171,11 +174,13 @@ public class TransactionalStateStoreIntegrationTest {
         final String uniqueTestName = safeUniqueTestName(getClass(), testName);
         final String input = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-store";
-        final String outputTopic = uniqueTestName + "-output";
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app");
+        final String output = uniqueTestName + "-output";
+        final String appId = uniqueTestName + "-appId";
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        producerConfig.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, appId + "-producer");
 
-        cleanStateBeforeTest(CLUSTER, input);
+        cleanStateBeforeTest(CLUSTER, input, output);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> inputStream = builder.stream(input);
@@ -189,6 +194,7 @@ public class TransactionalStateStoreIntegrationTest {
 
         final AtomicBoolean crashRequested = new AtomicBoolean(false);
         final CountDownLatch crashLatch = new CountDownLatch(1);
+        final AtomicBoolean skipRecords = new AtomicBoolean(false);
 
         inputStream.process(new ProcessorSupplier<String, String, String, String>() {
 
@@ -207,6 +213,10 @@ public class TransactionalStateStoreIntegrationTest {
 
                         @Override
                         public void process(final Record<String, String> record) {
+                            if (skipRecords.get()) {
+                                return;
+                            }
+
                             store.put(record.key(), record.value());
 
                             // crash after updating local state, but before forwarding the record
@@ -224,16 +234,20 @@ public class TransactionalStateStoreIntegrationTest {
                     };
                 }
             }, storeName)
-            .to(outputTopic);
-
+            .to(output);
 
         final KafkaStreams driver = getRunningStreams(STREAMS_CONFIG, builder, true);
 
         try {
-            IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
-                singletonList(new KeyValueTimestamp<>("k1", "v1", 0L)));
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                input,
+                singletonList(new KeyValue<>("k1", "v1")),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class, producerConfig),
+                CLUSTER.time,
+                true
+            );
             IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                consumerConfig, outputTopic, 1, 20000L);
+                consumerConfig(appId + "readCommitted"), output, 1, 20000L);
 
             final ReadOnlyKeyValueStore<Object, Object> store = IntegrationTestUtils.getStore(
                 storeName, driver, keyValueStore());
@@ -241,8 +255,13 @@ public class TransactionalStateStoreIntegrationTest {
 
             Thread.sleep(2 * COMMIT_INTERVAL_MS);
             crashRequested.set(true);
-            IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
-                singletonList(new KeyValueTimestamp<>("k2", "v2", 1L)));
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                input,
+                singletonList(new KeyValue<>("k2", "v2")),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class, producerConfig),
+                CLUSTER.time,
+                true
+            );
             TestUtils.waitForCondition(() -> store.get("k2").equals("v2"),
                 "Expected to read the second key");
             crashLatch.countDown();
@@ -253,6 +272,7 @@ public class TransactionalStateStoreIntegrationTest {
             throw new RuntimeException(e);
         }
 
+        skipRecords.set(true);
         final KafkaStreams driver1 = getRunningStreams(STREAMS_CONFIG, builder, false);
         final ReadOnlyKeyValueStore<String, String> store = IntegrationTestUtils.getStore(storeName, driver1, keyValueStore());
         assertEquals("v1", store.get("k1"));
@@ -268,11 +288,13 @@ public class TransactionalStateStoreIntegrationTest {
         final String uniqueTestName = safeUniqueTestName(getClass(), testName);
         final String input = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-store";
-        final String outputTopic = uniqueTestName + "-output";
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app");
+        final String output = uniqueTestName + "-output";
+        final String appId = uniqueTestName + "-appId";
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        producerConfig.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, appId + "-producer");
 
-        cleanStateBeforeTest(CLUSTER, input);
+        cleanStateBeforeTest(CLUSTER, input, output);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> inputStream = builder.stream(input);
@@ -287,6 +309,7 @@ public class TransactionalStateStoreIntegrationTest {
 
         final AtomicBoolean crashRequested = new AtomicBoolean(false);
         final CountDownLatch crashLatch = new CountDownLatch(1);
+        final AtomicBoolean skipRecords = new AtomicBoolean(false);
 
         inputStream.process(new ProcessorSupplier<String, String, String, String>() {
 
@@ -305,6 +328,10 @@ public class TransactionalStateStoreIntegrationTest {
 
                         @Override
                         public void process(final Record<String, String> record) {
+                            if (skipRecords.get()) {
+                                return;
+                            }
+
                             store.put(record.key(), record.value());
 
                             // crash after updating local state, but before forwarding the record
@@ -322,16 +349,21 @@ public class TransactionalStateStoreIntegrationTest {
                     };
                 }
             }, storeName)
-            .to(outputTopic);
+            .to(output);
 
 
         final KafkaStreams driver = getRunningStreams(STREAMS_CONFIG, builder, true);
 
         try {
-            IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
-                singletonList(new KeyValueTimestamp<>("k1", "v1", 0L)));
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                input,
+                singletonList(new KeyValue<>("k1", "v1")),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class, producerConfig),
+                CLUSTER.time,
+                true
+            );
             IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                consumerConfig, outputTopic, 1, 20000L);
+                consumerConfig(appId + "readCommitted"), output, 1);
 
             final ReadOnlyKeyValueStore<Object, Object> store = IntegrationTestUtils.getStore(
                 storeName, driver, keyValueStore());
@@ -339,8 +371,13 @@ public class TransactionalStateStoreIntegrationTest {
 
             Thread.sleep(2 * COMMIT_INTERVAL_MS);
             crashRequested.set(true);
-            IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
-                singletonList(new KeyValueTimestamp<>("k2", "v2", 1L)));
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                input,
+                singletonList(new KeyValue<>("k2", "v2")),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class, producerConfig),
+                CLUSTER.time,
+                true
+            );
             TestUtils.waitForCondition(() -> store.get("k2").equals("v2"),
                 "Expected to read the second key");
             crashLatch.countDown();
@@ -351,6 +388,7 @@ public class TransactionalStateStoreIntegrationTest {
             throw new RuntimeException(e);
         }
 
+        skipRecords.set(true);
         final KafkaStreams driver1 = getRunningStreams(STREAMS_CONFIG, builder, false);
 
         final ReadOnlyKeyValueStore<String, String> store = IntegrationTestUtils.getStore(storeName, driver1, keyValueStore());
@@ -367,11 +405,13 @@ public class TransactionalStateStoreIntegrationTest {
         final String uniqueTestName = safeUniqueTestName(getClass(), testName);
         final String input = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-store";
-        final String outputTopic = uniqueTestName + "-output";
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app");
+        final String output = uniqueTestName + "-output";
+        final String appId = uniqueTestName + "-appId";
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        producerConfig.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, appId + "-producer");
 
-        cleanStateBeforeTest(CLUSTER, input);
+        cleanStateBeforeTest(CLUSTER, input, output);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> inputStream = builder.stream(input);
@@ -391,6 +431,7 @@ public class TransactionalStateStoreIntegrationTest {
 
         final AtomicBoolean crashRequested = new AtomicBoolean(false);
         final CountDownLatch crashLatch = new CountDownLatch(1);
+        final AtomicBoolean skipRecords = new AtomicBoolean(false);
 
         inputStream.process(new ProcessorSupplier<String, String, String, String>() {
 
@@ -409,6 +450,10 @@ public class TransactionalStateStoreIntegrationTest {
 
                         @Override
                         public void process(final Record<String, String> record) {
+                            if (skipRecords.get()) {
+                                return;
+                            }
+
                             store.put(record.key(), record.value(), record.timestamp());
 
                             // crash after updating local state, but before forwarding the record
@@ -426,26 +471,39 @@ public class TransactionalStateStoreIntegrationTest {
                     };
                 }
             }, storeName)
-            .to(outputTopic);
+            .to(output);
 
 
         final KafkaStreams driver = getRunningStreams(STREAMS_CONFIG, builder, true);
 
+        final long ts1 = CLUSTER.time.milliseconds();
+        final long ts2;
         try {
-            IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
-                singletonList(new KeyValueTimestamp<>("k1", "v1", 0L)));
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                input,
+                singletonList(new KeyValue<>("k1", "v1")),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class, producerConfig),
+                CLUSTER.time,
+                true
+            );
             IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                consumerConfig, outputTopic, 1, 20000L);
+                consumerConfig(appId + "readCommitted"), output, 1);
 
             final ReadOnlyWindowStore<Object, Object> store = IntegrationTestUtils.getStore(
                 storeName, driver, windowStore());
-            assertEquals("v1", store.fetch("k1", 0L));
+            assertEquals("v1", store.fetch("k1", ts1));
 
             Thread.sleep(2 * COMMIT_INTERVAL_MS);
             crashRequested.set(true);
-            IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
-                singletonList(new KeyValueTimestamp<>("k2", "v2", 1L)));
-            TestUtils.waitForCondition(() -> store.fetch("k2", 1L).equals("v2"),
+            ts2 = CLUSTER.time.milliseconds();
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                input,
+                singletonList(new KeyValue<>("k2", "v2")),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class, producerConfig),
+                CLUSTER.time,
+                true
+            );
+            TestUtils.waitForCondition(() -> store.fetch("k2", ts2).equals("v2"),
                 "Expected to read the second key");
             crashLatch.countDown();
 
@@ -455,11 +513,12 @@ public class TransactionalStateStoreIntegrationTest {
             throw new RuntimeException(e);
         }
 
+        skipRecords.set(true);
         final KafkaStreams driver1 = getRunningStreams(STREAMS_CONFIG, builder, false);
 
         final ReadOnlyWindowStore<String, String> store = IntegrationTestUtils.getStore(storeName, driver1, windowStore());
-        assertEquals("v1", store.fetch("k1", 0L));
-        assertNull(store.fetch("k2", 1L));
+        assertEquals("v1", store.fetch("k1", ts1));
+        assertNull(store.fetch("k2", ts2));
 
         driver1.close();
         quietlyCleanStateAfterTest(CLUSTER, driver);
@@ -471,11 +530,13 @@ public class TransactionalStateStoreIntegrationTest {
         final String uniqueTestName = safeUniqueTestName(getClass(), testName);
         final String input = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-store";
-        final String outputTopic = uniqueTestName + "-output";
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app");
+        final String output = uniqueTestName + "-output";
+        final String appId = uniqueTestName + "-appId";
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        producerConfig.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, appId + "-producer");
 
-        cleanStateBeforeTest(CLUSTER, input);
+        cleanStateBeforeTest(CLUSTER, input, output);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> inputStream = builder.stream(input);
@@ -495,6 +556,7 @@ public class TransactionalStateStoreIntegrationTest {
 
         final AtomicBoolean crashRequested = new AtomicBoolean(false);
         final CountDownLatch crashLatch = new CountDownLatch(1);
+        final AtomicBoolean skipRecords = new AtomicBoolean(false);
 
         inputStream.process(new ProcessorSupplier<String, String, String, String>() {
 
@@ -513,6 +575,10 @@ public class TransactionalStateStoreIntegrationTest {
 
                         @Override
                         public void process(final Record<String, String> record) {
+                            if (skipRecords.get()) {
+                                return;
+                            }
+
                             store.put(record.key(), record.value(), record.timestamp());
 
                             // crash after updating local state, but before forwarding the record
@@ -530,26 +596,38 @@ public class TransactionalStateStoreIntegrationTest {
                     };
                 }
             }, storeName)
-            .to(outputTopic);
-
+            .to(output);
 
         final KafkaStreams driver = getRunningStreams(STREAMS_CONFIG, builder, true);
 
+        final long ts1 = CLUSTER.time.milliseconds();
+        final long ts2;
         try {
-            IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
-                singletonList(new KeyValueTimestamp<>("k1", "v1", 0L)));
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                input,
+                singletonList(new KeyValue<>("k1", "v1")),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class, producerConfig),
+                CLUSTER.time,
+                true
+            );
             IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                consumerConfig, outputTopic, 1, 20000L);
+                consumerConfig(appId + "readCommitted"), output, 1);
 
-            final ReadOnlyWindowStore<Object, Object> store = IntegrationTestUtils.getStore(
+            final ReadOnlyWindowStore<String, String> store = IntegrationTestUtils.getStore(
                 storeName, driver, windowStore());
-            assertEquals("v1", store.fetch("k1", 0L));
+            assertEquals("v1", store.fetch("k1", ts1));
 
             Thread.sleep(2 * COMMIT_INTERVAL_MS);
             crashRequested.set(true);
-            IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
-                singletonList(new KeyValueTimestamp<>("k2", "v2", 1L)));
-            TestUtils.waitForCondition(() -> store.fetch("k2", 1L).equals("v2"),
+            ts2 = CLUSTER.time.milliseconds();
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                input,
+                singletonList(new KeyValue<>("k2", "v2")),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class, producerConfig),
+                CLUSTER.time,
+                true
+            );
+            TestUtils.waitForCondition(() -> store.fetch("k2", ts2).equals("v2"),
                 "Expected to read the second key");
             crashLatch.countDown();
 
@@ -559,6 +637,7 @@ public class TransactionalStateStoreIntegrationTest {
             throw new RuntimeException(e);
         }
 
+        skipRecords.set(true);
         final KafkaStreams driver1 = getRunningStreams(STREAMS_CONFIG, builder, false);
 
         final ReadOnlyWindowStore<String, String> store = IntegrationTestUtils.getStore(storeName, driver1, windowStore());
@@ -566,10 +645,10 @@ public class TransactionalStateStoreIntegrationTest {
         final String expectedString = new String(
             ByteBuffer
                 .allocate(10)
-                .putLong(0L)
+                .putLong(ts1)
                 .put("v1".getBytes()).array());
-        assertEquals(expectedString, store.fetch("k1", 0L));
-        assertNull(store.fetch("k2", 1L));
+        assertEquals(expectedString, store.fetch("k1", ts1));
+        assertNull(store.fetch("k2", ts2));
 
         driver1.close();
         quietlyCleanStateAfterTest(CLUSTER, driver);
@@ -581,11 +660,13 @@ public class TransactionalStateStoreIntegrationTest {
         final String uniqueTestName = safeUniqueTestName(getClass(), testName);
         final String input = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-store";
-        final String outputTopic = uniqueTestName + "-output";
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName + "-app");
+        final String output = uniqueTestName + "-output";
+        final String appId = uniqueTestName + "-appId";
+        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        producerConfig.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, appId + "-producer");
 
-        cleanStateBeforeTest(CLUSTER, input);
+        cleanStateBeforeTest(CLUSTER, input, output);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> inputStream = builder.stream(input);
@@ -603,6 +684,7 @@ public class TransactionalStateStoreIntegrationTest {
 
         final AtomicBoolean crashRequested = new AtomicBoolean(false);
         final CountDownLatch crashLatch = new CountDownLatch(1);
+        final AtomicBoolean skipRecords = new AtomicBoolean(false);
 
         final long sessionStart = 0L;
         final long sessionEnd = 10L;
@@ -624,6 +706,10 @@ public class TransactionalStateStoreIntegrationTest {
 
                         @Override
                         public void process(final Record<String, String> record) {
+                            if (skipRecords.get()) {
+                                return;
+                            }
+
                             store.put(new Windowed<>(record.key(), new SessionWindow(sessionStart, sessionEnd)), record.value());
 
                             // crash after updating local state, but before forwarding the record
@@ -641,16 +727,21 @@ public class TransactionalStateStoreIntegrationTest {
                     };
                 }
             }, storeName)
-            .to(outputTopic);
+            .to(output);
 
 
         final KafkaStreams driver = getRunningStreams(STREAMS_CONFIG, builder, true);
 
         try {
-            IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
-                singletonList(new KeyValueTimestamp<>("k1", "v1", 0L)));
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                input,
+                singletonList(new KeyValue<>("k1", "v1")),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class, producerConfig),
+                CLUSTER.time,
+                true
+            );
             IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                consumerConfig, outputTopic, 1, 20000L);
+                consumerConfig(appId + "readCommitted"), output, 1);
 
             final ReadOnlySessionStore<Object, Object> store = IntegrationTestUtils.getStore(
                 storeName, driver, sessionStore());
@@ -658,8 +749,13 @@ public class TransactionalStateStoreIntegrationTest {
 
             Thread.sleep(2 * COMMIT_INTERVAL_MS);
             crashRequested.set(true);
-            IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
-                singletonList(new KeyValueTimestamp<>("k2", "v2", 1L)));
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                input,
+                singletonList(new KeyValue<>("k2", "v2")),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class, producerConfig),
+                CLUSTER.time,
+                true
+            );
             TestUtils.waitForCondition(() -> store.fetchSession("k2", sessionStart, sessionEnd).equals("v2"),
                 "Expected to read the second key");
             crashLatch.countDown();
@@ -670,6 +766,7 @@ public class TransactionalStateStoreIntegrationTest {
             throw new RuntimeException(e);
         }
 
+        skipRecords.set(true);
         final KafkaStreams driver1 = getRunningStreams(STREAMS_CONFIG, builder, false);
         final ReadOnlySessionStore<Object, Object> store = IntegrationTestUtils.getStore(
             storeName, driver1, sessionStore());
