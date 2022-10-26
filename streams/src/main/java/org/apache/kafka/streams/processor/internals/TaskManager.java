@@ -395,8 +395,10 @@ public class TaskManager {
             tasks.addActiveTasks(newActiveTasks);
             tasks.addStandbyTasks(newStandbyTask);
         } else {
-            tasks.addPendingTaskToInit(newActiveTasks);
-            tasks.addPendingTaskToInit(newStandbyTask);
+            final Map<TaskId, RuntimeException> taskInitExceptions = new LinkedHashMap<>();
+            Stream.concat(newActiveTasks.stream(), newStandbyTask.stream())
+                    .forEach(t -> addTaskToStateUpdater(t, taskInitExceptions));
+            maybeThrowTaskExceptions(taskInitExceptions);
         }
     }
 
@@ -730,7 +732,6 @@ public class TaskManager {
 
     public boolean checkStateUpdater(final long now,
                                      final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
-        addTasksToStateUpdater();
         handleExceptionsFromStateUpdater();
         handleRemovedTasksFromStateUpdater();
         if (stateUpdater.restoresActiveTasks()) {
@@ -809,10 +810,14 @@ public class TaskManager {
         }
     }
 
-    private void addTasksToStateUpdater() {
-        for (final Task task : tasks.drainPendingTaskToInit()) {
+    private void addTaskToStateUpdater(final Task task, final Map<TaskId, RuntimeException> taskExceptions) {
+        try {
             task.initializeIfNeeded();
             stateUpdater.add(task);
+        } catch (final RuntimeException e) {
+            // need to add task back to the bookkeeping to be handled by the stream thread
+            tasks.addTask(task);
+            taskExceptions.put(task.id(), e);
         }
     }
 

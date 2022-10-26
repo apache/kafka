@@ -517,7 +517,8 @@ public class TaskManagerTest {
         );
 
         verify(activeTaskCreator, standbyTaskCreator);
-        Mockito.verify(tasks).addPendingTaskToInit(createdTasks);
+        Mockito.verify(activeTaskToBeCreated).initializeIfNeeded();
+        Mockito.verify(stateUpdater).add(activeTaskToBeCreated);
     }
 
     @Test
@@ -540,7 +541,40 @@ public class TaskManagerTest {
         );
 
         verify(activeTaskCreator, standbyTaskCreator);
-        Mockito.verify(tasks).addPendingTaskToInit(createdTasks);
+        Mockito.verify(standbyTaskToBeCreated).initializeIfNeeded();
+        Mockito.verify(stateUpdater).add(standbyTaskToBeCreated);
+    }
+
+    @Test
+    public void shouldRethrowTaskCorruptedExceptionFromInitialization() {
+        final StreamTask activeTaskToBeCreated = statefulTask(taskId03, taskId03ChangelogPartitions)
+                .inState(State.CREATED)
+                .withInputPartitions(taskId03Partitions).build();
+        final StandbyTask standbyTaskToBeCreated = standbyTask(taskId02, taskId02ChangelogPartitions)
+                .inState(State.CREATED)
+                .withInputPartitions(taskId02Partitions).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        expect(activeTaskCreator.createTasks(consumer, mkMap(
+                mkEntry(activeTaskToBeCreated.id(), activeTaskToBeCreated.inputPartitions())))
+        ).andReturn(mkSet(activeTaskToBeCreated));
+        expect(standbyTaskCreator.createTasks(mkMap(
+                mkEntry(standbyTaskToBeCreated.id(), standbyTaskToBeCreated.inputPartitions())))
+        ).andReturn(mkSet(standbyTaskToBeCreated));
+        doThrow(new TaskCorruptedException(Collections.singleton(activeTaskToBeCreated.id))).when(activeTaskToBeCreated).initializeIfNeeded();
+        doThrow(new TaskCorruptedException(Collections.singleton(standbyTaskToBeCreated.id))).when(standbyTaskToBeCreated).initializeIfNeeded();
+        replay(activeTaskCreator, standbyTaskCreator);
+
+        final TaskCorruptedException thrown = assertThrows(
+                TaskCorruptedException.class,
+                () ->
+                    taskManager.handleAssignment(
+                            mkMap(mkEntry(activeTaskToBeCreated.id(), activeTaskToBeCreated.inputPartitions())),
+                            mkMap(mkEntry(standbyTaskToBeCreated.id(), standbyTaskToBeCreated.inputPartitions()))
+                    )
+        );
+        assertEquals(mkSet(taskId02, taskId03), thrown.corruptedTasks());
+        assertEquals("Tasks [0_3, 0_2] are corrupted and hence needs to be re-initialized", thrown.getMessage());
     }
 
     @Test
@@ -748,26 +782,6 @@ public class TaskManagerTest {
 
         verify(activeTaskCreator, standbyTaskCreator);
         Mockito.verify(activeTaskToClose).closeClean();
-    }
-
-    @Test
-    public void shouldAddTasksToStateUpdater() {
-        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
-            .withInputPartitions(taskId00Partitions)
-            .inState(State.RESTORING).build();
-        final StandbyTask task01 = standbyTask(taskId01, taskId01ChangelogPartitions)
-            .withInputPartitions(taskId01Partitions)
-            .inState(State.RUNNING).build();
-        final TasksRegistry tasks = mock(TasksRegistry.class);
-        when(tasks.drainPendingTaskToInit()).thenReturn(mkSet(task00, task01));
-        taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
-
-        taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
-
-        Mockito.verify(task00).initializeIfNeeded();
-        Mockito.verify(task01).initializeIfNeeded();
-        Mockito.verify(stateUpdater).add(task00);
-        Mockito.verify(stateUpdater).add(task01);
     }
 
     @Test
@@ -1879,6 +1893,7 @@ public class TaskManagerTest {
         expectLastCall();
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
         expectLastCall().andThrow(new RuntimeException("KABOOM!"));
+        expect(activeTaskCreator.createTasks(anyObject(), anyObject())).andReturn(mkSet());
 
         replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
 
