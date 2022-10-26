@@ -112,7 +112,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected final ConfigBackingStore configBackingStore;
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
     protected volatile boolean running = false;
-    private final ExecutorService connectorExecutor;
+    // visible for testing
+    final ExecutorService connectorExecutor;
 
     private final ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
 

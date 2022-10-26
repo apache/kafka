@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime.standalone;
+package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
@@ -26,32 +26,18 @@ import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverri
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
-import org.apache.kafka.connect.runtime.AbstractStatus;
-import org.apache.kafka.connect.runtime.ConnectorConfig;
-import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.HerderConnectorContext;
-import org.apache.kafka.connect.runtime.RestartPlan;
-import org.apache.kafka.connect.runtime.RestartRequest;
-import org.apache.kafka.connect.runtime.SinkConnectorConfig;
-import org.apache.kafka.connect.runtime.SourceConnectorConfig;
-import org.apache.kafka.connect.runtime.TargetState;
-import org.apache.kafka.connect.runtime.TaskConfig;
-import org.apache.kafka.connect.runtime.TaskStatus;
-import org.apache.kafka.connect.runtime.Worker;
-import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
-import org.apache.kafka.connect.storage.ClusterConfigState;
-import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
-import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+import org.apache.kafka.connect.runtime.standalone.StandaloneHerder;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.MemoryConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
@@ -122,10 +108,6 @@ public class StandaloneHerderTest {
     protected Worker worker;
     @Mock protected WorkerConfigTransformer transformer;
     @Mock private Plugins plugins;
-    @Mock
-    private PluginClassLoader pluginLoader;
-    @Mock
-    private DelegatingClassLoader delegatingLoader;
     protected FutureCallback<Herder.Created<ConnectorInfo>> createCallback;
     @Mock protected StatusBackingStore statusBackingStore;
 
@@ -135,13 +117,19 @@ public class StandaloneHerderTest {
     private MockedStatic<Plugins> pluginsStatic;
 
     @Before
-    public void setup() {
+    public void setup() throws ExecutionException, InterruptedException {
         worker = mock(Worker.class);
         herder = mock(StandaloneHerder.class, withSettings()
             .useConstructor(worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy)
             .defaultAnswer(CALLS_REAL_METHODS));
         createCallback = new FutureCallback<>();
-        pluginsStatic = mockStatic(Plugins.class);
+
+        // Since mockStatic is only ThreadLocal (see https://github.com/mockito/mockito/issues/2142) and Herder's uses
+        // an ExecutorService to submit tasks, we need to create the static mock on the same connectorExecutor
+        // that the herder submits the tasks on.
+        ((AbstractHerder) herder).connectorExecutor.submit(() ->
+            pluginsStatic = mockStatic(Plugins.class)
+        ).get();
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
     }
@@ -178,14 +166,12 @@ public class StandaloneHerderTest {
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
         when(worker.getPlugins()).thenReturn(plugins);
-        when(plugins.compareAndSwapLoaders(connectorMock)).thenReturn(delegatingLoader);
         when(plugins.newConnector(anyString())).thenReturn(connectorMock);
 
         when(connectorMock.config()).thenReturn(new ConfigDef());
 
         ConfigValue validatedValue = new ConfigValue("foo.bar");
         when(connectorMock.validate(config)).thenReturn(new Config(singletonList(validatedValue)));
-        pluginsStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
 
@@ -207,9 +193,6 @@ public class StandaloneHerderTest {
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
         when(worker.getPlugins()).thenReturn(plugins);
-        when(plugins.compareAndSwapLoaders(connectorMock)).thenReturn(delegatingLoader);
-        // No new connector is created
-        pluginsStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
@@ -797,11 +780,8 @@ public class StandaloneHerderTest {
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
         when(worker.getPlugins()).thenReturn(plugins);
-        when(plugins.compareAndSwapLoaders(connectorMock)).thenReturn(delegatingLoader);
-        when(worker.getPlugins()).thenReturn(plugins);
         when(plugins.newConnector(anyString())).thenReturn(connectorMock);
         when(connectorMock.config()).thenReturn(configDef);
-        pluginsStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, true, createCallback);
         try {
@@ -929,7 +909,6 @@ public class StandaloneHerderTest {
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
         when(worker.getPlugins()).thenReturn(plugins);
-        when(plugins.compareAndSwapLoaders(connectorMock)).thenReturn(delegatingLoader);
         if (shouldCreateConnector) {
             when(worker.getPlugins()).thenReturn(plugins);
             when(plugins.newConnector(anyString())).thenReturn(connectorMock);
@@ -938,7 +917,6 @@ public class StandaloneHerderTest {
 
         for (Map<String, String> config : configs)
             when(connectorMock.validate(config)).thenReturn(new Config(Collections.emptyList()));
-        pluginsStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
     }
 
     // We need to use a real class here due to some issue with mocking java.lang.Class
