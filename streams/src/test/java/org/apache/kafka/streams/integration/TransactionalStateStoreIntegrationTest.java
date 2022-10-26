@@ -28,6 +28,7 @@ import static org.apache.kafka.streams.state.QueryableStoreTypes.sessionStore;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.windowStore;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -642,12 +643,11 @@ public class TransactionalStateStoreIntegrationTest {
 
         final ReadOnlyWindowStore<String, String> store = IntegrationTestUtils.getStore(storeName, driver1, windowStore());
         // RecordConverters puts the timestamp inside the value after reading raw records from the changelog
-        final String expectedString = new String(
-            ByteBuffer
-                .allocate(10)
-                .putLong(ts1)
-                .put("v1".getBytes()).array());
-        assertEquals(expectedString, store.fetch("k1", ts1));
+        final String val = store.fetch("k1", ts1);
+        assertTrue(
+            String.format("Incorrect value in the state store. Expected: %s, got: %s", "v1", val),
+            val.endsWith("v1")
+        );
         assertNull(store.fetch("k2", ts2));
 
         driver1.close();
