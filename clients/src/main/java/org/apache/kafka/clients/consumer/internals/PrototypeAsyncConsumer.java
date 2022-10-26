@@ -21,22 +21,12 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
-import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -50,18 +40,16 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.time.Duration;
-import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.regex.Pattern;
 
 /**
  * This prototype consumer uses the EventHandler to process application
@@ -69,7 +57,7 @@ import java.util.regex.Pattern;
  * <a href="https://cwiki.apache.org/confluence/display/KAFKA/Proposal%3A+Consumer+Threading+Model+Refactor" >this document</a>
  * for detail implementation.
  */
-public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
+public abstract class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private static final String CLIENT_ID_METRIC_TAG = "client-id";
     private static final String JMX_PREFIX = "kafka.consumer";
 
@@ -81,7 +69,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final Logger log;
     private final SubscriptionState subscriptions;
     private final Metrics metrics;
-    private final long defaultApiTimeoutMs;
 
     @SuppressWarnings("unchecked")
     public PrototypeAsyncConsumer(final Time time,
@@ -93,7 +80,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 GroupRebalanceConfig.ProtocolType.CONSUMER);
         this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
         this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
-        this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+
         // If group.instance.id is set, we will append it to the log context.
         if (groupRebalanceConfig.groupInstanceId.isPresent()) {
             logContext = new LogContext("[Consumer instanceId=" + groupRebalanceConfig.groupInstanceId.get() +
@@ -120,29 +107,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                 clusterResourceListeners,
                 null // this is coming from the fetcher, but we don't have one
         );
-    }
-
-    // Visible for testing
-    PrototypeAsyncConsumer(
-            Time time,
-            LogContext logContext,
-            ConsumerConfig config,
-            SubscriptionState subscriptionState,
-            EventHandler eventHandler,
-            Metrics metrics,
-            ClusterResourceListeners clusterResourceListeners,
-            Optional<String> groupId,
-            String clientId,
-            int defaultApiTimeoutMs) {
-        this.time = time;
-        this.logContext = logContext;
-        this.log = logContext.logger(getClass());
-        this.subscriptions = subscriptionState;
-        this.metrics = metrics;
-        this.groupId = groupId;
-        this.defaultApiTimeoutMs = defaultApiTimeoutMs;
-        this.clientId = clientId;
-        this.eventHandler = eventHandler;
     }
 
 
@@ -187,28 +151,12 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         return ConsumerRecords.empty();
     }
 
-    /**
-     * Commit offsets returned on the last {@link #poll(Duration) poll()} for all the subscribed list of topics and
-     * partitions.
-     */
-    @Override
-    public void commitSync() {
-        commitSync(Duration.ofMillis(defaultApiTimeoutMs));
-    }
+    abstract void processEvent(final BackgroundEvent backgroundEvent,
+                               final Duration timeout);
 
-    private void processEvent(final BackgroundEvent backgroundEvent, final Duration timeout) {
-        // stubbed class
-    }
+    abstract ConsumerRecords<K, V> processFetchResults(final Fetch<K, V> fetch);
 
-    private ConsumerRecords<K, V> processFetchResults(final Fetch<K, V> fetch) {
-        // stubbed class
-        return ConsumerRecords.empty();
-    }
-
-    private Fetch<K, V> collectFetches() {
-        // stubbed class
-        return Fetch.empty();
-    }
+    abstract Fetch<K, V> collectFetches();
 
     /**
      * This method sends a commit event to the EventHandler and return.
@@ -217,173 +165,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     public void commitAsync() {
         final ApplicationEvent commitEvent = new CommitApplicationEvent();
         eventHandler.add(commitEvent);
-    }
-
-    @Override
-    public void commitAsync(OffsetCommitCallback callback) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void seek(TopicPartition partition, long offset) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void seekToBeginning(Collection<TopicPartition> partitions) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void seekToEnd(Collection<TopicPartition> partitions) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public long position(TopicPartition partition) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public long position(TopicPartition partition, Duration timeout) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    @Deprecated
-    public OffsetAndMetadata committed(TopicPartition partition) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    @Deprecated
-    public OffsetAndMetadata committed(TopicPartition partition, Duration timeout) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public Map<TopicPartition, OffsetAndMetadata> committed(Set<TopicPartition> partitions, Duration timeout) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public Map<MetricName, ? extends Metric> metrics() {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public List<PartitionInfo> partitionsFor(String topic) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public List<PartitionInfo> partitionsFor(String topic, Duration timeout) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public Map<String, List<PartitionInfo>> listTopics() {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public Map<String, List<PartitionInfo>> listTopics(Duration timeout) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public Set<TopicPartition> paused() {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void pause(Collection<TopicPartition> partitions) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void resume(Collection<TopicPartition> partitions) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch, Duration timeout) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public OptionalLong currentLag(TopicPartition topicPartition) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public ConsumerGroupMetadata groupMetadata() {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void enforceRebalance() {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void enforceRebalance(String reason) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void close() {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void close(Duration timeout) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void wakeup() {
-        throw new KafkaException("method not implemented");
     }
 
     /**
@@ -409,65 +190,13 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    @Override
-    public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public Set<TopicPartition> assignment() {
-        throw new KafkaException("method not implemented");
-    }
-
     /**
      * Get the current subscription.  or an empty set if no such call has
      * been made.
      * @return The set of topics currently subscribed to
      */
-    @Override
     public Set<String> subscription() {
         return Collections.unmodifiableSet(this.subscriptions.subscription());
-    }
-
-    @Override
-    public void subscribe(Collection<String> topics) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void subscribe(Collection<String> topics, ConsumerRebalanceListener callback) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void assign(Collection<TopicPartition> partitions) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void subscribe(Pattern pattern, ConsumerRebalanceListener callback) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void subscribe(Pattern pattern) {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void unsubscribe() {
-        throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    @Deprecated
-    public ConsumerRecords<K, V> poll(long timeout) {
-        throw new KafkaException("method not implemented");
     }
 
     /**

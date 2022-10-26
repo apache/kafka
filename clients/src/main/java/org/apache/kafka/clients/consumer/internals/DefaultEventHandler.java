@@ -114,13 +114,14 @@ public class DefaultEventHandler implements EventHandler {
             logContext
         );
         final ConsumerNetworkClient networkClient = new ConsumerNetworkClient(
-                logContext,
-                netClient,
-                metadata,
-                time,
-                config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
-                config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-                config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG));
+            logContext,
+            netClient,
+            metadata,
+            time,
+            config.getInt(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
+            config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+            config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG)
+        );
         this.backgroundThread = new DefaultBackgroundThread(
             time,
             config,
