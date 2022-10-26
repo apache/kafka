@@ -128,6 +128,7 @@ public abstract class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
                     final Optional<BackgroundEvent> backgroundEvent = eventHandler.poll();
                     // processEvent() may process 3 types of event:
                     // 1. Errors
+                    
                     // 2. Callback Invocation
                     // 3. Fetch responses
                     // Errors will be handled or rethrown.
