@@ -1156,7 +1156,6 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         FAIL_TRANSACTION_COMMIT
     }
 
-    @SuppressWarnings("unchecked")
     private CountDownLatch expectFlush(FlushOutcome outcome, AtomicInteger flushCount) {
         CountDownLatch result = new CountDownLatch(1);
         org.easymock.IExpectationSetters<Boolean> flushBegin = EasyMock
@@ -1173,18 +1172,17 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
         Capture<Callback<Void>> flushCallback = EasyMock.newCapture();
         org.easymock.IExpectationSetters<Future<Void>> offsetFlush =
                 EasyMock.expect(offsetWriter.doFlush(EasyMock.capture(flushCallback)));
-        Future<Void> flushFuture = PowerMock.createMock(Future.class);
         switch (outcome) {
             case SUCCEED:
                 // The worker task doesn't actually use the returned future
-                offsetFlush.andReturn(flushFuture);
+                offsetFlush.andReturn(null);
                 expectCall(producer::commitTransaction);
                 expectCall(() -> sourceTask.commitRecord(EasyMock.anyObject(), EasyMock.anyObject()));
                 expectCall(sourceTask::commit);
                 break;
             case SUCCEED_ANY_TIMES:
                 // The worker task doesn't actually use the returned future
-                offsetFlush.andReturn(flushFuture).anyTimes();
+                offsetFlush.andReturn(null).anyTimes();
                 expectCall(producer::commitTransaction).anyTimes();
                 expectCall(() -> sourceTask.commitRecord(EasyMock.anyObject(), EasyMock.anyObject())).anyTimes();
                 expectCall(sourceTask::commit).anyTimes();
@@ -1197,7 +1195,7 @@ public class ExactlyOnceWorkerSourceTaskTest extends ThreadedTest {
                 expectCall(offsetWriter::cancelFlush);
                 break;
             case FAIL_TRANSACTION_COMMIT:
-                offsetFlush.andReturn(flushFuture);
+                offsetFlush.andReturn(null);
                 expectCall(producer::commitTransaction)
                         .andThrow(new RecordTooLargeException());
                 expectCall(offsetWriter::cancelFlush);

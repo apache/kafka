@@ -50,7 +50,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 
 
@@ -262,7 +261,6 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
         maybeBeginTransaction();
 
         AtomicReference<Throwable> flushError = new AtomicReference<>();
-        Future<Void> flushFuture = null;
         if (offsetWriter.beginFlush()) {
             // Now we can actually write the offsets to the internal topic.
             // No need to track the flush future here since it's guaranteed to complete by the time
@@ -270,7 +268,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
             // We do have to track failures for that callback though, since they may originate from outside
             // the producer (i.e., the offset writer or the backing offset store), and would not cause
             // Producer::commitTransaction to fail
-            flushFuture = offsetWriter.doFlush((error, result) -> {
+            offsetWriter.doFlush((error, result) -> {
                 if (error != null) {
                     log.error("{} Failed to flush offsets to storage: ", ExactlyOnceWorkerSourceTask.this, error);
                     flushError.compareAndSet(null, error);
@@ -282,17 +280,18 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
 
         // Commit the transaction
         // Blocks until all outstanding records have been sent and ack'd
-        if (flushFuture != null) {
+        Throwable error = flushError.get();
+        if (error == null) {
             try {
                 producer.commitTransaction();
             } catch (Throwable t) {
                 log.error("{} Failed to commit producer transaction", ExactlyOnceWorkerSourceTask.this, t);
                 flushError.compareAndSet(null, t);
             }
-            transactionOpen = false;
         }
+        transactionOpen = false;
 
-        Throwable error = flushError.get();
+        error = flushError.get();
         if (error != null) {
             recordCommitFailure(time.milliseconds() - started, null);
             offsetWriter.cancelFlush();
