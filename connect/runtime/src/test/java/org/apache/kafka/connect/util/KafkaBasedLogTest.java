@@ -72,7 +72,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -141,7 +140,7 @@ public class KafkaBasedLogTest {
     private MockedKafkaBasedLog store;
 
     @Mock
-    private Runnable initializer;
+    private Consumer<TopicAdmin> initializer;
     @Mock
     private KafkaProducer<String, String> producer;
     private MockConsumer<String, String> consumer;
@@ -158,7 +157,7 @@ public class KafkaBasedLogTest {
     @SuppressWarnings("unchecked")
     @Before
     public void setUp() {
-        store = new MockedKafkaBasedLog(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, () -> null, consumedCallback, time, null);
+        store = new MockedKafkaBasedLog(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, () -> null, consumedCallback, time, initializer);
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
         Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
@@ -169,8 +168,6 @@ public class KafkaBasedLogTest {
 
     @Test
     public void testStartStop() throws Exception {
-        expectStart();
-        expectStop();
 
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
@@ -187,9 +184,6 @@ public class KafkaBasedLogTest {
 
     @Test
     public void testReloadOnStart() throws Exception {
-        expectStart();
-        expectStop();
-
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 1L);
         endOffsets.put(TP1, 1L);
@@ -214,6 +208,8 @@ public class KafkaBasedLogTest {
             consumer.schedulePollTask(finishedLatch::countDown);
         });
         store.start();
+        expectStart();
+
         assertTrue(finishedLatch.await(10000, TimeUnit.MILLISECONDS));
 
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
@@ -223,16 +219,14 @@ public class KafkaBasedLogTest {
         assertEquals(TP1_VALUE, consumedRecords.get(TP1).get(0).value());
 
         store.stop();
+        expectStop();
 
         assertFalse(store.thread.isAlive());
         assertTrue(consumer.closed());
     }
 
     @Test
-    public void testReloadOnStartWithNoNewRecordsPresent() throws Exception {
-        expectStart();
-        expectStop();
-
+    public void testReloadOnStartWithNoNewRecordsPresent() {
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 7L);
         endOffsets.put(TP1, 7L);
@@ -248,12 +242,14 @@ public class KafkaBasedLogTest {
         });
 
         store.start();
+        expectStart();
 
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
         assertEquals(7L, consumer.position(TP0));
         assertEquals(7L, consumer.position(TP1));
 
         store.stop();
+        expectStop();
 
         assertFalse(store.thread.isAlive());
         assertTrue(consumer.closed());
@@ -261,7 +257,6 @@ public class KafkaBasedLogTest {
 
     @Test
     public void testSendAndReadToEnd() throws Exception {
-        expectStart();
         TestFuture<RecordMetadata> tp0Future = new TestFuture<>();
         ProducerRecord<String, String> tp0Record = new ProducerRecord<>(TOPIC, TP0_KEY, TP0_VALUE);
         ArgumentCaptor<org.apache.kafka.clients.producer.Callback> callback0 =
@@ -276,13 +271,13 @@ public class KafkaBasedLogTest {
         // Producer flushes when read to log end is called
         doNothing().when(producer).flush();
 
-        expectStop();
-
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
         consumer.updateEndOffsets(endOffsets);
         store.start();
+        expectStart();
+
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
         assertEquals(0L, consumer.position(TP0));
         assertEquals(0L, consumer.position(TP1));
@@ -346,6 +341,7 @@ public class KafkaBasedLogTest {
 
         // Cleanup
         store.stop();
+        expectStop();
 
         assertFalse(store.thread.isAlive());
         assertTrue(consumer.closed());
@@ -353,8 +349,6 @@ public class KafkaBasedLogTest {
 
     @Test
     public void testPollConsumerError() throws Exception {
-        expectStart();
-        expectStop();
 
         final CountDownLatch finishedLatch = new CountDownLatch(1);
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
@@ -379,11 +373,13 @@ public class KafkaBasedLogTest {
             consumer.schedulePollTask(finishedLatch::countDown);
         });
         store.start();
+        expectStart();
         assertTrue(finishedLatch.await(10000, TimeUnit.MILLISECONDS));
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
         assertEquals(1L, consumer.position(TP0));
 
         store.stop();
+        expectStop();
 
         assertFalse(store.thread.isAlive());
         assertTrue(consumer.closed());
@@ -391,13 +387,9 @@ public class KafkaBasedLogTest {
 
     @Test
     public void testGetOffsetsConsumerErrorOnReadToEnd() throws Exception {
-        expectStart();
-
         // Producer flushes when read to log end is called
         producer.flush();
         doNothing().when(producer).flush();
-
-        expectStop();
 
         final CountDownLatch finishedLatch = new CountDownLatch(1);
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
@@ -405,6 +397,7 @@ public class KafkaBasedLogTest {
         endOffsets.put(TP1, 0L);
         consumer.updateEndOffsets(endOffsets);
         store.start();
+        expectStart();
         final AtomicBoolean getInvoked = new AtomicBoolean(false);
         final FutureCallback<Void> readEndFutureCallback = new FutureCallback<>((error, result) -> getInvoked.set(true));
         consumer.schedulePollTask(() -> {
@@ -439,27 +432,26 @@ public class KafkaBasedLogTest {
         assertEquals(1L, consumer.position(TP0));
 
         store.stop();
+        expectStop();
 
         assertFalse(store.thread.isAlive());
         assertTrue(consumer.closed());
     }
 
     @Test
-    public void testProducerError() throws Exception {
-        expectStart();
+    public void testProducerError() {
         TestFuture<RecordMetadata> tp0Future = new TestFuture<>();
         ProducerRecord<String, String> tp0Record = new ProducerRecord<>(TOPIC, TP0_KEY, TP0_VALUE);
         ArgumentCaptor<org.apache.kafka.clients.producer.Callback> callback0 =
             ArgumentCaptor.forClass(org.apache.kafka.clients.producer.Callback.class);
         when(producer.send(eq(tp0Record), callback0.capture())).thenReturn(tp0Future);
 
-        expectStop();
-
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
         consumer.updateEndOffsets(endOffsets);
         store.start();
+        expectStart();
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
         assertEquals(0L, consumer.position(TP0));
         assertEquals(0L, consumer.position(TP1));
@@ -478,6 +470,7 @@ public class KafkaBasedLogTest {
 
         assertFalse(store.thread.isAlive());
         assertTrue(consumer.closed());
+        expectStop();
     }
 
     @Test
@@ -542,13 +535,11 @@ public class KafkaBasedLogTest {
     }
 
     private void expectStart() {
-        initializer.run();
-        verify(initializer, times(1)).run();
+        verify(initializer).accept(any());
     }
 
     private void expectStop() {
-        producer.close();
-        verify(producer, times(1)).close();
+        verify(producer).close();
         // MockConsumer close is checked after test.
     }
 
