@@ -411,9 +411,7 @@ subprojects {
       "**/SourceTaskOffsetCommitterTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
       "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*", "**/ExactlyOnceWorkerSourceTaskTest.*",
-      "**/WorkerTaskTest.*",
-      // streams tests
-      "**/KafkaStreamsTest.*"
+      "**/WorkerTaskTest.*"
     ])
   }
 
