@@ -84,6 +84,7 @@ import static org.mockito.Mockito.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
@@ -173,6 +174,7 @@ public class ConnectorsResourceTest {
     @After
     public void teardown() {
         restClientStatic.close();
+        verifyNoMoreInteractions(herder);
     }
 
     private static Map<String, String> getConnectorConfig(Map<String, String> mapToClone) {
@@ -903,11 +905,10 @@ public class ConnectorsResourceTest {
     @Test
     public void testResetConnectorActiveTopics() {
         HttpHeaders headers = mock(HttpHeaders.class);
-        herder.resetConnectorActiveTopics(CONNECTOR_NAME);
-        verify(herder).resetConnectorActiveTopics(CONNECTOR_NAME);
         connectorsResource = new ConnectorsResource(herder, workerConfig);
 
         Response response = connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers);
+        verify(herder).resetConnectorActiveTopics(CONNECTOR_NAME);
         assertEquals(Response.Status.ACCEPTED.getStatusCode(), response.getStatus());
     }
 
