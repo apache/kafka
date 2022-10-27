@@ -333,8 +333,8 @@ class ReplicaManager(val config: KafkaConfig,
 
   /**
    * Complete any local follower fetches that have been unblocked since new data is available
-   * from the leader for one or more partitions. Called in ReplicaFetcherThread after successfully
-   * replicating from the leader.
+   * from the leader for one or more partitions. Should only be called by ReplicaFetcherThread
+   * after successfully replicating from the leader.
    */
   private[server] def completeDelayedFetchRequests(topicPartitions: Seq[TopicPartition]): Unit = {
     topicPartitions.foreach(tp => delayedFetchPurgatory.checkAndComplete(TopicPartitionOperationKey(tp)))

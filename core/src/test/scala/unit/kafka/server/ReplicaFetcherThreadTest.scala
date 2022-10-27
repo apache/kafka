@@ -1100,6 +1100,66 @@ class ReplicaFetcherThreadTest {
     assertEquals(Collections.singletonList(tid1p0), fetchRequestBuilder2.removed())
   }
 
+  @Test
+  def testFetchResponseWithPartitionData(): Unit = {
+    val appendInfo: LogAppendInfo = mock(classOf[LogAppendInfo])
+    verifyLocalFetchCompletionAfterReplication(Some(appendInfo))
+  }
+
+  @Test
+  def testFetchResponseWithNoPartitionData(): Unit = {
+    verifyLocalFetchCompletionAfterReplication(appendInfo = None)
+  }
+
+  private def verifyLocalFetchCompletionAfterReplication(appendInfo: Option[LogAppendInfo]): Unit = {
+    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
+    val config = KafkaConfig.fromProps(props)
+
+    val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
+    when(mockBlockingSend.brokerEndPoint()).thenReturn(brokerEndPoint)
+
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+
+    val partition: Partition = mock(classOf[Partition])
+    when(partition.localLogOrException).thenReturn(log)
+    when(partition.appendRecordsToFollowerOrFutureReplica(any[MemoryRecords], any[Boolean])).thenReturn(appendInfo)
+
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.getPartitionOrException(any[TopicPartition])).thenReturn(partition)
+    val brokerTopicStats = new BrokerTopicStats
+    when(replicaManager.brokerTopicStats).thenReturn(brokerTopicStats)
+
+    val replicaQuota: ReplicaQuota = mock(classOf[ReplicaQuota])
+
+    val thread = createReplicaFetcherThread(
+      name = "replica-fetcher",
+      fetcherId = 0,
+      brokerConfig = config,
+      failedPartitions = failedPartitions,
+      replicaMgr = replicaManager,
+      quota = replicaQuota,
+      leaderEndpointBlockingSend = mockBlockingSend)
+
+    val tp0 = new TopicPartition("testTopic", 0)
+    val tp1 = new TopicPartition("testTopic", 1)
+    val records = MemoryRecords.withRecords(CompressionType.NONE,
+      new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
+    val partitionData: thread.FetchData = new FetchResponseData.PartitionData()
+      .setRecords(records)
+
+    thread.processPartitionData(tp0, 0, partitionData.setPartitionIndex(0))
+    thread.processPartitionData(tp1, 0, partitionData.setPartitionIndex(1))
+    thread.doWork()
+    appendInfo match {
+      case Some(_) =>
+        val argument: ArgumentCaptor[Seq[TopicPartition]] = ArgumentCaptor.forClass(classOf[Seq[TopicPartition]])
+        verify(replicaManager, times(1)).completeDelayedFetchRequests(argument.capture())
+        assertEquals(Seq(tp0, tp1), argument.getValue)
+      case None =>
+        verify(replicaManager, times(0)).completeDelayedFetchRequests(any[Seq[TopicPartition]])
+    }
+  }
+
   private def newOffsetForLeaderPartitionResult(
    tp: TopicPartition,
    leaderEpoch: Int,

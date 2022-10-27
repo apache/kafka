@@ -48,8 +48,10 @@ class BaseFetchRequestTest extends BaseRequestTest {
 
   protected def createFetchRequest(maxResponseBytes: Int, maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
                                    offsetMap: Map[TopicPartition, Long],
-                                   version: Short): FetchRequest = {
-    FetchRequest.Builder.forConsumer(version, Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap))
+                                   version: Short,
+                                   maxWaitMs: Int = Int.MaxValue,
+                                   minBytes: Int = 0): FetchRequest = {
+    FetchRequest.Builder.forConsumer(version, maxWaitMs, minBytes, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap))
       .setMaxBytes(maxResponseBytes).build()
   }
 
@@ -64,8 +66,8 @@ class BaseFetchRequestTest extends BaseRequestTest {
     partitionMap
   }
 
-  protected def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
-    connectAndReceive[FetchResponse](request, destination = brokerSocketServer(leaderId))
+  protected def sendFetchRequest(brokerId: Int, request: FetchRequest): FetchResponse = {
+    connectAndReceive[FetchResponse](request, destination = brokerSocketServer(brokerId))
   }
 
   protected def initProducer(): Unit = {
