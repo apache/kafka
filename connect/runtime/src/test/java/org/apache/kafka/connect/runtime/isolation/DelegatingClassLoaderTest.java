@@ -17,6 +17,8 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.runtime.TestSinkConnector;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -24,8 +26,10 @@ import org.junit.rules.TemporaryFolder;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Collections;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
@@ -128,5 +132,63 @@ public class DelegatingClassLoaderTest {
             assertNotNull(classLoader.loadClass(pluginClassName));
             assertNotNull(classLoader.pluginClassLoader(pluginClassName));
         }
+    }
+
+    @Test
+    public void testPluginConflictSameClassSameVersion() {
+        DelegatingClassLoader delegatingClassLoader = new DelegatingClassLoader(Collections.emptyList());
+
+        Class<Connector> klass = Connector.class;
+        PluginDesc<Connector> connectorDesc1 = new PluginDesc<>(
+                klass,
+                "1.1.0",
+                ClassLoader.getSystemClassLoader()
+        );
+        delegatingClassLoader.addPlugins(Arrays.asList(connectorDesc1, connectorDesc1), ClassLoader.getSystemClassLoader());
+        assertTrue(delegatingClassLoader.reportPluginConflicts().contains(klass.getName()));
+    }
+
+    @Test
+    public void testPluginConflictSameClassDiffVersions() {
+        DelegatingClassLoader delegatingClassLoader = new DelegatingClassLoader(Collections.emptyList());
+        PluginDesc<TestSinkConnector> notConflictingPlugin = new PluginDesc<>(
+                TestSinkConnector.class,
+                "0.0",
+                ClassLoader.getSystemClassLoader()
+        );
+        delegatingClassLoader.addPlugins(Collections.singletonList(notConflictingPlugin), ClassLoader.getSystemClassLoader());
+
+        Class<Connector> conflictingPluginClass = Connector.class;
+        PluginDesc<Connector> connectorDesc1 = new PluginDesc<>(
+                conflictingPluginClass,
+                "1.1.0",
+                ClassLoader.getSystemClassLoader()
+        );
+        delegatingClassLoader.addPlugins(Collections.singletonList(connectorDesc1), ClassLoader.getSystemClassLoader());
+        assertTrue(delegatingClassLoader.reportPluginConflicts().isEmpty());
+
+        PluginDesc<Connector> connectorDesc2 = new PluginDesc<>(
+                conflictingPluginClass,
+                "1.0.0",
+                ClassLoader.getSystemClassLoader()
+        );
+        delegatingClassLoader.addPlugins(Collections.singletonList(connectorDesc2), ClassLoader.getSystemClassLoader());
+        String conflictingPluginClassName = conflictingPluginClass.getName();
+        assertTrue(delegatingClassLoader.reportPluginConflicts().contains(conflictingPluginClassName));
+        assertFalse(delegatingClassLoader.reportPluginConflicts().contains(notConflictingPlugin.className()));
+        assertEquals(delegatingClassLoader.usedPluginDesc(conflictingPluginClassName), connectorDesc1);
+
+        PluginDesc<Connector> connectorDesc3 = new PluginDesc<>(
+                conflictingPluginClass,
+                "2.0.1",
+                ClassLoader.getSystemClassLoader()
+        );
+        delegatingClassLoader.addPlugins(Collections.singletonList(connectorDesc3), ClassLoader.getSystemClassLoader());
+        assertTrue(delegatingClassLoader.reportPluginConflicts().contains(conflictingPluginClassName));
+        assertFalse(delegatingClassLoader.reportPluginConflicts().contains(notConflictingPlugin.className()));
+        assertEquals(delegatingClassLoader.usedPluginDesc(conflictingPluginClassName), connectorDesc3);
+
+        assertEquals(delegatingClassLoader.usedPluginDesc(notConflictingPlugin.className()), notConflictingPlugin);
+
     }
 }

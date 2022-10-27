@@ -92,6 +92,8 @@ public class DelegatingClassLoader extends URLClassLoader {
     private final SortedSet<PluginDesc<ConnectRestExtension>> restExtensions;
     private final SortedSet<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies;
     private final List<String> pluginPaths;
+    //contains a list of plugins added so far including conflicts
+    private final Map<String, List<PluginDesc<?>>> allAddedPlugins;
 
     private static final String MANIFEST_PREFIX = "META-INF/services/";
     private static final Class<?>[] SERVICE_LOADER_PLUGINS = new Class<?>[] {ConnectRestExtension.class, ConfigProvider.class};
@@ -121,6 +123,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         this.configProviders = new TreeSet<>();
         this.restExtensions = new TreeSet<>();
         this.connectorClientConfigPolicies = new TreeSet<>();
+        this.allAddedPlugins = new HashMap<>();
     }
 
     public DelegatingClassLoader(List<String> pluginPaths) {
@@ -187,10 +190,20 @@ public class DelegatingClassLoader extends URLClassLoader {
         if (inner == null) {
             return null;
         }
-        ClassLoader pluginLoader = inner.get(inner.lastKey());
+        ClassLoader pluginLoader = inner.get(usedPluginDesc(inner));
         return pluginLoader instanceof PluginClassLoader
                ? (PluginClassLoader) pluginLoader
                : null;
+    }
+
+    //visible for testing
+    PluginDesc<?> usedPluginDesc(String name) {
+        SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(name);
+        return inner == null ? null : usedPluginDesc(inner);
+    }
+
+    private PluginDesc<?> usedPluginDesc(SortedMap<PluginDesc<?>, ClassLoader> inner) {
+        return inner.lastKey();
     }
 
     public ClassLoader connectorLoader(Connector connector) {
@@ -219,17 +232,16 @@ public class DelegatingClassLoader extends URLClassLoader {
         );
     }
 
-    private <T> void addPlugins(Collection<PluginDesc<T>> plugins, ClassLoader loader) {
+    //visible for testing
+    <T> void addPlugins(Collection<PluginDesc<T>> plugins, ClassLoader loader) {
         for (PluginDesc<T> plugin : plugins) {
             String pluginClassName = plugin.className();
-            SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(pluginClassName);
-            if (inner == null) {
-                inner = new TreeMap<>();
-                pluginLoaders.put(pluginClassName, inner);
+            if (!pluginLoaders.containsKey(pluginClassName)) {
                 // TODO: once versioning is enabled this line should be moved outside this if branch
                 log.info("Added plugin '{}'", pluginClassName);
             }
-            inner.put(plugin, loader);
+            pluginLoaders.computeIfAbsent(pluginClassName, n -> new TreeMap<>()).put(plugin, loader);
+            allAddedPlugins.computeIfAbsent(pluginClassName, n -> new ArrayList<>()).add(plugin);
         }
     }
 
@@ -240,6 +252,21 @@ public class DelegatingClassLoader extends URLClassLoader {
         // Finally add parent/system loader.
         initPluginLoader(CLASSPATH_NAME);
         addAllAliases();
+        reportPluginConflicts();
+    }
+
+    //visible for testing
+    Set<String> reportPluginConflicts() {
+        return allAddedPlugins.entrySet().stream().filter(e -> e.getValue().size() > 1).map(e -> {
+            String pluginClassName = e.getKey();
+            PluginDesc<?> usedPluginDesc = usedPluginDesc(pluginClassName);
+            List<PluginDesc<?>> ignoredPlugins = new ArrayList<>(e.getValue());
+            ignoredPlugins.remove(usedPluginDesc);
+            log.warn("Detected multiple plugins contain '{}'; using plugin {} and ignoring {} plugins ({}). "
+                    + "Check the installation on all workers and if possible remove all but one of these duplicated plugins.",
+                    pluginClassName, usedPluginDesc, ignoredPlugins.size(), ignoredPlugins);
+            return pluginClassName;
+        }).collect(Collectors.toSet());
     }
 
     private void initPluginLoader(String path) {
