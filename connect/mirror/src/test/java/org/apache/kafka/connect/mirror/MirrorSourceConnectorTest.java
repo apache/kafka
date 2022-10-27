@@ -322,7 +322,7 @@ public class MirrorSourceConnectorTest {
     }
 
     @Test
-    public void testIsCycleWithNullUpstreamTopic() throws Exception {
+    public void testIsCycleWithNullUpstreamTopic() {
         class BadReplicationPolicy extends DefaultReplicationPolicy {
             @Override
             public String upstreamTopic(String topic) {
