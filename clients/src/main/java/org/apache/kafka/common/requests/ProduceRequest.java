@@ -72,6 +72,9 @@ public class ProduceRequest extends AbstractRequest {
             this.data = data;
         }
 
+        public ProduceRequestData data() {
+            return data;
+        }
         @Override
         public ProduceRequest build(short version) {
             return build(version, true);

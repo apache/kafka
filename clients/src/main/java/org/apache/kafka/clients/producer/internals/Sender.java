@@ -295,7 +295,7 @@ public class Sender implements Runnable {
      * Run a single iteration of sending
      *
      */
-    void runOnce() {
+    public void runOnce() {
         if (transactionManager != null) {
             try {
                 transactionManager.maybeResolveSequences();
@@ -639,7 +639,9 @@ public class Sender implements Runnable {
                 // tell the user the result of their request. We only adjust sequence numbers if the batch didn't exhaust
                 // its retries -- if it did, we don't know whether the sequence number was accepted or not, and
                 // thus it is not safe to reassign the sequence.
-                failBatch(batch, response, batch.attempts() < this.retries);
+                boolean adjustSequenceNumbers = batch.attempts() < this.retries &&
+                    !batch.hasReachedDeliveryTimeout(accumulator.getDeliveryTimeoutMs(), now);
+                failBatch(batch, response, adjustSequenceNumbers);
             }
             if (error.exception() instanceof InvalidMetadataException) {
                 if (error.exception() instanceof UnknownTopicOrPartitionException) {

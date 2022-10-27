@@ -693,6 +693,10 @@ public class TransactionManager {
         return !txnPartitionMap.getOrCreate(topicPartition).inflightBatchesBySequence.isEmpty();
     }
 
+    private int numInflightBatches(TopicPartition topicPartition) {
+        return txnPartitionMap.getOrCreate(topicPartition).inflightBatchesBySequence.size();
+    }
+
     synchronized boolean hasStaleProducerIdAndEpoch(TopicPartition topicPartition) {
         return !producerIdAndEpoch.equals(txnPartitionMap.getOrCreate(topicPartition).producerIdAndEpoch);
     }

@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Crc32C;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
 import java.io.EOFException;
@@ -505,6 +506,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     @Override
     public String toString() {
         return "RecordBatch(magic=" + magic() + ", offsets=[" + baseOffset() + ", " + lastOffset() + "], " +
+                "producerEpoch=" + producerEpoch() + ", " +
                 "sequence=[" + baseSequence() + ", " + lastSequence() + "], " +
                 "isTransactional=" + isTransactional() + ", isControlBatch=" + isControlBatch() + ", " +
                 "compression=" + compressionType() + ", timestampType=" + timestampType() + ", crc=" + checksum() + ")";

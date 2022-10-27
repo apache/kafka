@@ -791,7 +791,8 @@ public class RecordAccumulator {
     private boolean shouldStopDrainBatchesForPartition(ProducerBatch first, TopicPartition tp) {
         ProducerIdAndEpoch producerIdAndEpoch = null;
         if (transactionManager != null) {
-            if (!transactionManager.isSendToPartitionAllowed(tp))
+
+            if (!first.inRetry() && !transactionManager.isSendToPartitionAllowed(tp))
                 return true;
 
             producerIdAndEpoch = transactionManager.producerIdAndEpoch();
@@ -830,7 +831,7 @@ public class RecordAccumulator {
         int size = 0;
         List<PartitionInfo> parts = cluster.partitionsForNode(node.id());
         List<ProducerBatch> ready = new ArrayList<>();
-        /* to make starvation less likely each node has it's own drainIndex */
+        /* to make starvation less likely each node has its own drainIndex */
         int drainIndex = getDrainIndex(node.idString());
         int start = drainIndex = drainIndex % parts.size();
         do {

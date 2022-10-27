@@ -2345,4 +2345,35 @@ public class KafkaProducerTest {
         }
     }
 
+    public static <K, V> KafkaProducer<K, V> newKafkaProducer(
+        ProducerConfig config,
+        LogContext logContext,
+        Metrics metrics,
+        Serializer<K> keySerializer,
+        Serializer<V> valueSerializer,
+        ProducerMetadata metadata,
+        RecordAccumulator accumulator,
+        TransactionManager txnManager,
+        Sender sender,
+        Partitioner partitioner,
+        Time time,
+        KafkaThread ioThread
+    ) {
+        return new KafkaProducer<>(
+            config,
+            logContext,
+            metrics,
+            keySerializer,
+            valueSerializer,
+            metadata,
+            accumulator,
+            txnManager,
+            sender,
+            new ProducerInterceptors<>(Collections.emptyList()),
+            partitioner,
+            time,
+            ioThread
+        );
+    }
+
 }

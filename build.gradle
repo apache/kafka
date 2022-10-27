@@ -1276,6 +1276,7 @@ project(':clients') {
     testImplementation libs.junitJupiter
     testImplementation libs.log4j
     testImplementation libs.mockitoInline
+    testImplementation libs.jqwik
 
     testRuntimeOnly libs.slf4jlog4j
     testRuntimeOnly libs.jacksonDatabind
