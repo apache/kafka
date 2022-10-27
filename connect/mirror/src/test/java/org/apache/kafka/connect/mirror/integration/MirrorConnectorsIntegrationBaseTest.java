@@ -118,6 +118,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     protected Properties backupBrokerProps = new Properties();
     protected Map<String, String> primaryWorkerProps = new HashMap<>();
     protected Map<String, String> backupWorkerProps = new HashMap<>();
+    protected boolean exactOffsetTranslation = true;
     
     @BeforeEach
     public void startClusters() throws Exception {
@@ -450,7 +451,7 @@ public class MirrorConnectorsIntegrationBaseTest {
             consumerProps, "primary.test-topic-1");
 
         waitForConsumerGroupOffsetSync(backup, backupConsumer, Collections.singletonList("primary.test-topic-1"), 
-            consumerGroupName, NUM_RECORDS_PRODUCED);
+            consumerGroupName, NUM_RECORDS_PRODUCED, exactOffsetTranslation);
 
         ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
 
@@ -479,7 +480,7 @@ public class MirrorConnectorsIntegrationBaseTest {
             "group.id", consumerGroupName), "primary.test-topic-1", "primary.test-topic-2");
 
         waitForConsumerGroupOffsetSync(backup, backupConsumer, Arrays.asList("primary.test-topic-1", "primary.test-topic-2"), 
-            consumerGroupName, NUM_RECORDS_PRODUCED);
+            consumerGroupName, NUM_RECORDS_PRODUCED, exactOffsetTranslation);
 
         records = backupConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
         // similar reasoning as above, no more records to consume by the same consumer group at backup cluster
@@ -708,7 +709,7 @@ public class MirrorConnectorsIntegrationBaseTest {
      * offsets are eventually synced to the expected offset numbers
      */
     protected static <T> void waitForConsumerGroupOffsetSync(EmbeddedConnectCluster connect,
-            Consumer<T, T> consumer, List<String> topics, String consumerGroupId, int numRecords)
+            Consumer<T, T> consumer, List<String> topics, String consumerGroupId, int numRecords, boolean exactOffsetTranslation)
             throws InterruptedException {
         try (Admin adminClient = connect.kafka().createAdminClient()) {
             List<TopicPartition> tps = new ArrayList<>(NUM_PARTITIONS * topics.size());
@@ -728,8 +729,11 @@ public class MirrorConnectorsIntegrationBaseTest {
                 Map<TopicPartition, Long> offsets = consumer.endOffsets(tps, CONSUMER_POLL_TIMEOUT_MS);
                 long totalOffsets = offsets.values().stream().mapToLong(l -> l).sum();
 
+                boolean totalOffsetsMatch = exactOffsetTranslation
+                        ? totalOffsets == expectedTotalOffsets
+                        : totalOffsets >= expectedTotalOffsets;
                 // make sure the consumer group offsets are synced to expected number
-                return totalOffsets == expectedTotalOffsets && consumerGroupOffsetTotal > 0;
+                return totalOffsetsMatch && consumerGroupOffsetTotal > 0;
             }, OFFSET_SYNC_DURATION_MS, "Consumer group offset sync is not complete in time");
         }
     }
