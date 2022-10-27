@@ -148,8 +148,7 @@ public class QuorumState {
                 logEndOffsetAndEpoch.epoch(),
                 voters,
                 Optional.empty(),
-                randomElectionTimeoutMs(),
-                logContext
+                randomElectionTimeoutMs()
             );
         } else if (localId.isPresent() && election.isLeader(localId.getAsInt())) {
             // If we were previously a leader, then we will start out as resigned
@@ -164,8 +163,7 @@ public class QuorumState {
                 election.epoch,
                 voters,
                 randomElectionTimeoutMs(),
-                Collections.emptyList(),
-                logContext
+                Collections.emptyList()
             );
         } else if (localId.isPresent() && election.isVotedCandidate(localId.getAsInt())) {
             initialState = new CandidateState(
@@ -175,8 +173,7 @@ public class QuorumState {
                 voters,
                 Optional.empty(),
                 1,
-                randomElectionTimeoutMs(),
-                logContext
+                randomElectionTimeoutMs()
             );
         } else if (election.hasVoted()) {
             initialState = new VotedState(
@@ -185,8 +182,7 @@ public class QuorumState {
                 election.votedId(),
                 voters,
                 Optional.empty(),
-                randomElectionTimeoutMs(),
-                logContext
+                randomElectionTimeoutMs()
             );
         } else if (election.hasLeader()) {
             initialState = new FollowerState(
@@ -195,8 +191,7 @@ public class QuorumState {
                 election.leaderId(),
                 voters,
                 Optional.empty(),
-                fetchTimeoutMs,
-                logContext
+                fetchTimeoutMs
             );
         } else {
             initialState = new UnattachedState(
@@ -204,8 +199,7 @@ public class QuorumState {
                 election.epoch,
                 voters,
                 Optional.empty(),
-                randomElectionTimeoutMs(),
-                logContext
+                randomElectionTimeoutMs()
             );
         }
 
@@ -283,8 +277,7 @@ public class QuorumState {
             epoch,
             voters,
             randomElectionTimeoutMs(),
-            preferredSuccessors,
-            logContext
+            preferredSuccessors
         );
         log.info("Completed transition to {}", state);
     }
@@ -318,8 +311,7 @@ public class QuorumState {
             epoch,
             voters,
             state.highWatermark(),
-            electionTimeoutMs,
-            logContext
+            electionTimeoutMs
         ));
     }
 
@@ -362,8 +354,7 @@ public class QuorumState {
             candidateId,
             voters,
             state.highWatermark(),
-            randomElectionTimeoutMs(),
-            logContext
+            randomElectionTimeoutMs()
         ));
     }
 
@@ -398,8 +389,7 @@ public class QuorumState {
             leaderId,
             voters,
             state.highWatermark(),
-            fetchTimeoutMs,
-            logContext
+            fetchTimeoutMs
         ));
     }
 
@@ -423,8 +413,7 @@ public class QuorumState {
             voters,
             state.highWatermark(),
             retries,
-            electionTimeoutMs,
-            logContext
+            electionTimeoutMs
         ));
     }
 
@@ -485,8 +474,8 @@ public class QuorumState {
         return electionTimeoutMs + random.nextInt(electionTimeoutMs);
     }
 
-    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
-        return state.canGrantVote(candidateId, isLogUpToDate);
+    public Optional<String> validateGrantVote(int candidateId, boolean isLogUpToDate) {
+        return state.validateGrantVote(candidateId, isLogUpToDate);
     }
 
     public FollowerState followerStateOrThrow() {

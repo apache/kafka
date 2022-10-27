@@ -576,7 +576,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         OffsetAndEpoch lastEpochEndOffsetAndEpoch = new OffsetAndEpoch(lastEpochEndOffset, lastEpoch);
-        boolean voteGranted = quorum.canGrantVote(candidateId, lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0);
+        Optional<String> rejectReasonOpt = quorum.validateGrantVote(
+            candidateId,
+            lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0
+        );
+
+        rejectReasonOpt.ifPresent(logger::debug);
+
+        boolean voteGranted = !rejectReasonOpt.isPresent();
 
         if (voteGranted && quorum.isUnattached()) {
             transitionToVoted(candidateId, candidateEpoch);

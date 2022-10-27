@@ -440,10 +440,12 @@ public class LeaderState<T> implements EpochState {
     }
 
     @Override
-    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
-        log.debug("Rejecting vote request from candidate {} since we are already leader in epoch {}",
-            candidateId, epoch);
-        return false;
+    public Optional<String> validateGrantVote(int candidateId, boolean isLogUpToDate) {
+        return Optional.of(String.format(
+            "Rejecting vote request from candidate %s since we are already leader in epoch %s",
+            candidateId,
+            epoch
+        ));
     }
 
     @Override

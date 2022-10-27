@@ -38,6 +38,7 @@ import static java.util.Collections.singleton;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -486,9 +487,9 @@ public class LeaderStateTest {
     public void testGrantVote(boolean isLogUpToDate) {
         LeaderState<?> state = newLeaderState(Utils.mkSet(1, 2, 3), 1);
 
-        assertFalse(state.canGrantVote(1, isLogUpToDate));
-        assertFalse(state.canGrantVote(2, isLogUpToDate));
-        assertFalse(state.canGrantVote(3, isLogUpToDate));
+        assertNotEquals(Optional.empty(), state.validateGrantVote(1, isLogUpToDate));
+        assertNotEquals(Optional.empty(), state.validateGrantVote(2, isLogUpToDate));
+        assertNotEquals(Optional.empty(), state.validateGrantVote(3, isLogUpToDate));
     }
 
     private static class MockOffsetMetadata implements OffsetMetadata {
