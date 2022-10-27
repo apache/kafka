@@ -98,6 +98,7 @@ public class KafkaBasedLog<K, V> {
     private Optional<Producer<K, V>> producer;
     private TopicAdmin admin;
 
+    // visible for testing
     Thread thread;
     private boolean stopRequested;
     private final Queue<Callback<Void>> readLogEndOffsetCallbacks;
