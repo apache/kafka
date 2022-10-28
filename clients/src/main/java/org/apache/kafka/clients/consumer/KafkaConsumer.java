@@ -1581,17 +1581,19 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * is invoked for the same partition more than once, the latest offset will be used on the next poll(). Note that
      * you may lose data if this API is arbitrarily used in the middle of consumption, to reset the fetch offsets
      *
-     * The next Consumer Record which will be retrieved when poll() is invoked will either have the offset specified or
+     * The next Consumer Record which will be retrieved when poll() is invoked will either have the offset specified or,
+     * by default, with {@link ConsumerConfig AUTO_RESET_CONFIG} set to "latest"
      * a higher numbered offset. A higher numbered offset will be returned if there is no consumer record with the offset
      * specified but there is one with a higher offset.
      * seek(0) is equivalent to seek to beginning for a topic with beginning offset 0.
-     *
-     * Seeking past the end of the highest known offset means that all consumer records between the highest known offset
-     * and the offset passed to seek will be skipped by poll(), which will only return records once the offset passed
-     * to poll() has been reached.
      * seekToEnd() is equivalent to seeking to the highest known offset + 1.
      *
-     * for an exhaustive list of tests illustrating behaviour see the tests for {@link MockConsumer}
+     * Seeking past the end of the highest known offset means an invalid offset is reached.
+     * Invalid offset behaviour is controlled by
+     * the {@link ConsumerConfig AUTO_RESET_CONFIG} property. If this is set to "earliest", the next poll() will seek to the beginning
+     * before returning a record. If it is set to "latest", the next poll() will seek to the end before returning a record.
+     * If it is set to "none", an {@link OffsetOutOfRangeException} will be thrown.
+     *
      *
      * @param offset the next offset returned by poll() will be either this or greater.
      * @throws IllegalArgumentException if the provided offset is negative
