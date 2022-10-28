@@ -323,14 +323,14 @@ public class MirrorSourceConnectorTest {
 
     @Test
     public void testIsCycleWithNullUpstreamTopic() {
-        class BadReplicationPolicy extends DefaultReplicationPolicy {
+        class CustomReplicationPolicy extends DefaultReplicationPolicy {
             @Override
             public String upstreamTopic(String topic) {
                 return null;
             }
         }
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new BadReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+                new CustomReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
         assertDoesNotThrow(() -> connector.isCycle(".b"));
     }
 }
