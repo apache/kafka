@@ -487,13 +487,13 @@ object TopicCommand extends Logging {
   }
 
   class TopicCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
-    private val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The Kafka server to connect to.")
+    private val bootstrapServerOpt = parser.accepts("bootstrap-server", "The Kafka server to connect to.")
       .withRequiredArg
       .describedAs("server to connect to")
       .ofType(classOf[String])
 
     private val commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client. " +
-      "This is used only with --bootstrap-server option for describing and altering broker configs.")
+      "This is used for describing and altering broker configs.")
       .withRequiredArg
       .describedAs("command config property file")
       .ofType(classOf[String])
@@ -510,17 +510,17 @@ object TopicCommand extends Logging {
                          .describedAs("topic")
                          .ofType(classOf[String])
     private val topicIdOpt = parser.accepts("topic-id", "The topic-id to describe." +
-      "This is used only with --bootstrap-server option for describing topics.")
+      "This is used for describing topics.")
       .withRequiredArg
       .describedAs("topic-id")
       .ofType(classOf[String])
     private val nl = System.getProperty("line.separator")
     private val kafkaConfigsCanAlterTopicConfigsViaBootstrapServer =
-      " (the kafka-configs CLI supports altering topic configs with a --bootstrap-server option)"
+      " (the kafka-configs CLI supports altering topic configs)"
     private val configOpt = parser.accepts("config", "A topic configuration override for the topic being created or altered." +
                                              " The following is a list of valid configurations: " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
                                              "See the Kafka documentation for full details on the topic configs." +
-                                             " It is supported only in combination with --create if --bootstrap-server option is used" +
+                                             " It is supported only in combination with --create" +
                                              kafkaConfigsCanAlterTopicConfigsViaBootstrapServer + ".")
                            .withRequiredArg
                            .describedAs("name=value")
@@ -615,8 +615,6 @@ object TopicCommand extends Logging {
         CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete")
 
       // check required args
-      if (!has(bootstrapServerOpt))
-        throw new IllegalArgumentException("--bootstrap-server must be specified")
       if (has(describeOpt) && has(ifExistsOpt)) {
         if (!has(topicOpt) && !has(topicIdOpt))
           CommandLineUtils.printUsageAndDie(parser, "--topic or --topic-id is required to describe a topic")
