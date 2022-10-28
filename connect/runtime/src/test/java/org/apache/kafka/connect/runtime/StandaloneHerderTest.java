@@ -306,15 +306,20 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
+        ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
         Connector connectorMock = mock(SourceConnector.class);
         expectConfigValidation(connectorMock, true, config);
+
+        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
+        assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
             onStart.getValue().onCompletion(null, TargetState.STARTED);
             return true;
         }).when(worker).startConnector(eq(CONNECTOR_NAME), eq(config), any(HerderConnectorContext.class),
-            eq(herder), eq(TargetState.STARTED), onStart.capture());
+                eq(herder), eq(TargetState.STARTED), onStart.capture());
 
         when(worker.connectorNames()).thenReturn(Collections.singleton(CONNECTOR_NAME));
         when(worker.getPlugins()).thenReturn(plugins);
@@ -322,18 +327,15 @@ public class StandaloneHerderTest {
         Map<String, String> taskConfigs = taskConfig(SourceSink.SOURCE);
         taskConfigs.put("k", "v");
         when(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, config, true)))
-            .thenReturn(Collections.singletonList(taskConfigs));
+                .thenReturn(Collections.singletonList(taskConfigs));
 
         when(worker.startSourceTask(eq(new ConnectorTaskId(CONNECTOR_NAME, 0)), any(), eq(connectorConfig(SourceSink.SOURCE)), eq(taskConfigs), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
-        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
-        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
-        assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
-
         FutureCallback<Void> restartCallback = new FutureCallback<>();
+        expectStop();
         herder.restartConnector(CONNECTOR_NAME, restartCallback);
+        verify(statusBackingStore).put(new TaskStatus(taskId, TaskStatus.State.DESTROYED, WORKER_ID, 0));
         restartCallback.get(1000L, TimeUnit.MILLISECONDS);
-        verify(worker).stopAndAwaitConnector(CONNECTOR_NAME);
         verifyCompareAndSwapLoaders(connectorMock);
     }
 
