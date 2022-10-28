@@ -74,12 +74,13 @@ object BrokerApiVersionsCommand {
       Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
     else
       new Properties()
-    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
+    if (opts.options.has(opts.bootstrapServerOpt))
+      props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
     AdminClient.create(props)
   }
 
   class BrokerVersionCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
-    val BootstrapServerDoc = "REQUIRED: The server to connect to."
+    val BootstrapServerDoc = "The server to connect to. Can also be specified with 'bootstrap.servers' in the property file."
     val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
 
     val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
@@ -95,8 +96,6 @@ object BrokerApiVersionsCommand {
 
     def checkArgs(): Unit = {
       CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to retrieve broker version information.")
-      // check required args
-      CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
     }
   }
 
