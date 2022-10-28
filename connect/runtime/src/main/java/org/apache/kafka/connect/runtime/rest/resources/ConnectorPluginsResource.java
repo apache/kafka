@@ -161,9 +161,12 @@ public class ConnectorPluginsResource implements ConnectResource {
     @GET
     @Path("/{pluginName}/config")
     @Operation(summary = "Get the configuration definition for the specified pluginName")
-    public List<ConfigKeyInfo> getConnectorConfigDef(final @PathParam("pluginName") String pluginName) {
+    public List<ConfigKeyInfo> getConnectorConfigDef(
+            final @PathParam("pluginName") String pluginName,
+            final @QueryParam("version") @DefaultValue("latest") @Parameter(description = "Version of the plugin if applicable") String version
+    ) {
         synchronized (this) {
-            return herder.connectorPluginConfig(pluginName);
+            return herder.connectorPluginConfig(pluginName, version);
         }
     }
 

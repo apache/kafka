@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -109,7 +110,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected volatile boolean running = false;
     private final ExecutorService connectorExecutor;
 
-    private final ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Pair<String, String>, Connector> tempConnectors = new ConcurrentHashMap<>();
 
     public AbstractHerder(Worker worker,
                           String workerId,
@@ -446,10 +447,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             connectorProps = worker.configTransformer().transform(connectorProps);
         }
         String connType = connectorProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+        String version = connectorProps.get(ConnectorConfig.VERSION_CONFIG);
         if (connType == null)
             throw new BadRequestException("Connector config " + connectorProps + " contains no connector type");
 
-        Connector connector = getConnector(connType);
+        Connector connector = getConnector(connType, version);
         org.apache.kafka.connect.health.ConnectorType connectorType;
         ClassLoader savedLoader = plugins().compareAndSwapLoaders(connector);
         ConfigDef enrichedConfigDef;
@@ -682,10 +684,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigValueInfo(configValue.name(), value, recommendedValues, configValue.errorMessages(), configValue.visible());
     }
 
-    protected Connector getConnector(String connType) {
-        return tempConnectors.computeIfAbsent(connType, k -> plugins().newConnector(k));
+    protected Connector getConnector(String connType, String version) {
+        return tempConnectors.computeIfAbsent(Pair.of(connType, version), k -> plugins().newConnector(k.getLeft(), k.getRight()));
     }
 
+    protected Connector getConnector(String connType) {
+        return getConnector(connType, null);
+    }
     /**
      * Retrieves ConnectorType for the corresponding connector class
      * @param connClass class of the connector
@@ -786,12 +791,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     @Override
-    public List<ConfigKeyInfo> connectorPluginConfig(String pluginName) {
+    public List<ConfigKeyInfo> connectorPluginConfig(String pluginName, String version) {
         List<ConfigKeyInfo> results = new ArrayList<>();
         ConfigDef configDefs;
         try {
             Plugins p = plugins();
-            Object plugin = p.newPlugin(pluginName);
+            Object plugin = p.newPlugin(pluginName, version);
             PluginType pluginType = PluginType.from(plugin.getClass());
             switch (pluginType) {
                 case SINK:

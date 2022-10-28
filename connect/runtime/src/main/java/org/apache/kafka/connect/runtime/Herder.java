@@ -277,7 +277,11 @@ public interface Herder {
      * @param pluginName the name of the plugin
      * @return the list of ConfigKeyInfo of the plugin
      */
-    List<ConfigKeyInfo> connectorPluginConfig(String pluginName);
+    List<ConfigKeyInfo> connectorPluginConfig(String pluginName, String version);
+
+    default List<ConfigKeyInfo> connectorPluginConfig(String pluginName) {
+        return connectorPluginConfig(pluginName, null);
+    }
 
     enum ConfigReloadAction {
         NONE,

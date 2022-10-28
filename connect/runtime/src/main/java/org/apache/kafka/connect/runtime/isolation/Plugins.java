@@ -24,6 +24,7 @@ import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -105,19 +106,28 @@ public class Plugins {
     @SuppressWarnings("unchecked")
     protected static <U> Class<? extends U> pluginClass(
             DelegatingClassLoader loader,
-            String classOrAlias,
+            String classNameOrAlias,
+            String version,
             Class<U> pluginClass
     ) throws ClassNotFoundException {
-        Class<?> klass = loader.loadClass(classOrAlias, false);
+        Class<?> klass = loader.loadVersionedClass(classNameOrAlias, version, false);
         if (pluginClass.isAssignableFrom(klass)) {
             return (Class<? extends U>) klass;
         }
 
         throw new ClassNotFoundException(
                 "Requested class: "
-                        + classOrAlias
+                        + classNameOrAlias
                         + " does not extend " + pluginClass.getSimpleName()
         );
+    }
+
+    protected static <U> Class<? extends U> pluginClass(
+        DelegatingClassLoader loader,
+        String classNameOrAlias,
+        Class<U> pluginClass
+    ) throws ClassNotFoundException {
+        return pluginClass(loader, classNameOrAlias, null, pluginClass);
     }
 
     public static ClassLoader compareAndSwapLoaders(ClassLoader loader) {
@@ -183,22 +193,31 @@ public class Plugins {
         return delegatingLoader.predicates();
     }
 
+    public Object newPlugin(String classOrAlias, String version) throws ClassNotFoundException {
+        Class<?> klass = pluginClass(delegatingLoader, classOrAlias, version, Object.class);
+        return newPlugin(klass);
+    }
+
     public Object newPlugin(String classOrAlias) throws ClassNotFoundException {
-        Class<?> klass = pluginClass(delegatingLoader, classOrAlias, Object.class);
+        return newPlugin(classOrAlias, null);
+    }
+
+    public Connector newConnector(String connectorClassOrAlias, String version) {
+        Class<? extends Connector> klass = connectorClass(connectorClassOrAlias, version);
         return newPlugin(klass);
     }
 
     public Connector newConnector(String connectorClassOrAlias) {
-        Class<? extends Connector> klass = connectorClass(connectorClassOrAlias);
-        return newPlugin(klass);
+        return newConnector(connectorClassOrAlias, null);
     }
 
-    public Class<? extends Connector> connectorClass(String connectorClassOrAlias) {
+    public Class<? extends Connector> connectorClass(String connectorClassOrAlias, String version) {
         Class<? extends Connector> klass;
         try {
             klass = pluginClass(
                     delegatingLoader,
                     connectorClassOrAlias,
+                    version,
                     Connector.class
             );
         } catch (ClassNotFoundException e) {
@@ -234,6 +253,10 @@ public class Plugins {
             klass = entry.pluginClass();
         }
         return klass;
+    }
+
+    public Class<? extends Connector> connectorClass(String connectorClassOrAlias) {
+        return connectorClass(connectorClassOrAlias, null);
     }
 
     public Task newTask(Class<? extends Task> taskClass) {
@@ -461,7 +484,13 @@ public class Plugins {
         T plugin;
         Class<? extends T> klass;
         try {
-            klass = pluginClass(delegatingLoader, klassName, pluginKlass);
+            if (Connector.class.isAssignableFrom(pluginKlass)) {
+                klass = pluginClass(delegatingLoader,
+                    config.originalsStrings().get(ConnectorConfig.VERSION_CONFIG), klassName,
+                    pluginKlass);
+            } else {
+                klass = pluginClass(delegatingLoader, klassName, pluginKlass);
+            }
         } catch (ClassNotFoundException e) {
             String msg = String.format("Failed to find any class that implements %s and which "
                                        + "name matches %s", pluginKlass, klassName);

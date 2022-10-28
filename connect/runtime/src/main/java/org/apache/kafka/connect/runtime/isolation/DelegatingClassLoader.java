@@ -179,7 +179,7 @@ public class DelegatingClassLoader extends URLClassLoader {
      * @param name The fully qualified class name of the plugin
      * @return the PluginClassLoader that should be used to load this, or null if the plugin is not isolated.
      */
-    public PluginClassLoader pluginClassLoader(String name) {
+    public PluginClassLoader pluginClassLoader(String name, String version) {
         if (!PluginUtils.shouldLoadInIsolation(name)) {
             return null;
         }
@@ -187,19 +187,36 @@ public class DelegatingClassLoader extends URLClassLoader {
         if (inner == null) {
             return null;
         }
-        ClassLoader pluginLoader = inner.get(inner.lastKey());
+
+        ClassLoader pluginLoader = null;
+        if (version == null
+            || version.isEmpty()
+            || version.equalsIgnoreCase("latest")) {
+            pluginLoader = inner.get(inner.lastKey());
+
+        } else {
+            for (PluginDesc<?> pluginDesc : inner.keySet()) {
+                if (pluginDesc.version().equals(version)) {
+                    pluginLoader = inner.get(pluginDesc);
+                }
+            }
+        }
         return pluginLoader instanceof PluginClassLoader
                ? (PluginClassLoader) pluginLoader
                : null;
     }
 
-    public ClassLoader connectorLoader(Connector connector) {
-        return connectorLoader(connector.getClass().getName());
+    public PluginClassLoader pluginClassLoader(String name) {
+        return pluginClassLoader(name, null);
     }
 
-    public ClassLoader connectorLoader(String connectorClassOrAlias) {
+    public ClassLoader connectorLoader(Connector connector) {
+        return connectorLoader(connector.getClass().getName(), connector.version());
+    }
+
+    public ClassLoader connectorLoader(String connectorClassOrAlias, String version) {
         String fullName = aliases.getOrDefault(connectorClassOrAlias, connectorClassOrAlias);
-        ClassLoader classLoader = pluginClassLoader(fullName);
+        ClassLoader classLoader = pluginClassLoader(fullName, version);
         if (classLoader == null) classLoader = this;
         log.debug(
             "Getting plugin class loader: '{}' for connector: {}",
@@ -207,6 +224,10 @@ public class DelegatingClassLoader extends URLClassLoader {
             connectorClassOrAlias
         );
         return classLoader;
+    }
+
+    public ClassLoader connectorLoader(String connectorClassOrAlias) {
+        return connectorLoader(connectorClassOrAlias, null);
     }
 
     protected PluginClassLoader newPluginClassLoader(
@@ -442,15 +463,25 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     @Override
-    protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+    protected Class<?> loadClass(String classLoadingInfo, boolean resolve) throws ClassNotFoundException {
+        ClassLoadingInfo info = ClassLoadingInfo.fromString(classLoadingInfo);
+
+        String name = info.classNameOrAlias;
+        String version = info.version;
+
         String fullName = aliases.getOrDefault(name, name);
-        PluginClassLoader pluginLoader = pluginClassLoader(fullName);
+        PluginClassLoader pluginLoader = pluginClassLoader(fullName, version);
+
         if (pluginLoader != null) {
             log.trace("Retrieving loaded class '{}' from '{}'", fullName, pluginLoader);
             return pluginLoader.loadClass(fullName, resolve);
         }
 
         return super.loadClass(fullName, resolve);
+    }
+
+    protected Class<?> loadVersionedClass(String classNameOrAlias, String version, boolean resolve) throws ClassNotFoundException {
+         return loadClass(new ClassLoadingInfo(classNameOrAlias, version).toString(), resolve);
     }
 
     private void addAllAliases() {
@@ -502,6 +533,30 @@ public class DelegatingClassLoader extends URLClassLoader {
                     log.warn("could not create Vfs.Dir from url. ignoring the exception and continuing", e);
                 }
             }
+        }
+    }
+
+    private static class ClassLoadingInfo {
+        final private String classNameOrAlias;
+        final private String version;
+
+        private ClassLoadingInfo(String classNameOrAlias, String version) {
+            this.classNameOrAlias = classNameOrAlias;
+            this.version = version;
+        }
+
+        private static ClassLoadingInfo fromString(String info) {
+            String[] parts = info.split(":");
+            if (parts.length == 2) {
+                return new ClassLoadingInfo(parts[0], parts[1]);
+            } else {
+                return new ClassLoadingInfo(parts[0], null);
+            }
+        }
+
+        @Override
+        public String toString() {
+            return version == null ? classNameOrAlias : classNameOrAlias + ":" + version;
         }
     }
 

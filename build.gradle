@@ -2434,6 +2434,7 @@ project(':connect:api') {
     api project(':clients')
     implementation libs.slf4jApi
     implementation libs.jaxrsApi
+    implementation libs.mavenArtifact
 
     testImplementation libs.junitJupiter
     testRuntimeOnly libs.slf4jlog4j

@@ -293,11 +293,12 @@ public class Worker {
                 // Getting this value from the unparsed map will allow us to instantiate the
                 // right config (source or sink)
                 final String connClass = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-                ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connClass);
+                final String version = connProps.get(ConnectorConfig.VERSION_CONFIG);
+                ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connClass, version);
                 savedLoader = Plugins.compareAndSwapLoaders(connectorLoader);
 
                 log.info("Creating connector {} of type {}", connName, connClass);
-                final Connector connector = plugins.newConnector(connClass);
+                final Connector connector = plugins.newConnector(connClass, version);
                 final ConnectorConfig connConfig;
                 final CloseableOffsetStorageReader offsetReader;
                 final ConnectorOffsetBackingStore offsetStore;
@@ -624,7 +625,8 @@ public class Worker {
             ClassLoader savedLoader = plugins.currentThreadLoader();
             try {
                 String connType = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-                ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connType);
+                String version = connProps.get(ConnectorConfig.VERSION_CONFIG);
+                ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connType, version);
                 savedLoader = Plugins.compareAndSwapLoaders(connectorLoader);
                 final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
                 final TaskConfig taskConfig = new TaskConfig(taskProps);
@@ -711,11 +713,12 @@ public class Worker {
         log.debug("Fencing out {} task producers for source connector {}", numTasks, connName);
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
             String connType = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-            ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connType);
+            String version = connProps.get(ConnectorConfig.VERSION_CONFIG);
+            ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connType, version);
             try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
                 final SourceConnectorConfig connConfig = new SourceConnectorConfig(plugins, connProps, config.topicCreationEnable());
                 final Class<? extends Connector> connClass = plugins.connectorClass(
-                        connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
+                        connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG), version);
 
                 Map<String, Object> adminConfig = adminConfigs(
                         connName,
@@ -1246,7 +1249,8 @@ public class Worker {
 
             ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
             final Class<? extends Connector> connectorClass = plugins.connectorClass(
-                    connectorConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
+                    connectorConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG),
+                    connectorConfig.getString(ConnectorConfig.VERSION_CONFIG));
             RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connectorConfig.errorRetryTimeout(),
                     connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
 

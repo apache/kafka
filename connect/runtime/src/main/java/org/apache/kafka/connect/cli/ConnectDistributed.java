@@ -90,7 +90,9 @@ public class ConnectDistributed {
 
     public Connect startConnect(Map<String, String> workerProps) {
         log.info("Scanning for plugin classes. This might take a moment ...");
+        long startTime = System.currentTimeMillis();
         Plugins plugins = new Plugins(workerProps);
+        log.info("Scan took {} milli-seconds", System.currentTimeMillis() - startTime);
         plugins.compareAndSwapWithDelegatingLoader();
         DistributedConfig config = new DistributedConfig(workerProps);
 
