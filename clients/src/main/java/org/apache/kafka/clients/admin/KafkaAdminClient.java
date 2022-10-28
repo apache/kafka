@@ -836,7 +836,7 @@ public class KafkaAdminClient extends AdminClient {
                 log.debug("{} failed: {}. Beginning retry #{}",
                     this, prettyPrintException(throwable), tries);
             }
-            //Temporarily save the last exception of the call,
+            // Temporarily save the last exception of the call,
             // so that the call can return valid exception information when it times out
             lastThrowable = throwable;
 
@@ -949,7 +949,7 @@ public class KafkaAdminClient extends AdminClient {
                 Call call = iter.next();
                 int remainingMs = calcTimeoutMsRemainingAsInt(now, call.deadlineMs);
                 if (remainingMs < 0) {
-                    call.fail(now, new TimeoutException(msg + " Call: " + call.callName,call.lastThrowable));
+                    call.fail(now, new TimeoutException(msg + " Call: " + call.callName + " , the last error causing retry is: ", call.lastThrowable));
                     iter.remove();
                     numTimedOut++;
                 } else {
