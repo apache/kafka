@@ -38,7 +38,7 @@ import java.util.function.Supplier;
 @RunWith(PowerMockRunner.class)
 public class RetryUtilTest {
 
-    private final Time mockTime = new MockTime();
+    private final Time mockTime = new MockTime(10);
 
     private Callable<String> mockCallable;
     private final Supplier<String> testMsg = () -> "Test";
@@ -58,10 +58,11 @@ public class RetryUtilTest {
 
     @Test
     public void testExhaustingRetries() throws Exception {
-        Mockito.when(mockCallable.call()).thenThrow(new TimeoutException());
+        Mockito.when(mockCallable.call()).thenThrow(new TimeoutException("timeout exception"));
         ConnectException e = assertThrows(ConnectException.class,
                 () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(50), 10, mockTime));
         Mockito.verify(mockCallable, Mockito.atLeastOnce()).call();
+        assertTrue(e.getMessage().contains("Reason: timeout exception"));
     }
 
     @Test
@@ -123,11 +124,7 @@ public class RetryUtilTest {
 
     @Test
     public void testNoBackoffTimeAndFail() throws Exception {
-        Mockito.when(mockCallable.call()).thenAnswer(invocation -> {
-            // Without any backoff time, the speed of the operation itself limits the number of retries and retry rate.
-            mockTime.sleep(30);
-            throw new TimeoutException("timeout exception");
-        });
+        Mockito.when(mockCallable.call()).thenThrow(new TimeoutException("timeout exception"));
 
         ConnectException e = assertThrows(ConnectException.class,
                 () -> RetryUtil.retryUntilTimeout(mockCallable, testMsg, Duration.ofMillis(80), 0, mockTime));
