@@ -120,7 +120,7 @@ versions += [
   scoverage: "1.4.11",
   slf4j: "1.7.36",
   snappy: "1.1.8.4",
-  spotbugs: "4.2.2",
+  spotbugs: "4.7.3",
   swaggerAnnotations: "2.2.0",
   swaggerJaxrs2: "2.2.0",
   zinc: "1.6.1",
