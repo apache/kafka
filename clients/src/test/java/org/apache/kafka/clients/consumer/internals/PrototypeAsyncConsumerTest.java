@@ -83,13 +83,6 @@ public class PrototypeAsyncConsumerTest {
     }
 
     @Test
-    public void testPoll() {
-        PrototypeAsyncConsumer<String, String> consumer =
-                setupConsumerWithDefault();
-        assertTrue(consumer.poll(Duration.ofMillis(100)).isEmpty());
-    }
-
-    @Test
     public void testUnimplementedException() {
         PrototypeAsyncConsumer<String, String> consumer =
                 setupConsumerWithDefault();
