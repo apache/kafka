@@ -415,8 +415,7 @@ public class StreamThreadStateStoreProviderTest {
                 logContext,
                 clientSupplier.adminClient,
                 clientSupplier.restoreConsumer,
-                new MockStateRestoreListener(),
-                false),
+                new MockStateRestoreListener()),
             topology.storeToChangelogTopic(),
             partitions,
             false);
