@@ -86,7 +86,6 @@ public class MirrorMakerConfigTest {
             "replication.policy.separator", "__",
             "ssl.key.password", "${fake:secret:password}",  // resolves to "secret2"
             "security.protocol", "SSL",
-            "a.ssl.truststore.password", "secret1",
             "a.security.protocol", "PLAINTEXT",
             "a.producer.security.protocol", "SSL",
             "a.bootstrap.servers", "one:9092, two:9092",
@@ -115,10 +114,6 @@ public class MirrorMakerConfigTest {
             "unknown properties aren't included in client configs");
         assertFalse(aClientConfig.adminConfig().containsKey("metric.reporters"),
             "top-leve metrics reporters aren't included in client configs");
-        assertEquals("secret1", aClientConfig.getPassword("ssl.truststore.password").value(),
-            "security properties are picked up in MirrorClientConfig");
-        assertEquals("secret1", ((Password) aClientConfig.adminConfig().get("ssl.truststore.password")).value(),
-            "client configs include top-level security properties");
         assertEquals("secret2", aClientConfig.getPassword("ssl.key.password").value(),
             "security properties are translated from external sources");
         assertEquals("secret2", ((Password) aClientConfig.adminConfig().get("ssl.key.password")).value(),
