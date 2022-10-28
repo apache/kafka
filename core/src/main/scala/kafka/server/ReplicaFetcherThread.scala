@@ -43,7 +43,8 @@ class ReplicaFetcherThread(name: String,
 
   this.logIdent = logPrefix
 
-  private val partitionsWithNewRecords = mutable.Buffer[TopicPartition]()
+  // Visible for testing
+  private[server] val partitionsWithNewRecords = mutable.Buffer[TopicPartition]()
 
   override protected val isOffsetForLeaderEpochSupported: Boolean = metadataVersionSupplier().isOffsetForLeaderEpochSupported
 

@@ -1144,20 +1144,21 @@ class ReplicaFetcherThreadTest {
     val tp1 = new TopicPartition("testTopic", 1)
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
-    val partitionData: thread.FetchData = new FetchResponseData.PartitionData()
-      .setRecords(records)
+    var partitionData: thread.FetchData = new FetchResponseData.PartitionData()
+    if (appendInfo.isDefined) {
+      partitionData = partitionData.setRecords(records)
+    }
 
     thread.processPartitionData(tp0, 0, partitionData.setPartitionIndex(0))
     thread.processPartitionData(tp1, 0, partitionData.setPartitionIndex(1))
     thread.doWork()
     appendInfo match {
       case Some(_) =>
-        val argument: ArgumentCaptor[Seq[TopicPartition]] = ArgumentCaptor.forClass(classOf[Seq[TopicPartition]])
-        verify(replicaManager, times(1)).completeDelayedFetchRequests(argument.capture())
-        assertEquals(Seq(tp0, tp1), argument.getValue)
+        verify(replicaManager, times(1)).completeDelayedFetchRequests(Seq(tp0, tp1))
       case None =>
         verify(replicaManager, times(0)).completeDelayedFetchRequests(any[Seq[TopicPartition]])
     }
+    assertEquals(mutable.Buffer.empty, thread.partitionsWithNewRecords)
   }
 
   private def newOffsetForLeaderPartitionResult(
