@@ -27,8 +27,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class ConnectUtilsTest {
 
@@ -132,6 +135,35 @@ public class ConnectUtilsTest {
                         true)
         );
         assertEquals(Collections.singletonMap("\u1984", "big brother"), props);
+    }
+
+    @Test
+    public void testClientIdBase() {
+        String groupId = "connect-cluster";
+        String userSpecifiedClientId = "worker-57";
+        String advertisedUrl = "localhost:8083";
+
+        String encodedAdvertisedUrl = "bG9jYWxob3N0OjgwODM";
+
+        String expectedClientIdBase = groupId + "-" + userSpecifiedClientId + "-";
+        assertClientIdBase(groupId, userSpecifiedClientId, advertisedUrl, expectedClientIdBase);
+
+        expectedClientIdBase = groupId + "-" + encodedAdvertisedUrl + "-";
+        assertClientIdBase(groupId, null, advertisedUrl, expectedClientIdBase);
+
+        expectedClientIdBase = "connect-" + encodedAdvertisedUrl + "-";
+        assertClientIdBase(null, null, advertisedUrl, expectedClientIdBase);
+
+        expectedClientIdBase = "connect-" + userSpecifiedClientId + "-";
+        assertClientIdBase(null, userSpecifiedClientId, advertisedUrl, expectedClientIdBase);
+    }
+
+    private void assertClientIdBase(String groupId, String userSpecifiedClientId, String advertisedUrl, String expectedClientIdBase) {
+        WorkerConfig config = mock(WorkerConfig.class);
+        when(config.groupId()).thenReturn(groupId);
+        when(config.getString(CLIENT_ID_CONFIG)).thenReturn(userSpecifiedClientId);
+        String actualClientIdBase = ConnectUtils.clientIdBase(config, advertisedUrl);
+        assertEquals(expectedClientIdBase, actualClientIdBase);
     }
 
 }
