@@ -1097,7 +1097,7 @@ public class KafkaStreams implements AutoCloseable {
                 // make a copy of threads to avoid holding lock
                 for (final StreamThread streamThread : new ArrayList<>(threads)) {
                     final boolean callingThreadIsNotCurrentStreamThread = !streamThread.getName().equals(Thread.currentThread().getName());
-                    if (streamThread.isAlive() && (callingThreadIsNotCurrentStreamThread || getNumLiveStreamThreads() == 1)) {
+                    if (streamThread.isThreadAlive() && (callingThreadIsNotCurrentStreamThread || getNumLiveStreamThreads() == 1)) {
                         log.info("Removing StreamThread " + streamThread.getName());
                         final Optional<String> groupInstanceID = streamThread.getGroupInstanceID();
                         streamThread.requestLeaveGroupDuringShutdown();
