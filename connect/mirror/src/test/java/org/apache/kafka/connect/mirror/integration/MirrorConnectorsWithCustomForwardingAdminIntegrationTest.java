@@ -144,15 +144,19 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest {
                         + "password=\"super_pwd\";");
         return superUserClientConfig;
     }
+
+    /*
+     * return connect user auth config.
+     */
     protected static Map<String, String> connectorUserConfig() {
-        Map<String, String> superUserClientConfig = new HashMap<>();
-        superUserClientConfig.put("sasl.mechanism", "PLAIN");
-        superUserClientConfig.put("security.protocol", "SASL_PLAINTEXT");
-        superUserClientConfig.put("sasl.jaas.config",
+        Map<String, String> connectUserClientConfig = new HashMap<>();
+        connectUserClientConfig.put("sasl.mechanism", "PLAIN");
+        connectUserClientConfig.put("security.protocol", "SASL_PLAINTEXT");
+        connectUserClientConfig.put("sasl.jaas.config",
                 "org.apache.kafka.common.security.plain.PlainLoginModule required "
                         + "username=\"connector\" "
                         + "password=\"connector_pwd\";");
-        return superUserClientConfig;
+        return connectUserClientConfig;
     }
 
     /*
