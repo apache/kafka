@@ -56,7 +56,7 @@ public class PrototypeAsyncConsumerTest {
     @BeforeEach
     public void setup() {
         this.subscriptionState = Mockito.mock(SubscriptionState.class);
-        this.eventHandler = Mockito.mock(EventHandler.class);
+        this.eventHandler = Mockito.mock(DefaultEventHandler.class);
         this.logContext = new LogContext();
         this.time = new MockTime();
         this.metrics = new Metrics(time);
@@ -80,6 +80,13 @@ public class PrototypeAsyncConsumerTest {
         subscriptionState.subscribe(singleton("t1"),
                 new NoOpConsumerRebalanceListener());
         assertEquals(1, consumer.subscription().size());
+    }
+
+    @Test
+    public void testPoll() {
+        PrototypeAsyncConsumer<String, String> consumer =
+                setupConsumerWithDefault();
+        assertTrue(consumer.poll(Duration.ofMillis(100)).isEmpty());
     }
 
     @Test
