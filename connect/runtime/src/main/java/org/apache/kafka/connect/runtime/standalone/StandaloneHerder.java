@@ -148,7 +148,7 @@ public class StandaloneHerder extends AbstractHerder {
         if (!configState.contains(connector))
             return null;
         Map<String, String> config = configState.rawConnectorConfig(connector);
-        return new ConnectorInfo(connector, config, configState.tasks(connector), connectorTypeForConfig(config));
+        return new ConnectorInfo(connector, config, configState.tasks(connector), connectorType(config));
     }
 
     @Override
@@ -387,7 +387,7 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     private boolean startTask(ConnectorTaskId taskId, Map<String, String> connProps) {
-        switch (connectorTypeForConfig(connProps)) {
+        switch (connectorType(connProps)) {
             case SINK:
                 return worker.startSinkTask(
                         taskId,

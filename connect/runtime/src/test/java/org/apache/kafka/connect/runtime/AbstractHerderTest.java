@@ -442,8 +442,7 @@ public class AbstractHerderTest {
         config.put(ConnectorConfig.TRANSFORMS_CONFIG + ".xformA.type", SampleTransformation.class.getName());
         config.put("required", "value"); // connector required config
         ConfigInfos result = herder.validateConnectorConfig(config, false);
-        assertEquals(herder.connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)), ConnectorType.SOURCE);
-        assertEquals(herder.connectorTypeForConfig(config), ConnectorType.SOURCE);
+        assertEquals(herder.connectorType(config), ConnectorType.SOURCE);
 
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
@@ -500,8 +499,7 @@ public class AbstractHerderTest {
         config.put("required", "value"); // connector required config
 
         ConfigInfos result = herder.validateConnectorConfig(config, false);
-        assertEquals(ConnectorType.SOURCE, herder.connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
-        assertEquals(ConnectorType.SOURCE, herder.connectorTypeForConfig(config));
+        assertEquals(ConnectorType.SOURCE, herder.connectorType(config));
 
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
@@ -568,8 +566,7 @@ public class AbstractHerderTest {
         config.put(saslConfigKey, "jaas_config");
 
         ConfigInfos result = herder.validateConnectorConfig(config, false);
-        assertEquals(herder.connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)), ConnectorType.SOURCE);
-        assertEquals(herder.connectorTypeForConfig(config), ConnectorType.SOURCE);
+        assertEquals(herder.connectorType(config), ConnectorType.SOURCE);
 
         // We expect there to be errors due to now allowed override policy for ACKS.... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
@@ -629,8 +626,7 @@ public class AbstractHerderTest {
         overriddenClientConfigs.add(loginCallbackHandlerConfigKey);
 
         ConfigInfos result = herder.validateConnectorConfig(config, false);
-        assertEquals(herder.connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)), ConnectorType.SOURCE);
-        assertEquals(herder.connectorTypeForConfig(config), ConnectorType.SOURCE);
+        assertEquals(herder.connectorType(config), ConnectorType.SOURCE);
 
         Map<String, String> validatedOverriddenClientConfigs = new HashMap<>();
         for (ConfigInfo configInfo : result.values()) {
@@ -906,7 +902,7 @@ public class AbstractHerderTest {
                 .defaultAnswer(CALLS_REAL_METHODS));
         when(worker.getPlugins()).thenReturn(plugins);
         when(plugins.newConnector(anyString())).thenThrow(new ConnectException("No class found"));
-        assertEquals(ConnectorType.UNKNOWN, herder.connectorTypeForClass(connName));
+        assertEquals(ConnectorType.UNKNOWN, herder.connectorType(Collections.singletonMap(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connName)));
     }
 
     @Test
@@ -914,7 +910,7 @@ public class AbstractHerderTest {
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
-        assertEquals(ConnectorType.UNKNOWN, herder.connectorTypeForConfig(null));
+        assertEquals(ConnectorType.UNKNOWN, herder.connectorType(null));
     }
 
     @Test
@@ -922,7 +918,7 @@ public class AbstractHerderTest {
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
-        assertEquals(ConnectorType.UNKNOWN, herder.connectorTypeForConfig(Collections.emptyMap()));
+        assertEquals(ConnectorType.UNKNOWN, herder.connectorType(Collections.emptyMap()));
     }
 
     protected void addConfigKey(Map<String, ConfigDef.ConfigKey> keys, String name, String group) {

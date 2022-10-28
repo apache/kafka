@@ -53,6 +53,8 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -100,6 +102,8 @@ import java.util.stream.Collectors;
  *    we have proper producer groups with fenced groups, there is not much else we can do.
  */
 public abstract class AbstractHerder implements Herder, TaskStatus.Listener, ConnectorStatus.Listener {
+
+    private final Logger log = LoggerFactory.getLogger(AbstractHerder.class);
 
     private final String workerId;
     protected final Worker worker;
@@ -281,7 +285,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             connector,
             config,
             configState.tasks(connector),
-            connectorTypeForConfig(config)
+            connectorType(config)
         );
     }
 
@@ -319,7 +323,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Collections.sort(taskStates);
 
         Map<String, String> conf = rawConfig(connName);
-        return new ConnectorStateInfo(connName, connectorState, taskStates, connectorTypeForConfig(conf));
+        return new ConnectorStateInfo(connName, connectorState, taskStates, connectorType(conf));
     }
 
     @Override
@@ -419,7 +423,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 connectorName,
                 connectorInfoState,
                 taskStates,
-                connectorTypeForConfig(conf)
+                connectorType(conf)
         );
         return Optional.of(new RestartPlan(request, stateInfo));
     }
@@ -687,30 +691,24 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     /**
-     * Retrieves ConnectorType for the corresponding connector class
-     * @param connClass class of the connector
+     * Retrieves ConnectorType for the class specified in the connector config
+     * @param connConfig the connector config, may be null
+     * @return the {@link ConnectorType} of the connector, or {@link ConnectorType#UNKNOWN} if an error occurs
      */
-    public ConnectorType connectorTypeForClass(String connClass) {
+    public ConnectorType connectorType(Map<String, String> connConfig) {
+        if (connConfig == null) {
+            return ConnectorType.UNKNOWN;
+        }
+        String connClass = connConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         if (connClass == null) {
             return ConnectorType.UNKNOWN;
         }
         try {
             return ConnectorType.from(getConnector(connClass).getClass());
         } catch (ConnectException e) {
+            log.error("Unable to retrieve connector type", e);
             return ConnectorType.UNKNOWN;
         }
-    }
-
-    /**
-     * Retrieves ConnectorType for the class specified in the connector config
-     * @param connConfig the connector config; may not be null
-     * @return the {@link ConnectorType} of the connector
-     */
-    public ConnectorType connectorTypeForConfig(Map<String, String> connConfig) {
-        if (connConfig == null) {
-            return ConnectorType.UNKNOWN;
-        }
-        return connectorTypeForClass(connConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
     }
 
     /**
