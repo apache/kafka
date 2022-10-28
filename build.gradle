@@ -178,7 +178,7 @@ apply from: file('wrapper.gradle')
 
 if (file('.git').exists()) {
   rat {
-    verbose = true
+    verbose.set(true)
     reportDir.set(project.file('build/rat'))
     stylesheet.set(file('gradle/resources/rat-output-to-html.xsl'))
 
@@ -221,7 +221,7 @@ subprojects {
   task allDeps(type: DependencyReportTask) {}
   // enable running :dependencyInsight task recursively on all subprojects
   // eg: ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
-  task allDepInsight(type: DependencyInsightReportTask) doLast {}
+  task allDepInsight(type: DependencyInsightReportTask) {showingAllVariants = false} doLast {}
 
   apply plugin: 'java-library'
   apply plugin: 'checkstyle'
@@ -411,9 +411,7 @@ subprojects {
       "**/SourceTaskOffsetCommitterTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
       "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*", "**/ExactlyOnceWorkerSourceTaskTest.*",
-      "**/WorkerTaskTest.*",
-      // streams tests
-      "**/KafkaStreamsTest.*"
+      "**/WorkerTaskTest.*"
     ])
   }
 
@@ -1273,6 +1271,8 @@ project(':clients') {
     compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
 
     testImplementation libs.bcpkix
+    testImplementation libs.jacksonJaxrsJsonProvider
+    testImplementation libs.jose4j
     testImplementation libs.junitJupiter
     testImplementation libs.log4j
     testImplementation libs.mockitoInline
@@ -1280,9 +1280,6 @@ project(':clients') {
     testRuntimeOnly libs.slf4jlog4j
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
-    testImplementation libs.jose4j
-    testImplementation libs.jacksonJaxrsJsonProvider
-    testImplementation libs.log4j
 
     generator project(':generator')
   }

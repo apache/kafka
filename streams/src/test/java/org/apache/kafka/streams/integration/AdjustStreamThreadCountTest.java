@@ -371,7 +371,7 @@ public class AdjustStreamThreadCountTest {
         final Properties props = new Properties();
         props.putAll(properties);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, totalCacheBytes);
+        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, totalCacheBytes);
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), props)) {
             addStreamStateChangeListener(kafkaStreams);
@@ -398,7 +398,7 @@ public class AdjustStreamThreadCountTest {
         final Properties props = new Properties();
         props.putAll(properties);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, totalCacheBytes);
+        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, totalCacheBytes);
 
         final AtomicBoolean injectError = new AtomicBoolean(false);
 

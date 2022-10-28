@@ -28,8 +28,10 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Disable warnings about mutable objects and the use of public fields.
             EI_EXPOSE_REP: May expose internal representation by returning reference to mutable object
             EI_EXPOSE_REP2: May expose internal representation by incorporating reference to mutable object
-            MS_PKGPROTECT: Field should be package protected -->
-        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2,MS_PKGPROTECT"/>
+            MS_PKGPROTECT: Field should be package protected
+            MS_EXPOSE_REP: Public static method may expose internal representation by returning array
+            EI_EXPOSE_STATIC_REP2: May expose internal static state by storing a mutable object into a static field -->
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2,MS_PKGPROTECT,EI_EXPOSE_STATIC_REP2,MS_EXPOSE_REP"/>
     </Match>
 
     <Match>
@@ -90,6 +92,8 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Bug pattern="MS_CANNOT_BE_FINAL"/>
             <Bug pattern="IC_INIT_CIRCULARITY"/>
             <Bug pattern="SE_NO_SUITABLE_CONSTRUCTOR"/>
+            <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+            <Bug pattern="SSD_DO_NOT_USE_INSTANCE_LOCK_ON_SHARED_STATIC_DATA"/>
         </Or>
     </Match>
 

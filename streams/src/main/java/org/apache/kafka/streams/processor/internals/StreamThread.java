@@ -1082,6 +1082,11 @@ public class StreamThread extends Thread {
         partitions.add(partition);
     }
 
+    // This method is added for usage in tests where mocking the underlying native call is not possible.
+    public boolean isThreadAlive() {
+        return isAlive();
+    }
+
     /**
      * Try to commit all active tasks owned by this thread.
      *
