@@ -263,6 +263,10 @@ public class ReplicationControlManager {
         public Uuid topicId() {
             return id;
         }
+
+        public int numPartitions(long epoch) {
+            return parts.size(epoch);
+        }
     }
 
     /**
@@ -527,7 +531,7 @@ public class ReplicationControlManager {
             if (colliding != null) {
                 colliding.remove(topic.name);
                 if (colliding.isEmpty()) {
-                    topicsWithCollisionChars.remove(topic.name);
+                    topicsWithCollisionChars.remove(normalizedName);
                 }
             }
         }
