@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.regex.Pattern
-import java.util.{Collections, Locale, Map, Optional, Properties, Random}
+import java.util.{Collections, Locale, Map, Optional, Properties, Random, Arrays}
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.utils.Implicits._
@@ -148,7 +148,9 @@ object ConsoleConsumer extends Logging {
     props ++= config.consumerProps
     props ++= config.extraConsumerProps
     setAutoOffsetResetValue(config, props)
-    props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
+
+    if (config.bootstrapServer != null)
+      props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
     if (props.getProperty(ConsumerConfig.CLIENT_ID_CONFIG) == null)
       props.put(ConsumerConfig.CLIENT_ID_CONFIG, "console-consumer")
     CommandLineUtils.maybeMergeOptions(
@@ -218,7 +220,7 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("consumer_prop")
       .ofType(classOf[String])
-    val consumerConfigOpt = parser.accepts("consumer.config", s"Consumer config properties file. Note that $consumerPropertyOpt takes precedence over this config.")
+    val consumerConfigOpt = parser.acceptsAll(Arrays.asList("consumer.config", "command-config"), s"Consumer config properties file. Note that $consumerPropertyOpt takes precedence over this config.")
       .withRequiredArg
       .describedAs("config file")
       .ofType(classOf[String])
@@ -260,7 +262,7 @@ object ConsoleConsumer extends Logging {
       .ofType(classOf[java.lang.Integer])
     val skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
       "skip it instead of halt.")
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "The server(s) to connect to.")
       .withRequiredArg
       .describedAs("server to connect to")
       .ofType(classOf[String])
@@ -366,8 +368,6 @@ object ConsoleConsumer extends Logging {
       }
       else if (fromBeginning) ListOffsetsRequest.EARLIEST_TIMESTAMP
       else ListOffsetsRequest.LATEST_TIMESTAMP
-
-    CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
     // if the group id is provided in more than place (through different means) all values must be the same
     val groupIdsProvided = Set(
