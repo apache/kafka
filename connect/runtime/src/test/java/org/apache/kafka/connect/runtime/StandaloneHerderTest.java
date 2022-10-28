@@ -89,6 +89,7 @@ import static org.mockito.Mockito.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
@@ -142,6 +143,7 @@ public class StandaloneHerderTest {
     @After
     public void tearDown() {
         pluginsStatic.close();
+        verifyNoMoreInteractions(worker, statusBackingStore);
     }
 
     @Test
@@ -249,6 +251,9 @@ public class StandaloneHerderTest {
         FutureCallback<Herder.Created<ConnectorInfo>> deleteCallback = new FutureCallback<>();
         expectDestroy();
         herder.deleteConnectorConfig(CONNECTOR_NAME, deleteCallback);
+        verify(herder).onDeletion(CONNECTOR_NAME);
+        verify(statusBackingStore).put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), TaskStatus.State.DESTROYED, WORKER_ID, 0));
+        verify(statusBackingStore).put(new ConnectorStatus(CONNECTOR_NAME, ConnectorStatus.State.DESTROYED, WORKER_ID, 0));
         deleteCallback.get(1000L, TimeUnit.MILLISECONDS);
 
         // Second deletion should fail since the connector is gone
@@ -292,6 +297,7 @@ public class StandaloneHerderTest {
         herder.restartConnector(CONNECTOR_NAME, restartCallback);
         worker.stopAndAwaitConnector(CONNECTOR_NAME);
         restartCallback.get(1000L, TimeUnit.MILLISECONDS);
+        verify(worker, atLeastOnce()).stopAndAwaitConnector(eq(CONNECTOR_NAME));
         verifyCompareAndSwapLoaders(connectorMock);
     }
 
@@ -411,9 +417,6 @@ public class StandaloneHerderTest {
         Connector connectorMock = mock(SourceConnector.class);
         expectConfigValidation(connectorMock, true, connectorConfig);
 
-        worker.stopAndAwaitTask(taskId);
-        doNothing().when(worker).stopAndAwaitTask(taskId);
-
         ClusterConfigState configState = new ClusterConfigState(
                 -1,
                 null,
@@ -435,6 +438,7 @@ public class StandaloneHerderTest {
 
         FutureCallback<Void> cb = new FutureCallback<>();
         herder.restartTask(taskId, cb);
+        verify(worker).stopAndAwaitTask(taskId);
         try {
             cb.get(1000L, TimeUnit.MILLISECONDS);
             fail("Expected restart callback to raise an exception");
@@ -515,6 +519,8 @@ public class StandaloneHerderTest {
         doReturn(Optional.of(restartPlan)).when(herder).buildRestartPlan(restartRequest);
 
         herder.onRestart(CONNECTOR_NAME);
+        verify(statusBackingStore).put(new ConnectorStatus(CONNECTOR_NAME, ConnectorStatus.State.RESTARTING, WORKER_ID, 0));
+
         doNothing().when(herder).onRestart(CONNECTOR_NAME);
 
         connector = mock(BogusSinkConnector.class);
@@ -558,6 +564,8 @@ public class StandaloneHerderTest {
         doReturn(Optional.of(restartPlan)).when(herder).buildRestartPlan(restartRequest);
 
         herder.onRestart(taskId);
+        verify(statusBackingStore).put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), AbstractStatus.State.RESTARTING, WORKER_ID, 0));
+
         doNothing().when(herder).onRestart(taskId);
 
         connector = mock(BogusSinkConnector.class);
@@ -665,18 +673,15 @@ public class StandaloneHerderTest {
         // herder.stop() should stop any running connectors and tasks even if destroyConnector was not invoked
         expectStop();
 
-        statusBackingStore.put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), AbstractStatus.State.DESTROYED, WORKER_ID, 0));
-
-        statusBackingStore.stop();
-        doNothing().when(statusBackingStore).stop();
-        doNothing().when(worker).stop();
-
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         verifyCompareAndSwapLoaders(connectorMock);
         herder.stop();
+        verify(worker).stop();
+        verify(statusBackingStore).stop();
+        verify(statusBackingStore).put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), AbstractStatus.State.DESTROYED, WORKER_ID, 0));
     }
 
     @Test
