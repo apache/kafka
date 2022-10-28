@@ -25,6 +25,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.MockClusterResourceListener;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -61,6 +63,7 @@ public class PrototypeAsyncConsumerTest {
         this.groupId = Optional.empty();
         this.clientId = "client-1";
         this.clusterResourceListeners = new ClusterResourceListeners();
+        this.clusterResourceListeners.maybeAdd(new MockClusterResourceListener());
         this.properties = new HashMap<>();
         this.properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 "localhost" +
@@ -68,6 +71,10 @@ public class PrototypeAsyncConsumerTest {
         this.properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         this.properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         this.properties.put(CLIENT_ID_CONFIG, "test-client");
+    }
+
+    @AfterEach
+    public void close() {
     }
     @Test
     public void testSubscription() {
