@@ -263,6 +263,10 @@ public class ReplicationControlManager {
         public Uuid topicId() {
             return id;
         }
+
+        public int numPartitions(long epoch) {
+            return parts.size(epoch);
+        }
     }
 
     /**

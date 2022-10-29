@@ -60,6 +60,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -267,6 +268,21 @@ public class ReplicationControlManagerTest {
                 replay(result.records());
             }
             return topicResult;
+        }
+
+        void deleteTopic(Uuid topicId) throws Exception {
+            ControllerResult<Map<Uuid, ApiError>> result = replicationControl.deleteTopics(Collections.singleton(topicId));
+            assertEquals(Collections.singleton(topicId), result.response().keySet());
+            assertEquals(NONE, result.response().get(topicId).error());
+            assertEquals(1, result.records().size());
+
+            ApiMessageAndVersion removeRecordAndVersion = result.records().get(0);
+            assertTrue(removeRecordAndVersion.message() instanceof RemoveTopicRecord);
+
+            RemoveTopicRecord removeRecord = (RemoveTopicRecord) removeRecordAndVersion.message();
+            assertEquals(topicId, removeRecord.topicId());
+
+            replay(result.records());
         }
 
         void createPartitions(int count, String name,
@@ -696,6 +712,21 @@ public class ReplicationControlManagerTest {
         ctx.createTestTopic("baz", new int[][] {new int[] {2, 1, 0}},
             Collections.singletonMap(SEGMENT_BYTES_CONFIG, "12300000"), NONE.code());
         ctx.createTestTopic("quux", new int[][] {new int[] {1, 2, 0}}, POLICY_VIOLATION.code());
+    }
+
+    @Test
+    public void testCreateTopicWithCollisionChars() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext(Optional.empty());
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+
+        CreatableTopicResult initialTopic = ctx.createTestTopic("foo.bar", 2, (short) 2, NONE.code());
+        assertEquals(2, ctx.replicationControl.getTopic(initialTopic.topicId()).numPartitions(Long.MAX_VALUE));
+        ctx.deleteTopic(initialTopic.topicId());
+
+        CreatableTopicResult recreatedTopic = ctx.createTestTopic("foo.bar", 4, (short) 2, NONE.code());
+        assertNotEquals(initialTopic.topicId(), recreatedTopic.topicId());
+        assertEquals(4, ctx.replicationControl.getTopic(recreatedTopic.topicId()).numPartitions(Long.MAX_VALUE));
     }
 
     @Test
