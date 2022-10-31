@@ -305,24 +305,7 @@ public class ConnectorsResourceTest {
     }
 
     @Test
-    public void testCreateConnectorWithHeaderAuthorization() throws Throwable {
-        CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME, Collections.singletonMap(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME));
-        final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
-        HttpHeaders httpHeaders = mock(HttpHeaders.class);
-        expectAndCallbackNotLeaderException(cb)
-            .when(herder).putConnectorConfig(eq(CONNECTOR_NAME), eq(body.config()), eq(false), cb.capture());
-
-        verifyRestRequestWithCall(
-            () -> RestClient.httpRequest(eq(LEADER_URL + "connectors?forward=false"), eq("POST"), eq(httpHeaders), any(), any(), any(WorkerConfig.class)),
-            new RestClient.HttpResponse<>(202, new HashMap<>(), null),
-            () -> connectorsResource.createConnector(FORWARD, httpHeaders, body)
-        );
-    }
-
-
-
-    @Test
-    public void testCreateConnectorWithoutHeaderAuthorization() throws Throwable {
+    public void testCreateConnectorWithHeaders() throws Throwable {
         CreateConnectorRequest body = new CreateConnectorRequest(CONNECTOR_NAME, Collections.singletonMap(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME));
         final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
         HttpHeaders httpHeaders = mock(HttpHeaders.class);
