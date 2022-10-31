@@ -1783,8 +1783,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         };
     }
 
-    // visible for testing
-    Callable<Void> getTaskStoppingCallable(final ConnectorTaskId taskId) {
+    private Callable<Void> getTaskStoppingCallable(final ConnectorTaskId taskId) {
         return () -> {
             worker.stopAndAwaitTask(taskId);
             return null;
@@ -1841,8 +1840,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         };
     }
 
-    // Visible for testing
-    Callable<Void> getConnectorStoppingCallable(final String connectorName) {
+    private Callable<Void> getConnectorStoppingCallable(final String connectorName) {
         return () -> {
             try {
                 worker.stopAndAwaitConnector(connectorName);
