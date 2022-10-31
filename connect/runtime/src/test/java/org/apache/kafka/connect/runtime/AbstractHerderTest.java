@@ -40,6 +40,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -108,7 +109,7 @@ public class AbstractHerderTest {
         CONN1_CONFIG.put(ConnectorConfig.NAME_CONFIG, CONN1);
         CONN1_CONFIG.put(ConnectorConfig.TASKS_MAX_CONFIG, MAX_TASKS.toString());
         CONN1_CONFIG.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
-        CONN1_CONFIG.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSourceConnector.class.getName());
+        CONN1_CONFIG.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName());
         CONN1_CONFIG.put(TEST_KEY, TEST_REF);
         CONN1_CONFIG.put(TEST_KEY2, TEST_REF2);
         CONN1_CONFIG.put(TEST_KEY3, TEST_REF3);
@@ -181,7 +182,47 @@ public class AbstractHerderTest {
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
 
-        when(herder.rawConfig(connectorName)).thenReturn(null);
+        when(plugins.newConnector(anyString())).thenReturn(new SampleSourceConnector());
+        when(herder.plugins()).thenReturn(plugins);
+
+        when(herder.rawConfig(connectorName)).thenReturn(Collections.singletonMap(
+                ConnectorConfig.CONNECTOR_CLASS_CONFIG, SampleSourceConnector.class.getName()
+        ));
+
+        when(statusStore.get(connectorName))
+                .thenReturn(new ConnectorStatus(connectorName, AbstractStatus.State.RUNNING, workerId, generation));
+
+        when(statusStore.getAll(connectorName))
+                .thenReturn(Collections.singletonList(
+                        new TaskStatus(taskId, AbstractStatus.State.UNASSIGNED, workerId, generation)));
+
+        ConnectorStateInfo state = herder.connectorStatus(connectorName);
+
+        assertEquals(connectorName, state.name());
+        assertEquals(ConnectorType.SOURCE, state.type());
+        assertEquals("RUNNING", state.connector().state());
+        assertEquals(1, state.tasks().size());
+        assertEquals(workerId, state.connector().workerId());
+
+        ConnectorStateInfo.TaskState taskState = state.tasks().get(0);
+        assertEquals(0, taskState.id());
+        assertEquals("UNASSIGNED", taskState.state());
+        assertEquals(workerId, taskState.workerId());
+    }
+
+    @Test
+    public void testConnectorStatusMissingPlugin() {
+        ConnectorTaskId taskId = new ConnectorTaskId(connectorName, 0);
+
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
+
+        when(plugins.newConnector(anyString())).thenThrow(new ConnectException("Unable to find class"));
+        when(herder.plugins()).thenReturn(plugins);
+
+        when(herder.rawConfig(connectorName))
+                .thenReturn(Collections.singletonMap(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "missing"));
 
         when(statusStore.get(connectorName))
                 .thenReturn(new ConnectorStatus(connectorName, AbstractStatus.State.RUNNING, workerId, generation));
@@ -205,37 +246,41 @@ public class AbstractHerderTest {
     }
 
     @Test
-    public void testConnectorStatusMissingPlugin() {
-        ConnectorTaskId taskId = new ConnectorTaskId(connectorName, 0);
-
+    public void testConnectorInfo() {
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .defaultAnswer(CALLS_REAL_METHODS));
 
-        when(plugins.newConnector(anyString())).thenThrow(new ConnectException("Unable to find class"));
+        when(plugins.newConnector(anyString())).thenReturn(new SampleSourceConnector());
         when(herder.plugins()).thenReturn(plugins);
 
-        when(herder.rawConfig(connectorName)).thenReturn(Collections.singletonMap(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "missing"));
+        when(configStore.snapshot()).thenReturn(SNAPSHOT);
 
-        when(statusStore.get(connectorName))
-                .thenReturn(new ConnectorStatus(connectorName, AbstractStatus.State.RUNNING, workerId, generation));
+        ConnectorInfo info = herder.connectorInfo(CONN1);
 
-        when(statusStore.getAll(connectorName))
-                .thenReturn(Collections.singletonList(
-                        new TaskStatus(taskId, AbstractStatus.State.UNASSIGNED, workerId, generation)));
+        assertEquals(CONN1, info.name());
+        assertEquals(CONN1_CONFIG, info.config());
+        assertEquals(Arrays.asList(TASK0, TASK1, TASK2), info.tasks());
+        assertEquals(ConnectorType.SOURCE, info.type());
+    }
 
-        ConnectorStateInfo state = herder.connectorStatus(connectorName);
+    @Test
+    public void testConnectorInfoMissingPlugin() {
+        AbstractHerder herder = mock(AbstractHerder.class, withSettings()
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
+                .defaultAnswer(CALLS_REAL_METHODS));
 
-        assertEquals(connectorName, state.name());
-        assertEquals(ConnectorType.UNKNOWN, state.type());
-        assertEquals("RUNNING", state.connector().state());
-        assertEquals(1, state.tasks().size());
-        assertEquals(workerId, state.connector().workerId());
+        when(plugins.newConnector(anyString())).thenThrow(new ConnectException("No class found"));
+        when(herder.plugins()).thenReturn(plugins);
 
-        ConnectorStateInfo.TaskState taskState = state.tasks().get(0);
-        assertEquals(0, taskState.id());
-        assertEquals("UNASSIGNED", taskState.state());
-        assertEquals(workerId, taskState.workerId());
+        when(configStore.snapshot()).thenReturn(SNAPSHOT);
+
+        ConnectorInfo info = herder.connectorInfo(CONN1);
+
+        assertEquals(CONN1, info.name());
+        assertEquals(CONN1_CONFIG, info.config());
+        assertEquals(Arrays.asList(TASK0, TASK1, TASK2), info.tasks());
+        assertEquals(ConnectorType.UNKNOWN, info.type());
     }
 
     @Test

@@ -693,7 +693,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     /**
      * Retrieves ConnectorType for the class specified in the connector config
      * @param connConfig the connector config, may be null
-     * @return the {@link ConnectorType} of the connector, or {@link ConnectorType#UNKNOWN} if an error occurs
+     * @return the {@link ConnectorType} of the connector, or {@link ConnectorType#UNKNOWN} if an error occurs or the
+     * type cannot be determined
      */
     public ConnectorType connectorType(Map<String, String> connConfig) {
         if (connConfig == null) {
@@ -706,7 +707,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         try {
             return ConnectorType.from(getConnector(connClass).getClass());
         } catch (ConnectException e) {
-            log.error("Unable to retrieve connector type", e);
+            log.warn("Unable to retrieve connector type", e);
             return ConnectorType.UNKNOWN;
         }
     }

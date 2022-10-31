@@ -127,7 +127,7 @@ public class StandaloneHerderTest {
     @Before
     public void setup() {
         worker = PowerMock.createMock(Worker.class);
-        String[] methodNames = new String[]{"connectorType"/*, "validateConnectorConfig"*/, "buildRestartPlan", "recordRestarting"};
+        String[] methodNames = new String[]{"connectorType", "buildRestartPlan", "recordRestarting"};
         herder = PowerMock.createPartialMock(StandaloneHerder.class, methodNames,
                 worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy);
         createCallback = new FutureCallback<>();
