@@ -1425,8 +1425,17 @@ public class Fetcher<K, V> implements Closeable {
             final ByteBuffer valueBytes = record.value();
             final int valueSize = valueBytes == null ? NULL_SIZE : valueBytes.remaining();
             final V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), headers, valueBytes);
-            return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
-                    timestamp, timestampType, keySize, valueSize, key, value, headers, leaderEpoch);
+            return new ConsumerRecord<>(partition.topic(),
+                    partition.partition(),
+                    offset,
+                    timestamp,
+                    timestampType,
+                    keySize,
+                    valueSize,
+                    key,
+                    value,
+                    headers,
+                    leaderEpoch);
         } catch (RuntimeException e) {
             throw new RecordDeserializationException(partition, record.offset(),
                 "Error deserializing key/value for partition " + partition +
