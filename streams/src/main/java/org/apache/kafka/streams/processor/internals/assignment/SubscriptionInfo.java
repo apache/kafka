@@ -60,10 +60,10 @@ public class SubscriptionInfo {
 
     static {
         // Just statically check to make sure that the generated code always stays in sync with the overall protocol
-        final int subscriptionInfoLatestVersion = SubscriptionInfoData.SCHEMAS.length - 1;
+        final int subscriptionInfoLatestVersion = SubscriptionInfoData.HIGHEST_SUPPORTED_VERSION;
         if (subscriptionInfoLatestVersion != LATEST_SUPPORTED_VERSION) {
             throw new IllegalArgumentException(
-                "streams/src/main/resources/common/message/SubscriptionInfo.json needs to be updated to match the " +
+                "streams/src/main/resources/common/message/SubscriptionInfoData.json needs to be updated to match the " +
                     "latest assignment protocol version. SubscriptionInfo only supports up to  ["
                     + subscriptionInfoLatestVersion + "] but needs to support up to [" + LATEST_SUPPORTED_VERSION + "].");
         }
