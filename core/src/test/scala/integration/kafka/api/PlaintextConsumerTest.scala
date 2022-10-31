@@ -672,7 +672,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testFetchInvalidOffset(): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none")
-    val consumer = createConsumer()
+    val consumer = createConsumer(configOverrides = this.consumerConfig)
 
     // produce one record
     val totalRecords = 2
@@ -696,8 +696,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @Test
   def testFetchInvalidOffsetResetConfigEarliest(): Unit = {
-    val consumer = createConsumer()
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    val consumer = createConsumer(configOverrides = this.consumerConfig)
     val totalRecords = 10L
 
     val producer = createProducer()
@@ -714,14 +714,16 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @Test
   def testFetchInvalidOffsetResetConfigLatest(): Unit = {
-    val consumer = createConsumer()
+
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
+    val consumer = createConsumer(configOverrides = this.consumerConfig)
     val totalRecords = 10L
 
     val producer = createProducer()
     val startingTimestamp = 0
     sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = startingTimestamp)
     consumer.assign(List(tp).asJava)
+    consumer.seek(tp,0)
     consumeAndVerifyRecords(consumer = consumer, numRecords = totalRecords.toInt, startingOffset = 0)
     // seek to out of range position
     val outOfRangePos = totalRecords + 7 //arbitrary, much higher offset
@@ -729,26 +731,23 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // assert that poll resets to the ending position
     assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
     sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = totalRecords)
-    // ensure that new records are consumed only if they're after the seek position
+    // ensure that new records start with the offset that was passed to seek()
     val nextRecord = consumer.poll(Duration.ofMillis(50)).iterator().next()
-    assertEquals(nextRecord.offset(),outOfRangePos)
+    assertEquals(outOfRangePos,nextRecord.offset())
 
   }
 
   @Test
   def testFetchInvalidOffsetResetConfigLatestPastEnd(): Unit = {
-    // todo: this seems broken - it definitely shouldn't seek to the beginning; see notes below
-    // one valid behaviour might be for it to keep returning empty until the seek offset is reached
-    // another might be for it to always seek to the latest new record (ie: the one at totalRecords position, or
-    // position 10). But since we've already consumed the first 10 records, it really shouldn't rewind.
-    val consumer = createConsumer()
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
+    val consumer = createConsumer(configOverrides = this.consumerConfig)
     val totalRecords = 10L
 
     val producer = createProducer()
     val startingTimestamp = 0
     sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = startingTimestamp)
     consumer.assign(List(tp).asJava)
+    consumer.seek(tp, 0)
     consumeAndVerifyRecords(consumer = consumer, numRecords = totalRecords.toInt, startingOffset = 0)
     // seek to out of range position
     val outOfRangePos = totalRecords + 17 //arbitrary, much higher offset
@@ -756,9 +755,13 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // assert that poll resets to the ending position
     assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
     sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = totalRecords)
-    // why is this resetting to 0? this seems like a bug
-    consumeAndVerifyRecords(consumer = consumer, numRecords = 1, startingOffset = 0, startingTimestamp = 0)
-
+    // ensure that, if we haven't reached the offset passed to seek(), no records are returned even though they are added
+    val newEnd = totalRecords+totalRecords
+    assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
+    sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = totalRecords)
+    // ensure that once poll is called on new records, the position is set to the new end of the queue
+    val nextRecord = consumer.poll(Duration.ofMillis(50)).iterator().next()
+    assertEquals(newEnd,nextRecord.offset())
   }
 
   @Test
