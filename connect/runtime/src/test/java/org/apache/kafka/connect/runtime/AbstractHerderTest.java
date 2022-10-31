@@ -43,8 +43,6 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
-import org.apache.kafka.connect.source.SourceConnector;
-import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -116,7 +114,7 @@ public class AbstractHerderTest {
     }
     private static final Map<String, String> TASK_CONFIG = new HashMap<>();
     static {
-        TASK_CONFIG.put(TaskConfig.TASK_CLASS_CONFIG, BogusSourceTask.class.getName());
+        TASK_CONFIG.put(TaskConfig.TASK_CLASS_CONFIG, SampleSourceConnector.SampleSourceTask.class.getName());
         TASK_CONFIG.put(TEST_KEY, TEST_REF);
     }
     private static final List<Map<String, String>> TASK_CONFIGS = new ArrayList<>();
@@ -729,7 +727,7 @@ public class AbstractHerderTest {
     public void testReverseTransformConfigs() {
         // Construct a task config with constant values for TEST_KEY and TEST_KEY2
         Map<String, String> newTaskConfig = new HashMap<>();
-        newTaskConfig.put(TaskConfig.TASK_CLASS_CONFIG, BogusSourceTask.class.getName());
+        newTaskConfig.put(TaskConfig.TASK_CLASS_CONFIG, SampleSourceConnector.SampleSourceTask.class.getName());
         newTaskConfig.put(TEST_KEY, TEST_VAL);
         newTaskConfig.put(TEST_KEY2, TEST_VAL2);
         List<Map<String, String>> newTaskConfigs = new ArrayList<>();
@@ -1078,13 +1076,6 @@ public class AbstractHerderTest {
         }
         this.connector = connector;
         return herder;
-    }
-
-    // We need to use a real class here due to some issue with mocking java.lang.Class
-    private abstract static class BogusSourceConnector extends SourceConnector {
-    }
-
-    private abstract static class BogusSourceTask extends SourceTask {
     }
 
     private static String producerOverrideKey(String config) {
