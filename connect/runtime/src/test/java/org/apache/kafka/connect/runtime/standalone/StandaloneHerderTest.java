@@ -127,7 +127,7 @@ public class StandaloneHerderTest {
     @Before
     public void setup() {
         worker = PowerMock.createMock(Worker.class);
-        String[] methodNames = new String[]{"connectorTypeForClass"/*, "validateConnectorConfig"*/, "buildRestartPlan", "recordRestarting"};
+        String[] methodNames = new String[]{"connectorType", "buildRestartPlan", "recordRestarting"};
         herder = PowerMock.createPartialMock(StandaloneHerder.class, methodNames,
                 worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy);
         createCallback = new FutureCallback<>();
@@ -974,10 +974,17 @@ public class StandaloneHerderTest {
         }
         EasyMock.expectLastCall().andReturn(true);
 
-        EasyMock.expect(herder.connectorTypeForClass(BogusSourceConnector.class.getName()))
-            .andReturn(ConnectorType.SOURCE).anyTimes();
-        EasyMock.expect(herder.connectorTypeForClass(BogusSinkConnector.class.getName()))
-            .andReturn(ConnectorType.SINK).anyTimes();
+        Capture<Map<String, String>> configCapture = EasyMock.newCapture();
+        EasyMock.expect(herder.connectorType(EasyMock.capture(configCapture)))
+            .andStubAnswer(() -> {
+                String connectorClass = configCapture.getValue().get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+                if (BogusSourceConnector.class.getName().equals(connectorClass)) {
+                    return ConnectorType.SOURCE;
+                } else if (BogusSinkConnector.class.getName().equals(connectorClass)) {
+                    return ConnectorType.SINK;
+                }
+                return ConnectorType.UNKNOWN;
+            });
         worker.isSinkConnector(CONNECTOR_NAME);
         PowerMock.expectLastCall().andReturn(sourceSink == SourceSink.SINK).anyTimes();
     }
