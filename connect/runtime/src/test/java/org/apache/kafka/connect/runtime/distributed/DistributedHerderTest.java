@@ -22,6 +22,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
@@ -100,6 +101,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -682,6 +684,36 @@ public class DistributedHerderTest {
         herder.halt();
 
         PowerMock.verifyAll();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testStartAndStopExecutorShutdownShouldHaltCleanly() throws InterruptedException {
+        ExecutorService startAndStopExecutor = EasyMock.mock(ExecutorService.class);
+        herder.startAndStopExecutor = startAndStopExecutor;
+
+        EasyMock.expect(worker.connectorNames()).andReturn(Collections.singleton(CONN1));
+        EasyMock.expect(worker.taskIds()).andReturn(Collections.singleton(TASK1));
+        member.stop();
+        PowerMock.expectLastCall();
+        configBackingStore.stop();
+        PowerMock.expectLastCall();
+        statusBackingStore.stop();
+        PowerMock.expectLastCall();
+        worker.stop();
+        PowerMock.expectLastCall();
+
+        EasyMock.expect(startAndStopExecutor.invokeAll(EasyMock.anyObject(Collection.class))).andThrow(new RejectedExecutionException());
+
+        PowerMock.replayAll(startAndStopExecutor);
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(DistributedHerder.class)) {
+            herder.halt();
+            assertTrue(appender.getEvents().stream().anyMatch(
+                    event -> event.getLevel().equals("ERROR")
+                    && event.getMessage().contains("startAndStopExecutor already shutdown or full. Not invoking explicit connector/task shutdown")));
+            PowerMock.verifyAll();
+        }
     }
 
     @Test

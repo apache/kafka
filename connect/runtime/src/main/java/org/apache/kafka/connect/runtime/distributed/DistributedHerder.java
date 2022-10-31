@@ -104,6 +104,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
@@ -171,7 +172,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // Visible for testing
     ExecutorService forwardRequestExecutor;
     private final ExecutorService herderExecutor;
-    private final ExecutorService startAndStopExecutor;
+    ExecutorService startAndStopExecutor;
     private final WorkerGroupMember member;
     private final AtomicBoolean stopping;
     private final boolean isTopicTrackingEnabled;
@@ -1663,6 +1664,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             startAndStopExecutor.invokeAll(callables);
         } catch (InterruptedException e) {
             // ignore
+        } catch (RejectedExecutionException re) {
+            log.error("startAndStopExecutor already shutdown or full. Not invoking explicit connector/task shutdown");
         }
     }
 
@@ -1780,7 +1783,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         };
     }
 
-    private Callable<Void> getTaskStoppingCallable(final ConnectorTaskId taskId) {
+    // visible for testing
+    Callable<Void> getTaskStoppingCallable(final ConnectorTaskId taskId) {
         return () -> {
             worker.stopAndAwaitTask(taskId);
             return null;
@@ -1837,7 +1841,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         };
     }
 
-    private Callable<Void> getConnectorStoppingCallable(final String connectorName) {
+    // Visible for testing
+    Callable<Void> getConnectorStoppingCallable(final String connectorName) {
         return () -> {
             try {
                 worker.stopAndAwaitConnector(connectorName);
