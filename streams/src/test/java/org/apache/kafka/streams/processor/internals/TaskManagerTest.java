@@ -1445,7 +1445,7 @@ public class TaskManagerTest {
                 .withInputPartitions(taskId01Partitions).build();
         final StreamTask statefulTask2 = statefulTask(taskId02, taskId02ChangelogPartitions)
             .inState(State.CREATED)
-            .withInputPartitions(taskId01Partitions).build();
+            .withInputPartitions(taskId02Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, tasks, true);
         when(tasks.drainPendingTaskToInit()).thenReturn(mkSet(statefulTask0, statefulTask1, statefulTask2));
