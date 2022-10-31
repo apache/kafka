@@ -20,10 +20,9 @@ package kafka.coordinator.transaction
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
 
-import kafka.api.KAFKA_2_8_IV0
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{KafkaConfig, MetadataCache}
+import kafka.server.{KafkaConfig, MetadataCache, RequestLocal}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.clients._
@@ -35,6 +34,7 @@ import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersReque
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, Reconfigurable, TopicPartition}
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV0
 
 import scala.collection.{concurrent, immutable}
 import scala.jdk.CollectionConverters._
@@ -148,7 +148,7 @@ class TransactionMarkerChannelManager(
   private val transactionsWithPendingMarkers = new ConcurrentHashMap[String, PendingCompleteTxn]
 
   val writeTxnMarkersRequestVersion: Short =
-    if (config.interBrokerProtocolVersion >= KAFKA_2_8_IV0) 1
+    if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV0)) 1
     else 0
 
   newGauge("UnknownDestinationQueueSize", () => markersQueueForUnknownBroker.totalNumMarkers)
@@ -330,8 +330,8 @@ class TransactionMarkerChannelManager(
           throw new IllegalStateException(errorMsg)
       }
 
-    txnStateManager.appendTransactionToLog(txnLogAppend.transactionalId, txnLogAppend.coordinatorEpoch, txnLogAppend.newMetadata, appendCallback,
-      _ == Errors.COORDINATOR_NOT_AVAILABLE)
+    txnStateManager.appendTransactionToLog(txnLogAppend.transactionalId, txnLogAppend.coordinatorEpoch,
+      txnLogAppend.newMetadata, appendCallback, _ == Errors.COORDINATOR_NOT_AVAILABLE, RequestLocal.NoCaching)
   }
 
   def addTxnMarkersToBrokerQueue(transactionalId: String,

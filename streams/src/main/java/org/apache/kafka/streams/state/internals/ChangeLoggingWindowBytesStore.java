@@ -26,6 +26,8 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+
+import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 /**
@@ -33,17 +35,24 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
  * updates to a changelog
  */
 class ChangeLoggingWindowBytesStore
-    extends WrappedStateStore<WindowStore<Bytes, byte[]>, byte[], byte[]>
-    implements WindowStore<Bytes, byte[]> {
+        extends WrappedStateStore<WindowStore<Bytes, byte[]>, byte[], byte[]>
+        implements WindowStore<Bytes, byte[]> {
+
+    interface ChangeLoggingKeySerializer {
+        Bytes serialize(final Bytes key, final long timestamp, final int seqnum);
+    }
 
     private final boolean retainDuplicates;
     InternalProcessorContext context;
     private int seqnum = 0;
+    private final ChangeLoggingKeySerializer keySerializer;
 
     ChangeLoggingWindowBytesStore(final WindowStore<Bytes, byte[]> bytesStore,
-                                  final boolean retainDuplicates) {
+                                  final boolean retainDuplicates,
+                                  final ChangeLoggingKeySerializer keySerializer) {
         super(bytesStore);
         this.retainDuplicates = retainDuplicates;
+        this.keySerializer = requireNonNull(keySerializer, "keySerializer");
     }
 
     @Deprecated
@@ -67,7 +76,6 @@ class ChangeLoggingWindowBytesStore
         return wrapped().fetch(key, timestamp);
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key,
                                              final long from,
@@ -82,7 +90,6 @@ class ChangeLoggingWindowBytesStore
         return wrapped().backwardFetch(key, timeFrom, timeTo);
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
                                                            final Bytes keyTo,
@@ -110,7 +117,6 @@ class ChangeLoggingWindowBytesStore
         return wrapped().backwardAll();
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
                                                               final long timeTo) {
@@ -123,27 +129,17 @@ class ChangeLoggingWindowBytesStore
         return wrapped().backwardFetchAll(timeFrom, timeTo);
     }
 
-    @Deprecated
-    @Override
-    public void put(final Bytes key, final byte[] value) {
-        // Note: It's incorrect to bypass the wrapped store here by delegating to another method,
-        // but we have no alternative. We must send a timestamped key to the changelog, which means
-        // we need to know what timestamp gets used for the record. Hopefully, we can deprecate this
-        // method in the future to resolve the situation.
-        put(key, value, context.timestamp());
-    }
-
     @Override
     public void put(final Bytes key,
                     final byte[] value,
                     final long windowStartTimestamp) {
         wrapped().put(key, value, windowStartTimestamp);
-        log(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, maybeUpdateSeqnumForDups()), value);
+
+        log(keySerializer.serialize(key, windowStartTimestamp, maybeUpdateSeqnumForDups()), value);
     }
 
-    void log(final Bytes key,
-             final byte[] value) {
-        context.logChange(name(), key, value, context.timestamp());
+    void log(final Bytes key, final byte[] value) {
+        context.logChange(name(), key, value, context.timestamp(), wrapped().getPosition());
     }
 
     private int maybeUpdateSeqnumForDups() {

@@ -159,23 +159,22 @@ public class StreamsAssignmentScaleTest {
             emptySet(),
             emptySet()
         );
-
+        final Map<String, Object> configMap = new HashMap<>();
+        configMap.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
+        configMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:8080");
         final InternalTopologyBuilder builder = new InternalTopologyBuilder();
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
         builder.addStateStore(new MockKeyValueStoreBuilder("store", false), "processor");
-        builder.setApplicationId(APPLICATION_ID);
-        builder.buildTopology();
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configMap));
+        topologyMetadata.buildAndRewriteTopology();
 
         final Consumer<byte[], byte[]> mainConsumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
-        expect(taskManager.builder()).andStubReturn(builder);
+        expect(taskManager.topologyMetadata()).andStubReturn(topologyMetadata);
         expect(mainConsumer.committed(new HashSet<>())).andStubReturn(Collections.emptyMap());
         final AdminClient adminClient = createMockAdminClientForAssignor(changelogEndOffsets);
 
-        final Map<String, Object> configMap = new HashMap<>();
-        configMap.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
-        configMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:8080");
         final ReferenceContainer referenceContainer = new ReferenceContainer();
         referenceContainer.mainConsumer = mainConsumer;
         referenceContainer.adminClient = adminClient;

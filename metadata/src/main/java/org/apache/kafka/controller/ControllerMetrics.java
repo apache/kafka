@@ -18,7 +18,7 @@
 package org.apache.kafka.controller;
 
 
-public interface ControllerMetrics {
+public interface ControllerMetrics extends AutoCloseable {
     void setActive(boolean active);
 
     boolean active();
@@ -26,4 +26,46 @@ public interface ControllerMetrics {
     void updateEventQueueTime(long durationMs);
 
     void updateEventQueueProcessingTime(long durationMs);
+
+    void setFencedBrokerCount(int brokerCount);
+
+    int fencedBrokerCount();
+
+    void setActiveBrokerCount(int brokerCount);
+
+    int activeBrokerCount();
+
+    void setGlobalTopicsCount(int topicCount);
+
+    int globalTopicsCount();
+
+    void setGlobalPartitionCount(int partitionCount);
+
+    int globalPartitionCount();
+
+    void setOfflinePartitionCount(int offlinePartitions);
+
+    int offlinePartitionCount();
+
+    void setPreferredReplicaImbalanceCount(int replicaImbalances);
+
+    int preferredReplicaImbalanceCount();
+
+    void incrementMetadataErrorCount();
+
+    int metadataErrorCount();
+
+    void setLastAppliedRecordOffset(long offset);
+
+    long lastAppliedRecordOffset();
+
+    void setLastCommittedRecordOffset(long offset);
+
+    long lastCommittedRecordOffset();
+
+    void setLastAppliedRecordTimestamp(long timestamp);
+
+    long lastAppliedRecordTimestamp();
+
+    void close();
 }

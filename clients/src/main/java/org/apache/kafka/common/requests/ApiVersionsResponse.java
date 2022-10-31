@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.feature.Features;
-import org.apache.kafka.common.feature.FinalizedVersionRange;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiMessageType.ListenerType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
@@ -33,6 +34,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordVersion;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -73,6 +75,11 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 2;
     }
@@ -105,19 +112,52 @@ public class ApiVersionsResponse extends AbstractResponse {
         int throttleTimeMs,
         ApiMessageType.ListenerType listenerType
     ) {
-        return createApiVersionsResponse(throttleTimeMs, filterApis(RecordVersion.current(), listenerType));
+        return createApiVersionsResponse(throttleTimeMs, filterApis(RecordVersion.current(), listenerType), Features.emptySupportedFeatures());
     }
 
     public static ApiVersionsResponse createApiVersionsResponse(
         int throttleTimeMs,
         ApiVersionCollection apiVersions
     ) {
+        return createApiVersionsResponse(throttleTimeMs, apiVersions, Features.emptySupportedFeatures());
+    }
+
+    public static ApiVersionsResponse createApiVersionsResponse(
+        int throttleTimeMs,
+        ApiVersionCollection apiVersions,
+        Features<SupportedVersionRange> latestSupportedFeatures
+    ) {
         return createApiVersionsResponse(
             throttleTimeMs,
             apiVersions,
-            Features.emptySupportedFeatures(),
-            Features.emptyFinalizedFeatures(),
-            UNKNOWN_FINALIZED_FEATURES_EPOCH
+            latestSupportedFeatures,
+            Collections.emptyMap(),
+            UNKNOWN_FINALIZED_FEATURES_EPOCH);
+    }
+
+    public static ApiVersionsResponse createApiVersionsResponse(
+        int throttleTimeMs,
+        RecordVersion minRecordVersion,
+        Features<SupportedVersionRange> latestSupportedFeatures,
+        Map<String, Short> finalizedFeatures,
+        long finalizedFeaturesEpoch,
+        NodeApiVersions controllerApiVersions,
+        ListenerType listenerType
+    ) {
+        ApiVersionCollection apiKeys;
+        if (controllerApiVersions != null) {
+            apiKeys = intersectForwardableApis(
+                listenerType, minRecordVersion, controllerApiVersions.allSupportedApiVersions());
+        } else {
+            apiKeys = filterApis(minRecordVersion, listenerType);
+        }
+
+        return createApiVersionsResponse(
+            throttleTimeMs,
+            apiKeys,
+            latestSupportedFeatures,
+            finalizedFeatures,
+            finalizedFeaturesEpoch
         );
     }
 
@@ -125,7 +165,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         int throttleTimeMs,
         ApiVersionCollection apiVersions,
         Features<SupportedVersionRange> latestSupportedFeatures,
-        Features<FinalizedVersionRange> finalizedFeatures,
+        Map<String, Short> finalizedFeatures,
         long finalizedFeaturesEpoch
     ) {
         return new ApiVersionsResponse(
@@ -205,7 +245,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         final Errors error,
         final ApiVersionCollection apiKeys,
         final Features<SupportedVersionRange> latestSupportedFeatures,
-        final Features<FinalizedVersionRange> finalizedFeatures,
+        final Map<String, Short> finalizedFeatures,
         final long finalizedFeaturesEpoch
     ) {
         final ApiVersionsResponseData data = new ApiVersionsResponseData();
@@ -235,14 +275,14 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     private static FinalizedFeatureKeyCollection createFinalizedFeatureKeys(
-        Features<FinalizedVersionRange> finalizedFeatures) {
+        Map<String, Short> finalizedFeatures) {
         FinalizedFeatureKeyCollection converted = new FinalizedFeatureKeyCollection();
-        for (Map.Entry<String, FinalizedVersionRange> feature : finalizedFeatures.features().entrySet()) {
+        for (Map.Entry<String, Short> feature : finalizedFeatures.entrySet()) {
             final FinalizedFeatureKey key = new FinalizedFeatureKey();
-            final FinalizedVersionRange versionLevelRange = feature.getValue();
+            final short versionLevel = feature.getValue();
             key.setName(feature.getKey());
-            key.setMinVersionLevel(versionLevelRange.min());
-            key.setMaxVersionLevel(versionLevelRange.max());
+            key.setMinVersionLevel(versionLevel);
+            key.setMaxVersionLevel(versionLevel);
             converted.add(key);
         }
 

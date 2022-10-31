@@ -65,10 +65,11 @@ import java.util.Map;
  * </ul>
  */
 public class RangeAssignor extends AbstractPartitionAssignor {
+    public static final String RANGE_ASSIGNOR_NAME = "range";
 
     @Override
     public String name() {
-        return "range";
+        return RANGE_ASSIGNOR_NAME;
     }
 
     private Map<String, List<MemberInfo>> consumersPerTopic(Map<String, Subscription> consumerMetadata) {

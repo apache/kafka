@@ -101,8 +101,6 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
                                                          final K keyTo,
                                                          final long earliestSessionEndTime,
                                                          final long latestSessionStartTime) {
-        Objects.requireNonNull(keyFrom, "from can't be null");
-        Objects.requireNonNull(keyTo, "to can't be null");
         final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
@@ -130,8 +128,6 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
                                                                  final K keyTo,
                                                                  final long earliestSessionEndTime,
                                                                  final long latestSessionStartTime) {
-        Objects.requireNonNull(keyFrom, "from can't be null");
-        Objects.requireNonNull(keyTo, "to can't be null");
         final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
@@ -155,12 +151,12 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
     }
 
     @Override
-    public V fetchSession(final K key, final long startTime, final long endTime) {
+    public V fetchSession(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
         Objects.requireNonNull(key, "key can't be null");
         final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
         for (final ReadOnlySessionStore<K, V> store : stores) {
             try {
-                return store.fetchSession(key, startTime, endTime);
+                return store.fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
             } catch (final InvalidStateStoreException ise) {
                 throw new InvalidStateStoreException(
                     "State store  [" + storeName + "] is not available anymore" +
@@ -220,10 +216,9 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to) {
-        Objects.requireNonNull(from, "from can't be null");
-        Objects.requireNonNull(to, "to can't be null");
-        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction = store -> store.fetch(from, to);
+    public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom, final K keyTo) {
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction =
+            store -> store.fetch(keyFrom, keyTo);
         return new DelegatingPeekingKeyValueIterator<>(storeName,
                                                        new CompositeKeyValueIterator<>(
                                                                storeProvider.stores(storeName, queryableStoreType).iterator(),
@@ -231,10 +226,9 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K from, final K to) {
-        Objects.requireNonNull(from, "from can't be null");
-        Objects.requireNonNull(to, "to can't be null");
-        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction = store -> store.backwardFetch(from, to);
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom, final K keyTo) {
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction =
+            store -> store.backwardFetch(keyFrom, keyTo);
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(

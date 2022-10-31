@@ -23,6 +23,8 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.BytesDeserializer;
+import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -33,6 +35,7 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -40,10 +43,11 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.TrackingS
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -52,20 +56,24 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.hamcrest.CoreMatchers;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -73,7 +81,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import org.junit.rules.TestName;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -85,65 +93,137 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.wa
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForStandbyCompletion;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Category({IntegrationTest.class})
+@Timeout(600)
+@Tag("integration")
 public class RestoreIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
-    @Rule
-    public final TestName testName = new TestName();
     private String appId;
     private String inputStream;
 
     private final int numberOfKeys = 10000;
     private KafkaStreams kafkaStreams;
 
-    @Before
-    public void createTopics() throws InterruptedException {
-        appId = safeUniqueTestName(RestoreIntegrationTest.class, testName);
+    @BeforeEach
+    public void createTopics(final TestInfo testInfo) throws InterruptedException {
+        appId = safeUniqueTestName(RestoreIntegrationTest.class, testInfo);
         inputStream = appId + "-input-stream";
         CLUSTER.createTopic(inputStream, 2, 1);
     }
 
-    private Properties props() {
+    private Properties props(final boolean stateUpdaterEnabled) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
         return streamsConfiguration;
     }
 
-    @After
+    @AfterEach
     public void shutdown() {
         if (kafkaStreams != null) {
             kafkaStreams.close(Duration.ofSeconds(30));
         }
     }
 
+    private static Stream<Boolean> parameters() {
+        return Stream.of(
+                Boolean.TRUE,
+                Boolean.FALSE);
+    }
+
     @Test
-    public void shouldRestoreStateFromSourceTopic() throws Exception {
+    public void shouldRestoreNullRecord() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final String applicationId = "restoration-test-app";
+        final String stateStoreName = "stateStore";
+        final String inputTopic = "input";
+        final String outputTopic = "output";
+
+        final Properties props = new Properties();
+
+        final Properties streamsConfiguration = StreamsTestUtils.getStreamsConfig(
+                applicationId,
+                CLUSTER.bootstrapServers(),
+                Serdes.Integer().getClass().getName(),
+                Serdes.ByteArray().getClass().getName(),
+                props);
+
+        CLUSTER.createTopics(inputTopic);
+        CLUSTER.createTopics(outputTopic);
+
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+        builder.table(inputTopic, Materialized.<Integer, Bytes>as(
+                        Stores.persistentTimestampedKeyValueStore(stateStoreName))
+                .withKeySerde(Serdes.Integer())
+                .withValueSerde(Serdes.Bytes())
+                .withCachingDisabled()).toStream().to(outputTopic);
+
+        final Properties producerConfig = TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(), IntegerSerializer.class, BytesSerializer.class);
+
+        final List<KeyValue<Integer, Bytes>> initialKeyValues = Arrays.asList(
+                KeyValue.pair(3, new Bytes(new byte[]{3})),
+                KeyValue.pair(3, null),
+                KeyValue.pair(1, new Bytes(new byte[]{1})));
+
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic, initialKeyValues, producerConfig, new MockTime());
+
+        KafkaStreams streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
+        streams.start();
+
+        final Properties consumerConfig = TestUtils.consumerConfig(
+                CLUSTER.bootstrapServers(), IntegerDeserializer.class, BytesDeserializer.class);
+
+        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+                consumerConfig, outputTopic, initialKeyValues);
+
+        // wipe out state store to trigger restore process on restart
+        streams.close();
+        streams.cleanUp();
+
+        // Restart the stream instance. There should not be exception handling the null
+        // value within changelog topic.
+        final List<KeyValue<Integer, Bytes>> newKeyValues = Collections
+                .singletonList(KeyValue.pair(2, new Bytes(new byte[3])));
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic, newKeyValues, producerConfig, new MockTime());
+        streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
+        streams.start();
+        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
+                consumerConfig, outputTopic, newKeyValues);
+        streams.close();
+    }
+
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldRestoreStateFromSourceTopic(final boolean stateUpdaterEnabled) throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Properties props = props();
+        final Properties props = props(stateUpdaterEnabled);
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
@@ -152,7 +232,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(inputStream, 0);
         setCommittedOffset(inputStream, offsetLimitDelta);
 
-        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
+        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
                 .write(Collections.singletonMap(new TopicPartition(inputStream, 0), (long) offsetCheckpointed - 1));
@@ -203,22 +283,23 @@ public class RestoreIntegrationTest {
         assertThat(numReceived.get(), equalTo(offsetLimitDelta * 2));
     }
 
-    @Test
-    public void shouldRestoreStateFromChangelogTopic() throws Exception {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldRestoreStateFromChangelogTopic(final boolean stateUpdaterEnabled) throws Exception {
         final String changelog = appId + "-store-changelog";
         CLUSTER.createTopic(changelog, 2, 1);
 
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Properties props = props();
+        final Properties props = props(stateUpdaterEnabled);
 
         // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
         final int offsetCheckpointed = 1000;
         createStateForRestoration(changelog, 0);
         createStateForRestoration(inputStream, 10000);
 
-        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
+        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true, false);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(new TaskId(0, 0)), ".checkpoint"))
                 .write(Collections.singletonMap(new TopicPartition(changelog, 0), (long) offsetCheckpointed - 1));
@@ -269,18 +350,19 @@ public class RestoreIntegrationTest {
         assertThat(numReceived.get(), equalTo(numberOfKeys));
     }
 
-    @Test
-    public void shouldSuccessfullyStartWhenLoggingDisabled() throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldSuccessfullyStartWhenLoggingDisabled(final boolean stateUpdaterEnabled) throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, Integer> stream = builder.stream(inputStream);
         stream.groupByKey()
                 .reduce(
-                    (value1, value2) -> value1 + value2,
-                    Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled());
+                        (value1, value2) -> value1 + value2,
+                        Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled());
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
-        kafkaStreams = new KafkaStreams(builder.build(), props());
+        kafkaStreams = new KafkaStreams(builder.build(), props(stateUpdaterEnabled));
         kafkaStreams.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
                 startupLatch.countDown();
@@ -292,24 +374,24 @@ public class RestoreIntegrationTest {
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
     }
 
-    @Test
-    public void shouldProcessDataFromStoresWithLoggingDisabled() throws InterruptedException {
-
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldProcessDataFromStoresWithLoggingDisabled(final boolean stateUpdaterEnabled) throws InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronously(inputStream,
-                                                           asList(KeyValue.pair(1, 1),
-                                                                         KeyValue.pair(2, 2),
-                                                                         KeyValue.pair(3, 3)),
-                                                           TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                                                                                    IntegerSerializer.class,
-                                                                                    IntegerSerializer.class),
-                                                           CLUSTER.time);
+                asList(KeyValue.pair(1, 1),
+                        KeyValue.pair(2, 2),
+                        KeyValue.pair(3, 3)),
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(),
+                        IntegerSerializer.class,
+                        IntegerSerializer.class),
+                CLUSTER.time);
 
         final KeyValueBytesStoreSupplier lruMapSupplier = Stores.lruMap(inputStream, 10);
 
         final StoreBuilder<KeyValueStore<Integer, Integer>> storeBuilder = new KeyValueStoreBuilder<>(lruMapSupplier,
-                                                                                                      Serdes.Integer(),
-                                                                                                      Serdes.Integer(),
-                                                                                                      CLUSTER.time)
+                Serdes.Integer(),
+                Serdes.Integer(),
+                CLUSTER.time)
                 .withLoggingDisabled();
 
         final StreamsBuilder streamsBuilder = new StreamsBuilder();
@@ -322,7 +404,7 @@ public class RestoreIntegrationTest {
 
         final Topology topology = streamsBuilder.build();
 
-        kafkaStreams = new KafkaStreams(topology, props());
+        kafkaStreams = new KafkaStreams(topology, props(stateUpdaterEnabled));
 
         final CountDownLatch latch = new CountDownLatch(1);
         kafkaStreams.setStateListener((newState, oldState) -> {
@@ -337,22 +419,23 @@ public class RestoreIntegrationTest {
         assertTrue(processorLatch.await(30, TimeUnit.SECONDS));
     }
 
-    @Test
-    public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore() throws Exception {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore(final boolean stateUpdaterEnabled) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(
                 inputStream,
-            Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.as(getCloseCountingStore("store"))
+                Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.as(getCloseCountingStore("store"))
         );
         createStateForRestoration(inputStream, 0);
 
-        final Properties props1 = props();
+        final Properties props1 = props(stateUpdaterEnabled);
         props1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-1").getPath());
         purgeLocalStreamsState(props1);
         final KafkaStreams client1 = new KafkaStreams(builder.build(), props1);
 
-        final Properties props2 = props();
+        final Properties props2 = props(stateUpdaterEnabled);
         props2.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props2.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-2").getPath());
         purgeLocalStreamsState(props2);
@@ -371,7 +454,7 @@ public class RestoreIntegrationTest {
         // Sometimes the store happens to have already been closed sometime during startup, so just keep track
         // of where it started and make sure it doesn't happen more times from there
         final int initialStoreCloseCount = CloseCountingInMemoryStore.numStoresClosed();
-        assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(0L));
+        final long initialNunRestoredCount = restoreListener.totalNumRestored();
 
         client2.close();
         waitForApplicationState(singletonList(client2), State.NOT_RUNNING, Duration.ofSeconds(60));
@@ -381,7 +464,7 @@ public class RestoreIntegrationTest {
         waitForCompletion(client1, 1, 30 * 1000L);
         waitForStandbyCompletion(client1, 1, 30 * 1000L);
 
-        assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(0L));
+        assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(initialNunRestoredCount));
 
         // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed just two stores
         // total: the active and standby tasks on instance 2
@@ -430,8 +513,7 @@ public class RestoreIntegrationTest {
         }
     }
 
-    public static class KeyValueStoreProcessor implements Processor<Integer, Integer> {
-
+    public static class KeyValueStoreProcessor implements Processor<Integer, Integer, Void, Void> {
         private final String topic;
         private final CountDownLatch processorLatch;
 
@@ -442,22 +524,18 @@ public class RestoreIntegrationTest {
             this.processorLatch = processorLatch;
         }
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            this.store = (KeyValueStore<Integer, Integer>) context.getStateStore(topic);
+        public void init(final ProcessorContext<Void, Void> context) {
+            this.store = context.getStateStore(topic);
         }
 
         @Override
-        public void process(final Integer key, final Integer value) {
-            if (key != null) {
-                store.put(key, value);
+        public void process(final Record<Integer, Integer> record) {
+            if (record.key() != null) {
+                store.put(record.key(), record.value());
                 processorLatch.countDown();
             }
         }
-
-        @Override
-        public void close() { }
     }
 
     private void createStateForRestoration(final String changelogTopic, final int startingOffset) {
@@ -484,8 +562,8 @@ public class RestoreIntegrationTest {
 
         final Consumer<Integer, Integer> consumer = new KafkaConsumer<>(consumerConfig);
         final List<TopicPartition> partitions = asList(
-            new TopicPartition(topic, 0),
-            new TopicPartition(topic, 1));
+                new TopicPartition(topic, 0),
+                new TopicPartition(topic, 1));
 
         consumer.assign(partitions);
         consumer.seekToEnd(partitions);
@@ -498,5 +576,4 @@ public class RestoreIntegrationTest {
         consumer.commitSync();
         consumer.close();
     }
-
 }

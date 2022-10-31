@@ -29,7 +29,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private val producerBufferSize = 30000
@@ -51,23 +51,23 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   def generateConfigs =
     TestUtils.createBrokerConfigs(numServers, zkConnect, false).map(KafkaConfig.fromProps(_, overridingProps))
 
-  private var producer1: KafkaProducer[Array[Byte], Array[Byte]] = null
-  private var producer2: KafkaProducer[Array[Byte], Array[Byte]] = null
-  private var producer3: KafkaProducer[Array[Byte], Array[Byte]] = null
-  private var producer4: KafkaProducer[Array[Byte], Array[Byte]] = null
+  private var producer1: KafkaProducer[Array[Byte], Array[Byte]] = _
+  private var producer2: KafkaProducer[Array[Byte], Array[Byte]] = _
+  private var producer3: KafkaProducer[Array[Byte], Array[Byte]] = _
+  private var producer4: KafkaProducer[Array[Byte], Array[Byte]] = _
 
   private val topic1 = "topic-1"
   private val topic2 = "topic-2"
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
-    producer1 = TestUtils.createProducer(brokerList, acks = 0, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
+    producer1 = TestUtils.createProducer(bootstrapServers(), acks = 0, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
       bufferSize = producerBufferSize)
-    producer2 = TestUtils.createProducer(brokerList, acks = 1, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
+    producer2 = TestUtils.createProducer(bootstrapServers(), acks = 1, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
       bufferSize = producerBufferSize)
-    producer3 = TestUtils.createProducer(brokerList, acks = -1, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
+    producer3 = TestUtils.createProducer(bootstrapServers(), acks = -1, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
       bufferSize = producerBufferSize)
   }
 

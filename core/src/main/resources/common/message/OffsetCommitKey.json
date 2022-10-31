@@ -17,6 +17,7 @@
   "type": "data",
   "name": "OffsetCommitKey",
   "validVersions": "0-1",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "group", "type": "string", "versions": "0-1" },
     { "name": "topic", "type": "string", "versions": "0-1" },

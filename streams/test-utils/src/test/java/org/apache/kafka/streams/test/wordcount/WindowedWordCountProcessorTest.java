@@ -84,6 +84,8 @@ public class WindowedWordCountProcessorTest {
         );
 
         assertThat(capturedForwards, is(expected));
+
+        store.close();
     }
 
     @Test
@@ -138,6 +140,8 @@ public class WindowedWordCountProcessorTest {
             );
 
             assertThat(capturedForwards, is(expected));
+
+            store.close();
         } finally {
             Utils.delete(stateDir);
         }

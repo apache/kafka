@@ -33,6 +33,7 @@ import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -185,7 +186,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     @Override
     public String version() {
-        return "1";
+        return AppInfoParser.getVersion();
     }
 
     // visible for testing
@@ -304,7 +305,7 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     private void createOffsetSyncsTopic() {
-        MirrorUtils.createSinglePartitionCompactedTopic(config.offsetSyncsTopic(), config.offsetSyncsTopicReplicationFactor(), config.sourceAdminConfig());
+        MirrorUtils.createSinglePartitionCompactedTopic(config.offsetSyncsTopic(), config.offsetSyncsTopicReplicationFactor(), config.offsetSyncsTopicAdminConfig());
     }
 
     void computeAndCreateTopicPartitions() throws ExecutionException, InterruptedException {
@@ -319,7 +320,7 @@ public class MirrorSourceConnector extends SourceConnector {
         Set<String> knownSourceTopics = sourceTopicToPartitionCounts.keySet();
         Set<String> knownTargetTopics = targetTopicToPartitionCounts.keySet();
         Map<String, String> sourceToRemoteTopics = knownSourceTopics.stream()
-                .collect(Collectors.toMap(Function.identity(), sourceTopic -> formatRemoteTopic(sourceTopic)));
+                .collect(Collectors.toMap(Function.identity(), this::formatRemoteTopic));
 
         // compute existing and new source topics
         Map<Boolean, Set<String>> partitionedSourceTopics = knownSourceTopics.stream()
@@ -349,14 +350,15 @@ public class MirrorSourceConnector extends SourceConnector {
         }
     }
 
-    private void createNewTopics(Set<String> newSourceTopics, Map<String, Long> sourceTopicToPartitionCounts)
+    // visible for testing
+    void createNewTopics(Set<String> newSourceTopics, Map<String, Long> sourceTopicToPartitionCounts)
             throws ExecutionException, InterruptedException {
         Map<String, Config> sourceTopicToConfig = describeTopicConfigs(newSourceTopics);
         Map<String, NewTopic> newTopics = newSourceTopics.stream()
                 .map(sourceTopic -> {
                     String remoteTopic = formatRemoteTopic(sourceTopic);
                     int partitionCount = sourceTopicToPartitionCounts.get(sourceTopic).intValue();
-                    Map<String, String> configs = configToMap(sourceTopicToConfig.get(sourceTopic));
+                    Map<String, String> configs = configToMap(targetConfig(sourceTopicToConfig.get(sourceTopic)));
                     return new NewTopic(remoteTopic, partitionCount, (short) replicationFactor)
                             .configs(configs);
                 })
@@ -399,7 +401,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     private static Collection<TopicDescription> describeTopics(AdminClient adminClient, Collection<String> topics)
             throws InterruptedException, ExecutionException {
-        return adminClient.describeTopics(topics).all().get().values();
+        return adminClient.describeTopics(topics).allTopicNames().get().values();
     }
 
     static Map<String, String> configToMap(Config config) {
@@ -409,8 +411,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     @SuppressWarnings("deprecation")
     // use deprecated alterConfigs API for broker compatibility back to 0.11.0
-    private void updateTopicConfigs(Map<String, Config> topicConfigs)
-            throws InterruptedException, ExecutionException {
+    private void updateTopicConfigs(Map<String, Config> topicConfigs) {
         Map<ConfigResource, Config> configs = topicConfigs.entrySet().stream()
             .collect(Collectors.toMap(x ->
                 new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), Entry::getValue));
@@ -422,8 +423,7 @@ public class MirrorSourceConnector extends SourceConnector {
         }));
     }
 
-    private void updateTopicAcls(List<AclBinding> bindings)
-            throws InterruptedException, ExecutionException {
+    private void updateTopicAcls(List<AclBinding> bindings) {
         log.trace("Syncing {} topic ACL bindings.", bindings.size());
         targetAdminClient.createAcls(bindings).values().forEach((k, v) -> v.whenComplete((x, e) -> {
             if (e != null) {
@@ -473,7 +473,7 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     boolean shouldReplicateTopic(String topic) {
-        return (topicFilter.shouldReplicateTopic(topic) || isHeartbeatTopic(topic))
+        return (topicFilter.shouldReplicateTopic(topic) || replicationPolicy.isHeartbeatsTopic(topic))
             && !replicationPolicy.isInternalTopic(topic) && !isCycle(topic);
     }
 
@@ -494,13 +494,13 @@ public class MirrorSourceConnector extends SourceConnector {
         } else if (source.equals(sourceAndTarget.target())) {
             return true;
         } else {
-            return isCycle(replicationPolicy.upstreamTopic(topic));
+            String upstreamTopic = replicationPolicy.upstreamTopic(topic);
+            if (upstreamTopic == null || upstreamTopic.equals(topic)) {
+                // Extra check for IdentityReplicationPolicy and similar impls that don't prevent cycles.
+                return false;
+            }
+            return isCycle(upstreamTopic);
         }
-    }
-
-    // e.g. heartbeats, us-west.heartbeats
-    boolean isHeartbeatTopic(String topic) {
-        return MirrorClientConfig.HEARTBEATS_TOPIC.equals(replicationPolicy.originalTopic(topic));
     }
 
     String formatRemoteTopic(String topic) {

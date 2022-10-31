@@ -31,8 +31,6 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -42,6 +40,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -53,8 +52,6 @@ import static org.hamcrest.Matchers.hasProperty;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestTopicsTest {
-    private static final Logger log = LoggerFactory.getLogger(TestTopicsTest.class);
-
     private final static String INPUT_TOPIC = "input";
     private final static String OUTPUT_TOPIC = "output1";
     private final static String INPUT_TOPIC_MAP = OUTPUT_TOPIC;
@@ -74,18 +71,16 @@ public class TestTopicsTest {
         final KStream<Long, String> source = builder.stream(INPUT_TOPIC_MAP, Consumed.with(longSerde, stringSerde));
         final KStream<String, Long> mapped = source.map((key, value) -> new KeyValue<>(value, key));
         mapped.to(OUTPUT_TOPIC_MAP, Produced.with(stringSerde, longSerde));
-        testDriver = new TopologyTestDriver(builder.build());
+
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+        testDriver = new TopologyTestDriver(builder.build(), properties);
     }
 
     @AfterEach
     public void tearDown() {
-        try {
-            testDriver.close();
-        } catch (final RuntimeException e) {
-            // https://issues.apache.org/jira/browse/KAFKA-6647 causes exception when executed in Windows, ignoring it
-            // Logged stacktrace cannot be avoided
-            log.warn("Ignoring exception, test failing in Windows due this exception: {}", e.getLocalizedMessage());
-        }
+        testDriver.close();
     }
 
     @Test
@@ -176,7 +171,6 @@ public class TestTopicsTest {
         assertThrows(IllegalStateException.class, outputTopic::readKeyValuesToMap);
     }
 
-
     @Test
     public void testKeyValueListDuration() {
         final TestInputTopic<Long, String> inputTopic =
@@ -254,7 +248,7 @@ public class TestTopicsTest {
         final Headers headers = new RecordHeaders(
                 new Header[]{
                     new RecordHeader("foo", "value".getBytes()),
-                    new RecordHeader("bar", (byte[]) null),
+                    new RecordHeader("bar", null),
                     new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
                 });
         final TestInputTopic<Long, String> inputTopic =

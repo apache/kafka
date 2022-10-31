@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
+import org.apache.kafka.common.network.InvalidReceiveException;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.ChannelBuilders;
@@ -88,8 +89,6 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 public class SaslServerAuthenticator implements Authenticator {
-    // GSSAPI limits requests to 64K, but we allow a bit extra for custom SASL mechanisms
-    static final int MAX_RECEIVE_SIZE = 524288;
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerAuthenticator.class);
 
     /**
@@ -140,6 +139,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private String saslMechanism;
 
     // buffers used in `authenticate`
+    private Integer saslAuthRequestMaxReceiveSize;
     private NetworkReceive netInBuffer;
     private Send netOutBuffer;
     private Send authenticationFailureSend = null;
@@ -189,6 +189,10 @@ public class SaslServerAuthenticator implements Authenticator {
         // Note that the old principal builder does not support SASL, so we do not need to pass the
         // authenticator or the transport layer
         this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, kerberosNameParser, null);
+
+        saslAuthRequestMaxReceiveSize = (Integer) configs.get(BrokerSecurityConfigs.SASL_SERVER_MAX_RECEIVE_SIZE_CONFIG);
+        if (saslAuthRequestMaxReceiveSize == null)
+            saslAuthRequestMaxReceiveSize = BrokerSecurityConfigs.DEFAULT_SASL_SERVER_MAX_RECEIVE_SIZE;
     }
 
     private void createSaslServer(String mechanism) throws IOException {
@@ -252,9 +256,13 @@ public class SaslServerAuthenticator implements Authenticator {
             }
 
             // allocate on heap (as opposed to any socket server memory pool)
-            if (netInBuffer == null) netInBuffer = new NetworkReceive(MAX_RECEIVE_SIZE, connectionId);
+            if (netInBuffer == null) netInBuffer = new NetworkReceive(saslAuthRequestMaxReceiveSize, connectionId);
 
-            netInBuffer.readFrom(transportLayer);
+            try {
+                netInBuffer.readFrom(transportLayer);
+            } catch (InvalidReceiveException e) {
+                throw new SaslAuthenticationException("Failing SASL authentication due to invalid receive size", e);
+            }
             if (!netInBuffer.complete())
                 return;
             netInBuffer.payload().rewind();
@@ -673,30 +681,26 @@ public class SaslServerAuthenticator implements Authenticator {
             Long credentialExpirationMs = (Long) saslServer
                     .getNegotiatedProperty(SaslInternalConfigs.CREDENTIAL_LIFETIME_MS_SASL_NEGOTIATED_PROPERTY_KEY);
             Long connectionsMaxReauthMs = connectionsMaxReauthMsByMechanism.get(saslMechanism);
-            if (credentialExpirationMs != null || connectionsMaxReauthMs != null) {
+            boolean maxReauthSet = connectionsMaxReauthMs != null && connectionsMaxReauthMs > 0;
+
+            if (credentialExpirationMs != null || maxReauthSet) {
                 if (credentialExpirationMs == null)
                     retvalSessionLifetimeMs = zeroIfNegative(connectionsMaxReauthMs);
-                else if (connectionsMaxReauthMs == null)
+                else if (!maxReauthSet)
                     retvalSessionLifetimeMs = zeroIfNegative(credentialExpirationMs - authenticationEndMs);
                 else
-                    retvalSessionLifetimeMs = zeroIfNegative(
-                            Math.min(credentialExpirationMs - authenticationEndMs, connectionsMaxReauthMs));
-                if (retvalSessionLifetimeMs > 0L)
-                    sessionExpirationTimeNanos = authenticationEndNanos + 1000 * 1000 * retvalSessionLifetimeMs;
+                    retvalSessionLifetimeMs = zeroIfNegative(Math.min(credentialExpirationMs - authenticationEndMs, connectionsMaxReauthMs));
+
+                sessionExpirationTimeNanos = authenticationEndNanos + 1000 * 1000 * retvalSessionLifetimeMs;
             }
+
             if (credentialExpirationMs != null) {
-                if (sessionExpirationTimeNanos != null)
-                    LOG.debug(
-                            "Authentication complete; session max lifetime from broker config={} ms, credential expiration={} ({} ms); session expiration = {} ({} ms), sending {} ms to client",
-                            connectionsMaxReauthMs, new Date(credentialExpirationMs),
-                            credentialExpirationMs - authenticationEndMs,
-                            new Date(authenticationEndMs + retvalSessionLifetimeMs), retvalSessionLifetimeMs,
-                            retvalSessionLifetimeMs);
-                else
-                    LOG.debug(
-                            "Authentication complete; session max lifetime from broker config={} ms, credential expiration={} ({} ms); no session expiration, sending 0 ms to client",
-                            connectionsMaxReauthMs, new Date(credentialExpirationMs),
-                            credentialExpirationMs - authenticationEndMs);
+                LOG.debug(
+                        "Authentication complete; session max lifetime from broker config={} ms, credential expiration={} ({} ms); session expiration = {} ({} ms), sending {} ms to client",
+                        connectionsMaxReauthMs, new Date(credentialExpirationMs),
+                        credentialExpirationMs - authenticationEndMs,
+                        new Date(authenticationEndMs + retvalSessionLifetimeMs), retvalSessionLifetimeMs,
+                        retvalSessionLifetimeMs);
             } else {
                 if (sessionExpirationTimeNanos != null)
                     LOG.debug(

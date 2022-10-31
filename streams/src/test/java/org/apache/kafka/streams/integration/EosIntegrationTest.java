@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.IsolationLevel;
@@ -40,20 +41,25 @@ import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.StateQueryRequest;
+import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
@@ -63,6 +69,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -81,17 +88,21 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
+import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
+import static org.apache.kafka.test.TestUtils.consumerConfig;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
 public class EosIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private static final Logger LOG = LoggerFactory.getLogger(EosIntegrationTest.class);
     private static final int NUM_BROKERS = 3;
     private static final int MAX_POLL_INTERVAL_MS = 5 * 1000;
@@ -133,11 +144,17 @@ public class EosIntegrationTest {
 
     private static final AtomicInteger TEST_NUMBER = new AtomicInteger(0);
 
+    private volatile boolean hasUnexpectedError = false;
+
+    private String stateTmpDir;
+
+    @SuppressWarnings("deprecation")
     @Parameters(name = "{0}")
     public static Collection<String[]> data() {
-        return Arrays.asList(new String[][] {
-            {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_BETA}
+        return Arrays.asList(new String[][]{
+                {StreamsConfig.AT_LEAST_ONCE},
+                {StreamsConfig.EXACTLY_ONCE},
+                {StreamsConfig.EXACTLY_ONCE_V2}
         });
     }
 
@@ -232,11 +249,13 @@ public class EosIntegrationTest {
 
         final Properties properties = new Properties();
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
-        properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), MAX_POLL_INTERVAL_MS - 1);
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
 
         for (int i = 0; i < numberOfRestarts; ++i) {
             final Properties config = StreamsTestUtils.getStreamsConfig(
@@ -246,51 +265,39 @@ public class EosIntegrationTest {
                 Serdes.LongSerde.class.getName(),
                 properties);
 
+            final List<KeyValue<Long, Long>> inputData = prepareData(i * 100, i * 100 + 10L, 0L, 1L);
+
+            final Properties producerConfigs = new Properties();
+            if (inputTopicTransactional) {
+                producerConfigs.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-input-producer");
+            }
+
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                inputTopic,
+                inputData,
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class, producerConfigs),
+                CLUSTER.time,
+                inputTopicTransactional
+            );
+
             try (final KafkaStreams streams = new KafkaStreams(builder.build(), config)) {
                 startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
 
-                final List<KeyValue<Long, Long>> inputData = prepareData(i * 100, i * 100 + 10L, 0L, 1L);
-
-                final Properties producerConfigs = new Properties();
-                if (inputTopicTransactional) {
-                    producerConfigs.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-input-producer");
-                }
-
-                IntegrationTestUtils.produceKeyValuesSynchronously(
-                    inputTopic,
-                    inputData,
-                    TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class, producerConfigs),
-                    CLUSTER.time,
-                    inputTopicTransactional
-                );
-
-                final List<KeyValue<Long, Long>> committedRecords =
-                    IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                        TestUtils.consumerConfig(
-                            CLUSTER.bootstrapServers(),
-                            CONSUMER_GROUP_ID,
-                            LongDeserializer.class,
-                            LongDeserializer.class,
-                            Utils.mkProperties(Collections.singletonMap(
-                                ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                            ),
-                        outputTopic,
-                        inputData.size()
-                    );
-
-                checkResultPerKey(committedRecords, inputData);
+                final List<KeyValue<Long, Long>> committedRecords = readResult(outputTopic, inputData.size(), CONSUMER_GROUP_ID);
+                checkResultPerKey(committedRecords, inputData, "The committed records do not match what expected");
             }
         }
     }
 
-    private void checkResultPerKey(final List<KeyValue<Long, Long>> result, final List<KeyValue<Long, Long>> expectedResult) {
+    private void checkResultPerKey(final List<KeyValue<Long, Long>> result,
+                                   final List<KeyValue<Long, Long>> expectedResult,
+                                   final String reason) {
         final Set<Long> allKeys = new HashSet<>();
         addAllKeys(allKeys, result);
         addAllKeys(allKeys, expectedResult);
 
         for (final Long key : allKeys) {
-            assertThat(getAllRecordPerKey(key, result), equalTo(getAllRecordPerKey(key, expectedResult)));
+            assertThat(reason, getAllRecordPerKey(key, result), equalTo(getAllRecordPerKey(key, expectedResult)));
         }
     }
 
@@ -319,8 +326,8 @@ public class EosIntegrationTest {
 
         final Properties properties = new Properties();
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
-        properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
         properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
@@ -344,21 +351,7 @@ public class EosIntegrationTest {
                 CLUSTER.time
             );
 
-            final List<KeyValue<Long, Long>> firstCommittedRecords =
-                IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                    TestUtils.consumerConfig(
-                        CLUSTER.bootstrapServers(),
-                        CONSUMER_GROUP_ID,
-                        LongDeserializer.class,
-                        LongDeserializer.class,
-                        Utils.mkProperties(Collections.singletonMap(
-                            ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                            IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                        ),
-                    SINGLE_PARTITION_OUTPUT_TOPIC,
-                    firstBurstOfData.size()
-                );
-
+            final List<KeyValue<Long, Long>> firstCommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, firstBurstOfData.size(), CONSUMER_GROUP_ID);
             assertThat(firstCommittedRecords, equalTo(firstBurstOfData));
 
             IntegrationTestUtils.produceKeyValuesSynchronously(
@@ -368,42 +361,32 @@ public class EosIntegrationTest {
                 CLUSTER.time
             );
 
-            final List<KeyValue<Long, Long>> secondCommittedRecords =
-                IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                    TestUtils.consumerConfig(
-                        CLUSTER.bootstrapServers(),
-                        CONSUMER_GROUP_ID,
-                        LongDeserializer.class,
-                        LongDeserializer.class,
-                        Utils.mkProperties(Collections.singletonMap(
-                            ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                            IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
-                        ),
-                    SINGLE_PARTITION_OUTPUT_TOPIC,
-                    secondBurstOfData.size()
-                );
-
+            final List<KeyValue<Long, Long>> secondCommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, secondBurstOfData.size(), CONSUMER_GROUP_ID);
             assertThat(secondCommittedRecords, equalTo(secondBurstOfData));
         }
     }
 
     @Test
     public void shouldNotViolateEosIfOneTaskFails() throws Exception {
+        if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
+
         // this test writes 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to copy all 40 records into the output topic
-        // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
+        //
+        // the app first commits after each 10 records per partition(total 20 records), and thus will have 2 * 5 uncommitted writes
         //
         // the failure gets inject after 20 committed and 30 uncommitted records got received
         // -> the failure only kills one thread
         // after fail over, we should read 40 committed records (even if 50 record got written)
 
-        try (final KafkaStreams streams = getKafkaStreams("dummy", false, "appDir", 2, eosConfig)) {
+        try (final KafkaStreams streams = getKafkaStreams("dummy", false, "appDir", 2, eosConfig, MAX_POLL_INTERVAL_MS)) {
             startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
             final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L);
 
-            final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<>();
+            final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<>(
+                committedDataBeforeFailure.size() + uncommittedDataBeforeFailure.size());
             dataBeforeFailure.addAll(committedDataBeforeFailure);
             dataBeforeFailure.addAll(uncommittedDataBeforeFailure);
 
@@ -415,13 +398,29 @@ public class EosIntegrationTest {
                 () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
                 "StreamsTasks did not request commit.");
 
+            // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
+            //
+            // p-0: ---> 10 rec + C
+            // p-1: ---> 10 rec + C
+
+            final List<KeyValue<Long, Long>> committedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
+            checkResultPerKey(
+                committedRecords,
+                committedDataBeforeFailure,
+                "The committed records before failure do not match what expected");
+
             writeInputData(uncommittedDataBeforeFailure);
 
-            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
+            // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
+            //
+            // p-0: ---> 10 rec + C  + 5 rec (pending)
+            // p-1: ---> 10 rec + C  + 5 rec (pending)
 
-            checkResultPerKey(committedRecords, committedDataBeforeFailure);
-            checkResultPerKey(uncommittedRecords, dataBeforeFailure);
+            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, dataBeforeFailure.size(), null);
+            checkResultPerKey(
+                uncommittedRecords,
+                dataBeforeFailure,
+                "The uncommitted records before failure do not match what expected");
 
             errorInjected.set(true);
             writeInputData(dataAfterFailure);
@@ -430,48 +429,72 @@ public class EosIntegrationTest {
                 () -> uncaughtException != null, MAX_WAIT_TIME_MS,
                 "Should receive uncaught exception from one StreamThread.");
 
+            // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
+            //
+            // p-0: ---> 10 rec + C  + 5 rec + C    + 5 rec + C
+            // p-1: ---> 10 rec + C  + 5 rec + C    + 5 rec + C
+
             final List<KeyValue<Long, Long>> allCommittedRecords = readResult(
+                SINGLE_PARTITION_OUTPUT_TOPIC,
                 committedDataBeforeFailure.size() + uncommittedDataBeforeFailure.size() + dataAfterFailure.size(),
                 CONSUMER_GROUP_ID + "_ALL");
 
             final List<KeyValue<Long, Long>> committedRecordsAfterFailure = readResult(
+                SINGLE_PARTITION_OUTPUT_TOPIC,
                 uncommittedDataBeforeFailure.size() + dataAfterFailure.size(),
                 CONSUMER_GROUP_ID);
 
-            final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>();
+            final int allCommittedRecordsAfterRecoverySize = committedDataBeforeFailure.size() +
+                uncommittedDataBeforeFailure.size() + dataAfterFailure.size();
+            final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>(allCommittedRecordsAfterRecoverySize);
             allExpectedCommittedRecordsAfterRecovery.addAll(committedDataBeforeFailure);
             allExpectedCommittedRecordsAfterRecovery.addAll(uncommittedDataBeforeFailure);
             allExpectedCommittedRecordsAfterRecovery.addAll(dataAfterFailure);
 
-            final List<KeyValue<Long, Long>> expectedCommittedRecordsAfterRecovery = new ArrayList<>();
+            final int committedRecordsAfterRecoverySize = uncommittedDataBeforeFailure.size() + dataAfterFailure.size();
+            final List<KeyValue<Long, Long>> expectedCommittedRecordsAfterRecovery = new ArrayList<>(committedRecordsAfterRecoverySize);
             expectedCommittedRecordsAfterRecovery.addAll(uncommittedDataBeforeFailure);
             expectedCommittedRecordsAfterRecovery.addAll(dataAfterFailure);
 
-            checkResultPerKey(allCommittedRecords, allExpectedCommittedRecordsAfterRecovery);
-            checkResultPerKey(committedRecordsAfterFailure, expectedCommittedRecordsAfterRecovery);
+            checkResultPerKey(
+                allCommittedRecords,
+                allExpectedCommittedRecordsAfterRecovery,
+                "The all committed records after recovery do not match what expected");
+            checkResultPerKey(
+                committedRecordsAfterFailure,
+                expectedCommittedRecordsAfterRecovery,
+                "The committed records after recovery do not match what expected");
+
+            assertThat("Should only get one uncaught exception from Streams.", hasUnexpectedError, is(false));
         }
     }
 
     @Test
     public void shouldNotViolateEosIfOneTaskFailsWithState() throws Exception {
+        if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
+
         // this test updates a store with 10 + 5 + 5 records per partition (running with 2 partitions)
         // the app is supposed to emit all 40 update records into the output topic
-        // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
-        // and store updates (ie, another 5 uncommitted writes to a changelog topic per partition)
-        // in the uncommitted batch sending some data for the new key to validate that upon resuming they will not be shown up in the store
         //
-        // the failure gets inject after 20 committed and 10 uncommitted records got received
+        // the app first commits after each 10 records per partition (total 20 records), and thus will have 2 * 5 uncommitted writes
+        // and store updates (ie, another 5 uncommitted writes to a changelog topic per partition)
+        // in the uncommitted batch, sending some data for the new key to validate that upon resuming they will not be shown up in the store
+        //
+        // the failure gets inject after 20 committed and 30 uncommitted records got received
         // -> the failure only kills one thread
         // after fail over, we should read 40 committed records and the state stores should contain the correct sums
         // per key (even if some records got processed twice)
 
-        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, eosConfig)) {
+        // We need more processing time under "with state" situation, so increasing the max.poll.interval.ms
+        // to avoid unexpected rebalance during test, which will cause unexpected fail over triggered
+        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, eosConfig, 3 * MAX_POLL_INTERVAL_MS)) {
             startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
             final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L, 2L, 3L);
 
-            final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<>();
+            final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<>(
+                committedDataBeforeFailure.size() + uncommittedDataBeforeFailure.size());
             dataBeforeFailure.addAll(committedDataBeforeFailure);
             dataBeforeFailure.addAll(uncommittedDataBeforeFailure);
 
@@ -483,15 +506,36 @@ public class EosIntegrationTest {
                 () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
                 "SteamsTasks did not request commit.");
 
+            // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
+            //
+            // p-0: ---> 10 rec + C
+            // p-1: ---> 10 rec + C
+
+            final List<KeyValue<Long, Long>> committedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
+            checkResultPerKey(
+                committedRecords,
+                computeExpectedResult(committedDataBeforeFailure),
+                "The committed records before failure do not match what expected");
+
             writeInputData(uncommittedDataBeforeFailure);
 
-            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
+            // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
+            //
+            // p-0: ---> 10 rec + C  + 5 rec (pending)
+            // p-1: ---> 10 rec + C  + 5 rec (pending)
 
+            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, dataBeforeFailure.size(), null);
             final List<KeyValue<Long, Long>> expectedResultBeforeFailure = computeExpectedResult(dataBeforeFailure);
-            checkResultPerKey(committedRecords, computeExpectedResult(committedDataBeforeFailure));
-            checkResultPerKey(uncommittedRecords, expectedResultBeforeFailure);
-            verifyStateStore(streams, getMaxPerKey(expectedResultBeforeFailure));
+
+
+            checkResultPerKey(
+                uncommittedRecords,
+                expectedResultBeforeFailure,
+                "The uncommitted records before failure do not match what expected");
+            verifyStateStore(
+                streams,
+                getMaxPerKey(expectedResultBeforeFailure),
+                "The state store content before failure do not match what expected");
 
             errorInjected.set(true);
             writeInputData(dataAfterFailure);
@@ -500,37 +544,59 @@ public class EosIntegrationTest {
                 () -> uncaughtException != null, MAX_WAIT_TIME_MS,
                 "Should receive uncaught exception from one StreamThread.");
 
+            // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
+            //
+            // p-0: ---> 10 rec + C  + 5 rec + C    + 5 rec + C
+            // p-1: ---> 10 rec + C  + 5 rec + C    + 5 rec + C
+
             final List<KeyValue<Long, Long>> allCommittedRecords = readResult(
+                SINGLE_PARTITION_OUTPUT_TOPIC,
                 committedDataBeforeFailure.size() + uncommittedDataBeforeFailure.size() + dataAfterFailure.size(),
                 CONSUMER_GROUP_ID + "_ALL");
 
             final List<KeyValue<Long, Long>> committedRecordsAfterFailure = readResult(
+                SINGLE_PARTITION_OUTPUT_TOPIC,
                 uncommittedDataBeforeFailure.size() + dataAfterFailure.size(),
                 CONSUMER_GROUP_ID);
 
-            final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>();
+            final int allCommittedRecordsAfterRecoverySize = committedDataBeforeFailure.size() +
+                uncommittedDataBeforeFailure.size() + dataAfterFailure.size();
+            final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>(allCommittedRecordsAfterRecoverySize);
             allExpectedCommittedRecordsAfterRecovery.addAll(committedDataBeforeFailure);
             allExpectedCommittedRecordsAfterRecovery.addAll(uncommittedDataBeforeFailure);
             allExpectedCommittedRecordsAfterRecovery.addAll(dataAfterFailure);
 
             final List<KeyValue<Long, Long>> expectedResult = computeExpectedResult(allExpectedCommittedRecordsAfterRecovery);
 
-            checkResultPerKey(allCommittedRecords, expectedResult);
+            checkResultPerKey(
+                allCommittedRecords,
+                expectedResult,
+                "The all committed records after recovery do not match what expected");
+
             checkResultPerKey(
                 committedRecordsAfterFailure,
-                expectedResult.subList(committedDataBeforeFailure.size(), expectedResult.size()));
+                expectedResult.subList(committedDataBeforeFailure.size(), expectedResult.size()),
+                "The committed records after recovery do not match what expected");
 
-            verifyStateStore(streams, getMaxPerKey(expectedResult));
+            verifyStateStore(
+                streams,
+                getMaxPerKey(expectedResult),
+                "The state store content after recovery do not match what expected");
+
+            assertThat("Should only get one uncaught exception from Streams.", hasUnexpectedError, is(false));
         }
     }
 
     @Test
     public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances() throws Exception {
+        if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
+
         // this test writes 10 + 5 + 5 + 10 records per partition (running with 2 partitions)
         // the app is supposed to copy all 60 records into the output topic
-        // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
         //
-        // a stall gets injected after 20 committed and 30 uncommitted records got received
+        // the app first commits after each 10 records per partition, and thus will have 2 * 5 uncommitted writes
+        //
+        // Then, a stall gets injected after 20 committed and 30 uncommitted records got received
         // -> the stall only affects one thread and should trigger a rebalance
         // after rebalancing, we should read 40 committed records (even if 50 record got written)
         //
@@ -538,8 +604,8 @@ public class EosIntegrationTest {
         // we write the remaining 20 records and verify to read 60 result records
 
         try (
-            final KafkaStreams streams1 = getKafkaStreams("streams1", false, "appDir1", 1, eosConfig);
-            final KafkaStreams streams2 = getKafkaStreams("streams2", false, "appDir2", 1, eosConfig)
+            final KafkaStreams streams1 = getKafkaStreams("streams1", false, "appDir1", 1, eosConfig, MAX_POLL_INTERVAL_MS);
+            final KafkaStreams streams2 = getKafkaStreams("streams2", false, "appDir2", 1, eosConfig, MAX_POLL_INTERVAL_MS)
         ) {
             startKafkaStreamsAndWaitForRunningState(streams1, MAX_WAIT_TIME_MS);
             startKafkaStreamsAndWaitForRunningState(streams2, MAX_WAIT_TIME_MS);
@@ -547,7 +613,8 @@ public class EosIntegrationTest {
             final List<KeyValue<Long, Long>> committedDataBeforeStall = prepareData(0L, 10L, 0L, 1L);
             final List<KeyValue<Long, Long>> uncommittedDataBeforeStall = prepareData(10L, 15L, 0L, 1L);
 
-            final List<KeyValue<Long, Long>> dataBeforeStall = new ArrayList<>();
+            final List<KeyValue<Long, Long>> dataBeforeStall = new ArrayList<>(
+                committedDataBeforeStall.size() + uncommittedDataBeforeStall.size());
             dataBeforeStall.addAll(committedDataBeforeStall);
             dataBeforeStall.addAll(uncommittedDataBeforeStall);
 
@@ -561,13 +628,29 @@ public class EosIntegrationTest {
                 () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
                 "SteamsTasks did not request commit.");
 
+            // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
+            //
+            // p-0: ---> 10 rec + C
+            // p-1: ---> 10 rec + C
+
+            final List<KeyValue<Long, Long>> committedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, committedDataBeforeStall.size(), CONSUMER_GROUP_ID);
+            checkResultPerKey(
+                committedRecords,
+                committedDataBeforeStall,
+                "The committed records before stall do not match what expected");
+
             writeInputData(uncommittedDataBeforeStall);
 
-            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeStall.size(), null);
-            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeStall.size(), CONSUMER_GROUP_ID);
+            // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
+            //
+            // p-0: ---> 10 rec + C  + 5 rec (pending)
+            // p-1: ---> 10 rec + C  + 5 rec (pending)
 
-            checkResultPerKey(committedRecords, committedDataBeforeStall);
-            checkResultPerKey(uncommittedRecords, dataBeforeStall);
+            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, dataBeforeStall.size(), null);
+            checkResultPerKey(
+                uncommittedRecords,
+                dataBeforeStall,
+                "The uncommitted records before stall do not match what expected");
 
             LOG.info("Injecting Stall");
             stallInjected.set(true);
@@ -595,23 +678,33 @@ public class EosIntegrationTest {
             // the assignment is. We only really care that the remaining instance only sees one host
             // that owns both partitions.
             waitForCondition(
-                () -> stallingInstance.allMetadata().size() == 2
-                    && remainingInstance.allMetadata().size() == 1
-                    && remainingInstance.allMetadata().iterator().next().topicPartitions().size() == 2,
+                () -> stallingInstance.metadataForAllStreamsClients().size() == 2
+                    && remainingInstance.metadataForAllStreamsClients().size() == 1
+                    && remainingInstance.metadataForAllStreamsClients().iterator().next().topicPartitions().size() == 2,
                 MAX_WAIT_TIME_MS,
                 () -> "Should have rebalanced.\n" +
-                    "Streams1[" + streams1.allMetadata() + "]\n" +
-                    "Streams2[" + streams2.allMetadata() + "]");
+                    "Streams1[" + streams1.metadataForAllStreamsClients() + "]\n" +
+                    "Streams2[" + streams2.metadataForAllStreamsClients() + "]");
+
+            // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
+            //
+            // p-0: ---> 10 rec + C  + 5 rec + C    + 5 rec + C
+            // p-1: ---> 10 rec + C  + 5 rec + C    + 5 rec + C
 
             final List<KeyValue<Long, Long>> committedRecordsAfterRebalance = readResult(
+                SINGLE_PARTITION_OUTPUT_TOPIC,
                 uncommittedDataBeforeStall.size() + dataToTriggerFirstRebalance.size(),
                 CONSUMER_GROUP_ID);
 
-            final List<KeyValue<Long, Long>> expectedCommittedRecordsAfterRebalance = new ArrayList<>();
+            final List<KeyValue<Long, Long>> expectedCommittedRecordsAfterRebalance = new ArrayList<>(
+                uncommittedDataBeforeStall.size() + dataToTriggerFirstRebalance.size());
             expectedCommittedRecordsAfterRebalance.addAll(uncommittedDataBeforeStall);
             expectedCommittedRecordsAfterRebalance.addAll(dataToTriggerFirstRebalance);
 
-            checkResultPerKey(committedRecordsAfterRebalance, expectedCommittedRecordsAfterRebalance);
+            checkResultPerKey(
+                committedRecordsAfterRebalance,
+                expectedCommittedRecordsAfterRebalance,
+                "The all committed records after rebalance do not match what expected");
 
             LOG.info("Releasing Stall");
             doStall = false;
@@ -619,36 +712,113 @@ public class EosIntegrationTest {
             // It doesn't really matter what the assignment is, but we might as well also assert that they
             // both see both partitions assigned exactly once
             waitForCondition(
-                () -> streams1.allMetadata().size() == 2
-                    && streams2.allMetadata().size() == 2
-                    && streams1.allMetadata().stream().mapToLong(meta -> meta.topicPartitions().size()).sum() == 2
-                    && streams2.allMetadata().stream().mapToLong(meta -> meta.topicPartitions().size()).sum() == 2,
+                () -> streams1.metadataForAllStreamsClients().size() == 2
+                    && streams2.metadataForAllStreamsClients().size() == 2
+                    && streams1.metadataForAllStreamsClients().stream().mapToLong(meta -> meta.topicPartitions().size()).sum() == 2
+                    && streams2.metadataForAllStreamsClients().stream().mapToLong(meta -> meta.topicPartitions().size()).sum() == 2,
                 MAX_WAIT_TIME_MS,
                 () -> "Should have rebalanced.\n" +
-                    "Streams1[" + streams1.allMetadata() + "]\n" +
-                    "Streams2[" + streams2.allMetadata() + "]");
+                    "Streams1[" + streams1.metadataForAllStreamsClients() + "]\n" +
+                    "Streams2[" + streams2.metadataForAllStreamsClients() + "]");
 
             writeInputData(dataAfterSecondRebalance);
 
+            // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
+            //
+            // p-0: ---> 10 rec + C  + 5 rec + C    + 5 rec + C   + 10 rec + C
+            // p-1: ---> 10 rec + C  + 5 rec + C    + 5 rec + C   + 10 rec + C
+
             final List<KeyValue<Long, Long>> allCommittedRecords = readResult(
+                SINGLE_PARTITION_OUTPUT_TOPIC,
                 committedDataBeforeStall.size() + uncommittedDataBeforeStall.size()
                 + dataToTriggerFirstRebalance.size() + dataAfterSecondRebalance.size(),
                 CONSUMER_GROUP_ID + "_ALL");
 
-            final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>();
+            final int allCommittedRecordsAfterRecoverySize = committedDataBeforeStall.size() +
+                uncommittedDataBeforeStall.size() + dataToTriggerFirstRebalance.size() + dataAfterSecondRebalance.size();
+            final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>(allCommittedRecordsAfterRecoverySize);
             allExpectedCommittedRecordsAfterRecovery.addAll(committedDataBeforeStall);
             allExpectedCommittedRecordsAfterRecovery.addAll(uncommittedDataBeforeStall);
             allExpectedCommittedRecordsAfterRecovery.addAll(dataToTriggerFirstRebalance);
             allExpectedCommittedRecordsAfterRecovery.addAll(dataAfterSecondRebalance);
 
-            checkResultPerKey(allCommittedRecords, allExpectedCommittedRecordsAfterRecovery);
+            checkResultPerKey(
+                allCommittedRecords,
+                allExpectedCommittedRecordsAfterRecovery,
+                "The all committed records after recovery do not match what expected");
         }
+    }
+
+    @Test
+    public void shouldWriteLatestOffsetsToCheckpointOnShutdown() throws Exception {
+        final List<KeyValue<Long, Long>> writtenData = prepareData(0L, 10, 0L, 1L);
+        final List<KeyValue<Long, Long>> expectedResult = computeExpectedResult(writtenData);
+
+        try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, eosConfig, MAX_POLL_INTERVAL_MS)) {
+            writeInputData(writtenData);
+
+            startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
+
+            waitForCondition(
+                    () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
+                    "SteamsTasks did not request commit.");
+
+            final List<KeyValue<Long, Long>> committedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, writtenData.size(), CONSUMER_GROUP_ID);
+
+            if (!eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) {
+                checkResultPerKey(
+                        committedRecords,
+                        expectedResult,
+                        "The committed records do not match what expected");
+
+                verifyStateStore(
+                        streams,
+                        getMaxPerKey(expectedResult),
+                        "The state store content do not match what expected");
+            }
+        }
+
+        verifyOffsetsAreInCheckpoint(0);
+        verifyOffsetsAreInCheckpoint(1);
+    }
+
+    private void verifyOffsetsAreInCheckpoint(final int partition) throws IOException {
+        final String stateStoreDir = stateTmpDir + File.separator + "appDir" + File.separator + applicationId + File.separator + "0_" + partition + File.separator;
+
+        // Verify that the checkpointed offsets match exactly with max offset of the records in the changelog
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateStoreDir + ".checkpoint"));
+        final Map<TopicPartition, Long> checkpointedOffsets = checkpoint.read();
+        checkpointedOffsets.forEach(this::verifyChangelogMaxRecordOffsetMatchesCheckpointedOffset);
+    }
+
+    private void verifyChangelogMaxRecordOffsetMatchesCheckpointedOffset(final TopicPartition tp, final long checkpointedOffset) {
+        final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerConfig(CLUSTER.bootstrapServers(), Serdes.ByteArray().deserializer().getClass(), Serdes.ByteArray().deserializer().getClass()));
+        final List<TopicPartition> partitions = Collections.singletonList(tp);
+        consumer.assign(partitions);
+        consumer.seekToEnd(partitions);
+        final long topicEndOffset = consumer.position(tp);
+
+        assertTrue("changelog topic end " + topicEndOffset + " is less than checkpointed offset " + checkpointedOffset,
+                topicEndOffset >= checkpointedOffset);
+
+        consumer.seekToBeginning(partitions);
+
+        Long maxRecordOffset = null;
+        while (consumer.position(tp) != topicEndOffset) {
+            final List<ConsumerRecord<String, String>> records = consumer.poll(Duration.ofMillis(0)).records(tp);
+            if (!records.isEmpty()) {
+                maxRecordOffset = records.get(records.size() - 1).offset();
+            }
+        }
+
+        assertEquals("Checkpointed offset does not match end of changelog", maxRecordOffset, (Long) checkpointedOffset);
     }
 
     private List<KeyValue<Long, Long>> prepareData(final long fromInclusive,
                                                    final long toExclusive,
                                                    final Long... keys) {
-        final List<KeyValue<Long, Long>> data = new ArrayList<>();
+        final long dataSize = keys.length * (toExclusive - fromInclusive);
+        final List<KeyValue<Long, Long>> data = new ArrayList<>((int) dataSize);
 
         for (final Long k : keys) {
             for (long v = fromInclusive; v < toExclusive; ++v) {
@@ -664,7 +834,8 @@ public class EosIntegrationTest {
                                          final boolean withState,
                                          final String appDir,
                                          final int numberOfStreamsThreads,
-                                         final String eosConfig) {
+                                         final String eosConfig,
+                                         final int maxPollIntervalMs) {
         commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
         stallInjected = new AtomicBoolean(false);
@@ -753,17 +924,24 @@ public class EosIntegrationTest {
             } }, storeNames)
             .to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
+        stateTmpDir = TestUtils.tempDirectory().getPath() + File.separator;
+
         final Properties properties = new Properties();
+        // Set commit interval to a larger value to avoid affection of controlled stream commit,
+        // but not too large as we need to have a relatively low transaction timeout such
+        // that it should help trigger the timed out transaction in time.
+        final long commitIntervalMs = 20_000L;
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numberOfStreamsThreads);
-        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.MAX_VALUE);
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
+        properties.put(StreamsConfig.producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG), (int) commitIntervalMs);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
-        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), 5 * 1000);
-        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 5 * 1000 - 1);
-        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
-        properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + File.separator + appDir);
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), maxPollIntervalMs);
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), maxPollIntervalMs - 1);
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), maxPollIntervalMs);
+        properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+        properties.put(StreamsConfig.STATE_DIR_CONFIG, stateTmpDir + appDir);
         properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, dummyHostName + ":2142");
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
@@ -776,9 +954,9 @@ public class EosIntegrationTest {
         final KafkaStreams streams = new KafkaStreams(builder.build(), config);
 
         streams.setUncaughtExceptionHandler((t, e) -> {
-            if (uncaughtException != null) {
+            if (uncaughtException != null || !e.getMessage().contains("Injected test exception")) {
                 e.printStackTrace(System.err);
-                fail("Should only get one uncaught exception from Streams.");
+                hasUnexpectedError = true;
             }
             uncaughtException = e;
         });
@@ -795,7 +973,8 @@ public class EosIntegrationTest {
         );
     }
 
-    private List<KeyValue<Long, Long>> readResult(final int numberOfRecords,
+    private List<KeyValue<Long, Long>> readResult(final String topic,
+                                                  final int numberOfRecords,
                                                   final String groupId) throws Exception {
         if (groupId != null) {
             return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
@@ -807,7 +986,7 @@ public class EosIntegrationTest {
                     Utils.mkProperties(Collections.singletonMap(
                         ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                         IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))),
-                SINGLE_PARTITION_OUTPUT_TOPIC,
+                topic,
                 numberOfRecords
             );
         }
@@ -815,7 +994,7 @@ public class EosIntegrationTest {
         // read uncommitted
         return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             TestUtils.consumerConfig(CLUSTER.bootstrapServers(), LongDeserializer.class, LongDeserializer.class),
-            SINGLE_PARTITION_OUTPUT_TOPIC,
+            topic,
             numberOfRecords
         );
     }
@@ -860,16 +1039,22 @@ public class EosIntegrationTest {
     }
 
     private void verifyStateStore(final KafkaStreams streams,
-                                  final Set<KeyValue<Long, Long>> expectedStoreContent) throws Exception {
-        final ReadOnlyKeyValueStore<Long, Long> store = IntegrationTestUtils
-            .getStore(300_000L, storeName, streams, QueryableStoreTypes.keyValueStore());
-        assertNotNull(store);
+                                  final Set<KeyValue<Long, Long>> expectedStoreContent,
+                                  final String reason) {
+        final StateQueryRequest<KeyValueIterator<Long, Long>> request =
+                inStore(storeName).withQuery(RangeQuery.withNoBounds());
 
-        final KeyValueIterator<Long, Long> it = store.all();
-        while (it.hasNext()) {
-            assertTrue(expectedStoreContent.remove(it.next()));
+        final StateQueryResult<KeyValueIterator<Long, Long>> result =
+                IntegrationTestUtils.iqv2WaitForResult(streams, request);
+
+        for (final QueryResult<KeyValueIterator<Long, Long>> partitionResult: result.getPartitionResults().values()) {
+            try (final KeyValueIterator<Long, Long> it = partitionResult.getResult()) {
+                while (it.hasNext()) {
+                    assertTrue(reason, expectedStoreContent.remove(it.next()));
+                }
+            }
         }
 
-        assertTrue(expectedStoreContent.isEmpty());
+        assertTrue(reason, expectedStoreContent.isEmpty());
     }
 }

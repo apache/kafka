@@ -14,9 +14,9 @@
 
 package kafka.api
 
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.KafkaBroker
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 class ClientIdQuotaTest extends BaseQuotaTest {
 
@@ -24,13 +24,18 @@ class ClientIdQuotaTest extends BaseQuotaTest {
   override def consumerClientId = "QuotasTestConsumer-!@#$%^&*()"
 
   @BeforeEach
-  override def setUp(): Unit = {
-    this.serverConfig.setProperty(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, defaultProducerQuota.toString)
-    this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, defaultConsumerQuota.toString)
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
+    quotaTestClients.alterClientQuotas(
+      quotaTestClients.clientQuotaAlteration(
+        quotaTestClients.clientQuotaEntity(None, Some(QuotaTestClients.DefaultEntity)),
+        Some(defaultProducerQuota), Some(defaultConsumerQuota), Some(defaultRequestQuota)
+      )
+    )
+    quotaTestClients.waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
   }
 
-  override def createQuotaTestClients(topic: String, leaderNode: KafkaServer): QuotaTestClients = {
+  override def createQuotaTestClients(topic: String, leaderNode: KafkaBroker): QuotaTestClients = {
     val producer = createProducer()
     val consumer = createConsumer()
     val adminClient = createAdminClient()

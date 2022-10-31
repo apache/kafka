@@ -490,9 +490,7 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Test with PEM key store files without key password for client key store. We don't allow this
-     * with PEM files since unprotected private key on disk is not safe. We do allow with inline
-     * PEM config since key config can be encrypted or externalized similar to other password configs.
+     * Test with PEM key store files without key password for client key store.
      */
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
@@ -502,27 +500,19 @@ public class SslTransportLayerTest {
         TestSslUtils.convertToPem(args.sslClientConfigs, !useInlinePem, false);
         args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
         server = createEchoServer(args, SecurityProtocol.SSL);
-        if (useInlinePem)
-            verifySslConfigs(args);
-        else
-            assertThrows(KafkaException.class, () -> createSelector(args.sslClientConfigs));
+        verifySslConfigs(args);
     }
 
     /**
      * Test with PEM key store files without key password for server key store.We don't allow this
-     * with PEM files since unprotected private key on disk is not safe. We do allow with inline
-     * PEM config since key config can be encrypted or externalized similar to other password configs.
+     * with PEM files since unprotected private key on disk is not safe.
      */
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
     public void testPemFilesWithoutServerKeyPassword(Args args) throws Exception {
         TestSslUtils.convertToPem(args.sslServerConfigs, !args.useInlinePem, false);
         TestSslUtils.convertToPem(args.sslClientConfigs, !args.useInlinePem, true);
-
-        if (args.useInlinePem)
-            verifySslConfigs(args);
-        else
-            assertThrows(KafkaException.class, () -> createEchoServer(args, SecurityProtocol.SSL));
+        verifySslConfigs(args);
     }
 
     /**
@@ -591,7 +581,7 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Tests that connection success with the default TLS version.
+     * Tests that connection succeeds with the default TLS version.
      */
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
@@ -611,12 +601,6 @@ public class SslTransportLayerTest {
         NetworkTestUtils.checkClientConnection(selector, "0", 10, 100);
         server.verifyAuthenticationMetrics(1, 0);
         selector.close();
-
-        checkAuthenticationFailed(args, "1", "TLSv1.1");
-        server.verifyAuthenticationMetrics(1, 1);
-
-        checkAuthenticationFailed(args, "2", "TLSv1");
-        server.verifyAuthenticationMetrics(1, 2);
     }
 
     /** Checks connection failed using the specified {@code tlsVersion}. */
@@ -629,19 +613,6 @@ public class SslTransportLayerTest {
         NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
 
         selector.close();
-    }
-
-    /**
-     * Tests that connections cannot be made with unsupported TLS versions
-     */
-    @ParameterizedTest
-    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
-    public void testUnsupportedTLSVersion(Args args) throws Exception {
-        args.sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2"));
-        server = createEchoServer(args, SecurityProtocol.SSL);
-
-        checkAuthenticationFailed(args, "0", "TLSv1.1");
-        server.verifyAuthenticationMetrics(0, 1);
     }
 
     /**
@@ -936,7 +907,7 @@ public class SslTransportLayerTest {
 
         // Test without delay and a couple of delay counts to ensure delay applies to handshake failure
         for (int i = 0; i < 3; i++) {
-            String node = "0";
+            String node = String.valueOf(i);
             TestSslChannelBuilder serverChannelBuilder = new TestSslChannelBuilder(Mode.SERVER);
             serverChannelBuilder.configure(args.sslServerConfigs);
             serverChannelBuilder.flushDelayCount = i;
@@ -953,6 +924,14 @@ public class SslTransportLayerTest {
             selector.close();
             serverChannelBuilder.close();
         }
+    }
+
+    @ParameterizedTest
+    @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
+    public void testPeerNotifiedOfHandshakeFailureWithClientSideDelay(Args args) throws Exception {
+        args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        CertStores.KEYSTORE_PROPS.forEach(args.sslClientConfigs::remove);
+        verifySslConfigsWithHandshakeFailure(args, 1);
     }
 
     @ParameterizedTest
@@ -1318,12 +1297,16 @@ public class SslTransportLayerTest {
     }
 
     private void verifySslConfigsWithHandshakeFailure(Args args) throws Exception {
+        verifySslConfigsWithHandshakeFailure(args, 0);
+    }
+
+    private void verifySslConfigsWithHandshakeFailure(Args args, int pollDelayMs) throws Exception {
         server = createEchoServer(args, SecurityProtocol.SSL);
         createSelector(args.sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         String node = "0";
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED, pollDelayMs);
         server.verifyAuthenticationMetrics(0, 1);
     }
 
@@ -1437,6 +1420,8 @@ public class SslTransportLayerTest {
 
             @Override
             protected boolean flush(ByteBuffer buf) throws IOException {
+                if (!buf.hasRemaining())
+                    return super.flush(buf);
                 if (numFlushesRemaining.decrementAndGet() == 0 && !ready())
                     flushFailureAction.run();
                 else if (numDelayedFlushesRemaining.getAndDecrement() != 0)

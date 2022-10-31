@@ -19,21 +19,20 @@ package kafka.server
 import java.net.InetAddress
 import java.util
 import java.util.Collections
+
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.Session
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
-import org.apache.kafka.common.metrics.MetricConfig
-import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.ClientInformation
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, RequestContext, RequestHeader, RequestTestUtils}
+import org.apache.kafka.common.metrics.{MetricConfig, Metrics}
+import org.apache.kafka.common.network.{ClientInformation, ListenerName}
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, RequestContext, RequestHeader}
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.MockTime
-import org.easymock.EasyMock
 import org.junit.jupiter.api.AfterEach
+import org.mockito.Mockito.mock
 
 class BaseClientQuotaManagerTest {
   protected val time = new MockTime
@@ -57,9 +56,8 @@ class BaseClientQuotaManagerTest {
                                                    listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {
 
     val request = builder.build()
-    val buffer = RequestTestUtils.serializeRequestWithHeader(
-      new RequestHeader(builder.apiKey, request.version, "", 0), request)
-    val requestChannelMetrics: RequestChannel.Metrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
+    val buffer = request.serializeWithHeader(new RequestHeader(builder.apiKey, request.version, "", 0))
+    val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
@@ -81,7 +79,7 @@ class BaseClientQuotaManagerTest {
 
   protected def throttle(quotaManager: ClientQuotaManager, user: String, clientId: String, throttleTimeMs: Int,
                          channelThrottlingCallback: ThrottleCallback): Unit = {
-    val (_, request) = buildRequest(FetchRequest.Builder.forConsumer(0, 1000, new util.HashMap[TopicPartition, PartitionData]))
+    val (_, request) = buildRequest(FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 1000, new util.HashMap[TopicPartition, PartitionData]))
     quotaManager.throttle(request, channelThrottlingCallback, throttleTimeMs)
   }
 }

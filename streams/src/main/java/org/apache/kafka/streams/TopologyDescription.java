@@ -30,6 +30,7 @@ import java.util.regex.Pattern;
  * In contrast, two sub-topologies are not connected but can be linked to each other via topics, i.e., if one
  * sub-topology {@link Topology#addSink(String, String, String...) writes} into a topic and another sub-topology
  * {@link Topology#addSource(String, String...) reads} from the same topic.
+ * Message {@link ProcessorContext#forward(Object, Object) forwards} using custom Processors and Transformers are not considered in the topology graph.
  * <p>
  * When {@link KafkaStreams#start()} is called, different sub-topologies will be constructed and executed as independent
  * {@link StreamTask tasks}.
@@ -113,13 +114,6 @@ public interface TopologyDescription {
      * A source node of a topology.
      */
     interface Source extends Node {
-        /**
-         * The topic names this source node is reading from.
-         * @return comma separated list of topic names or pattern (as String)
-         * @deprecated use {@link #topicSet()} or {@link #topicPattern()} instead
-         */
-        @Deprecated
-        String topics();
 
         /**
          * The topic names this source node is reading from.

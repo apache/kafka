@@ -36,9 +36,11 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -57,7 +59,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 
 /**
@@ -66,12 +68,15 @@ import static org.junit.Assert.assertFalse;
 @RunWith(Parameterized.class)
 @Category(IntegrationTest.class)
 public class EOSUncleanShutdownIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
+    @SuppressWarnings("deprecation")
     @Parameterized.Parameters(name = "{0}")
     public static Collection<String[]> data() {
         return Arrays.asList(new String[][] {
             {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_BETA}
+            {StreamsConfig.EXACTLY_ONCE_V2}
         });
     }
 
@@ -143,15 +148,17 @@ public class EOSUncleanShutdownIntegrationTest {
         driver.cleanUp();
         driver.start();
 
-        final File stateDir = new File(String.join("/", TEST_FOLDER.getRoot().getPath(), appId, "0_0"));
+        // Task's StateDir
+        final File taskStateDir = new File(String.join("/", TEST_FOLDER.getRoot().getPath(), appId, "0_0"));
+        final File taskCheckpointFile = new File(taskStateDir, ".checkpoint");
 
         try {
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 singletonList(new KeyValueTimestamp<>("k1", "v1", 0L)));
 
-            TestUtils.waitForCondition(stateDir::exists,
+            // wait until the first request is processed and some files are created in it
+            TestUtils.waitForCondition(() -> taskStateDir.exists() && taskStateDir.isDirectory() && taskStateDir.list().length > 0,
                 "Failed awaiting CreateTopics first request failure");
-
             IntegrationTestUtils.produceSynchronously(producerConfig, false, input, Optional.empty(),
                 asList(new KeyValueTimestamp<>("k2", "v2", 1L),
                     new KeyValueTimestamp<>("k3", "v3", 2L)));
@@ -164,8 +171,13 @@ public class EOSUncleanShutdownIntegrationTest {
 
             driver.close();
 
-            // the state directory should still exist with the empty checkpoint file
-            assertFalse(stateDir.exists());
+            // Although there is an uncaught exception,
+            // case 1: the state directory is cleaned up without any problems.
+            // case 2: The state directory is not cleaned up, for it does not include any checkpoint file.
+            // case 3: The state directory is not cleaned up, for it includes a checkpoint file but it is empty.
+            assertTrue(!taskStateDir.exists()
+                || (taskStateDir.exists() && taskStateDir.list().length > 0 && !taskCheckpointFile.exists())
+                || (taskCheckpointFile.exists() && taskCheckpointFile.length() == 0L));
 
             quietlyCleanStateAfterTest(CLUSTER, driver);
         }

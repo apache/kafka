@@ -91,8 +91,8 @@ public interface SegmentedBytesStore extends StateStore {
     /**
      * Gets all the key-value pairs that belong to the windows within in the given time range.
      *
-     * @param from the beginning of the time slot from which to search
-     * @param to   the end of the time slot from which to search
+     * @param from the beginning of the time slot from which to search (inclusive)
+     * @param to   the end of the time slot from which to search (inclusive)
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException if null is used for any key
@@ -108,6 +108,14 @@ public interface SegmentedBytesStore extends StateStore {
      * @param key   the segmented key to remove
      */
     void remove(Bytes key);
+
+    /**
+     * Remove all duplicated records with the provided key in the specified timestamp.
+     *
+     * @param key   the segmented key to remove
+     * @param timestamp  the timestamp to match
+     */
+    void remove(Bytes key, long timestamp);
 
     /**
      * Write a new value to the store with the provided key. The key
@@ -152,6 +160,18 @@ public interface SegmentedBytesStore extends StateStore {
         Bytes lowerRange(final Bytes key, final long from);
 
         /**
+         * Given a record key and a time, construct a Segmented key to search when performing
+         * prefixed queries.
+         *
+         * @param key
+         * @param timestamp
+         * @return  The key that represents the prefixed Segmented key in bytes.
+         */
+        default Bytes toStoreBinaryKeyPrefix(final Bytes key, long timestamp) {
+            throw new UnsupportedOperationException();
+        }
+
+        /**
          * Given a range of fixed size record keys and a time, construct a Segmented key that represents
          * the upper range of keys to search when performing range queries.
          * @see SessionKeySchema#upperRange
@@ -190,9 +210,10 @@ public interface SegmentedBytesStore extends StateStore {
          * @param binaryKeyTo   the last key in the range
          * @param from          starting time range
          * @param to            ending time range
+         * @param forward       forward or backward
          * @return
          */
-        HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to);
+        HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to, final boolean forward);
 
         /**
          * Used during {@link SegmentedBytesStore#fetch(Bytes, long, long)} operations to determine

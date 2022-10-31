@@ -247,6 +247,20 @@ public class DefaultRecordTest {
         buf.flip();
         assertThrows(InvalidRecordException.class,
             () -> DefaultRecord.readFrom(buf, 0L, 0L, RecordBatch.NO_SEQUENCE, null));
+
+        ByteBuffer buf2 = ByteBuffer.allocate(sizeOfBodyInBytes + ByteUtils.sizeOfVarint(sizeOfBodyInBytes));
+        ByteUtils.writeVarint(sizeOfBodyInBytes, buf2);
+        buf2.put(attributes);
+        ByteUtils.writeVarlong(timestampDelta, buf2);
+        ByteUtils.writeVarint(offsetDelta, buf2);
+        ByteUtils.writeVarint(-1, buf2); // null key
+        ByteUtils.writeVarint(-1, buf2); // null value
+        ByteUtils.writeVarint(sizeOfBodyInBytes, buf2); // more headers than remaining buffer size, not allowed
+        buf2.position(buf2.limit());
+
+        buf2.flip();
+        assertThrows(InvalidRecordException.class,
+                () -> DefaultRecord.readFrom(buf2, 0L, 0L, RecordBatch.NO_SEQUENCE, null));
     }
 
     @Test
@@ -481,4 +495,14 @@ public class DefaultRecordTest {
         assertEquals(RecordBatch.NO_SEQUENCE, record.sequence());
     }
 
+    @Test
+    public void testInvalidSizeOfBodyInBytes() {
+        int sizeOfBodyInBytes = 10;
+        ByteBuffer buf = ByteBuffer.allocate(5);
+        ByteUtils.writeVarint(sizeOfBodyInBytes, buf);
+
+        buf.flip();
+        assertThrows(InvalidRecordException.class,
+            () -> DefaultRecord.readFrom(buf, 0L, 0L, RecordBatch.NO_SEQUENCE, null));
+    }
 }

@@ -45,16 +45,47 @@ public interface ReplicationPolicy {
      */
     default String originalTopic(String topic) {
         String upstream = upstreamTopic(topic);
-        if (upstream == null) {
+        if (upstream == null || upstream.equals(topic)) {
             return topic;
         } else {
             return originalTopic(upstream);
         }
     }
 
+    /** Returns heartbeats topic name.*/
+    default String heartbeatsTopic() {
+        return "heartbeats";
+    }
+
+    /** Returns the offset-syncs topic for given cluster alias. */
+    default String offsetSyncsTopic(String clusterAlias) {
+        return "mm2-offset-syncs." + clusterAlias + ".internal";
+    }
+
+    /** Returns the name checkpoint topic for given cluster alias. */
+    default String checkpointsTopic(String clusterAlias) {
+        return clusterAlias + ".checkpoints.internal";
+    }
+
+    /** check if topic is a heartbeat topic, e.g heartbeats, us-west.heartbeats. */
+    default boolean isHeartbeatsTopic(String topic) {
+        return heartbeatsTopic().equals(originalTopic(topic));
+    }
+
+    /** check if topic is a checkpoint topic. */
+    default boolean isCheckpointsTopic(String topic) {
+        return  topic.endsWith(".checkpoints.internal");
+    }
+
+    /** Check topic is one of MM2 internal topic, this is used to make sure the topic doesn't need to be replicated.*/
+    default boolean isMM2InternalTopic(String topic) {
+        return  topic.endsWith(".internal");
+    }
+
     /** Internal topics are never replicated. */
     default boolean isInternalTopic(String topic) {
-        return topic.endsWith(".internal") || topic.endsWith("-internal") || topic.startsWith("__")
-            || topic.startsWith(".");
+        boolean isKafkaInternalTopic = topic.startsWith("__") || topic.startsWith(".");
+        boolean isDefaultConnectTopic =  topic.endsWith("-internal") ||  topic.endsWith(".internal");
+        return isMM2InternalTopic(topic) || isKafkaInternalTopic || isDefaultConnectTopic;
     }
 }

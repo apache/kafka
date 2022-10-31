@@ -18,6 +18,8 @@
 package org.apache.kafka.jmh.common;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -43,7 +45,9 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -60,11 +64,17 @@ public class FetchResponseBenchmark {
     @Param({"3", "10", "20"})
     private int partitionCount;
 
-    LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData;
+    LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData;
+
+    Map<String, Uuid> topicIds;
+
+    Map<Uuid, String> topicNames;
 
     ResponseHeader header;
 
     FetchResponse fetchResponse;
+
+    FetchResponseData fetchResponseData;
 
     @Setup(Level.Trial)
     public void setup() {
@@ -74,26 +84,37 @@ public class FetchResponseBenchmark {
                 new SimpleRecord(1002, "key3".getBytes(StandardCharsets.UTF_8), "value3".getBytes(StandardCharsets.UTF_8)));
 
         this.responseData = new LinkedHashMap<>();
+        this.topicIds = new HashMap<>();
+        this.topicNames = new HashMap<>();
         for (int topicIdx = 0; topicIdx < topicCount; topicIdx++) {
             String topic = UUID.randomUUID().toString();
+            Uuid id = Uuid.randomUuid();
+            topicIds.put(topic, id);
+            topicNames.put(id, topic);
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
                 FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
                                 .setPartitionIndex(partitionId)
                                 .setLastStableOffset(0)
                                 .setLogStartOffset(0)
                                 .setRecords(records);
-                responseData.put(new TopicPartition(topic, partitionId), partitionData);
+                responseData.put(new TopicIdPartition(id, new TopicPartition(topic, partitionId)), partitionData);
             }
         }
 
         this.header = new ResponseHeader(100, ApiKeys.FETCH.responseHeaderVersion(ApiKeys.FETCH.latestVersion()));
         this.fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
+        this.fetchResponseData = this.fetchResponse.data();
     }
 
     @Benchmark
     public int testConstructFetchResponse() {
         FetchResponse fetchResponse = FetchResponse.of(Errors.NONE, 0, 0, responseData);
-        return fetchResponse.responseData().size();
+        return fetchResponse.data().responses().size();
+    }
+
+    @Benchmark
+    public int testPartitionMapFromData() {
+        return new FetchResponse(fetchResponseData).responseData(topicNames, ApiKeys.FETCH.latestVersion()).size();
     }
 
     @Benchmark

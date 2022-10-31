@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
@@ -56,6 +57,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -126,11 +128,7 @@ public class KafkaBasedLogTest {
     private Map<TopicPartition, List<ConsumerRecord<String, String>>> consumedRecords = new HashMap<>();
     private Callback<ConsumerRecord<String, String>> consumedCallback = (error, record) -> {
         TopicPartition partition = new TopicPartition(record.topic(), record.partition());
-        List<ConsumerRecord<String, String>> records = consumedRecords.get(partition);
-        if (records == null) {
-            records = new ArrayList<>();
-            consumedRecords.put(partition, records);
-        }
+        List<ConsumerRecord<String, String>> records = consumedRecords.computeIfAbsent(partition, k -> new ArrayList<>());
         records.add(record);
     };
 
@@ -187,12 +185,14 @@ public class KafkaBasedLogTest {
             consumer.scheduleNopPollTask();
             consumer.scheduleNopPollTask();
             consumer.schedulePollTask(() ->
-                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE))
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE,
+                    new RecordHeaders(), Optional.empty()))
             );
             consumer.scheduleNopPollTask();
             consumer.scheduleNopPollTask();
             consumer.schedulePollTask(() ->
-                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE))
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY, TP1_VALUE,
+                    new RecordHeaders(), Optional.empty()))
             );
             consumer.schedulePollTask(finishedLatch::countDown);
         });
@@ -306,13 +306,17 @@ public class KafkaBasedLogTest {
             consumer.scheduleNopPollTask();
             consumer.scheduleNopPollTask();
             consumer.schedulePollTask(() -> {
-                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE));
-                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
-                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE,
+                    new RecordHeaders(), Optional.empty()));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE_NEW,
+                    new RecordHeaders(), Optional.empty()));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY, TP1_VALUE,
+                    new RecordHeaders(), Optional.empty()));
             });
 
             consumer.schedulePollTask(() ->
-                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE_NEW)));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY, TP1_VALUE_NEW,
+                    new RecordHeaders(), Optional.empty())));
 
             // Already have FutureCallback that should be invoked/awaited, so no need for follow up finishedLatch
         });
@@ -357,8 +361,10 @@ public class KafkaBasedLogTest {
             consumer.scheduleNopPollTask();
             consumer.scheduleNopPollTask();
             consumer.schedulePollTask(() -> {
-                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
-                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE_NEW,
+                    new RecordHeaders(), Optional.empty()));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE_NEW,
+                    new RecordHeaders(), Optional.empty()));
             });
 
             consumer.schedulePollTask(finishedLatch::countDown);
@@ -411,8 +417,10 @@ public class KafkaBasedLogTest {
             consumer.scheduleNopPollTask();
             consumer.scheduleNopPollTask();
             consumer.schedulePollTask(() -> {
-                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE));
-                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE,
+                    new RecordHeaders(), Optional.empty()));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY, TP0_VALUE_NEW,
+                    new RecordHeaders(), Optional.empty()));
             });
 
             consumer.schedulePollTask(finishedLatch::countDown);
@@ -478,13 +486,15 @@ public class KafkaBasedLogTest {
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
+        admin.retryEndOffsets(EasyMock.eq(tps), EasyMock.anyObject(), EasyMock.anyLong());
+        PowerMock.expectLastCall().andReturn(endOffsets).times(1);
         admin.endOffsets(EasyMock.eq(tps));
-        PowerMock.expectLastCall().andReturn(endOffsets).times(2);
+        PowerMock.expectLastCall().andReturn(endOffsets).times(1);
 
         PowerMock.replayAll();
 
         store.start();
-        assertEquals(endOffsets, store.readEndOffsets(tps));
+        assertEquals(endOffsets, store.readEndOffsets(tps, false));
     }
 
     @Test
@@ -495,7 +505,7 @@ public class KafkaBasedLogTest {
 
         Set<TopicPartition> tps = new HashSet<>(Arrays.asList(TP0, TP1));
         // Getting end offsets using the admin client should fail with unsupported version
-        admin.endOffsets(EasyMock.eq(tps));
+        admin.retryEndOffsets(EasyMock.eq(tps), EasyMock.anyObject(), EasyMock.anyLong());
         PowerMock.expectLastCall().andThrow(new UnsupportedVersionException("too old"));
 
         // Falls back to the consumer
@@ -507,7 +517,7 @@ public class KafkaBasedLogTest {
         PowerMock.replayAll();
 
         store.start();
-        assertEquals(endOffsets, store.readEndOffsets(tps));
+        assertEquals(endOffsets, store.readEndOffsets(tps, false));
     }
 
     @Test
@@ -521,7 +531,7 @@ public class KafkaBasedLogTest {
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
         // Getting end offsets upon startup should work fine
-        admin.endOffsets(EasyMock.eq(tps));
+        admin.retryEndOffsets(EasyMock.eq(tps), EasyMock.anyObject(), EasyMock.anyLong());
         PowerMock.expectLastCall().andReturn(endOffsets).times(1);
         // Getting end offsets using the admin client should fail with leader not available
         admin.endOffsets(EasyMock.eq(tps));
@@ -530,7 +540,7 @@ public class KafkaBasedLogTest {
         PowerMock.replayAll();
 
         store.start();
-        assertThrows(LeaderNotAvailableException.class, () -> store.readEndOffsets(tps));
+        assertThrows(LeaderNotAvailableException.class, () -> store.readEndOffsets(tps, false));
     }
 
     @SuppressWarnings("unchecked")

@@ -17,17 +17,26 @@
 package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.streams.kstream.Suppressed.BufferConfig
-import org.apache.kafka.streams.kstream.{Named, SessionWindows, TimeWindows, Windowed, Suppressed => JSuppressed}
+import org.apache.kafka.streams.kstream.{
+  Named,
+  SessionWindows,
+  SlidingWindows,
+  Suppressed => JSuppressed,
+  TimeWindows,
+  Windowed
+}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.apache.kafka.streams.scala.utils.TestDriver
 import org.apache.kafka.streams.scala.{ByteArrayKeyValueStore, StreamsBuilder}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertTrue}
 import org.junit.jupiter.api.Test
-
 import java.time.Duration
+import java.time.Duration.ofMillis
+
 import scala.jdk.CollectionConverters._
 
+//noinspection ScalaDeprecation
 class KTableTest extends TestDriver {
 
   @Test
@@ -158,7 +167,7 @@ class KTableTest extends TestDriver {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
-    val window = TimeWindows.of(Duration.ofSeconds(1L))
+    val window = TimeWindows.ofSizeAndGrace(Duration.ofSeconds(1L), Duration.ofHours(24))
     val suppression = JSuppressed.untilTimeLimit[Windowed[String]](Duration.ofSeconds(2L), BufferConfig.unbounded())
 
     val table: KTable[Windowed[String], Long] = builder
@@ -212,11 +221,49 @@ class KTableTest extends TestDriver {
   }
 
   @Test
+  def testCorrectlyGroupByKeyWindowedBySlidingWindow(): Unit = {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+    val window = SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(1000L), ofMillis(1000L))
+    val suppression = JSuppressed.untilWindowCloses(BufferConfig.unbounded())
+
+    val table: KTable[Windowed[String], Long] = builder
+      .stream[String, String](sourceTopic)
+      .groupByKey
+      .windowedBy(window)
+      .count()
+      .suppress(suppression)
+
+    table.toStream((k, _) => s"${k.window().start()}:${k.window().end()}:${k.key()}").to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+    val testOutput = testDriver.createOutput[String, Long](sinkTopic)
+
+    {
+      // publish key=1 @ time 0 => count==1
+      testInput.pipeInput("1", "value1", 0L)
+      assertTrue(testOutput.isEmpty)
+    }
+    {
+      // move event time right past the grace period of the first window.
+      testInput.pipeInput("2", "value3", 5001L)
+      val record = testOutput.readKeyValue
+      assertEquals("0:1000:1", record.key)
+      assertEquals(1L, record.value)
+    }
+    assertTrue(testOutput.isEmpty)
+
+    testDriver.close()
+  }
+
+  @Test
   def testCorrectlySuppressResultsUsingSuppressedUntilWindowClosesByWindowed(): Unit = {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
     val sinkTopic = "sink"
-    val window = TimeWindows.of(Duration.ofSeconds(1L)).grace(Duration.ofSeconds(1L))
+    val window = TimeWindows.ofSizeAndGrace(Duration.ofSeconds(1L), Duration.ofSeconds(1L))
     val suppression = JSuppressed.untilWindowCloses(BufferConfig.unbounded())
 
     val table: KTable[Windowed[String], Long] = builder
@@ -275,7 +322,7 @@ class KTableTest extends TestDriver {
     val sourceTopic = "source"
     val sinkTopic = "sink"
     // Very similar to SuppressScenarioTest.shouldSupportFinalResultsForSessionWindows
-    val window = SessionWindows.`with`(Duration.ofMillis(5L)).grace(Duration.ofMillis(10L))
+    val window = SessionWindows.ofInactivityGapAndGrace(Duration.ofMillis(5L), Duration.ofMillis(10L))
     val suppression = JSuppressed.untilWindowCloses(BufferConfig.unbounded())
 
     val table: KTable[Windowed[String], Long] = builder
@@ -448,5 +495,43 @@ class KTableTest extends TestDriver {
     val joinNodeRight = builder.build().describe().subtopologies().asScala.toList(1).nodes().asScala.toList(7)
     assertTrue(joinNodeLeft.name().contains("my-name"))
     assertTrue(joinNodeRight.name().contains("my-name"))
+  }
+
+  @Test
+  def testMapValuesWithValueMapperWithMaterialized(): Unit = {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val stateStore = "store"
+    val materialized = Materialized.as[String, Long, ByteArrayKeyValueStore](stateStore)
+
+    val table = builder.stream[String, String](sourceTopic).toTable
+    table.mapValues(value => value.length.toLong, materialized)
+
+    val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+
+    testInput.pipeInput("1", "topic1value1")
+    assertEquals(12, testDriver.getKeyValueStore[String, Long](stateStore).get("1"))
+
+    testDriver.close()
+  }
+
+  @Test
+  def testMapValuesWithValueMapperWithKeyAndWithMaterialized(): Unit = {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val stateStore = "store"
+    val materialized = Materialized.as[String, Long, ByteArrayKeyValueStore](stateStore)
+
+    val table = builder.stream[String, String](sourceTopic).toTable
+    table.mapValues((key, value) => key.length + value.length.toLong, materialized)
+
+    val testDriver = createTestDriver(builder)
+    val testInput = testDriver.createInput[String, String](sourceTopic)
+
+    testInput.pipeInput("1", "topic1value1")
+    assertEquals(13, testDriver.getKeyValueStore[String, Long](stateStore).get("1"))
+
+    testDriver.close()
   }
 }

@@ -154,7 +154,7 @@ public class IncrementalCooperativeConnectProtocol {
                 .set(CONFIG_OFFSET_KEY_NAME, workerState.offset());
         // Not a big issue if we embed the protocol version with the assignment in the metadata
         Struct allocation = new Struct(ALLOCATION_V1)
-                .set(ALLOCATION_KEY_NAME, serializeAssignment(workerState.assignment()));
+                .set(ALLOCATION_KEY_NAME, serializeAssignment(workerState.assignment(), sessioned));
         Struct connectProtocolHeader = sessioned ? CONNECT_PROTOCOL_HEADER_V2 : CONNECT_PROTOCOL_HEADER_V1;
         ByteBuffer buffer = ByteBuffer.allocate(connectProtocolHeader.sizeOf()
                                                 + CONFIG_STATE_V1.sizeOf(configState)
@@ -230,15 +230,16 @@ public class IncrementalCooperativeConnectProtocol {
      *   ScheduledDelay     => Int32
      * </pre>
      */
-    public static ByteBuffer serializeAssignment(ExtendedAssignment assignment) {
+    public static ByteBuffer serializeAssignment(ExtendedAssignment assignment, boolean sessioned) {
         // comparison depends on reference equality for now
         if (assignment == null || ExtendedAssignment.empty().equals(assignment)) {
             return null;
         }
         Struct struct = assignment.toStruct();
-        ByteBuffer buffer = ByteBuffer.allocate(CONNECT_PROTOCOL_HEADER_V1.sizeOf()
+        Struct protocolHeader = sessioned ? CONNECT_PROTOCOL_HEADER_V2 : CONNECT_PROTOCOL_HEADER_V1;
+        ByteBuffer buffer = ByteBuffer.allocate(protocolHeader.sizeOf()
                                                 + ASSIGNMENT_V1.sizeOf(struct));
-        CONNECT_PROTOCOL_HEADER_V1.writeTo(buffer);
+        protocolHeader.writeTo(buffer);
         ASSIGNMENT_V1.write(buffer, struct);
         buffer.flip();
         return buffer;

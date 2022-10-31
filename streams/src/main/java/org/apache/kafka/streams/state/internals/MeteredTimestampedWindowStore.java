@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
@@ -47,11 +48,11 @@ class MeteredTimestampedWindowStore<K, V>
 
     @SuppressWarnings("unchecked")
     @Override
-    protected Serde<ValueAndTimestamp<V>> prepareValueSerde(final Serde<ValueAndTimestamp<V>> valueSerde, final Serde<?> contextKeySerde, final Serde<?> contextValueSerde) {
+    protected Serde<ValueAndTimestamp<V>> prepareValueSerde(final Serde<ValueAndTimestamp<V>> valueSerde, final SerdeGetter getter) {
         if (valueSerde == null) {
-            return new ValueAndTimestampSerde<>((Serde<V>) contextValueSerde);
+            return new ValueAndTimestampSerde<>((Serde<V>) getter.valueSerde());
         } else {
-            return super.prepareValueSerde(valueSerde, contextKeySerde, contextValueSerde);
+            return super.prepareValueSerde(valueSerde, getter);
         }
     }
 }

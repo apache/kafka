@@ -62,7 +62,7 @@ public class TimelineHashSetTest {
         assertTrue(set.retainAll(Arrays.asList("a", "b", "c")));
         assertFalse(set.retainAll(Arrays.asList("a", "b", "c")));
         assertFalse(set.removeAll(Arrays.asList("d")));
-        registry.createSnapshot(2);
+        registry.getOrCreateSnapshot(2);
         assertTrue(set.removeAll(Arrays.asList("c")));
         assertThat(TimelineHashMapTest.iteratorToList(set.iterator(2)),
             containsInAnyOrder("a", "b", "c"));
@@ -99,7 +99,7 @@ public class TimelineHashSetTest {
         assertTrue(set.containsAll(Arrays.asList("def", "jkl")));
         assertFalse(set.containsAll(Arrays.asList("abc", "def", "xyz")));
         assertTrue(set.removeAll(Arrays.asList("def", "ghi", "xyz")));
-        registry.createSnapshot(5);
+        registry.getOrCreateSnapshot(5);
         assertThat(TimelineHashMapTest.iteratorToList(set.iterator(5)),
             containsInAnyOrder("abc", "jkl"));
         assertThat(TimelineHashMapTest.iteratorToList(set.iterator()),

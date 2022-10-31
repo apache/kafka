@@ -31,7 +31,7 @@ import java.util.Objects;
  * be loaded in isolation, this plugin classloader delegates their loading to its parent. This makes
  * this classloader a child-first classloader.
  * <p>
- * This class is thread-safe.
+ * This class is thread-safe and parallel capable.
  */
 public class PluginClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(PluginClassLoader.class);
@@ -98,8 +98,7 @@ public class PluginClassLoader extends URLClassLoader {
     // base method is not. More on multithreaded classloaders in:
     // https://docs.oracle.com/javase/7/docs/technotes/guides/lang/cl-mt.html
     @Override
-    protected synchronized Class<?> loadClass(String name, boolean resolve)
-            throws ClassNotFoundException {
+    protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         synchronized (getClassLoadingLock(name)) {
             Class<?> klass = findLoadedClass(name);
             if (klass == null) {

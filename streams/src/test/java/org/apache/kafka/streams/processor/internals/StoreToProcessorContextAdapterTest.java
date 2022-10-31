@@ -58,12 +58,6 @@ public class StoreToProcessorContextAdapterTest {
         context.getStateStore("store");
     }
 
-    @SuppressWarnings("deprecation") // need to test deprecated code until removed
-    @Test(expected = UnsupportedOperationException.class)
-    public void shouldThrowOnSchedule() {
-        context.schedule(0, PunctuationType.WALL_CLOCK_TIME, punctuator);
-    }
-
     @Test(expected = UnsupportedOperationException.class)
     public void shouldThrowOnScheduleWithDuration() {
         context.schedule(Duration.ZERO, PunctuationType.WALL_CLOCK_TIME, punctuator);

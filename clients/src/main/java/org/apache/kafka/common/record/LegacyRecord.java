@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.common.record;
 
+import java.util.zip.CRC32;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Checksums;
-import org.apache.kafka.common.utils.Crc32;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataOutputStream;
@@ -106,7 +106,7 @@ public final class LegacyRecord {
      * Compute the checksum of the record from the record contents
      */
     public long computeChecksum() {
-        return Crc32.crc32(buffer, MAGIC_OFFSET, buffer.limit() - MAGIC_OFFSET);
+        return crc32(buffer, MAGIC_OFFSET, buffer.limit() - MAGIC_OFFSET);
     }
 
     /**
@@ -374,7 +374,7 @@ public final class LegacyRecord {
         buffer.putInt(recordPosition + keyOffset(magic), valueSize);
 
         // compute and fill the crc from the beginning of the message
-        long crc = Crc32.crc32(buffer, MAGIC_OFFSET, recordSize - MAGIC_OFFSET);
+        long crc = crc32(buffer, MAGIC_OFFSET, recordSize - MAGIC_OFFSET);
         ByteUtils.writeUnsignedInt(buffer, recordPosition + CRC_OFFSET, crc);
     }
 
@@ -513,11 +513,17 @@ public final class LegacyRecord {
         return computeChecksum(magic, attributes, timestamp, wrapNullable(key), wrapNullable(value));
     }
 
+    private static long crc32(ByteBuffer buffer, int offset, int size) {
+        CRC32 crc = new CRC32();
+        Checksums.update(crc, buffer, offset, size);
+        return crc.getValue();
+    }
+
     /**
      * Compute the checksum of the record from the attributes, key and value payloads
      */
     private static long computeChecksum(byte magic, byte attributes, long timestamp, ByteBuffer key, ByteBuffer value) {
-        Crc32 crc = new Crc32();
+        CRC32 crc = new CRC32();
         crc.update(magic);
         crc.update(attributes);
         if (magic > RecordBatch.MAGIC_VALUE_V0)

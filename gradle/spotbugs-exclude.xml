@@ -28,8 +28,10 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Disable warnings about mutable objects and the use of public fields.
             EI_EXPOSE_REP: May expose internal representation by returning reference to mutable object
             EI_EXPOSE_REP2: May expose internal representation by incorporating reference to mutable object
-            MS_PKGPROTECT: Field should be package protected -->
-        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2,MS_PKGPROTECT"/>
+            MS_PKGPROTECT: Field should be package protected
+            MS_EXPOSE_REP: Public static method may expose internal representation by returning array
+            EI_EXPOSE_STATIC_REP2: May expose internal static state by storing a mutable object into a static field -->
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2,MS_PKGPROTECT,EI_EXPOSE_STATIC_REP2,MS_EXPOSE_REP"/>
     </Match>
 
     <Match>
@@ -90,6 +92,8 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Bug pattern="MS_CANNOT_BE_FINAL"/>
             <Bug pattern="IC_INIT_CIRCULARITY"/>
             <Bug pattern="SE_NO_SUITABLE_CONSTRUCTOR"/>
+            <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+            <Bug pattern="SSD_DO_NOT_USE_INSTANCE_LOCK_ON_SHARED_STATIC_DATA"/>
         </Or>
     </Match>
 
@@ -97,6 +101,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     <Match>
         <Class name="org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream"/>
         <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+    </Match>
+
+    <!-- false positive, see https://github.com/spotbugs/spotbugs/issues/1001 -->
+    <Match>
+        <Class name="org.apache.kafka.common.internals.KafkaFutureImpl"/>
+        <Bug pattern="NP_NONNULL_PARAM_VIOLATION"/>
     </Match>
 
     <Match>
@@ -139,8 +149,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Unboxing to Int to make scalac happy makes spotBugs unhappy -->
-        <Class name="kafka.tools.ConsoleConsumer$ConsumerConfig"/>
+        <Or>
+            <!-- Unboxing to Int to make scalac happy makes spotBugs unhappy -->
+            <Class name="kafka.tools.ConsoleConsumer$ConsumerConfig"/>
+            <!-- Java's own Map#compute forces this pattern on us -->
+            <Class name="org.apache.kafka.streams.query.Position"/>
+        </Or>
         <Bug pattern="BX_UNBOXING_IMMEDIATELY_REBOXED"/>
     </Match>
 
@@ -155,6 +169,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
         <Source name="ControllerContext.scala"/>
         <Package name="kafka.controller"/>
+        <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
+    </Match>
+
+    <Match>
+        <!-- Uncallable anonymous methods are left behind after inlining by scalac 2.12, fixed in 2.13 -->
+        <Source name="LogConfig.scala"/>
+        <Package name="kafka.log"/>
         <Bug pattern="UMAC_UNCALLABLE_METHOD_OF_ANONYMOUS_CLASS"/>
     </Match>
 
@@ -244,6 +265,14 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Suppress warning about missing reflexive and symmetric properties of equal.
+             This equals method is used as a value filter for Jackson. -->
+        <Class name="org.apache.kafka.connect.runtime.rest.entities.PluginInfo$NoVersionFilter"/>
+        <Method name="equals"/>
+        <Bug pattern="EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS"/>
+    </Match>
+
+    <Match>
         <!-- Suppress some minor warnings about machine-generated code for benchmarking. -->
         <Package name="~org\.apache\.kafka\.jmh\..*\.jmh_generated"/>
     </Match>
@@ -262,7 +291,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Suppress warnings about ignoring the return value of await.
              This is done intentionally because we use other clues to determine
              if the wait was cut short. -->
-        <Class name="org.apache.kafka.connect.runtime.WorkerSourceTask"/>
+        <Class name="org.apache.kafka.connect.runtime.AbstractWorkerSourceTask"/>
         <Method name="execute"/>
         <Bug pattern="RV_RETURN_VALUE_IGNORED"/>
     </Match>
@@ -423,12 +452,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <Match>
         <Package name="org.apache.kafka.streams.scala"/>
-        <Source name="FunctionConversions.scala"/>
-        <Bug pattern="EQ_UNUSUAL"/>
-    </Match>
-
-    <Match>
-        <Package name="org.apache.kafka.streams.scala"/>
         <Source name="FunctionsCompatConversions.scala"/>
         <Bug pattern="EQ_UNUSUAL"/>
     </Match>
@@ -473,6 +496,11 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     <Match>
         <!-- Suppress warnings related to jmh generated code -->
         <Package name="org.apache.kafka.jmh.metadata.generated"/>
+    </Match>
+
+    <Match>
+        <Package name="org.apache.kafka.common.security.oauthbearer.secured" />
+        <Bug pattern="NM_SAME_SIMPLE_NAME_AS_SUPERCLASS"/>
     </Match>
 
 </FindBugsFilter>

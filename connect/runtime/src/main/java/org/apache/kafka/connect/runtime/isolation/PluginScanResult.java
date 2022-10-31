@@ -17,9 +17,10 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.config.provider.ConfigProvider;
-import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -30,28 +31,31 @@ import java.util.Collection;
 import java.util.List;
 
 public class PluginScanResult {
-    private final Collection<PluginDesc<Connector>> connectors;
+    private final Collection<PluginDesc<SinkConnector>> sinkConnectors;
+    private final Collection<PluginDesc<SourceConnector>> sourceConnectors;
     private final Collection<PluginDesc<Converter>> converters;
     private final Collection<PluginDesc<HeaderConverter>> headerConverters;
-    private final Collection<PluginDesc<Transformation>> transformations;
-    private final Collection<PluginDesc<Predicate>> predicates;
+    private final Collection<PluginDesc<Transformation<?>>> transformations;
+    private final Collection<PluginDesc<Predicate<?>>> predicates;
     private final Collection<PluginDesc<ConfigProvider>> configProviders;
     private final Collection<PluginDesc<ConnectRestExtension>> restExtensions;
     private final Collection<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies;
 
-    private final List<Collection> allPlugins;
+    private final List<Collection<?>> allPlugins;
 
     public PluginScanResult(
-            Collection<PluginDesc<Connector>> connectors,
+            Collection<PluginDesc<SinkConnector>> sinkConnectors,
+            Collection<PluginDesc<SourceConnector>> sourceConnectors,
             Collection<PluginDesc<Converter>> converters,
             Collection<PluginDesc<HeaderConverter>> headerConverters,
-            Collection<PluginDesc<Transformation>> transformations,
-            Collection<PluginDesc<Predicate>> predicates,
+            Collection<PluginDesc<Transformation<?>>> transformations,
+            Collection<PluginDesc<Predicate<?>>> predicates,
             Collection<PluginDesc<ConfigProvider>> configProviders,
             Collection<PluginDesc<ConnectRestExtension>> restExtensions,
             Collection<PluginDesc<ConnectorClientConfigOverridePolicy>> connectorClientConfigPolicies
     ) {
-        this.connectors = connectors;
+        this.sinkConnectors = sinkConnectors;
+        this.sourceConnectors = sourceConnectors;
         this.converters = converters;
         this.headerConverters = headerConverters;
         this.transformations = transformations;
@@ -60,12 +64,16 @@ public class PluginScanResult {
         this.restExtensions = restExtensions;
         this.connectorClientConfigPolicies = connectorClientConfigPolicies;
         this.allPlugins =
-            Arrays.asList(connectors, converters, headerConverters, transformations, configProviders,
+            Arrays.asList(sinkConnectors, sourceConnectors, converters, headerConverters, transformations, configProviders,
                           connectorClientConfigPolicies);
     }
 
-    public Collection<PluginDesc<Connector>> connectors() {
-        return connectors;
+    public Collection<PluginDesc<SinkConnector>> sinkConnectors() {
+        return sinkConnectors;
+    }
+
+    public Collection<PluginDesc<SourceConnector>> sourceConnectors() {
+        return sourceConnectors;
     }
 
     public Collection<PluginDesc<Converter>> converters() {
@@ -76,11 +84,11 @@ public class PluginScanResult {
         return headerConverters;
     }
 
-    public Collection<PluginDesc<Transformation>> transformations() {
+    public Collection<PluginDesc<Transformation<?>>> transformations() {
         return transformations;
     }
 
-    public Collection<PluginDesc<Predicate>> predicates() {
+    public Collection<PluginDesc<Predicate<?>>> predicates() {
         return predicates;
     }
 
@@ -98,7 +106,7 @@ public class PluginScanResult {
 
     public boolean isEmpty() {
         boolean isEmpty = true;
-        for (Collection plugins : allPlugins) {
+        for (Collection<?> plugins : allPlugins) {
             isEmpty = isEmpty && plugins.isEmpty();
         }
         return isEmpty;

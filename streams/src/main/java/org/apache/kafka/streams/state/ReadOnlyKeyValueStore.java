@@ -51,9 +51,10 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
      *
      * @param from The first key that could be in the range, where iteration starts from.
+     *             A null value indicates that the range starts with the first element in the store.
      * @param to   The last key that could be in the range, where iteration ends.
+     *             A null value indicates that the range ends with the last element in the store.
      * @return The iterator for this range, from smallest to largest bytes.
-     * @throws NullPointerException       If null is used for from or to.
      * @throws InvalidStateStoreException if the store is not initialized
      */
     KeyValueIterator<K, V> range(K from, K to);
@@ -65,9 +66,10 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
      *
      * @param from The first key that could be in the range, where iteration ends.
+     *             A null value indicates that the range starts with the first element in the store.
      * @param to   The last key that could be in the range, where iteration starts from.
+     *             A null value indicates that the range ends with the last element in the store.
      * @return The reverse iterator for this range, from largest to smallest key bytes.
-     * @throws NullPointerException       If null is used for from or to.
      * @throws InvalidStateStoreException if the store is not initialized
      */
     default KeyValueIterator<K, V> reverseRange(K from, K to) {

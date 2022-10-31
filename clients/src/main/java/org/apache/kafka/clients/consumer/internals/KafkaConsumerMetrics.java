@@ -21,6 +21,7 @@ import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 
 import java.util.concurrent.TimeUnit;
@@ -29,6 +30,8 @@ public class KafkaConsumerMetrics implements AutoCloseable {
     private final MetricName lastPollMetricName;
     private final Sensor timeBetweenPollSensor;
     private final Sensor pollIdleSensor;
+    private final Sensor committedSensor;
+    private final Sensor commitSyncSensor;
     private final Metrics metrics;
     private long lastPollMs;
     private long pollStartMs;
@@ -63,6 +66,26 @@ public class KafkaConsumerMetrics implements AutoCloseable {
                 metricGroupName,
                 "The average fraction of time the consumer's poll() is idle as opposed to waiting for the user code to process records."),
                 new Avg());
+
+        this.commitSyncSensor = metrics.sensor("commit-sync-time-ns-total");
+        this.commitSyncSensor.add(
+            metrics.metricName(
+                "commit-sync-time-ns-total",
+                metricGroupName,
+                "The total time the consumer has spent in commitSync in nanoseconds"
+            ),
+            new CumulativeSum()
+        );
+
+        this.committedSensor = metrics.sensor("committed-time-ns-total");
+        this.committedSensor.add(
+            metrics.metricName(
+                "committed-time-ns-total",
+                metricGroupName,
+                "The total time the consumer has spent in committed in nanoseconds"
+            ),
+            new CumulativeSum()
+        );
     }
 
     public void recordPollStart(long pollStartMs) {
@@ -78,10 +101,20 @@ public class KafkaConsumerMetrics implements AutoCloseable {
         this.pollIdleSensor.record(pollIdleRatio);
     }
 
+    public void recordCommitSync(long duration) {
+        this.commitSyncSensor.record(duration);
+    }
+
+    public void recordCommitted(long duration) {
+        this.committedSensor.record(duration);
+    }
+
     @Override
     public void close() {
         metrics.removeMetric(lastPollMetricName);
         metrics.removeSensor(timeBetweenPollSensor.name());
         metrics.removeSensor(pollIdleSensor.name());
+        metrics.removeSensor(commitSyncSensor.name());
+        metrics.removeSensor(committedSensor.name());
     }
 }

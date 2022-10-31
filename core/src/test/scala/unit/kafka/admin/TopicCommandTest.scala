@@ -16,15 +16,23 @@
  */
 package kafka.admin
 
-import kafka.admin.TopicCommand.{PartitionDescription, TopicCommandOptions}
+import kafka.admin.TopicCommand.{PartitionDescription, TopicCommandOptions, TopicService}
 import kafka.common.AdminCommandFailedException
 import kafka.utils.Exit
-import org.apache.kafka.clients.admin.PartitionReassignment
+import org.apache.kafka.clients.admin.{Admin, AdminClientTestUtils, CreatePartitionsOptions, CreateTopicsOptions, DeleteTopicsOptions, NewPartitions, NewTopic, PartitionReassignment, TopicDescription}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.TopicPartitionInfo
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
+import org.apache.kafka.common.protocol.Errors
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatcher
+import org.mockito.ArgumentMatchers.{any, argThat, eq => eqThat}
+import org.mockito.Mockito.{mock, times, verify, when}
 
+import java.util.{Collection, Collections, Optional}
+import scala.collection.Seq
+import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 
 class TopicCommandTest {
@@ -82,6 +90,26 @@ class TopicCommandTest {
   }
 
   @Test
+  def testCreateWithPartitionCountWithoutReplicationFactorShouldSucceed(): Unit = {
+    val opts = new TopicCommandOptions(
+      Array("--bootstrap-server", brokerList,
+        "--create",
+        "--partitions", "2",
+        "--topic", topicName))
+    opts.checkArgs()
+  }
+
+  @Test
+  def testCreateWithReplicationFactorWithoutPartitionCountShouldSucceed(): Unit = {
+    val opts = new TopicCommandOptions(
+      Array("--bootstrap-server", brokerList,
+        "--create",
+        "--replication-factor", "3",
+        "--topic", topicName))
+    opts.checkArgs()
+  }
+
+  @Test
   def testCreateWithAssignmentAndPartitionCount(): Unit = {
     assertCheckArgsExitCode(1,
       new TopicCommandOptions(
@@ -89,7 +117,7 @@ class TopicCommandTest {
           "--create",
           "--replica-assignment", "3:0,5:1",
           "--partitions", "2",
-          "--topic", "testTopic")))
+          "--topic", topicName)))
   }
 
   @Test
@@ -100,8 +128,27 @@ class TopicCommandTest {
           "--create",
           "--replica-assignment", "3:0,5:1",
           "--replication-factor", "2",
-          "--topic", "testTopic")))
+          "--topic", topicName)))
   }
+
+  @Test
+  def testCreateWithoutPartitionCountAndReplicationFactorShouldSucceed(): Unit = {
+    val opts = new TopicCommandOptions(
+      Array("--bootstrap-server", brokerList,
+        "--create",
+        "--topic", topicName))
+    opts.checkArgs()
+  }
+
+  @Test
+  def testDescribeShouldSucceed(): Unit = {
+    val opts = new TopicCommandOptions(
+      Array("--bootstrap-server", brokerList,
+        "--describe",
+        "--topic", topicName))
+    opts.checkArgs()
+  }
+
 
   @Test
   def testParseAssignmentDuplicateEntries(): Unit = {
@@ -118,6 +165,74 @@ class TopicCommandTest {
     val actualAssignment = TopicCommand.parseReplicaAssignment("5:4,3:2,1:0")
     val expectedAssignment = Map(0 -> List(5, 4), 1 -> List(3, 2), 2 -> List(1, 0))
     assertEquals(expectedAssignment, actualAssignment)
+  }
+
+  @Test
+  def testCreateTopicDoesNotRetryThrottlingQuotaExceededException(): Unit = {
+    val adminClient = mock(classOf[Admin])
+    val topicService = TopicService(adminClient)
+
+    val result = AdminClientTestUtils.createTopicsResult(topicName, Errors.THROTTLING_QUOTA_EXCEEDED.exception())
+    when(adminClient.createTopics(any(), any())).thenReturn(result)
+
+    assertThrows(classOf[ThrottlingQuotaExceededException],
+      () => topicService.createTopic(new TopicCommandOptions(Array("--topic", topicName))))
+
+    val expectedNewTopic = new NewTopic(topicName, Optional.empty[Integer](), Optional.empty[java.lang.Short]())
+      .configs(Map.empty[String, String].asJava)
+
+    verify(adminClient, times(1)).createTopics(
+      eqThat(Set(expectedNewTopic).asJava),
+      argThat((_.shouldRetryOnQuotaViolation() == false): ArgumentMatcher[CreateTopicsOptions])
+    )
+  }
+
+  @Test
+  def testDeleteTopicDoesNotRetryThrottlingQuotaExceededException(): Unit = {
+    val adminClient = mock(classOf[Admin])
+    val topicService = TopicService(adminClient)
+
+    val listResult = AdminClientTestUtils.listTopicsResult(topicName)
+    when(adminClient.listTopics(any())).thenReturn(listResult)
+
+    val result = AdminClientTestUtils.deleteTopicsResult(topicName, Errors.THROTTLING_QUOTA_EXCEEDED.exception())
+    when(adminClient.deleteTopics(any[Collection[String]](), any())).thenReturn(result)
+
+    val exception = assertThrows(classOf[ExecutionException],
+      () => topicService.deleteTopic(new TopicCommandOptions(Array("--topic", topicName))))
+    assertTrue(exception.getCause.isInstanceOf[ThrottlingQuotaExceededException])
+
+    verify(adminClient, times(1)).deleteTopics(
+      eqThat(Seq(topicName).asJavaCollection),
+      argThat((_.shouldRetryOnQuotaViolation() == false): ArgumentMatcher[DeleteTopicsOptions])
+    )
+  }
+
+  @Test
+  def testCreatePartitionsDoesNotRetryThrottlingQuotaExceededException(): Unit = {
+    val adminClient = mock(classOf[Admin])
+    val topicService = TopicService(adminClient)
+
+    val listResult = AdminClientTestUtils.listTopicsResult(topicName)
+    when(adminClient.listTopics(any())).thenReturn(listResult)
+
+    val topicPartitionInfo = new TopicPartitionInfo(0, new Node(0, "", 0),
+      Collections.emptyList(), Collections.emptyList())
+    val describeResult = AdminClientTestUtils.describeTopicsResult(topicName, new TopicDescription(
+      topicName, false, Collections.singletonList(topicPartitionInfo)))
+    when(adminClient.describeTopics(any(classOf[java.util.Collection[String]]))).thenReturn(describeResult)
+
+    val result = AdminClientTestUtils.createPartitionsResult(topicName, Errors.THROTTLING_QUOTA_EXCEEDED.exception())
+    when(adminClient.createPartitions(any(), any())).thenReturn(result)
+
+    val exception = assertThrows(classOf[ExecutionException],
+      () => topicService.alterTopic(new TopicCommandOptions(Array("--topic", topicName, "--partitions", "3"))))
+    assertTrue(exception.getCause.isInstanceOf[ThrottlingQuotaExceededException])
+
+    verify(adminClient, times(1)).createPartitions(
+      argThat((_.get(topicName).totalCount() == 3): ArgumentMatcher[java.util.Map[String, NewPartitions]]),
+      argThat((_.shouldRetryOnQuotaViolation() == false): ArgumentMatcher[CreatePartitionsOptions])
+    )
   }
 
   private[this] def assertCheckArgsExitCode(expected: Int, options: TopicCommandOptions): Unit = {

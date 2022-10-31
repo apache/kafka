@@ -12,7 +12,6 @@
   */
 package kafka.api
 
-import java.io.File
 import java.util
 import java.util.Properties
 
@@ -28,7 +27,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.authorizer.Authorizer
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
@@ -83,7 +82,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
 
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
 
-  override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
 
   override def configureSecurityBeforeServersStart(): Unit = {
     val authorizer = CoreUtils.createObject[Authorizer](classOf[AclAuthorizer].getName)
@@ -107,9 +106,9 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(Seq("GSSAPI"), Some("GSSAPI"), Both, JaasTestUtils.KafkaServerContextName))
-    super.setUp()
+    super.setUp(testInfo)
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
     client = Admin.create(createConfig())
   }
@@ -123,7 +122,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
 
   private def createConfig(): Properties = {
     val adminClientConfig = new Properties()
-    adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     adminClientConfig.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
     val securityProps: util.Map[Object, Object] =
       TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
@@ -183,13 +182,13 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
     createTopic(Topic2)
 
     // test without includeAuthorizedOperations flag
-    var describeTopicsResult = client.describeTopics(Set(Topic1, Topic2).asJava).all.get()
+    var describeTopicsResult = client.describeTopics(Set(Topic1, Topic2).asJava).allTopicNames.get()
     assertNull(describeTopicsResult.get(Topic1).authorizedOperations)
     assertNull(describeTopicsResult.get(Topic2).authorizedOperations)
 
     // test with includeAuthorizedOperations flag
     describeTopicsResult = client.describeTopics(Set(Topic1, Topic2).asJava,
-      new DescribeTopicsOptions().includeAuthorizedOperations(true)).all.get()
+      new DescribeTopicsOptions().includeAuthorizedOperations(true)).allTopicNames.get()
     assertEquals(Set(AclOperation.DESCRIBE), describeTopicsResult.get(Topic1).authorizedOperations().asScala.toSet)
     assertEquals(Set(AclOperation.DESCRIBE), describeTopicsResult.get(Topic2).authorizedOperations().asScala.toSet)
 
@@ -201,7 +200,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
     val expectedOperations = AclEntry.supportedOperations(ResourceType.TOPIC).asJava
 
     describeTopicsResult = client.describeTopics(Set(Topic1, Topic2).asJava,
-      new DescribeTopicsOptions().includeAuthorizedOperations(true)).all.get()
+      new DescribeTopicsOptions().includeAuthorizedOperations(true)).allTopicNames.get()
     assertEquals(expectedOperations, describeTopicsResult.get(Topic1).authorizedOperations())
     assertEquals(Set(AclOperation.DESCRIBE, AclOperation.DELETE),
       describeTopicsResult.get(Topic2).authorizedOperations().asScala.toSet)

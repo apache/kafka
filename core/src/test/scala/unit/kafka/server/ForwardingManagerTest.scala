@@ -207,7 +207,7 @@ class ForwardingManagerTest {
       "clientId",
       correlationId
     )
-    val buffer = RequestTestUtils.serializeRequestWithHeader(header, body)
+    val buffer = body.serializeWithHeader(header)
 
     // Fast-forward buffer to start of the request as `RequestChannel.Request` expects
     RequestHeader.parse(buffer)

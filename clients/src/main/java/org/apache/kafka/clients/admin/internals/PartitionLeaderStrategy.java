@@ -153,7 +153,6 @@ public class PartitionLeaderStrategy implements AdminApiLookupStrategy<TopicPart
                 continue;
             }
 
-
             for (MetadataResponseData.MetadataResponsePartition partitionMetadata : topicMetadata.partitions()) {
                 TopicPartition topicPartition = new TopicPartition(topic, partitionMetadata.partitionIndex());
                 Errors partitionError = Errors.forCode(partitionMetadata.errorCode());

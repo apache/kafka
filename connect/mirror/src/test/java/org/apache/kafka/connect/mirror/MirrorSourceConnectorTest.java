@@ -36,7 +36,11 @@ import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
@@ -56,7 +60,7 @@ public class MirrorSourceConnectorTest {
 
     @Test
     public void testReplicatesHeartbeatsByDefault() {
-        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"), 
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
             new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
         assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
         assertTrue(connector.shouldReplicateTopic("us-west.heartbeats"), "should replicate upstream heartbeats");
@@ -77,8 +81,30 @@ public class MirrorSourceConnectorTest {
         assertFalse(connector.shouldReplicateTopic("target.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.source.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("source.target.topic1"), "should not allow cycles");
+        assertFalse(connector.shouldReplicateTopic("target.source.target.topic1"), "should not allow cycles");
+        assertFalse(connector.shouldReplicateTopic("source.target.source.topic1"), "should not allow cycles");
         assertTrue(connector.shouldReplicateTopic("topic1"), "should allow anything else");
         assertTrue(connector.shouldReplicateTopic("source.topic1"), "should allow anything else");
+    }
+
+    @Test
+    public void testIdentityReplication() {
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+            new IdentityReplicationPolicy(), x -> true, x -> true);
+        assertTrue(connector.shouldReplicateTopic("target.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("target.source.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("source.target.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("target.source.target.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("source.target.source.topic1"), "should allow cycles");
+        assertTrue(connector.shouldReplicateTopic("topic1"), "should allow normal topics");
+        assertTrue(connector.shouldReplicateTopic("othersource.topic1"), "should allow normal topics");
+        assertFalse(connector.shouldReplicateTopic("target.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("target.source.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("source.target.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("target.source.target.heartbeats"), "should not allow heartbeat cycles");
+        assertFalse(connector.shouldReplicateTopic("source.target.source.heartbeats"), "should not allow heartbeat cycles");
+        assertTrue(connector.shouldReplicateTopic("heartbeats"), "should allow heartbeat topics");
+        assertTrue(connector.shouldReplicateTopic("othersource.heartbeats"), "should allow heartbeat topics");
     }
 
     @Test
@@ -114,7 +140,7 @@ public class MirrorSourceConnectorTest {
         assertEquals(processedDenyAllAclBinding.entry().operation(), AclOperation.ALL, "should not change ALL");
         assertEquals(processedDenyAllAclBinding.entry().permissionType(), AclPermissionType.DENY, "should not change DENY");
     }
-    
+
     @Test
     public void testConfigPropertyFiltering() {
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
@@ -128,6 +154,49 @@ public class MirrorSourceConnectorTest {
             .anyMatch(x -> x.name().equals("name-1")), "should replicate properties");
         assertFalse(targetConfig.entries().stream()
             .anyMatch(x -> x.name().equals("min.insync.replicas")), "should not replicate excluded properties");
+    }
+
+    @Test
+    public void testNewTopicConfigs() throws Exception {
+        Map<String, Object> filterConfig = new HashMap<>();
+        filterConfig.put(DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG, "follower\\.replication\\.throttled\\.replicas, "
+                + "leader\\.replication\\.throttled\\.replicas, "
+                + "message\\.timestamp\\.difference\\.max\\.ms, "
+                + "message\\.timestamp\\.type, "
+                + "unclean\\.leader\\.election\\.enable, "
+                + "min\\.insync\\.replicas,"
+                + "exclude_param.*");
+        DefaultConfigPropertyFilter filter = new DefaultConfigPropertyFilter();
+        filter.configure(filterConfig);
+
+        MirrorSourceConnector connector = spy(new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), x -> true, filter));
+
+        final String topic = "testtopic";
+        List<ConfigEntry> entries = new ArrayList<>();
+        entries.add(new ConfigEntry("name-1", "value-1"));
+        entries.add(new ConfigEntry("exclude_param.param1", "value-param1"));
+        entries.add(new ConfigEntry("min.insync.replicas", "2"));
+        Config config = new Config(entries);
+        doReturn(Collections.singletonMap(topic, config)).when(connector).describeTopicConfigs(any());
+        doAnswer(invocation -> {
+            Map<String, NewTopic> newTopics = invocation.getArgument(0);
+            assertNotNull(newTopics.get("source." + topic));
+            Map<String, String> targetConfig = newTopics.get("source." + topic).configs();
+
+            // property 'name-1' isn't defined in the exclude filter -> should be replicated
+            assertNotNull(targetConfig.get("name-1"), "should replicate properties");
+
+            // this property is in default list, just double check it:
+            String prop1 = "min.insync.replicas";
+            assertNull(targetConfig.get(prop1), "should not replicate excluded properties " + prop1);
+            // this property is only in exclude filter custom parameter, also tests regex on the way:
+            String prop2 = "exclude_param.param1";
+            assertNull(targetConfig.get(prop2), "should not replicate excluded properties " + prop2);
+            return null;
+        }).when(connector).createNewTopics(any());
+        connector.createNewTopics(Collections.singleton(topic), Collections.singletonMap(topic, 1L));
+        verify(connector).createNewTopics(any(), any());
     }
 
     @Test
@@ -167,13 +236,13 @@ public class MirrorSourceConnectorTest {
         // t3 -> [t0p2, t0p5, t1p0, t2p1]
 
         Map<String, String> t1 = output.get(0);
-        assertEquals("t0-0,t0-3,t0-6,t1-1", t1.get(TASK_TOPIC_PARTITIONS));
+        assertEquals("t0-0,t0-3,t0-6,t1-1", t1.get(TASK_TOPIC_PARTITIONS), "Config for t1 is incorrect");
 
         Map<String, String> t2 = output.get(1);
-        assertEquals("t0-1,t0-4,t0-7,t2-0", t2.get(TASK_TOPIC_PARTITIONS));
+        assertEquals("t0-1,t0-4,t0-7,t2-0", t2.get(TASK_TOPIC_PARTITIONS), "Config for t2 is incorrect");
 
         Map<String, String> t3 = output.get(2);
-        assertEquals("t0-2,t0-5,t1-0,t2-1", t3.get(TASK_TOPIC_PARTITIONS));
+        assertEquals("t0-2,t0-5,t1-0,t2-1", t3.get(TASK_TOPIC_PARTITIONS), "Config for t3 is incorrect");
     }
 
     @Test
@@ -201,7 +270,7 @@ public class MirrorSourceConnectorTest {
         Map<String, Long> expectedPartitionCounts = new HashMap<>();
         expectedPartitionCounts.put("source.topic", 1L);
         Map<String, String> configMap = MirrorSourceConnector.configToMap(topicConfig);
-        assertEquals(2, configMap.size());
+        assertEquals(2, configMap.size(), "configMap has incorrect size");
 
         Map<String, NewTopic> expectedNewTopics = new HashMap<>();
         expectedNewTopics.put("source.topic", new NewTopic("source.topic", 1, (short) 0).configs(configMap));
@@ -250,5 +319,18 @@ public class MirrorSourceConnectorTest {
         // when partitions are added to the source cluster, reconfiguration is triggered
         connector.refreshTopicPartitions();
         verify(connector, times(1)).computeAndCreateTopicPartitions();
+    }
+
+    @Test
+    public void testIsCycleWithNullUpstreamTopic() {
+        class CustomReplicationPolicy extends DefaultReplicationPolicy {
+            @Override
+            public String upstreamTopic(String topic) {
+                return null;
+            }
+        }
+        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+                new CustomReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
+        assertDoesNotThrow(() -> connector.isCycle(".b"));
     }
 }

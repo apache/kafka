@@ -179,11 +179,7 @@ public class TimelineHashMap<K, V>
 
     @Override
     public void clear() {
-        Iterator<TimelineHashMapEntry<K, V>> iter = snapshottableIterator(SnapshottableHashTable.LATEST_EPOCH);
-        while (iter.hasNext()) {
-            iter.next();
-            iter.remove();
-        }
+        reset();
     }
 
     final class KeySet extends AbstractSet<K> {

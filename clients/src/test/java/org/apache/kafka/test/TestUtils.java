@@ -34,10 +34,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -49,6 +49,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Random;
@@ -141,14 +142,31 @@ public class TestUtils {
     }
 
     /**
+     * Create an empty file in the default temporary-file directory, using the given prefix and suffix
+     * to generate its name.
+     * @throws IOException
+     */
+    public static File tempFile(final String prefix, final String suffix) throws IOException {
+        final File file = Files.createTempFile(prefix, suffix).toFile();
+        file.deleteOnExit();
+
+        Exit.addShutdownHook("delete-temp-file-shutdown-hook", () -> {
+            try {
+                Utils.delete(file);
+            } catch (IOException e) {
+                log.error("Error deleting {}", file.getAbsolutePath(), e);
+            }
+        });
+
+        return file;
+    }
+
+    /**
      * Create an empty file in the default temporary-file directory, using `kafka` as the prefix and `tmp` as the
      * suffix to generate its name.
      */
     public static File tempFile() throws IOException {
-        final File file = File.createTempFile("kafka", ".tmp");
-        file.deleteOnExit();
-
-        return file;
+        return tempFile("kafka", ".tmp");
     }
 
     /**
@@ -157,10 +175,7 @@ public class TestUtils {
      */
     public static File tempFile(final String contents) throws IOException {
         final File file = tempFile();
-        final FileWriter writer = new FileWriter(file);
-        writer.write(contents);
-        writer.close();
-
+        Files.write(file.toPath(), contents.getBytes(StandardCharsets.UTF_8));
         return file;
     }
 
@@ -297,7 +312,7 @@ public class TestUtils {
      * avoid transient failures due to slow or overloaded machines.
      */
     public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, Supplier<String> conditionDetailsSupplier) throws InterruptedException {
-        waitForCondition(testCondition, DEFAULT_POLL_INTERVAL_MS, maxWaitMs, conditionDetailsSupplier);
+        waitForCondition(testCondition, maxWaitMs, DEFAULT_POLL_INTERVAL_MS, conditionDetailsSupplier);
     }
 
     /**
@@ -309,11 +324,11 @@ public class TestUtils {
      */
     public static void waitForCondition(
         final TestCondition testCondition,
-        final long pollIntervalMs,
         final long maxWaitMs,
+        final long pollIntervalMs,
         Supplier<String> conditionDetailsSupplier
     ) throws InterruptedException {
-        retryOnExceptionWithTimeout(pollIntervalMs, maxWaitMs, () -> {
+        retryOnExceptionWithTimeout(maxWaitMs, pollIntervalMs, () -> {
             String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
             String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
             assertTrue(testCondition.conditionMet(),
@@ -332,7 +347,7 @@ public class TestUtils {
      */
     public static void retryOnExceptionWithTimeout(final long timeoutMs,
                                                    final ValuelessCallable runnable) throws InterruptedException {
-        retryOnExceptionWithTimeout(DEFAULT_POLL_INTERVAL_MS, timeoutMs, runnable);
+        retryOnExceptionWithTimeout(timeoutMs, DEFAULT_POLL_INTERVAL_MS, runnable);
     }
 
     /**
@@ -344,7 +359,7 @@ public class TestUtils {
      * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
      */
     public static void retryOnExceptionWithTimeout(final ValuelessCallable runnable) throws InterruptedException {
-        retryOnExceptionWithTimeout(DEFAULT_POLL_INTERVAL_MS, DEFAULT_MAX_WAIT_MS, runnable);
+        retryOnExceptionWithTimeout(DEFAULT_MAX_WAIT_MS, DEFAULT_POLL_INTERVAL_MS, runnable);
     }
 
     /**
@@ -352,13 +367,13 @@ public class TestUtils {
      * {@link AssertionError}s, or for the given timeout to expire. If the timeout expires then the
      * last exception or assertion failure will be thrown thus providing context for the failure.
      *
-     * @param pollIntervalMs the interval in milliseconds to wait between invoking {@code runnable}.
      * @param timeoutMs the total time in milliseconds to wait for {@code runnable} to complete successfully.
+     * @param pollIntervalMs the interval in milliseconds to wait between invoking {@code runnable}.
      * @param runnable the code to attempt to execute successfully.
      * @throws InterruptedException if the current thread is interrupted while waiting for {@code runnable} to complete successfully.
      */
-    public static void retryOnExceptionWithTimeout(final long pollIntervalMs,
-                                                   final long timeoutMs,
+    public static void retryOnExceptionWithTimeout(final long timeoutMs,
+                                                   final long pollIntervalMs,
                                                    final ValuelessCallable runnable) throws InterruptedException {
         final long expectedEnd = System.currentTimeMillis() + timeoutMs;
 
@@ -534,5 +549,45 @@ public class TestUtils {
         Field field = obj.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(obj, value);
+    }
+
+    /**
+     * Returns true if both iterators have same elements in the same order.
+     *
+     * @param iterator1 first iterator.
+     * @param iterator2 second iterator.
+     * @param <T>       type of element in the iterators.
+     */
+    public static <T> boolean sameElementsWithOrder(Iterator<T> iterator1,
+                                                    Iterator<T> iterator2) {
+        while (iterator1.hasNext()) {
+            if (!iterator2.hasNext()) {
+                return false;
+            }
+
+            if (!Objects.equals(iterator1.next(), iterator2.next())) {
+                return false;
+            }
+        }
+
+        return !iterator2.hasNext();
+    }
+
+    /**
+     * Returns true if both the iterators have same set of elements irrespective of order and duplicates.
+     *
+     * @param iterator1 first iterator.
+     * @param iterator2 second iterator.
+     * @param <T>       type of element in the iterators.
+     */
+    public static <T> boolean sameElementsWithoutOrder(Iterator<T> iterator1,
+                                                       Iterator<T> iterator2) {
+        // Check both the iterators have the same set of elements irrespective of order and duplicates.
+        Set<T> allSegmentsSet = new HashSet<>();
+        iterator1.forEachRemaining(allSegmentsSet::add);
+        Set<T> expectedSegmentsSet = new HashSet<>();
+        iterator2.forEachRemaining(expectedSegmentsSet::add);
+
+        return allSegmentsSet.equals(expectedSegmentsSet);
     }
 }

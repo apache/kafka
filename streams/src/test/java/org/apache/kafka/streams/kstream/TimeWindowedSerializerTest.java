@@ -16,32 +16,27 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsConfig;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class TimeWindowedSerializerTest {
-    private final TimeWindowedSerializer<?> timeWindowedSerializer = new TimeWindowedSerializer<>();
+    private final TimeWindowedSerializer<?> timeWindowedSerializer = new TimeWindowedSerializer<>(Serdes.String().serializer());
     private final Map<String, String> props = new HashMap<>();
 
-    @Before
-    public void setUp() {
-        props.put(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class.getName());
-        props.put(StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS, Serdes.ByteArraySerde.class.getName());
-    }
-
     @Test
-    public void testWindowedKeySerializerNoArgConstructors() {
+    public void testTimeWindowedSerializerConstructor() {
         timeWindowedSerializer.configure(props, true);
         final Serializer<?> inner = timeWindowedSerializer.innerSerializer();
         assertNotNull("Inner serializer should be not null", inner);
@@ -49,10 +44,29 @@ public class TimeWindowedSerializerTest {
     }
 
     @Test
-    public void testWindowedValueSerializerNoArgConstructors() {
-        timeWindowedSerializer.configure(props, false);
-        final Serializer<?> inner = timeWindowedSerializer.innerSerializer();
-        assertNotNull("Inner serializer should be not null", inner);
-        assertTrue("Inner serializer type should be ByteArraySerializer", inner instanceof ByteArraySerializer);
+    public void shouldSetWindowedInnerClassSerialiserThroughConfig() {
+        props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, Serdes.ByteArraySerde.class.getName());
+        final TimeWindowedSerializer<?> serializer = new TimeWindowedSerializer<>();
+        serializer.configure(props, false);
+        assertTrue(serializer.innerSerializer() instanceof ByteArraySerializer);
     }
+
+    @Test
+    public void shouldThrowErrorIfWindowedInnerClassSerialiserIsNotSet() {
+        final TimeWindowedSerializer<?> serializer = new TimeWindowedSerializer<>();
+        assertThrows(IllegalArgumentException.class, () -> serializer.configure(props, false));
+    }
+
+    @Test
+    public void shouldThrowErrorIfWindowedInnerClassSerialisersConflictInConstructorAndConfig() {
+        props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, Serdes.ByteArraySerde.class.getName());
+        assertThrows(IllegalArgumentException.class, () -> timeWindowedSerializer.configure(props, false));
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionWhenInvalidWindowedInnerClassSerialiserSupplied() {
+        props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, "some.non.existent.class");
+        assertThrows(ConfigException.class, () -> timeWindowedSerializer.configure(props, false));
+    }
+
 }

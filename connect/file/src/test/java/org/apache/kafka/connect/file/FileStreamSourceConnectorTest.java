@@ -16,36 +16,34 @@
  */
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.ConnectorContext;
-import org.easymock.EasyMock;
-import org.easymock.EasyMockSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class FileStreamSourceConnectorTest extends EasyMockSupport {
+public class FileStreamSourceConnectorTest {
 
     private static final String SINGLE_TOPIC = "test";
-    private static final String MULTIPLE_TOPICS = "test1,test2";
     private static final String FILENAME = "/somefilename";
 
     private FileStreamSourceConnector connector;
-    private ConnectorContext ctx;
     private Map<String, String> sourceProperties;
 
     @BeforeEach
     public void setup() {
         connector = new FileStreamSourceConnector();
-        ctx = createMock(ConnectorContext.class);
+        ConnectorContext ctx = mock(ConnectorContext.class);
         connector.initialize(ctx);
 
         sourceProperties = new HashMap<>();
@@ -55,18 +53,14 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
 
     @Test
     public void testConnectorConfigValidation() {
-        replayAll();
         List<ConfigValue> configValues = connector.config().validate(sourceProperties);
         for (ConfigValue val : configValues) {
             assertEquals(0, val.errorMessages().size(), "Config property errors: " + val.errorMessages());
         }
-        verifyAll();
     }
 
     @Test
     public void testSourceTasks() {
-        replayAll();
-
         connector.start(sourceProperties);
         List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
         assertEquals(1, taskConfigs.size());
@@ -82,55 +76,56 @@ public class FileStreamSourceConnectorTest extends EasyMockSupport {
                 taskConfigs.get(0).get(FileStreamSourceConnector.FILE_CONFIG));
         assertEquals(SINGLE_TOPIC,
                 taskConfigs.get(0).get(FileStreamSourceConnector.TOPIC_CONFIG));
-
-        verifyAll();
     }
 
     @Test
     public void testSourceTasksStdin() {
-        EasyMock.replay(ctx);
-
         sourceProperties.remove(FileStreamSourceConnector.FILE_CONFIG);
         connector.start(sourceProperties);
         List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
         assertEquals(1, taskConfigs.size());
         assertNull(taskConfigs.get(0).get(FileStreamSourceConnector.FILE_CONFIG));
-
-        EasyMock.verify(ctx);
-    }
-
-    @Test
-    public void testMultipleSourcesInvalid() {
-        sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, MULTIPLE_TOPICS);
-        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
     }
 
     @Test
     public void testTaskClass() {
-        EasyMock.replay(ctx);
-
         connector.start(sourceProperties);
         assertEquals(FileStreamSourceTask.class, connector.taskClass());
+    }
 
-        EasyMock.verify(ctx);
+    @Test
+    public void testConnectorConfigsPropagateToTaskConfigs() {
+        // This is required so that updates in transforms/converters/clients configs get reflected
+        // in tasks without manual restarts of the tasks (see https://issues.apache.org/jira/browse/KAFKA-13809)
+        sourceProperties.put("transforms", "insert");
+        connector.start(sourceProperties);
+        List<Map<String, String>> taskConfigs = connector.taskConfigs(1);
+        assertEquals(1, taskConfigs.size());
+        assertEquals("insert", taskConfigs.get(0).get("transforms"));
+    }
+
+    @Test
+    public void testValidConfigsAndDefaults() {
+        AbstractConfig config = new AbstractConfig(FileStreamSourceConnector.CONFIG_DEF, sourceProperties);
+        assertEquals(SINGLE_TOPIC, config.getString(FileStreamSourceConnector.TOPIC_CONFIG));
+        assertEquals(FileStreamSourceConnector.DEFAULT_TASK_BATCH_SIZE, config.getInt(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG));
     }
 
     @Test
     public void testMissingTopic() {
         sourceProperties.remove(FileStreamSourceConnector.TOPIC_CONFIG);
-        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
+        assertThrows(ConfigException.class, () -> new AbstractConfig(FileStreamSourceConnector.CONFIG_DEF, sourceProperties));
     }
 
     @Test
     public void testBlankTopic() {
-        // Because of trimming this tests is same as testing for empty string.
-        sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, "     ");
-        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
+        sourceProperties.put(FileStreamSourceConnector.TOPIC_CONFIG, "   ");
+        assertThrows(ConfigException.class, () -> new AbstractConfig(FileStreamSourceConnector.CONFIG_DEF, sourceProperties));
     }
 
     @Test
     public void testInvalidBatchSize() {
         sourceProperties.put(FileStreamSourceConnector.TASK_BATCH_SIZE_CONFIG, "abcd");
-        assertThrows(ConfigException.class, () -> connector.start(sourceProperties));
+        assertThrows(ConfigException.class, () -> new AbstractConfig(FileStreamSourceConnector.CONFIG_DEF, sourceProperties));
     }
 }

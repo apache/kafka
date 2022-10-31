@@ -92,8 +92,14 @@ public class RequestHeader implements AbstractRequestResponse {
             short apiVersion = buffer.getShort();
             short headerVersion = ApiKeys.forId(apiKey).requestHeaderVersion(apiVersion);
             buffer.position(position);
-            return new RequestHeader(new RequestHeaderData(
-                new ByteBufferAccessor(buffer), headerVersion), headerVersion);
+            RequestHeaderData headerData = new RequestHeaderData(
+                new ByteBufferAccessor(buffer), headerVersion);
+            // Due to a quirk in the protocol, client ID is marked as nullable.
+            // However, we treat a null client ID as equivalent to an empty client ID.
+            if (headerData.clientId() == null) {
+                headerData.setClientId("");
+            }
+            return new RequestHeader(headerData, headerVersion);
         } catch (UnsupportedVersionException e) {
             throw new InvalidRequestException("Unknown API key " + apiKey, e);
         } catch (Throwable ex) {

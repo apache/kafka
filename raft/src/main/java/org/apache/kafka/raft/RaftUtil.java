@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
@@ -54,6 +55,7 @@ public class RaftUtil {
 
     public static FetchRequestData singletonFetchRequest(
         TopicPartition topicPartition,
+        Uuid topicId,
         Consumer<FetchRequestData.FetchPartition> partitionConsumer
     ) {
         FetchRequestData.FetchPartition fetchPartition =
@@ -64,6 +66,7 @@ public class RaftUtil {
         FetchRequestData.FetchTopic fetchTopic =
             new FetchRequestData.FetchTopic()
                 .setTopic(topicPartition.topic())
+                .setTopicId(topicId)
                 .setPartitions(singletonList(fetchPartition));
 
         return new FetchRequestData()
@@ -72,6 +75,7 @@ public class RaftUtil {
 
     public static FetchResponseData singletonFetchResponse(
         TopicPartition topicPartition,
+        Uuid topicId,
         Errors topLevelError,
         Consumer<FetchResponseData.PartitionData> partitionConsumer
     ) {
@@ -85,6 +89,7 @@ public class RaftUtil {
         FetchResponseData.FetchableTopicResponse fetchableTopic =
             new FetchResponseData.FetchableTopicResponse()
                 .setTopic(topicPartition.topic())
+                .setTopicId(topicId)
                 .setPartitions(Collections.singletonList(fetchablePartition));
 
         return new FetchResponseData()
@@ -92,16 +97,16 @@ public class RaftUtil {
             .setResponses(Collections.singletonList(fetchableTopic));
     }
 
-    static boolean hasValidTopicPartition(FetchRequestData data, TopicPartition topicPartition) {
+    static boolean hasValidTopicPartition(FetchRequestData data, TopicPartition topicPartition, Uuid topicId) {
         return data.topics().size() == 1 &&
-            data.topics().get(0).topic().equals(topicPartition.topic()) &&
+            data.topics().get(0).topicId().equals(topicId) &&
             data.topics().get(0).partitions().size() == 1 &&
             data.topics().get(0).partitions().get(0).partition() == topicPartition.partition();
     }
 
-    static boolean hasValidTopicPartition(FetchResponseData data, TopicPartition topicPartition) {
+    static boolean hasValidTopicPartition(FetchResponseData data, TopicPartition topicPartition, Uuid topicId) {
         return data.responses().size() == 1 &&
-            data.responses().get(0).topic().equals(topicPartition.topic()) &&
+            data.responses().get(0).topicId().equals(topicId) &&
             data.responses().get(0).partitions().size() == 1 &&
             data.responses().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
     }

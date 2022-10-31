@@ -16,12 +16,13 @@
   */
 package kafka.server.epoch
 
+import kafka.cluster.BrokerEndPoint
 import kafka.server.KafkaConfig._
-import kafka.server.{BlockingSend, KafkaServer, ReplicaFetcherBlockingSend}
+import kafka.server.{BlockingSend, KafkaServer, BrokerBlockingSender}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
@@ -42,7 +43,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.Map
 import scala.collection.mutable.ListBuffer
 
-class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
+class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   var brokers: ListBuffer[KafkaServer] = ListBuffer()
   val topic1 = "foo"
   val topic2 = "bar"
@@ -52,7 +53,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   val t2p0 = new TopicPartition(topic2, 0)
   val t2p2 = new TopicPartition(topic2, 2)
   val tp = t1p0
-  var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
+  var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
 
   @AfterEach
   override def tearDown(): Unit = {
@@ -107,7 +108,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     TestUtils.createTopic(zkClient, topic2, assignment2, brokers)
 
     //Send messages equally to the two partitions, then half as many to a third
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = -1)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = -1)
     (0 until 10).foreach { _ =>
       producer.send(new ProducerRecord(topic1, 0, null, "IHeartLogs".getBytes))
     }
@@ -150,7 +151,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     def leo() = brokers(1).replicaManager.localLog(tp).get.logEndOffset
 
     TestUtils.createTopic(zkClient, tp.topic, Map(tp.partition -> Seq(101)), brokers)
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = -1)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = -1)
 
     //1. Given a single message
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
@@ -227,8 +228,10 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   }
 
   private def sender(from: KafkaServer, to: KafkaServer): BlockingSend = {
-    val endPoint = from.metadataCache.getAliveBrokers.find(_.id == to.config.brokerId).get.brokerEndPoint(from.config.interBrokerListenerName)
-    new ReplicaFetcherBlockingSend(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher", new LogContext())
+    val node = from.metadataCache.getAliveBrokerNode(to.config.brokerId,
+      from.config.interBrokerListenerName).get
+    val endPoint = new BrokerEndPoint(node.id(), node.host(), node.port())
+    new BrokerBlockingSender(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher", new LogContext())
   }
 
   private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
@@ -261,7 +264,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   private def sendFourMessagesToEachTopic() = {
     val testMessageList1 = List("test1", "test2", "test3", "test4")
     val testMessageList2 = List("test5", "test6", "test7", "test8")
-    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(brokers),
+    val producer = TestUtils.createProducer(plaintextBootstrapServers(brokers),
       keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
     val records =
       testMessageList1.map(m => new ProducerRecord(topic1, m, m)) ++

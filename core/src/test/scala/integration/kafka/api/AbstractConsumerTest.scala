@@ -27,7 +27,7 @@ import org.apache.kafka.common.TopicPartition
 import kafka.utils.{ShutdownableThread, TestUtils}
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
@@ -52,7 +52,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
   val group = "my-test"
   val producerClientId = "ConsumerTestProducer"
   val consumerClientId = "ConsumerTestConsumer"
-  val groupMaxSessionTimeoutMs = 30000L
+  val groupMaxSessionTimeoutMs = 60000L
 
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
@@ -74,8 +74,8 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     // create the test topic with all the brokers as replicas
     createTopic(topic, 2, brokerCount)
@@ -134,7 +134,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
       if (timestampType == TimestampType.CREATE_TIME) {
         assertEquals(timestampType, record.timestampType)
         val timestamp = startingTimestamp + i
-        assertEquals(timestamp.toLong, record.timestamp)
+        assertEquals(timestamp, record.timestamp)
       } else
         assertTrue(record.timestamp >= startingTimestamp && record.timestamp <= now,
           s"Got unexpected timestamp ${record.timestamp}. Timestamp should be between [$startingTimestamp, $now}]")
@@ -163,10 +163,29 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     records
   }
 
+
+  /**
+   * Creates topic 'topicName' with 'numPartitions' partitions and produces 'recordsPerPartition'
+   * records to each partition
+   */
+  protected def createTopicAndSendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
+                                          topicName: String,
+                                          numPartitions: Int,
+                                          recordsPerPartition: Int): Set[TopicPartition] = {
+    createTopic(topicName, numPartitions, brokerCount)
+    var parts = Set[TopicPartition]()
+    for (partition <- 0 until numPartitions) {
+      val tp = new TopicPartition(topicName, partition)
+      sendRecords(producer, recordsPerPartition, tp)
+      parts = parts + tp
+    }
+    parts
+  }
+
   protected def sendAndAwaitAsyncCommit[K, V](consumer: Consumer[K, V],
                                               offsetsOpt: Option[Map[TopicPartition, OffsetAndMetadata]] = None): Unit = {
 
-    def sendAsyncCommit(callback: OffsetCommitCallback) = {
+    def sendAsyncCommit(callback: OffsetCommitCallback): Unit = {
       offsetsOpt match {
         case Some(offsets) => consumer.commitAsync(offsets.asJava, callback)
         case None => consumer.commitAsync(callback)
@@ -260,12 +279,13 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
   def validateGroupAssignment(consumerPollers: mutable.Buffer[ConsumerAssignmentPoller],
                               subscriptions: Set[TopicPartition],
                               msg: Option[String] = None,
-                              waitTime: Long = 10000L): Unit = {
+                              waitTime: Long = 10000L,
+                              expectedAssignment: Buffer[Set[TopicPartition]] = Buffer()): Unit = {
     val assignments = mutable.Buffer[Set[TopicPartition]]()
     TestUtils.waitUntilTrue(() => {
       assignments.clear()
       consumerPollers.foreach(assignments += _.consumerAssignment())
-      isPartitionAssignmentValid(assignments, subscriptions)
+      isPartitionAssignmentValid(assignments, subscriptions, expectedAssignment)
     }, msg.getOrElse(s"Did not get valid assignment for partitions $subscriptions. Instead, got $assignments"), waitTime)
   }
 
@@ -322,15 +342,16 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
 
   protected class ConsumerAssignmentPoller(consumer: Consumer[Array[Byte], Array[Byte]],
                                            topicsToSubscribe: List[String],
-                                           partitionsToAssign: Set[TopicPartition])
+                                           partitionsToAssign: Set[TopicPartition],
+                                           userRebalanceListener: ConsumerRebalanceListener)
     extends ShutdownableThread("daemon-consumer-assignment", false) {
 
     def this(consumer: Consumer[Array[Byte], Array[Byte]], topicsToSubscribe: List[String]) = {
-      this(consumer, topicsToSubscribe, Set.empty[TopicPartition])
+      this(consumer, topicsToSubscribe, Set.empty[TopicPartition], null)
     }
 
     def this(consumer: Consumer[Array[Byte], Array[Byte]], partitionsToAssign: Set[TopicPartition]) = {
-      this(consumer, List.empty[String], partitionsToAssign)
+      this(consumer, List.empty[String], partitionsToAssign, null)
     }
 
     @volatile var thrownException: Option[Throwable] = None
@@ -341,12 +362,16 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     private var topicsSubscription = topicsToSubscribe
 
     val rebalanceListener: ConsumerRebalanceListener = new ConsumerRebalanceListener {
-      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
         partitionAssignment ++= partitions.toArray(new Array[TopicPartition](0))
+        if (userRebalanceListener != null)
+          userRebalanceListener.onPartitionsAssigned(partitions)
       }
 
-      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
         partitionAssignment --= partitions.toArray(new Array[TopicPartition](0))
+        if (userRebalanceListener != null)
+          userRebalanceListener.onPartitionsRevoked(partitions)
       }
     }
 
@@ -412,13 +437,15 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
    * 1. Every consumer got assigned at least one partition
    * 2. Each partition is assigned to only one consumer
    * 3. Every partition is assigned to one of the consumers
+   * 4. The assignment is the same as expected assignment (if provided)
    *
    * @param assignments set of consumer assignments; one per each consumer
    * @param partitions set of partitions that consumers subscribed to
    * @return true if partition assignment is valid
    */
   def isPartitionAssignmentValid(assignments: Buffer[Set[TopicPartition]],
-                                 partitions: Set[TopicPartition]): Boolean = {
+                                 partitions: Set[TopicPartition],
+                                 expectedAssignment: Buffer[Set[TopicPartition]]): Boolean = {
     val allNonEmptyAssignments = assignments.forall(assignment => assignment.nonEmpty)
     if (!allNonEmptyAssignments) {
       // at least one consumer got empty assignment
@@ -437,7 +464,22 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     // than one consumer and the same number of partitions were missing from assignments.
     // Make sure that all unique assignments are the same as 'partitions'
     val uniqueAssignedPartitions = assignments.foldLeft(Set.empty[TopicPartition])(_ ++ _)
-    uniqueAssignedPartitions == partitions
+    if (uniqueAssignedPartitions != partitions) {
+      return false
+    }
+
+    // check the assignment is the same as the expected assignment if provided
+    // Note: since we've checked that each partition is assigned to only one consumer,
+    // we just need to check the assignment is included in the expected assignment
+    if (expectedAssignment.nonEmpty) {
+      for (assignment <- assignments) {
+        if (!expectedAssignment.contains(assignment)) {
+          return false
+        }
+      }
+    }
+
+    true
   }
 
 }

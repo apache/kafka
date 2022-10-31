@@ -33,7 +33,9 @@ import java.util.function.Supplier;
  *
  * @param <K> the type of keys
  * @param <V> the type of values
+ * @deprecated Since 3.0. Use {@link org.apache.kafka.streams.processor.api.ProcessorSupplier} instead.
  */
+@Deprecated
 public interface ProcessorSupplier<K, V> extends ConnectedStoreProvider, Supplier<Processor<K, V>> {
 
     /**

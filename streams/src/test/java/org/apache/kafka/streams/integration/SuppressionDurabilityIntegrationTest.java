@@ -50,6 +50,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
@@ -85,7 +86,8 @@ import static org.hamcrest.Matchers.equalTo;
 @RunWith(Parameterized.class)
 @Category({IntegrationTest.class})
 public class SuppressionDurabilityIntegrationTest {
-    private static final Logger LOG = LoggerFactory.getLogger(SuppressionDurabilityIntegrationTest.class);
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
         3,
@@ -110,14 +112,15 @@ public class SuppressionDurabilityIntegrationTest {
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
-    private static final int COMMIT_INTERVAL = 100;
+    private static final long COMMIT_INTERVAL = 100L;
 
+    @SuppressWarnings("deprecation")
     @Parameterized.Parameters(name = "{0}")
     public static Collection<String[]> data() {
         return Arrays.asList(new String[][] {
             {StreamsConfig.AT_LEAST_ONCE},
             {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_BETA}
+            {StreamsConfig.EXACTLY_ONCE_V2}
         });
     }
 
@@ -125,6 +128,7 @@ public class SuppressionDurabilityIntegrationTest {
     public String processingGuaranteee;
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldRecoverBufferAfterShutdown() {
         final String testId = safeUniqueTestName(getClass(), testName);
         final String appId = "appId_" + testId;
@@ -167,11 +171,12 @@ public class SuppressionDurabilityIntegrationTest {
         final Properties streamsConfig = mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
-            mkEntry(StreamsConfig.POLL_MS_CONFIG, Integer.toString(COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Integer.toString(COMMIT_INTERVAL)),
+            mkEntry(StreamsConfig.POLL_MS_CONFIG, Long.toString(COMMIT_INTERVAL)),
             mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuaranteee),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
+
+        streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);
 
         KafkaStreams driver = getStartedStreams(streamsConfig, builder, true);
         try {

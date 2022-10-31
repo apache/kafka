@@ -27,7 +27,6 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -58,17 +57,6 @@ public class JoinGroupRequestTest {
             }
         }
     }
-
-    @Test
-    public void shouldRecognizeInvalidCharactersInGroupInstanceIds() {
-        char[] invalidChars = {'/', '\\', ',', '\u0000', ':', '"', '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '='};
-
-        for (char c : invalidChars) {
-            String instanceId = "Is " + c + "illegal";
-            assertFalse(JoinGroupRequest.containsValidPattern(instanceId));
-        }
-    }
-
     @Test
     public void testRequestVersionCompatibilityFailBuild() {
         assertThrows(UnsupportedVersionException.class, () -> new JoinGroupRequest.Builder(

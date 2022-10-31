@@ -35,9 +35,9 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
  */
 @InterfaceStability.Evolving
 final public class ElectLeadersResult {
-    private final KafkaFutureImpl<Map<TopicPartition, Optional<Throwable>>> electionFuture;
+    private final KafkaFuture<Map<TopicPartition, Optional<Throwable>>> electionFuture;
 
-    ElectLeadersResult(KafkaFutureImpl<Map<TopicPartition, Optional<Throwable>>> electionFuture) {
+    ElectLeadersResult(KafkaFuture<Map<TopicPartition, Optional<Throwable>>> electionFuture) {
         this.electionFuture = electionFuture;
     }
 

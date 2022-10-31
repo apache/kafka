@@ -17,6 +17,8 @@
 package org.apache.kafka.connect.mirror;
 
 import java.util.Map.Entry;
+
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -37,6 +39,8 @@ import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /** Top-level config describing replication flows between multiple Kafka clusters.
  *
@@ -93,17 +97,17 @@ public class MirrorMakerConfig extends AbstractConfig {
         Map<String, String> originalStrings = originalsStrings();
         boolean globalHeartbeatsEnabled = MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED_DEFAULT;
         if (originalStrings.containsKey(MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED)) {
-            globalHeartbeatsEnabled = Boolean.valueOf(originalStrings.get(MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
+            globalHeartbeatsEnabled = Boolean.parseBoolean(originalStrings.get(MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
         }
 
         for (String source : clusters) {
             for (String target : clusters) {
                 if (!source.equals(target)) {
                     String clusterPairConfigPrefix = source + "->" + target + ".";
-                    boolean clusterPairEnabled = Boolean.valueOf(originalStrings.getOrDefault(clusterPairConfigPrefix + "enabled", "false"));
+                    boolean clusterPairEnabled = Boolean.parseBoolean(originalStrings.get(clusterPairConfigPrefix + "enabled"));
                     boolean clusterPairHeartbeatsEnabled = globalHeartbeatsEnabled;
                     if (originalStrings.containsKey(clusterPairConfigPrefix + MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED)) {
-                        clusterPairHeartbeatsEnabled = Boolean.valueOf(originalStrings.get(clusterPairConfigPrefix + MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
+                        clusterPairHeartbeatsEnabled = Boolean.parseBoolean(originalStrings.get(clusterPairConfigPrefix + MirrorConnectorConfig.EMIT_HEARTBEATS_ENABLED));
                     }
 
                     // By default, all source->target Herder combinations are created even if `x->y.enabled=false`
@@ -175,6 +179,7 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.putAll(stringsWithPrefix("header.converter"));
         props.putAll(stringsWithPrefix("task"));
         props.putAll(stringsWithPrefix("worker"));
+        props.putAll(stringsWithPrefix("replication.policy"));
  
         // transform any expression like ${provider:path:key}, since the worker doesn't do so
         props = transform(props);
@@ -203,6 +208,7 @@ public class MirrorMakerConfig extends AbstractConfig {
         props.keySet().retainAll(MirrorConnectorConfig.CONNECTOR_CONFIG_DEF.names());
         
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));
+        props.putAll(stringsWithPrefix("replication.policy"));
 
         Map<String, String> sourceClusterProps = clusterProps(sourceAndTarget.source());
         // attrs non prefixed with producer|consumer|admin
@@ -259,6 +265,7 @@ public class MirrorMakerConfig extends AbstractConfig {
             .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                 Type.STRING,
                 CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                in(Utils.enumOptions(SecurityProtocol.class)),
                 Importance.MEDIUM,
                 CommonClientConfigs.SECURITY_PROTOCOL_DOC)
             .withClientSslSupport()

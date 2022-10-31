@@ -20,7 +20,6 @@ import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
 import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 import kafka.common.LogSegmentOffsetOverflowException
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server.epoch.LeaderEpochFileCache
@@ -51,7 +50,6 @@ import scala.math._
  * @param indexIntervalBytes The approximate number of bytes between entries in the index
  * @param rollJitterMs The maximum random jitter subtracted from the scheduled segment roll time
  * @param time The time instance
- * @param needsFlushParentDir Whether or not we need to flush the parent directory during the first flush
  */
 @nonthreadsafe
 class LogSegment private[log] (val log: FileRecords,
@@ -61,8 +59,7 @@ class LogSegment private[log] (val log: FileRecords,
                                val baseOffset: Long,
                                val indexIntervalBytes: Int,
                                val rollJitterMs: Long,
-                               val time: Time,
-                               val needsFlushParentDir: Boolean = false) extends Logging {
+                               val time: Time) extends Logging {
 
   def offsetIndex: OffsetIndex = lazyOffsetIndex.get
 
@@ -98,28 +95,26 @@ class LogSegment private[log] (val log: FileRecords,
   /* the number of bytes since we last added an entry in the offset index */
   private var bytesSinceLastIndexEntry = 0
 
-  /* whether or not we need to flush the parent dir during the next flush */
-  private val atomicNeedsFlushParentDir = new AtomicBoolean(needsFlushParentDir)
-
   // The timestamp we used for time based log rolling and for ensuring max compaction delay
   // volatile for LogCleaner to see the update
   @volatile private var rollingBasedTimestamp: Option[Long] = None
 
-  /* The maximum timestamp we see so far */
-  @volatile private var _maxTimestampSoFar: Option[Long] = None
-  def maxTimestampSoFar_=(timestamp: Long): Unit = _maxTimestampSoFar = Some(timestamp)
-  def maxTimestampSoFar: Long = {
-    if (_maxTimestampSoFar.isEmpty)
-      _maxTimestampSoFar = Some(timeIndex.lastEntry.timestamp)
-    _maxTimestampSoFar.get
+  /* The maximum timestamp and offset we see so far */
+  @volatile private var _maxTimestampAndOffsetSoFar: TimestampOffset = TimestampOffset.Unknown
+  def maxTimestampAndOffsetSoFar_= (timestampOffset: TimestampOffset): Unit = _maxTimestampAndOffsetSoFar = timestampOffset
+  def maxTimestampAndOffsetSoFar: TimestampOffset = {
+    if (_maxTimestampAndOffsetSoFar == TimestampOffset.Unknown)
+      _maxTimestampAndOffsetSoFar = timeIndex.lastEntry
+    _maxTimestampAndOffsetSoFar
   }
 
-  @volatile private var _offsetOfMaxTimestampSoFar: Option[Long] = None
-  def offsetOfMaxTimestampSoFar_=(offset: Long): Unit = _offsetOfMaxTimestampSoFar = Some(offset)
+  /* The maximum timestamp we see so far */
+  def maxTimestampSoFar: Long = {
+    maxTimestampAndOffsetSoFar.timestamp
+  }
+
   def offsetOfMaxTimestampSoFar: Long = {
-    if (_offsetOfMaxTimestampSoFar.isEmpty)
-      _offsetOfMaxTimestampSoFar = Some(timeIndex.lastEntry.offset)
-    _offsetOfMaxTimestampSoFar.get
+    maxTimestampAndOffsetSoFar.offset
   }
 
   /* Return the size in bytes of this log segment */
@@ -164,8 +159,7 @@ class LogSegment private[log] (val log: FileRecords,
       trace(s"Appended $appendedBytes to ${log.file} at end offset $largestOffset")
       // Update the in memory max timestamp and corresponding offset.
       if (largestTimestamp > maxTimestampSoFar) {
-        maxTimestampSoFar = largestTimestamp
-        offsetOfMaxTimestampSoFar = shallowOffsetOfMaxTimestamp
+        maxTimestampAndOffsetSoFar = TimestampOffset(largestTimestamp, shallowOffsetOfMaxTimestamp)
       }
       // append an entry to the index (if needed)
       if (bytesSinceLastIndexEntry > indexIntervalBytes) {
@@ -344,7 +338,7 @@ class LogSegment private[log] (val log: FileRecords,
     txnIndex.reset()
     var validBytes = 0
     var lastIndexEntry = 0
-    maxTimestampSoFar = RecordBatch.NO_TIMESTAMP
+    maxTimestampAndOffsetSoFar = TimestampOffset.Unknown
     try {
       for (batch <- log.batches.asScala) {
         batch.ensureValid()
@@ -352,8 +346,7 @@ class LogSegment private[log] (val log: FileRecords,
 
         // The max timestamp is exposed at the batch level, so no need to iterate the records
         if (batch.maxTimestamp > maxTimestampSoFar) {
-          maxTimestampSoFar = batch.maxTimestamp
-          offsetOfMaxTimestampSoFar = batch.lastOffset
+          maxTimestampAndOffsetSoFar = TimestampOffset(batch.maxTimestamp, batch.lastOffset)
         }
 
         // Build offset index
@@ -392,15 +385,13 @@ class LogSegment private[log] (val log: FileRecords,
   private def loadLargestTimestamp(): Unit = {
     // Get the last time index entry. If the time index is empty, it will return (-1, baseOffset)
     val lastTimeIndexEntry = timeIndex.lastEntry
-    maxTimestampSoFar = lastTimeIndexEntry.timestamp
-    offsetOfMaxTimestampSoFar = lastTimeIndexEntry.offset
+    maxTimestampAndOffsetSoFar = lastTimeIndexEntry
 
     val offsetPosition = offsetIndex.lookup(lastTimeIndexEntry.offset)
     // Scan the rest of the messages to see if there is a larger timestamp after the last time index entry.
     val maxTimestampOffsetAfterLastEntry = log.largestTimestampAfter(offsetPosition.position)
     if (maxTimestampOffsetAfterLastEntry.timestamp > lastTimeIndexEntry.timestamp) {
-      maxTimestampSoFar = maxTimestampOffsetAfterLastEntry.timestamp
-      offsetOfMaxTimestampSoFar = maxTimestampOffsetAfterLastEntry.offset
+      maxTimestampAndOffsetSoFar = TimestampOffset(maxTimestampOffsetAfterLastEntry.timestamp, maxTimestampOffsetAfterLastEntry.offset)
     }
   }
 
@@ -478,9 +469,6 @@ class LogSegment private[log] (val log: FileRecords,
       offsetIndex.flush()
       timeIndex.flush()
       txnIndex.flush()
-      // We only need to flush the parent of the log file because all other files share the same parent
-      if (atomicNeedsFlushParentDir.getAndSet(false))
-        log.flushParentDir()
     }
   }
 
@@ -499,14 +487,18 @@ class LogSegment private[log] (val log: FileRecords,
    * Change the suffix for the index and log files for this log segment
    * IOException from this method should be handled by the caller
    */
-  def changeFileSuffixes(oldSuffix: String, newSuffix: String, needsFlushParentDir: Boolean = true): Unit = {
+  def changeFileSuffixes(oldSuffix: String, newSuffix: String): Unit = {
     log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
     lazyOffsetIndex.renameTo(new File(CoreUtils.replaceSuffix(lazyOffsetIndex.file.getPath, oldSuffix, newSuffix)))
     lazyTimeIndex.renameTo(new File(CoreUtils.replaceSuffix(lazyTimeIndex.file.getPath, oldSuffix, newSuffix)))
     txnIndex.renameTo(new File(CoreUtils.replaceSuffix(txnIndex.file.getPath, oldSuffix, newSuffix)))
-    // We only need to flush the parent of the log file because all other files share the same parent
-    if (needsFlushParentDir)
-      log.flushParentDir()
+  }
+
+  def hasSuffix(suffix: String): Boolean = {
+    log.file.getName.endsWith(suffix) &&
+    lazyOffsetIndex.file.getName.endsWith(suffix) &&
+    lazyTimeIndex.file.getName.endsWith(suffix) &&
+    txnIndex.file.getName.endsWith(suffix)
   }
 
   /**
@@ -542,7 +534,7 @@ class LogSegment private[log] (val log: FileRecords,
    * segment is rolled if the difference between the current wall clock time and the segment create time exceeds the
    * segment rolling time.
    */
-  def timeWaitedForRoll(now: Long, messageTimestamp: Long) : Long = {
+  def timeWaitedForRoll(now: Long, messageTimestamp: Long): Long = {
     // Load the timestamp of the first message into memory
     loadFirstBatchTimestamp()
     rollingBasedTimestamp match {
@@ -554,7 +546,7 @@ class LogSegment private[log] (val log: FileRecords,
   /**
     * @return the first batch timestamp if the timestamp is available. Otherwise return Long.MaxValue
     */
-  def getFirstBatchTimestamp() : Long = {
+  def getFirstBatchTimestamp(): Long = {
     loadFirstBatchTimestamp()
     rollingBasedTimestamp match {
       case Some(t) if t >= 0 => t
@@ -596,7 +588,7 @@ class LogSegment private[log] (val log: FileRecords,
    * Close this log segment
    */
   def close(): Unit = {
-    if (_maxTimestampSoFar.nonEmpty || _offsetOfMaxTimestampSoFar.nonEmpty)
+    if (_maxTimestampAndOffsetSoFar != TimestampOffset.Unknown)
       CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestampSoFar,
         skipFullCheck = true), this)
     CoreUtils.swallow(lazyOffsetIndex.close(), this)
@@ -639,6 +631,10 @@ class LogSegment private[log] (val log: FileRecords,
     ))
   }
 
+  def deleted(): Boolean = {
+    !log.file.exists() && !lazyOffsetIndex.file.exists() && !lazyTimeIndex.file.exists() && !txnIndex.file.exists()
+  }
+
   /**
    * The last modified time of this log segment as a unix time stamp
    */
@@ -669,26 +665,24 @@ class LogSegment private[log] (val log: FileRecords,
 object LogSegment {
 
   def open(dir: File, baseOffset: Long, config: LogConfig, time: Time, fileAlreadyExists: Boolean = false,
-           initFileSize: Int = 0, preallocate: Boolean = false, fileSuffix: String = "",
-           needsRecovery: Boolean = false): LogSegment = {
+           initFileSize: Int = 0, preallocate: Boolean = false, fileSuffix: String = ""): LogSegment = {
     val maxIndexSize = config.maxIndexSize
     new LogSegment(
-      FileRecords.open(Log.logFile(dir, baseOffset, fileSuffix), fileAlreadyExists, initFileSize, preallocate),
-      LazyIndex.forOffset(Log.offsetIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
-      LazyIndex.forTime(Log.timeIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
-      new TransactionIndex(baseOffset, Log.transactionIndexFile(dir, baseOffset, fileSuffix)),
+      FileRecords.open(UnifiedLog.logFile(dir, baseOffset, fileSuffix), fileAlreadyExists, initFileSize, preallocate),
+      LazyIndex.forOffset(UnifiedLog.offsetIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
+      LazyIndex.forTime(UnifiedLog.timeIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
+      new TransactionIndex(baseOffset, UnifiedLog.transactionIndexFile(dir, baseOffset, fileSuffix)),
       baseOffset,
       indexIntervalBytes = config.indexInterval,
       rollJitterMs = config.randomSegmentJitter,
-      time,
-      needsFlushParentDir = needsRecovery || !fileAlreadyExists)
+      time)
   }
 
   def deleteIfExists(dir: File, baseOffset: Long, fileSuffix: String = ""): Unit = {
-    Log.deleteFileIfExists(Log.offsetIndexFile(dir, baseOffset, fileSuffix))
-    Log.deleteFileIfExists(Log.timeIndexFile(dir, baseOffset, fileSuffix))
-    Log.deleteFileIfExists(Log.transactionIndexFile(dir, baseOffset, fileSuffix))
-    Log.deleteFileIfExists(Log.logFile(dir, baseOffset, fileSuffix))
+    UnifiedLog.deleteFileIfExists(UnifiedLog.offsetIndexFile(dir, baseOffset, fileSuffix))
+    UnifiedLog.deleteFileIfExists(UnifiedLog.timeIndexFile(dir, baseOffset, fileSuffix))
+    UnifiedLog.deleteFileIfExists(UnifiedLog.transactionIndexFile(dir, baseOffset, fileSuffix))
+    UnifiedLog.deleteFileIfExists(UnifiedLog.logFile(dir, baseOffset, fileSuffix))
   }
 }
 

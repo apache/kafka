@@ -78,7 +78,7 @@ public interface CogroupedKStream<K, VOut> {
      * same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG cache size}, and
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
      * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
@@ -90,7 +90,7 @@ public interface CogroupedKStream<K, VOut> {
      * K key = "some-key";
      * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore}) will be backed by
@@ -128,7 +128,7 @@ public interface CogroupedKStream<K, VOut> {
      * same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG cache size}, and
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
      * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
@@ -140,7 +140,7 @@ public interface CogroupedKStream<K, VOut> {
      * K key = "some-key";
      * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore}) will be backed by
@@ -179,7 +179,7 @@ public interface CogroupedKStream<K, VOut> {
      * same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG cache size}, and
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
      * To query the local {@link ReadOnlyKeyValueStore} it must be obtained via
@@ -191,7 +191,7 @@ public interface CogroupedKStream<K, VOut> {
      * K key = "some-key";
      * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore} -- regardless of what
@@ -232,7 +232,7 @@ public interface CogroupedKStream<K, VOut> {
      * same key.
      * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
      * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
-     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#STATESTORE_CACHE_MAX_BYTES_CONFIG cache size}, and
      * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit interval}.
      * <p>
      * To query the local {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore} it must be obtained via
@@ -244,7 +244,7 @@ public interface CogroupedKStream<K, VOut> {
      * K key = "some-key";
      * ValueAndTimestamp<VOut> aggForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
-     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to query
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#metadataForAllStreamsClients()} to query
      * the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * For failure and recovery the store (which always will be of type {@link TimestampedKeyValueStore} -- regardless of what

@@ -19,6 +19,7 @@ package org.apache.kafka.common.serialization;
 import org.apache.kafka.common.utils.Bytes;
 
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -123,6 +124,27 @@ public class Serdes {
         public UUIDSerde() {
             super(new UUIDSerializer(), new UUIDDeserializer());
         }
+    }
+
+    static public final class ListSerde<Inner> extends WrapperSerde<List<Inner>> {
+
+        final static int NULL_ENTRY_VALUE = -1;
+
+        enum SerializationStrategy {
+            CONSTANT_SIZE,
+            VARIABLE_SIZE;
+
+            public static final SerializationStrategy[] VALUES = SerializationStrategy.values();
+        }
+
+        public ListSerde() {
+            super(new ListSerializer<>(), new ListDeserializer<>());
+        }
+
+        public <L extends List<Inner>> ListSerde(Class<L> listClass, Serde<Inner> serde) {
+            super(new ListSerializer<>(serde.serializer()), new ListDeserializer<>(listClass, serde.deserializer()));
+        }
+
     }
 
     @SuppressWarnings("unchecked")
@@ -265,4 +287,12 @@ public class Serdes {
     static public Serde<Void> Void() {
         return new VoidSerde();
     }
+
+    /*
+     * A serde for {@code List} type
+     */
+    static public <L extends List<Inner>, Inner> Serde<List<Inner>> ListSerde(Class<L> listClass, Serde<Inner> innerSerde) {
+        return new ListSerde<>(listClass, innerSerde);
+    }
+
 }

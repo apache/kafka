@@ -24,13 +24,57 @@ import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NodeApiVersions}
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestHeader}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
 
 import scala.compat.java8.OptionConverters._
 
 trait ForwardingManager {
   def forwardRequest(
-    request: RequestChannel.Request,
+    originalRequest: RequestChannel.Request,
+    responseCallback: Option[AbstractResponse] => Unit
+  ): Unit = {
+    val buffer = originalRequest.buffer.duplicate()
+    buffer.flip()
+    forwardRequest(originalRequest.context,
+      buffer,
+      originalRequest.body[AbstractRequest],
+      () => originalRequest.toString,
+      responseCallback)
+  }
+
+  def forwardRequest(
+    originalRequest: RequestChannel.Request,
+    newRequestBody: AbstractRequest,
+    responseCallback: Option[AbstractResponse] => Unit
+  ): Unit = {
+    val buffer = newRequestBody.serializeWithHeader(originalRequest.header)
+    forwardRequest(originalRequest.context,
+      buffer,
+      newRequestBody,
+      () => originalRequest.toString,
+      responseCallback)
+  }
+
+  /**
+   * Forward given request to the active controller.
+   *
+   * @param requestContext      The request context of the original envelope request.
+   * @param requestBufferCopy   The request buffer we want to send. This should not be the original
+   *                            byte buffer from the envelope request, since we will be mutating
+   *                            the position and limit fields. It should be a copy.
+   * @param requestBody         The AbstractRequest we are sending.
+   * @param requestToString     A callback which can be invoked to produce a human-readable decription
+   *                            of the request.
+   * @param responseCallback    A callback which takes in an `Option[AbstractResponse]`.
+   *                            We will call this function with Some(x) after the controller responds with x.
+   *                            Or, if the controller doesn't support the request version, we will complete
+   *                            the callback with None.
+   */
+  def forwardRequest(
+    requestContext: RequestContext,
+    requestBufferCopy: ByteBuffer,
+    requestBody: AbstractRequest,
+    requestToString: () => String,
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit
 
@@ -43,47 +87,44 @@ object ForwardingManager {
   ): ForwardingManager = {
     new ForwardingManagerImpl(channelManager)
   }
+
+  private[server] def buildEnvelopeRequest(context: RequestContext,
+                                           forwardRequestBuffer: ByteBuffer): EnvelopeRequest.Builder = {
+    val principalSerde = context.principalSerde.asScala.getOrElse(
+      throw new IllegalArgumentException(s"Cannot deserialize principal from request context $context " +
+        "since there is no serde defined")
+    )
+    val serializedPrincipal = principalSerde.serialize(context.principal)
+    new EnvelopeRequest.Builder(
+      forwardRequestBuffer,
+      serializedPrincipal,
+      context.clientAddress.getAddress
+    )
+  }
 }
 
 class ForwardingManagerImpl(
   channelManager: BrokerToControllerChannelManager
 ) extends ForwardingManager with Logging {
 
-  /**
-   * Forward given request to the active controller.
-   *
-   * @param request request to be forwarded
-   * @param responseCallback callback which takes in an `Option[AbstractResponse]`, where
-   *                         None is indicating that controller doesn't support the request
-   *                         version.
-   */
   override def forwardRequest(
-    request: RequestChannel.Request,
+    requestContext: RequestContext,
+    requestBufferCopy: ByteBuffer,
+    requestBody: AbstractRequest,
+    requestToString: () => String,
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit = {
-    val principalSerde = request.context.principalSerde.asScala.getOrElse(
-      throw new IllegalArgumentException(s"Cannot deserialize principal from request $request " +
-        "since there is no serde defined")
-    )
-    val serializedPrincipal = principalSerde.serialize(request.context.principal)
-    val forwardRequestBuffer = request.buffer.duplicate()
-    forwardRequestBuffer.flip()
-    val envelopeRequest = new EnvelopeRequest.Builder(
-      forwardRequestBuffer,
-      serializedPrincipal,
-      request.context.clientAddress.getAddress
-    )
+    val envelopeRequest = ForwardingManager.buildEnvelopeRequest(requestContext, requestBufferCopy)
 
     class ForwardingResponseHandler extends ControllerRequestCompletionHandler {
       override def onComplete(clientResponse: ClientResponse): Unit = {
-        val requestBody = request.body[AbstractRequest]
 
         if (clientResponse.versionMismatch != null) {
-          debug(s"Returning `UNKNOWN_SERVER_ERROR` in response to request $requestBody " +
+          debug(s"Returning `UNKNOWN_SERVER_ERROR` in response to ${requestToString()} " +
             s"due to unexpected version error", clientResponse.versionMismatch)
           responseCallback(Some(requestBody.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception)))
         } else if (clientResponse.authenticationException != null) {
-          debug(s"Returning `UNKNOWN_SERVER_ERROR` in response to request $requestBody " +
+          debug(s"Returning `UNKNOWN_SERVER_ERROR` in response to ${requestToString()} " +
             s"due to authentication error", clientResponse.authenticationException)
           responseCallback(Some(requestBody.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception)))
         } else {
@@ -103,10 +144,10 @@ class ForwardingManagerImpl(
               // the error directly to the client since it would not be expected. Instead we
               // return `UNKNOWN_SERVER_ERROR` so that the user knows that there is a problem
               // on the broker.
-              debug(s"Forwarded request $request failed with an error in the envelope response $envelopeError")
+              debug(s"Forwarded request ${requestToString()} failed with an error in the envelope response $envelopeError")
               requestBody.getErrorResponse(Errors.UNKNOWN_SERVER_ERROR.exception)
             } else {
-              parseResponse(envelopeResponse.responseData, requestBody, request.header)
+              parseResponse(envelopeResponse.responseData, requestBody, requestContext.header)
             }
             responseCallback(Option(response))
           }
@@ -114,8 +155,8 @@ class ForwardingManagerImpl(
       }
 
       override def onTimeout(): Unit = {
-        debug(s"Forwarding of the request $request failed due to timeout exception")
-        val response = request.body[AbstractRequest].getErrorResponse(new TimeoutException())
+        debug(s"Forwarding of the request ${requestToString()} failed due to timeout exception")
+        val response = requestBody.getErrorResponse(new TimeoutException())
         responseCallback(Option(response))
       }
     }

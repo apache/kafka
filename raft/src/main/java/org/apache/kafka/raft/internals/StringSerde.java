@@ -20,7 +20,7 @@ import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.raft.RecordSerde;
+import org.apache.kafka.server.common.serialization.RecordSerde;
 
 public class StringSerde implements RecordSerde<String> {
 
@@ -40,8 +40,7 @@ public class StringSerde implements RecordSerde<String> {
 
     @Override
     public String read(Readable input, int size) {
-        byte[] data = new byte[size];
-        input.readArray(data);
+        byte[] data = input.readArray(size);
         return Utils.utf8(data);
     }
 

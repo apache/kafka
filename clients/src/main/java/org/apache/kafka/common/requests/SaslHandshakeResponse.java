@@ -58,6 +58,11 @@ public class SaslHandshakeResponse extends AbstractResponse {
     }
 
     @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        // Not supported by the response schema
+    }
+
+    @Override
     public SaslHandshakeResponseData data() {
         return data;
     }

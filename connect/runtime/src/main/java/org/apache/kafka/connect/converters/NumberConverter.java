@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
@@ -28,7 +29,6 @@ import org.apache.kafka.connect.storage.ConverterType;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StringConverterConfig;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -122,6 +122,8 @@ abstract class NumberConverter<T extends Number> implements Converter, HeaderCon
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
+        Utils.closeQuietly(this.serializer, "number converter serializer");
+        Utils.closeQuietly(this.deserializer, "number converter deserializer");
     }
 }

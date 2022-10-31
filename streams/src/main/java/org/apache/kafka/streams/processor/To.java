@@ -89,4 +89,11 @@ public class To {
         throw new UnsupportedOperationException("To is unsafe for use in Hash collections");
     }
 
+    @Override
+    public String toString() {
+        return "To{" +
+               "childName='" + childName + '\'' +
+               ", timestamp=" + timestamp +
+               '}';
+    }
 }

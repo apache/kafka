@@ -183,7 +183,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     *
     * @param requestedEpoch requested leader epoch
     * @param logEndOffset the existing Log End Offset
-    * @return found leader epoch and end offset  
+    * @return found leader epoch and end offset
     */
   def endOffsetFor(requestedEpoch: Int, logEndOffset: Long): (Int, Long) = {
     inReadLock(lock) {

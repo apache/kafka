@@ -17,11 +17,11 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeSet;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
@@ -31,7 +31,7 @@ import org.apache.kafka.controller.BrokerHeartbeatManager.BrokerHeartbeatState;
 import org.apache.kafka.controller.BrokerHeartbeatManager.BrokerHeartbeatStateIterator;
 import org.apache.kafka.controller.BrokerHeartbeatManager.BrokerHeartbeatStateList;
 import org.apache.kafka.controller.BrokerHeartbeatManager.UsableBrokerIterator;
-import org.apache.kafka.metadata.UsableBroker;
+import org.apache.kafka.metadata.placement.UsableBroker;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -78,7 +78,7 @@ public class BrokerHeartbeatManagerTest {
     }
 
     @Test
-    public void testFindStaleBrokers() {
+    public void testFindOneStaleBroker() {
         BrokerHeartbeatManager manager = newBrokerHeartbeatManager();
         MockTime time = (MockTime)  manager.time();
         assertFalse(manager.hasValidSession(0));
@@ -93,22 +93,24 @@ public class BrokerHeartbeatManagerTest {
         assertEquals(1, iter.next().id());
         assertEquals(2, iter.next().id());
         assertFalse(iter.hasNext());
-        assertEquals(Collections.emptyList(), manager.findStaleBrokers());
+        assertEquals(Optional.empty(), manager.findOneStaleBroker());
 
         time.sleep(5);
-        assertEquals(Collections.singletonList(0), manager.findStaleBrokers());
+        assertEquals(Optional.of(0), manager.findOneStaleBroker());
         manager.fence(0);
-        assertEquals(Collections.emptyList(), manager.findStaleBrokers());
+        assertEquals(Optional.empty(), manager.findOneStaleBroker());
         iter = manager.unfenced().iterator();
         assertEquals(1, iter.next().id());
         assertEquals(2, iter.next().id());
         assertFalse(iter.hasNext());
 
         time.sleep(20);
-        assertEquals(Arrays.asList(1, 2), manager.findStaleBrokers());
+        assertEquals(Optional.of(1), manager.findOneStaleBroker());
         manager.fence(1);
+        assertEquals(Optional.of(2), manager.findOneStaleBroker());
         manager.fence(2);
-        assertEquals(Collections.emptyList(), manager.findStaleBrokers());
+
+        assertEquals(Optional.empty(), manager.findOneStaleBroker());
         iter = manager.unfenced().iterator();
         assertFalse(iter.hasNext());
     }
@@ -125,17 +127,20 @@ public class BrokerHeartbeatManagerTest {
         manager.touch(2, false, 0);
         time.sleep(1);
         manager.touch(3, false, 0);
-        assertEquals(Collections.emptyList(), manager.findStaleBrokers());
+        assertEquals(Optional.empty(), manager.findOneStaleBroker());
         assertEquals(10_000_000, manager.nextCheckTimeNs());
         time.sleep(7);
         assertEquals(10_000_000, manager.nextCheckTimeNs());
-        assertEquals(Collections.singletonList(0), manager.findStaleBrokers());
+        assertEquals(Optional.of(0), manager.findOneStaleBroker());
         manager.fence(0);
         assertEquals(12_000_000, manager.nextCheckTimeNs());
+
         time.sleep(3);
-        assertEquals(Arrays.asList(1, 2), manager.findStaleBrokers());
+        assertEquals(Optional.of(1), manager.findOneStaleBroker());
         manager.fence(1);
+        assertEquals(Optional.of(2), manager.findOneStaleBroker());
         manager.fence(2);
+
         assertEquals(14_000_000, manager.nextCheckTimeNs());
     }
 
@@ -174,7 +179,7 @@ public class BrokerHeartbeatManagerTest {
     private static Set<UsableBroker> usableBrokersToSet(BrokerHeartbeatManager manager) {
         Set<UsableBroker> brokers = new HashSet<>();
         for (Iterator<UsableBroker> iterator = new UsableBrokerIterator(
-            manager.unfenced().iterator(),
+            manager.brokers().iterator(),
             id -> id % 2 == 0 ? Optional.of("rack1") : Optional.of("rack2"));
              iterator.hasNext(); ) {
             brokers.add(iterator.next());
@@ -193,19 +198,42 @@ public class BrokerHeartbeatManagerTest {
         manager.touch(4, true, 100);
         assertEquals(98L, manager.lowestActiveOffset());
         Set<UsableBroker> expected = new HashSet<>();
-        expected.add(new UsableBroker(0, Optional.of("rack1")));
-        expected.add(new UsableBroker(1, Optional.of("rack2")));
-        expected.add(new UsableBroker(2, Optional.of("rack1")));
-        expected.add(new UsableBroker(3, Optional.of("rack2")));
+        expected.add(new UsableBroker(0, Optional.of("rack1"), false));
+        expected.add(new UsableBroker(1, Optional.of("rack2"), false));
+        expected.add(new UsableBroker(2, Optional.of("rack1"), false));
+        expected.add(new UsableBroker(3, Optional.of("rack2"), false));
+        expected.add(new UsableBroker(4, Optional.of("rack1"), true));
         assertEquals(expected, usableBrokersToSet(manager));
-        manager.updateControlledShutdownOffset(2, 0);
+        manager.maybeUpdateControlledShutdownOffset(2, 0);
         assertEquals(100L, manager.lowestActiveOffset());
         assertThrows(RuntimeException.class,
-            () -> manager.updateControlledShutdownOffset(4, 0));
+            () -> manager.maybeUpdateControlledShutdownOffset(4, 0));
         manager.touch(4, false, 100);
-        manager.updateControlledShutdownOffset(4, 0);
-        expected.remove(new UsableBroker(2, Optional.of("rack1")));
+        manager.maybeUpdateControlledShutdownOffset(4, 0);
+        expected.remove(new UsableBroker(2, Optional.of("rack1"), false));
+        expected.remove(new UsableBroker(4, Optional.of("rack1"), true));
         assertEquals(expected, usableBrokersToSet(manager));
+    }
+
+    @Test
+    public void testControlledShutdownOffsetIsOnlyUpdatedOnce() {
+        BrokerHeartbeatManager manager = newBrokerHeartbeatManager();
+        assertEquals(Collections.emptySet(), usableBrokersToSet(manager));
+        manager.touch(0, false, 100);
+        manager.touch(1, false, 100);
+        manager.touch(2, false, 98);
+        manager.touch(3, false, 100);
+        manager.touch(4, true, 100);
+        assertEquals(OptionalLong.empty(), manager.controlledShutdownOffset(2));
+        manager.maybeUpdateControlledShutdownOffset(2, 98);
+        assertEquals(OptionalLong.of(98), manager.controlledShutdownOffset(2));
+        manager.maybeUpdateControlledShutdownOffset(2, 99);
+        assertEquals(OptionalLong.of(98), manager.controlledShutdownOffset(2));
+        assertEquals(OptionalLong.empty(), manager.controlledShutdownOffset(3));
+        manager.maybeUpdateControlledShutdownOffset(3, 101);
+        assertEquals(OptionalLong.of(101), manager.controlledShutdownOffset(3));
+        manager.maybeUpdateControlledShutdownOffset(3, 102);
+        assertEquals(OptionalLong.of(101), manager.controlledShutdownOffset(3));
     }
 
     @Test
@@ -250,7 +278,7 @@ public class BrokerHeartbeatManagerTest {
         manager.touch(3, false, 100);
         manager.touch(4, true, 100);
         manager.touch(5, false, 99);
-        manager.updateControlledShutdownOffset(5, 99);
+        manager.maybeUpdateControlledShutdownOffset(5, 99);
 
         assertEquals(98L, manager.lowestActiveOffset());
 

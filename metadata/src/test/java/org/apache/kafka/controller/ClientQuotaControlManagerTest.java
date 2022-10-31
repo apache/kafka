@@ -18,17 +18,21 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.config.internals.QuotaConfigs;
-import org.apache.kafka.common.metadata.QuotaRecord;
+import org.apache.kafka.common.metadata.ClientQuotaRecord;
+import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.metadata.RecordTestUtils;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -68,8 +72,28 @@ public class ClientQuotaControlManagerTest {
     }
 
     private void assertInvalidEntity(ClientQuotaControlManager manager, ClientQuotaEntity entity) {
+        assertInvalidQuota(manager, entity, quotas(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0));
+    }
+
+    @Test
+    public void testInvalidQuotaKeys() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ClientQuotaControlManager manager = new ClientQuotaControlManager(snapshotRegistry);
+        ClientQuotaEntity entity = entity(ClientQuotaEntity.USER, "user-1");
+
+        // Invalid + valid keys
+        assertInvalidQuota(manager, entity, quotas("not.a.quota.key", 0.0, QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 99.9));
+
+        // Valid + invalid keys
+        assertInvalidQuota(manager, entity, quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 99.9, "not.a.quota.key", 0.0));
+
+        // Null key
+        assertInvalidQuota(manager, entity, quotas(null, 99.9));
+    }
+
+    private void assertInvalidQuota(ClientQuotaControlManager manager, ClientQuotaEntity entity, Map<String, Double> quota) {
         List<ClientQuotaAlteration> alters = new ArrayList<>();
-        entityQuotaToAlterations(entity, quotas(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, 10000.0), alters::add);
+        entityQuotaToAlterations(entity, quota, alters::add);
         ControllerResult<Map<ClientQuotaEntity, ApiError>> result = manager.alterClientQuotas(alters);
         assertEquals(Errors.INVALID_REQUEST, result.response().get(entity).error());
         assertEquals(0, result.records().size());
@@ -151,7 +175,7 @@ public class ClientQuotaControlManagerTest {
     }
 
     @Test
-    public void testEntityTypes() {
+    public void testEntityTypes() throws Exception {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         ClientQuotaControlManager manager = new ClientQuotaControlManager(snapshotRegistry);
 
@@ -179,10 +203,51 @@ public class ClientQuotaControlManagerTest {
         quotasToTest.put(clientEntity("client-id-2"),
                 quotas(QuotaConfigs.REQUEST_PERCENTAGE_OVERRIDE_CONFIG, 60.60));
 
-
         List<ClientQuotaAlteration> alters = new ArrayList<>();
         quotasToTest.forEach((entity, quota) -> entityQuotaToAlterations(entity, quota, alters::add));
         alterQuotas(alters, manager);
+
+        RecordTestUtils.assertBatchIteratorContains(Arrays.asList(
+            Arrays.asList(new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-1"),
+                new EntityData().setEntityType("client-id").setEntityName("client-id-1"))).
+                    setKey("request_percentage").setValue(50.5).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-2"),
+                new EntityData().setEntityType("client-id").setEntityName("client-id-1"))).
+                    setKey("request_percentage").setValue(51.51).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-3"),
+                new EntityData().setEntityType("client-id").setEntityName("client-id-2"))).
+                    setKey("request_percentage").setValue(52.52).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName(null),
+                new EntityData().setEntityType("client-id").setEntityName("client-id-1"))).
+                    setKey("request_percentage").setValue(53.53).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-1"),
+                new EntityData().setEntityType("client-id").setEntityName(null))).
+                    setKey("request_percentage").setValue(54.54).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-3"),
+                new EntityData().setEntityType("client-id").setEntityName(null))).
+                    setKey("request_percentage").setValue(55.55).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-1"))).
+                    setKey("request_percentage").setValue(56.56).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-2"))).
+                    setKey("request_percentage").setValue(57.57).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName("user-3"))).
+                    setKey("request_percentage").setValue(58.58).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("user").setEntityName(null))).
+                    setKey("request_percentage").setValue(59.59).setRemove(false), (short) 0)),
+            Arrays.asList(new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Arrays.asList(
+                new EntityData().setEntityType("client-id").setEntityName("client-id-2"))).
+                    setKey("request_percentage").setValue(60.60).setRemove(false), (short) 0))),
+            manager.iterator(Long.MAX_VALUE));
     }
 
     static void entityQuotaToAlterations(ClientQuotaEntity entity, Map<String, Double> quota,
@@ -196,7 +261,8 @@ public class ClientQuotaControlManagerTest {
     static void alterQuotas(List<ClientQuotaAlteration> alterations, ClientQuotaControlManager manager) {
         ControllerResult<Map<ClientQuotaEntity, ApiError>> result = manager.alterClientQuotas(alterations);
         assertTrue(result.response().values().stream().allMatch(ApiError::isSuccess));
-        result.records().forEach(apiMessageAndVersion -> manager.replay((QuotaRecord) apiMessageAndVersion.message()));
+        result.records().forEach(apiMessageAndVersion ->
+                manager.replay((ClientQuotaRecord) apiMessageAndVersion.message()));
     }
 
     static Map<String, Double> quotas(String key, Double value) {

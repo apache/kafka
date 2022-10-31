@@ -16,7 +16,7 @@
 {
   "apiKey": 26,
   "type": "request",
-  "listeners": ["zkBroker"],
+  "listeners": ["zkBroker", "broker"],
   "name": "EndTxnRequest",
   // Version 1 is the same as version 0.
   //

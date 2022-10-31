@@ -20,9 +20,10 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
@@ -36,6 +37,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -49,6 +51,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("unchecked")
 public abstract class AbstractKeyValueStoreTest {
 
     protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(final StateStoreContext context);
@@ -80,6 +83,7 @@ public abstract class AbstractKeyValueStoreTest {
         return result;
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldNotIncludeDeletedFromRangeResult() {
         store.close();
@@ -381,13 +385,95 @@ public abstract class AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() {
-        assertThrows(NullPointerException.class, () -> store.range(null, 2));
+    public void shouldReturnValueOnRangeNullToKey() {
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+
+        final LinkedList<KeyValue<Integer, String>> expectedContents = new LinkedList<>();
+        expectedContents.add(new KeyValue<>(0, "zero"));
+        expectedContents.add(new KeyValue<>(1, "one"));
+
+        try (final KeyValueIterator<Integer, String> iterator = store.range(null, 1)) {
+            assertEquals(expectedContents, Utils.toList(iterator));
+        }
     }
 
     @Test
-    public void shouldThrowNullPointerExceptionOnRangeNullToKey() {
-        assertThrows(NullPointerException.class, () -> store.range(2, null));
+    public void shouldReturnValueOnRangeKeyToNull() {
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+
+        final LinkedList<KeyValue<Integer, String>> expectedContents = new LinkedList<>();
+        expectedContents.add(new KeyValue<>(1, "one"));
+        expectedContents.add(new KeyValue<>(2, "two"));
+
+        try (final KeyValueIterator<Integer, String> iterator = store.range(1, null)) {
+            assertEquals(expectedContents, Utils.toList(iterator));
+        }
+    }
+
+    @Test
+    public void shouldReturnValueOnRangeNullToNull() {
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+
+        final LinkedList<KeyValue<Integer, String>> expectedContents = new LinkedList<>();
+        expectedContents.add(new KeyValue<>(0, "zero"));
+        expectedContents.add(new KeyValue<>(1, "one"));
+        expectedContents.add(new KeyValue<>(2, "two"));
+
+        try (final KeyValueIterator<Integer, String> iterator = store.range(null, null)) {
+            assertEquals(expectedContents, Utils.toList(iterator));
+        }
+    }
+
+    @Test
+    public void shouldReturnValueOnReverseRangeNullToKey() {
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+
+        final LinkedList<KeyValue<Integer, String>> expectedContents = new LinkedList<>();
+        expectedContents.add(new KeyValue<>(1, "one"));
+        expectedContents.add(new KeyValue<>(0, "zero"));
+
+        try (final KeyValueIterator<Integer, String> iterator = store.reverseRange(null, 1)) {
+            assertEquals(expectedContents, Utils.toList(iterator));
+        }
+    }
+
+    @Test
+    public void shouldReturnValueOnReverseRangeKeyToNull() {
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+
+        final LinkedList<KeyValue<Integer, String>> expectedContents = new LinkedList<>();
+        expectedContents.add(new KeyValue<>(2, "two"));
+        expectedContents.add(new KeyValue<>(1, "one"));
+
+        try (final KeyValueIterator<Integer, String> iterator = store.reverseRange(1, null)) {
+            assertEquals(expectedContents, Utils.toList(iterator));
+        }
+    }
+
+    @Test
+    public void shouldReturnValueOnReverseRangeNullToNull() {
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+
+        final LinkedList<KeyValue<Integer, String>> expectedContents = new LinkedList<>();
+        expectedContents.add(new KeyValue<>(2, "two"));
+        expectedContents.add(new KeyValue<>(1, "one"));
+        expectedContents.add(new KeyValue<>(0, "zero"));
+
+        try (final KeyValueIterator<Integer, String> iterator = store.reverseRange(null, null)) {
+            assertEquals(expectedContents, Utils.toList(iterator));
+        }
     }
 
     @Test
@@ -483,18 +569,20 @@ public abstract class AbstractKeyValueStoreTest {
     public void shouldNotThrowConcurrentModificationException() {
         store.put(0, "zero");
 
-        final KeyValueIterator<Integer, String> results = store.range(0, 2);
+        try (final KeyValueIterator<Integer, String> results = store.range(0, 2)) {
 
-        store.put(1, "one");
+            store.put(1, "one");
 
-        assertEquals(new KeyValue<>(0, "zero"), results.next());
+            assertEquals(new KeyValue<>(0, "zero"), results.next());
+        }
     }
 
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            final KeyValueIterator<Integer, String> iterator = store.range(-1, 1);
-            assertFalse(iterator.hasNext());
+            try (final KeyValueIterator<Integer, String> iterator = store.range(-1, 1)) {
+                assertFalse(iterator.hasNext());
+            }
 
             final List<String> messages = appender.getMessages();
             assertThat(
@@ -510,8 +598,9 @@ public abstract class AbstractKeyValueStoreTest {
     @Test
     public void shouldNotThrowInvalidReverseRangeExceptionWithNegativeFromKey() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            final KeyValueIterator<Integer, String> iterator = store.reverseRange(-1, 1);
-            assertFalse(iterator.hasNext());
+            try (final KeyValueIterator<Integer, String> iterator = store.reverseRange(-1, 1)) {
+                assertFalse(iterator.hasNext());
+            }
 
             final List<String> messages = appender.getMessages();
             assertThat(
@@ -527,8 +616,9 @@ public abstract class AbstractKeyValueStoreTest {
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithFromLargerThanTo() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            final KeyValueIterator<Integer, String> iterator = store.range(2, 1);
-            assertFalse(iterator.hasNext());
+            try (final KeyValueIterator<Integer, String> iterator = store.range(2, 1)) {
+                assertFalse(iterator.hasNext());
+            }
 
             final List<String> messages = appender.getMessages();
             assertThat(
@@ -544,8 +634,9 @@ public abstract class AbstractKeyValueStoreTest {
     @Test
     public void shouldNotThrowInvalidReverseRangeExceptionWithFromLargerThanTo() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            final KeyValueIterator<Integer, String> iterator = store.reverseRange(2, 1);
-            assertFalse(iterator.hasNext());
+            try (final KeyValueIterator<Integer, String> iterator = store.reverseRange(2, 1)) {
+                assertFalse(iterator.hasNext());
+            }
 
             final List<String> messages = appender.getMessages();
             assertThat(

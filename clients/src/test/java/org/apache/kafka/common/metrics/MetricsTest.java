@@ -45,6 +45,7 @@ import java.util.function.Function;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -304,12 +305,12 @@ public class MetricsTest {
         assertNotNull(
                 metrics.metrics().get(metrics.metricName("test.s2.count", "grp1")), "MetricName test.s2.count must be present");
 
-        // After another 1 second sleep, the metric should be purged
-        time.sleep(1000);
+        // After another 1001 ms sleep, the metric should be purged
+        time.sleep(1001);
         purger.run();
-        assertNull(metrics.getSensor("test.s1"), "Sensor test.s2 should have been purged");
+        assertNull(metrics.getSensor("test.s2"), "Sensor test.s2 should have been purged");
         assertNull(
-                metrics.metrics().get(metrics.metricName("test.s1.count", "grp1")), "MetricName test.s2.count should have been purged");
+                metrics.metrics().get(metrics.metricName("test.s2.count", "grp1")), "MetricName test.s2.count should have been purged");
 
         // After purging, it should be possible to recreate a metric
         s1 = metrics.sensor("test.s1", null, 1);
@@ -607,15 +608,15 @@ public class MetricsTest {
         // Sleep for half the window.
         time.sleep(cfg.timeWindowMs() / 2);
 
-        // prior to any time passing
-        double elapsedSecs = (cfg.timeWindowMs() * (cfg.samples() - 1) + cfg.timeWindowMs() / 2) / 1000.0;
+        // prior to any time passing, elapsedSecs = sampleWindowSize * (total samples - half of final sample)
+        double elapsedSecs = MetricsUtils.convert(cfg.timeWindowMs(), TimeUnit.SECONDS) * (cfg.samples() - 0.5);
 
         KafkaMetric rateMetric = metrics.metrics().get(rateMetricName);
         KafkaMetric countRateMetric = metrics.metrics().get(countRateMetricName);
         assertEquals(sum / elapsedSecs, (Double) rateMetric.metricValue(), EPS, "Rate(0...2) = 2.666");
         assertEquals(count / elapsedSecs, (Double) countRateMetric.metricValue(), EPS, "Count rate(0...2) = 0.02666");
         assertEquals(elapsedSecs,
-                ((Rate) rateMetric.measurable()).windowSize(cfg, time.milliseconds()) / 1000, EPS, "Elapsed Time = 75 seconds");
+                MetricsUtils.convert(((Rate) rateMetric.measurable()).windowSize(cfg, time.milliseconds()), TimeUnit.SECONDS), EPS, "Elapsed Time = 75 seconds");
         assertEquals(sum, (Double) totalMetric.metricValue(), EPS);
         assertEquals(count, (Double) countTotalMetric.metricValue(), EPS);
 

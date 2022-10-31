@@ -166,7 +166,7 @@ object LeaderElectionCommand extends Logging {
     }
 
     if (noop.nonEmpty) {
-      val partitions = succeeded.mkString(", ")
+      val partitions = noop.mkString(", ")
       println(s"Valid replica already elected for partitions $partitions")
     }
 

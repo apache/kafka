@@ -17,20 +17,20 @@
 
 package org.apache.kafka.jmh.partition;
 
-import kafka.api.ApiVersion$;
 import kafka.cluster.DelayedOperations;
-import kafka.cluster.IsrChangeListener;
+import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
 import kafka.log.CleanerConfig;
 import kafka.log.Defaults;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
-import kafka.server.AlterIsrManager;
+import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.LogDirFailureChannel;
 import kafka.server.MetadataCache;
+import kafka.server.builders.LogManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
-import kafka.server.metadata.CachedConfigRepository;
+import kafka.server.metadata.MockConfigRepository;
 import kafka.utils.KafkaScheduler;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -40,6 +40,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -53,14 +54,10 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
-import scala.Option;
-import scala.collection.JavaConverters;
-import scala.compat.java8.OptionConverters;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -70,6 +67,8 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import scala.Option;
+import scala.compat.java8.OptionConverters;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -97,36 +96,37 @@ public class PartitionMakeFollowerBenchmark {
         scheduler.startup();
         LogConfig logConfig = createLogConfig();
 
-        List<File> logDirs = Collections.singletonList(logDir);
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
-        logManager = new LogManager(JavaConverters.asScalaIteratorConverter(logDirs.iterator()).asScala().toSeq(),
-            JavaConverters.asScalaIteratorConverter(new ArrayList<File>().iterator()).asScala().toSeq(),
-            new CachedConfigRepository(),
-            logConfig,
-            new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5"),
-            1,
-            1000L,
-            10000L,
-            10000L,
-            1000L,
-            60000,
-            scheduler,
-            brokerTopicStats,
-            logDirFailureChannel,
-            Time.SYSTEM,
-            true);
+        logManager = new LogManagerBuilder().
+            setLogDirs(Collections.singletonList(logDir)).
+            setInitialOfflineDirs(Collections.emptyList()).
+            setConfigRepository(new MockConfigRepository()).
+            setInitialDefaultConfig(logConfig).
+            setCleanerConfig(new CleanerConfig(0, 0, 0, 0, 0, 0.0, 0, false, "MD5")).
+            setRecoveryThreadsPerDataDir(1).
+            setFlushCheckMs(1000L).
+            setFlushRecoveryOffsetCheckpointMs(10000L).
+            setFlushStartOffsetCheckpointMs(10000L).
+            setRetentionCheckMs(1000L).
+            setMaxProducerIdExpirationMs(60000).
+            setInterBrokerProtocolVersion(MetadataVersion.latest()).
+            setScheduler(scheduler).
+            setBrokerTopicStats(brokerTopicStats).
+            setLogDirFailureChannel(logDirFailureChannel).
+            setTime(Time.SYSTEM).setKeepPartitionMetadataFile(true).
+            build();
 
         TopicPartition tp = new TopicPartition("topic", 0);
         topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
 
         Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
-        IsrChangeListener isrChangeListener = Mockito.mock(IsrChangeListener.class);
-        AlterIsrManager alterIsrManager = Mockito.mock(AlterIsrManager.class);
+        AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
+        AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         partition = new Partition(tp, 100,
-            ApiVersion$.MODULE$.latestVersion(), 0, Time.SYSTEM,
-            isrChangeListener, delayedOperations,
-            Mockito.mock(MetadataCache.class), logManager, alterIsrManager);
+            MetadataVersion.latest(), 0, Time.SYSTEM,
+            alterPartitionListener, delayedOperations,
+            Mockito.mock(MetadataCache.class), logManager, alterPartitionManager);
         partition.createLogIfNotExists(true, false, offsetCheckpoints, topicId);
         executorService.submit((Runnable) () -> {
             SimpleRecord[] simpleRecords = new SimpleRecord[] {
@@ -157,7 +157,7 @@ public class PartitionMakeFollowerBenchmark {
             .setLeader(0)
             .setLeaderEpoch(0)
             .setIsr(replicas)
-            .setZkVersion(1)
+            .setPartitionEpoch(1)
             .setReplicas(replicas)
             .setIsNew(true);
         return partition.makeFollower(partitionState, offsetCheckpoints, topicId);
@@ -174,7 +174,6 @@ public class PartitionMakeFollowerBenchmark {
         logProps.put(LogConfig.MaxMessageBytesProp(), Defaults.MaxMessageSize());
         logProps.put(LogConfig.IndexIntervalBytesProp(), Defaults.IndexInterval());
         logProps.put(LogConfig.SegmentIndexBytesProp(), Defaults.MaxIndexSize());
-        logProps.put(LogConfig.MessageFormatVersionProp(), Defaults.MessageFormatVersion());
         logProps.put(LogConfig.FileDeleteDelayMsProp(), Defaults.FileDeleteDelayMs());
         return LogConfig.apply(logProps, new scala.collection.immutable.HashSet<>());
     }

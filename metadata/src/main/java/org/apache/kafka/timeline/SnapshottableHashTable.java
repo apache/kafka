@@ -111,15 +111,19 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
         @Override
         public void mergeFrom(long epoch, Delta source) {
             HashTier<T> other = (HashTier<T>) source;
-            List<T> list = new ArrayList<>();
-            Object[] otherElements = other.deltaTable.baseElements();
-            for (int slot = 0; slot < otherElements.length; slot++) {
-                BaseHashTable.unpackSlot(list, otherElements, slot);
-                for (T element : list) {
-                    // When merging in a later hash tier, we want to keep only the elements
-                    // that were present at our epoch.
-                    if (element.startEpoch() <= epoch) {
-                        deltaTable.baseAddOrReplace(element);
+            // As an optimization, the deltaTable might not exist for a new key
+            // as there is no previous value
+            if (other.deltaTable != null) {
+                List<T> list = new ArrayList<>();
+                Object[] otherElements = other.deltaTable.baseElements();
+                for (int slot = 0; slot < otherElements.length; slot++) {
+                    BaseHashTable.unpackSlot(list, otherElements, slot);
+                    for (T element : list) {
+                        // When merging in a later hash tier, we want to keep only the elements
+                        // that were present at our epoch.
+                        if (element.startEpoch() <= epoch) {
+                            deltaTable.baseAddOrReplace(element);
+                        }
                     }
                 }
             }
@@ -280,6 +284,7 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
     SnapshottableHashTable(SnapshotRegistry snapshotRegistry, int expectedSize) {
         super(expectedSize);
         this.snapshotRegistry = snapshotRegistry;
+        snapshotRegistry.register(this);
     }
 
     int snapshottableSize(long epoch) {
@@ -450,6 +455,15 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
                 }
                 out.clear();
             }
+        }
+    }
+
+    @Override
+    public void reset() {
+        Iterator<T> iter = snapshottableIterator(SnapshottableHashTable.LATEST_EPOCH);
+        while (iter.hasNext()) {
+            iter.next();
+            iter.remove();
         }
     }
 }

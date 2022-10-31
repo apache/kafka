@@ -35,6 +35,7 @@ import java.util.ArrayDeque;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.OptionalLong;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 import static org.apache.kafka.common.record.Records.OFFSET_OFFSET;
@@ -110,11 +111,6 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     @Override
     public boolean hasTimestampType(TimestampType timestampType) {
         return outerRecord().timestampType() == timestampType;
-    }
-
-    @Override
-    public Long checksumOrNull() {
-        return checksum();
     }
 
     @Override
@@ -216,6 +212,11 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     @Override
     public boolean isControlBatch() {
         return false;
+    }
+
+    @Override
+    public OptionalLong deleteHorizonMs() {
+        return OptionalLong.empty();
     }
 
     /**
@@ -470,6 +471,11 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
+        public OptionalLong deleteHorizonMs() {
+            return OptionalLong.empty();
+        }
+
+        @Override
         public LegacyRecord outerRecord() {
             return record;
         }
@@ -556,6 +562,11 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         @Override
         public long baseOffset() {
             return loadFullBatch().baseOffset();
+        }
+
+        @Override
+        public OptionalLong deleteHorizonMs() {
+            return OptionalLong.empty();
         }
 
         @Override

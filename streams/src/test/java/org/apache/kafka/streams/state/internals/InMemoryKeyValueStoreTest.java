@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -23,6 +24,8 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.streams.state.Stores;
@@ -36,16 +39,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     private KeyValueStore<Bytes, byte[]> byteStore;
     private final Serializer<String> stringSerializer = new StringSerializer();
     private final KeyValueStoreTestDriver<Bytes, byte[]> byteStoreDriver = KeyValueStoreTestDriver.create(Bytes.class, byte[].class);
+    private InMemoryKeyValueStore inMemoryKeyValueStore;
 
     @Before
     public void createStringKeyValueStore() {
@@ -57,6 +64,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             new Serdes.ByteArraySerde());
         byteStore = storeBuilder.build();
         byteStore.init(byteStoreContext, byteStore);
+        this.inMemoryKeyValueStore = getInMemoryStore();
     }
 
     @After
@@ -79,6 +87,11 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         return store;
     }
 
+    InMemoryKeyValueStore getInMemoryStore() {
+        return new InMemoryKeyValueStore("in-memory-store-test");
+    }
+
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldRemoveKeysWithNullValues() {
         store.close();
@@ -125,15 +138,17 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         byteStore.putAll(entries);
         byteStore.flush();
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = byteStore.prefixScan("prefix", stringSerializer);
         final List<String> valuesWithPrefix = new ArrayList<>();
         int numberOfKeysReturned = 0;
 
-        while (keysWithPrefix.hasNext()) {
-            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
-            valuesWithPrefix.add(new String(next.value));
-            numberOfKeysReturned++;
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = byteStore.prefixScan("prefix", stringSerializer)) {
+            while (keysWithPrefix.hasNext()) {
+                final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+                valuesWithPrefix.add(new String(next.value));
+                numberOfKeysReturned++;
+            }
         }
+
         assertThat(numberOfKeysReturned, is(3));
         assertThat(valuesWithPrefix.get(0), is("f"));
         assertThat(valuesWithPrefix.get(1), is("d"));
@@ -158,15 +173,16 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         byteStore.putAll(entries);
         byteStore.flush();
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefixAsabcd = byteStore.prefixScan("abcd", stringSerializer);
-        int numberOfKeysReturned = 0;
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefixAsabcd = byteStore.prefixScan("abcd", stringSerializer)) {
+            int numberOfKeysReturned = 0;
 
-        while (keysWithPrefixAsabcd.hasNext()) {
-            keysWithPrefixAsabcd.next().key.get();
-            numberOfKeysReturned++;
+            while (keysWithPrefixAsabcd.hasNext()) {
+                keysWithPrefixAsabcd.next().key.get();
+                numberOfKeysReturned++;
+            }
+
+            assertThat(numberOfKeysReturned, is(1));
         }
-
-        assertThat(numberOfKeysReturned, is(1));
     }
 
     @Test
@@ -186,14 +202,15 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         byteStore.putAll(entries);
         byteStore.flush();
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = byteStore.prefixScan(prefix, stringSerializer);
         final List<String> valuesWithPrefix = new ArrayList<>();
         int numberOfKeysReturned = 0;
 
-        while (keysWithPrefix.hasNext()) {
-            final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
-            valuesWithPrefix.add(new String(next.value));
-            numberOfKeysReturned++;
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = byteStore.prefixScan(prefix, stringSerializer)) {
+            while (keysWithPrefix.hasNext()) {
+                final KeyValue<Bytes, byte[]> next = keysWithPrefix.next();
+                valuesWithPrefix.add(new String(next.value));
+                numberOfKeysReturned++;
+            }
         }
 
         assertThat(numberOfKeysReturned, is(1));
@@ -215,13 +232,45 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         byteStore.putAll(entries);
         byteStore.flush();
 
-        final KeyValueIterator<Bytes, byte[]> keysWithPrefix = byteStore.prefixScan("bb", stringSerializer);
         int numberOfKeysReturned = 0;
 
-        while (keysWithPrefix.hasNext()) {
-            keysWithPrefix.next();
-            numberOfKeysReturned++;
+        try (final KeyValueIterator<Bytes, byte[]> keysWithPrefix = byteStore.prefixScan("bb", stringSerializer)) {
+            while (keysWithPrefix.hasNext()) {
+                keysWithPrefix.next();
+                numberOfKeysReturned++;
+            }
         }
+
         assertThat(numberOfKeysReturned, is(0));
     }
+
+    @Test
+    public void shouldThrowNullPointerIfPrefixKeySerializerIsNull() {
+        assertThrows(NullPointerException.class, () -> byteStore.prefixScan("bb", null));
+    }
+
+    @Test
+    public void shouldMatchPositionAfterPut() {
+        inMemoryKeyValueStore.init((StateStoreContext) context, inMemoryKeyValueStore);
+
+        context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "", new RecordHeaders()));
+        inMemoryKeyValueStore.put(bytesKey("key1"), bytesValue("value1"));
+        context.setRecordContext(new ProcessorRecordContext(0, 2, 0, "", new RecordHeaders()));
+        inMemoryKeyValueStore.put(bytesKey("key2"), bytesValue("value2"));
+        context.setRecordContext(new ProcessorRecordContext(0, 3, 0, "", new RecordHeaders()));
+        inMemoryKeyValueStore.put(bytesKey("key3"), bytesValue("value3"));
+
+        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 3L)))));
+        final Position actual = inMemoryKeyValueStore.getPosition();
+        assertEquals(expected, actual);
+    }
+
+    private byte[] bytesValue(final String value) {
+        return value.getBytes();
+    }
+
+    private Bytes bytesKey(final String key) {
+        return Bytes.wrap(key.getBytes());
+    }
+
 }

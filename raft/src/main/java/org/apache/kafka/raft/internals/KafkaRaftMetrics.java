@@ -27,6 +27,7 @@ import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
 
+import java.util.Arrays;
 import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
 
@@ -34,11 +35,11 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
     private final Metrics metrics;
 
-    private OffsetAndEpoch logEndOffset;
-    private int numUnknownVoterConnections;
-    private OptionalLong electionStartMs;
-    private OptionalLong pollStartMs;
-    private OptionalLong pollEndMs;
+    private volatile OffsetAndEpoch logEndOffset;
+    private volatile int numUnknownVoterConnections;
+    private volatile OptionalLong electionStartMs;
+    private volatile OptionalLong pollStartMs;
+    private volatile OptionalLong pollEndMs;
 
     private final MetricName currentLeaderIdMetricName;
     private final MetricName currentVotedIdMetricName;
@@ -101,12 +102,13 @@ public class KafkaRaftMetrics implements AutoCloseable {
         metrics.addMetric(this.highWatermarkMetricName, (mConfig, currentTimeMs) -> state.highWatermark().map(hw -> hw.offset).orElse(-1L));
 
         this.logEndOffsetMetricName = metrics.metricName("log-end-offset", metricGroupName, "The current raft log end offset.");
-        metrics.addMetric(this.logEndOffsetMetricName, (mConfig, currentTimeMs) -> logEndOffset.offset);
+        metrics.addMetric(this.logEndOffsetMetricName, (mConfig, currentTimeMs) -> logEndOffset.offset());
 
         this.logEndEpochMetricName = metrics.metricName("log-end-epoch", metricGroupName, "The current raft log end epoch.");
-        metrics.addMetric(this.logEndEpochMetricName, (mConfig, currentTimeMs) -> logEndOffset.epoch);
+        metrics.addMetric(this.logEndEpochMetricName, (mConfig, currentTimeMs) -> logEndOffset.epoch());
 
-        this.numUnknownVoterConnectionsMetricName = metrics.metricName("number-unknown-voter-connections", metricGroupName, "The number of voter connections recognized at this member.");
+        this.numUnknownVoterConnectionsMetricName = metrics.metricName("number-unknown-voter-connections", metricGroupName,
+                "Number of unknown voters whose connection information is not cached; would never be larger than quorum-size.");
         metrics.addMetric(this.numUnknownVoterConnectionsMetricName, (mConfig, currentTimeMs) -> numUnknownVoterConnections);
 
         this.commitTimeSensor = metrics.sensor("commit-latency");
@@ -117,9 +119,9 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
         this.electionTimeSensor = metrics.sensor("election-latency");
         this.electionTimeSensor.add(metrics.metricName("election-latency-avg", metricGroupName,
-                "The average time in milliseconds to elect a new leader."), new Avg());
+                "The average time in milliseconds spent on electing a new leader."), new Avg());
         this.electionTimeSensor.add(metrics.metricName("election-latency-max", metricGroupName,
-                "The maximum time in milliseconds to elect a new leader."), new Max());
+                "The maximum time in milliseconds spent on electing a new leader."), new Max());
 
         this.fetchRecordsSensor = metrics.sensor("fetch-records");
         this.fetchRecordsSensor.add(metrics.metricName("fetch-records-rate", metricGroupName,
@@ -186,19 +188,23 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
     @Override
     public void close() {
-        metrics.removeMetric(currentLeaderIdMetricName);
-        metrics.removeMetric(currentVotedIdMetricName);
-        metrics.removeMetric(currentEpochMetricName);
-        metrics.removeMetric(currentStateMetricName);
-        metrics.removeMetric(highWatermarkMetricName);
-        metrics.removeMetric(logEndOffsetMetricName);
-        metrics.removeMetric(logEndEpochMetricName);
-        metrics.removeMetric(numUnknownVoterConnectionsMetricName);
+        Arrays.asList(
+            currentLeaderIdMetricName,
+            currentVotedIdMetricName,
+            currentEpochMetricName,
+            currentStateMetricName,
+            highWatermarkMetricName,
+            logEndOffsetMetricName,
+            logEndEpochMetricName,
+            numUnknownVoterConnectionsMetricName
+        ).forEach(metrics::removeMetric);
 
-        metrics.removeSensor(commitTimeSensor.name());
-        metrics.removeSensor(electionTimeSensor.name());
-        metrics.removeSensor(fetchRecordsSensor.name());
-        metrics.removeSensor(appendRecordsSensor.name());
-        metrics.removeSensor(pollIdleSensor.name());
+        Arrays.asList(
+            commitTimeSensor.name(),
+            electionTimeSensor.name(),
+            fetchRecordsSensor.name(),
+            appendRecordsSensor.name(),
+            pollIdleSensor.name()
+        ).forEach(metrics::removeSensor);
     }
 }

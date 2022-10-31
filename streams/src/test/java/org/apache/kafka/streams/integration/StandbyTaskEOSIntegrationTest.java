@@ -48,6 +48,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -74,16 +75,18 @@ import static org.junit.Assert.assertTrue;
 @RunWith(Parameterized.class)
 @Category(IntegrationTest.class)
 public class StandbyTaskEOSIntegrationTest {
-
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private final static long REBALANCE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
     private final static int KEY_0 = 0;
     private final static int KEY_1 = 1;
 
+    @SuppressWarnings("deprecation")
     @Parameterized.Parameters(name = "{0}")
     public static Collection<String[]> data() {
         return asList(new String[][] {
             {StreamsConfig.EXACTLY_ONCE},
-            {StreamsConfig.EXACTLY_ONCE_BETA}
+            {StreamsConfig.EXACTLY_ONCE_V2}
         });
     }
 
@@ -169,8 +172,8 @@ public class StandbyTaskEOSIntegrationTest {
         // Wait for the record to be processed
         assertTrue(instanceLatch.await(15, TimeUnit.SECONDS));
 
-        streamInstanceOne.close(Duration.ZERO);
-        streamInstanceTwo.close(Duration.ZERO);
+        streamInstanceOne.close();
+        streamInstanceTwo.close();
 
         streamInstanceOne.cleanUp();
         streamInstanceTwo.cleanUp();
@@ -185,7 +188,7 @@ public class StandbyTaskEOSIntegrationTest {
         final Properties props = props(stateDirPath);
 
         final StateDirectory stateDirectory = new StateDirectory(
-            new StreamsConfig(props), new MockTime(), true);
+            new StreamsConfig(props), new MockTime(), true, false);
 
         new OffsetCheckpoint(new File(stateDirectory.getOrCreateDirectoryForTask(taskId), ".checkpoint"))
             .write(Collections.singletonMap(new TopicPartition("unknown-topic", 0), 5L));
@@ -341,6 +344,7 @@ public class StandbyTaskEOSIntegrationTest {
         );
     }
 
+    @SuppressWarnings("deprecation")
     private KafkaStreams buildWithDeduplicationTopology(final String stateDirPath) {
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -399,13 +403,13 @@ public class StandbyTaskEOSIntegrationTest {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, stateDirPath);
         streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         // need to set to zero to get predictable active/standby task assignments
         streamsConfiguration.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, 0);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");

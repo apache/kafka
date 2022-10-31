@@ -20,7 +20,6 @@ import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage}
 
 import com.typesafe.scalalogging.Logger
-import kafka.api.KAFKA_2_0_IV1
 import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
@@ -37,6 +36,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_0_IV1
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn
@@ -95,25 +95,25 @@ object AclAuthorizer {
     }
   }
 
-  private[authorizer] def zkClientConfigFromKafkaConfigAndMap(kafkaConfig: KafkaConfig, configMap: mutable.Map[String, _<:Any]): Option[ZKClientConfig] = {
+  private[authorizer] def zkClientConfigFromKafkaConfigAndMap(kafkaConfig: KafkaConfig, configMap: mutable.Map[String, _<:Any]): ZKClientConfig = {
     val zkSslClientEnable = configMap.get(AclAuthorizer.configPrefix + KafkaConfig.ZkSslClientEnableProp).
       map(_.toString).getOrElse(kafkaConfig.zkSslClientEnable.toString).toBoolean
     if (!zkSslClientEnable)
-      None
+      new ZKClientConfig
     else {
       // start with the base config from the Kafka configuration
       // be sure to force creation since the zkSslClientEnable property in the kafkaConfig could be false
       val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig, true)
       // add in any prefixed overlays
-      KafkaConfig.ZkSslConfigToSystemPropertyMap.foreach{ case (kafkaProp, sysProp) => {
-        val prefixedValue = configMap.get(AclAuthorizer.configPrefix + kafkaProp)
-        if (prefixedValue.isDefined)
-          zkClientConfig.get.setProperty(sysProp,
+      KafkaConfig.ZkSslConfigToSystemPropertyMap.forKeyValue { (kafkaProp, sysProp) =>
+        configMap.get(AclAuthorizer.configPrefix + kafkaProp).foreach { prefixedValue =>
+          zkClientConfig.setProperty(sysProp,
             if (kafkaProp == KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp)
-              (prefixedValue.get.toString.toUpperCase == "HTTPS").toString
+              (prefixedValue.toString.toUpperCase == "HTTPS").toString
             else
-              prefixedValue.get.toString)
-      }}
+              prefixedValue.toString)
+        }
+      }
       zkClientConfig
     }
   }
@@ -121,6 +121,8 @@ object AclAuthorizer {
   private def validateAclBinding(aclBinding: AclBinding): Unit = {
     if (aclBinding.isUnknown)
       throw new IllegalArgumentException("ACL binding contains unknown elements")
+    if (aclBinding.pattern().name().contains("/"))
+      throw new IllegalArgumentException(s"ACL binding contains invalid resource name: ${aclBinding.pattern().name()}")
   }
 }
 
@@ -175,12 +177,14 @@ class AclAuthorizer extends Authorizer with Logging {
 
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(kafkaConfig, configs)
     val time = Time.SYSTEM
+    // createChrootIfNecessary=true is necessary in case we are running in a KRaft cluster
+    // because such a cluster will not create any chroot path in ZooKeeper (it doesn't connect to ZooKeeper)
     zkClient = KafkaZkClient(zkUrl, kafkaConfig.zkEnableSecureAcls, zkSessionTimeOutMs, zkConnectionTimeoutMs,
-      zkMaxInFlightRequests, time, "kafka.security", "AclAuthorizer", name=Some("ACL authorizer"),
-      zkClientConfig = zkClientConfig)
+      zkMaxInFlightRequests, time, name = "ACL authorizer", zkClientConfig = zkClientConfig,
+      metricGroup = "kafka.security", metricType = "AclAuthorizer", createChrootIfNecessary = true)
     zkClient.createAclPaths()
 
-    extendedAclSupport = kafkaConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1
+    extendedAclSupport = kafkaConfig.interBrokerProtocolVersion.isAtLeast(IBP_2_0_IV1)
 
     // Start change listeners first and then populate the cache so that there is no timing window
     // between loading cache and processing change notifications.
@@ -190,11 +194,12 @@ class AclAuthorizer extends Authorizer with Logging {
 
   override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = {
     serverInfo.endpoints.asScala.map { endpoint =>
-      endpoint -> CompletableFuture.completedFuture[Void](null) }.toMap.asJava
+      endpoint -> CompletableFuture.completedFuture[Void](null)
+    }.toMap.asJava
   }
 
   override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
-    actions.asScala.map { action => authorizeAction(requestContext, action) }.asJava
+    actions.asScala.map(action => authorizeAction(requestContext, action)).asJava
   }
 
   override def createAcls(requestContext: AuthorizableRequestContext,
@@ -204,7 +209,7 @@ class AclAuthorizer extends Authorizer with Logging {
       try {
         if (!extendedAclSupport && aclBinding.pattern.patternType == PatternType.PREFIXED) {
           throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
-            s"${KafkaConfig.InterBrokerProtocolVersionProp} of $KAFKA_2_0_IV1 or greater")
+            s"${KafkaConfig.InterBrokerProtocolVersionProp} of $IBP_2_0_IV1 or greater")
         }
         validateAclBinding(aclBinding)
         true
@@ -438,7 +443,6 @@ class AclAuthorizer extends Authorizer with Logging {
     false
   }
 
-
   private def authorizeAction(requestContext: AuthorizableRequestContext, action: Action): AuthorizationResult = {
     val resource = action.resourcePattern
     if (resource.patternType != PatternType.LITERAL) {
@@ -545,7 +549,7 @@ class AclAuthorizer extends Authorizer with Logging {
 
   private def loadCache(): Unit = {
     lock synchronized  {
-      ZkAclStore.stores.foreach(store => {
+      ZkAclStore.stores.foreach { store =>
         val resourceTypes = zkClient.getResourceTypes(store.patternType)
         for (rType <- resourceTypes) {
           val resourceType = Try(SecurityUtils.resourceType(rType))
@@ -560,7 +564,7 @@ class AclAuthorizer extends Authorizer with Logging {
             case Failure(_) => warn(s"Ignoring unknown ResourceType: $rType")
           }
         }
-      })
+      }
     }
   }
 
@@ -689,14 +693,14 @@ class AclAuthorizer extends Authorizer with Logging {
     val acesToAdd = newAces.diff(currentAces)
     val acesToRemove = currentAces.diff(newAces)
 
-    acesToAdd.foreach(ace => {
+    acesToAdd.foreach { ace =>
       val resourceTypeKey = ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
       resourceCache.get(resourceTypeKey) match {
         case Some(resources) => resourceCache += (resourceTypeKey -> (resources + resource.name()))
         case None => resourceCache += (resourceTypeKey -> immutable.HashSet(resource.name()))
       }
-    })
-    acesToRemove.foreach(ace => {
+    }
+    acesToRemove.foreach { ace =>
       val resourceTypeKey = ResourceTypeKey(ace, resource.resourceType(), resource.patternType())
       resourceCache.get(resourceTypeKey) match {
         case Some(resources) =>
@@ -708,7 +712,7 @@ class AclAuthorizer extends Authorizer with Logging {
           }
         case None =>
       }
-    })
+    }
 
     if (versionedAcls.acls.nonEmpty) {
       aclCache = aclCache.updated(resource, versionedAcls)

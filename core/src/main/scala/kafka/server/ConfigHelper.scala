@@ -36,14 +36,14 @@ import scala.jdk.CollectionConverters._
 
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
 
+  def allConfigs(config: AbstractConfig) = {
+    config.originals.asScala.filter(_._2 != null) ++ config.nonInternalValues.asScala
+  }
+
   def describeConfigs(resourceToConfigNames: List[DescribeConfigsResource],
                       includeSynonyms: Boolean,
                       includeDocumentation: Boolean): List[DescribeConfigsResponseData.DescribeConfigsResult] = {
     resourceToConfigNames.map { case resource =>
-
-      def allConfigs(config: AbstractConfig) = {
-        config.originals.asScala.filter(_._2 != null) ++ config.nonInternalValues.asScala
-      }
 
       def createResponseConfig(configs: Map[String, Any],
                                createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {

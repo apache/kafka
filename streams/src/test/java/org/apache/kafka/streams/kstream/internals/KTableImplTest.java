@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
+import org.apache.kafka.streams.TopologyDescription.Subtopology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -44,10 +45,10 @@ import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.MockAggregator;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -91,7 +92,7 @@ public class KTableImplTest {
 
         final KTable<String, String> table1 = builder.table(topic1, consumed);
 
-        final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         final KTable<String, Integer> table2 = table1.mapValues(s -> Integer.valueOf(s));
@@ -115,7 +116,7 @@ public class KTableImplTest {
             inputTopic.pipeInput("A", "06", 8L);
         }
 
-        final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
+        final List<MockApiProcessor<String, Object, Void, Void>> processors = supplier.capturedProcessors(4);
         assertEquals(asList(
             new KeyValueTimestamp<>("A", "01", 5),
             new KeyValueTimestamp<>("B", "02", 100),
@@ -159,7 +160,7 @@ public class KTableImplTest {
 
         final KTable<String, String> table1 = builder.table(topic1, consumed, Materialized.as("fred"));
 
-        final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
         table1.toStream().process(supplier);
 
         final KTable<String, Integer> table2 = table1.mapValues(s -> Integer.valueOf(s));
@@ -183,7 +184,7 @@ public class KTableImplTest {
             inputTopic.pipeInput("A", "06", 8L);
         }
 
-        final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
+        final List<MockApiProcessor<String, Object, Void, Void>> processors = supplier.capturedProcessors(4);
         assertEquals(asList(
             new KeyValueTimestamp<>("A", "01", 5),
             new KeyValueTimestamp<>("B", "02", 100),
@@ -405,7 +406,7 @@ public class KTableImplTest {
     }
 
     private void assertTopologyContainsProcessor(final Topology topology, final String processorName) {
-        for (final TopologyDescription.Subtopology subtopology: topology.describe().subtopologies()) {
+        for (final Subtopology subtopology: topology.describe().subtopologies()) {
             for (final TopologyDescription.Node node: subtopology.nodes()) {
                 if (node.name().equals(processorName)) {
                     return;
@@ -573,7 +574,6 @@ public class KTableImplTest {
         assertThrows(NullPointerException.class, () -> table.transformValues(valueTransformerSupplier, (Materialized) null));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowNullPointerOnTransformValuesWithKeyWhenStoreNamesNull() {
         final ValueTransformerWithKeySupplier<String, String, ?> valueTransformerSupplier =

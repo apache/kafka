@@ -19,7 +19,7 @@ package kafka.utils
 import java.util.Properties
 import java.util.concurrent.atomic._
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
-import kafka.log.{Log, LogConfig, LogManager, ProducerStateManager}
+import kafka.log.{LocalLog, LogConfig, LogLoader, LogSegments, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.TestUtils.retry
 import org.junit.jupiter.api.Assertions._
@@ -118,13 +118,36 @@ class SchedulerTest {
     val logDir = TestUtils.randomPartitionLogDir(tmpDir)
     val logConfig = LogConfig(new Properties())
     val brokerTopicStats = new BrokerTopicStats
-    val recoveryPoint = 0L
-    val maxProducerIdExpirationMs = 60 * 60 * 1000
-    val topicPartition = Log.parseTopicPartitionName(logDir)
-    val producerStateManager = new ProducerStateManager(topicPartition, logDir, maxProducerIdExpirationMs)
-    val log = new Log(logDir, logConfig, logStartOffset = 0, recoveryPoint = recoveryPoint, scheduler,
-      brokerTopicStats, mockTime, maxProducerIdExpirationMs, LogManager.ProducerIdExpirationCheckIntervalMs,
-      topicPartition, producerStateManager, new LogDirFailureChannel(10), topicId = None, keepPartitionMetadataFile = true)
+    val maxTransactionTimeoutMs = 5 * 60 * 1000
+    val maxProducerIdExpirationMs = kafka.server.Defaults.ProducerIdExpirationMs
+    val producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs
+    val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
+    val logDirFailureChannel = new LogDirFailureChannel(10)
+    val segments = new LogSegments(topicPartition)
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.recordVersion, "")
+    val producerStateManager = new ProducerStateManager(topicPartition, logDir,
+      maxTransactionTimeoutMs, new ProducerStateManagerConfig(maxProducerIdExpirationMs), mockTime)
+    val offsets = new LogLoader(
+      logDir,
+      topicPartition,
+      logConfig,
+      scheduler,
+      mockTime,
+      logDirFailureChannel,
+      hadCleanShutdown = true,
+      segments,
+      0L,
+      0L,
+      leaderEpochCache,
+      producerStateManager
+    ).load()
+    val localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
+      offsets.nextOffsetMetadata, scheduler, mockTime, topicPartition, logDirFailureChannel)
+    val log = new UnifiedLog(logStartOffset = offsets.logStartOffset,
+      localLog = localLog,
+      brokerTopicStats, producerIdExpirationCheckIntervalMs,
+      leaderEpochCache, producerStateManager,
+      _topicId = None, keepPartitionMetadataFile = true)
     assertTrue(scheduler.taskRunning(log.producerExpireCheck))
     log.close()
     assertFalse(scheduler.taskRunning(log.producerExpireCheck))

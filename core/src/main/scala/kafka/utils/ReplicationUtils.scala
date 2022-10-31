@@ -31,7 +31,7 @@ object ReplicationUtils extends Logging {
     val newLeaderData = TopicPartitionStateZNode.encode(LeaderIsrAndControllerEpoch(newLeaderAndIsr, controllerEpoch))
     // use the epoch of the controller that made the leadership decision, instead of the current controller epoch
     val updatePersistentPath: (Boolean, Int) = zkClient.conditionalUpdatePath(path, newLeaderData,
-      newLeaderAndIsr.zkVersion, Some(checkLeaderAndIsrZkData))
+      newLeaderAndIsr.partitionEpoch, Some(checkLeaderAndIsrZkData))
     updatePersistentPath
   }
 

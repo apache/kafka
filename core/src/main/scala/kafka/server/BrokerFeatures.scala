@@ -18,9 +18,10 @@
 package kafka.server
 
 import kafka.utils.Logging
-import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
-import org.apache.kafka.common.feature.Features._
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.server.common.MetadataVersion
 
+import java.util
 import scala.jdk.CollectionConverters._
 
 /**
@@ -32,19 +33,19 @@ import scala.jdk.CollectionConverters._
 class BrokerFeatures private (@volatile var supportedFeatures: Features[SupportedVersionRange]) {
   // For testing only.
   def setSupportedFeatures(newFeatures: Features[SupportedVersionRange]): Unit = {
-    supportedFeatures = newFeatures
+    val combined = new util.HashMap[String, SupportedVersionRange](supportedFeatures.features())
+    combined.putAll(newFeatures.features())
+    supportedFeatures = Features.supportedFeatures(combined)
   }
 
   /**
-   * Returns the default finalized features that a new Kafka cluster with IBP config >= KAFKA_2_7_IV0
+   * Returns the default finalized features that a new Kafka cluster with IBP config >= IBP_2_7_IV0
    * needs to be bootstrapped with.
    */
-  def defaultFinalizedFeatures: Features[FinalizedVersionRange] = {
-    Features.finalizedFeatures(
-      supportedFeatures.features.asScala.map {
-        case(name, versionRange) => (
-          name, new FinalizedVersionRange(versionRange.min, versionRange.max))
-      }.asJava)
+  def defaultFinalizedFeatures: Map[String, Short] = {
+    supportedFeatures.features.asScala.map {
+      case(name, versionRange) => (name, versionRange.max)
+    }.toMap
   }
 
   /**
@@ -62,7 +63,7 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
    * @return            The subset of input features which are incompatible. If the returned object
    *                    is empty, it means there were no feature incompatibilities found.
    */
-  def incompatibleFeatures(finalized: Features[FinalizedVersionRange]): Features[FinalizedVersionRange] = {
+  def incompatibleFeatures(finalized: Map[String, Short]): Map[String, Short] = {
     BrokerFeatures.incompatibleFeatures(supportedFeatures, finalized, logIncompatibilities = true)
   }
 }
@@ -70,9 +71,17 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
 object BrokerFeatures extends Logging {
 
   def createDefault(): BrokerFeatures = {
-    // The arguments are currently empty, but, in the future as we define features we should
-    // populate the required values here.
-    new BrokerFeatures(emptySupportedFeatures)
+    new BrokerFeatures(defaultSupportedFeatures())
+  }
+
+  def defaultSupportedFeatures(): Features[SupportedVersionRange] = {
+    Features.supportedFeatures(
+      java.util.Collections.singletonMap(MetadataVersion.FEATURE_NAME,
+        new SupportedVersionRange(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(), MetadataVersion.latest().featureLevel())))
+  }
+
+  def createEmpty(): BrokerFeatures = {
+    new BrokerFeatures(Features.emptySupportedFeatures())
   }
 
   /**
@@ -86,19 +95,19 @@ object BrokerFeatures extends Logging {
    *                            - False otherwise.
    */
   def hasIncompatibleFeatures(supportedFeatures: Features[SupportedVersionRange],
-                              finalizedFeatures: Features[FinalizedVersionRange]): Boolean = {
-    !incompatibleFeatures(supportedFeatures, finalizedFeatures, logIncompatibilities = false).empty
+                              finalizedFeatures: Map[String, Short]): Boolean = {
+    incompatibleFeatures(supportedFeatures, finalizedFeatures, logIncompatibilities = false).nonEmpty
   }
 
   private def incompatibleFeatures(supportedFeatures: Features[SupportedVersionRange],
-                                   finalizedFeatures: Features[FinalizedVersionRange],
-                                   logIncompatibilities: Boolean): Features[FinalizedVersionRange] = {
-    val incompatibleFeaturesInfo = finalizedFeatures.features.asScala.map {
+                                   finalizedFeatures: Map[String, Short],
+                                   logIncompatibilities: Boolean): Map[String, Short] = {
+    val incompatibleFeaturesInfo = finalizedFeatures.map {
       case (feature, versionLevels) =>
         val supportedVersions = supportedFeatures.get(feature)
         if (supportedVersions == null) {
           (feature, versionLevels, "{feature=%s, reason='Unsupported feature'}".format(feature))
-        } else if (versionLevels.isIncompatibleWith(supportedVersions)) {
+        } else if (supportedVersions.isIncompatibleWith(versionLevels)) {
           (feature, versionLevels, "{feature=%s, reason='%s is incompatible with %s'}".format(
             feature, versionLevels, supportedVersions))
         } else {
@@ -110,7 +119,6 @@ object BrokerFeatures extends Logging {
       warn("Feature incompatibilities seen: " +
            incompatibleFeaturesInfo.map { case(_, _, errorReason) => errorReason }.mkString(", "))
     }
-    Features.finalizedFeatures(
-      incompatibleFeaturesInfo.map { case(feature, versionLevels, _) => (feature, versionLevels) }.toMap.asJava)
+    incompatibleFeaturesInfo.map { case(feature, versionLevels, _) => (feature, versionLevels) }.toMap
   }
 }

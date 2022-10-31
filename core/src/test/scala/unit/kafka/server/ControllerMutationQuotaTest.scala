@@ -40,20 +40,19 @@ import org.apache.kafka.common.requests.DeleteTopicsRequest
 import org.apache.kafka.common.requests.DeleteTopicsResponse
 import org.apache.kafka.common.security.auth.AuthenticationContext
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.fail
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
 object ControllerMutationQuotaTest {
   // Principal used for all client connections. This is updated by each test.
   var principal = KafkaPrincipal.ANONYMOUS
-  class TestPrincipalBuilder extends KafkaPrincipalBuilder {
+  class TestPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       principal
     }
@@ -106,8 +105,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     // Define a quota for ThrottledPrincipal
     defineUserQuota(ThrottledPrincipal.getName, Some(ControllerMutationRate))

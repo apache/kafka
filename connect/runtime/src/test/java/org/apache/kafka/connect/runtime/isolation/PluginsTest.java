@@ -47,7 +47,6 @@ import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,7 +67,6 @@ public class PluginsTest {
     private TestHeaderConverter headerConverter;
     private TestInternalConverter internalConverter;
 
-    @SuppressWarnings("deprecation")
     @Before
     public void setup() {
         Map<String, String> pluginProps = new HashMap<>();
@@ -83,10 +81,6 @@ public class PluginsTest {
         props.put("value.converter." + JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "true");
         props.put("key.converter.extra.config", "foo1");
         props.put("value.converter.extra.config", "foo2");
-        props.put(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, TestInternalConverter.class.getName());
-        props.put(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, TestInternalConverter.class.getName());
-        props.put("internal.key.converter.extra.config", "bar1");
-        props.put("internal.value.converter.extra.config", "bar2");
         props.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, TestHeaderConverter.class.getName());
         props.put("header.converter.extra.config", "baz");
 
@@ -110,20 +104,11 @@ public class PluginsTest {
         assertEquals("foo2", converter.configs.get("extra.config"));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldInstantiateAndConfigureInternalConverters() {
-        instantiateAndConfigureInternalConverter(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.CURRENT_CLASSLOADER);
-        // Validate schemas.enable is defaulted to false for internal converter
-        assertEquals(false, internalConverter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
-        // Validate internal converter properties can still be set
-        assertEquals("bar1", internalConverter.configs.get("extra.config"));
-
-        instantiateAndConfigureInternalConverter(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.PLUGINS);
-        // Validate schemas.enable is defaulted to false for internal converter
-        assertEquals(false, internalConverter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
-        // Validate internal converter properties can still be set
-        assertEquals("bar2", internalConverter.configs.get("extra.config"));
+        instantiateAndConfigureInternalConverter(true, Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"));
+        // Validate schemas.enable is set to false
+        assertEquals("false", internalConverter.configs.get(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG));
     }
 
     @Test
@@ -438,8 +423,8 @@ public class PluginsTest {
         assertNotNull(headerConverter);
     }
 
-    protected void instantiateAndConfigureInternalConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {
-        internalConverter = (TestInternalConverter) plugins.newConverter(config, configPropName, classLoaderUsage);
+    protected void instantiateAndConfigureInternalConverter(boolean isKey, Map<String, String> config) {
+        internalConverter = (TestInternalConverter) plugins.newInternalConverter(isKey, TestInternalConverter.class.getName(), config);
         assertNotNull(internalConverter);
     }
 
@@ -507,7 +492,7 @@ public class PluginsTest {
         }
 
         @Override
-        public void close() throws IOException {
+        public void close() {
         }
     }
 
@@ -521,7 +506,7 @@ public class PluginsTest {
         }
 
         @Override
-        public void close() throws IOException {
+        public void close() {
         }
 
         @Override
@@ -538,6 +523,7 @@ public class PluginsTest {
     public static class TestInternalConverter extends JsonConverter {
         public Map<String, ?> configs;
 
+        @Override
         public void configure(Map<String, ?> configs) {
             this.configs = configs;
             super.configure(configs);

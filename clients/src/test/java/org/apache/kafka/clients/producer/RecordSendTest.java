@@ -39,7 +39,7 @@ public class RecordSendTest {
 
     private final TopicPartition topicPartition = new TopicPartition("test", 0);
     private final long baseOffset = 45;
-    private final long relOffset = 5;
+    private final int relOffset = 5;
 
     /**
      * Test that waiting on a request that never completes times out
@@ -48,7 +48,7 @@ public class RecordSendTest {
     public void testTimeout() throws Exception {
         ProduceRequestResult request = new ProduceRequestResult(topicPartition);
         FutureRecordMetadata future = new FutureRecordMetadata(request, relOffset,
-                RecordBatch.NO_TIMESTAMP, 0L, 0, 0, Time.SYSTEM);
+                RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
         assertFalse(future.isDone(), "Request is not completed");
         try {
             future.get(5, TimeUnit.MILLISECONDS);
@@ -68,7 +68,7 @@ public class RecordSendTest {
     @Test
     public void testError() throws Exception {
         FutureRecordMetadata future = new FutureRecordMetadata(asyncRequest(baseOffset, new CorruptRecordException(), 50L),
-                relOffset, RecordBatch.NO_TIMESTAMP, 0L, 0, 0, Time.SYSTEM);
+                relOffset, RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
         assertThrows(ExecutionException.class, future::get);
     }
 
@@ -78,7 +78,7 @@ public class RecordSendTest {
     @Test
     public void testBlocking() throws Exception {
         FutureRecordMetadata future = new FutureRecordMetadata(asyncRequest(baseOffset, null, 50L),
-                relOffset, RecordBatch.NO_TIMESTAMP, 0L, 0, 0, Time.SYSTEM);
+                relOffset, RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
         assertEquals(baseOffset + relOffset, future.get().offset());
     }
 
@@ -89,7 +89,12 @@ public class RecordSendTest {
             public void run() {
                 try {
                     sleep(timeout);
-                    request.set(baseOffset, RecordBatch.NO_TIMESTAMP, error);
+                    if (error == null) {
+                        request.set(baseOffset, RecordBatch.NO_TIMESTAMP, null);
+                    } else {
+                        request.set(-1L, RecordBatch.NO_TIMESTAMP, index -> error);
+                    }
+
                     request.done();
                 } catch (InterruptedException e) { }
             }

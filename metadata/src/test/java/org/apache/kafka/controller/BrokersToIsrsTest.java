@@ -20,7 +20,6 @@ package org.apache.kafka.controller;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.controller.BrokersToIsrs.PartitionsOnReplicaIterator;
-import org.apache.kafka.controller.BrokersToIsrs.TopicIdPartition;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -101,9 +100,9 @@ public class BrokersToIsrsTest {
         assertEquals(toSet(new TopicIdPartition(UUIDS[0], 2)),
             toSet(brokersToIsrs.iterator(3, true)));
         assertEquals(toSet(), toSet(brokersToIsrs.iterator(2, true)));
-        assertEquals(toSet(), toSet(brokersToIsrs.noLeaderIterator()));
+        assertEquals(toSet(), toSet(brokersToIsrs.partitionsWithNoLeader()));
         brokersToIsrs.update(UUIDS[0], 2, new int[]{1, 2, 3}, new int[]{1, 2, 3}, 3, -1);
         assertEquals(toSet(new TopicIdPartition(UUIDS[0], 2)),
-            toSet(brokersToIsrs.noLeaderIterator()));
+            toSet(brokersToIsrs.partitionsWithNoLeader()));
     }
 }

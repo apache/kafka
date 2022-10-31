@@ -21,13 +21,22 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.metadata.AccessControlEntryRecord;
+import org.apache.kafka.common.metadata.AccessControlEntryRecordJsonConverter;
+import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
+import org.apache.kafka.common.metadata.ClientQuotaRecord;
+import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.common.metadata.FeatureLevelRecordJsonConverter;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.PartitionRecordJsonConverter;
+import org.apache.kafka.common.metadata.ProducerIdsRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.RemoveAccessControlEntryRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
@@ -36,21 +45,29 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.metadata.ApiMessageAndVersion;
-import org.apache.kafka.metalog.MetaLogLeader;
-import org.apache.kafka.metalog.MetaLogListener;
+import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
+import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
+import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
+import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.shell.MetadataNode.DirectoryNode;
 import org.apache.kafka.shell.MetadataNode.FileNode;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+
+import static org.apache.kafka.metadata.LeaderRecoveryState.NO_CHANGE;
 
 /**
  * Maintains the in-memory metadata for the metadata tool.
@@ -77,13 +94,15 @@ public final class MetadataNodeManager implements AutoCloseable {
         }
     }
 
-    class LogListener implements MetaLogListener, RaftClient.Listener<ApiMessageAndVersion> {
+    class LogListener implements RaftClient.Listener<ApiMessageAndVersion> {
         @Override
         public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
             try {
-                // TODO: handle lastOffset
                 while (reader.hasNext()) {
-                    BatchReader.Batch<ApiMessageAndVersion> batch = reader.next();
+                    Batch<ApiMessageAndVersion> batch = reader.next();
+                    log.debug("handleCommits " + batch.records() + " at offset " + batch.lastOffset());
+                    DirectoryNode dir = data.root.mkdirs("metadataQuorum");
+                    dir.create("offset").setContents(String.valueOf(batch.lastOffset()));
                     for (ApiMessageAndVersion messageAndVersion : batch.records()) {
                         handleMessage(messageAndVersion.message());
                     }
@@ -94,19 +113,21 @@ public final class MetadataNodeManager implements AutoCloseable {
         }
 
         @Override
-        public void handleCommits(long lastOffset, List<ApiMessage> messages) {
-            appendEvent("handleCommits", () -> {
-                log.debug("handleCommits " + messages + " at offset " + lastOffset);
-                DirectoryNode dir = data.root.mkdirs("metadataQuorum");
-                dir.create("offset").setContents(String.valueOf(lastOffset));
-                for (ApiMessage message : messages) {
-                    handleMessage(message);
+        public void handleSnapshot(SnapshotReader<ApiMessageAndVersion> reader) {
+            try {
+                while (reader.hasNext()) {
+                    Batch<ApiMessageAndVersion> batch = reader.next();
+                    for (ApiMessageAndVersion messageAndVersion : batch) {
+                        handleMessage(messageAndVersion.message());
+                    }
                 }
-            }, null);
+            } finally {
+                reader.close();
+            }
         }
 
         @Override
-        public void handleNewLeader(MetaLogLeader leader) {
+        public void handleLeaderChange(LeaderAndEpoch leader) {
             appendEvent("handleNewLeader", () -> {
                 log.debug("handleNewLeader " + leader);
                 DirectoryNode dir = data.root.mkdirs("metadataQuorum");
@@ -115,20 +136,8 @@ public final class MetadataNodeManager implements AutoCloseable {
         }
 
         @Override
-        public void handleClaim(int epoch) {
-            // This shouldn't happen because we should never be the leader.
-            log.debug("RaftClient.Listener sent handleClaim(epoch=" + epoch + ")");
-        }
-
-        @Override
-        public void handleRenounce(long epoch) {
-            // This shouldn't happen because we should never be the leader.
-            log.debug("MetaLogListener sent handleRenounce(epoch=" + epoch + ")");
-        }
-
-        @Override
         public void beginShutdown() {
-            log.debug("MetaLogListener sent beginShutdown");
+            log.debug("Metadata log listener sent beginShutdown");
         }
     }
 
@@ -157,6 +166,11 @@ public final class MetadataNodeManager implements AutoCloseable {
 
     public LogListener logListener() {
         return logListener;
+    }
+
+    // VisibleForTesting
+    Data getData() {
+        return data;
     }
 
     @Override
@@ -190,7 +204,8 @@ public final class MetadataNodeManager implements AutoCloseable {
         });
     }
 
-    private void handleMessage(ApiMessage message) {
+    // VisibleForTesting
+    void handleMessage(ApiMessage message) {
         try {
             MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
             handleCommitImpl(type, message);
@@ -200,7 +215,7 @@ public final class MetadataNodeManager implements AutoCloseable {
     }
 
     private void handleCommitImpl(MetadataRecordType type, ApiMessage message)
-            throws Exception {
+        throws Exception {
         switch (type) {
             case REGISTER_BROKER_RECORD: {
                 DirectoryNode brokersNode = data.root.mkdirs("brokers");
@@ -253,7 +268,7 @@ public final class MetadataNodeManager implements AutoCloseable {
                             "Can't handle ConfigResource.Type " + record.resourceType());
                 }
                 DirectoryNode configDirectory = data.root.mkdirs("configs").
-                    mkdirs(typeString).mkdirs(record.resourceName());
+                    mkdirs(typeString).mkdirs(record.resourceName().isEmpty() ? "<default>" : record.resourceName());
                 if (record.value() == null) {
                     configDirectory.rmrf(record.name());
                 } else {
@@ -275,6 +290,9 @@ public final class MetadataNodeManager implements AutoCloseable {
                     partition.setLeader(record.leader());
                     partition.setLeaderEpoch(partition.leaderEpoch() + 1);
                 }
+                if (record.leaderRecoveryState() != NO_CHANGE) {
+                    partition.setLeaderRecoveryState(record.leaderRecoveryState());
+                }
                 partition.setPartitionEpoch(partition.partitionEpoch() + 1);
                 file.setContents(PartitionRecordJsonConverter.write(partition,
                     PartitionRecord.HIGHEST_SUPPORTED_VERSION).toPrettyString());
@@ -292,6 +310,22 @@ public final class MetadataNodeManager implements AutoCloseable {
                     create("isFenced").setContents("false");
                 break;
             }
+            case BROKER_REGISTRATION_CHANGE_RECORD: {
+                BrokerRegistrationChangeRecord record = (BrokerRegistrationChangeRecord) message;
+                BrokerRegistrationFencingChange fencingChange =
+                    BrokerRegistrationFencingChange.fromValue(record.fenced()).get();
+                if (fencingChange != BrokerRegistrationFencingChange.NONE) {
+                    data.root.mkdirs("brokers", Integer.toString(record.brokerId()))
+                        .create("isFenced").setContents(Boolean.toString(fencingChange.asBoolean().get()));
+                }
+                BrokerRegistrationInControlledShutdownChange inControlledShutdownChange =
+                    BrokerRegistrationInControlledShutdownChange.fromValue(record.inControlledShutdown()).get();
+                if (inControlledShutdownChange != BrokerRegistrationInControlledShutdownChange.NONE) {
+                    data.root.mkdirs("brokers", Integer.toString(record.brokerId()))
+                        .create("inControlledShutdown").setContents(Boolean.toString(inControlledShutdownChange.asBoolean().get()));
+                }
+                break;
+            }
             case REMOVE_TOPIC_RECORD: {
                 RemoveTopicRecord record = (RemoveTopicRecord) message;
                 DirectoryNode topicsDirectory =
@@ -301,8 +335,72 @@ public final class MetadataNodeManager implements AutoCloseable {
                 data.root.rmrf("topicIds", record.topicId().toString());
                 break;
             }
+            case CLIENT_QUOTA_RECORD: {
+                ClientQuotaRecord record = (ClientQuotaRecord) message;
+                List<String> directories = clientQuotaRecordDirectories(record.entity());
+                DirectoryNode node = data.root;
+                for (String directory : directories) {
+                    node = node.mkdirs(directory);
+                }
+                if (record.remove())
+                    node.rmrf(record.key());
+                else
+                    node.create(record.key()).setContents(record.value() + "");
+                break;
+            }
+            case PRODUCER_IDS_RECORD: {
+                ProducerIdsRecord record = (ProducerIdsRecord) message;
+                DirectoryNode producerIds = data.root.mkdirs("producerIds");
+                producerIds.create("lastBlockBrokerId").setContents(record.brokerId() + "");
+                producerIds.create("lastBlockBrokerEpoch").setContents(record.brokerEpoch() + "");
+
+                producerIds.create("nextBlockStartId").setContents(record.nextProducerId() + "");
+                break;
+            }
+            case ACCESS_CONTROL_ENTRY_RECORD: {
+                AccessControlEntryRecord record = (AccessControlEntryRecord) message;
+                DirectoryNode acls = data.root.mkdirs("acl").mkdirs("id");
+                FileNode file = acls.create(record.id().toString());
+                file.setContents(AccessControlEntryRecordJsonConverter.write(record,
+                    AccessControlEntryRecord.HIGHEST_SUPPORTED_VERSION).toPrettyString());
+                break;
+            }
+            case REMOVE_ACCESS_CONTROL_ENTRY_RECORD: {
+                RemoveAccessControlEntryRecord record = (RemoveAccessControlEntryRecord) message;
+                DirectoryNode acls = data.root.mkdirs("acl").mkdirs("id");
+                acls.rmrf(record.id().toString());
+                break;
+            }
+            case FEATURE_LEVEL_RECORD: {
+                FeatureLevelRecord record = (FeatureLevelRecord) message;
+                DirectoryNode features = data.root.mkdirs("features");
+                if (record.featureLevel() == 0) {
+                    features.rmrf(record.name());
+                } else {
+                    FileNode file = features.create(record.name());
+                    file.setContents(FeatureLevelRecordJsonConverter.write(record,
+                        FeatureLevelRecord.HIGHEST_SUPPORTED_VERSION).toPrettyString());
+                }
+                break;
+            }
+            case NO_OP_RECORD: {
+                break;
+            }
             default:
                 throw new RuntimeException("Unhandled metadata record type");
         }
+    }
+
+    static List<String> clientQuotaRecordDirectories(List<EntityData> entityData) {
+        List<String> result = new ArrayList<>();
+        result.add("client-quotas");
+        TreeMap<String, EntityData> entries = new TreeMap<>();
+        entityData.forEach(e -> entries.put(e.entityType(), e));
+        for (Map.Entry<String, EntityData> entry : entries.entrySet()) {
+            result.add(entry.getKey());
+            result.add(entry.getValue().entityName() == null ?
+                "<default>" : entry.getValue().entityName());
+        }
+        return result;
     }
 }

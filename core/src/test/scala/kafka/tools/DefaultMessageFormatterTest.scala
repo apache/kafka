@@ -15,12 +15,12 @@
   * limitations under the License.
   */
 
-package unit.kafka.tools
+package kafka.tools
 
 import java.io.{ByteArrayOutputStream, Closeable, PrintStream}
 import java.nio.charset.StandardCharsets
 import java.util
-import kafka.tools.DefaultMessageFormatter
+
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.header.internals.{RecordHeader, RecordHeaders}
@@ -30,11 +30,11 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
+import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 class DefaultMessageFormatterTest {
   import DefaultMessageFormatterTest._
-
 
   @ParameterizedTest
   @MethodSource(Array("parameters"))
@@ -141,7 +141,7 @@ object DefaultMessageFormatterTest {
         Map("print.key" -> "true",
             "print.headers" -> "true",
             "print.value" -> "true",
-            "key.deserializer" -> "unit.kafka.tools.UpperCaseDeserializer"),
+            "key.deserializer" -> "kafka.tools.UpperCaseDeserializer"),
         "h1:v1,h2:v2\tSOMEKEY\tsomeValue\n"),
       Arguments.of(
         "print value with custom deserializer",
@@ -149,7 +149,7 @@ object DefaultMessageFormatterTest {
         Map("print.key" -> "true",
             "print.headers" -> "true",
             "print.value" -> "true",
-            "value.deserializer" -> "unit.kafka.tools.UpperCaseDeserializer"),
+            "value.deserializer" -> "kafka.tools.UpperCaseDeserializer"),
         "h1:v1,h2:v2\tsomeKey\tSOMEVALUE\n"),
       Arguments.of(
         "print headers with custom deserializer",
@@ -157,7 +157,7 @@ object DefaultMessageFormatterTest {
         Map("print.key" -> "true",
             "print.headers" -> "true",
             "print.value" -> "true",
-            "headers.deserializer" -> "unit.kafka.tools.UpperCaseDeserializer"),
+            "headers.deserializer" -> "kafka.tools.UpperCaseDeserializer"),
         "h1:V1,h2:V2\tsomeKey\tsomeValue\n"),
       Arguments.of(
         "print key and value",
@@ -210,12 +210,12 @@ object DefaultMessageFormatterTest {
       offset,
       timestamp,
       timestampType,
-      0L,
       0,
       0,
       if (key == null) null else key.getBytes(StandardCharsets.UTF_8),
       if (value == null) null else value.getBytes(StandardCharsets.UTF_8),
-      new RecordHeaders(headers.asJava))
+      new RecordHeaders(headers.asJava),
+      Optional.empty[Integer])
   }
 
   private def withResource[Resource <: Closeable, Result](resource: Resource)(handler: Resource => Result): Result = {

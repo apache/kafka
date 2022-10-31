@@ -51,6 +51,7 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+@SuppressWarnings("deprecation")
 public class TimeWindowedCogroupedKStreamImplTest {
 
     private static final Long WINDOW_SIZE = 500L;

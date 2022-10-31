@@ -20,6 +20,7 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -138,6 +139,18 @@ public interface Herder {
     void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback, InternalRequestSignature requestSignature);
 
     /**
+     * Fence out any older task generations for a source connector, and then write a record to the config topic
+     * indicating that it is safe to bring up a new generation of tasks. If that record is already present, do nothing
+     * and invoke the callback successfully.
+     * @param connName the name of the connector to fence out, which must refer to a source connector; if the
+     *                 connector does not exist or is not a source connector, the callback will be invoked with an error
+     * @param callback callback to invoke upon completion
+     * @param requestSignature the signature of the request made for this connector;
+     *                         may be null if no signature was provided
+     */
+    void fenceZombieSourceTasks(String connName, Callback<Void> callback, InternalRequestSignature requestSignature);
+
+    /**
      * Get a list of connectors currently running in this cluster.
      * @return A list of connector names
      */
@@ -225,6 +238,13 @@ public interface Herder {
     HerderRequest restartConnector(long delayMs, String connName, Callback<Void> cb);
 
     /**
+     * Restart the connector and optionally its tasks.
+     * @param request the details of the restart request
+     * @param cb      callback to invoke upon completion with the connector state info
+     */
+    void restartConnectorAndTasks(RestartRequest request, Callback<ConnectorStateInfo> cb);
+
+    /**
      * Pause the connector. This call will asynchronously suspend processing by the connector and all
      * of its tasks.
      * @param connector name of the connector
@@ -250,6 +270,14 @@ public interface Herder {
      * @return the cluster ID of the Kafka cluster backing this connect cluster
      */
     String kafkaClusterId();
+
+
+    /**
+     * Returns the configuration of a plugin
+     * @param pluginName the name of the plugin
+     * @return the list of ConfigKeyInfo of the plugin
+     */
+    List<ConfigKeyInfo> connectorPluginConfig(String pluginName);
 
     enum ConfigReloadAction {
         NONE,

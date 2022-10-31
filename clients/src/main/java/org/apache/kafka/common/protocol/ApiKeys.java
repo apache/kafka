@@ -84,10 +84,10 @@ public enum ApiKeys {
     EXPIRE_DELEGATION_TOKEN(ApiMessageType.EXPIRE_DELEGATION_TOKEN, false, true),
     DESCRIBE_DELEGATION_TOKEN(ApiMessageType.DESCRIBE_DELEGATION_TOKEN),
     DELETE_GROUPS(ApiMessageType.DELETE_GROUPS),
-    ELECT_LEADERS(ApiMessageType.ELECT_LEADERS),
+    ELECT_LEADERS(ApiMessageType.ELECT_LEADERS, false, true),
     INCREMENTAL_ALTER_CONFIGS(ApiMessageType.INCREMENTAL_ALTER_CONFIGS, false, true),
     ALTER_PARTITION_REASSIGNMENTS(ApiMessageType.ALTER_PARTITION_REASSIGNMENTS, false, true),
-    LIST_PARTITION_REASSIGNMENTS(ApiMessageType.LIST_PARTITION_REASSIGNMENTS),
+    LIST_PARTITION_REASSIGNMENTS(ApiMessageType.LIST_PARTITION_REASSIGNMENTS, false, true),
     OFFSET_DELETE(ApiMessageType.OFFSET_DELETE),
     DESCRIBE_CLIENT_QUOTAS(ApiMessageType.DESCRIBE_CLIENT_QUOTAS),
     ALTER_CLIENT_QUOTAS(ApiMessageType.ALTER_CLIENT_QUOTAS, false, true),
@@ -96,9 +96,9 @@ public enum ApiKeys {
     VOTE(ApiMessageType.VOTE, true, RecordBatch.MAGIC_VALUE_V0, false),
     BEGIN_QUORUM_EPOCH(ApiMessageType.BEGIN_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false),
     END_QUORUM_EPOCH(ApiMessageType.END_QUORUM_EPOCH, true, RecordBatch.MAGIC_VALUE_V0, false),
-    DESCRIBE_QUORUM(ApiMessageType.DESCRIBE_QUORUM, true, RecordBatch.MAGIC_VALUE_V0, false),
-    ALTER_ISR(ApiMessageType.ALTER_ISR, true),
-    UPDATE_FEATURES(ApiMessageType.UPDATE_FEATURES, false, true),
+    DESCRIBE_QUORUM(ApiMessageType.DESCRIBE_QUORUM, true, RecordBatch.MAGIC_VALUE_V0, true),
+    ALTER_PARTITION(ApiMessageType.ALTER_PARTITION, true),
+    UPDATE_FEATURES(ApiMessageType.UPDATE_FEATURES, true, true),
     ENVELOPE(ApiMessageType.ENVELOPE, true, RecordBatch.MAGIC_VALUE_V0, false),
     FETCH_SNAPSHOT(ApiMessageType.FETCH_SNAPSHOT, false, RecordBatch.MAGIC_VALUE_V0, false),
     DESCRIBE_CLUSTER(ApiMessageType.DESCRIBE_CLUSTER),
@@ -107,7 +107,8 @@ public enum ApiKeys {
     BROKER_HEARTBEAT(ApiMessageType.BROKER_HEARTBEAT, true, RecordBatch.MAGIC_VALUE_V0, false),
     UNREGISTER_BROKER(ApiMessageType.UNREGISTER_BROKER, false, RecordBatch.MAGIC_VALUE_V0, true),
     DESCRIBE_TRANSACTIONS(ApiMessageType.DESCRIBE_TRANSACTIONS),
-    LIST_TRANSACTIONS(ApiMessageType.LIST_TRANSACTIONS);
+    LIST_TRANSACTIONS(ApiMessageType.LIST_TRANSACTIONS),
+    ALLOCATE_PRODUCER_IDS(ApiMessageType.ALLOCATE_PRODUCER_IDS, true, true);
 
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);
@@ -230,7 +231,7 @@ public enum ApiKeys {
         b.append("<th>Name</th>\n");
         b.append("<th>Key</th>\n");
         b.append("</tr>");
-        for (ApiKeys key : zkBrokerApis()) {
+        for (ApiKeys key : clientApis()) {
             b.append("<tr>\n");
             b.append("<td>");
             b.append("<a href=\"#The_Messages_" + key.name + "\">" + key.name + "</a>");
@@ -240,7 +241,7 @@ public enum ApiKeys {
             b.append("</td>");
             b.append("</tr>\n");
         }
-        b.append("</table>\n");
+        b.append("</tbody></table>\n");
         return b.toString();
     }
 
@@ -266,15 +267,26 @@ public enum ApiKeys {
         return apisForListener(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
+    public static EnumSet<ApiKeys> controllerApis() {
+        return apisForListener(ApiMessageType.ListenerType.CONTROLLER);
+    }
+
+    public static EnumSet<ApiKeys> clientApis() {
+        List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
+            .filter(apiKey -> apiKey.inScope(ApiMessageType.ListenerType.ZK_BROKER) || apiKey.inScope(ApiMessageType.ListenerType.BROKER))
+            .collect(Collectors.toList());
+        return EnumSet.copyOf(apis);
+    }
+
     public static EnumSet<ApiKeys> apisForListener(ApiMessageType.ListenerType listener) {
         return APIS_BY_LISTENER.get(listener);
     }
 
     private static EnumSet<ApiKeys> filterApisForListener(ApiMessageType.ListenerType listener) {
-        List<ApiKeys> controllerApis = Arrays.stream(ApiKeys.values())
-            .filter(apiKey -> apiKey.messageType.listeners().contains(listener))
+        List<ApiKeys> apis = Arrays.stream(ApiKeys.values())
+            .filter(apiKey -> apiKey.inScope(listener))
             .collect(Collectors.toList());
-        return EnumSet.copyOf(controllerApis);
+        return EnumSet.copyOf(apis);
     }
 
 }

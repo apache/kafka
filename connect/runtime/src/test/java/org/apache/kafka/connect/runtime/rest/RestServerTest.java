@@ -20,6 +20,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
+import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpOptions;
@@ -29,28 +30,27 @@ import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
-import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.api.easymock.annotation.MockStrict;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.modules.junit4.PowerMockRunner;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.core.MediaType;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -61,26 +61,39 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 
-@RunWith(PowerMockRunner.class)
-@PowerMockIgnore({"javax.net.ssl.*", "javax.security.*", "javax.crypto.*"})
 public class RestServerTest {
-    @MockStrict
+
     private Herder herder;
-    @MockStrict
     private Plugins plugins;
     private RestServer server;
+    private CloseableHttpClient httpClient;
+    private Collection<CloseableHttpResponse> responses = new ArrayList<>();
 
     protected static final String KAFKA_CLUSTER_ID = "Xbafgnagvar";
 
+    @Before
+    public void setUp() {
+        herder = mock(Herder.class);
+        plugins = mock(Plugins.class);
+        httpClient = HttpClients.createMinimal();
+    }
+
     @After
-    public void tearDown() {
+    public void tearDown() throws IOException {
+        for (CloseableHttpResponse response: responses) {
+            response.close();
+        }
+        if (httpClient != null) {
+            httpClient.close();
+        }
         if (server != null) {
             server.stop();
         }
     }
 
-    @SuppressWarnings("deprecation")
     private Map<String, String> baseWorkerProps() {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
@@ -89,8 +102,6 @@ public class RestServerTest {
         workerProps.put(DistributedConfig.GROUP_ID_CONFIG, "connect-test-group");
         workerProps.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "connect-offsets");
         workerProps.put(WorkerConfig.LISTENERS_CONFIG, "HTTP://localhost:0");
 
@@ -107,28 +118,6 @@ public class RestServerTest {
         checkCORSRequest("", "http://bar.com", null, null);
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void testParseListeners() {
-        // Use listeners field
-        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
-        configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
-        DistributedConfig config = new DistributedConfig(configMap);
-
-        server = new RestServer(config);
-        Assert.assertArrayEquals(new String[] {"http://localhost:8080", "https://localhost:8443"}, server.parseListeners().toArray());
-
-        // Build listener from hostname and port
-        configMap = new HashMap<>(baseWorkerProps());
-        configMap.remove(WorkerConfig.LISTENERS_CONFIG);
-        configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
-        configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
-        config = new DistributedConfig(configMap);
-        server = new RestServer(config);
-        Assert.assertArrayEquals(new String[] {"http://my-hostname:8080"}, server.parseListeners().toArray());
-    }
-
-    @SuppressWarnings("deprecation")
     @Test
     public void testAdvertisedUri() {
         // Advertised URI from listeners without protocol
@@ -138,6 +127,7 @@ public class RestServerTest {
 
         server = new RestServer(config);
         Assert.assertEquals("http://localhost:8080/", server.advertisedUrl().toString());
+        server.stop();
 
         // Advertised URI from listeners with protocol
         configMap = new HashMap<>(baseWorkerProps());
@@ -147,6 +137,7 @@ public class RestServerTest {
 
         server = new RestServer(config);
         Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
+        server.stop();
 
         // Advertised URI from listeners with only SSL available
         configMap = new HashMap<>(baseWorkerProps());
@@ -155,6 +146,7 @@ public class RestServerTest {
 
         server = new RestServer(config);
         Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
+        server.stop();
 
         // Listener is overriden by advertised values
         configMap = new HashMap<>(baseWorkerProps());
@@ -166,15 +158,7 @@ public class RestServerTest {
 
         server = new RestServer(config);
         Assert.assertEquals("http://somehost:10000/", server.advertisedUrl().toString());
-
-        // listener from hostname and port
-        configMap = new HashMap<>(baseWorkerProps());
-        configMap.remove(WorkerConfig.LISTENERS_CONFIG);
-        configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
-        configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
-        config = new DistributedConfig(configMap);
-        server = new RestServer(config);
-        Assert.assertEquals("http://my-hostname:8080/", server.advertisedUrl().toString());
+        server.stop();
 
         // correct listener is chosen when https listener is configured before http listener and advertised listener is http
         configMap = new HashMap<>(baseWorkerProps());
@@ -183,6 +167,7 @@ public class RestServerTest {
         config = new DistributedConfig(configMap);
         server = new RestServer(config);
         Assert.assertEquals("http://plaintext-localhost:4761/", server.advertisedUrl().toString());
+        server.stop();
     }
 
     @Test
@@ -190,13 +175,9 @@ public class RestServerTest {
         Map<String, String> configMap = new HashMap<>(baseWorkerProps());
         DistributedConfig workerConfig = new DistributedConfig(configMap);
 
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
-        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
-        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
-            workerConfig,
-            ConnectRestExtension.class))
-            .andStubReturn(Collections.emptyList());
-        PowerMock.replayAll();
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
 
         server = new RestServer(workerConfig);
         server.initializeServer();
@@ -204,12 +185,7 @@ public class RestServerTest {
 
         HttpOptions request = new HttpOptions("/connectors");
         request.addHeader("Content-Type", MediaType.WILDCARD);
-        CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpHost httpHost = new HttpHost(
-            server.advertisedUrl().getHost(),
-            server.advertisedUrl().getPort()
-        );
-        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        HttpResponse response = executeRequest(server.advertisedUrl(), request);
         Assert.assertEquals(MediaType.TEXT_PLAIN, response.getEntity().getContentType().getValue());
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         response.getEntity().writeTo(baos);
@@ -217,7 +193,6 @@ public class RestServerTest {
             request.getAllowedMethods(response).toArray(),
             new String(baos.toByteArray(), StandardCharsets.UTF_8).split(", ")
         );
-        PowerMock.verifyAll();
     }
 
     public void checkCORSRequest(String corsDomain, String origin, String expectedHeader, String method)
@@ -227,29 +202,20 @@ public class RestServerTest {
         workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG, method);
         WorkerConfig workerConfig = new DistributedConfig(workerProps);
 
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
-        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
-        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
-                                           workerConfig,
-                                           ConnectRestExtension.class))
-            .andStubReturn(Collections.emptyList());
-
-        EasyMock.expect(herder.connectors()).andReturn(Arrays.asList("a", "b"));
-
-        PowerMock.replayAll();
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
+        doReturn(Arrays.asList("a", "b")).when(herder).connectors();
 
         server = new RestServer(workerConfig);
         server.initializeServer();
         server.initializeResources(herder);
+        URI serverUrl = server.advertisedUrl();
+
         HttpRequest request = new HttpGet("/connectors");
         request.addHeader("Referer", origin + "/page");
         request.addHeader("Origin", origin);
-        CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpHost httpHost = new HttpHost(
-            server.advertisedUrl().getHost(),
-            server.advertisedUrl().getPort()
-        );
-        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        HttpResponse response = executeRequest(serverUrl, request);
 
         Assert.assertEquals(200, response.getStatusLine().getStatusCode());
 
@@ -262,7 +228,7 @@ public class RestServerTest {
         request.addHeader("Referer", origin + "/page");
         request.addHeader("Origin", origin);
         request.addHeader("Access-Control-Request-Method", method);
-        response = httpClient.execute(httpHost, request);
+        response = executeRequest(serverUrl, request);
         Assert.assertEquals(404, response.getStatusLine().getStatusCode());
         if (expectedHeader != null) {
             Assert.assertEquals(expectedHeader,
@@ -272,7 +238,6 @@ public class RestServerTest {
             Assert.assertEquals(method,
                 response.getFirstHeader("Access-Control-Allow-Methods").getValue());
         }
-        PowerMock.verifyAll();
     }
 
     @Test
@@ -281,23 +246,16 @@ public class RestServerTest {
         workerProps.put("offset.storage.file.filename", "/tmp");
         WorkerConfig workerConfig = new StandaloneConfig(workerProps);
 
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
-        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
-        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
-            workerConfig,
-            ConnectRestExtension.class)).andStubReturn(Collections.emptyList());
-
-        EasyMock.expect(herder.connectors()).andReturn(Arrays.asList("a", "b"));
-
-        PowerMock.replayAll();
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
+        doReturn(Arrays.asList("a", "b")).when(herder).connectors();
 
         server = new RestServer(workerConfig);
         server.initializeServer();
         server.initializeResources(herder);
         HttpRequest request = new HttpGet("/connectors");
-        CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
-        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        HttpResponse response = executeRequest(server.advertisedUrl(), request);
 
         Assert.assertEquals(200, response.getStatusLine().getStatusCode());
     }
@@ -307,13 +265,9 @@ public class RestServerTest {
         Map<String, String> configMap = new HashMap<>(baseWorkerProps());
         DistributedConfig workerConfig = new DistributedConfig(configMap);
 
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
-        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
-        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
-                workerConfig,
-                ConnectRestExtension.class))
-                .andStubReturn(Collections.emptyList());
-        PowerMock.replayAll();
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
 
         // create some loggers in the process
         LoggerFactory.getLogger("a.b.c.s.W");
@@ -324,12 +278,11 @@ public class RestServerTest {
 
         ObjectMapper mapper = new ObjectMapper();
 
-        String host = server.advertisedUrl().getHost();
-        int port = server.advertisedUrl().getPort();
+        URI serverUrl = server.advertisedUrl();
 
-        executePut(host, port, "/admin/loggers/a.b.c.s.W", "{\"level\": \"INFO\"}");
+        executePut(serverUrl, "/admin/loggers/a.b.c.s.W", "{\"level\": \"INFO\"}");
 
-        String responseStr = executeGet(host, port, "/admin/loggers");
+        String responseStr = executeGet(serverUrl, "/admin/loggers");
         Map<String, Map<String, ?>> loggers = mapper.readValue(responseStr, new TypeReference<Map<String, Map<String, ?>>>() {
         });
         assertNotNull("expected non null response for /admin/loggers" + prettyPrint(loggers), loggers);
@@ -344,13 +297,9 @@ public class RestServerTest {
 
         DistributedConfig workerConfig = new DistributedConfig(configMap);
 
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
-        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
-        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
-                workerConfig,
-                ConnectRestExtension.class))
-                .andStubReturn(Collections.emptyList());
-        PowerMock.replayAll();
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
 
         // create some loggers in the process
         LoggerFactory.getLogger("a.b.c.s.W");
@@ -364,12 +313,10 @@ public class RestServerTest {
 
         assertNotEquals(server.advertisedUrl(), server.adminUrl());
 
-        executeGet(server.adminUrl().getHost(), server.adminUrl().getPort(), "/admin/loggers");
+        executeGet(server.adminUrl(), "/admin/loggers");
 
         HttpRequest request = new HttpGet("/admin/loggers");
-        CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
-        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        HttpResponse response = executeRequest(server.advertisedUrl(), request);
         Assert.assertEquals(404, response.getStatusLine().getStatusCode());
     }
 
@@ -380,13 +327,9 @@ public class RestServerTest {
 
         DistributedConfig workerConfig = new DistributedConfig(configMap);
 
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
-        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
-        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
-                workerConfig,
-                ConnectRestExtension.class))
-                .andStubReturn(Collections.emptyList());
-        PowerMock.replayAll();
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
 
         server = new RestServer(workerConfig);
         server.initializeServer();
@@ -395,10 +338,35 @@ public class RestServerTest {
         assertNull(server.adminUrl());
 
         HttpRequest request = new HttpGet("/admin/loggers");
-        CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
-        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        HttpResponse response = executeRequest(server.advertisedUrl(), request);
         Assert.assertEquals(404, response.getStatusLine().getStatusCode());
+    }
+
+    @Test
+    public void testRequestLogs() throws IOException, InterruptedException {
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        DistributedConfig workerConfig = new DistributedConfig(configMap);
+
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
+
+        server = new RestServer(workerConfig);
+        server.initializeServer();
+        server.initializeResources(herder);
+
+        LogCaptureAppender restServerAppender = LogCaptureAppender.createAndRegister();
+        HttpRequest request = new HttpGet("/");
+        HttpResponse response = executeRequest(server.advertisedUrl(), request);
+
+        // Stop the server to flush all logs
+        server.stop();
+
+        Collection<String> logMessages = restServerAppender.getMessages();
+        LogCaptureAppender.unregister(restServerAppender);
+        restServerAppender.close();
+        String expectedlogContent = "\"GET / HTTP/1.1\" " + response.getStatusLine().getStatusCode();
+        assertTrue(logMessages.stream().anyMatch(logMessage -> logMessage.contains(expectedlogContent)));
     }
 
     @Test
@@ -425,60 +393,49 @@ public class RestServerTest {
         workerProps.put(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);
         WorkerConfig workerConfig = new DistributedConfig(workerProps);
 
-        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
-        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
-        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
-                workerConfig,
-                ConnectRestExtension.class)).andStubReturn(Collections.emptyList());
-
-        EasyMock.expect(herder.connectors()).andReturn(Arrays.asList("a", "b"));
-
-        PowerMock.replayAll();
+        doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
+        doReturn(plugins).when(herder).plugins();
+        doReturn(Collections.emptyList()).when(plugins).newPlugins(Collections.emptyList(), workerConfig, ConnectRestExtension.class);
+        doReturn(Arrays.asList("a", "b")).when(herder).connectors();
 
         server = new RestServer(workerConfig);
-        try {
-            server.initializeServer();
-            server.initializeResources(herder);
-            HttpRequest request = new HttpGet("/connectors");
-            try (CloseableHttpClient httpClient = HttpClients.createMinimal()) {
-                HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
-                try (CloseableHttpResponse response = httpClient.execute(httpHost, request)) {
-                    Assert.assertEquals(200, response.getStatusLine().getStatusCode());
-                    if (!headerConfig.isEmpty()) {
-                        expectedHeaders.forEach((k, v) ->
-                                Assert.assertEquals(response.getFirstHeader(k).getValue(), v));
-                    } else {
-                        Assert.assertNull(response.getFirstHeader("X-Frame-Options"));
-                    }
-                }
-            }
-        } finally {
-            server.stop();
-            server = null;
+        server.initializeServer();
+        server.initializeResources(herder);
+        HttpRequest request = new HttpGet("/connectors");
+        HttpResponse response = executeRequest(server.advertisedUrl(), request);
+        Assert.assertEquals(200, response.getStatusLine().getStatusCode());
+        if (!headerConfig.isEmpty()) {
+            expectedHeaders.forEach((k, v) ->
+                    Assert.assertEquals(response.getFirstHeader(k).getValue(), v));
+        } else {
+            Assert.assertNull(response.getFirstHeader("X-Frame-Options"));
         }
     }
 
-    private String executeGet(String host, int port, String endpoint) throws IOException {
+    private String executeGet(URI serverUrl, String endpoint) throws IOException {
         HttpRequest request = new HttpGet(endpoint);
-        CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpHost httpHost = new HttpHost(host, port);
-        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        HttpResponse response = executeRequest(serverUrl, request);
 
         Assert.assertEquals(200, response.getStatusLine().getStatusCode());
         return new BasicResponseHandler().handleResponse(response);
     }
 
-    private String executePut(String host, int port, String endpoint, String jsonBody) throws IOException {
+    private String executePut(URI serverUrl, String endpoint, String jsonBody) throws IOException {
         HttpPut request = new HttpPut(endpoint);
         StringEntity entity = new StringEntity(jsonBody, StandardCharsets.UTF_8.name());
         entity.setContentType("application/json");
         request.setEntity(entity);
-        CloseableHttpClient httpClient = HttpClients.createMinimal();
-        HttpHost httpHost = new HttpHost(host, port);
-        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        HttpResponse response = executeRequest(serverUrl, request);
 
         Assert.assertEquals(200, response.getStatusLine().getStatusCode());
         return new BasicResponseHandler().handleResponse(response);
+    }
+
+    private HttpResponse executeRequest(URI serverUrl, HttpRequest request) throws IOException {
+        HttpHost httpHost = new HttpHost(serverUrl.getHost(), serverUrl.getPort());
+        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        responses.add(response);
+        return response;
     }
 
     private static String prettyPrint(Map<String, ?> map) throws IOException {

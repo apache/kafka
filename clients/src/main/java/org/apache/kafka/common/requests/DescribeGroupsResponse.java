@@ -115,6 +115,11 @@ public class DescribeGroupsResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
     public static final String UNKNOWN_STATE = "";
     public static final String UNKNOWN_PROTOCOL_TYPE = "";
     public static final String UNKNOWN_PROTOCOL = "";

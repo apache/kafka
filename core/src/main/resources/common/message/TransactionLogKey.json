@@ -17,6 +17,7 @@
   "type": "data",
   "name": "TransactionLogKey",
   "validVersions": "0",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0"}
   ]

@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 
@@ -102,22 +103,14 @@ public class EagerAssignor implements ConnectAssignor {
         for (String connectorId : connectorsSorted) {
             String connectorAssignedTo = memberIt.next();
             log.trace("Assigning connector {} to {}", connectorId, connectorAssignedTo);
-            Collection<String> memberConnectors = connectorAssignments.get(connectorAssignedTo);
-            if (memberConnectors == null) {
-                memberConnectors = new ArrayList<>();
-                connectorAssignments.put(connectorAssignedTo, memberConnectors);
-            }
+            Collection<String> memberConnectors = connectorAssignments.computeIfAbsent(connectorAssignedTo, k -> new ArrayList<>());
             memberConnectors.add(connectorId);
         }
         for (String connectorId : connectorsSorted) {
             for (ConnectorTaskId taskId : sorted(coordinator.configSnapshot().tasks(connectorId))) {
                 String taskAssignedTo = memberIt.next();
                 log.trace("Assigning task {} to {}", taskId, taskAssignedTo);
-                Collection<ConnectorTaskId> memberTasks = taskAssignments.get(taskAssignedTo);
-                if (memberTasks == null) {
-                    memberTasks = new ArrayList<>();
-                    taskAssignments.put(taskAssignedTo, memberTasks);
-                }
+                Collection<ConnectorTaskId> memberTasks = taskAssignments.computeIfAbsent(taskAssignedTo, k -> new ArrayList<>());
                 memberTasks.add(taskId);
             }
         }

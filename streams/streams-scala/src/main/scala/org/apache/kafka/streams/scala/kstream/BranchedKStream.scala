@@ -110,7 +110,7 @@ class BranchedKStream[K, V](val inner: BranchedKStreamJ[K, V]) {
   def noDefaultBranch(): Map[String, KStream[K, V]] = toScalaMap(inner.noDefaultBranch())
 
   private def toScalaMap(m: util.Map[String, kstream.KStream[K, V]]): collection.immutable.Map[String, KStream[K, V]] =
-    m.asScala.map {
-      case (name, kStreamJ) => (name, new KStream(kStreamJ))
+    m.asScala.map { case (name, kStreamJ) =>
+      (name, new KStream(kStreamJ))
     }.toMap
 }

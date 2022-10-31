@@ -56,7 +56,6 @@ public class TableProcessorNode<K, V> extends GraphNode {
             "} " + super.toString();
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final String processorName = processorParameters.processorName();

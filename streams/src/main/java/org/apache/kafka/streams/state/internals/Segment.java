@@ -25,4 +25,5 @@ public interface Segment extends KeyValueStore<Bytes, byte[]>, BatchWritingStore
 
     void destroy() throws IOException;
 
+    void deleteRange(Bytes keyFrom, Bytes keyTo);
 }

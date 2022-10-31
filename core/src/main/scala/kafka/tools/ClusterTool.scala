@@ -40,7 +40,7 @@ object ClusterTool extends Logging {
       val clusterIdParser = subparsers.addParser("cluster-id").
         help("Get information about the ID of a cluster.")
       val unregisterParser = subparsers.addParser("unregister").
-        help("Unregister a broker..")
+        help("Unregister a broker.")
       List(clusterIdParser, unregisterParser).foreach(parser => {
         parser.addArgument("--bootstrap-server", "-b").
           action(store()).
@@ -52,6 +52,7 @@ object ClusterTool extends Logging {
       unregisterParser.addArgument("--id", "-i").
         `type`(classOf[Integer]).
         action(store()).
+        required(true).
         help("The ID of the broker to unregister.")
 
       val namespace = parser.parseArgsOrFail(args)

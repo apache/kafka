@@ -122,12 +122,6 @@ public class GlobalProcessorContextImplTest {
         globalContext.commit();
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldNotAllowToSchedulePunctuationsUsingDeprecatedApi() {
-        assertThrows(UnsupportedOperationException.class, () -> globalContext.schedule(0L, null, null));
-    }
-
     @Test
     public void shouldNotAllowToSchedulePunctuations() {
         assertThrows(UnsupportedOperationException.class, () -> globalContext.schedule(null, null, null));

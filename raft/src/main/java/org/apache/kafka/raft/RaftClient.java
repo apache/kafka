@@ -16,19 +16,23 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.raft.errors.BufferAllocationException;
+import org.apache.kafka.raft.errors.NotLeaderException;
+import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 
-public interface RaftClient<T> extends Closeable {
+public interface RaftClient<T> extends AutoCloseable {
 
     interface Listener<T> {
         /**
          * Callback which is invoked for all records committed to the log.
-         * It is the responsibility of the caller to invoke {@link BatchReader#close()}
+         * It is the responsibility of this implementation to invoke {@link BatchReader#close()}
          * after consuming the reader.
          *
          * Note that there is not a one-to-one correspondence between writes through
@@ -45,46 +49,90 @@ public interface RaftClient<T> extends Closeable {
         void handleCommit(BatchReader<T> reader);
 
         /**
-         * Invoked after this node has become a leader. This is only called after
-         * all commits up to the start of the leader's epoch have been sent to
-         * {@link #handleCommit(BatchReader)}.
+         * Callback which is invoked when the Listener needs to load a snapshot.
+         * It is the responsibility of this implementation to invoke {@link SnapshotReader#close()}
+         * after consuming the reader.
          *
-         * After becoming a leader, the client is eligible to write to the log
-         * using {@link #scheduleAppend(int, List)} or {@link #scheduleAtomicAppend(int, List)}.
+         * When handling this call, the implementation must assume that all previous calls
+         * to {@link #handleCommit} contain invalid data.
          *
-         * @param epoch the claimed leader epoch
+         * @param reader snapshot reader instance which must be iterated and closed
          */
-        default void handleClaim(int epoch) {}
+        void handleSnapshot(SnapshotReader<T> reader);
 
         /**
-         * Invoked after a leader has stepped down. This callback may or may not
-         * fire before the next leader has been elected.
+         * Called on any change to leadership. This includes both when a leader is elected and
+         * when a leader steps down or fails.
          *
-         * @param epoch the epoch that the leader is resigning from
+         * If this node is the leader, then the notification of leadership will be delayed until
+         * the implementation of this interface has caught up to the high-watermark through calls to
+         * {@link #handleSnapshot(SnapshotReader)} and {@link #handleCommit(BatchReader)}.
+         *
+         * If this node is not the leader, then this method will be called as soon as possible. In
+         * this case the leader may or may not be known for the current epoch.
+         *
+         * Subsequent calls to this method will expose a monotonically increasing epoch. For a
+         * given epoch the leader may be unknown, {@code leader.leaderId} is {@code OptionalInt#empty},
+         * or known {@code leader.leaderId} is {@code OptionalInt#of}. Once a leader is known for
+         * a given epoch it will remain the leader for that epoch. In other words, the implementation of
+         * method should expect this method will be called at most twice for each epoch. Once if the
+         * epoch changed but the leader is not known and once when the leader is known for the current
+         * epoch.
+         *
+         * @param leader the current leader and epoch
          */
-        default void handleResign(int epoch) {}
+        default void handleLeaderChange(LeaderAndEpoch leader) {}
+
+        default void beginShutdown() {}
     }
 
     /**
-     * Initialize the client.
-     * This should only be called once on startup.
-     *
-     * @throws IOException For any IO errors during initialization
+     * Initialize the client. This should only be called once on startup.
      */
-    void initialize() throws IOException;
+    void initialize();
 
     /**
-     * Register a listener to get commit/leader notifications.
+     * Register a listener to get commit, snapshot and leader notifications.
      *
-     * @param listener the listener
+     * The implementation of this interface assumes that each call to {@code register} uses
+     * a different {@code Listener} instance. If the same instance is used for multiple calls
+     * to this method, then only one {@code Listener} will be registered.
+     *
+     * @param listener the listener to register
      */
     void register(Listener<T> listener);
 
     /**
+     * Unregisters a listener.
+     *
+     * To distinguish from events that happend before the call to {@code unregister} and a future
+     * call to {@code register}, different {@code Listener} instances must be used.
+     *
+     * If the {@code Listener} provided was never registered then the unregistration is ignored. 
+     *
+     * @param listener the listener to unregister
+     */
+    void unregister(Listener<T> listener);
+
+    /**
+     * Returns the current high water mark, or OptionalLong.empty if it is not known.
+     */
+    OptionalLong highWatermark();
+
+    /**
      * Return the current {@link LeaderAndEpoch}.
-     * @return the current {@link LeaderAndEpoch}
+     *
+     * @return the current leader and epoch
      */
     LeaderAndEpoch leaderAndEpoch();
+
+    /**
+     * Get local nodeId if one is defined. This may be absent when the client is used
+     * as an anonymous observer, as in the case of the metadata shell.
+     *
+     * @return optional node id
+     */
+    OptionalInt nodeId();
 
     /**
      * Append a list of records to the log. The write will be scheduled for some time
@@ -96,19 +144,20 @@ public interface RaftClient<T> extends Closeable {
      *
      * If the provided current leader epoch does not match the current epoch, which
      * is possible when the state machine has yet to observe the epoch change, then
-     * this method will return {@link Long#MAX_VALUE} to indicate an offset which is
-     * not possible to become committed. The state machine is expected to discard all
+     * this method will throw an {@link NotLeaderException} to indicate the leader
+     * to resign its leadership. The state machine is expected to discard all
      * uncommitted entries after observing an epoch change.
      *
      * @param epoch the current leader epoch
      * @param records the list of records to append
-     * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
-     *         be committed; null if no memory could be allocated for the batch at this time
-     * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
+     * @return the expected offset of the last record if append succeed
+     * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
+     * @throws NotLeaderException if we are not the current leader or the epoch doesn't match the leader epoch
+     * @throws BufferAllocationException if we failed to allocate memory for the records
      */
-    Long scheduleAppend(int epoch, List<T> records);
+    long scheduleAppend(int epoch, List<T> records);
 
     /**
      * Append a list of records to the log. The write will be scheduled for some time
@@ -118,19 +167,20 @@ public interface RaftClient<T> extends Closeable {
      *
      * If the provided current leader epoch does not match the current epoch, which
      * is possible when the state machine has yet to observe the epoch change, then
-     * this method will return {@link Long#MAX_VALUE} to indicate an offset which is
-     * not possible to become committed. The state machine is expected to discard all
+     * this method will throw an {@link NotLeaderException} to indicate the leader
+     * to resign its leadership. The state machine is expected to discard all
      * uncommitted entries after observing an epoch change.
      *
      * @param epoch the current leader epoch
      * @param records the list of records to append
-     * @return the expected offset of the last record; {@link Long#MAX_VALUE} if the records could
-     *         be committed; null if no memory could be allocated for the batch at this time
-     * @throws RecordBatchTooLargeException if the size of the records is greater than the maximum
+     * @return the expected offset of the last record if append succeed
+     * @throws org.apache.kafka.common.errors.RecordBatchTooLargeException if the size of the records is greater than the maximum
      *         batch size; if this exception is throw none of the elements in records were
      *         committed
+     * @throws NotLeaderException if we are not the current leader or the epoch doesn't match the leader epoch
+     * @throws BufferAllocationException we failed to allocate memory for the records
      */
-    Long scheduleAtomicAppend(int epoch, List<T> records);
+    long scheduleAtomicAppend(int epoch, List<T> records);
 
     /**
      * Attempt a graceful shutdown of the client. This allows the leader to proactively
@@ -148,14 +198,35 @@ public interface RaftClient<T> extends Closeable {
     CompletableFuture<Void> shutdown(int timeoutMs);
 
     /**
-     * Create a writable snapshot file for a given offset and epoch.
+     * Resign the leadership. The leader will give up its leadership in the passed epoch
+     * (if it matches the current epoch), and a new election will be held. Note that nothing
+     * prevents this node from being reelected as the leader.
      *
-     * The RaftClient assumes that the snapshot return will contain the records up to but
-     * not including the end offset in the snapshot id. See {@link SnapshotWriter} for
-     * details on how to use this object.
+     * Notification of successful resignation can be observed through
+     * {@link Listener#handleLeaderChange(LeaderAndEpoch)}.
      *
-     * @param snapshotId the end offset and epoch that identifies the snapshot
-     * @return a writable snapshot
+     * @param epoch the epoch to resign from. If this epoch is smaller than the current epoch, this
+     *              call will be ignored.
+     *
+     * @throws IllegalArgumentException - if the passed epoch is invalid (negative or greater than current) or
+     * if the listener is not the leader associated with this epoch.
      */
-    SnapshotWriter<T> createSnapshot(OffsetAndEpoch snapshotId) throws IOException;
+    void resign(int epoch);
+
+    /**
+     * Create a writable snapshot file for a committed offset and epoch.
+     *
+     * The RaftClient assumes that the snapshot returned will contain the records up to and
+     * including the committed offset and epoch. See {@link SnapshotWriter} for details on
+     * how to use this object. If a snapshot already exists then returns an
+     * {@link Optional#empty()}.
+     *
+     * @param committedEpoch the epoch of the committed offset
+     * @param committedOffset the last committed offset that will be included in the snapshot
+     * @param lastContainedLogTime The append time of the highest record contained in this snapshot
+     * @return a writable snapshot if it doesn't already exists
+     * @throws IllegalArgumentException if the committed offset is greater than the high-watermark
+     *         or less than the log start offset.
+     */
+    Optional<SnapshotWriter<T>> createSnapshot(long committedOffset, int committedEpoch, long lastContainedLogTime);
 }

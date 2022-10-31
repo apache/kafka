@@ -94,6 +94,11 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
     public Map<TopicPartition, Errors> errors() {
         if (cachedErrorsMap != null) {
             return cachedErrorsMap;

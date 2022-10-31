@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -116,6 +117,12 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
+        public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix,
+                                                                               final PS prefixKeySerializer) {
+            return wrapped().prefixScan(prefix, prefixKeySerializer);
+        }
+
+        @Override
         public long approximateNumEntries() {
             return wrapped().approximateNumEntries();
         }
@@ -158,13 +165,6 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
 
         private WindowStoreReadOnlyDecorator(final WindowStore<K, V> inner) {
             super(inner);
-        }
-
-        @Deprecated
-        @Override
-        public void put(final K key,
-                        final V value) {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
@@ -280,8 +280,8 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
-        public AGG fetchSession(final K key, final long startTime, final long endTime) {
-            return wrapped().fetchSession(key, startTime, endTime);
+        public AGG fetchSession(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+            return wrapped().fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
@@ -290,9 +290,9 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
-        public KeyValueIterator<Windowed<K>, AGG> fetch(final K from,
-                                                        final K to) {
-            return wrapped().fetch(from, to);
+        public KeyValueIterator<Windowed<K>, AGG> fetch(final K keyFrom,
+                                                        final K keyTo) {
+            return wrapped().fetch(keyFrom, keyTo);
         }
     }
 }

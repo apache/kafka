@@ -17,10 +17,15 @@
 
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.ConfigKey;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -112,5 +117,31 @@ public class ConfigUtils {
         });
 
         return newConfigs;
+    }
+
+    public static String configMapToRedactedString(Map<String, Object> map, ConfigDef configDef) {
+        StringBuilder bld = new StringBuilder("{");
+        List<String> keys = new ArrayList<>(map.keySet());
+        Collections.sort(keys);
+        String prefix = "";
+        for (String key : keys) {
+            bld.append(prefix).append(key).append("=");
+            ConfigKey configKey = configDef.configKeys().get(key);
+            if (configKey == null || configKey.type().isSensitive()) {
+                bld.append("(redacted)");
+            } else {
+                Object value = map.get(key);
+                if (value == null) {
+                    bld.append("null");
+                } else if (configKey.type() == Type.STRING) {
+                    bld.append("\"").append(value).append("\"");
+                } else {
+                    bld.append(value);
+                }
+            }
+            prefix = ", ";
+        }
+        bld.append("}");
+        return bld.toString();
     }
 }

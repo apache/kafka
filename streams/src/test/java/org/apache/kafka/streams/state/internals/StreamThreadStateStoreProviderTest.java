@@ -23,11 +23,13 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -44,6 +46,7 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsProducer;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
@@ -153,7 +156,7 @@ public class StreamThreadStateStoreProviderTest {
         final ProcessorTopology processorTopology = internalTopologyBuilder.buildTopology();
 
         tasks = new HashMap<>();
-        stateDirectory = new StateDirectory(streamsConfig, new MockTime(), true);
+        stateDirectory = new StateDirectory(streamsConfig, new MockTime(), true, false);
 
         taskOne = createStreamsTask(
             streamsConfig,
@@ -399,11 +402,11 @@ public class StreamThreadStateStoreProviderTest {
                                          final TaskId taskId) {
         final Metrics metrics = new Metrics();
         final LogContext logContext = new LogContext("test-stream-task ");
-        final Set<TopicPartition> partitions = Collections.singleton(new TopicPartition(topicName, taskId.partition));
+        final Set<TopicPartition> partitions = Collections.singleton(new TopicPartition(topicName, taskId.partition()));
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             Task.TaskType.ACTIVE,
-            StreamThread.eosEnabled(streamsConfig),
+            StreamsConfigUtils.eosEnabled(streamsConfig),
             logContext,
             stateDirectory,
             new StoreChangelogReader(
@@ -413,7 +416,9 @@ public class StreamThreadStateStoreProviderTest {
                 clientSupplier.adminClient,
                 clientSupplier.restoreConsumer,
                 new MockStateRestoreListener()),
-            topology.storeToChangelogTopic(), partitions);
+            topology.storeToChangelogTopic(),
+            partitions,
+            false);
         final RecordCollector recordCollector = new RecordCollectorImpl(
             logContext,
             taskId,
@@ -423,10 +428,13 @@ public class StreamThreadStateStoreProviderTest {
                 clientSupplier,
                 new TaskId(0, 0),
                 UUID.randomUUID(),
-                logContext
+                logContext,
+                Time.SYSTEM
             ),
             streamsConfig.defaultProductionExceptionHandler(),
-            new MockStreamsMetrics(metrics));
+            new MockStreamsMetrics(metrics),
+            topology
+        );
         final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
         final InternalProcessorContext context = new ProcessorContextImpl(
             taskId,
@@ -440,7 +448,7 @@ public class StreamThreadStateStoreProviderTest {
             partitions,
             topology,
             clientSupplier.consumer,
-            streamsConfig,
+            new TopologyConfig(null, streamsConfig, new Properties()).getTaskConfig(),
             streamsMetrics,
             stateDirectory,
             EasyMock.createNiceMock(ThreadCache.class),

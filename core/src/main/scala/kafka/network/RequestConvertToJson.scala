@@ -29,9 +29,10 @@ object RequestConvertToJson {
     request match {
       case req: AddOffsetsToTxnRequest => AddOffsetsToTxnRequestDataJsonConverter.write(req.data, request.version)
       case req: AddPartitionsToTxnRequest => AddPartitionsToTxnRequestDataJsonConverter.write(req.data, request.version)
+      case req: AllocateProducerIdsRequest => AllocateProducerIdsRequestDataJsonConverter.write(req.data, request.version)
       case req: AlterClientQuotasRequest => AlterClientQuotasRequestDataJsonConverter.write(req.data, request.version)
       case req: AlterConfigsRequest => AlterConfigsRequestDataJsonConverter.write(req.data, request.version)
-      case req: AlterIsrRequest => AlterIsrRequestDataJsonConverter.write(req.data, request.version)
+      case req: AlterPartitionRequest => AlterPartitionRequestDataJsonConverter.write(req.data, request.version)
       case req: AlterPartitionReassignmentsRequest => AlterPartitionReassignmentsRequestDataJsonConverter.write(req.data, request.version)
       case req: AlterReplicaLogDirsRequest => AlterReplicaLogDirsRequestDataJsonConverter.write(req.data, request.version)
       case res: AlterUserScramCredentialsRequest => AlterUserScramCredentialsRequestDataJsonConverter.write(res.data, request.version)
@@ -103,9 +104,10 @@ object RequestConvertToJson {
     response match {
       case res: AddOffsetsToTxnResponse => AddOffsetsToTxnResponseDataJsonConverter.write(res.data, version)
       case res: AddPartitionsToTxnResponse => AddPartitionsToTxnResponseDataJsonConverter.write(res.data, version)
+      case res: AllocateProducerIdsResponse => AllocateProducerIdsResponseDataJsonConverter.write(res.data, version)
       case res: AlterClientQuotasResponse => AlterClientQuotasResponseDataJsonConverter.write(res.data, version)
       case res: AlterConfigsResponse => AlterConfigsResponseDataJsonConverter.write(res.data, version)
-      case res: AlterIsrResponse => AlterIsrResponseDataJsonConverter.write(res.data, version)
+      case res: AlterPartitionResponse => AlterPartitionResponseDataJsonConverter.write(res.data, version)
       case res: AlterPartitionReassignmentsResponse => AlterPartitionReassignmentsResponseDataJsonConverter.write(res.data, version)
       case res: AlterReplicaLogDirsResponse => AlterReplicaLogDirsResponseDataJsonConverter.write(res.data, version)
       case res: AlterUserScramCredentialsResponse => AlterUserScramCredentialsResponseDataJsonConverter.write(res.data, version)

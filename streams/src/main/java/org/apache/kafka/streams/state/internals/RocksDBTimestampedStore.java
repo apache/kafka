@@ -75,7 +75,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             db = RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors, columnFamilies);
             setDbAccessor(columnFamilies.get(0), columnFamilies.get(1));
         } catch (final RocksDBException e) {
-            if ("Column family not found: : keyValueWithTimestamp".equals(e.getMessage())) {
+            if ("Column family not found: keyValueWithTimestamp".equals(e.getMessage())) {
                 try {
                     db = RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors.subList(0, 1), columnFamilies);
                     columnFamilies.add(db.createColumnFamily(columnFamilyDescriptors.get(1)));
@@ -140,6 +140,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                 }
                 try {
                     db.put(newColumnFamily, wOptions, key, valueWithTimestamp);
+                    StoreQueryUtils.updatePosition(position, context);
                 } catch (final RocksDBException e) {
                     // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                     throw new ProcessorStateException("Error while putting key/value into store " + name, e);
@@ -203,6 +204,22 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                 to,
                 forward,
                 true);
+        }
+
+        @Override
+        public void deleteRange(final byte[] from, final byte[] to) {
+            try {
+                db.deleteRange(oldColumnFamily, wOptions, from, to);
+            } catch (final RocksDBException e) {
+                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                throw new ProcessorStateException("Error while removing key from store " + name, e);
+            }
+            try {
+                db.deleteRange(newColumnFamily, wOptions, from, to);
+            } catch (final RocksDBException e) {
+                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                throw new ProcessorStateException("Error while removing key from store " + name, e);
+            }
         }
 
         @Override
@@ -410,19 +427,23 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             this.forward = forward;
             this.toInclusive = toInclusive;
             if (forward) {
-                iterWithTimestamp.seek(from.get());
-                iterNoTimestamp.seek(from.get());
-                rawLastKey = to.get();
-                if (rawLastKey == null) {
-                    throw new NullPointerException("RocksDBDualCFRangeIterator: rawLastKey is null for key " + to);
+                if (from == null) {
+                    iterWithTimestamp.seekToFirst();
+                    iterNoTimestamp.seekToFirst();
+                } else {
+                    iterWithTimestamp.seek(from.get());
+                    iterNoTimestamp.seek(from.get());
                 }
+                rawLastKey = to == null ? null : to.get();
             } else {
-                iterWithTimestamp.seekForPrev(to.get());
-                iterNoTimestamp.seekForPrev(to.get());
-                rawLastKey = from.get();
-                if (rawLastKey == null) {
-                    throw new NullPointerException("RocksDBDualCFRangeIterator: rawLastKey is null for key " + from);
+                if (to == null) {
+                    iterWithTimestamp.seekToLast();
+                    iterNoTimestamp.seekToLast();
+                } else {
+                    iterWithTimestamp.seekForPrev(to.get());
+                    iterNoTimestamp.seekForPrev(to.get());
                 }
+                rawLastKey = from == null ? null : from.get();
             }
         }
 
@@ -432,9 +453,11 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
 
             if (next == null) {
                 return allDone();
+            } else if (rawLastKey == null) {
+                //null means range endpoint is open
+                return next;
             } else {
                 if (forward) {
-
                     if (comparator.compare(next.key.get(), rawLastKey) < 0) {
                         return next;
                     } else if (comparator.compare(next.key.get(), rawLastKey) == 0) {

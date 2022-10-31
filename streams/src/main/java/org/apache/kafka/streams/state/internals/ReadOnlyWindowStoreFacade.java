@@ -42,14 +42,6 @@ public class ReadOnlyWindowStoreFacade<K, V> implements ReadOnlyWindowStore<K, V
     }
 
     @Override
-    @SuppressWarnings("deprecation")
-    public WindowStoreIterator<V> fetch(final K key,
-                                        final long timeFrom,
-                                        final long timeTo) {
-        return new WindowStoreIteratorFacade<>(inner.fetch(key, timeFrom, timeTo));
-    }
-
-    @Override
     public WindowStoreIterator<V> fetch(final K key,
                                         final Instant timeFrom,
                                         final Instant timeTo) throws IllegalArgumentException {
@@ -61,15 +53,6 @@ public class ReadOnlyWindowStoreFacade<K, V> implements ReadOnlyWindowStore<K, V
                                                 final Instant timeFrom,
                                                 final Instant timeTo) throws IllegalArgumentException {
         return new WindowStoreIteratorFacade<>(inner.backwardFetch(key, timeFrom, timeTo));
-    }
-
-    @Override
-    @SuppressWarnings("deprecation")
-    public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
-                                                  final K keyTo,
-                                                  final long timeFrom,
-                                                  final long timeTo) {
-        return new KeyValueIteratorFacade<>(inner.fetch(keyFrom, keyTo, timeFrom, timeTo));
     }
 
     @Override
@@ -86,13 +69,6 @@ public class ReadOnlyWindowStoreFacade<K, V> implements ReadOnlyWindowStore<K, V
                                                           final Instant timeFrom,
                                                           final Instant timeTo) throws IllegalArgumentException {
         return new KeyValueIteratorFacade<>(inner.backwardFetch(keyFrom, keyTo, timeFrom, timeTo));
-    }
-
-    @Override
-    @SuppressWarnings("deprecation")
-    public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
-                                                     final long timeTo) {
-        return new KeyValueIteratorFacade<>(inner.fetchAll(timeFrom, timeTo));
     }
 
     @Override

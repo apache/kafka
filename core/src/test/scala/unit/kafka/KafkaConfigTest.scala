@@ -16,17 +16,17 @@
  */
 package kafka
 
-import java.io.File
 import java.nio.file.Files
 import java.util
-
+import java.util.Properties
 import kafka.server.KafkaConfig
-import kafka.utils.Exit
+import kafka.utils.{Exit, TestUtils}
+import kafka.utils.TestUtils.assertBadConfigContainingMessage
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
-import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 
 import scala.jdk.CollectionConverters._
 
@@ -77,6 +77,100 @@ class KafkaTest {
   def testGetKafkaConfigFromArgsNonArgsAtTheBegging(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     assertThrows(classOf[FatalExitError], () => KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "--override", "broker.id=2"))))
+  }
+
+  @Test
+  def testBrokerRoleNodeIdValidation(): Unit = {
+    // Ensure that validation is happening at startup to check that brokers do not use their node.id as a voter in controller.quorum.voters 
+    val propertiesFile = new Properties
+    propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "broker")
+    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
+    propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
+    setListenerProps(propertiesFile)
+    assertBadConfigContainingMessage(propertiesFile,
+      "If process.roles contains just the 'broker' role, the node id 1 must not be included in the set of voters")
+
+    // Ensure that with a valid config no exception is thrown
+    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "2")
+    KafkaConfig.fromProps(propertiesFile)
+  }
+
+  @Test
+  def testControllerRoleNodeIdValidation(): Unit = {
+    // Ensure that validation is happening at startup to check that controllers use their node.id as a voter in controller.quorum.voters 
+    val propertiesFile = new Properties
+    propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller")
+    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
+    propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "2@localhost:9092")
+    setListenerProps(propertiesFile)
+    assertBadConfigContainingMessage(propertiesFile,
+      "If process.roles contains the 'controller' role, the node id 1 must be included in the set of voters")
+
+    // Ensure that with a valid config no exception is thrown
+    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "2")
+    KafkaConfig.fromProps(propertiesFile)
+  }
+
+  @Test
+  def testColocatedRoleNodeIdValidation(): Unit = {
+    // Ensure that validation is happening at startup to check that colocated processes use their node.id as a voter in controller.quorum.voters 
+    val propertiesFile = new Properties
+    propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller,broker")
+    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
+    propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "2@localhost:9092")
+    setListenerProps(propertiesFile)
+    assertBadConfigContainingMessage(propertiesFile,
+      "If process.roles contains the 'controller' role, the node id 1 must be included in the set of voters")
+
+    // Ensure that with a valid config no exception is thrown
+    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "2")
+    KafkaConfig.fromProps(propertiesFile)
+  }
+
+  @Test
+  def testMustContainQuorumVotersIfUsingProcessRoles(): Unit = {
+    // Ensure that validation is happening at startup to check that if process.roles is set controller.quorum.voters is not empty
+    val propertiesFile = new Properties
+    propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller,broker")
+    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
+    propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "")
+    setListenerProps(propertiesFile)
+    assertBadConfigContainingMessage(propertiesFile,
+      "If using process.roles, controller.quorum.voters must contain a parseable set of voters.")
+
+    // Ensure that if neither process.roles nor controller.quorum.voters is populated, then an exception is thrown if zookeeper.connect is not defined
+    propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "")
+    assertBadConfigContainingMessage(propertiesFile,
+      "Missing required configuration `zookeeper.connect` which has no default value.")
+
+    // Ensure that no exception is thrown once zookeeper.connect is defined (and we clear controller.listener.names)
+    propertiesFile.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
+    propertiesFile.setProperty(KafkaConfig.ControllerListenerNamesProp, "")
+    KafkaConfig.fromProps(propertiesFile)
+  }
+
+  private def setListenerProps(props: Properties): Unit = {
+    val hasBrokerRole = props.getProperty(KafkaConfig.ProcessRolesProp).contains("broker")
+    val hasControllerRole = props.getProperty(KafkaConfig.ProcessRolesProp).contains("controller")
+    val controllerListener = "SASL_PLAINTEXT://localhost:9092"
+    val brokerListener = "PLAINTEXT://localhost:9093"
+
+    if (hasBrokerRole || hasControllerRole) { // KRaft
+      props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SASL_PLAINTEXT")
+      if (hasBrokerRole && hasControllerRole) {
+        props.setProperty(KafkaConfig.ListenersProp, s"$brokerListener,$controllerListener")
+      } else if (hasControllerRole) {
+        props.setProperty(KafkaConfig.ListenersProp, controllerListener)
+      } else if (hasBrokerRole) {
+        props.setProperty(KafkaConfig.ListenersProp, brokerListener)
+      }
+    } else { // ZK-based
+       props.setProperty(KafkaConfig.ListenersProp, brokerListener)
+    }
+    if (!(hasControllerRole & !hasBrokerRole)) { // not controller-only
+      props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "PLAINTEXT")
+      props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092") 
+    }
   }
 
   @Test
@@ -295,8 +389,7 @@ class KafkaTest {
   }
 
   def prepareConfig(lines : Array[String]): String = {
-    val file = File.createTempFile("kafkatest", ".properties")
-    file.deleteOnExit()
+    val file = TestUtils.tempFile("kafkatest", ".properties")
 
     val writer = Files.newOutputStream(file.toPath)
     try {

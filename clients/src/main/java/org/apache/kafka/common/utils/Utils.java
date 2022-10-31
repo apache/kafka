@@ -20,6 +20,7 @@ import java.nio.BufferUnderflowException;
 import java.nio.file.StandardOpenOption;
 import java.util.AbstractMap;
 import java.util.EnumSet;
+import java.util.Map.Entry;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.common.KafkaException;
@@ -69,6 +70,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.BinaryOperator;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -332,6 +334,42 @@ public final class Utils {
     }
 
     /**
+     * Compares two character arrays for equality using a constant-time algorithm, which is needed
+     * for comparing passwords. Two arrays are equal if they have the same length and all
+     * characters at corresponding positions are equal.
+     *
+     * All characters in the first array are examined to determine equality.
+     * The calculation time depends only on the length of this first character array; it does not
+     * depend on the length of the second character array or the contents of either array.
+     *
+     * @param first the first array to compare
+     * @param second the second array to compare
+     * @return true if the arrays are equal, or false otherwise
+     */
+    public static boolean isEqualConstantTime(char[] first, char[] second) {
+        if (first == second) {
+            return true;
+        }
+        if (first == null || second == null) {
+            return false;
+        }
+
+        if (second.length == 0) {
+            return first.length == 0;
+        }
+
+        // time-constant comparison that always compares all characters in first array
+        boolean matches = first.length == second.length;
+        for (int i = 0; i < first.length; ++i) {
+            int j = i < second.length ? i : 0;
+            if (first[i] != second[j]) {
+                matches = false;
+            }
+        }
+        return matches;
+    }
+
+    /**
      * Sleep for a bit
      * @param ms The duration of the sleep
      */
@@ -425,8 +463,7 @@ public final class Utils {
             throw new ClassNotFoundException(String.format("Unable to access " +
                 "constructor of %s", className), e);
         } catch (InvocationTargetException e) {
-            throw new ClassNotFoundException(String.format("Unable to invoke " +
-                "constructor of %s", className), e);
+            throw new KafkaException(String.format("The constructor of %s threw an exception", className), e.getCause());
         }
     }
 
@@ -810,18 +847,6 @@ public final class Utils {
      * @param rootFile The root file at which to begin deleting
      */
     public static void delete(final File rootFile) throws IOException {
-        delete(rootFile, Collections.emptyList());
-    }
-
-    /**
-     * Recursively delete the subfiles (if any exist) of the passed in root file that are not included
-     * in the list to keep
-     *
-     * @param rootFile The root file at which to begin deleting
-     * @param filesToKeep The subfiles to keep (note that if a subfile is to be kept, so are all its parent
-     *                    files in its pat)h; if empty we would also delete the root file
-     */
-    public static void delete(final File rootFile, final List<File> filesToKeep) throws IOException {
         if (rootFile == null)
             return;
         Files.walkFileTree(rootFile.toPath(), new SimpleFileVisitor<Path>() {
@@ -835,9 +860,7 @@ public final class Utils {
 
             @Override
             public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-                if (!filesToKeep.contains(path.toFile())) {
-                    Files.delete(path);
-                }
+                Files.delete(path);
                 return FileVisitResult.CONTINUE;
             }
 
@@ -848,15 +871,7 @@ public final class Utils {
                     throw exc;
                 }
 
-                if (rootFile.toPath().equals(path)) {
-                    // only delete the parent directory if there's nothing to keep
-                    if (filesToKeep.isEmpty()) {
-                        Files.delete(path);
-                    }
-                } else if (!filesToKeep.contains(path.toFile())) {
-                    Files.delete(path);
-                }
-
+                Files.delete(path);
                 return FileVisitResult.CONTINUE;
             }
         });
@@ -896,7 +911,7 @@ public final class Utils {
      * Attempts to move source to target atomically and falls back to a non-atomic move if it fails.
      * This function also flushes the parent directory to guarantee crash consistency.
      *
-     * @throws IOException if both atomic and non-atomic moves fail
+     * @throws IOException if both atomic and non-atomic moves fail, or parent dir flush fails.
      */
     public static void atomicMoveWithFallback(Path source, Path target) throws IOException {
         atomicMoveWithFallback(source, target, true);
@@ -908,7 +923,8 @@ public final class Utils {
      * when a sequence of atomicMoveWithFallback is called for the same directory and we don't want
      * to repeatedly flush the same parent directory.
      *
-     * @throws IOException if both atomic and non-atomic moves fail
+     * @throws IOException if both atomic and non-atomic moves fail,
+     * or parent dir flush fails if needFlushParentDir is true.
      */
     public static void atomicMoveWithFallback(Path source, Path target, boolean needFlushParentDir) throws IOException {
         try {
@@ -924,27 +940,23 @@ public final class Utils {
             }
         } finally {
             if (needFlushParentDir) {
-                flushParentDir(target);
+                flushDir(target.toAbsolutePath().normalize().getParent());
             }
         }
     }
 
     /**
-     * Flushes the parent directory to guarantee crash consistency.
+     * Flushes dirty directories to guarantee crash consistency.
      *
-     * @throws IOException if flushing the parent directory fails.
+     * Note: We don't fsync directories on Windows OS because otherwise it'll throw AccessDeniedException (KAFKA-13391)
+     *
+     * @throws IOException if flushing the directory fails.
      */
-    public static void flushParentDir(Path path) throws IOException {
-        FileChannel dir = null;
-        try {
-            Path parent = path.toAbsolutePath().getParent();
-            if (parent != null) {
-                dir = FileChannel.open(parent, StandardOpenOption.READ);
+    public static void flushDir(Path path) throws IOException {
+        if (path != null && !OperatingSystem.IS_WINDOWS && !OperatingSystem.IS_ZOS) {
+            try (FileChannel dir = FileChannel.open(path, StandardOpenOption.READ)) {
                 dir.force(true);
             }
-        } finally {
-            if (dir != null)
-                dir.close();
         }
     }
 
@@ -985,6 +997,14 @@ public final class Utils {
 
     /**
      * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
+     * <b>Be cautious when passing method references as an argument.</b> For example:
+     * <p>
+     * {@code closeQuietly(task::stop, "source task");}
+     * <p>
+     * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
+     * reference from a null object will result in a {@link NullPointerException}. In the example code above,
+     * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
+     * use a method reference from it.
      */
     public static void closeQuietly(AutoCloseable closeable, String name) {
         if (closeable != null) {
@@ -996,6 +1016,17 @@ public final class Utils {
         }
     }
 
+    /**
+    * Closes {@code closeable} and if an exception is thrown, it is registered to the firstException parameter.
+    * <b>Be cautious when passing method references as an argument.</b> For example:
+    * <p>
+    * {@code closeQuietly(task::stop, "source task");}
+    * <p>
+    * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
+    * reference from a null object will result in a {@link NullPointerException}. In the example code above,
+    * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
+    * use a method reference from it.
+    */
     public static void closeQuietly(AutoCloseable closeable, String name, AtomicReference<Throwable> firstException) {
         if (closeable != null) {
             try {
@@ -1025,7 +1056,7 @@ public final class Utils {
      *
      * Note: changing this method in the future will possibly cause partition selection not to be
      * compatible with the existing messages already placed on a partition since it is used
-     * in producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner}
+     * in producer's partition selection logic {@link org.apache.kafka.clients.producer.KafkaProducer}
      *
      * @param number a given number
      * @return a positive number.
@@ -1188,6 +1219,17 @@ public final class Utils {
         return res;
     }
 
+    public static <T> List<T> toList(Iterator<T> iterator, Predicate<T> predicate) {
+        List<T> res = new ArrayList<>();
+        while (iterator.hasNext()) {
+            T e = iterator.next();
+            if (predicate.test(e)) {
+                res.add(e);
+            }
+        }
+        return res;
+    }
+
     public static <T> List<T> concatListsUnmodifiable(List<T> left, List<T> right) {
         return concatLists(left, right, Collections::unmodifiableList);
     }
@@ -1308,6 +1350,10 @@ public final class Utils {
         return result;
     }
 
+    public static <K, V> Map<K, V> filterMap(final Map<K, V> map, final Predicate<Entry<K, V>> filterPredicate) {
+        return map.entrySet().stream().filter(filterPredicate).collect(Collectors.toMap(Entry::getKey, Entry::getValue));
+    }
+
     /**
      * Convert a properties to map. All keys in properties must be string type. Otherwise, a ConfigException is thrown.
      * @param properties to be converted
@@ -1385,6 +1431,23 @@ public final class Utils {
         Map<K, V> res = new HashMap<>(keys.size());
         keys.forEach(key -> res.put(key, valueSupplier.get()));
         return res;
+    }
+
+    /**
+     * Get an array containing all of the {@link Object#toString string representations} of a given enumerable type.
+     * @param enumClass the enum class; may not be null
+     * @return an array with the names of every value for the enum class; never null, but may be empty
+     * if there are no values defined for the enum
+     */
+    public static String[] enumOptions(Class<? extends Enum<?>> enumClass) {
+        Objects.requireNonNull(enumClass);
+        if (!enumClass.isEnum()) {
+            throw new IllegalArgumentException("Class " + enumClass + " is not an enumerable type");
+        }
+
+        return Stream.of(enumClass.getEnumConstants())
+                .map(Object::toString)
+                .toArray(String[]::new);
     }
 
 }

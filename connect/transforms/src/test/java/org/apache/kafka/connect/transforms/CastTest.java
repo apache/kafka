@@ -90,6 +90,42 @@ public class CastTest {
     }
 
     @Test
+    public void castNullValueRecordWithSchema() {
+        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int64"));
+        SourceRecord original = new SourceRecord(null, null, "topic", 0,
+            Schema.STRING_SCHEMA, "key", Schema.STRING_SCHEMA, null);
+        SourceRecord transformed = xformValue.apply(original);
+        assertEquals(original, transformed);
+    }
+
+    @Test
+    public void castNullValueRecordSchemaless() {
+        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int64"));
+        SourceRecord original = new SourceRecord(null, null, "topic", 0,
+            Schema.STRING_SCHEMA, "key", null, null);
+        SourceRecord transformed = xformValue.apply(original);
+        assertEquals(original, transformed);
+    }
+
+    @Test
+    public void castNullKeyRecordWithSchema() {
+        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int64"));
+        SourceRecord original = new SourceRecord(null, null, "topic", 0,
+            Schema.STRING_SCHEMA, null, Schema.STRING_SCHEMA, "value");
+        SourceRecord transformed = xformKey.apply(original);
+        assertEquals(original, transformed);
+    }
+
+    @Test
+    public void castNullKeyRecordSchemaless() {
+        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:int64"));
+        SourceRecord original = new SourceRecord(null, null, "topic", 0,
+            null, null, Schema.STRING_SCHEMA, "value");
+        SourceRecord transformed = xformKey.apply(original);
+        assertEquals(original, transformed);
+    }
+
+    @Test
     public void castWholeRecordKeyWithSchema() {
         xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8"));
         SourceRecord transformed = xformKey.apply(new SourceRecord(null, null, "topic", 0,

@@ -38,6 +38,7 @@ import java.net.URL;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -53,8 +54,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.BOOTSTRAP_SERVERS_CONFIG;
-import static org.apache.kafka.connect.runtime.WorkerConfig.REST_HOST_NAME_CONFIG;
-import static org.apache.kafka.connect.runtime.WorkerConfig.REST_PORT_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.LISTENERS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG;
@@ -220,6 +220,16 @@ public class EmbeddedConnectCluster {
     }
 
     /**
+     * Set a new timeout for REST requests to each worker in the cluster. Useful if a request
+     * is expected to block, since the time spent awaiting that request can be reduced
+     * and test runtime bloat can be avoided.
+     * @param requestTimeoutMs the new timeout in milliseconds; must be positive
+     */
+    public void requestTimeout(long requestTimeoutMs) {
+        connectCluster.forEach(worker -> worker.requestTimeout(requestTimeoutMs));
+    }
+
+    /**
      * Determine whether the Connect cluster has any workers running.
      *
      * @return true if any worker is running, or false otherwise
@@ -237,13 +247,12 @@ public class EmbeddedConnectCluster {
         return workers().stream().allMatch(WorkerHandle::isRunning);
     }
 
-    @SuppressWarnings("deprecation")
     public void startConnect() {
         log.info("Starting Connect cluster '{}' with {} workers", connectClusterName, numInitialWorkers);
 
         workerProps.put(BOOTSTRAP_SERVERS_CONFIG, kafka().bootstrapServers());
-        workerProps.put(REST_HOST_NAME_CONFIG, REST_HOST_NAME);
-        workerProps.put(REST_PORT_CONFIG, "0"); // use a random available port
+        // use a random available port
+        workerProps.put(LISTENERS_CONFIG, "HTTP://" + REST_HOST_NAME + ":0");
 
         String internalTopicsReplFactor = String.valueOf(numBrokers);
         putIfAbsent(workerProps, GROUP_ID_CONFIG, "connect-integration-test-" + connectClusterName);
@@ -429,6 +438,41 @@ public class EmbeddedConnectCluster {
     }
 
     /**
+     * Restart an existing connector and its tasks.
+     *
+     * @param connName  name of the connector to be restarted
+     * @param onlyFailed    true if only failed instances should be restarted
+     * @param includeTasks  true if tasks should be restarted, or false if only the connector should be restarted
+     * @param onlyCallOnEmptyWorker true if the REST API call should be called on a worker not running this connector or its tasks
+     * @throws ConnectRestException if the REST API returns error status
+     * @throws ConnectException for any other error.
+     */
+    public ConnectorStateInfo restartConnectorAndTasks(String connName, boolean onlyFailed, boolean includeTasks, boolean onlyCallOnEmptyWorker) {
+        ObjectMapper mapper = new ObjectMapper();
+        String restartPath = String.format("connectors/%s/restart?onlyFailed=" + onlyFailed + "&includeTasks=" + includeTasks, connName);
+        String restartEndpoint;
+        if (onlyCallOnEmptyWorker) {
+            restartEndpoint = endpointForResourceNotRunningConnector(restartPath, connName);
+        } else {
+            restartEndpoint = endpointForResource(restartPath);
+        }
+        Response response = requestPost(restartEndpoint, "", Collections.emptyMap());
+        try {
+            if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+                //only the 202 stauts returns a body
+                if (response.getStatus() == Response.Status.ACCEPTED.getStatusCode()) {
+                    return mapper.readerFor(ConnectorStateInfo.class)
+                            .readValue(responseToString(response));
+                }
+            }
+            return null;
+        } catch (IOException e) {
+            log.error("Could not read connector state from response: {}",
+                    responseToString(response), e);
+            throw new ConnectException("Could not not parse connector state", e);
+        }
+    }
+    /**
      * Get the connector names of the connectors currently running on this cluster.
      *
      * @return the list of connector names
@@ -555,6 +599,31 @@ public class EmbeddedConnectCluster {
                 .filter(Objects::nonNull)
                 .findFirst()
                 .orElseThrow(() -> new ConnectException("Connect workers have not been provisioned"))
+                .toString();
+        return url + resource;
+    }
+
+    /**
+     * Get the full URL of the endpoint that corresponds to the given REST resource using a worker
+     * that is not running any tasks or connector instance for the connectorName provided in the arguments
+     *
+     * @param resource the resource under the worker's admin endpoint
+     * @param connectorName the name of the connector
+     * @return the admin endpoint URL
+     * @throws ConnectException if no REST endpoint is available
+     */
+    public String endpointForResourceNotRunningConnector(String resource, String connectorName) {
+        ConnectorStateInfo info = connectorStatus(connectorName);
+        Set<String> activeWorkerUrls = new HashSet<>();
+        activeWorkerUrls.add(String.format("http://%s/", info.connector().workerId()));
+        info.tasks().forEach(t -> activeWorkerUrls.add(String.format("http://%s/", t.workerId())));
+        String url = connectCluster.stream()
+                .map(WorkerHandle::url)
+                .filter(Objects::nonNull)
+                .filter(workerUrl -> !activeWorkerUrls.contains(workerUrl.toString()))
+                .findFirst()
+                .orElseThrow(() -> new ConnectException(
+                        String.format("Connect workers have not been provisioned or no free worker found that is not running this connector(%s) or its tasks", connectorName)))
                 .toString();
         return url + resource;
     }

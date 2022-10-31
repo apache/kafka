@@ -60,7 +60,7 @@ public class PageViewUntypedDemo {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pageview-untyped");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -78,6 +78,8 @@ public class PageViewUntypedDemo {
 
         final KTable<String, String> userRegions = users.mapValues(record -> record.get("region").textValue());
 
+        final Duration duration24Hours = Duration.ofHours(24);
+
         final KStream<JsonNode, JsonNode> regionCount = views
             .leftJoin(userRegions, (view, region) -> {
                 final ObjectNode jNode = JsonNodeFactory.instance.objectNode();
@@ -88,7 +90,7 @@ public class PageViewUntypedDemo {
             })
             .map((user, viewRegion) -> new KeyValue<>(viewRegion.get("region").textValue(), viewRegion))
             .groupByKey(Grouped.with(Serdes.String(), jsonSerde))
-            .windowedBy(TimeWindows.of(Duration.ofDays(7)).advanceBy(Duration.ofSeconds(1)))
+            .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(7), duration24Hours).advanceBy(Duration.ofSeconds(1)))
             .count()
             .toStream()
             .map((key, value) -> {

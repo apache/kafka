@@ -31,11 +31,12 @@ import org.apache.kafka.common.message.{BrokerHeartbeatResponseData, BrokerRegis
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys.{BROKER_HEARTBEAT, BROKER_REGISTRATION}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{BrokerHeartbeatResponse, BrokerRegistrationResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.{Assertions, Test, Timeout}
+import org.junit.jupiter.api.{Test, Timeout}
+import org.junit.jupiter.api.Assertions._
 
 import scala.jdk.CollectionConverters._
 
@@ -47,6 +48,8 @@ class BrokerLifecycleManagerTest {
     properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "broker")
     properties.setProperty(KafkaConfig.NodeIdProp, "1")
+    properties.setProperty(KafkaConfig.QuorumVotersProp, s"2@localhost:9093")
+    properties.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
     properties.setProperty(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp, "300000")
     properties
   }
@@ -70,7 +73,7 @@ class BrokerLifecycleManagerTest {
     val metadata = new Metadata(1000, 1000, new LogContext(), new ClusterResourceListeners())
     val mockClient = new MockClient(time, metadata)
     val controllerNodeProvider = new SimpleControllerNodeProvider()
-    val nodeApiVersions = new NodeApiVersions(Seq(BROKER_REGISTRATION, BROKER_HEARTBEAT).map {
+    val nodeApiVersions = NodeApiVersions.create(Seq(BROKER_REGISTRATION, BROKER_HEARTBEAT).map {
       apiKey => new ApiVersion().setApiKey(apiKey.id).
         setMinVersion(apiKey.oldestVersion()).setMaxVersion(apiKey.latestVersion())
     }.toList.asJava)
@@ -78,7 +81,7 @@ class BrokerLifecycleManagerTest {
       time, controllerNodeProvider, nodeApiVersions)
     val clusterId = "x4AJGXQSRnephtTZzujw4w"
     val advertisedListeners = new ListenerCollection()
-    config.advertisedListeners.foreach { ep =>
+    config.effectiveAdvertisedListeners.foreach { ep =>
       advertisedListeners.add(new Listener().setHost(ep.host).
         setName(ep.listenerName.value()).
         setPort(ep.port.shortValue()).
@@ -102,15 +105,15 @@ class BrokerLifecycleManagerTest {
   def testCreateStartAndClose(): Unit = {
     val context = new BrokerLifecycleManagerTestContext(configProperties)
     val manager = new BrokerLifecycleManager(context.config, context.time, None)
-    Assertions.assertEquals(BrokerState.NOT_RUNNING, manager.state())
+    assertEquals(BrokerState.NOT_RUNNING, manager.state)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
       Collections.emptyMap())
     TestUtils.retry(60000) {
-      Assertions.assertEquals(BrokerState.STARTING, manager.state())
+      assertEquals(BrokerState.STARTING, manager.state)
     }
     manager.close()
-    Assertions.assertEquals(BrokerState.SHUTTING_DOWN, manager.state())
+    assertEquals(BrokerState.SHUTTING_DOWN, manager.state)
   }
 
   @Test
@@ -126,7 +129,7 @@ class BrokerLifecycleManagerTest {
       Collections.emptyMap())
     TestUtils.retry(10000) {
       context.poll()
-      Assertions.assertEquals(1000L, manager.brokerEpoch())
+      assertEquals(1000L, manager.brokerEpoch)
     }
     manager.close()
 
@@ -145,14 +148,14 @@ class BrokerLifecycleManagerTest {
       context.mockChannelManager.poll()
     }
     newDuplicateRegistrationResponse()
-    Assertions.assertEquals(1, context.mockClient.futureResponses().size)
+    assertEquals(1, context.mockClient.futureResponses().size)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
       Collections.emptyMap())
     // We should send the first registration request and get a failure immediately
     TestUtils.retry(60000) {
       context.poll()
-      Assertions.assertEquals(0, context.mockClient.futureResponses().size)
+      assertEquals(0, context.mockClient.futureResponses().size)
     }
     // Verify that we resend the registration request.
     newDuplicateRegistrationResponse()
@@ -160,16 +163,16 @@ class BrokerLifecycleManagerTest {
       context.time.sleep(100)
       context.poll()
       manager.eventQueue.wakeup()
-      Assertions.assertEquals(0, context.mockClient.futureResponses().size)
+      assertEquals(0, context.mockClient.futureResponses().size)
     }
     // Verify that we time out eventually.
     context.time.sleep(300000)
     TestUtils.retry(60000) {
       context.poll()
       manager.eventQueue.wakeup()
-      Assertions.assertEquals(BrokerState.SHUTTING_DOWN, manager.state())
-      Assertions.assertTrue(manager.initialCatchUpFuture.isCompletedExceptionally())
-      Assertions.assertEquals(-1L, manager.brokerEpoch())
+      assertEquals(BrokerState.SHUTTING_DOWN, manager.state)
+      assertTrue(manager.initialCatchUpFuture.isCompletedExceptionally())
+      assertEquals(-1L, manager.brokerEpoch)
     }
     manager.close()
   }
@@ -190,7 +193,7 @@ class BrokerLifecycleManagerTest {
     TestUtils.retry(10000) {
       context.poll()
       manager.eventQueue.wakeup()
-      Assertions.assertEquals(BrokerState.RECOVERY, manager.state())
+      assertEquals(BrokerState.RECOVERY, manager.state)
     }
     context.mockClient.prepareResponseFrom(new BrokerHeartbeatResponse(
       new BrokerHeartbeatResponseData().setIsFenced(false)), controllerNode)
@@ -198,21 +201,33 @@ class BrokerLifecycleManagerTest {
     TestUtils.retry(10000) {
       context.poll()
       manager.eventQueue.wakeup()
-      Assertions.assertEquals(BrokerState.RUNNING, manager.state())
+      assertEquals(BrokerState.RUNNING, manager.state)
     }
     manager.beginControlledShutdown()
     TestUtils.retry(10000) {
       context.poll()
       manager.eventQueue.wakeup()
-      Assertions.assertEquals(BrokerState.PENDING_CONTROLLED_SHUTDOWN, manager.state())
+      assertEquals(BrokerState.PENDING_CONTROLLED_SHUTDOWN, manager.state)
+      assertTrue(context.mockClient.hasInFlightRequests)
     }
-    context.mockClient.prepareResponseFrom(new BrokerHeartbeatResponse(
-      new BrokerHeartbeatResponseData().setShouldShutDown(true)), controllerNode)
-    context.time.sleep(3000)
+
+    context.mockClient.respond(
+      (body: AbstractRequest) => {
+        body match {
+          case heartbeatRequest: BrokerHeartbeatRequest =>
+            assertTrue(heartbeatRequest.data.wantShutDown)
+            true
+          case _ =>
+            false
+        }
+      },
+      new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData().setShouldShutDown(true))
+    )
+
     TestUtils.retry(10000) {
       context.poll()
       manager.eventQueue.wakeup()
-      Assertions.assertEquals(BrokerState.SHUTTING_DOWN, manager.state())
+      assertEquals(BrokerState.SHUTTING_DOWN, manager.state)
     }
     manager.controlledShutdownFuture.get()
     manager.close()

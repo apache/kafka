@@ -31,13 +31,14 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.Mode
 import org.apache.kafka.common.security.auth._
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.security.plain.PlainAuthenticateCallback
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 object SaslPlainSslEndToEndAuthorizationTest {
 
-  class TestPrincipalBuilder extends KafkaPrincipalBuilder {
+  class TestPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
 
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       val saslContext = context.asInstanceOf[SaslAuthenticationContext]
@@ -69,13 +70,12 @@ object SaslPlainSslEndToEndAuthorizationTest {
     def handle(callbacks: Array[Callback]): Unit = {
       var username: String = null
       for (callback <- callbacks) {
-        if (callback.isInstanceOf[NameCallback])
-          username = callback.asInstanceOf[NameCallback].getDefaultName
-        else if (callback.isInstanceOf[PlainAuthenticateCallback]) {
-          val plainCallback = callback.asInstanceOf[PlainAuthenticateCallback]
-          plainCallback.authenticated(Credentials.allUsers(username) == new String(plainCallback.password))
-        } else
-          throw new UnsupportedCallbackException(callback)
+        callback match {
+          case nameCallback: NameCallback => username = nameCallback.getDefaultName
+          case plainCallback: PlainAuthenticateCallback =>
+            plainCallback.authenticated(Credentials.allUsers(username) == new String(plainCallback.password))
+          case _ => throw new UnsupportedCallbackException(callback)
+        }
       }
     }
     def close(): Unit = {}
@@ -84,16 +84,16 @@ object SaslPlainSslEndToEndAuthorizationTest {
   class TestClientCallbackHandler extends AuthenticateCallbackHandler {
     def configure(configs: java.util.Map[String, _], saslMechanism: String, jaasConfigEntries: java.util.List[AppConfigurationEntry]): Unit = {}
     def handle(callbacks: Array[Callback]): Unit = {
-      val subject = Subject.getSubject(AccessController.getContext())
+      val subject = Subject.getSubject(AccessController.getContext)
       val username = subject.getPublicCredentials(classOf[String]).iterator().next()
       for (callback <- callbacks) {
-        if (callback.isInstanceOf[NameCallback])
-          callback.asInstanceOf[NameCallback].setName(username)
-        else if (callback.isInstanceOf[PasswordCallback]) {
-          if (username == KafkaPlainUser || username == KafkaPlainAdmin)
-            callback.asInstanceOf[PasswordCallback].setPassword(Credentials.allUsers(username).toCharArray)
-        } else
-          throw new UnsupportedCallbackException(callback)
+        callback match {
+          case nameCallback: NameCallback => nameCallback.setName(username)
+          case passwordCallback: PasswordCallback =>
+            if (username == KafkaPlainUser || username == KafkaPlainAdmin)
+              passwordCallback.setPassword(Credentials.allUsers(username).toCharArray)
+          case _ => throw new UnsupportedCallbackException(callback)
+        }
       }
     }
     def close(): Unit = {}

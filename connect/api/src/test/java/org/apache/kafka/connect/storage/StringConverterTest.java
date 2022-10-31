@@ -32,7 +32,7 @@ public class StringConverterTest {
     private static final String TOPIC = "topic";
     private static final String SAMPLE_STRING = "a string";
 
-    private StringConverter converter = new StringConverter();
+    private final StringConverter converter = new StringConverter();
 
     @Test
     public void testStringToBytes() {

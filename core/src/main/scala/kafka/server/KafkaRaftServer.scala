@@ -18,20 +18,28 @@ package kafka.server
 
 import java.io.File
 import java.util.concurrent.CompletableFuture
-
-import kafka.common.{InconsistentNodeIdException, KafkaException}
-import kafka.log.Log
-import kafka.metrics.{KafkaMetricsReporter, KafkaYammerMetrics}
+import kafka.common.InconsistentNodeIdException
+import kafka.log.{LogConfig, UnifiedLog}
+import kafka.metrics.KafkaMetricsReporter
 import kafka.raft.KafkaRaftManager
 import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
+import kafka.server.metadata.BrokerServerMetrics
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
-import org.apache.kafka.metadata.ApiMessageAndVersion
+import org.apache.kafka.common.{KafkaException, Uuid}
+import org.apache.kafka.controller.QuorumControllerMetrics
+import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
+import org.apache.kafka.metadata.{KafkaConfigSchema, MetadataRecordSerde}
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.raft.metadata.{MetaLogRaftShim, MetadataRecordSerde}
+import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.fault.{LoggingFaultHandler, ProcessExitingFaultHandler}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
+import java.util.Optional
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 
 /**
  * This class implements the KRaft (Kafka Raft) mode server which relies
@@ -39,8 +47,6 @@ import scala.collection.Seq
  * constructing the controller and/or broker based on the `process.roles`
  * configuration and for managing their basic lifecycle (startup and shutdown).
  *
- * Note that this server is a work in progress and we are releasing it as
- * early access in 2.8.0.
  */
 class KafkaRaftServer(
   config: KafkaConfig,
@@ -48,15 +54,16 @@ class KafkaRaftServer(
   threadNamePrefix: Option[String]
 ) extends Server with Logging {
 
+  this.logIdent = s"[KafkaRaftServer nodeId=${config.nodeId}] "
   KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
   KafkaYammerMetrics.INSTANCE.configure(config.originals)
 
-  private val (metaProps, offlineDirs) = KafkaRaftServer.initializeLogDirs(config)
+  private val (metaProps, bootstrapMetadata, offlineDirs) = KafkaRaftServer.initializeLogDirs(config)
 
   private val metrics = Server.initializeMetrics(
     config,
     time,
-    metaProps.clusterId.toString
+    metaProps.clusterId
   )
 
   private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
@@ -67,40 +74,57 @@ class KafkaRaftServer(
     config,
     new MetadataRecordSerde,
     KafkaRaftServer.MetadataPartition,
+    KafkaRaftServer.MetadataTopicId,
     time,
     metrics,
     threadNamePrefix,
     controllerQuorumVotersFuture
   )
 
-  private val metaLogShim = new MetaLogRaftShim(raftManager.kafkaRaftClient, config.nodeId)
-
   private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
+    val brokerMetrics = BrokerServerMetrics(metrics)
+    val fatalFaultHandler = new ProcessExitingFaultHandler()
+    val metadataLoadingFaultHandler = new LoggingFaultHandler("metadata loading",
+        () => brokerMetrics.metadataLoadErrorCount.getAndIncrement())
+    val metadataApplyingFaultHandler = new LoggingFaultHandler("metadata application",
+      () => brokerMetrics.metadataApplyErrorCount.getAndIncrement())
     Some(new BrokerServer(
       config,
       metaProps,
-      metaLogShim,
+      raftManager,
       time,
       metrics,
+      brokerMetrics,
       threadNamePrefix,
       offlineDirs,
       controllerQuorumVotersFuture,
-      Server.SUPPORTED_FEATURES
+      fatalFaultHandler,
+      metadataLoadingFaultHandler,
+      metadataApplyingFaultHandler
     ))
   } else {
     None
   }
 
   private val controller: Option[ControllerServer] = if (config.processRoles.contains(ControllerRole)) {
+    val controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)
+    val metadataFaultHandler = new LoggingFaultHandler("controller metadata",
+      () => controllerMetrics.incrementMetadataErrorCount())
+    val fatalFaultHandler = new ProcessExitingFaultHandler()
     Some(new ControllerServer(
       metaProps,
       config,
-      metaLogShim,
       raftManager,
       time,
       metrics,
+      controllerMetrics,
       threadNamePrefix,
-      controllerQuorumVotersFuture
+      controllerQuorumVotersFuture,
+      KafkaRaftServer.configSchema,
+      raftManager.apiVersions,
+      bootstrapMetadata,
+      metadataFaultHandler,
+      fatalFaultHandler
     ))
   } else {
     None
@@ -108,6 +132,8 @@ class KafkaRaftServer(
 
   override def startup(): Unit = {
     Mx4jLoader.maybeLoad()
+    // Note that we startup `RaftManager` first so that the controller and broker
+    // can register listeners during initialization.
     raftManager.startup()
     controller.foreach(_.startup())
     broker.foreach(_.startup())
@@ -117,6 +143,10 @@ class KafkaRaftServer(
 
   override def shutdown(): Unit = {
     broker.foreach(_.shutdown())
+    // The order of shutdown for `RaftManager` and `ControllerServer` is backwards
+    // compared to `startup()`. This is because the `SocketServer` implementation that
+    // we rely on to receive requests is owned by `ControllerServer`, so we need it
+    // to stick around until graceful shutdown of `RaftManager` can be completed.
     raftManager.shutdown()
     controller.foreach(_.shutdown())
     CoreUtils.swallow(AppInfoParser.unregisterAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics), this)
@@ -131,8 +161,9 @@ class KafkaRaftServer(
 }
 
 object KafkaRaftServer {
-  val MetadataTopic = "@metadata"
-  val MetadataPartition = new TopicPartition(MetadataTopic, 0)
+  val MetadataTopic = Topic.METADATA_TOPIC_NAME
+  val MetadataPartition = Topic.METADATA_TOPIC_PARTITION
+  val MetadataTopicId = Uuid.METADATA_TOPIC_ID
 
   sealed trait ProcessRole
   case object BrokerRole extends ProcessRole
@@ -147,7 +178,7 @@ object KafkaRaftServer {
    * @return A tuple containing the loaded meta properties (which are guaranteed to
    *         be consistent across all log dirs) and the offline directories
    */
-  def initializeLogDirs(config: KafkaConfig): (MetaProperties, Seq[String]) = {
+  def initializeLogDirs(config: KafkaConfig): (MetaProperties, BootstrapMetadata, Seq[String]) = {
     val logDirs = (config.logDirs.toSet + config.metadataLogDir).toSeq
     val (rawMetaProperties, offlineDirs) = BrokerMetadataCheckpoint.
       getBrokerMetadataAndOfflineDirs(logDirs, ignoreMissing = false)
@@ -157,7 +188,7 @@ object KafkaRaftServer {
         s"loaded from ${config.metadataLogDir}")
     }
 
-    val metadataPartitionDirName = Log.logDirName(MetadataPartition)
+    val metadataPartitionDirName = UnifiedLog.logDirName(MetadataPartition)
     val onlineNonMetadataDirs = logDirs.diff(offlineDirs :+ config.metadataLogDir)
     onlineNonMetadataDirs.foreach { logDir =>
       val metadataDir = new File(logDir, metadataPartitionDirName)
@@ -175,7 +206,15 @@ object KafkaRaftServer {
           "If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
     }
 
-    (metaProperties, offlineDirs.toSeq)
+    val bootstrapDirectory = new BootstrapDirectory(config.metadataLogDir,
+      Optional.ofNullable(config.interBrokerProtocolVersionString))
+    val bootstrapMetadata = bootstrapDirectory.read()
+
+    (metaProperties, bootstrapMetadata, offlineDirs.toSeq)
   }
 
+  val configSchema = new KafkaConfigSchema(Map(
+    ConfigResource.Type.BROKER -> new ConfigDef(KafkaConfig.configDef),
+    ConfigResource.Type.TOPIC -> LogConfig.configDefCopy,
+  ).asJava, LogConfig.AllTopicConfigSynonyms)
 }

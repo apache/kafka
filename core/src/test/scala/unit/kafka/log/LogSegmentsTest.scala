@@ -18,10 +18,12 @@ package kafka.log
 
 import java.io.File
 
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.mockito.Mockito.{mock, when}
 
 class LogSegmentsTest {
 
@@ -35,7 +37,17 @@ class LogSegmentsTest {
     LogTestUtils.createSegment(offset, logDir, indexIntervalBytes, time)
   }
 
-  private def assertEntry(segment: LogSegment, tested: java.util.Map.Entry[java.lang.Long, LogSegment]): Unit = {
+  @BeforeEach
+  def setup(): Unit = {
+    logDir = TestUtils.tempDir()
+  }
+
+  @AfterEach
+  def teardown(): Unit = {
+    Utils.delete(logDir)
+  }
+
+  private def assertEntry(segment: LogSegment, tested: java.util.Map.Entry[Long, LogSegment]): Unit = {
     assertEquals(segment.baseOffset, tested.getKey())
     assertEquals(segment, tested.getValue())
   }
@@ -89,11 +101,14 @@ class LogSegmentsTest {
     assertFalse(segments.nonEmpty)
     assertEquals(0, segments.numberOfSegments)
     assertFalse(segments.contains(offset1))
+
+    segments.close()
   }
 
   @Test
   def testSegmentAccess(): Unit = {
     val segments = new LogSegments(topicPartition)
+
     val offset1 = 1
     val seg1 = createSegment(offset1)
     val offset2 = 2
@@ -130,11 +145,13 @@ class LogSegmentsTest {
     assertEquals(Seq(), segments.values(4, 4).toSeq)
     assertEquals(Seq(seg4), segments.values(4, 5).toSeq)
 
+    segments.close()
   }
 
   @Test
   def testClosestMatchOperations(): Unit = {
     val segments = new LogSegments(topicPartition)
+
     val seg1 = createSegment(1)
     val seg2 = createSegment(3)
     val seg3 = createSegment(5)
@@ -142,22 +159,81 @@ class LogSegmentsTest {
 
     List(seg1, seg2, seg3, seg4).foreach(segments.add)
 
-    // Test floorSegment, floorEntry
+    // Test floorSegment
     assertEquals(Some(seg1), segments.floorSegment(2))
-    assertEntry(seg1, segments.floorEntry(2).get)
     assertEquals(Some(seg2), segments.floorSegment(3))
-    assertEntry(seg2, segments.floorEntry(3).get)
 
-    // Test lowerSegment, lowerEntry
+    // Test lowerSegment
     assertEquals(Some(seg1), segments.lowerSegment(3))
-    assertEntry(seg1, segments.lowerEntry(3).get)
     assertEquals(Some(seg2), segments.lowerSegment(4))
-    assertEntry(seg2, segments.lowerEntry(4).get)
 
     // Test higherSegment, higherEntry
     assertEquals(Some(seg3), segments.higherSegment(4))
     assertEntry(seg3, segments.higherEntry(4).get)
     assertEquals(Some(seg4), segments.higherSegment(5))
     assertEntry(seg4, segments.higherEntry(5).get)
+
+    segments.close()
+  }
+
+  @Test
+  def testHigherSegments(): Unit = {
+    val segments = new LogSegments(topicPartition)
+
+    val seg1 = createSegment(1)
+    val seg2 = createSegment(3)
+    val seg3 = createSegment(5)
+    val seg4 = createSegment(7)
+    val seg5 = createSegment(9)
+
+    List(seg1, seg2, seg3, seg4, seg5).foreach(segments.add)
+
+    // higherSegments(0) should return all segments in order
+    {
+      val iterator = segments.higherSegments(0).iterator
+      List(seg1, seg2, seg3, seg4, seg5).foreach {
+        segment =>
+          assertTrue(iterator.hasNext)
+          assertEquals(segment, iterator.next())
+      }
+      assertFalse(iterator.hasNext)
+    }
+
+    // higherSegments(1) should return all segments in order except seg1
+    {
+      val iterator = segments.higherSegments(1).iterator
+      List(seg2, seg3, seg4, seg5).foreach {
+        segment =>
+          assertTrue(iterator.hasNext)
+          assertEquals(segment, iterator.next())
+      }
+      assertFalse(iterator.hasNext)
+    }
+
+    // higherSegments(8) should return only seg5
+    {
+      val iterator = segments.higherSegments(8).iterator
+      assertTrue(iterator.hasNext)
+      assertEquals(seg5, iterator.next())
+      assertFalse(iterator.hasNext)
+    }
+
+    // higherSegments(9) should return no segments
+    {
+      val iterator = segments.higherSegments(9).iterator
+      assertFalse(iterator.hasNext)
+    }
+  }
+
+  @Test
+  def testSizeForLargeLogs(): Unit = {
+    val largeSize = Int.MaxValue.toLong * 2
+    val logSegment: LogSegment = mock(classOf[LogSegment])
+
+    when(logSegment.size).thenReturn(Int.MaxValue)
+
+    assertEquals(Int.MaxValue, LogSegments.sizeInBytes(Seq(logSegment)))
+    assertEquals(largeSize, LogSegments.sizeInBytes(Seq(logSegment, logSegment)))
+    assertTrue(UnifiedLog.sizeInBytes(Seq(logSegment, logSegment)) > Int.MaxValue)
   }
 }
