@@ -1905,11 +1905,13 @@ object TestUtils extends Logging {
     t0         t1         t2         t3         t4         t5         t6
     |____**____|__________|____**____|__________|____**____|__________|
     Within a single sample, all m requests may exist at the start or end of that sample:
+             t0.9          t2.1                  t4.1
     |________**|__________|**________|__________|**________|__________|
     An outside observer with no knowledge of these boundaries can examine the average rate over any interval
     For the worst case rate, their interval should include the maximum number of intervals in the minimum amount of time
     For example, the intervals t0.9-t2.1 and t0.9-t4.1 are two intervals with the locally worst average rate:
-             t0.9          t2.1                  t4.1
+            (m             m ) delta=1.2
+            (m             m                     m ) delta=3.2
     |________**|__________|**________|__________|**________|__________|
     The interval t0.9-t2.1 has a rate of 2*m requests over 1.2 window times, worse than intervals t0.8-t2.1, t1-t2.1, t0.9-t2, or t0.9-t2.2
     This is because in the t0-t1 sample has m requests at t0.9, and the t2-t3 sample has m requests at t2.1.
