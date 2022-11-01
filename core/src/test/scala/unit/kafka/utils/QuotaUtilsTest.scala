@@ -26,6 +26,8 @@ import org.apache.kafka.common.metrics.stats.{Rate, Value}
 import scala.jdk.CollectionConverters._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class QuotaUtilsTest {
 
@@ -112,8 +114,13 @@ class QuotaUtilsTest {
       maxThrottleTimeMs, time.milliseconds))
   }
 
-  @Test
-  def testErrorBoundWorstCase(): Unit = {
+  @ParameterizedTest
+  @CsvSource(Array(
+    " 1,0", " 1,1", " 1,2", " 1,10", " 1,20", " 1,30", " 1,39", " 1,40",
+    " 2,0", " 2,1", " 2,2", " 2,10", " 2,20", " 2,30", " 2,39", " 2,40",
+    "10,0",	"10,1", "10,2", "10,10", "10,20", "10,30", "10,39", "10,40"
+  ))
+  def testErrorBoundWorstCase(numSamples: Int, minInterval: Int): Unit = {
     val maxConnectionRate = 30
     val metricConfig = new MetricConfig()
       .timeWindow(sampleWindowSec, TimeUnit.SECONDS)
@@ -140,7 +147,8 @@ class QuotaUtilsTest {
       }
       // Follow the throttle strategy under test
       val throttleTime = recordAndGetThrottleTimeMs(sensor, timeMs)
-      time.sleep(throttleTime)
+      val waitTime = Math.min(throttleTime, minInterval)
+      time.sleep(waitTime)
     }
   }
 
