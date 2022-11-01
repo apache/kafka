@@ -1898,9 +1898,10 @@ object TestUtils extends Logging {
 
   def errorBoundForWindowedRateQuota(quotaSamples: Int, quotaWindowSizeSeconds: Int, elapsedMs: Long): Double = {
     /*
-    Within an n-sample window limited to rate r requests/window, all m=r*n requests may land within a single sample while the other n-1 samples are empty.
-    For example, a n=2-sample window which allows r=1 requests/window may have the following pattern:
-    key: *=request, _=no request, |=window boundary
+    Within an n-sample window limited to an average rate of r requests/sample,
+    all m=r*n requests may land within a single sample while the other n-1 samples are empty.
+    For example, a n=2-sample window which allows r=1 requests/sample may have the following pattern:
+    key: *=request, _=no request, |=sample boundary
     t0         t1         t2         t3         t4         t5         t6
     |____**____|__________|____**____|__________|____**____|__________|
     Within a single sample, all m requests may exist at the start or end of that sample:
@@ -1943,7 +1944,7 @@ object TestUtils extends Logging {
     n=2, k=floor(13001/1000/2)=6, R_2,6/r = 14/11 = 1.2727  |__*|___|_*_|___|_*_|___|_*_|___|_*_|___|_*_|___|*__|
     n=2, k=floor(14001/1000/2)=7, R_2,7/r = 16/13 = 1.2307  |__*|___|_*_|___|_*_|___|_*_|___|_*_|___|_*_|___|_*_|___|*__|
      */
-    val n = quotaSamples;
+    val n = quotaSamples
     val k = Math.floor(elapsedMs.toDouble / TimeUnit.SECONDS.toMillis(quotaWindowSizeSeconds) / quotaSamples)
     assertTrue(k >= 1, s"Test duration $elapsedMs did not cover a full quota window, unable to enforce rate bound")
     (n*k+n)/(n*k-1)
