@@ -51,7 +51,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
 
     def createFetchRequest(topicPartitions: Seq[TopicPartition], offsetMap: Map[TopicPartition, Long] = Map.empty,
                            version: Short = ApiKeys.FETCH.latestVersion()): FetchRequest =
-      this.createFetchRequest(maxResponseBytes, maxPartitionBytes, topicPartitions, offsetMap, version)
+      this.createConsumerFetchRequest(maxResponseBytes, maxPartitionBytes, topicPartitions, offsetMap, version)
 
     val topicPartitionToLeader = createTopics(numTopics = 5, numPartitions = 6)
     val random = new Random(0)

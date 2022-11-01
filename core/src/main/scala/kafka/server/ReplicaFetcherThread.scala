@@ -127,10 +127,11 @@ class ReplicaFetcherThread(name: String,
 
     // For the follower replica, we do not need to keep its segment base offset and physical position.
     // These values will be computed upon becoming leader or handling a preferred read replica fetch.
-    val followerHighWatermark = log.updateHighWatermark(partitionData.highWatermark)
+    val highWatermarkUpdate = log.updateHighWatermark(partitionData.highWatermark)
+    info(s"follower high watermark: ${highWatermarkUpdate.highWatermark}")
     log.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented)
     if (logTrace)
-      trace(s"Follower set replica high watermark for partition $topicPartition to $followerHighWatermark")
+      trace(s"Follower set replica high watermark for partition $topicPartition to ${highWatermarkUpdate.highWatermark}")
 
     // Traffic from both in-sync and out of sync replicas are accounted for in replication quota to ensure total replication
     // traffic doesn't exceed quota.
@@ -142,7 +143,9 @@ class ReplicaFetcherThread(name: String,
 
     brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
 
-    logAppendInfo.foreach { _ => partitionsWithNewRecords += topicPartition }
+    if (highWatermarkUpdate.hasHighWatermarkChanged) {
+      logAppendInfo.foreach { _ => partitionsWithNewRecords += topicPartition }
+    }
     logAppendInfo
   }
 

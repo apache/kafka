@@ -3341,13 +3341,13 @@ class UnifiedLogTest {
       log.appendAsLeader(records, leaderEpoch = 0)
     }
 
-    val initialHighWatermark = log.updateHighWatermark(25L)
-    assertEquals(25L, initialHighWatermark)
+    val initialHighWatermarkUpdate = log.updateHighWatermark(25L)
+    assertEquals(25L, initialHighWatermarkUpdate.highWatermark)
 
     val initialNumSegments = log.numberOfSegments
     log.deleteOldSegments()
     assertTrue(log.numberOfSegments < initialNumSegments)
-    assertTrue(log.logStartOffset <= initialHighWatermark)
+    assertTrue(log.logStartOffset <= initialHighWatermarkUpdate.highWatermark)
   }
 
   @Test

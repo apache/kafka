@@ -379,7 +379,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * @param hw the suggested new value for the high watermark
    * @return the updated high watermark offset
    */
-  def updateHighWatermark(hw: Long): Long = {
+  def updateHighWatermark(hw: Long): HighWatermarkUpdate = {
     updateHighWatermark(LogOffsetMetadata(hw))
   }
 
@@ -390,7 +390,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * @param highWatermarkMetadata the suggested high watermark with offset metadata
    * @return the updated high watermark offset
    */
-  def updateHighWatermark(highWatermarkMetadata: LogOffsetMetadata): Long = {
+  def updateHighWatermark(highWatermarkMetadata: LogOffsetMetadata): HighWatermarkUpdate = {
     val endOffsetMetadata = localLog.logEndOffsetMetadata
     val newHighWatermarkMetadata = if (highWatermarkMetadata.messageOffset < logStartOffset) {
       LogOffsetMetadata(logStartOffset)
@@ -400,8 +400,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       highWatermarkMetadata
     }
 
-    updateHighWatermarkMetadata(newHighWatermarkMetadata)
-    newHighWatermarkMetadata.messageOffset
+    val hasHighWatermarkChanged = updateHighWatermarkMetadata(newHighWatermarkMetadata)
+    HighWatermarkUpdate(newHighWatermarkMetadata.messageOffset, hasHighWatermarkChanged)
   }
 
   /**
@@ -452,7 +452,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
-  private def updateHighWatermarkMetadata(newHighWatermark: LogOffsetMetadata): Unit = {
+  private def updateHighWatermarkMetadata(newHighWatermark: LogOffsetMetadata): Boolean = {
+    var hasHighWatermarkChanged = false
     if (newHighWatermark.messageOffset < 0)
       throw new IllegalArgumentException("High watermark offset should be non-negative")
 
@@ -461,11 +462,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         warn(s"Non-monotonic update of high watermark from $highWatermarkMetadata to $newHighWatermark")
       }
 
+      if (highWatermarkMetadata.messageOffset != newHighWatermark.messageOffset) {
+        hasHighWatermarkChanged = true
+      }
       highWatermarkMetadata = newHighWatermark
       producerStateManager.onHighWatermarkUpdated(newHighWatermark.messageOffset)
       maybeIncrementFirstUnstableOffset()
     }
     trace(s"Setting high watermark $newHighWatermark")
+    hasHighWatermarkChanged
   }
 
   /**
@@ -2167,3 +2172,5 @@ case class StartOffsetBreach(log: UnifiedLog) extends SegmentDeletionReason {
     log.info(s"Deleting segments due to log start offset ${log.logStartOffset} breach: ${toDelete.mkString(",")}")
   }
 }
+
+case class HighWatermarkUpdate(highWatermark: Long, hasHighWatermarkChanged: Boolean)

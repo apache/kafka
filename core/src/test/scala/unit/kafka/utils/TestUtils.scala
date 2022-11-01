@@ -824,9 +824,7 @@ object TestUtils extends Logging {
                            trustStoreFile: Option[File] = None,
                            saslProperties: Option[Properties] = None,
                            keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
-                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
-                           rackId: String = null,
-                           fetchMaxWaitMs: Int = 500): KafkaConsumer[K, V] = {
+                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer): KafkaConsumer[K, V] = {
     val consumerProps = new Properties
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset)
@@ -835,10 +833,6 @@ object TestUtils extends Logging {
     consumerProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
     consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, if (readCommitted) "read_committed" else "read_uncommitted")
     consumerProps ++= consumerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
-    if (rackId != null) {
-      consumerProps.put(ConsumerConfig.CLIENT_RACK_CONFIG, rackId)
-    }
-    consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, fetchMaxWaitMs)
     new KafkaConsumer[K, V](consumerProps, keyDeserializer, valueDeserializer)
   }
 
@@ -1731,15 +1725,11 @@ object TestUtils extends Logging {
       groupId: String = "group",
       securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
       trustStoreFile: Option[File] = None,
-      waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS,
-      rackId: String = null,
-      fetchMaxWaitMs: Int = 500): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
+      waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
     val consumer = createConsumer(bootstrapServers(brokers, ListenerName.forSecurityProtocol(securityProtocol)),
       groupId = groupId,
       securityProtocol = securityProtocol,
-      trustStoreFile = trustStoreFile,
-      rackId = rackId,
-      fetchMaxWaitMs = fetchMaxWaitMs)
+      trustStoreFile = trustStoreFile)
     try {
       consumer.subscribe(Collections.singleton(topic))
       consumeRecords(consumer, numMessages, waitTime)

@@ -23,7 +23,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.FetchResponse
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Timeout}
+import org.junit.jupiter.api.{BeforeEach, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -53,8 +53,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   @BeforeEach
   def initializeFetchFromFollowerCluster(): Unit = {
     // Create a 2 broker cluster where broker 0 is the leader and 1 is the follower.
-
-    admin = TestUtils.createAdminClient(brokers, listenerName)
+    admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
       admin,
       topic,
@@ -63,18 +62,11 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     )
   }
 
-  @AfterEach
-  def close(): Unit = {
-    if (admin != null) {
-      admin.close()
-    }
-  }
-
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  @Timeout(30)
+  @Timeout(15)
   def testFollowerCompleteDelayedPurgatoryOnReplication(quorum: String): Unit = {
-    // Set fetch.max.wait.ms to a value (45 seconds) greater than the timeout (30 seconds).
+    // Set fetch.max.wait.ms to a value (20 seconds) greater than the timeout (15 seconds).
     // Send a fetch request before the record is replicated to ensure that the replication
     // triggers purgatory completion.
 
@@ -85,13 +77,13 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       topicPartition -> 0
     )
 
-    val fetchRequest = createFetchRequest(
+    val fetchRequest = createConsumerFetchRequest(
       maxResponseBytes = 1000,
       maxPartitionBytes = 1000,
       Seq(topicPartition),
       offsetMap,
       version,
-      maxWaitMs = 45000,
+      maxWaitMs = 20000,
       minBytes = 1
     )
 
