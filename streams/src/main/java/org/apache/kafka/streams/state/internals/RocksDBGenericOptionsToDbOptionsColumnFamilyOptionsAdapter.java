@@ -339,17 +339,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Deprecated
     @Override
-    public void setBaseBackgroundCompactions(final int baseBackgroundCompactions) {
-        dbOptions.setBaseBackgroundCompactions(baseBackgroundCompactions);
-    }
-
-    @Override
-    public int baseBackgroundCompactions() {
-        return dbOptions.baseBackgroundCompactions();
-    }
-
-    @Deprecated
-    @Override
     public Options setMaxBackgroundCompactions(final int maxBackgroundCompactions) {
         dbOptions.setMaxBackgroundCompactions(maxBackgroundCompactions);
         return this;
@@ -608,17 +597,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     @Override
     public AccessHint accessHintOnCompactionStart() {
         return dbOptions.accessHintOnCompactionStart();
-    }
-
-    @Override
-    public Options setNewTableReaderForCompactionInputs(final boolean newTableReaderForCompactionInputs) {
-        dbOptions.setNewTableReaderForCompactionInputs(newTableReaderForCompactionInputs);
-        return this;
-    }
-
-    @Override
-    public boolean newTableReaderForCompactionInputs() {
-        return dbOptions.newTableReaderForCompactionInputs();
     }
 
     @Override
@@ -1484,17 +1462,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     @Override
     public boolean allowIngestBehind() {
         return dbOptions.allowIngestBehind();
-    }
-
-    @Override
-    public Options setPreserveDeletes(final boolean preserveDeletes) {
-        dbOptions.setPreserveDeletes(preserveDeletes);
-        return this;
-    }
-
-    @Override
-    public boolean preserveDeletes() {
-        return dbOptions.preserveDeletes();
     }
 
     @Override
