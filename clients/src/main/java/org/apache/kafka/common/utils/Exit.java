@@ -54,8 +54,25 @@ public class Exit {
         }
     };
 
-    private volatile static Procedure exitProcedure = DEFAULT_EXIT_PROCEDURE;
-    private volatile static Procedure haltProcedure = DEFAULT_HALT_PROCEDURE;
+    // The procedures to use if no custom procedure has been installed via setExitProcedure/setHaltProcedure
+    private volatile static Procedure fallbackExitProcedure = DEFAULT_EXIT_PROCEDURE;
+    private volatile static Procedure fallbackHaltProcedure = DEFAULT_HALT_PROCEDURE;
+
+    // Use InheritableThreadLocal so that all threads use the same custom procedure(s), but
+    // once new test cases are started, leaked threads from prior tests don't have those custom procedures
+    // overwritten by the new cases, and don't accidentally invoke the custom procedures for the new cases
+    private static final InheritableThreadLocal<ProcedureWithFallback> EXIT_PROCEDURE = new InheritableThreadLocal<ProcedureWithFallback>() {
+        @Override
+        protected ProcedureWithFallback initialValue() {
+            return ProcedureWithFallback.forExit();
+        }
+    };
+    private static final InheritableThreadLocal<ProcedureWithFallback> HALT_PROCEDURE = new InheritableThreadLocal<ProcedureWithFallback>() {
+        @Override
+        protected ProcedureWithFallback initialValue() {
+            return ProcedureWithFallback.forHalt();
+        }
+    };
     private volatile static ShutdownHookAdder shutdownHookAdder = DEFAULT_SHUTDOWN_HOOK_ADDER;
 
     public static void exit(int statusCode) {
@@ -63,7 +80,7 @@ public class Exit {
     }
 
     public static void exit(int statusCode, String message) {
-        exitProcedure.execute(statusCode, message);
+        EXIT_PROCEDURE.get().procedure().execute(statusCode, message);
     }
 
     public static void halt(int statusCode) {
@@ -71,19 +88,29 @@ public class Exit {
     }
 
     public static void halt(int statusCode, String message) {
-        haltProcedure.execute(statusCode, message);
+        HALT_PROCEDURE.get().procedure().execute(statusCode, message);
     }
 
     public static void addShutdownHook(String name, Runnable runnable) {
         shutdownHookAdder.addShutdownHook(name, runnable);
     }
 
+    public static void setFallbackExitProcedure(Procedure procedure) {
+        fallbackExitProcedure = procedure;
+        EXIT_PROCEDURE.get().setFallback(procedure);
+    }
+
+    public static void setFallbackHaltProcedure(Procedure procedure) {
+        fallbackHaltProcedure = procedure;
+        HALT_PROCEDURE.get().setFallback(procedure);
+    }
+
     public static void setExitProcedure(Procedure procedure) {
-        exitProcedure = procedure;
+        EXIT_PROCEDURE.get().setCustom(procedure);
     }
 
     public static void setHaltProcedure(Procedure procedure) {
-        haltProcedure = procedure;
+        HALT_PROCEDURE.get().setCustom(procedure);
     }
 
     public static void setShutdownHookAdder(ShutdownHookAdder shutdownHookAdder) {
@@ -91,14 +118,55 @@ public class Exit {
     }
 
     public static void resetExitProcedure() {
-        exitProcedure = DEFAULT_EXIT_PROCEDURE;
+        EXIT_PROCEDURE.get().useFallback();
+        EXIT_PROCEDURE.set(ProcedureWithFallback.forExit());
     }
 
     public static void resetHaltProcedure() {
-        haltProcedure = DEFAULT_HALT_PROCEDURE;
+        HALT_PROCEDURE.get().useFallback();
+        HALT_PROCEDURE.set(ProcedureWithFallback.forHalt());
     }
 
     public static void resetShutdownHookAdder() {
         shutdownHookAdder = DEFAULT_SHUTDOWN_HOOK_ADDER;
+    }
+
+    private static class ProcedureWithFallback {
+        private volatile Procedure fallback;
+        private volatile Procedure custom;
+        private volatile boolean useCustom;
+
+        public static ProcedureWithFallback forExit() {
+            return new ProcedureWithFallback(fallbackExitProcedure);
+        }
+
+        public static ProcedureWithFallback forHalt() {
+            return new ProcedureWithFallback(fallbackHaltProcedure);
+        }
+
+        private ProcedureWithFallback(Procedure fallbackProcedure) {
+            this.fallback = fallbackProcedure;
+            this.custom = null;
+            this.useCustom = true;
+        }
+
+        public void setCustom(Procedure procedure) {
+            this.custom = procedure;
+        }
+
+        public void setFallback(Procedure procedure) {
+            this.fallback = procedure;
+        }
+
+        // Disable any custom procedures and force the fallback to be used; should be invoked
+        // once a test case has completed, in order to prevent leaked threads from that test case
+        // from calling the custom procedure
+        public void useFallback() {
+            useCustom = false;
+        }
+
+        public Procedure procedure() {
+            return custom != null && useCustom ? custom : fallback;
+        }
     }
 }

@@ -17,7 +17,7 @@
 
 package kafka.test.junit;
 
-import kafka.test.DelegatingSecurityManager;
+import org.apache.kafka.common.utils.Exit;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -35,7 +35,6 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-@SuppressWarnings({"deprecation", "removal"})
 public class SystemExitExtension implements BeforeEachCallback, AfterEachCallback {
 
     private static final Logger log = LoggerFactory.getLogger(SystemExitExtension.class);
@@ -43,15 +42,12 @@ public class SystemExitExtension implements BeforeEachCallback, AfterEachCallbac
     private static final Map<Object, TestCase> FINISHED_TEST_CASES = new ConcurrentHashMap<>();
     private static final InheritableThreadLocal<Object> CURRENT_TEST_INSTANCE = new InheritableThreadLocal<>();
 
-    private static volatile boolean canSetSecurityManager = true;
-
     public SystemExitExtension() {
         log.debug("Instantiating system exit extension to guard against unintentional calls to terminate the JVM");
     }
 
     @Override
     public void beforeEach(ExtensionContext context) {
-        maybeInstallSecurityManager();
         addActiveTestCase(context);
     }
 
@@ -59,13 +55,6 @@ public class SystemExitExtension implements BeforeEachCallback, AfterEachCallbac
     public void afterEach(ExtensionContext context) {
         finishActiveTestCase(context);
         checkForLateExits();
-    }
-
-    /**
-     * For testing the extension; should not be used by any other tests
-     */
-    static boolean securityManagerInstalled() {
-        return System.getSecurityManager() instanceof ExitCheckingSecurityManager;
     }
 
     /**
@@ -103,42 +92,19 @@ public class SystemExitExtension implements BeforeEachCallback, AfterEachCallbac
         assertEquals(Integer.valueOf(expectedStatus), actualStatus);
     }
 
-    private static void maybeInstallSecurityManager() {
-        if (!shouldInstallSecurityManager())
-            return;
-        synchronized (SystemExitExtension.class) {
-            // Check again now that we've entered the synchronized block
-            if (!shouldInstallSecurityManager())
-                return;
-            SecurityManager wrappedSecurityManager = new ExitCheckingSecurityManager(System.getSecurityManager());
-            try {
-                System.setSecurityManager(wrappedSecurityManager);
-            } catch (Throwable t) {
-                // Some JVMs may not allow a security manager to be set; see https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/lang/SecurityManager.html:
-                //     "The Java run-time may also allow, but is not required to allow, the security manager to be set dynamically by invoking the setSecurityManager method."
-                // We don't want to fail the build if we can't set the security manager; better to log a warning and then continue normally
-                log.warn("Failed to set new security manager; tests will not be guarded against accidental JVM termination", t);
-                canSetSecurityManager = false;
-            }
-        }
-    }
-
-    private static boolean shouldInstallSecurityManager() {
-        // If we've already tried and failed to set the security manager, we shouldn't try again
-        return canSetSecurityManager
-                // If we've already successfully registered the security manager, we don't need to do it again
-                && !securityManagerInstalled();
-    }
-
     private static void addActiveTestCase(ExtensionContext context) {
         Object testInstance = context.getRequiredTestInstance();
         CURRENT_TEST_INSTANCE.set(testInstance);
         Method testMethod = context.getRequiredTestMethod();
         String testCaseDescription = testMethod.getDeclaringClass() + "::" + testMethod.getName();
         ACTIVE_TEST_CASES.put(testInstance, new TestCase(testCaseDescription));
+        Exit.setFallbackExitProcedure(exitHandler(testInstance));
+        Exit.setFallbackHaltProcedure(exitHandler(testInstance));
     }
 
     private static void finishActiveTestCase(ExtensionContext context) {
+        Exit.resetExitProcedure();
+        Exit.resetHaltProcedure();
         // Any leaked threads from the test case will continue to see the value that they were instantiated with,
         // but this thread should be reset since it may be reused for newer tests
         CURRENT_TEST_INSTANCE.remove();
@@ -151,9 +117,9 @@ public class SystemExitExtension implements BeforeEachCallback, AfterEachCallbac
                 return;
             }
             if (testCase.exit() != null && !testCase.allowExit()) {
-                throw new AssertionError("System exit was invoked with status " + testCase.exit() + " during this test. "
-                        + "Tests should never directly or indirectly invoke System::exit or System::halt and instead should use the Exit wrapper class, "
-                        + "which can then be mocked during testing to avoid terminating the JVM when called");
+                throw new AssertionError("Exit/halt was invoked with status " + testCase.exit() + " during this test. "
+                        + "This test should either be modified to install a custom exit/halt procedure in the Exit class, or "
+                        + "if no calls to Exit::exit or Exit::halt are expected, fixed to prevent these calls from taking place.");
             } else {
                 // Continue tracking tests that have completed without exiting as they may leak threads
                 // that try to exit later on
@@ -173,11 +139,9 @@ public class SystemExitExtension implements BeforeEachCallback, AfterEachCallbac
         }
         if (!lateExits.isEmpty()) {
             throw new AssertionError(
-                    "System exit was invoked by threads spawned for testing after those tests had completed; "
+                    "Exit/halt was invoked by threads spawned for testing after those tests had completed; "
                     + "this test will fail in order to surface these illegal calls. The calls occurred in the following tests:\n"
                     + lateExits.stream().map(Object::toString).collect(Collectors.joining("\n"))
-                    + "\nTests should never directly or indirectly invoke System::exit or System::halt and instead should use the Exit wrapper class, "
-                    + "which can then be modified during testing to avoid terminating the JVM when called. "
                     + "Since the attempts to terminate the JVM originated from potentially-leaked threads, it may not be sufficient to "
                     + "use the Exit wrapper class, since its behavior must be reset at the end of each test, at which point other threads "
                     + "spawned during testing may attempt to use it. The offending test may have to be modified or disabled."
@@ -225,20 +189,8 @@ public class SystemExitExtension implements BeforeEachCallback, AfterEachCallbac
         }
     }
 
-    private static class ExitCheckingSecurityManager extends DelegatingSecurityManager {
-
-        public ExitCheckingSecurityManager(SecurityManager originalSecurityManager) {
-            super(originalSecurityManager);
-        }
-
-        @Override
-        public void checkExit(int status) {
-            Object testInstance = CURRENT_TEST_INSTANCE.get();
-            if (testInstance == null) {
-                // We've probably finished testing and this is a "real" call to terminate the JVM
-                return;
-            }
-
+    private static org.apache.kafka.common.utils.Exit.Procedure exitHandler(Object testInstance) {
+        return (statusCode, message) -> {
             TestCase testCase;
             synchronized (SystemExitExtension.class) {
                 testCase = ACTIVE_TEST_CASES.get(testInstance);
@@ -252,10 +204,16 @@ public class SystemExitExtension implements BeforeEachCallback, AfterEachCallbac
                     return;
                 }
 
-                testCase.recordExit(status);
+                testCase.recordExit(statusCode);
             }
 
-            throw new AssertionError("Exit was invoked during test with status " + status);
-        }
+            String errorMessage = "Exit or halt was invoked during test with status " + statusCode;
+            if (message != null) {
+                errorMessage += " and message '" + message + "'";
+            }
+
+            throw new AssertionError(errorMessage);
+        };
     }
+
 }

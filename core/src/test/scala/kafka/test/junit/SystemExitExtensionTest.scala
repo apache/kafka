@@ -16,6 +16,7 @@
  */
 package kafka.test.junit
 
+import kafka.utils.Exit
 import org.junit.jupiter.api.Assertions.{assertInstanceOf, assertNotNull, assertThrows, assertTrue}
 import org.junit.jupiter.api.{MethodOrderer, Order, Test, TestMethodOrder}
 
@@ -36,14 +37,11 @@ class SystemExitExtensionTest {
   @Test
   @Order(1)
   def testSystemExitInvokedOnMainTestThread(): Unit = {
-    if (!SystemExitExtension.securityManagerInstalled)
-      return
-
     SystemExitExtension.allowExitFromCurrentTest()
 
     val exitStatus = 618
     // The caller should know that the attempt to terminate the JVM has failed
-    assertThrows(classOf[AssertionError], () => System.exit(exitStatus))
+    assertThrows(classOf[AssertionError], () => Exit.exit(exitStatus))
     // The extension should track that exit has been called in this test as well
     SystemExitExtension.assertExitCalledFromCurrentTest(exitStatus)
   }
@@ -51,9 +49,6 @@ class SystemExitExtensionTest {
   @Test
   @Order(2)
   def testSystemExitInvokedOnSeparateTestThread(): Unit = {
-    if (!SystemExitExtension.securityManagerInstalled)
-      return
-
     SystemExitExtension.allowExitFromCurrentTest()
 
     val exitStatus = 815
@@ -61,7 +56,7 @@ class SystemExitExtensionTest {
     val exitException = new AtomicReference[Throwable]()
     new Thread(() => {
       try {
-        System.exit(exitStatus)
+        Exit.exit(exitStatus)
       } catch {
         case t: Throwable => exitException.set(t)
       } finally {
@@ -90,9 +85,6 @@ class SystemExitExtensionTest {
   // then invokes System::exit later on while a different test is running, so that that
   // other test can ensure that the call was properly handled and attributed to this one
   def spawnLateExitingTest(): Unit = {
-    if (!SystemExitExtension.securityManagerInstalled)
-      return
-
     SystemExitExtension.allowExitFromCurrentTest()
 
     SystemExitExtensionTest.lateExitOrigin.set(this)
@@ -103,7 +95,7 @@ class SystemExitExtensionTest {
       // Await this latch indefinitely
       SystemExitExtensionTest.lateExitReady.await()
       try {
-        System.exit(SystemExitExtensionTest.lateExitStatus)
+        Exit.exit(SystemExitExtensionTest.lateExitStatus)
       } finally {
         SystemExitExtensionTest.lateExitInvoked.countDown()
       }
@@ -115,9 +107,6 @@ class SystemExitExtensionTest {
   // This test ensures that the "leaked" thread from the above test is properly
   // handled and attributed to that test
   def testSystemExitInvokedOnLeakedTestThread(): Unit = {
-    if (!SystemExitExtension.securityManagerInstalled)
-      return
-
     assertNotNull(SystemExitExtensionTest.lateExitOrigin.get())
     SystemExitExtensionTest.lateExitReady.countDown()
     awaitLatch(
