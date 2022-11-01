@@ -860,7 +860,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     /**
      * Discover the current coordinator for the group. Sends a FindCoordinator request to
-     * one of the brokers. The returned future should be polled to get the result of the request.
+     * the given broker node. The returned future should be polled to get the result of the request.
      * @return A request future which indicates the completion of the metadata request
      */
     private RequestFuture<Void> sendFindCoordinatorRequest(Node node) {
