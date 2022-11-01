@@ -35,6 +35,7 @@ import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * An {@code EventHandler} that uses a single background thread to consume {@code ApplicationEvent} and produce
@@ -46,6 +47,24 @@ public class DefaultEventHandler implements EventHandler {
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private final DefaultBackgroundThread backgroundThread;
 
+    public DefaultEventHandler(final ConsumerConfig config,
+                               final LogContext logContext,
+                               final SubscriptionState subscriptionState,
+                               final ApiVersions apiVersions,
+                               final Metrics metrics,
+                               final ClusterResourceListeners clusterResourceListeners,
+                               final Sensor fetcherThrottleTimeSensor) {
+        this(Time.SYSTEM,
+                config,
+                logContext,
+                new LinkedBlockingQueue<>(),
+                new LinkedBlockingQueue<>(),
+                subscriptionState,
+                apiVersions,
+                metrics,
+                clusterResourceListeners,
+                fetcherThrottleTimeSensor);
+    }
 
     public DefaultEventHandler(final Time time,
                                final ConsumerConfig config,
@@ -95,14 +114,13 @@ public class DefaultEventHandler implements EventHandler {
             logContext
         );
         final ConsumerNetworkClient networkClient = new ConsumerNetworkClient(
-            logContext,
-            netClient,
-            metadata,
-            time,
-            config.getInt(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
-            config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
-            config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG)
-        );
+                logContext,
+                netClient,
+                metadata,
+                time,
+                config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
+                config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG));
         this.backgroundThread = new DefaultBackgroundThread(
             time,
             config,
