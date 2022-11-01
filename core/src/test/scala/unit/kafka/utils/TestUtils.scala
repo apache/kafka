@@ -1916,7 +1916,7 @@ object TestUtils extends Logging {
     The interval t0.9-t2.1 has a rate of 2*m requests over 1.2 window times, worse than intervals t0.8-t2.1, t1-t2.1, t0.9-t2, or t0.9-t2.2
     This is because in the t0-t1 sample has m requests at t0.9, and the t2-t3 sample has m requests at t2.1.
     Nearby intervals would either contain fewer samples or be over a longer duration, resulting in a lower rate.
-    The next longest locally worst interval is t0.9-t4.1, containing 3m requests over 4.2 time units.
+    The next longest locally worst interval is t0.9-t4.1, containing 3m requests over 3.2 time units.
     Depending on the interval i of the sample, the actual average rate R(i) may be substantially higher than the underlying rate limit r.
     For the t0.9-t2.1 request above, the effective rate R(0.9, 2.1) = 2m/(2.1-0.9) = 2nr/1.2 = 4/1.2 = 3.33
     For the t0.9-t4.1 request above, the effective rate R(0.9, 2.1) = 3m/(4.1-0.9) = 3nr/3.2 = 6/3.2 = 1.87
