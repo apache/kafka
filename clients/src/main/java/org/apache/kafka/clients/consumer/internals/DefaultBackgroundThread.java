@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -82,6 +81,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                                    final SubscriptionState subscriptions,
                                    final ConsumerMetadata metadata,
                                    final ConsumerNetworkClient networkClient,
+                                   final DefaultAsyncCoordinator coordinator,
                                    final Metrics metrics) {
         this(
             Time.SYSTEM,
@@ -92,6 +92,7 @@ public class DefaultBackgroundThread extends KafkaThread {
             subscriptions,
             metadata,
             networkClient,
+            coordinator,
             metrics
         );
     }
@@ -104,6 +105,7 @@ public class DefaultBackgroundThread extends KafkaThread {
                                    final SubscriptionState subscriptions,
                                    final ConsumerMetadata metadata,
                                    final ConsumerNetworkClient networkClient,
+                                   final DefaultAsyncCoordinator coordinator,
                                    final Metrics metrics) {
         super(BACKGROUND_THREAD_NAME, true);
         try {
@@ -119,16 +121,7 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.metadata = metadata;
             this.networkClient = networkClient;
             this.metrics = metrics;
-            final GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
-                    GroupRebalanceConfig.ProtocolType.CONSUMER);
-            this.coordinator = new DefaultAsyncCoordinator(
-                    time,
-                    logContext,
-                    groupRebalanceConfig,
-                    networkClient,
-                    subscriptions,
-                    metrics,
-                    METRIC_GRP_PREFIX);
+            this.coordinator = coordinator;
             this.running = true;
         } catch (final Exception e) {
             // now propagate the exception

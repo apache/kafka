@@ -57,6 +57,7 @@ public class DefaultBackgroundThreadTest {
     private Metrics metrics;
     private BlockingQueue<BackgroundEvent> backgroundEventsQueue;
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
+    private DefaultAsyncCoordinator coordinator;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -69,6 +70,7 @@ public class DefaultBackgroundThreadTest {
         this.metrics = mock(Metrics.class);
         this.applicationEventsQueue = (BlockingQueue<ApplicationEvent>) mock(BlockingQueue.class);
         this.backgroundEventsQueue = (BlockingQueue<BackgroundEvent>) mock(BlockingQueue.class);
+        this.coordinator = mock(DefaultAsyncCoordinator.class);
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(RETRY_BACKOFF_MS_CONFIG, REFRESH_BACK_OFF_MS);
@@ -160,11 +162,12 @@ public class DefaultBackgroundThreadTest {
             this.time,
             new ConsumerConfig(properties),
             new LogContext(),
-            applicationEventsQueue,
-            backgroundEventsQueue,
+            this.applicationEventsQueue,
+            this.backgroundEventsQueue,
             this.subscriptions,
             this.metadata,
             this.consumerClient,
+            this.coordinator,
             this.metrics
         );
     }

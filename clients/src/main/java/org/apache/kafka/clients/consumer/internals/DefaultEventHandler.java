@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
@@ -121,6 +122,16 @@ public class DefaultEventHandler implements EventHandler {
                 config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
                 config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                 config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG));
+        final GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
+                GroupRebalanceConfig.ProtocolType.CONSUMER);
+         final DefaultAsyncCoordinator coordinator = new DefaultAsyncCoordinator(
+                time,
+                logContext,
+                groupRebalanceConfig,
+                networkClient,
+                subscriptionState,
+                metrics,
+                METRIC_GRP_PREFIX);
         this.backgroundThread = new DefaultBackgroundThread(
             time,
             config,
@@ -130,6 +141,7 @@ public class DefaultEventHandler implements EventHandler {
             subscriptionState,
             metadata,
             networkClient,
+            coordinator,
             new Metrics(time)
         );
     }
@@ -142,7 +154,8 @@ public class DefaultEventHandler implements EventHandler {
                         final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                         final SubscriptionState subscriptionState,
                         final ConsumerMetadata metadata,
-                        final ConsumerNetworkClient networkClient) {
+                        final ConsumerNetworkClient networkClient,
+                        final DefaultAsyncCoordinator coordinator) {
         this.applicationEventQueue = applicationEventQueue;
         this.backgroundEventQueue = backgroundEventQueue;
         this.backgroundThread = new DefaultBackgroundThread(
@@ -154,6 +167,7 @@ public class DefaultEventHandler implements EventHandler {
             subscriptionState,
             metadata,
             networkClient,
+            coordinator,
             new Metrics(time)
         );
         backgroundThread.start();

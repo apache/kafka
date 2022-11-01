@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -23,6 +24,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -44,6 +46,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DefaultEventHandlerTest {
     private final Properties properties = new Properties();
+    private final int sessionTimeoutMs = 10;
+    private final int rebalanceTimeoutMs = 60;
+    private final int heartbeatIntervalMs = 2;
+    private final long retryBackoffMs = 100;
+    private final int requestTimeoutMs = 1000;
+    private final int maxPollIntervalMs = 900;
 
     @BeforeEach
     public void setup() {
@@ -61,26 +69,41 @@ public class DefaultEventHandlerTest {
         final ConsumerMetadata metadata = newConsumerMetadata(false, subscriptions);
         final MockClient client = new MockClient(time, metadata);
         final ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(
-            logContext,
-            client,
-            metadata,
-            time,
-            100,
-            1000,
-            100
-        );
+                logContext,
+                client,
+                metadata,
+                time,
+                retryBackoffMs,
+                requestTimeoutMs,
+                maxPollIntervalMs);
         final BlockingQueue<ApplicationEvent> aq = new LinkedBlockingQueue<>();
         final BlockingQueue<BackgroundEvent> bq = new LinkedBlockingQueue<>();
+        final GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(
+                sessionTimeoutMs,
+                rebalanceTimeoutMs,
+                heartbeatIntervalMs,
+                "group-1",
+                Optional.empty(),
+                retryBackoffMs,
+                true);
+        final DefaultAsyncCoordinator coordinator = new DefaultAsyncCoordinator(
+                time,
+                logContext,
+                rebalanceConfig,
+                consumerClient,
+                subscriptions,
+                new Metrics(time),
+                "background_thread");
         final DefaultEventHandler handler = new DefaultEventHandler(
-            time,
-            new ConsumerConfig(properties),
-            logContext,
-            aq,
-            bq,
-            subscriptions,
-            metadata,
-            consumerClient
-        );
+                time,
+                new ConsumerConfig(properties),
+                logContext,
+                aq,
+                bq,
+                subscriptions,
+                metadata,
+                consumerClient,
+                coordinator);
         assertTrue(client.active());
         assertTrue(handler.isEmpty());
         handler.add(

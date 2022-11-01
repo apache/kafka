@@ -264,9 +264,37 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         eventHandler.add(commitEvent);
     }
 
+    /**
+     * Commit offsets returned on the last {@link #poll(Duration) poll()} for the subscribed list of topics and partitions.
+     * <p>
+     * This commits offsets only to Kafka. The offsets committed using this API will be used on the first fetch after
+     * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
+     * should not be used.
+     * <p>
+     * This is an asynchronous call and will not block. Any errors encountered are either passed to the callback
+     * (if provided) or discarded.
+     * <p>
+     * Offsets committed through multiple calls to this API are guaranteed to be sent in the same order as
+     * the invocations. Corresponding commit callbacks are also invoked in the same order. Additionally note that
+     * offsets committed through this API are guaranteed to complete before a subsequent call to {@link #commitSync()}
+     * (and variants) returns.
+     *
+     * @param callback Callback to invoke when the commit completes
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+     */
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
-        throw new KafkaException("method not implemented");
+        commitAsync(subscriptions.allConsumed(), callback);
+    }
+
+    /**
+     * Commit offsets returned on the last {@link #poll(Duration)} for all the subscribed list of topics and partition.
+     * Same as {@link #commitAsync(OffsetCommitCallback) commitAsync(null)}
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
+     */
+    @Override
+    public void commitAsync() {
+        commitAsync(null);
     }
 
     @Override
@@ -495,11 +523,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
         throw new KafkaException("method not implemented");
-    }
-
-    @Override
-    public void commitAsync() {
-
     }
 
     @Override
