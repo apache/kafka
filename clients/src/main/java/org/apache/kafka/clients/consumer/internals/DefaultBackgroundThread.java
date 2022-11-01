@@ -18,14 +18,10 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -34,11 +30,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -64,6 +57,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final Metrics metrics;
     private final ConsumerConfig config;
     private final DefaultAsyncCoordinator coordinator;
+    private final ApplicationEventProcessor applicationEventProcessor;
 
     private String clientId;
     private long retryBackoffMs;
@@ -72,30 +66,6 @@ public class DefaultBackgroundThread extends KafkaThread {
     private Optional<ApplicationEvent> inflightEvent = Optional.empty();
     private final AtomicReference<Optional<RuntimeException>> exception =
         new AtomicReference<>(Optional.empty());
-    private AtomicInteger pendingAsyncCommits;
-
-    public DefaultBackgroundThread(final ConsumerConfig config,
-                                   final LogContext logContext,
-                                   final BlockingQueue<ApplicationEvent> applicationEventQueue,
-                                   final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                   final SubscriptionState subscriptions,
-                                   final ConsumerMetadata metadata,
-                                   final ConsumerNetworkClient networkClient,
-                                   final DefaultAsyncCoordinator coordinator,
-                                   final Metrics metrics) {
-        this(
-            Time.SYSTEM,
-            config,
-            logContext,
-            applicationEventQueue,
-            backgroundEventQueue,
-            subscriptions,
-            metadata,
-            networkClient,
-            coordinator,
-            metrics
-        );
-    }
 
     public DefaultBackgroundThread(final Time time,
                                    final ConsumerConfig config,
@@ -123,6 +93,9 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.metrics = metrics;
             this.coordinator = coordinator;
             this.running = true;
+            this.applicationEventProcessor = new ApplicationEventProcessor(
+                    coordinator,
+                    backgroundEventQueue);
         } catch (final Exception e) {
             // now propagate the exception
             close();
@@ -145,18 +118,13 @@ public class DefaultBackgroundThread extends KafkaThread {
                     runOnce();
                 } catch (final WakeupException e) {
                     log.debug(
-                        "Exception thrown, background thread won't terminate",
-                        e
-                    );
-                    // swallow the wakeup exception to prevent killing the
-                    // background thread.
+                        "WakeupException caught, background thread won't be interrupted");
+                    // swallow the wakeup exception to prevent killing the background thread.
                 }
             }
         } catch (final Throwable t) {
             log.error(
-                "The background thread failed due to unexpected error",
-                t
-            );
+                "The background thread failed due to unexpected error", t);
             if (t instanceof RuntimeException)
                 this.exception.set(Optional.of((RuntimeException) t));
             else
@@ -168,7 +136,12 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     /**
-     * Process event from a single poll
+     * Process event from a single poll. It performs the following tasks sequentially:
+     *  1. Try to poll and event from the queue, and try to process it.
+     *  2. Poll coordinator and update the metadata if needed.
+     *  3. Try to send fetches.
+     *  4. Try to poll the networkClient for outstanding requests. If non: poll until next
+     *  iteration.
      */
     void runOnce() {
         this.inflightEvent = maybePollEvent();
@@ -204,14 +177,6 @@ public class DefaultBackgroundThread extends KafkaThread {
         return Optional.ofNullable(this.applicationEventQueue.poll());
     }
 
-    private boolean findCoordinator() {
-        if (!coordinator.coordinatorUnknown()) {
-            return true;
-        }
-
-        return coordinator.ensureCoordinatorReadyAsync();
-    }
-
     /**
      * ApplicationEvent are consumed here.
      *
@@ -220,32 +185,7 @@ public class DefaultBackgroundThread extends KafkaThread {
      */
     private boolean maybeConsumeInflightEvent(final ApplicationEvent event) {
         log.debug("try consuming event: {}", Optional.ofNullable(event));
-        Objects.requireNonNull(event);
-        switch (event.type) {
-            case NOOP:
-                return process((NoopApplicationEvent) event);
-            case COMMIT:
-                return process((CommitApplicationEvent) event);
-        }
-        return false;
-    }
-
-    private boolean process(CommitApplicationEvent event) {
-        Map<TopicPartition, OffsetAndMetadata> offsets = event.offsets;
-        Optional<OffsetCommitCallback> callback = event.callback;
-        coordinator.commitOffsets(offsets, event.commitFuture);
-        return true;
-    }
-
-    /**
-     * Processes {@link NoopApplicationEvent} and equeue a
-     * {@link NoopBackgroundEvent}. This is intentionally left here for
-     * demonstration purpose.
-     *
-     * @param event a {@link NoopApplicationEvent}
-     */
-    private boolean process(final NoopApplicationEvent event) {
-        return backgroundEventQueue.add(new NoopBackgroundEvent(event.message));
+        return applicationEventProcessor.process(event);
     }
 
     public boolean isRunning() {

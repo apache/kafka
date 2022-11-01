@@ -49,7 +49,7 @@ public class DefaultEventHandler implements EventHandler {
     private final DefaultBackgroundThread backgroundThread;
 
     public DefaultEventHandler(final ConsumerConfig config,
-                               final LogContext logContext,
+                               GroupRebalanceConfig groupRebalanceConfig, final LogContext logContext,
                                final SubscriptionState subscriptionState,
                                final ApiVersions apiVersions,
                                final Metrics metrics,
@@ -57,6 +57,7 @@ public class DefaultEventHandler implements EventHandler {
                                final Sensor fetcherThrottleTimeSensor) {
         this(Time.SYSTEM,
                 config,
+                groupRebalanceConfig,
                 logContext,
                 new LinkedBlockingQueue<>(),
                 new LinkedBlockingQueue<>(),
@@ -69,6 +70,7 @@ public class DefaultEventHandler implements EventHandler {
 
     public DefaultEventHandler(final Time time,
                                final ConsumerConfig config,
+                               final GroupRebalanceConfig groupRebalanceConfig,
                                final LogContext logContext,
                                final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                final BlockingQueue<BackgroundEvent> backgroundEventQueue,
@@ -122,14 +124,13 @@ public class DefaultEventHandler implements EventHandler {
                 config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
                 config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                 config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG));
-        final GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
-                GroupRebalanceConfig.ProtocolType.CONSUMER);
-         final DefaultAsyncCoordinator coordinator = new DefaultAsyncCoordinator(
+        final DefaultAsyncCoordinator coordinator = new DefaultAsyncCoordinator(
                 time,
                 logContext,
                 groupRebalanceConfig,
                 networkClient,
                 subscriptionState,
+                backgroundEventQueue,
                 metrics,
                 METRIC_GRP_PREFIX);
         this.backgroundThread = new DefaultBackgroundThread(

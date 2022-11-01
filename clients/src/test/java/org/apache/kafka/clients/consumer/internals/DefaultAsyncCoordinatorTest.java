@@ -22,21 +22,24 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AsyncCoordinatorTestUtils.MockCommitCallback;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.requests.FindCoordinatorResponse;
-import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
-import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -52,10 +55,19 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.clients.consumer.internals.AsyncCoordinatorTestUtils.groupCoordinatorResponse;
+import static org.apache.kafka.clients.consumer.internals.AsyncCoordinatorTestUtils.heartbeatResponse;
+import static org.apache.kafka.clients.consumer.internals.AsyncCoordinatorTestUtils.offsetCommitRequestMatcher;
+import static org.apache.kafka.clients.consumer.internals.AsyncCoordinatorTestUtils.offsetCommitResponse;
+import static org.apache.kafka.clients.consumer.internals.AsyncCoordinatorTestUtils.prepareOffsetCommitRequest;
+import static org.apache.kafka.clients.consumer.internals.AsyncCoordinatorTestUtils.prepareOffsetCommitRequestDisconnect;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -74,13 +86,7 @@ public class DefaultAsyncCoordinatorTest {
     private final TopicPartition t2p = new TopicPartition(topic2, 0);
     private final String groupId = "test-group";
     private final String consumerId = "consumer";
-    /*
-    private final ThrowOnAssignmentAssignor throwOnAssignmentAssignor;
-    private final ConsumerPartitionAssignor.RebalanceProtocol protocol;
-    private final ThrowOnAssignmentAssignor throwFatalErrorOnAssignmentAssignor;
-    private final List<ConsumerPartitionAssignor> assignors;
-    private final Map<String, MockPartitionAssignor> assignorMap;
-     */
+
     private MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
         {
             put(topic1, 1);
@@ -97,6 +103,8 @@ public class DefaultAsyncCoordinatorTest {
     private MockCommitCallback mockOffsetCommitCallback;
     private GroupRebalanceConfig rebalanceConfig;
     private DefaultAsyncCoordinator coordinator;
+    private RequestFuture<Void> commitFuture;
+    private BlockingQueue<BackgroundEvent> bq;
 
     @BeforeEach
     public void setup() {
@@ -125,10 +133,13 @@ public class DefaultAsyncCoordinatorTest {
         this.rebalanceListener = new MockRebalanceListener();
         this.mockOffsetCommitCallback = new MockCommitCallback();
         this.rebalanceConfig = buildRebalanceConfig(Optional.empty());
+        this.bq = new LinkedBlockingQueue<>();
         this.coordinator = buildCoordinator(
                 rebalanceConfig,
                 metrics,
-                subscriptions);
+                subscriptions,
+                bq);
+        this.commitFuture = new RequestFuture<>();
     }
 
     @AfterEach
@@ -186,8 +197,89 @@ public class DefaultAsyncCoordinatorTest {
     }
 
     @Test
+    public void testCommitOffsetMetadata() {
+        subscriptions.assignFromUser(singleton(t1p));
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE, groupId));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NONE, client);
+
+        Optional<OffsetCommitCallback> cb = Optional.of(new MockCommitCallback());
+        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p, new OffsetAndMetadata(100L, "hello"));
+        RequestFuture<Void> requestFuture = new RequestFuture<>();
+        coordinator.commitOffsets(offsets, cb, requestFuture);
+        assertTrue(requestFuture.succeeded());
+    }
+
+    @Test
+    public void testCommitOffsetRequestSyncWithFencedInstanceIdException() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE, groupId));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.FENCED_INSTANCE_ID, client);
+
+        Optional<OffsetCommitCallback> cb = Optional.of(new MockCommitCallback());
+        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p, new OffsetAndMetadata(100L, "hello"));
+        RequestFuture<Void> requestFuture = new RequestFuture<>();
+        coordinator.commitOffsets(offsets, cb, requestFuture);
+        assertTrue(requestFuture.failed());
+        assertTrue(requestFuture.exception() instanceof FencedInstanceIdException);
+    }
+
+    @Test
+    public void testCommitOffsetNotCoordinator() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE, groupId));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        // async commit with not coordinator
+        Optional<OffsetCommitCallback> cb = Optional.of(new MockCommitCallback());
+
+        prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.NOT_COORDINATOR, client);
+        RequestFuture<Void> requestFuture = new RequestFuture<>();
+        coordinator.commitOffsets(singletonMap(t1p, new OffsetAndMetadata(100L)), cb, requestFuture);
+
+        assertTrue(coordinator.coordinatorUnknown());
+        assertTrue(requestFuture.failed());
+        assertTrue(requestFuture.exception() instanceof NotCoordinatorException);
+    }
+
+    @Test
+    public void testCommitOffsetDisconnected() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE, groupId));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        // async commit with coordinator disconnected
+        Optional<OffsetCommitCallback> cb = Optional.of(new MockCommitCallback());
+        prepareOffsetCommitRequestDisconnect(singletonMap(t1p, 100L), client);
+        RequestFuture<Void> requestFuture = new RequestFuture<>();
+        coordinator.commitOffsets(singletonMap(t1p, new OffsetAndMetadata(100L)), cb, requestFuture);
+
+        assertTrue(coordinator.coordinatorUnknown());
+        assertTrue(requestFuture.failed());
+        assertTrue(requestFuture.exception() instanceof DisconnectException);
+    }
+
+    @Test
+    public void testCommitOffsetWhenCoordinatorNotAvailable() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE, groupId));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        RequestFuture<Void> commitFuture = new RequestFuture<>();
+        Optional<OffsetCommitCallback> cb = Optional.of(new MockCommitCallback());
+        // async commit with coordinator not available
+        prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.COORDINATOR_NOT_AVAILABLE, client);
+        coordinator.commitOffsets(singletonMap(t1p, new OffsetAndMetadata(100L)), cb, commitFuture);
+
+        assertTrue(coordinator.coordinatorUnknown());
+        assertTrue(commitFuture.failed());
+        System.out.println(commitFuture.exception());
+        assertTrue(commitFuture.exception() instanceof CoordinatorNotAvailableException);
+    }
+
+    @Test
     public void testCoordinatorNotAvailable() {
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE, groupId));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // COORDINATOR_NOT_AVAILABLE will mark coordinator as unknown
@@ -207,8 +299,36 @@ public class DefaultAsyncCoordinatorTest {
     }
 
     @Test
+    public void testRetryCommitUnknownTopicOrPartition() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE, groupId));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        client.prepareResponse(offsetCommitResponse(singletonMap(t1p, Errors.UNKNOWN_TOPIC_OR_PARTITION)));
+
+        RequestFuture<Void> commitFuture = new RequestFuture<>();
+        Optional<OffsetCommitCallback> cb = Optional.of(new MockCommitCallback());
+        coordinator.commitOffsets(singletonMap(t1p, new OffsetAndMetadata(100L, "metadata")), cb, commitFuture);
+        assertTrue(commitFuture.failed());
+        assertTrue(commitFuture.exception() instanceof UnknownTopicOrPartitionException);
+    }
+
+    @Test
+    public void testCommitOffsetMetadataTooLarge() {
+        // since offset metadata is provided by the user, we have to propagate the exception so they can handle it
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE, groupId));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.OFFSET_METADATA_TOO_LARGE, client);
+        RequestFuture<Void> commitFuture = new RequestFuture<>();
+        Optional<OffsetCommitCallback> cb = Optional.of(new MockCommitCallback());
+        coordinator.commitOffsets(singletonMap(t1p, new OffsetAndMetadata(100L, "metadata")), cb, commitFuture);
+        assertTrue(commitFuture.failed());
+        assertTrue(commitFuture.exception() instanceof OffsetMetadataTooLarge);
+    }
+
+    @Test
     public void testManyInFlightAsyncCommitsWithCoordinatorDisconnect() {
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE, groupId));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         int numRequests = 1000;
@@ -219,7 +339,8 @@ public class DefaultAsyncCoordinatorTest {
         for (int i = 0; i < numRequests; i++) {
             Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(tp, new OffsetAndMetadata(i));
             RequestFuture<Void> future = new RequestFuture<>();
-            coordinator.commitOffsets(offsets, future);
+            Optional<OffsetCommitCallback> cb = Optional.of(new MockCommitCallback());
+            coordinator.commitOffsets(offsets, cb, future);
             future.addListener(new RequestFutureListener<Void>() {
                 @Override
                 public void onSuccess(Void value) {
@@ -247,7 +368,7 @@ public class DefaultAsyncCoordinatorTest {
         // with a disconnect error. This test case ensures that the corresponding callbacks see
         // the coordinator as unknown which prevents additional retries to the same coordinator.
 
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE, groupId));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         final AtomicBoolean asyncCallbackInvoked = new AtomicBoolean(false);
@@ -288,7 +409,7 @@ public class DefaultAsyncCoordinatorTest {
 
     @Test
     public void testNotCoordinator() {
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE, groupId));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // not_coordinator will mark coordinator as unknown
@@ -318,7 +439,7 @@ public class DefaultAsyncCoordinatorTest {
     }
 
     private void testInFlightRequestsFailedAfterCoordinatorMarkedDead(Errors error) {
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE, groupId));
         assertTrue(coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE)));
 
         // Send two async commits and fail the first one with an error.
@@ -327,8 +448,8 @@ public class DefaultAsyncCoordinatorTest {
         RequestFuture<Void> firstFuture = new RequestFuture<>();
         RequestFuture<Void> secondFuture = new RequestFuture<>();
 
-        coordinator.commitOffsets(singletonMap(t1p, new OffsetAndMetadata(100L)), firstFuture);
-        coordinator.commitOffsets(singletonMap(t1p, new OffsetAndMetadata(100L)), secondFuture);
+        coordinator.commitOffsets(singletonMap(t1p, new OffsetAndMetadata(100L)), Optional.of(new MockCommitCallback()), firstFuture);
+        coordinator.commitOffsets(singletonMap(t1p, new OffsetAndMetadata(100L)), Optional.of(new MockCommitCallback()), secondFuture);
 
         respondToOffsetCommitRequest(singletonMap(t1p, 100L), error);
         consumerClient.pollNoWakeup();
@@ -352,50 +473,17 @@ public class DefaultAsyncCoordinatorTest {
         return errors;
     }
 
-    private MockClient.RequestMatcher offsetCommitRequestMatcher(final Map<TopicPartition, Long> expectedOffsets) {
-        return body -> {
-            OffsetCommitRequest req = (OffsetCommitRequest) body;
-            Map<TopicPartition, Long> offsets = req.offsets();
-            if (offsets.size() != expectedOffsets.size()) {
-                return false;
-            }
-
-            for (Map.Entry<TopicPartition, Long> expectedOffset : expectedOffsets.entrySet()) {
-                if (!offsets.containsKey(expectedOffset.getKey())) {
-
-                    return false;
-                } else {
-                    Long actualOffset = offsets.get(expectedOffset.getKey());
-                    if (!actualOffset.equals(expectedOffset.getValue())) {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        };
-    }
-
-    private OffsetCommitResponse offsetCommitResponse(Map<TopicPartition, Errors> responseData) {
-        return new OffsetCommitResponse(responseData);
-    }
-
-    private HeartbeatResponse heartbeatResponse(Errors error) {
-        return new HeartbeatResponse(new HeartbeatResponseData().setErrorCode(error.code()));
-    }
-
-    private FindCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {
-        return FindCoordinatorResponse.prepareResponse(error, groupId, node);
-    }
-
     private DefaultAsyncCoordinator buildCoordinator(final GroupRebalanceConfig rebalanceConfig,
-                                                 final Metrics metrics,
-                                                 final SubscriptionState subscriptionState) {
+                                                     final Metrics metrics,
+                                                     final SubscriptionState subscriptionState,
+                                                     final BlockingQueue<BackgroundEvent> bq) {
         return new DefaultAsyncCoordinator(
                 this.time,
                 new LogContext(),
                 rebalanceConfig,
                 this.consumerClient,
                 subscriptionState,
+                bq,
                 metrics,
                 consumerId + groupId);
     }
@@ -408,16 +496,5 @@ public class DefaultAsyncCoordinatorTest {
                 groupInstanceId,
                 retryBackoffMs,
                 !groupInstanceId.isPresent());
-    }
-
-    private static class MockCommitCallback implements OffsetCommitCallback {
-        public int invoked = 0;
-        public Exception exception = null;
-
-        @Override
-        public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-            invoked++;
-            this.exception = exception;
-        }
     }
 }

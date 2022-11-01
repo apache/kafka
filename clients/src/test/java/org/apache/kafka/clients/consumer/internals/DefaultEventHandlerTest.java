@@ -92,6 +92,7 @@ public class DefaultEventHandlerTest {
                 rebalanceConfig,
                 consumerClient,
                 subscriptions,
+                bq,
                 new Metrics(time),
                 "background_thread");
         final DefaultEventHandler handler = new DefaultEventHandler(

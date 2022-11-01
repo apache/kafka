@@ -18,30 +18,33 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
-import org.apache.kafka.clients.consumer.internals.RequestFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
 
 import java.util.Map;
 import java.util.Optional;
 
-public class CommitApplicationEvent extends ApplicationEvent {
-    public RequestFuture<Void> commitFuture;
-    public final Map<TopicPartition, OffsetAndMetadata> offsets;
-    public final Optional<OffsetCommitCallback> callback;
-    public final boolean isAsync;
+public class CommitBackgroundEvent extends BackgroundEvent {
+    private final Map<TopicPartition, OffsetAndMetadata> offsets;
+    private final OffsetCommitCallback callback;
+    private final Exception exception;
 
-    public CommitApplicationEvent(
+    public CommitBackgroundEvent(
             final Map<TopicPartition, OffsetAndMetadata> offsets,
-            final OffsetCommitCallback callback) {
-        super(Type.COMMIT);
+            final OffsetCommitCallback callback,
+            final Optional<Exception> exception) {
+        super(EventType.COMPLETED_COMMIT);
         this.offsets = offsets;
-        this.callback = Optional.ofNullable(callback);
-        this.commitFuture = new RequestFuture<>();
-        this.isAsync = false;
+        this.callback = callback;
+        this.exception = exception.orElse(null);
     }
 
-    @Override
-    public String toString() {
-        return getClass() + "_" + this.offsets;
+    public void invokeCallback() {
+        // Handle FencedInstanceIdException separatedly from the callback invocation
+        // If the consumer is fenced, then we throw the exception immediately
+        if (exception instanceof FencedInstanceIdException) {
+            throw new FencedInstanceIdException(exception.getMessage());
+        }
+        callback.onComplete(offsets, exception);
     }
 }

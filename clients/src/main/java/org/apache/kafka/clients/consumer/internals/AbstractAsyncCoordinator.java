@@ -36,7 +36,6 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
@@ -56,19 +55,19 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * AbstractAsyncCoordinator implements group management for a single group member by interacting with
- * a designated Kafka broker (the coordinator). Group semantics are provided by extending this class.
+ * the coordinator. Group semantics are provided by extending this class.
  * See {@link DefaultAsyncCoordinator} for example usage.
  * */
 public class AbstractAsyncCoordinator implements Closeable {
     private final Logger log;
     private final Time time;
-    final ConsumerNetworkClient networkClient;
-    final GroupRebalanceConfig rebalanceConfig;
+    protected final ConsumerNetworkClient networkClient;
+    protected final GroupRebalanceConfig rebalanceConfig;
     private final GroupCoordinatorMetrics sensors;
-    private Node coordinator = null;
-    private RequestFuture<Void> findCoordinatorFuture = null;
-    private volatile RuntimeException fatalFindCoordinatorException = null;
-    protected Generation generation = Generation.NO_GENERATION;
+    private Node coordinator;
+    private RequestFuture<Void> findCoordinatorFuture;
+    private RuntimeException fatalFindCoordinatorException;
+    protected Generation generation;
     private long lastRebalanceEndMs = -1L;
     private long lastTimeOfConnectionMs = -1L;
 
@@ -86,10 +85,11 @@ public class AbstractAsyncCoordinator implements Closeable {
         this.rebalanceConfig = rebalanceConfig;
         this.networkClient = networkClient;
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
+        this.generation = Generation.NO_GENERATION;
     }
 
     /**
-     * Check if we know who the coordinator is and we have an active connection
+     * Check if the coordinator has been discovered and we maintain an active connection
      * @return true if the coordinator is unknown
      */
     public boolean coordinatorUnknown() {
@@ -102,7 +102,7 @@ public class AbstractAsyncCoordinator implements Closeable {
      *
      * @return the current coordinator or null if it is unknown
      */
-    protected synchronized Node checkAndGetCoordinator() {
+    protected Node checkAndGetCoordinator() {
         if (coordinator != null && networkClient.isUnavailable(coordinator)) {
             markCoordinatorUnknown(true, "coordinator unavailable");
             return null;
@@ -110,39 +110,41 @@ public class AbstractAsyncCoordinator implements Closeable {
         return this.coordinator;
     }
 
-    protected synchronized void markCoordinatorUnknown(Errors error) {
+    protected void markCoordinatorUnknown(Errors error) {
         markCoordinatorUnknown(false, "error response " + error.name());
     }
 
-    protected synchronized void markCoordinatorUnknown(String cause) {
+    protected void markCoordinatorUnknown(String cause) {
         markCoordinatorUnknown(false, cause);
     }
 
-    protected synchronized void markCoordinatorUnknown(boolean isDisconnected, String cause) {
-        if (this.coordinator != null) {
-            log.info("Group coordinator {} is unavailable or invalid due to cause: {}. "
-                            + "isDisconnected: {}. Rediscovery will be attempted.", this.coordinator,
-                    cause, isDisconnected);
-            Node oldCoordinator = this.coordinator;
-
-            // Mark the coordinator dead before disconnecting requests since the callbacks for any pending
-            // requests may attempt to do likewise. This also prevents new requests from being sent to the
-            // coordinator while the disconnect is in progress.
-            this.coordinator = null;
-
-            // Disconnect from the coordinator to ensure that there are no in-flight requests remaining.
-            // Pending callbacks will be invoked with a DisconnectException on the next call to poll.
-            if (!isDisconnected) {
-                log.info("Requesting disconnect from last known coordinator {}", oldCoordinator);
-                networkClient.disconnectAsync(oldCoordinator);
-            }
-
-            lastTimeOfConnectionMs = time.milliseconds();
-        } else {
+    protected void markCoordinatorUnknown(boolean isDisconnected, String cause) {
+        if (this.coordinator == null) {
+            // coordinator is already disconnected
             long durationOfOngoingDisconnect = time.milliseconds() - lastTimeOfConnectionMs;
             if (durationOfOngoingDisconnect > rebalanceConfig.rebalanceTimeoutMs)
                 log.warn("Consumer has been disconnected from the group coordinator for {}ms", durationOfOngoingDisconnect);
+            return;
         }
+
+        log.info("Group coordinator {} is unavailable or invalid due to cause: {}. "
+                        + "isDisconnected: {}. Rediscovery will be attempted.", this.coordinator,
+                cause, isDisconnected);
+        Node oldCoordinator = this.coordinator;
+
+        // Mark the coordinator dead before disconnecting requests since the callbacks for any pending
+        // requests may attempt to do likewise. This also prevents new requests from being sent to the
+        // coordinator while the disconnect is in progress.
+        this.coordinator = null;
+
+        // Disconnect from the coordinator to ensure that there are no in-flight requests remaining.
+        // Pending callbacks will be invoked with a DisconnectException on the next call to poll.
+        if (!isDisconnected) {
+            log.info("Requesting disconnect from last known coordinator {}", oldCoordinator);
+            networkClient.disconnectAsync(oldCoordinator);
+        }
+
+        lastTimeOfConnectionMs = time.milliseconds();
     }
 
     /**
@@ -152,7 +154,7 @@ public class AbstractAsyncCoordinator implements Closeable {
      *
      * @return true If coordinator discovery and initial connection succeeded, false otherwise
      */
-    protected synchronized boolean ensureCoordinatorReadyAsync() {
+    protected boolean ensureCoordinatorReadyAsync() {
         return ensureCoordinatorReady(time.timer(0), true);
     }
 
@@ -162,7 +164,7 @@ public class AbstractAsyncCoordinator implements Closeable {
      * @param timer Timer bounding how long this method can block
      * @return true If coordinator discovery and initial connection succeeded, false otherwise
      */
-    protected  boolean ensureCoordinatorReady(final Timer timer) {
+    protected boolean ensureCoordinatorReady(final Timer timer) {
         return ensureCoordinatorReady(timer, false);
     }
 
@@ -209,13 +211,17 @@ public class AbstractAsyncCoordinator implements Closeable {
         return !coordinatorUnknown();
     }
 
-    private synchronized void clearFindCoordinatorFuture() {
+    private void clearFindCoordinatorFuture() {
         findCoordinatorFuture = null;
     }
 
+    /**
+     * Find a broker node to send the FindCoordinator request. If no node is available, fail the
+     * future with {@link NoAvailableBrokersException}.
+     * @return FindCoordinator future
+     */
     protected RequestFuture<Void> lookupCoordinator() {
         if (findCoordinatorFuture == null) {
-            // find a node to ask about the coordinator
             Node node = this.networkClient.leastLoadedNode();
             if (node == null) {
                 log.debug("No broker available to send FindCoordinator request");
@@ -233,7 +239,6 @@ public class AbstractAsyncCoordinator implements Closeable {
      * @return A request future which indicates the completion of the metadata request
      */
     private RequestFuture<Void> sendFindCoordinatorRequest(Node node) {
-        // initiate the group metadata request
         log.debug("Sending FindCoordinator request to broker {}", node);
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
@@ -248,7 +253,6 @@ public class AbstractAsyncCoordinator implements Closeable {
         @Override
         public void onSuccess(ClientResponse resp, RequestFuture<Void> future) {
             log.debug("Received FindCoordinator response {}", resp);
-
             List<FindCoordinatorResponseData.Coordinator> coordinators = ((FindCoordinatorResponse) resp.responseBody()).coordinators();
             if (coordinators.size() != 1) {
                 log.error("Group coordinator lookup failed: Invalid response containing more than a single coordinator");
@@ -268,8 +272,8 @@ public class AbstractAsyncCoordinator implements Closeable {
                             coordinatorData.port());
                     log.info("Discovered group coordinator {}", coordinator);
                     networkClient.tryConnect(coordinator);
-                    // TODO: implement after adding the HBT
-                    //heartbeat.resetSessionTimeout();
+                    // TODO: we need to updated heartbeat's session timeout upon finding a new
+                    //  coordinator. This will be added after the heartbeat thread has been added.
                 }
                 future.complete(null);
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
@@ -283,28 +287,29 @@ public class AbstractAsyncCoordinator implements Closeable {
         @Override
         public void onFailure(RuntimeException e, RequestFuture<Void> future) {
             log.debug("FindCoordinator request failed due to {}", e.toString());
-
             if (!(e instanceof RetriableException)) {
                 // Remember the exception if fatal so we can ensure it gets thrown by the main thread
                 fatalFindCoordinatorException = e;
             }
-
             super.onFailure(e, future);
         }
     }
 
     public boolean hasGroup() {
-        // TODO: this.state == stable
+        // TODO: State machine to be implemented. this.state == stable
         return true;
     }
 
     boolean rebalanceInProgress() {
-        // TODO: state in [rebalance states]
+        // TODO: State machine to be implemented. state in [rebalance states]
         return true;
     }
 
     private synchronized Node coordinator() {
         return this.coordinator;
+    }
+    protected String memberId() {
+        return generation.memberId;
     }
 
     synchronized RequestFuture<Void> sendHeartbeatRequest() {
@@ -340,11 +345,11 @@ public class AbstractAsyncCoordinator implements Closeable {
                 markCoordinatorUnknown(error);
                 future.raise(error);
             } else if (error == Errors.REBALANCE_IN_PROGRESS) {
-                // TODO: Implement after rebalance protocol
+                // TODO: Implement after rebalance protocol is implemented
             } else if (error == Errors.ILLEGAL_GENERATION ||
                     error == Errors.UNKNOWN_MEMBER_ID ||
                     error == Errors.FENCED_INSTANCE_ID) {
-                // TODO: Implement after rebalance protocol
+                // TODO: Implement after rebalance protocol is implemented
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
             } else {
@@ -371,7 +376,6 @@ public class AbstractAsyncCoordinator implements Closeable {
     }
 
     protected abstract class CoordinatorResponseHandler<R, T> extends RequestFutureAdapter<ClientResponse, T> {
-
         final Generation sentGeneration;
         ClientResponse response;
 
@@ -407,23 +411,6 @@ public class AbstractAsyncCoordinator implements Closeable {
             synchronized (AbstractAsyncCoordinator.this) {
                 return generation.equals(sentGeneration);
             }
-        }
-
-        synchronized void resetStateOnResponseError(ApiKeys api, Errors error, boolean shouldResetMemberId) {
-            /*
-            TODO: to implement
-            final String reason = String.format("encountered %s from %s response", error, api);
-            resetStateAndRejoin(reason, shouldResetMemberId);
-             */
-        }
-
-        private synchronized void resetStateAndRejoin(final String reason, final boolean shouldResetMemberId) {
-            /*
-            TODO: to implement
-            resetStateAndGeneration(reason, shouldResetMemberId);
-            requestRejoin(reason);
-            needsJoinPrepare = true;
-             */
         }
     }
 
@@ -568,6 +555,7 @@ public class AbstractAsyncCoordinator implements Closeable {
                             "The number of seconds since the last successful rebalance event"),
                     lastRebalance);
             /*
+            TODO:
             Heartbeat metrics will be added in the future PR. This serves the
              purpose of the reminder
             Measurable lastHeartbeat = (config, now) -> {

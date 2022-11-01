@@ -29,7 +29,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventHandler;
@@ -38,8 +37,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.FencedInstanceIdException;
-import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -55,6 +52,7 @@ import org.slf4j.Logger;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -62,9 +60,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 /**
@@ -79,9 +75,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
 
     private final LogContext logContext;
     private final EventHandler eventHandler;
-    private final ConcurrentLinkedQueue<OffsetCommitCompletion> completedOffsetCommits;
     private final ConsumerInterceptors<?, ?> interceptors;
-    private final OffsetCommitCallback defaultOffsetCommitCallback = new DefaultOffsetCommitCallback();
 
     private final Time time;
     private final Optional<String> groupId;
@@ -91,7 +85,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     private final Metrics metrics;
     private final long defaultApiTimeoutMs;
     private final GroupRebalanceConfig groupRebalanceConfig;
-    private AtomicBoolean asyncCommitFenced;
 
     @SuppressWarnings("unchecked")
     public PrototypeAsyncConsumer(final Time time,
@@ -122,10 +115,9 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.interceptors = new ConsumerInterceptors<>(interceptorList);
         ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keyDeserializer,
                 valueDeserializer, metrics.reporters(), interceptorList);
-        this.asyncCommitFenced = new AtomicBoolean();
-        this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
         this.eventHandler = new DefaultEventHandler(
                 config,
+                groupRebalanceConfig,
                 logContext,
                 subscriptions,
                 new ApiVersions(),
@@ -159,7 +151,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         this.clientId = clientId;
         this.eventHandler = eventHandler;
         this.groupRebalanceConfig = groupRebalanceConfig;
-        this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
         this.interceptors = Objects.requireNonNull(interceptors);
 
     }
@@ -173,6 +164,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      *  If the timeout expires, return an empty ConsumerRecord.
      *
      * @param timeout timeout of the poll loop
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
      * @return ConsumerRecord.  It can be empty if time timeout expires.
      */
     @Override
@@ -235,29 +227,18 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         final CommitApplicationEvent commitEvent =
-                new CommitApplicationEvent(null, null);
-        invokeCompletedOffsetCommitCallbacks();
-        final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
+                new CommitApplicationEvent(new HashMap<>(), null);
         commitEvent.commitFuture.addListener(new RequestFutureListener<Void>() {
             @Override
             public void onSuccess(Void value) {
+                // intercept onCommit
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
-                completedOffsetCommits.add(new OffsetCommitCompletion(cb,
-                        offsets, null));
             }
 
             @Override
             public void onFailure(RuntimeException e) {
-                Exception commitException = e;
-
-                if (e instanceof RetriableException) {
-                    commitException = new RetriableCommitFailedException(e);
-                }
-                completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, commitException));
-                if (commitException instanceof FencedInstanceIdException) {
-                    asyncCommitFenced.set(true);
-                }
+                // failed commits will be handled by the callback invocation in poll()
             }
         });
 
@@ -280,7 +261,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
      * (and variants) returns.
      *
      * @param callback Callback to invoke when the commit completes
-     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
      */
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
@@ -290,7 +270,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     /**
      * Commit offsets returned on the last {@link #poll(Duration)} for all the subscribed list of topics and partition.
      * Same as {@link #commitAsync(OffsetCommitCallback) commitAsync(null)}
-     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
      */
     @Override
     public void commitAsync() {
@@ -452,46 +431,6 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void wakeup() {
         throw new KafkaException("method not implemented");
-    }
-
-    void invokeCompletedOffsetCommitCallbacks() {
-        if (asyncCommitFenced.get()) {
-            throw new FencedInstanceIdException("Get fenced exception for group.instance.id "
-                    + this.groupRebalanceConfig.groupInstanceId.orElse("unset_instance_id"));
-        }
-        while (true) {
-            OffsetCommitCompletion completion = completedOffsetCommits.poll();
-            if (completion == null) {
-                break;
-            }
-            completion.invoke();
-        }
-    }
-
-    private static class OffsetCommitCompletion {
-        private final OffsetCommitCallback callback;
-        private final Map<TopicPartition, OffsetAndMetadata> offsets;
-        private final Exception exception;
-
-        private OffsetCommitCompletion(OffsetCommitCallback callback, Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-            this.callback = callback;
-            this.offsets = offsets;
-            this.exception = exception;
-        }
-
-        public void invoke() {
-            if (callback != null)
-                callback.onComplete(offsets, exception);
-        }
-    }
-
-    private class DefaultOffsetCommitCallback implements OffsetCommitCallback {
-        @Override
-        public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-            if (exception != null) {
-                // log.error("Offset commit with offsets {} failed", offsets, exception);
-            }
-        }
     }
 
     /**

@@ -16,34 +16,66 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AsyncCoordinatorTestUtils.MockCommitCallback;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.internals.AsyncCoordinatorTestUtils.buildRebalanceConfig;
+import static org.apache.kafka.clients.consumer.internals.AsyncCoordinatorTestUtils.groupCoordinatorResponse;
+import static org.apache.kafka.clients.consumer.internals.AsyncCoordinatorTestUtils.prepareOffsetCommitRequest;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class DefaultBackgroundThreadTest {
@@ -58,6 +90,24 @@ public class DefaultBackgroundThreadTest {
     private BlockingQueue<BackgroundEvent> backgroundEventsQueue;
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
     private DefaultAsyncCoordinator coordinator;
+    private MockClient client;
+    private final String testTopic = "test-topic";
+    private final TopicPartition testTopicPartition = new TopicPartition(testTopic, 0);
+    private MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
+        {
+            put(testTopic, 1);
+        }
+    });
+    private Node node = metadataResponse.brokers().iterator().next();
+    private LogContext logContext;
+    private int sessionTimeoutMs = 1000;
+    private int rebalanceTimeoutMs = 100;
+    private int heartbeatIntervalMs = 2;
+    private int retryBackoffMs = 100;
+    private int defaultApiTimeoutMs = 60000;
+    private int requestTimeoutMs = defaultApiTimeoutMs / 2;
+    private int maxPollIntervalMs = 900;
+
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -71,6 +121,8 @@ public class DefaultBackgroundThreadTest {
         this.applicationEventsQueue = (BlockingQueue<ApplicationEvent>) mock(BlockingQueue.class);
         this.backgroundEventsQueue = (BlockingQueue<BackgroundEvent>) mock(BlockingQueue.class);
         this.coordinator = mock(DefaultAsyncCoordinator.class);
+        this.logContext = new LogContext();
+        this.client = new MockClient(time);
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(RETRY_BACKOFF_MS_CONFIG, REFRESH_BACK_OFF_MS);
@@ -97,7 +149,7 @@ public class DefaultBackgroundThreadTest {
     }
 
     @Test
-    public void testInterruption() throws InterruptedException {
+    public void testInterruption() {
         final MockClient client = new MockClient(time, metadata);
         this.consumerClient = new ConsumerNetworkClient(
             context,
@@ -157,18 +209,136 @@ public class DefaultBackgroundThreadTest {
         runnable.close();
     }
 
+    @Test
+    void testCommitEventInvokedCoordinatorOnce() {
+        this.time = new MockTime();
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        DefaultBackgroundThread runnable = setupMockHandler();
+        Map<TopicPartition, OffsetAndMetadata> offset = singletonMap(testTopicPartition,
+                new OffsetAndMetadata(100L, "hello"));
+        OffsetCommitCallback callback = new MockCommitCallback();
+        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offset, callback);
+        assertTrue(applicationEventsQueue.add(commitEvent));
+
+        runnable.runOnce();
+        verify(this.coordinator, times(1)).commitOffsets(offset, Optional.of(callback), commitEvent.commitFuture);
+        verify(this.consumerClient, times(1)).poll(any(Timer.class));
+        runnable.close();
+    }
+
+    private static Collection<Arguments> commitErrorParameters() {
+        List<Arguments> arguments = new ArrayList<>();
+        arguments.add(Arguments.of(Errors.NONE));
+        arguments.add(Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE));
+        arguments.add(Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION));
+        return arguments;
+    }
+
+    @ParameterizedTest(name = "commitError={0}")
+    @MethodSource("commitErrorParameters")
+    void testCoordinatorResponse(Errors commitError) {
+        this.time = new MockTime();
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
+        String groupId = "group-id";
+        this.coordinator = setupCoordinator(groupId, "group-instance-id");
+        DefaultBackgroundThread runnable = setupMockHandler();
+        Map<TopicPartition, OffsetAndMetadata> offset = singletonMap(testTopicPartition,
+                new OffsetAndMetadata(100L, "hello"));
+        OffsetCommitCallback callback = new MockCommitCallback();
+        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offset, callback);
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE, groupId));
+
+        // successful commit event
+        assertTrue(applicationEventsQueue.add(commitEvent));
+        prepareOffsetCommitRequest(singletonMap(testTopicPartition, 100L), commitError, client);
+        runnable.runOnce();
+        assertFalse(backgroundEventsQueue.isEmpty());
+        BackgroundEvent event = backgroundEventsQueue.poll();
+        assertTrue(event instanceof CommitBackgroundEvent);
+        assertDoesNotThrow(() -> ((CommitBackgroundEvent) event).invokeCallback());
+    }
+
+    @Test
+    void testCoordinatorThrowsFencedInstanceException() {
+        this.time = new MockTime();
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.backgroundEventsQueue = new LinkedBlockingQueue<>();
+        String groupId = "group-id";
+        this.coordinator = setupCoordinator(groupId, "group-instance-id");
+        DefaultBackgroundThread runnable = setupMockHandler();
+        Map<TopicPartition, OffsetAndMetadata> offset = singletonMap(testTopicPartition,
+                new OffsetAndMetadata(100L, "hello"));
+        OffsetCommitCallback callback = new MockCommitCallback();
+        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offset, callback);
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE, groupId));
+
+        // fenced instance id error
+        assertTrue(applicationEventsQueue.add(commitEvent));
+        prepareOffsetCommitRequest(singletonMap(testTopicPartition, 100L), Errors.FENCED_INSTANCE_ID, client);
+        runnable.runOnce();
+        assertFalse(backgroundEventsQueue.isEmpty());
+        BackgroundEvent fencedEvent = backgroundEventsQueue.poll();
+        assertTrue(fencedEvent instanceof CommitBackgroundEvent);
+        assertThrows(FencedInstanceIdException.class,
+                () -> ((CommitBackgroundEvent) fencedEvent).invokeCallback());
+    }
+
     private DefaultBackgroundThread setupMockHandler() {
         return new DefaultBackgroundThread(
-            this.time,
-            new ConsumerConfig(properties),
-            new LogContext(),
-            this.applicationEventsQueue,
-            this.backgroundEventsQueue,
-            this.subscriptions,
-            this.metadata,
-            this.consumerClient,
-            this.coordinator,
-            this.metrics
+                this.time,
+                new ConsumerConfig(properties),
+                this.logContext,
+                this.applicationEventsQueue,
+                this.backgroundEventsQueue,
+                this.subscriptions,
+                this.metadata,
+                this.consumerClient,
+                this.coordinator,
+                this.metrics
         );
+    }
+
+    private DefaultAsyncCoordinator setupCoordinator(String groupId, String groupInstanceId) {
+        Objects.requireNonNull(groupInstanceId);
+        Objects.requireNonNull(groupId);
+        GroupRebalanceConfig rebalanceConfig = buildRebalanceConfig(
+                sessionTimeoutMs,
+                rebalanceTimeoutMs,
+                heartbeatIntervalMs,
+                groupId,
+                Optional.of(groupInstanceId),
+                retryBackoffMs);
+        ConsumerMetadata metadata = new ConsumerMetadata(
+                retryBackoffMs,
+                60 * 60 * 1000L,
+                false,
+                false,
+                new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST),
+                logContext,
+                new ClusterResourceListeners());
+        this.client = new MockClient(time, metadata);
+        this.consumerClient = new ConsumerNetworkClient(
+                this.logContext,
+                this.client,
+                this.metadata,
+                this.time,
+                this.retryBackoffMs,
+                this.requestTimeoutMs,
+                this.maxPollIntervalMs);
+        this.metrics = new Metrics(this.time);
+        this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, emptyMap()));
+        this.node = metadata.fetch().nodes().get(0);
+        return new DefaultAsyncCoordinator(
+                this.time,
+                this.logContext,
+                rebalanceConfig,
+                this.consumerClient,
+                this.subscriptions,
+                this.backgroundEventsQueue,
+                this.metrics,
+                "metric_grp_prefix");
     }
 }

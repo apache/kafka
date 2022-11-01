@@ -19,10 +19,14 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitBackgroundEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -47,7 +51,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class DefaultAsyncCoordinator extends AbstractAsyncCoordinator {
@@ -56,6 +62,7 @@ public class DefaultAsyncCoordinator extends AbstractAsyncCoordinator {
     private final SubscriptionState subscriptions;
     private final AtomicInteger pendingAsyncCommits;
     private final ConsumerCoordinatorMetrics sensors;
+    private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
 
     public DefaultAsyncCoordinator(
             final Time time,
@@ -63,55 +70,48 @@ public class DefaultAsyncCoordinator extends AbstractAsyncCoordinator {
             final GroupRebalanceConfig rebalanceConfig,
             final ConsumerNetworkClient networkClient,
             final SubscriptionState subscriptionState,
+            final BlockingQueue<BackgroundEvent> backgroundEventQueue,
             final Metrics metrics,
             final String metricGrpPrefix) {
-        super(time, logContext, rebalanceConfig, networkClient, metrics,
-                metricGrpPrefix);
+        super(time, logContext, rebalanceConfig, networkClient, metrics, metricGrpPrefix);
         this.log = logContext.logger(getClass());
-        // this.defaultOffsetCommitCallback = new DefaultOffsetCommitCallback();
         this.subscriptions = subscriptionState;
         this.pendingAsyncCommits = new AtomicInteger();
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
+        this.backgroundEventQueue = backgroundEventQueue;
     }
 
     public void commitOffsets(
             final Map<TopicPartition, OffsetAndMetadata> offsets,
+            final Optional<OffsetCommitCallback> callback,
             final RequestFuture<Void> future) {
-        // invoke completed offset
-        // invokeCompletedOffsetCommitCallbacks();
         if (offsets.isEmpty()) {
             // No need to check coordinator if offsets is empty since commit of empty offsets is completed locally.
-            doCommitOffsets(offsets).chain(future);
+            doCommitOffsets(offsets, callback).chain(future);
         } else if (!coordinatorUnknownAndUnreadyAsync()) {
-            // we need to make sure coordinator is ready before committing, since
-            // this is for async committing we do not try to block, but just try once to
-            // clear the previous discover-coordinator future, resend, or get responses;
-            // if the coordinator is not ready yet then we would just proceed and put that into the
-            // pending requests, and future poll calls would still try to complete them.
-            //
-            // the key here though is that we have to try sending the discover-coordinator if
-            // it's not known or ready, since this is the only place we can send such request
-            // under manual assignment (there we would not have heartbeat thread trying to auto-rediscover
-            // the coordinator).
-            doCommitOffsets(offsets).chain(future);
+            // If the coordinator is ready, then we send the offset commit to the network client
+            doCommitOffsets(offsets, callback).chain(future);
         } else {
-            // we don't know the current coordinator, so we will try to find
-            // it upon the next successful coordinator lookup. If the lookup
-            // succeed, these pending offsets will be committed; otherwise,
-            // they will fail with RetriableCommitFailedException().
+            // we don't know the current coordinator, we will send a FindCoordinator request and
+            // handle the commit offsets based on the FindCoordinator response. If the call
+            // succeed, commit the offsets, otherwise, raise RetriableCommitFailedException and
+            // handle it on the polling thread.
             pendingAsyncCommits.incrementAndGet();
             lookupCoordinator().addListener(new RequestFutureListener<Void>() {
                 @Override
                 public void onSuccess(Void value) {
                     pendingAsyncCommits.decrementAndGet();
-                    doCommitOffsets(offsets).chain(future);
+                    doCommitOffsets(offsets, callback).chain(future);
                     networkClient.pollNoWakeup();
                 }
 
                 @Override
                 public void onFailure(RuntimeException e) {
                     pendingAsyncCommits.decrementAndGet();
-                    future.raise(new RetriableCommitFailedException(e));
+                    backgroundEventQueue.add(new CommitBackgroundEvent(
+                            offsets,
+                            callback.orElse(new DefaultOffsetCommitCallback()),
+                            Optional.of(new RetriableCommitFailedException(e))));
                 }
             });
         }
@@ -122,8 +122,36 @@ public class DefaultAsyncCoordinator extends AbstractAsyncCoordinator {
         return coordinatorUnknown() && !ensureCoordinatorReadyAsync();
     }
 
-    protected RequestFuture<Void> doCommitOffsets(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    protected RequestFuture<Void> doCommitOffsets(
+            final Map<TopicPartition, OffsetAndMetadata> offsets,
+            final Optional<OffsetCommitCallback> callback) {
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
+        future.addListener(new RequestFutureListener<Void>() {
+            @Override
+            public void onSuccess(Void value) {
+                backgroundEventQueue.add(new CommitBackgroundEvent(
+                        offsets,
+                        callback.orElse(new DefaultOffsetCommitCallback()),
+                        Optional.empty()));
+            }
+            @Override
+            public void onFailure(RuntimeException e) {
+                Exception commitException = e;
+
+                if (e instanceof RetriableException) {
+                    commitException = new RetriableCommitFailedException(e);
+                } else if (e instanceof FencedInstanceIdException) {
+                    commitException = new FencedInstanceIdException("Get fenced exception for group.instance.id "
+                            + rebalanceConfig.groupInstanceId.orElse("unset_instance_id")
+                            + ", current member.id is " + memberId());
+                }
+                backgroundEventQueue.add(
+                        new CommitBackgroundEvent(
+                                offsets,
+                                callback.orElse(new DefaultOffsetCommitCallback()),
+                                Optional.of(commitException)));
+            }
+        });
         return future;
     }
 
@@ -211,13 +239,12 @@ public class DefaultAsyncCoordinator extends AbstractAsyncCoordinator {
                 .compose(new OffsetCommitResponseHandler(offsets, generation));
     }
 
-
     /**
      * Get the current generation state if the group is stable, otherwise return null
      *
      * @return the current generation or null
      */
-    protected synchronized Generation generationIfStable() {
+    protected Generation generationIfStable() {
         if (!hasGroup())
             return null;
         return this.generation;
@@ -228,7 +255,6 @@ public class DefaultAsyncCoordinator extends AbstractAsyncCoordinator {
         networkClient.disableWakeups();
         try {
             // TODO: Add auto-commit logic
-            // maybeAutoCommitOffsetsSync(timer);
             while (pendingAsyncCommits.get() > 0 && timer.notExpired()) {
                 ensureCoordinatorReady(timer);
                 networkClient.poll(timer);
@@ -291,15 +317,9 @@ public class DefaultAsyncCoordinator extends AbstractAsyncCoordinator {
                             return;
                         } else if (error == Errors.FENCED_INSTANCE_ID) {
                             log.info("OffsetCommit failed with {} due to group instance id {} fenced", sentGeneration, rebalanceConfig.groupInstanceId);
-
-                            // if the generation has changed or we are not in rebalancing, do not raise the fatal error but rebalance-in-progress
-                            if (generationUnchanged()) {
-                                future.raise(error);
-                            } else {
-                                // TODO: handle prepare rebalance error
-                                // future.raise(exception);
-                            }
-                            return;
+                            future.raise(error);
+                            // TODO: Generation change will be implemented after the protocol is
+                            //  completed. Here we raised the error for testing purpose
                         } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                             // TODO: handle rebalance in progress
                             return;
@@ -321,6 +341,14 @@ public class DefaultAsyncCoordinator extends AbstractAsyncCoordinator {
                     future.complete(null);
                 }
             }
+        }
+    }
+
+    private class DefaultOffsetCommitCallback implements OffsetCommitCallback {
+        @Override
+        public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+            if (exception != null)
+                log.error("Offset commit with offsets {} failed", offsets, exception);
         }
     }
 

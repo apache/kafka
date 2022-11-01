@@ -30,8 +30,11 @@ abstract public class ApplicationEvent {
      * false otherwise.
      * @return true if the event was successfully executed; false otherwise.
      */
-    public abstract boolean process();
 
+    @Override
+    public String toString() {
+        return type + " ApplicationEvent";
+    }
     public enum Type {
         NOOP,
         COMMIT,
