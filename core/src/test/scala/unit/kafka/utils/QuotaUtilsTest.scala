@@ -20,7 +20,7 @@ package kafka.utils
 import java.util.concurrent.TimeUnit
 
 import org.apache.kafka.common.MetricName
-import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Quota, QuotaViolationException}
+import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics, Quota, QuotaViolationException, Sensor}
 import org.apache.kafka.common.metrics.stats.{Rate, Value}
 
 import scala.jdk.CollectionConverters._
@@ -32,7 +32,7 @@ class QuotaUtilsTest {
   private val time = new MockTime
   private val numSamples = 10
   private val sampleWindowSec = 1
-  private val maxThrottleTimeMs = 500
+  private val maxThrottleTimeMs = 1000
   private val metricName = new MetricName("test-metric", "groupA", "testA", Map.empty.asJava)
 
   @Test
@@ -110,6 +110,50 @@ class QuotaUtilsTest {
 
     assertThrows(classOf[IllegalArgumentException], () => QuotaUtils.boundedThrottleTime(new QuotaViolationException(testMetric, 10.0, 20.0),
       maxThrottleTimeMs, time.milliseconds))
+  }
+
+  @Test
+  def testErrorBoundWorstCase(): Unit = {
+    val maxConnectionRate = 30
+    val metricConfig = new MetricConfig()
+      .timeWindow(sampleWindowSec, TimeUnit.SECONDS)
+      .samples(numSamples)
+      .quota(new Quota(maxConnectionRate, true))
+    val metrics = new Metrics(time)
+    val sensor = metrics.sensor("quotasensor", metricConfig, Long.MaxValue);
+    sensor.add(metricName, new Rate, null)
+    // start the window early, so that the main iteration fills the window at the end of the first sample
+    assertEquals(0, recordAndGetThrottleTimeMs(sensor, time.milliseconds()))
+    time.sleep(TimeUnit.SECONDS.toMillis(sampleWindowSec)-1)
+    var i = 0
+    val startTimeMs = time.milliseconds()
+    while (i < 10000) {
+      i = i+1
+      val timeMs = time.milliseconds()
+      val deltaMs = timeMs - startTimeMs;
+      // Skip the first few iterations before we have a full window of data to assert on
+      if (deltaMs >= numSamples * TimeUnit.SECONDS.toMillis(sampleWindowSec)) {
+        val errorBound = TestUtils.errorBoundForWindowedRateQuota(numSamples, sampleWindowSec, deltaMs)
+        val actualRate = i.toDouble*1000/deltaMs
+        val rateCap = errorBound * maxConnectionRate
+        assertTrue(actualRate <= rateCap, s"Connection rate $actualRate must be below $rateCap ($errorBound * $maxConnectionRate)")
+      }
+      // Follow the throttle strategy under test
+      val throttleTime = recordAndGetThrottleTimeMs(sensor, timeMs)
+      time.sleep(throttleTime)
+    }
+  }
+
+  // following implementation from SocketServer
+  private def recordAndGetThrottleTimeMs(sensor: Sensor, timeMs: Long): Int = {
+    try {
+      sensor.record(1.0, timeMs)
+      0
+    } catch {
+      case e: QuotaViolationException =>
+        val throttleTimeMs = QuotaUtils.boundedThrottleTime(e, maxThrottleTimeMs, timeMs).toInt
+        throttleTimeMs
+    }
   }
 
   // the `metric` passed into the returned QuotaViolationException will return windowSize = 'numSamples' - 1

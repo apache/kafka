@@ -44,14 +44,17 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   override def brokerCount = 1
 
   val topic = "test"
-  val listener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-  val localAddress = InetAddress.getByName("127.0.0.1")
+  val listener: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
+  val localAddress: InetAddress = InetAddress.getByName("127.0.0.1")
   val unknownHost = "255.255.0.1"
+  val numQuotaSamplesProp = 2
+  val quotaWindowSizeSecondsProp = 1
   val plaintextListenerDefaultQuota = 30
   var executor: ExecutorService = _
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.NumQuotaSamplesProp, "2")
+    properties.put(KafkaConfig.NumQuotaSamplesProp, numQuotaSamplesProp.toString)
+    properties.put(KafkaConfig.QuotaWindowSizeSecondsProp, quotaWindowSizeSecondsProp.toString)
     properties.put("listener.name.plaintext.max.connection.creation.rate", plaintextListenerDefaultQuota.toString)
   }
 
@@ -189,7 +192,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     // new broker-wide connection rate limit
     val connRateLimit = 9
 
-    // before setting connection rate to 10, verify we can do at least double that by default (no limit)
+    // before setting connection rate to 10, verify we can do at least double that with the default quota
     verifyConnectionRate(2 * connRateLimit, plaintextListenerDefaultQuota, "PLAINTEXT", ignoreIOExceptions = false)
     waitForConnectionCount(initialConnectionCount)
 
@@ -254,9 +257,12 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   private def reconfigureServers(newProps: Properties, perBrokerConfig: Boolean, aPropToVerify: (String, String)): Unit = {
     val initialConnectionCount = connectionCount
     val adminClient = createAdminClient()
-    TestUtils.incrementalAlterConfigs(servers, adminClient, newProps, perBrokerConfig).all.get()
-    waitForConfigOnServer(aPropToVerify._1, aPropToVerify._2)
-    adminClient.close()
+    try {
+      TestUtils.incrementalAlterConfigs(servers, adminClient, newProps, perBrokerConfig).all.get()
+      waitForConfigOnServer(aPropToVerify._1, aPropToVerify._2)
+    } finally {
+      adminClient.close()
+    }
     TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount,
       s"Admin client connection not closed (initial = $initialConnectionCount, current = $connectionCount)")
   }
@@ -395,8 +401,6 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
    * is at least certain value. Note that throttling is tested and verified more accurately in ConnectionQuotasTest
    */
   private def verifyConnectionRate(minConnectionRate: Int, maxConnectionRate: Int, listener: String, ignoreIOExceptions: Boolean): Unit = {
-    // duration such that the maximum rate should be at most 20% higher than the rate limit. Since all connections
-    // can fall in the beginning of quota window, it is OK to create extra 2 seconds (window size) worth of connections
     val runTimeMs = TimeUnit.SECONDS.toMillis(13)
     val startTimeMs = System.currentTimeMillis
     val endTimeMs = startTimeMs + runTimeMs
@@ -408,8 +412,9 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
     val elapsedMs = System.currentTimeMillis - startTimeMs
     val actualRate = (connCount.toDouble / elapsedMs) * 1000
-    val rateCap = if (maxConnectionRate < Int.MaxValue) 1.2 * maxConnectionRate.toDouble else Int.MaxValue.toDouble
-    assertTrue(actualRate <= rateCap, s"Listener $listener connection rate $actualRate must be below $rateCap")
+    val errorBound = TestUtils.errorBoundForWindowedRateQuota(numQuotaSamplesProp, quotaWindowSizeSecondsProp, elapsedMs)
+    val rateCap = if (maxConnectionRate < Int.MaxValue) errorBound * maxConnectionRate.toDouble else Int.MaxValue.toDouble
+    assertTrue(actualRate <= rateCap, s"Listener $listener connection rate $actualRate must be below $rateCap ($errorBound * $maxConnectionRate)")
     assertTrue(actualRate >= minConnectionRate, s"Listener $listener connection rate $actualRate must be above $minConnectionRate")
   }
 }

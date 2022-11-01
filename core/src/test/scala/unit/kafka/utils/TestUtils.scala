@@ -1896,6 +1896,59 @@ object TestUtils extends Logging {
     adminClient.alterClientQuotas(entries)
   }
 
+  def errorBoundForWindowedRateQuota(quotaSamples: Int, quotaWindowSizeSeconds: Int, elapsedMs: Long): Double = {
+    /*
+    Within an n-sample window limited to rate r requests/window, all m=r*n requests may land within a single sample while the other n-1 samples are empty.
+    For example, a n=2-sample window which allows r=1 requests/window may have the following pattern:
+    key: *=request, _=no request, |=window boundary
+    t0         t1         t2         t3         t4         t5         t6
+    |____**____|__________|____**____|__________|____**____|__________|
+    Within a single sample, all m requests may exist at the start or end of that sample:
+    |________**|__________|**________|__________|**________|__________|
+    An outside observer with no knowledge of these boundaries can examine the average rate over any interval
+    For the worst case rate, their interval should include the maximum number of intervals in the minimum amount of time
+    For example, the intervals t0.9-t2.1 and t0.9-t4.1 are two intervals with the locally worst average rate:
+             t0.9          t2.1                  t4.1
+    |________**|__________|**________|__________|**________|__________|
+    The interval t0.9-t2.1 has a rate of 2*m requests over 1.2 window times, worse than intervals t0.8-t2.1, t1-t2.1, t0.9-t2, or t0.9-t2.2
+    This is because in the t0-t1 sample has m requests at t0.9, and the t2-t3 sample has m requests at t2.1.
+    Nearby intervals would either contain fewer samples or be over a longer duration, resulting in a lower rate.
+    The next longest locally worst interval is t0.9-t4.1, containing 3m requests over 4.2 time units.
+    Depending on the interval i of the sample, the actual average rate R(i) may be substantially higher than the underlying rate limit r.
+    For the t0.9-t2.1 request above, the effective rate R(0.9, 2.1) = 2m/(2.1-0.9) = 2nr/1.2 = 4/1.2 = 3.33
+    For the t0.9-t4.1 request above, the effective rate R(0.9, 2.1) = 3m/(4.1-0.9) = 3nr/3.2 = 6/3.2 = 1.87
+
+    More generally, locally worst intervals starting right before time t, and overlapping k+1 windows have a rate of:
+    R(t-eps, t+nk-1+eps) = (k+1)nr/((t+nk-1+eps)-(t-eps)) = rn(k+1) / (nk-1+2*eps)
+    R_n,k = lim eps->0 R(t-eps, t+k*n-1+eps) = lim eps->0 rn(k+1) / (nk-1 + 2*eps) = rn(k+1)/(kn-1)
+    The error ratio of this actual rate R_n,k to the average rate r is
+        R_n,k/r = n(k+1)/(kn-1) = (nk+n)/(nk-1).
+
+    Notice that this depends only on the number of samples in a window n, and how many windows we're overlapping k.
+    For some non-rigorous limits and insight into these two parameters n,k:
+    lim n,k->+inf R_n,k/r = lim k->+inf (lim n->+inf (nk+n)/(nk-1)) = lim k->+inf (k+1)/k = 1
+    For arbitrarily large values of n, the maximum error converges to a fixed value that depends on k.
+    If k<1, (averaging over part of a window duration) then the error can diverge to +inf,
+    as a window's worth of requests can appear arbitrarily close together inside a window.
+    If k=1, (averaging over 1 window duration, either n or n+1 samples) then the error converges to 2.
+    For arbitrarily large values of k (averaging over many windows, kn or kn+1 samples), the error converges to 1.
+
+    Some example bounds:
+    For this test's params, n = numQuotaSamplesProp, k = floor(elapsedTime/quotaWindowSizeTime/numQuotaSamplesProp)
+    params                        error bound               worst case diagram
+    n=2, k=1,                     R_2,1/r = 4/1   = 4       |__*|___|*__|
+    n=2, k=2,                     R_2,2/r = 6/3   = 2       |__*|___|_*_|___|*__|
+    n=3, k=1,                     R_3,1/r = 6/2   = 3       |__*|___|___|_*_|___|___|*__|
+    n=4, k=1,                     R_4,1/r = 8/3   = 2.6667  |__*|___|___|___|_*_|___|___|___|*__|
+    n=2, k=floor(13001/1000/2)=6, R_2,6/r = 14/11 = 1.2727  |__*|___|_*_|___|_*_|___|_*_|___|_*_|___|_*_|___|*__|
+    n=2, k=floor(14001/1000/2)=7, R_2,7/r = 16/13 = 1.2307  |__*|___|_*_|___|_*_|___|_*_|___|_*_|___|_*_|___|_*_|___|*__|
+     */
+    val n = quotaSamples;
+    val k = Math.floor(elapsedMs.toDouble / TimeUnit.SECONDS.toMillis(quotaWindowSizeSeconds) / quotaSamples)
+    assertTrue(k >= 1, s"Test duration $elapsedMs did not cover a full quota window, unable to enforce rate bound")
+    (n*k+n)/(n*k-1)
+  }
+
   def assertLeader(client: Admin, topicPartition: TopicPartition, expectedLeader: Int): Unit = {
     waitForLeaderToBecome(client, topicPartition, Some(expectedLeader))
   }
