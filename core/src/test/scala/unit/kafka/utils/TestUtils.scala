@@ -1906,24 +1906,25 @@ object TestUtils extends Logging {
     |____**____|__________|____**____|__________|____**____|__________|
     Within a single sample, all m requests may exist at the start or end of that sample:
              t0.9          t2.1                  t4.1
+             m             m                     m
     |________**|__________|**________|__________|**________|__________|
     An outside observer with no knowledge of these boundaries can examine the average rate over any interval
-    For the worst case rate, their interval should include the maximum number of intervals in the minimum amount of time
+    For the worst case rate, their interval should include the maximum number of samples in the minimum amount of time
     For example, the intervals t0.9-t2.1 and t0.9-t4.1 are two intervals with the locally worst average rate:
-            (m             m ) delta=1.2
-            (m             m                     m ) delta=3.2
+          i0(m             m ) delta=1.2
+          i1(m             m                     m ) delta=3.2
     |________**|__________|**________|__________|**________|__________|
-    The interval t0.9-t2.1 has a rate of 2*m requests over 1.2 window times, worse than intervals t0.8-t2.1, t1-t2.1, t0.9-t2, or t0.9-t2.2
-    This is because in the t0-t1 sample has m requests at t0.9, and the t2-t3 sample has m requests at t2.1.
+    The interval i0=(t0.9,t2.1) has a rate of 2*m requests over 1.2 sample times, worse than intervals (t0.8,t2.1), (t1,t2.1), (t0.9,t2), or (t0.9,t2.2)
+    This is because in the (t0,t1) sample has m requests at t0.9, and the (t2,t3) sample has m requests at t2.1.
     Nearby intervals would either contain fewer samples or be over a longer duration, resulting in a lower rate.
-    The next longest locally worst interval is t0.9-t4.1, containing 3m requests over 3.2 time units.
+    The next longest locally worst interval is i1=(t0.9,t4.1), containing 3m requests over 3.2 sample times.
     Depending on the interval i of the sample, the actual average rate R(i) may be substantially higher than the underlying rate limit r.
-    For the t0.9-t2.1 request above, the effective rate R(0.9, 2.1) = 2m/(2.1-0.9) = 2nr/1.2 = 4/1.2 = 3.33
-    For the t0.9-t4.1 request above, the effective rate R(0.9, 2.1) = 3m/(4.1-0.9) = 3nr/3.2 = 6/3.2 = 1.87
+    For i0, the effective rate R(i0) = R(0.9, 2.1) = 2m/(2.1-0.9) = 2nr/1.2 = 4/1.2 = 3.33
+    For i1, the effective rate R(i1) = R(0.9, 2.1) = 3m/(4.1-0.9) = 3nr/3.2 = 6/3.2 = 1.87
 
-    More generally, locally worst intervals starting right before time t, and overlapping k+1 windows have a rate of:
-    R(t-eps, t+nk-1+eps) = (k+1)nr/((t+nk-1+eps)-(t-eps)) = rn(k+1) / (nk-1+2*eps)
-    R_n,k = lim eps->0 R(t-eps, t+k*n-1+eps) = lim eps->0 rn(k+1) / (nk-1 + 2*eps) = rn(k+1)/(kn-1)
+    The locally worst intervals i_n,k,eps starting right before time t, and overlapping k+1 windows have a rate of:
+    R(i_n,k,eps) = max t (R(t-eps, t+nk-1+eps)) = max t ((k+1)nr/((t+nk-1+eps)-(t-eps))) = rn(k+1) / (nk-1+2*eps)
+    R_n,k = lim eps->0 R(i_n,k,eps) = lim eps->0 rn(k+1) / (nk-1 + 2*eps) = rn(k+1)/(kn-1)
     The error ratio of this actual rate R_n,k to the average rate r is
         R_n,k/r = n(k+1)/(kn-1) = (nk+n)/(nk-1).
 
@@ -1940,9 +1941,9 @@ object TestUtils extends Logging {
     For this test's params, n = numQuotaSamplesProp, k = floor(elapsedTime/quotaWindowSizeTime/numQuotaSamplesProp)
     params                        error bound               worst case diagram
     n=2, k=1,                     R_2,1/r = 4/1   = 4       |__*|___|*__|
+    n=3, k=1,                     R_3,1/r = 6/2   = 3       |__*|___|___|*__|
+    n=4, k=1,                     R_4,1/r = 8/3   = 2.6667  |__*|___|___|___|*__|
     n=2, k=2,                     R_2,2/r = 6/3   = 2       |__*|___|_*_|___|*__|
-    n=3, k=1,                     R_3,1/r = 6/2   = 3       |__*|___|___|_*_|___|___|*__|
-    n=4, k=1,                     R_4,1/r = 8/3   = 2.6667  |__*|___|___|___|_*_|___|___|___|*__|
     n=2, k=floor(13001/1000/2)=6, R_2,6/r = 14/11 = 1.2727  |__*|___|_*_|___|_*_|___|_*_|___|_*_|___|_*_|___|*__|
     n=2, k=floor(14001/1000/2)=7, R_2,7/r = 16/13 = 1.2307  |__*|___|_*_|___|_*_|___|_*_|___|_*_|___|_*_|___|_*_|___|*__|
      */
