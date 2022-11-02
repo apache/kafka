@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.security.plain.PlainAuthenticateCallback
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 object SaslPlainSslEndToEndAuthorizationTest {
 
@@ -117,16 +117,21 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
   this.producerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   this.consumerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   this.adminClientConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
-  private val plainLogin = s"org.apache.kafka.common.security.plain.PlainLoginModule username=$KafkaPlainUser required;"
-  this.producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
-  this.consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
-  this.adminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
 
   override protected def kafkaClientSaslMechanism = "PLAIN"
   override protected def kafkaServerSaslMechanisms = List("PLAIN")
 
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
+
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
+    val plainLogin = s"org.apache.kafka.common.security.plain.PlainLoginModule required username=$KafkaPlainUser;"
+    this.producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
+    this.consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
+    this.adminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
+  }
 
   override def jaasSections(kafkaServerSaslMechanisms: Seq[String],
                             kafkaClientSaslMechanism: Option[String],
