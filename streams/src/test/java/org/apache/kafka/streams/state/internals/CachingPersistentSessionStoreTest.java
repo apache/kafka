@@ -265,10 +265,9 @@ public class CachingPersistentSessionStoreTest {
     @Test
     public void shouldCloseWrappedStoreAndCacheAfterErrorDuringCacheFlush() {
         setUpCloseTests();
-        doThrow(new RuntimeException("Simulating an error on flush")).doNothing().when(cache).flush(anyString());
+        doThrow(new RuntimeException("Simulating an error on flush")).doNothing().when(cache).flush(CACHE_NAMESPACE);
 
         assertThrows(RuntimeException.class, cachingStore::close);
-        verify(cache).flush(CACHE_NAMESPACE);
         verify(cache).close(CACHE_NAMESPACE);
         verify(underlyingStore).close();
     }
@@ -281,7 +280,6 @@ public class CachingPersistentSessionStoreTest {
 
         assertThrows(RuntimeException.class, cachingStore::close);
         verify(cache).flush(CACHE_NAMESPACE);
-        verify(cache).close(CACHE_NAMESPACE);
         verify(underlyingStore).close();
     }
 
@@ -294,7 +292,6 @@ public class CachingPersistentSessionStoreTest {
         assertThrows(RuntimeException.class, cachingStore::close);
         verify(cache).flush(CACHE_NAMESPACE);
         verify(cache).close(CACHE_NAMESPACE);
-        verify(underlyingStore).close();
     }
 
     @SuppressWarnings("unchecked")

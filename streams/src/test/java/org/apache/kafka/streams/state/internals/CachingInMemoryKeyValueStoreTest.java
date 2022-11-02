@@ -157,7 +157,6 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
         assertThrows(RuntimeException.class, store::close);
 
-        verify(cache).flush(CACHE_NAMESPACE);
         verify(cache).close(CACHE_NAMESPACE);
         verify(underlyingStore).close();
     }
@@ -171,7 +170,6 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         assertThrows(RuntimeException.class, store::close);
 
         verify(cache).flush(CACHE_NAMESPACE);
-        verify(cache).close(CACHE_NAMESPACE);
         verify(underlyingStore).close();
     }
 
@@ -185,7 +183,6 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
         verify(cache).flush(CACHE_NAMESPACE);
         verify(cache).close(CACHE_NAMESPACE);
-        verify(underlyingStore).close();
     }
 
     @SuppressWarnings("unchecked")
