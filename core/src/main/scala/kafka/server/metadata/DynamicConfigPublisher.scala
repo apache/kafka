@@ -62,49 +62,50 @@ class DynamicConfigPublisher(
           val props = newImage.configs().configProperties(resource)
           resource.`type`() match {
             case TOPIC =>
-              try {
-                // Apply changes to a topic's dynamic configuration.
-                info(s"Updating topic ${resource.name()} with new configuration : " +
-                  toLoggableProps(resource, props).mkString(","))
-                dynamicConfigHandlers(ConfigType.Topic).
-                  processConfigChanges(resource.name(), props)
-              } catch {
-                case t: Throwable => faultHandler.handleFault("Error updating topic " +
-                  s"${resource.name()} with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
-                  s"in ${deltaName}", t)
-              }
+              dynamicConfigHandlers.get(ConfigType.Topic).foreach(topicConfigHandler =>
+                try {
+                  // Apply changes to a topic's dynamic configuration.
+                  info(s"Updating topic ${resource.name()} with new configuration : " +
+                    toLoggableProps(resource, props).mkString(","))
+                  topicConfigHandler.processConfigChanges(resource.name(), props)
+                } catch {
+                  case t: Throwable => faultHandler.handleFault("Error updating topic " +
+                    s"${resource.name()} with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
+                    s"in ${deltaName}", t)
+                }
+              )
             case BROKER =>
-              if (resource.name().isEmpty) {
-                try {
-                  // Apply changes to "cluster configs" (also known as default BROKER configs).
-                  // These are stored in KRaft with an empty name field.
-                  info("Updating cluster configuration : " +
-                    toLoggableProps(resource, props).mkString(","))
-                  dynamicConfigHandlers(ConfigType.Broker).
-                    processConfigChanges(ConfigEntityName.Default, props)
-                } catch {
-                  case t: Throwable => faultHandler.handleFault("Error updating " +
-                    s"cluster with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
-                    s"in ${deltaName}", t)
+              dynamicConfigHandlers.get(ConfigType.Broker).foreach(nodeConfigHandler =>
+                if (resource.name().isEmpty) {
+                  try {
+                    // Apply changes to "cluster configs" (also known as default BROKER configs).
+                    // These are stored in KRaft with an empty name field.
+                    info("Updating cluster configuration : " +
+                      toLoggableProps(resource, props).mkString(","))
+                    nodeConfigHandler.processConfigChanges(ConfigEntityName.Default, props)
+                  } catch {
+                    case t: Throwable => faultHandler.handleFault("Error updating " +
+                      s"cluster with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
+                      s"in ${deltaName}", t)
+                  }
+                } else if (resource.name() == conf.nodeId.toString) {
+                  try {
+                    // Apply changes to this broker's dynamic configuration.
+                    info(s"Updating node ${conf.nodeId} with new configuration : " +
+                      toLoggableProps(resource, props).mkString(","))
+                    nodeConfigHandler.processConfigChanges(resource.name(), props)
+                    // When applying a per broker config (not a cluster config), we also
+                    // reload any associated file. For example, if the ssl.keystore is still
+                    // set to /tmp/foo, we still want to reload /tmp/foo in case its contents
+                    // have changed. This doesn't apply to topic configs or cluster configs.
+                    reloadUpdatedFilesWithoutConfigChange(props)
+                  } catch {
+                    case t: Throwable => faultHandler.handleFault("Error updating " +
+                      s"node with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
+                      s"in ${deltaName}", t)
+                  }
                 }
-              } else if (resource.name() == conf.nodeId.toString) {
-                try {
-                  // Apply changes to this broker's dynamic configuration.
-                  info(s"Updating node ${conf.nodeId} with new configuration : " +
-                    toLoggableProps(resource, props).mkString(","))
-                  dynamicConfigHandlers(ConfigType.Broker).
-                    processConfigChanges(resource.name(), props)
-                  // When applying a per broker config (not a cluster config), we also
-                  // reload any associated file. For example, if the ssl.keystore is still
-                  // set to /tmp/foo, we still want to reload /tmp/foo in case its contents
-                  // have changed. This doesn't apply to topic configs or cluster configs.
-                  reloadUpdatedFilesWithoutConfigChange(props)
-                } catch {
-                  case t: Throwable => faultHandler.handleFault("Error updating " +
-                    s"node with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
-                    s"in ${deltaName}", t)
-                }
-              }
+              )
             case _ => // nothing to do
           }
         }
