@@ -311,7 +311,7 @@ public class ConsumerConfig extends AbstractConfig {
      * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
      *
      */
-    static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
+    public static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
 
     /** <code>isolation.level</code> */
     public static final String ISOLATION_LEVEL_CONFIG = "isolation.level";
@@ -615,7 +615,7 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
-    protected static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
+    public static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
                                                                     Deserializer<?> keyDeserializer,
                                                                     Deserializer<?> valueDeserializer) {
         // validate deserializer configuration, if the passed deserializer instance is null, the user must explicitly set a valid deserializer configuration value
@@ -631,7 +631,7 @@ public class ConsumerConfig extends AbstractConfig {
         return newConfigs;
     }
 
-    boolean maybeOverrideEnableAutoCommit() {
+    public boolean maybeOverrideEnableAutoCommit() {
         Optional<String> groupId = Optional.ofNullable(getString(CommonClientConfigs.GROUP_ID_CONFIG));
         boolean enableAutoCommit = getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
         if (!groupId.isPresent()) { // overwrite in case of default group id where the config is not explicitly provided

@@ -26,7 +26,7 @@ import kafka.log.LogConfig
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, NewPartitions}
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.{Consumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -52,7 +52,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties).map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  private var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = _
+  private var consumer: Consumer[Array[Byte], Array[Byte]] = _
   private val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
   protected var admin: Admin = _
 

@@ -192,7 +192,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(1, listener.callsToRevoked)
   }
 
-  @Test
   def testMaxPollIntervalMsDelayInRevocation(): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
@@ -948,7 +947,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // subscribe all consumers to all topics and validate the assignment
 
-    val consumersInGroup = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+    val consumersInGroup = Buffer[Consumer[Array[Byte], Array[Byte]]]()
     consumersInGroup += createConsumer()
     consumersInGroup += createConsumer()
 
@@ -1069,7 +1068,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     createTopic(topic1, 3)
     createTopic(topic2, 3)
 
-    val consumersInGroup = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+    val consumersInGroup = Buffer[Consumer[Array[Byte], Array[Byte]]]()
     consumersInGroup += createConsumer()
     consumersInGroup += createConsumer()
 
@@ -1689,7 +1688,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     * @param topicsToSubscribe topics to which consumers will subscribe to
     * @return collection of consumer pollers
     */
-  def subscribeConsumers(consumerGroup: mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]],
+  def subscribeConsumers(consumerGroup: mutable.Buffer[Consumer[Array[Byte], Array[Byte]]],
                          topicsToSubscribe: List[String]): mutable.Buffer[ConsumerAssignmentPoller] = {
     val consumerPollers = mutable.Buffer[ConsumerAssignmentPoller]()
     for (consumer <- consumerGroup)
@@ -1710,9 +1709,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     */
   def createConsumerGroupAndWaitForAssignment(consumerCount: Int,
                                               topicsToSubscribe: List[String],
-                                              subscriptions: Set[TopicPartition]): (Buffer[KafkaConsumer[Array[Byte], Array[Byte]]], Buffer[ConsumerAssignmentPoller]) = {
+                                              subscriptions: Set[TopicPartition]): (Buffer[Consumer[Array[Byte], Array[Byte]]], Buffer[ConsumerAssignmentPoller]) = {
     assertTrue(consumerCount <= subscriptions.size)
-    val consumerGroup = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+    val consumerGroup = Buffer[Consumer[Array[Byte], Array[Byte]]]()
     for (_ <- 0 until consumerCount)
       consumerGroup += createConsumer()
 

@@ -35,7 +35,7 @@ import kafka.utils.{Log4jController, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.HostResolver
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
@@ -975,7 +975,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertTrue(assertThrows(classOf[ExecutionException], () => describeResult2.values.get(invalidTopic).get).getCause.isInstanceOf[InvalidTopicException])
   }
 
-  private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
+  private def subscribeAndWaitForAssignment(topic: String, consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
     consumer.subscribe(Collections.singletonList(topic))
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Expected non-empty assignment")
   }
@@ -1152,7 +1152,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
       val latch = new CountDownLatch(consumerSet.size)
       try {
-        def createConsumerThread[K,V](consumer: KafkaConsumer[K,V], topic: String): Thread = {
+        def createConsumerThread[K,V](consumer: Consumer[K,V], topic: String): Thread = {
           new Thread {
             override def run : Unit = {
               consumer.subscribe(Collections.singleton(topic))

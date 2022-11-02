@@ -27,7 +27,7 @@ import kafka.controller.{ControllerChannelManager, ControllerContext, StateChang
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogManager
 import kafka.zookeeper.ZooKeeperClientTimeoutException
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
@@ -93,7 +93,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
         valueSerializer = new StringSerializer
       )
 
-    def createConsumer(): KafkaConsumer[Integer, String] =
+    def createConsumer(): Consumer[Integer, String] =
       TestUtils.createConsumer(
         bootstrapServers(),
         securityProtocol = SecurityProtocol.PLAINTEXT,

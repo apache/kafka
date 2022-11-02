@@ -203,8 +203,7 @@ public class KafkaConsumerTest {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
-        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
-                props, new StringDeserializer(), new StringDeserializer());
+        KafkaConsumer<String, String> consumer = newStringConsumer(props);
 
         MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metrics.reporters().get(0);
 
@@ -219,7 +218,7 @@ public class KafkaConsumerTest {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
-        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props, new StringDeserializer(), new StringDeserializer());
+        KafkaConsumer<String, String> consumer = newStringConsumer(props);
         assertTrue(consumer.metrics.reporters().isEmpty());
         consumer.close();
     }
@@ -229,7 +228,7 @@ public class KafkaConsumerTest {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
-        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props, new StringDeserializer(), new StringDeserializer());
+        KafkaConsumer<String, String> consumer = newStringConsumer(props);
         assertEquals(1, consumer.metrics.reporters().size());
         consumer.close();
     }
@@ -318,7 +317,7 @@ public class KafkaConsumerTest {
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
         try {
-            new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+            newConsumer(props);
             fail("should have caught an exception and returned");
         } catch (KafkaException e) {
             assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
@@ -486,8 +485,7 @@ public class KafkaConsumerTest {
             props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
             props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
 
-            KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
-                    props, new StringDeserializer(), new StringDeserializer());
+            KafkaConsumer<String, String> consumer = newStringConsumer(props);
             assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
             assertEquals(0, MockConsumerInterceptor.CLOSE_COUNT.get());
 
@@ -555,6 +553,10 @@ public class KafkaConsumerTest {
             autoCommit -> props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, autoCommit.toString()));
         return newConsumer(props);
     }
+    private KafkaConsumer<String, String> newStringConsumer(Properties props) {
+        return new KafkaConsumer<>(props, new StringDeserializer(), new StringDeserializer());
+    }
+
 
     private KafkaConsumer<byte[], byte[]> newConsumer(Properties props) {
         return new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
@@ -1674,12 +1676,12 @@ public class KafkaConsumerTest {
     public void testMetricConfigRecordingLevel() {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(props)) {
             assertEquals(Sensor.RecordingLevel.INFO, consumer.metrics.config().recordLevel());
         }
 
         props.put(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
-        try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(props)) {
             assertEquals(Sensor.RecordingLevel.DEBUG, consumer.metrics.config().recordLevel());
         }
     }

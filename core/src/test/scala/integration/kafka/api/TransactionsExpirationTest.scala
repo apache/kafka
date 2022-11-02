@@ -18,13 +18,12 @@
 package kafka.api
 
 import java.util.{Collections, Properties}
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.{consumeRecords, createAdminClient}
 import org.apache.kafka.clients.admin.{Admin, ProducerState}
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidPidMappingException, TransactionalIdNotFoundException}
@@ -45,7 +44,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
   val tp0 = new TopicPartition(topic1, 0)
 
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
-  var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = _
+  var consumer: Consumer[Array[Byte], Array[Byte]] = _
   var admin: Admin = _
 
   override def generateConfigs: Seq[KafkaConfig] = {

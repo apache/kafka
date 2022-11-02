@@ -18,7 +18,6 @@ import java.{lang, util}
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.Properties
-
 import kafka.api.GroupedUserPrincipalBuilder._
 import kafka.api.GroupedUserQuotaCallback._
 import kafka.server._
@@ -26,7 +25,7 @@ import kafka.utils.JaasTestUtils.ScramLoginModule
 import kafka.utils.{JaasTestUtils, Logging, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{Cluster, Reconfigurable}
 import org.apache.kafka.common.config.SaslConfigs
@@ -232,7 +231,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   case class GroupedUser(user: String, userGroup: String, topic: String, leaderNode: KafkaServer,
                          producerClientId: String, consumerClientId: String,
                          override val producer: KafkaProducer[Array[Byte], Array[Byte]],
-                         override val consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+                         override val consumer: Consumer[Array[Byte], Array[Byte]],
                          override val adminClient: Admin) extends
     QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producer, consumer, adminClient) {
 

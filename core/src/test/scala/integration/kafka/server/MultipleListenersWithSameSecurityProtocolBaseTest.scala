@@ -20,13 +20,12 @@ package kafka.server
 
 import java.util.{Collections, Objects, Properties}
 import java.util.concurrent.TimeUnit
-
 import kafka.api.SaslSetup
 import kafka.coordinator.group.OffsetConfig
 import kafka.utils.JaasTestUtils.JaasSection
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.utils.Implicits._
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.internals.Topic
@@ -54,7 +53,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
   private val trustStoreFile = TestUtils.tempFile("truststore", ".jks")
   private val servers = new ArrayBuffer[KafkaServer]
   private val producers = mutable.Map[ClientMetadata, KafkaProducer[Array[Byte], Array[Byte]]]()
-  private val consumers = mutable.Map[ClientMetadata, KafkaConsumer[Array[Byte], Array[Byte]]]()
+  private val consumers = mutable.Map[ClientMetadata, Consumer[Array[Byte], Array[Byte]]]()
 
   protected val kafkaClientSaslMechanism = Plain
   protected val kafkaServerSaslMechanisms = Map(

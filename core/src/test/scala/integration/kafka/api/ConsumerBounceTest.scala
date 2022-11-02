@@ -305,7 +305,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     val partitions = createTopicPartitions(topic, numPartitions = partitionCount, replicationFactor = brokerCount)
 
-    addConsumersToGroupAndWaitForGroupAssignment(consumerCount, mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]](),
+    addConsumersToGroupAndWaitForGroupAssignment(consumerCount, mutable.Buffer[Consumer[Array[Byte], Array[Byte]]](),
       consumerPollers, List[String](topic), partitions, group)
 
     // roll all brokers with a lesser max group size to make sure coordinator has the new config
@@ -343,10 +343,10 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val partitions = createTopicPartitions(topic, numPartitions = maxGroupSize, replicationFactor = brokerCount)
 
     // Create N+1 consumers in the same consumer group and assert that the N+1th consumer receives a fatal error when it tries to join the group
-    addConsumersToGroupAndWaitForGroupAssignment(maxGroupSize, mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]](),
+    addConsumersToGroupAndWaitForGroupAssignment(maxGroupSize, mutable.Buffer[Consumer[Array[Byte], Array[Byte]]](),
       consumerPollers, List[String](topic), partitions, group)
     val (_, rejectedConsumerPollers) = addConsumersToGroup(1,
-      mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]](), mutable.Buffer[ConsumerAssignmentPoller](), List[String](topic), partitions, group)
+      mutable.Buffer[Consumer[Array[Byte], Array[Byte]]](), mutable.Buffer[ConsumerAssignmentPoller](), List[String](topic), partitions, group)
     val rejectedConsumer = rejectedConsumerPollers.head
     TestUtils.waitUntilTrue(() => {
       rejectedConsumer.thrownException.isDefined
@@ -378,7 +378,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   @nowarn("cat=deprecation")
   private def checkCloseDuringRebalance(groupId: String, topic: String, executor: ExecutorService, brokersAvailableDuringClose: Boolean): Unit = {
 
-    def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]], revokeSemaphore: Option[Semaphore] = None): Future[Any] = {
+    def subscribeAndPoll(consumer: Consumer[Array[Byte], Array[Byte]], revokeSemaphore: Option[Semaphore] = None): Future[Any] = {
       executor.submit(() => {
         consumer.subscribe(Collections.singletonList(topic))
         revokeSemaphore.foreach(s => s.release())
@@ -387,7 +387,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
         }, 0)
     }
 
-    def waitForRebalance(timeoutMs: Long, future: Future[Any], otherConsumers: KafkaConsumer[Array[Byte], Array[Byte]]*): Unit = {
+    def waitForRebalance(timeoutMs: Long, future: Future[Any], otherConsumers: Consumer[Array[Byte], Array[Byte]]*): Unit = {
       val startMs = System.currentTimeMillis
       while (System.currentTimeMillis < startMs + timeoutMs && !future.isDone)
           otherConsumers.foreach(consumer => consumer.poll(time.Duration.ofMillis(100L)))
@@ -429,7 +429,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     closeFuture2.get(2000, TimeUnit.MILLISECONDS)
   }
 
-  private def createConsumerAndReceive(groupId: String, manualAssign: Boolean, numRecords: Int): KafkaConsumer[Array[Byte], Array[Byte]] = {
+  private def createConsumerAndReceive(groupId: String, manualAssign: Boolean, numRecords: Int): Consumer[Array[Byte], Array[Byte]] = {
     val consumer = createConsumerWithGroupId(groupId)
     val consumerPoller = if (manualAssign)
         subscribeConsumerAndStartPolling(consumer, List(), Set(tp))
@@ -447,7 +447,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     }, s"Consumer did not receive expected $numRecords. It received ${consumer.receivedMessages}", timeoutMs)
   }
 
-  private def submitCloseAndValidate(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+  private def submitCloseAndValidate(consumer: Consumer[Array[Byte], Array[Byte]],
       closeTimeoutMs: Long, minCloseTimeMs: Option[Long], maxCloseTimeMs: Option[Long]): Future[Any] = {
     executor.submit(() => {
       val closeGraceTimeMs = 2000

@@ -19,13 +19,12 @@ package kafka.api
 
 import java.util
 import java.util.{Collections, List, Map, Properties}
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.{consumeRecords, createAdminClient}
-import org.apache.kafka.clients.admin.{Admin,AlterConfigOp, ConfigEntry, ProducerState}
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, ProducerState}
+import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource
@@ -47,7 +46,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
   val configResource = new ConfigResource(ConfigResource.Type.BROKER, "")
 
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
-  var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = _
+  var consumer: Consumer[Array[Byte], Array[Byte]] = _
   var admin: Admin = _
 
   override def generateConfigs: Seq[KafkaConfig] = {
