@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.image.MetadataVersionChange;
 import org.apache.kafka.image.publisher.MetadataPublisher;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
@@ -37,14 +38,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.concurrent.ExecutionException;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV1;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV3;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -251,7 +257,7 @@ public class MetadataLoaderTest {
                 asList(asList(new ApiMessageAndVersion(
                     new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
-                        setFeatureLevel(MetadataVersion.IBP_3_3_IV2.featureLevel()), (short) 0))));
+                        setFeatureLevel(IBP_3_3_IV2.featureLevel()), (short) 0))));
             assertFalse(snapshotReader.closed);
             loader.handleSnapshot(snapshotReader);
             loader.waitForAllEventsToBeHandled();
@@ -259,7 +265,7 @@ public class MetadataLoaderTest {
             loader.removeAndClosePublisher(publishers.get(0)).get();
         }
         assertTrue(publishers.get(0).closed);
-        assertEquals(MetadataVersion.IBP_3_3_IV2,
+        assertEquals(IBP_3_3_IV2,
                 publishers.get(0).latestImage.features().metadataVersion());
         assertTrue(publishers.get(1).closed);
         assertEquals(MetadataImage.EMPTY, publishers.get(1).latestImage);
@@ -388,7 +394,7 @@ public class MetadataLoaderTest {
      */
     @Test
     public void testLastAppliedOffset() throws Exception {
-        MockFaultHandler faultHandler = new MockFaultHandler("testRemovePublisher");
+        MockFaultHandler faultHandler = new MockFaultHandler("testLastAppliedOffset");
         List<MockPublisher> publishers = asList(new MockPublisher(),
                 new MockPublisher());
         try (MetadataLoader loader = new MetadataLoader.Builder().
@@ -399,7 +405,7 @@ public class MetadataLoaderTest {
                 new MetadataProvenance(200, 100, 4000), asList(
                     asList(new ApiMessageAndVersion(new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
-                        setFeatureLevel(MetadataVersion.IBP_3_3_IV1.featureLevel()), (short) 0)),
+                        setFeatureLevel(IBP_3_3_IV1.featureLevel()), (short) 0)),
                     asList(new ApiMessageAndVersion(new TopicRecord().
                         setName("foo").
                         setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))
@@ -416,8 +422,105 @@ public class MetadataLoaderTest {
         for (int i = 0; i < 2; i++) {
             assertTrue(publishers.get(i).closed);
             assertTrue(publishers.get(i).closed);
-            assertEquals(MetadataVersion.IBP_3_3_IV1,
+            assertEquals(IBP_3_3_IV1,
                     publishers.get(i).latestImage.features().metadataVersion());
+        }
+        faultHandler.maybeRethrowFirstException();
+    }
+
+    /**
+     * Test metadata version changes
+     */
+    @Test
+    public void testMetadataVersionChange() throws Exception {
+        MockFaultHandler faultHandler = new MockFaultHandler("testMetadataVersionChange");
+        MockTime time = new MockTime();
+        MockPublisher publisher = new MockPublisher();
+        try (MetadataLoader loader = new MetadataLoader.Builder().
+                setFaultHandler(faultHandler).
+                setTime(time).
+                build()) {
+            // Starting with an empty metadata image and loading a snapshot should not trigger
+            // the publishPreVersionChangeImage callbacks.
+            loader.installPublishers(Arrays.asList(publisher)).get();
+            loader.handleSnapshot(MockSnapshotReader.fromRecordLists(
+                    new MetadataProvenance(200, 100, 4000), asList(
+                            asList(new ApiMessageAndVersion(new FeatureLevelRecord().
+                                    setName(MetadataVersion.FEATURE_NAME).
+                                    setFeatureLevel(IBP_3_3_IV1.featureLevel()), (short) 0)),
+                            asList(new ApiMessageAndVersion(new TopicRecord().
+                                    setName("foo").
+                                    setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))
+                    )).setTime(time));
+            loader.waitForAllEventsToBeHandled();
+            assertEquals(200L, loader.lastAppliedOffset());
+            assertNull(publisher.latestPreVersionChangeDelta);
+            assertNull(publisher.latestPreVersionChangeImage);
+            assertNull(publisher.latestPreVersionChangeManifest);
+
+            // Loading a snapshot with a new metadata version should trigger the
+            // publishPreVersionChangeImage callbacks.
+            loader.handleSnapshot(MockSnapshotReader.fromRecordLists(
+                    new MetadataProvenance(201, 101, 5000), asList(
+                            asList(new ApiMessageAndVersion(new FeatureLevelRecord().
+                                    setName(MetadataVersion.FEATURE_NAME).
+                                    setFeatureLevel(IBP_3_3_IV2.featureLevel()), (short) 0)),
+                            asList(new ApiMessageAndVersion(new TopicRecord().
+                                    setName("foo").
+                                    setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))
+                    )).setTime(time));
+            loader.waitForAllEventsToBeHandled();
+            assertEquals(201L, loader.lastAppliedOffset());
+            assertNotNull(publisher.latestPreVersionChangeDelta);
+            assertNotNull(publisher.latestPreVersionChangeImage);
+            assertEquals(IBP_3_3_IV1, publisher.latestPreVersionChangeImage.features().metadataVersion());
+            assertEquals(new PreVersionChangeManifest(
+                new MetadataProvenance(200, 100, 4000),
+                    new MetadataVersionChange(IBP_3_3_IV1, IBP_3_3_IV2)),
+                        publisher.latestPreVersionChangeManifest);
+
+            // Loading a batch of log messages with a new metadata version should also trigger the
+            // publishPreVersionChangeImage callbacks.
+            loader.handleCommit(new MockBatchReader(203, asList(
+                MockBatchReader.newBatch(203, 102, asList(
+                    new ApiMessageAndVersion(new FeatureLevelRecord().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setFeatureLevel(IBP_3_3_IV3.featureLevel()), (short) 0),
+                    new ApiMessageAndVersion(new TopicRecord().
+                        setName("bar").
+                        setTopicId(Uuid.fromString("aN0Qt3hRQgiaxkx_raX92Q")), (short) 0))))).
+                    setTime(time));
+            loader.waitForAllEventsToBeHandled();
+            assertEquals(204L, loader.lastAppliedOffset());
+            assertTrue(publisher.latestPreVersionChangeDelta.topicsDelta().changedTopics().
+                            containsKey(Uuid.fromString("aN0Qt3hRQgiaxkx_raX92Q")));
+            assertEquals(IBP_3_3_IV2, publisher.latestPreVersionChangeImage.features().metadataVersion());
+            assertEquals(new PreVersionChangeManifest(
+                            new MetadataProvenance(201, 101, 5000),
+                            new MetadataVersionChange(IBP_3_3_IV2, IBP_3_3_IV3)),
+                    publisher.latestPreVersionChangeManifest);
+
+
+            // Loading a batch of log messages with a new metadata version should also trigger the
+            // publishPreVersionChangeImage callbacks.
+            loader.handleCommit(new MockBatchReader(203, asList(
+                Batch.data(206, 103, 6000, 20, asList(
+                    new ApiMessageAndVersion(new TopicRecord().
+                        setName("quux").
+                        setTopicId(Uuid.fromString("Q1gR0H5AQsmU_Ojh66TnAg")), (short) 0),
+                    new ApiMessageAndVersion(new FeatureLevelRecord().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setFeatureLevel(IBP_3_3_IV2.featureLevel()), (short) 0))))).
+                    setTime(time));
+            loader.waitForAllEventsToBeHandled();
+            assertEquals(207L, loader.lastAppliedOffset());
+            assertNotNull(publisher.latestPreVersionChangeDelta);
+            assertNotNull(publisher.latestPreVersionChangeImage);
+            assertEquals(IBP_3_3_IV3, publisher.latestPreVersionChangeImage.features().metadataVersion());
+            assertEquals(new PreVersionChangeManifest(
+                            new MetadataProvenance(206, 103, 6000),
+                            new MetadataVersionChange(IBP_3_3_IV3, IBP_3_3_IV2)),
+                    publisher.latestPreVersionChangeManifest);
         }
         faultHandler.maybeRethrowFirstException();
     }
