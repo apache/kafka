@@ -234,9 +234,9 @@ public class AbstractAsyncCoordinator implements Closeable {
     }
 
     /**
-     * Discover the current coordinator for the group. Sends a GroupMetadata request to
-     * one of the brokers. The returned future should be polled to get the result of the request.
-     * @return A request future which indicates the completion of the metadata request
+     * Send a FindCoordinator request to the given node to discover the current coordinator. The
+     * returned future should be polled to get the result of the request.
+     * @return A request future which indicates the completion of the request
      */
     private RequestFuture<Void> sendFindCoordinatorRequest(Node node) {
         log.debug("Sending FindCoordinator request to broker {}", node);

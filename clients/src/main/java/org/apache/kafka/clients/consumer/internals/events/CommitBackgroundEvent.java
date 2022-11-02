@@ -40,8 +40,8 @@ public class CommitBackgroundEvent extends BackgroundEvent {
     }
 
     public void invokeCallback() {
-        // Handle FencedInstanceIdException separatedly from the callback invocation
-        // If the consumer is fenced, then we throw the exception immediately
+        // Handle FencedInstanceIdException separately from the callback invocation
+        // If the consumer is fenced, then we throw an exception before invoking the callback
         if (exception instanceof FencedInstanceIdException) {
             throw new FencedInstanceIdException(exception.getMessage());
         }
