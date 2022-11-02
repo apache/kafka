@@ -188,7 +188,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
                     KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
-                    String threadNamePrefix = String.format("controller%d_", node.id());
+                    String threadNamePrefix = String.format("controller%d", node.id());
                     MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id());
                     TopicPartition metadataPartition = new TopicPartition(KafkaRaftServer.MetadataTopic(), 0);
                     BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
