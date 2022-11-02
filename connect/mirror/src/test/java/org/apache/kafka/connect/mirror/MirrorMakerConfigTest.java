@@ -79,6 +79,8 @@ public class MirrorMakerConfigTest {
 
     @Test
     public void testClientConfigProperties() {
+        String clusterABBootstrap = "127.0.0.1:9092, 127.0.0.2:9092";
+        String clusterBBoostrap = "127.0.0.3:9092, 127.0.0.4:9092";
         MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
             "clusters", "a, b",
             "config.providers", "fake",
@@ -88,8 +90,8 @@ public class MirrorMakerConfigTest {
             "security.protocol", "SSL",
             "a.security.protocol", "PLAINTEXT",
             "a.producer.security.protocol", "SSL",
-            "a.bootstrap.servers", "one:9092, two:9092",
-            "b.bootstrap.servers", "three:9092, four:9092",
+            "a.bootstrap.servers", clusterABBootstrap,
+            "b.bootstrap.servers", clusterBBoostrap,
             "metrics.reporter", FakeMetricsReporter.class.getName(),
             "a.metrics.reporter", FakeMetricsReporter.class.getName(),
             "b->a.metrics.reporter", FakeMetricsReporter.class.getName(),
@@ -102,7 +104,7 @@ public class MirrorMakerConfigTest {
             "replication.policy.separator is picked up in MirrorClientConfig");
         assertEquals("b__topic1", aClientConfig.replicationPolicy().formatRemoteTopic("b", "topic1"),
             "replication.policy.separator is honored");
-        assertEquals("one:9092, two:9092", aClientConfig.adminConfig().get("bootstrap.servers"),
+        assertEquals(clusterABBootstrap, aClientConfig.adminConfig().get("bootstrap.servers"),
             "client configs include boostrap.servers");
         assertEquals(ForwardingAdmin.class.getName(), aClientConfig.forwardingAdmin(aClientConfig.adminConfig()).getClass().getName(),
                 "Cluster a uses the default ForwardingAdmin");
