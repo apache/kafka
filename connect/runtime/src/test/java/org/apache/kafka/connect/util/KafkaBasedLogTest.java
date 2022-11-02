@@ -167,8 +167,7 @@ public class KafkaBasedLogTest {
     }
 
     @Test
-    public void testStartStop() throws Exception {
-
+    public void testStartStop() {
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 0L);
         endOffsets.put(TP1, 0L);
@@ -349,7 +348,6 @@ public class KafkaBasedLogTest {
 
     @Test
     public void testPollConsumerError() throws Exception {
-
         final CountDownLatch finishedLatch = new CountDownLatch(1);
         Map<TopicPartition, Long> endOffsets = new HashMap<>();
         endOffsets.put(TP0, 1L);
@@ -509,7 +507,7 @@ public class KafkaBasedLogTest {
     }
 
     @Test
-    public void testReadEndOffsetsUsingAdminThatFailsWithRetriable() throws Exception {
+    public void testReadEndOffsetsUsingAdminThatFailsWithRetriable() {
         // Create a log that uses the admin supplier
         setupWithAdmin();
 
