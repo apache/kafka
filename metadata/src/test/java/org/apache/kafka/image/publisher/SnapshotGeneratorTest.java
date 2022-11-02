@@ -62,7 +62,7 @@ public class SnapshotGeneratorTest {
         }
 
         @Override
-        public synchronized void emit(MetadataImage image) {
+        public synchronized void maybeEmit(MetadataImage image) {
             RuntimeException currentProblem = problem;
             if (currentProblem != null) {
                 throw currentProblem;
@@ -96,8 +96,7 @@ public class SnapshotGeneratorTest {
     public void testCreateSnapshot() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("SnapshotGenerator");
         MockEmitter emitter = new MockEmitter();
-        try (SnapshotGenerator generator = new SnapshotGenerator.Builder().
-                setEmitter(emitter).
+        try (SnapshotGenerator generator = new SnapshotGenerator.Builder(emitter).
                 setFaultHandler(faultHandler).
                 setMinBytesSinceLastSnapshot(200).
                 setMinTimeSinceLastSnapshotNs(TimeUnit.DAYS.toNanos(10)).
@@ -130,8 +129,7 @@ public class SnapshotGeneratorTest {
     public void testSnapshotsDisabled() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("SnapshotGenerator");
         MockEmitter emitter = new MockEmitter().setReady();
-        try (SnapshotGenerator generator = new SnapshotGenerator.Builder().
-                setEmitter(emitter).
+        try (SnapshotGenerator generator = new SnapshotGenerator.Builder(emitter).
                 setFaultHandler(faultHandler).
                 setMinBytesSinceLastSnapshot(1).
                 setMinTimeSinceLastSnapshotNs(TimeUnit.DAYS.toNanos(10)).
@@ -153,9 +151,8 @@ public class SnapshotGeneratorTest {
         MockFaultHandler faultHandler = new MockFaultHandler("SnapshotGenerator");
         MockEmitter emitter = new MockEmitter().setReady();
         MockTime mockTime = new MockTime();
-        try (SnapshotGenerator generator = new SnapshotGenerator.Builder().
+        try (SnapshotGenerator generator = new SnapshotGenerator.Builder(emitter).
                 setTime(mockTime).
-                setEmitter(emitter).
                 setFaultHandler(faultHandler).
                 setMinBytesSinceLastSnapshot(200).
                 setMinTimeSinceLastSnapshotNs(TimeUnit.MINUTES.toNanos(30)).
@@ -182,8 +179,7 @@ public class SnapshotGeneratorTest {
     public void testEmitterProblem() throws Exception {
         MockFaultHandler faultHandler = new MockFaultHandler("SnapshotGenerator");
         MockEmitter emitter = new MockEmitter().setProblem(new RuntimeException("oops"));
-        try (SnapshotGenerator generator = new SnapshotGenerator.Builder().
-                setEmitter(emitter).
+        try (SnapshotGenerator generator = new SnapshotGenerator.Builder(emitter).
                 setFaultHandler(faultHandler).
                 setMinBytesSinceLastSnapshot(200).
                 build()) {

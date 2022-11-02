@@ -29,6 +29,7 @@ import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.slf4j.Logger;
 
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 
@@ -37,12 +38,16 @@ import java.util.concurrent.TimeUnit;
  */
 public class SnapshotGenerator implements MetadataPublisher {
     public static class Builder {
+        private final Emitter emitter;
         private int nodeId = 0;
         private Time time = Time.SYSTEM;
-        private Emitter emitter = null;
         private FaultHandler faultHandler = (m, e) -> null;
         private long minBytesSinceLastSnapshot = 100 * 1024L * 1024L;
         private long minTimeSinceLastSnapshotNs = TimeUnit.DAYS.toNanos(1);
+
+        public Builder(Emitter emitter) {
+            this.emitter = emitter;
+        }
 
         public Builder setNodeId(int nodeId) {
             this.nodeId = nodeId;
@@ -51,11 +56,6 @@ public class SnapshotGenerator implements MetadataPublisher {
 
         public Builder setTime(Time time) {
             this.time = time;
-            return this;
-        }
-
-        public Builder setEmitter(Emitter emitter) {
-            this.emitter = emitter;
             return this;
         }
 
@@ -75,7 +75,6 @@ public class SnapshotGenerator implements MetadataPublisher {
         }
 
         public SnapshotGenerator build() {
-            if (emitter == null) throw new RuntimeException("You must set a snapshot emitter.");
             return new SnapshotGenerator(
                 nodeId,
                 time,
@@ -91,7 +90,15 @@ public class SnapshotGenerator implements MetadataPublisher {
      * The callback which actually generates the snapshot.
      */
     public interface Emitter {
-        void emit(MetadataImage image);
+        /**
+         * Emit a snapshot for the given image.
+         *
+         * Note: if a snapshot has already been emitted for the given offset and epoch pair, this
+         * function will not recreate it.
+         *
+         * @param image     The metadata image to emit.
+         */
+        void maybeEmit(MetadataImage image);
     }
 
     /**
@@ -167,7 +174,7 @@ public class SnapshotGenerator implements MetadataPublisher {
         LogContext logContext = new LogContext("[SnapshotGenerator " + nodeId + "] ");
         this.log = logContext.logger(SnapshotGenerator.class);
         this.disabledReason = null;
-        this.eventQueue = new KafkaEventQueue(time, logContext, "");
+        this.eventQueue = new KafkaEventQueue(time, logContext, "SnapshotGenerator" + nodeId);
         resetSnapshotCounters();
     }
 
@@ -236,7 +243,7 @@ public class SnapshotGenerator implements MetadataPublisher {
                 log.info("Creating new KRaft snapshot file {} because {}.",
                         image.provenance().snapshotName(), reason);
                 try {
-                    emitter.emit(image);
+                    emitter.maybeEmit(image);
                 } catch (Throwable e) {
                     faultHandler.handleFault("KRaft snapshot file generation error", e);
                 }
@@ -251,7 +258,7 @@ public class SnapshotGenerator implements MetadataPublisher {
 
     public void disable(String disabledReason) {
         log.error("Disabling periodic KRaft snapshot generation because {}.", disabledReason);
-        this.disabledReason = disabledReason;
+        this.disabledReason = Objects.requireNonNull(disabledReason);
     }
 
     @Override

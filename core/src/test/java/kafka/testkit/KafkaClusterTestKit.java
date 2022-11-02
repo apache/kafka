@@ -218,8 +218,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 metadataLoader);
                     } catch (Throwable e) {
                         log.error("Error creating controller {}", node.id(), e);
-                        metadataLoader.close();
-                        controller.shutdown();
+                        if (metadataLoader != null) metadataLoader.close();
+                        if (controller != null) controller.shutdown();
                         throw e;
                     }
                     controllers.put(node.id(), controller);
@@ -295,8 +295,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 metadataLoader);
                     } catch (Throwable e) {
                         log.error("Error creating broker {}", node.id(), e);
-                        metadataLoader.close();
-                        broker.shutdown();
+                        if (metadataLoader != null) metadataLoader.close();
+                        if (broker != null) broker.shutdown();
                         throw e;
                     }
                     brokers.put(node.id(), broker);

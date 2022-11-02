@@ -17,8 +17,8 @@
 
 package org.apache.kafka.image.publisher;
 
-
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.writer.ImageWriterOptions;
@@ -29,6 +29,7 @@ import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
 import java.util.Optional;
+
 
 public class SnapshotEmitter implements SnapshotGenerator.Emitter {
     private final static int DEFAULT_BATCH_SIZE = 100;
@@ -87,7 +88,7 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
     }
 
     @Override
-    public void emit(MetadataImage image) {
+    public void maybeEmit(MetadataImage image) {
         MetadataProvenance provenance = image.provenance();
         Optional<SnapshotWriter<ApiMessageAndVersion>> snapshotWriter =
             raftClient.createSnapshot(provenance.offset(),
@@ -97,7 +98,8 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
             log.error("Not generating {} because it already exists.", provenance.snapshotName());
             return;
         }
-        try (RaftSnapshotWriter writer = new RaftSnapshotWriter(snapshotWriter.get(), batchSize)) {
+        RaftSnapshotWriter writer = new RaftSnapshotWriter(snapshotWriter.get(), batchSize);
+        try {
             image.write(writer, new ImageWriterOptions.Builder().
                     setMetadataVersion(image.features().metadataVersion()).
                     build());
@@ -106,12 +108,8 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
             log.error("Encountered error while writing {}", provenance.snapshotName(), e);
             throw e;
         } finally {
-            try {
-                snapshotWriter.get().close();
-            } catch (Throwable e) {
-                log.error("Error closing SnapshotWriter for {}", provenance.snapshotName(), e);
-                throw e;
-            }
+            Utils.closeQuietly(writer, "RaftSnapshotWriter");
+            Utils.closeQuietly(snapshotWriter.get(), "SnapshotWriter");
         }
         log.info("Successfully wrote {}", provenance.snapshotName());
     }

@@ -728,7 +728,10 @@ object KafkaConfig {
   val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
     "If it is not set, the metadata log is placed in the first log directory from log.dirs."
   val MetadataSnapshotMaxNewRecordBytesDoc = "This is the maximum number of bytes in the log between the latest snapshot and the high-watermark needed before generating a new snapshot."
-  val MetadataSnapshotMaxIntervalMsDoc = "This is the maximum number of milliseconds that can elapse between the previous metadata snapshot and the next one."
+  val MetadataSnapshotMaxIntervalMsDoc = "This is the maximum number of milliseconds that can elapse between the previous metadata snapshot and the next one. " +
+    "In other words, metadata snapshots will be generated at least as frequently as specified by this configuration. Note that if " +
+    s"${MetadataSnapshotMaxNewRecordBytesProp} bytes of new data is reached before the full specified interval completes, then " +
+    "the snapshot will still be generated."
   val MetadataMaxIdleIntervalMsDoc = "This configuration controls how often the active " +
     "controller should write no-op records to the metadata partition. If the value is 0, no-op records " +
     s"are not appended to the metadata partition. The default value is ${Defaults.MetadataMaxIdleIntervalMs}";

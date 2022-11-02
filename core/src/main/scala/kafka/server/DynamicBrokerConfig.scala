@@ -285,9 +285,14 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       addReconfigurable(new DynamicMetricsReporters(
         kafkaConfig.brokerId, controller.config, controller.metrics, controller.clusterId))
     }
-    // TODO: add dynamic thread pool resizing here
-    // TODO: add dynamic listener reconfiguration here
     addBrokerReconfigurable(controller.socketServer)
+
+    // KAFKA-14349: add dynamic thread pool resizing here
+
+    // KAFKA-14350: add dynamic listener reconfiguration here
+
+    // When we implement controller mutation quotas in KRaft, as discussed in KAFKA-14351,
+    // we'll need to make them reconfigurable here (probably via DynamicClientQuotaCallback).
   }
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = CoreUtils.inWriteLock(lock) {

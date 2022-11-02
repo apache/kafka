@@ -498,7 +498,7 @@ public class ClusterControlManagerTest {
                         setPort((short) 9094).
                         setName("PLAINTEXT").
                         setHost("example.com")).iterator())).
-                    setFenced(true), expectedVersion),
+                        setFenced(true), expectedVersion),
             clusterControl.brokerRegistrations().get(2).toRecord(options));
     }
 

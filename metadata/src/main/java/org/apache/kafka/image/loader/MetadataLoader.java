@@ -40,7 +40,8 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
+
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 
 /**
@@ -190,6 +191,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                         setImage(image).
                         build();
                 LogDeltaManifest manifest = loadLogDelta(delta, reader);
+                if (log.isDebugEnabled()) {
+                    log.debug("Generated a metadata delta between {} and {} from {} batch(es) " +
+                            "in {} us.", image.offset(), manifest.provenance().offset(),
+                            manifest.numBatches(), NANOSECONDS.toMicros(manifest.elapsedNs()));
+                }
                 try {
                     image = delta.apply(manifest.provenance());
                 } catch (Throwable e) {
@@ -248,17 +254,23 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 try {
                     delta.replay(record.message());
                 } catch (MetadataVersionChangeException e) {
-                    handleMetadataVersionChange(delta,
-                        e.change(),
-                        batch.baseOffset() + indexWithinBatch,
-                        lastEpoch,
-                        lastContainedLogTimeMs);
+                    MetadataProvenance preChangeProvenance;
+                    if (indexWithinBatch == 0) {
+                        preChangeProvenance = new MetadataProvenance(
+                            lastOffset,
+                            lastEpoch,
+                            lastContainedLogTimeMs);
+                    } else {
+                        preChangeProvenance = new MetadataProvenance(
+                            batch.baseOffset() + indexWithinBatch - 1,
+                            batch.epoch(),
+                            batch.appendTimestamp());
+                    }
+                    handleMetadataVersionChange(delta, e.change(), preChangeProvenance);
                 } catch (Throwable e) {
                     faultHandler.handleFault("Error loading metadata log record from offset " +
                             batch.baseOffset() + indexWithinBatch, e);
                 }
-                lastEpoch = batch.epoch();
-                lastContainedLogTimeMs = batch.appendTimestamp();
                 indexWithinBatch++;
             }
             metrics.updateBatchSize(batch.records().size());
@@ -271,7 +283,6 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         MetadataProvenance provenance =
                 new MetadataProvenance(lastOffset, lastEpoch, lastContainedLogTimeMs);
         long elapsedNs = time.nanoseconds() - startNs;
-        // TODO: this metric should be renamed something like "delta processing time"
         metrics.updateBatchProcessingTime(elapsedNs);
         return new LogDeltaManifest(provenance,
                 numBatches,
@@ -282,17 +293,15 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     /**
      * Handle a change in the metadata version.
      *
-     * @param delta             The metadata delta we're working with.
-     * @param change            The change we're handling.
-     * @param changeOffset      The offset of the change.
-     * @param preChangeEpoch    The log epoch BEFORE the change.
+     * @param delta                 The metadata delta we're working with.
+     * @param change                The change we're handling.
+     * @param preChangeProvenance   The pre-change provenance. This will be the offset, epoch,
+     *                              timestamp, etc. right before the MV change.
      */
     void handleMetadataVersionChange(
         MetadataDelta delta,
         MetadataVersionChange change,
-        long changeOffset,
-        int preChangeEpoch,
-        long lastContainedLogTimeMs
+        MetadataProvenance preChangeProvenance
     ) {
         if (image.isEmpty()) {
             // If the previous image was empty, this is not a true metadata version transition.
@@ -305,17 +314,15 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         // First, we materialize the current metadata image and send it to all the publishers that
         // are interested in preVersionChange images. The most important one is the publisher which
         // writes snapshots out to disk.
-        MetadataProvenance provenance =
-                new MetadataProvenance(changeOffset - 1, preChangeEpoch, lastContainedLogTimeMs);
-        PreVersionChangeManifest manifest = new PreVersionChangeManifest(provenance, change);
-        MetadataImage preVersionChangeImage = delta.apply(provenance);
-        log.info("Publishing pre-version change image with provenance {}.", image.provenance());
+        PreVersionChangeManifest manifest = new PreVersionChangeManifest(preChangeProvenance, change);
+        MetadataImage preVersionChangeImage = delta.apply(preChangeProvenance);
+        log.info("Publishing pre-version change image with provenance {}.", preChangeProvenance);
         for (MetadataPublisher publisher : publishers) {
             try {
                 publisher.publishPreVersionChangeImage(delta, preVersionChangeImage, manifest);
             } catch (Throwable e) {
                 faultHandler.handleFault("Error publishing pre-version change image at offset " +
-                    provenance.offset() + " with publisher " + publisher.name(), e);
+                    preChangeProvenance.offset() + " with publisher " + publisher.name(), e);
             }
         }
         // Then, we clear the current delta and write out the current image to it in the new format.
@@ -340,6 +347,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                         setImage(image).
                         build();
                 SnapshotManifest manifest = loadSnapshot(delta, reader);
+                if (log.isDebugEnabled()) {
+                    log.debug("Generated a metadata delta from a snapshot at offset {} " +
+                            "in {} us.", manifest.provenance().offset(),
+                            NANOSECONDS.toMicros(manifest.elapsedNs()));
+                }
                 try {
                     image = delta.apply(manifest.provenance());
                 } catch (Throwable e) {
@@ -390,11 +402,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 try {
                     delta.replay(record.message());
                 } catch (MetadataVersionChangeException e) {
-                    handleMetadataVersionChange(delta,
-                            e.change(),
-                            reader.lastContainedLogOffset(),
-                            image.provenance().epoch(),
-                            image.provenance().lastContainedLogTimeMs());
+                    handleMetadataVersionChange(delta, e.change(), image.provenance());
                 } catch (Throwable e) {
                     faultHandler.handleFault("Error loading metadata log record " + snapshotIndex +
                             " in snapshot at offset " + reader.lastContainedLogOffset(), e);

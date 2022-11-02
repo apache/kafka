@@ -88,11 +88,10 @@ class KafkaRaftServer(
     setRaftClient(raftManager.client).
     build()
 
-  private val snapshotGenerator: SnapshotGenerator = new SnapshotGenerator.Builder().
-    setTime(Time.SYSTEM).
+  private val snapshotGenerator: SnapshotGenerator = new SnapshotGenerator.Builder(snapshotEmitter).
+    setTime(time).
     setNodeId(config.nodeId).
     setFaultHandler(new LoggingFaultHandler("snapshot generation", () => { })).
-    setEmitter(snapshotEmitter).
     setMinBytesSinceLastSnapshot(config.metadataSnapshotMaxNewRecordBytes).
     setMinTimeSinceLastSnapshotNs(TimeUnit.MILLISECONDS.toNanos(config.metadataSnapshotMaxIntervalMsProp)).
     build()
@@ -105,7 +104,7 @@ class KafkaRaftServer(
 
   private val metadataLoader: MetadataLoader = {
     val builder = new MetadataLoader.Builder().
-      setTime(Time.SYSTEM).
+      setTime(time).
       setNodeId(config.nodeId)
     if (config.processRoles.contains(ControllerRole)) {
       // Controllers and combined nodes must exit immediately if there is a metadata loading error.

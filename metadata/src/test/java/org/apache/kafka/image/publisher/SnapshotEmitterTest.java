@@ -180,7 +180,7 @@ public class SnapshotEmitterTest {
             setBatchSize(2).
             setRaftClient(mockRaftClient).
             build();
-        emitter.emit(MetadataImageTest.IMAGE1);
+        emitter.maybeEmit(MetadataImageTest.IMAGE1);
         MockSnapshotWriter writer = mockRaftClient.writers.get(
                 MetadataImageTest.IMAGE1.highestOffsetAndEpoch());
         assertNotNull(writer);
@@ -192,7 +192,7 @@ public class SnapshotEmitterTest {
         assertTrue(writer.isClosed());
 
         // Second call to emit does nothing because we already have a snapshot at that offset and epoch.
-        emitter.emit(MetadataImageTest.IMAGE1);
+        emitter.maybeEmit(MetadataImageTest.IMAGE1);
         assertEquals(1, mockRaftClient.writers.size());
     }
 }
