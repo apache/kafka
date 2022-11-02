@@ -51,7 +51,6 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -59,7 +58,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -116,7 +114,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         final CachingKeyValueStore outer = new CachingKeyValueStore(inner, false);
         when(inner.name()).thenReturn("store");
         outer.init((ProcessorContext) context, outer);
-        verify(inner).init(eq((ProcessorContext) context), eq(outer));
+        verify(inner).init((ProcessorContext) context, outer);
     }
 
     @Test
@@ -125,7 +123,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
         final CachingKeyValueStore outer = new CachingKeyValueStore(inner, false);
         when(inner.name()).thenReturn("store");
         outer.init((StateStoreContext) context, outer);
-        verify(inner).init(eq((StateStoreContext) context), eq(outer));
+        verify(inner).init((StateStoreContext) context, outer);
     }
 
     @Test
@@ -159,8 +157,8 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
         assertThrows(RuntimeException.class, store::close);
 
-        verify(cache).flush(eq(CACHE_NAMESPACE));
-        verify(cache).close(eq(CACHE_NAMESPACE));
+        verify(cache).flush(CACHE_NAMESPACE);
+        verify(cache).close(CACHE_NAMESPACE);
         verify(underlyingStore).close();
     }
 
@@ -172,8 +170,8 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
         assertThrows(RuntimeException.class, store::close);
 
-        verify(cache).flush(eq(CACHE_NAMESPACE));
-        verify(cache).close(eq(CACHE_NAMESPACE));
+        verify(cache).flush(CACHE_NAMESPACE);
+        verify(cache).close(CACHE_NAMESPACE);
         verify(underlyingStore).close();
     }
 
@@ -185,8 +183,8 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
 
         assertThrows(RuntimeException.class, store::close);
 
-        verify(cache).flush(eq(CACHE_NAMESPACE));
-        verify(cache).close(eq(CACHE_NAMESPACE));
+        verify(cache).flush(CACHE_NAMESPACE);
+        verify(cache).close(CACHE_NAMESPACE);
         verify(underlyingStore).close();
     }
 
@@ -437,9 +435,9 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
             }
         }
 
-        assertThat(numberOfKeysReturned, is(2));
-        assertThat(keys, is(Arrays.asList("p1", "p11")));
-        assertThat(values, is(Arrays.asList("2", "2")));
+        assertEquals(2, numberOfKeysReturned);
+        assertEquals(Arrays.asList("p1", "p11"), keys);
+        assertEquals(Arrays.asList("2", "2"), values);
 
     }
 
@@ -466,9 +464,9 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
             }
         }
 
-        assertThat(numberOfKeysReturned, is(2));
-        assertThat(keys, is(Arrays.asList("abcd", "abcdd")));
-        assertThat(values, is(Arrays.asList("2", "1")));
+        assertEquals(2, numberOfKeysReturned);
+        assertEquals(Arrays.asList("abcd", "abcdd"), keys);
+        assertEquals(Arrays.asList("2", "1"), values);
     }
 
     @Test

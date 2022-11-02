@@ -37,7 +37,6 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -79,8 +78,8 @@ public class StreamsRebalanceListenerTest {
     public void shouldSwallowVersionProbingError() {
         assignmentErrorCode.set(AssignorError.VERSION_PROBING.code());
         streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList());
-        verify(streamThread).setState(eq(State.PARTITIONS_ASSIGNED));
-        verify(streamThread).setPartitionAssignedTime(eq(time.milliseconds()));
+        verify(streamThread).setState(State.PARTITIONS_ASSIGNED);
+        verify(streamThread).setPartitionAssignedTime(time.milliseconds());
         verify(taskManager).handleRebalanceComplete();
     }
 
@@ -122,8 +121,8 @@ public class StreamsRebalanceListenerTest {
 
         streamsRebalanceListener.onPartitionsAssigned(Collections.emptyList());
 
-        verify(streamThread).setState(eq(State.PARTITIONS_ASSIGNED));
-        verify(streamThread).setPartitionAssignedTime(eq(time.milliseconds()));
+        verify(streamThread).setState(State.PARTITIONS_ASSIGNED);
+        verify(streamThread).setPartitionAssignedTime(time.milliseconds());
         verify(taskManager).handleRebalanceComplete();
     }
 
@@ -134,7 +133,7 @@ public class StreamsRebalanceListenerTest {
 
         streamsRebalanceListener.onPartitionsRevoked(partitions);
 
-        verify(taskManager).handleRevocation(eq(partitions));
+        verify(taskManager).handleRevocation(partitions);
     }
 
     @Test

@@ -69,7 +69,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -116,7 +115,7 @@ public class CachingInMemorySessionStoreTest {
         final CachingSessionStore outer = new CachingSessionStore(inner, SEGMENT_INTERVAL);
         when(inner.name()).thenReturn("store");
         outer.init((ProcessorContext) context, outer);
-        verify(inner).init(eq((ProcessorContext) context), eq(outer));
+        verify(inner).init((ProcessorContext) context, outer);
     }
 
     @Test
@@ -125,7 +124,7 @@ public class CachingInMemorySessionStoreTest {
         final CachingSessionStore outer = new CachingSessionStore(inner, SEGMENT_INTERVAL);
         when(inner.name()).thenReturn("store");
         outer.init((StateStoreContext) context, outer);
-        verify(inner).init(eq((StateStoreContext) context), eq(outer));
+        verify(inner).init((StateStoreContext) context, outer);
     }
 
     @Test

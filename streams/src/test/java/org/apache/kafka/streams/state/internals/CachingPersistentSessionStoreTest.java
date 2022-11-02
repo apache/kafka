@@ -69,7 +69,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -269,8 +268,8 @@ public class CachingPersistentSessionStoreTest {
         doThrow(new RuntimeException("Simulating an error on flush")).doNothing().when(cache).flush(anyString());
 
         assertThrows(RuntimeException.class, cachingStore::close);
-        verify(cache).flush(eq(CACHE_NAMESPACE));
-        verify(cache).close(eq(CACHE_NAMESPACE));
+        verify(cache).flush(CACHE_NAMESPACE);
+        verify(cache).close(CACHE_NAMESPACE);
         verify(underlyingStore).close();
     }
 
@@ -281,8 +280,8 @@ public class CachingPersistentSessionStoreTest {
         doThrow(new RuntimeException("Simulating an error on close")).doNothing().when(cache).close(CACHE_NAMESPACE);
 
         assertThrows(RuntimeException.class, cachingStore::close);
-        verify(cache).flush(eq(CACHE_NAMESPACE));
-        verify(cache).close(eq(CACHE_NAMESPACE));
+        verify(cache).flush(CACHE_NAMESPACE);
+        verify(cache).close(CACHE_NAMESPACE);
         verify(underlyingStore).close();
     }
 
@@ -293,8 +292,8 @@ public class CachingPersistentSessionStoreTest {
         doThrow(new RuntimeException("Simulating an error on close")).doNothing().when(underlyingStore).close();
 
         assertThrows(RuntimeException.class, cachingStore::close);
-        verify(cache).flush(eq(CACHE_NAMESPACE));
-        verify(cache).close(eq(CACHE_NAMESPACE));
+        verify(cache).flush(CACHE_NAMESPACE);
+        verify(cache).close(CACHE_NAMESPACE);
         verify(underlyingStore).close();
     }
 
