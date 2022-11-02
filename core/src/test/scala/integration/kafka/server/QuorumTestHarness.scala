@@ -107,6 +107,7 @@ class KRaftQuorumImplementation(
         setNodeId(config.nodeId).
         setTime(time).
         setThreadNamePrefix(threadNamePrefix).
+        setFaultHandler(faultHandler).
         build()
       broker = new BrokerServer(config = config,
         metaProps = new MetaProperties(clusterId, config.nodeId),
@@ -330,6 +331,7 @@ abstract class QuorumTestHarness extends Logging {
         setNodeId(config.nodeId).
         setTime(time).
         setThreadNamePrefix(threadNamePrefix).
+        setFaultHandler(faultHandler).
         build()
       controllerServer = new ControllerServer(
         metaProperties = metaProperties,

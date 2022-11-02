@@ -40,6 +40,7 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 
 /**
@@ -197,6 +198,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                             " and " + manifest.provenance().offset(), e);
                     return;
                 }
+                log.debug("Publishing new image with provenance {}.", image.provenance());
                 for (MetadataPublisher publisher : publishers) {
                     try {
                         publisher.publishLogDelta(delta, image, manifest);
@@ -261,6 +263,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             }
             metrics.updateBatchSize(batch.records().size());
             lastOffset = batch.lastOffset();
+            lastEpoch = batch.epoch();
+            lastContainedLogTimeMs = batch.appendTimestamp();
             numBytes += batch.sizeInBytes();
             numBatches++;
         }
@@ -290,6 +294,14 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         int preChangeEpoch,
         long lastContainedLogTimeMs
     ) {
+        if (image.isEmpty()) {
+            // If the previous image was empty, this is not a true metadata version transition.
+            // It just indicates that we hadn't loaded any records before, and now we have.
+            // Print out the metadata version and return to the loading process.
+            log.info("Loaded initial metadata version as {}.", change.newVersion());
+            delta.setMetadataVersion(change.newVersion());
+            return;
+        }
         // First, we materialize the current metadata image and send it to all the publishers that
         // are interested in preVersionChange images. The most important one is the publisher which
         // writes snapshots out to disk.
@@ -297,6 +309,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 new MetadataProvenance(changeOffset - 1, preChangeEpoch, lastContainedLogTimeMs);
         PreVersionChangeManifest manifest = new PreVersionChangeManifest(provenance, change);
         MetadataImage preVersionChangeImage = delta.apply(provenance);
+        log.info("Publishing pre-version change image with provenance {}.", image.provenance());
         for (MetadataPublisher publisher : publishers) {
             try {
                 publisher.publishPreVersionChangeImage(delta, preVersionChangeImage, manifest);
@@ -309,6 +322,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         // If any metadata was lost, we just log it here. We cannot prevent the losses because the
         // decision to change the metadata version was already taken by the controller.
         delta.clear();
+        delta.setMetadataVersion(change.newVersion());
         ImageReWriter writer = new ImageReWriter(delta);
         preVersionChangeImage.write(writer, new ImageWriterOptions.Builder().
                         setMetadataVersion(change.newVersion()).
@@ -333,6 +347,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                             "snapshot at offset " + reader.lastContainedLogOffset(), e);
                     return;
                 }
+                log.debug("Publishing new snapshot image with provenance {}.", image.provenance());
                 for (MetadataPublisher publisher : publishers) {
                     try {
                         publisher.publishSnapshot(delta, image, manifest);
@@ -356,8 +371,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
 
     /**
      * Load a snapshot. This is relatively straightforward since we don't track as many things as
-     * we do in loadLogDelta. Additionally, it is an error for a version change to occur unless
-     * it is the very first record. The main complication here is that we have to maintain an index
+     * we do in loadLogDelta. The main complication here is that we have to maintain an index
      * of what record we are processing so that we can give useful error messages.
      *
      * @param delta     The metadata delta we are preparing.
@@ -375,6 +389,12 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             for (ApiMessageAndVersion record : batch.records()) {
                 try {
                     delta.replay(record.message());
+                } catch (MetadataVersionChangeException e) {
+                    handleMetadataVersionChange(delta,
+                            e.change(),
+                            reader.lastContainedLogOffset(),
+                            image.provenance().epoch(),
+                            image.provenance().lastContainedLogTimeMs());
                 } catch (Throwable e) {
                     faultHandler.handleFault("Error loading metadata log record " + snapshotIndex +
                             " in snapshot at offset " + reader.lastContainedLogOffset(), e);
@@ -408,9 +428,10 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     public CompletableFuture<Void> installPublishers(List<? extends MetadataPublisher> newPublishers) {
         if (newPublishers.isEmpty()) return CompletableFuture.completedFuture(null);
         CompletableFuture<Void> future = new CompletableFuture<>();
-        eventQueue.beginShutdown("installPublishers", () -> {
+        eventQueue.append(() -> {
             try {
                 installNewPublishers(newPublishers);
+                future.complete(null);
             } catch (Throwable e) {
                 future.completeExceptionally(faultHandler.handleFault("Unhandled fault in " +
                         "MetadataLoader#installPublishers", e));
@@ -435,6 +456,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 build();
         ImageReWriter writer = new ImageReWriter(delta);
         image.write(writer, new ImageWriterOptions.Builder().
+                setMetadataVersion(image.features().metadataVersion()).
                 build());
         SnapshotManifest manifest = new SnapshotManifest(
                 image.provenance(),
@@ -453,6 +475,13 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         }
     }
 
+    // VisibleForTesting
+    void waitForAllEventsToBeHandled() throws Exception {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        eventQueue.append(() -> future.complete(null));
+        future.get();
+    }
+
     /**
      * Remove a publisher and close it.
      *
@@ -463,7 +492,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
      */
     public CompletableFuture<Void> removeAndClosePublisher(MetadataPublisher publisher) {
         CompletableFuture<Void> future = new CompletableFuture<>();
-        eventQueue.beginShutdown("removePublisher", () -> {
+        eventQueue.append(() -> {
             try {
                 if (!publishers.remove(publisher)) {
                     throw faultHandler.handleFault("Attempted to remove publisher " + publisher.name() +

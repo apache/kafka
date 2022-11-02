@@ -279,8 +279,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       case _ =>
     }
     if (!kafkaConfig.processRoles.contains(BrokerRole)) {
-      // In combined mode, these elements are shared between broker and controller, and therefore
-      // don't need to be updated here (since the broker will do it.)
+      // In standalone mode, add these reconfigurables.
+      // In combined mode, we can rely on the broker to add them.
       addReconfigurable(controller.kafkaYammerMetrics)
       addReconfigurable(new DynamicMetricsReporters(
         kafkaConfig.brokerId, controller.config, controller.metrics, controller.clusterId))

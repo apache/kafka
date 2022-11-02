@@ -29,7 +29,7 @@ import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
 import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.metadata.ControllerMetadataPublisher
+import kafka.server.metadata.DynamicConfigPublisher
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.clients.ApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -95,8 +95,7 @@ class ControllerServer(
   var quotaManagers: QuotaManagers = _
   var controllerApis: ControllerApis = _
   var controllerApisHandlerPool: KafkaRequestHandlerPool = _
-  var dynamicConfigHandlers: immutable.Map[String, ConfigHandler] = _
-  var controllerMetadataPublisher: ControllerMetadataPublisher = _
+  var dynamicConfigPublisher: DynamicConfigPublisher = _
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
@@ -265,13 +264,17 @@ class ControllerServer(
         throw e
     }
     config.dynamicConfig.addReconfigurables(this)
-    dynamicConfigHandlers = immutable.Map[String, ConfigHandler](
-      ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
-    controllerMetadataPublisher = new ControllerMetadataPublisher(
-      config,
-      dynamicConfigHandlers,
-      fatalFaultHandler)
-    metadataLoader.installPublishers(List().asJava)
+    if (!config.processRoles.contains(BrokerRole)) {
+      // In standalone mode, install a DynamicConfigPublisher.
+      // In combined mode, we can rely on the broker's DynamicConfigPublisher.
+      val dynamicConfigHandlers = immutable.Map[String, ConfigHandler](
+        ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
+      dynamicConfigPublisher = new DynamicConfigPublisher(
+        config,
+        fatalFaultHandler,
+        dynamicConfigHandlers)
+      metadataLoader.installPublishers(List(dynamicConfigPublisher).asJava)
+    }
   }
 
   def shutdown(): Unit = {

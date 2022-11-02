@@ -200,6 +200,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 setThreadNamePrefix(threadNamePrefix).
                                 setFaultHandler(fatalFaultHandler).
                                 build();
+                        raftManager.register(metadataLoader);
                         controller = new ControllerServer(
                                 nodes.controllerProperties(node.id()),
                                 config,
@@ -279,6 +280,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 setThreadNamePrefix(threadNamePrefix).
                                 setFaultHandler(fatalFaultHandler).
                                 build();
+                        raftManager.register(metadataLoader);
                         broker = new BrokerServer(
                                 config,
                                 nodes.brokerProperties(node.id()),

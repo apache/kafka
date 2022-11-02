@@ -35,7 +35,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, Timeout}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
 import org.mockito.Mockito.doThrow
@@ -44,6 +44,7 @@ import org.mockito.stubbing.Answer
 
 import scala.jdk.CollectionConverters._
 
+@Timeout(60)
 class BrokerMetadataPublisherTest {
   val exitException = new AtomicReference[Throwable](null)
 
@@ -176,23 +177,13 @@ class BrokerMetadataPublisherTest {
     new TopicsImage(idsMap.asJava, namesMap.asJava)
   }
 
-  private def newMockPublisher(
+  private def newMockDynamicConfigPublisher(
     broker: BrokerServer,
     errorHandler: FaultHandler = new MockFaultHandler("publisher")
-  ): BrokerMetadataPublisher = {
-    Mockito.spy(new BrokerMetadataPublisher(
-      conf = broker.config,
-      metadataCache = broker.metadataCache,
-      logManager = broker.logManager,
-      replicaManager = broker.replicaManager,
-      groupCoordinator = broker.groupCoordinator,
-      txnCoordinator = broker.transactionCoordinator,
-      clientQuotaMetadataManager = broker.clientQuotaMetadataManager,
-      dynamicConfigHandlers = broker.dynamicConfigHandlers.toMap,
-      _authorizer = Option.empty,
-      errorHandler,
-      errorHandler
-    ))
+  ): DynamicConfigPublisher = {
+    Mockito.spy(new DynamicConfigPublisher(conf = broker.config,
+      faultHandler = errorHandler,
+      dynamicConfigHandlers = broker.dynamicConfigHandlers.toMap))
   }
 
   @Disabled
@@ -207,14 +198,13 @@ class BrokerMetadataPublisherTest {
       cluster.startup()
       cluster.waitForReadyBrokers()
       val broker = cluster.brokers().values().iterator().next()
-      val publisher = newMockPublisher(broker)
+      val publisher = newMockDynamicConfigPublisher(broker)
       val numTimesReloadCalled = new AtomicInteger(0)
       Mockito.when(publisher.reloadUpdatedFilesWithoutConfigChange(any[Properties]())).
         thenAnswer(new Answer[Unit]() {
           override def answer(invocation: InvocationOnMock): Unit = numTimesReloadCalled.addAndGet(1)
         })
-      broker.metadataLoader.removeAndClosePublisher(broker.metadataPublisher).get()
-      broker.metadataLoader.installPublishers(Collections.singletonList(publisher)).get()
+      broker.metadataPublisher.dynamicConfigPublisher = publisher
       val admin = Admin.create(cluster.clientProperties())
       try {
         assertEquals(0, numTimesReloadCalled.get())

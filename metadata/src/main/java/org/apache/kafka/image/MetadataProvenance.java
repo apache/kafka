@@ -17,6 +17,8 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.raft.OffsetAndEpoch;
+
 import java.util.Objects;
 
 
@@ -38,6 +40,10 @@ public final class MetadataProvenance {
         this.offset = offset;
         this.epoch = epoch;
         this.lastContainedLogTimeMs = lastContainedLogTimeMs;
+    }
+
+    public OffsetAndEpoch offsetAndEpoch() {
+        return new OffsetAndEpoch(offset, epoch);
     }
 
     public long offset() {

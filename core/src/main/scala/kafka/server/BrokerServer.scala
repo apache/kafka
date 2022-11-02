@@ -29,7 +29,7 @@ import kafka.log.LogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.RaftManager
 import kafka.security.CredentialProvider
-import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, KRaftMetadataCache}
+import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCache}
 import kafka.utils.{CoreUtils, KafkaScheduler}
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -388,6 +388,7 @@ class BrokerServer(
         DataPlaneAcceptor.ThreadPrefix)
 
       // Block until we've caught up with the latest metadata from the controller quorum.
+      info("Waiting for broker metadata to catch up.")
       try {
         lifecycleManager.initialCatchUpFuture.get()
       } catch {
@@ -403,7 +404,10 @@ class BrokerServer(
         groupCoordinator,
         transactionCoordinator,
         clientQuotaMetadataManager,
-        dynamicConfigHandlers.toMap,
+        new DynamicConfigPublisher(
+          config,
+          metadataPublishingFaultHandler,
+          dynamicConfigHandlers.toMap),
         authorizer,
         fatalFaultHandler,
         metadataPublishingFaultHandler)
