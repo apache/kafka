@@ -93,7 +93,7 @@ class KafkaRaftServer(
     setNodeId(config.nodeId).
     setFaultHandler(new LoggingFaultHandler("snapshot generation", () => { })).
     setMinBytesSinceLastSnapshot(config.metadataSnapshotMaxNewRecordBytes).
-    setMinTimeSinceLastSnapshotNs(TimeUnit.MILLISECONDS.toNanos(config.metadataSnapshotMaxIntervalMsProp)).
+    setMaxTimeSinceLastSnapshotNs(TimeUnit.MILLISECONDS.toNanos(config.metadataSnapshotMaxIntervalMsProp)).
     build()
 
   private val brokerMetrics: Option[BrokerServerMetrics] = if (config.processRoles.contains(BrokerRole)) {

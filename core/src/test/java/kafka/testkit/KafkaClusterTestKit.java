@@ -37,8 +37,11 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.Controller;
 import org.apache.kafka.controller.MockControllerMetrics;
 import org.apache.kafka.image.loader.MetadataLoader;
+import org.apache.kafka.image.publisher.SnapshotEmitter;
+import org.apache.kafka.image.publisher.SnapshotGenerator;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
+import org.apache.kafka.raft.KafkaRaftClient;
 import org.apache.kafka.raft.RaftConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -58,12 +61,14 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
@@ -193,6 +198,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         Time.SYSTEM, new Metrics(), Option.apply(threadNamePrefix), connectFutureManager.future);
                     MetadataLoader metadataLoader = null;
                     ControllerServer controller = null;
+                    SnapshotGenerator snapshotGenerator = null;
                     try {
                         metadataLoader = new MetadataLoader.Builder().
                                 setNodeId(node.id()).
@@ -201,6 +207,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 setFaultHandler(fatalFaultHandler).
                                 build();
                         raftManager.register(metadataLoader);
+                        snapshotGenerator = maybeCreateSnapshotGenerator(node.id(), raftManager.client());
+                        if (snapshotGenerator != null) {
+                            metadataLoader.installPublishers(Arrays.asList(snapshotGenerator));
+                        }
                         controller = new ControllerServer(
                                 nodes.controllerProperties(node.id()),
                                 config,
@@ -218,7 +228,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 metadataLoader);
                     } catch (Throwable e) {
                         log.error("Error creating controller {}", node.id(), e);
-                        if (metadataLoader != null) metadataLoader.close();
+                        Utils.closeQuietly(metadataLoader, "metadataLoader");
+                        Utils.closeQuietly(snapshotGenerator, "snapshotGenerator");
                         if (controller != null) controller.shutdown();
                         throw e;
                     }
@@ -273,6 +284,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     Metrics metrics = new Metrics();
                     MetadataLoader metadataLoader = null;
                     BrokerServer broker = null;
+                    SnapshotGenerator snapshotGenerator = null;
                     try {
                         metadataLoader = new MetadataLoader.Builder().
                                 setNodeId(node.id()).
@@ -281,6 +293,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 setFaultHandler(fatalFaultHandler).
                                 build();
                         raftManager.register(metadataLoader);
+                        snapshotGenerator = maybeCreateSnapshotGenerator(node.id(), raftManager.client());
+                        if (snapshotGenerator != null) {
+                            metadataLoader.installPublishers(Arrays.asList(snapshotGenerator));
+                        }
                         broker = new BrokerServer(
                                 config,
                                 nodes.brokerProperties(node.id()),
@@ -295,7 +311,8 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                 metadataLoader);
                     } catch (Throwable e) {
                         log.error("Error creating broker {}", node.id(), e);
-                        if (metadataLoader != null) metadataLoader.close();
+                        Utils.closeQuietly(metadataLoader, "metadataLoader");
+                        Utils.closeQuietly(snapshotGenerator, "snapshotGenerator");
                         if (broker != null) broker.shutdown();
                         throw e;
                     }
@@ -324,6 +341,31 @@ public class KafkaClusterTestKit implements AutoCloseable {
             return new KafkaClusterTestKit(executorService, nodes, controllers,
                 brokers, raftManagers, connectFutureManager, baseDirectory,
                 metadataFaultHandler, fatalFaultHandler);
+        }
+
+        private SnapshotGenerator maybeCreateSnapshotGenerator(
+            int nodeId,
+            KafkaRaftClient<ApiMessageAndVersion> raftClient
+        ) {
+            String minBytes = configProps.get(KafkaConfig$.MODULE$.MetadataSnapshotMaxNewRecordBytesProp());
+            String maxIntervalMs = configProps.get(KafkaConfig$.MODULE$.MetadataSnapshotMaxIntervalMsProp());
+            if (minBytes == null && maxIntervalMs == null) {
+                return null;
+            }
+            SnapshotEmitter emitter = new SnapshotEmitter.Builder().
+                    setNodeId(nodeId).
+                    setRaftClient(raftClient).
+                    build();
+            SnapshotGenerator.Builder builder = new SnapshotGenerator.Builder(emitter).
+                    setTime(Time.SYSTEM).
+                    setFaultHandler(fatalFaultHandler);
+            if (minBytes != null) {
+                builder.setMinBytesSinceLastSnapshot(Long.parseLong(minBytes));
+            }
+            if (maxIntervalMs != null) {
+                builder.setMaxTimeSinceLastSnapshotNs(Long.parseLong(maxIntervalMs));
+            }
+            return builder.build();
         }
 
         private String listeners(int node) {

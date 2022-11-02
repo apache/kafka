@@ -99,7 +99,7 @@ public class SnapshotGeneratorTest {
         try (SnapshotGenerator generator = new SnapshotGenerator.Builder(emitter).
                 setFaultHandler(faultHandler).
                 setMinBytesSinceLastSnapshot(200).
-                setMinTimeSinceLastSnapshotNs(TimeUnit.DAYS.toNanos(10)).
+                setMaxTimeSinceLastSnapshotNs(TimeUnit.DAYS.toNanos(10)).
                 build()) {
             // Publish a log delta batch. This one will not trigger a snapshot yet.
             generator.publishLogDelta(TEST_DELTA, TEST_IMAGE,
@@ -132,7 +132,7 @@ public class SnapshotGeneratorTest {
         try (SnapshotGenerator generator = new SnapshotGenerator.Builder(emitter).
                 setFaultHandler(faultHandler).
                 setMinBytesSinceLastSnapshot(1).
-                setMinTimeSinceLastSnapshotNs(TimeUnit.DAYS.toNanos(10)).
+                setMaxTimeSinceLastSnapshotNs(0).
                 build()) {
             generator.disable("we are testing disable()");
             // No snapshots are generated because snapshots are disabled.
@@ -155,7 +155,7 @@ public class SnapshotGeneratorTest {
                 setTime(mockTime).
                 setFaultHandler(faultHandler).
                 setMinBytesSinceLastSnapshot(200).
-                setMinTimeSinceLastSnapshotNs(TimeUnit.MINUTES.toNanos(30)).
+                setMaxTimeSinceLastSnapshotNs(TimeUnit.MINUTES.toNanos(30)).
                 build()) {
             // This image isn't published yet.
             generator.publishLogDelta(TEST_DELTA, TEST_IMAGE,

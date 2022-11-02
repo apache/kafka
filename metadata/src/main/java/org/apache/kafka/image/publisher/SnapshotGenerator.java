@@ -43,7 +43,7 @@ public class SnapshotGenerator implements MetadataPublisher {
         private Time time = Time.SYSTEM;
         private FaultHandler faultHandler = (m, e) -> null;
         private long minBytesSinceLastSnapshot = 100 * 1024L * 1024L;
-        private long minTimeSinceLastSnapshotNs = TimeUnit.DAYS.toNanos(1);
+        private long maxTimeSinceLastSnapshotNs = TimeUnit.DAYS.toNanos(1);
 
         public Builder(Emitter emitter) {
             this.emitter = emitter;
@@ -69,8 +69,8 @@ public class SnapshotGenerator implements MetadataPublisher {
             return this;
         }
 
-        public Builder setMinTimeSinceLastSnapshotNs(long minTimeSinceLastSnapshotNs) {
-            this.minTimeSinceLastSnapshotNs = minTimeSinceLastSnapshotNs;
+        public Builder setMaxTimeSinceLastSnapshotNs(long maxTimeSinceLastSnapshotNs) {
+            this.maxTimeSinceLastSnapshotNs = maxTimeSinceLastSnapshotNs;
             return this;
         }
 
@@ -81,7 +81,7 @@ public class SnapshotGenerator implements MetadataPublisher {
                 emitter,
                 faultHandler,
                 minBytesSinceLastSnapshot,
-                minTimeSinceLastSnapshotNs
+                maxTimeSinceLastSnapshotNs
             );
         }
     }
@@ -132,10 +132,10 @@ public class SnapshotGenerator implements MetadataPublisher {
     private final long minBytesSinceLastSnapshot;
 
     /**
-     * The minimum amount of time we will wait before emitting a snapshot, or 0 to disable
+     * The maximum amount of time we will wait before emitting a snapshot, or 0 to disable
      * time-based snapshotting.
      */
-    private final long minTimeSinceLastSnapshotNs;
+    private final long maxTimeSinceLastSnapshotNs;
 
     /**
      * If non-null, the reason why snapshots have been disabled.
@@ -163,14 +163,14 @@ public class SnapshotGenerator implements MetadataPublisher {
         Emitter emitter,
         FaultHandler faultHandler,
         long minBytesSinceLastSnapshot,
-        long minTimeSinceLastSnapshotNs
+        long maxTimeSinceLastSnapshotNs
     ) {
         this.nodeId = nodeId;
         this.time = time;
         this.emitter = emitter;
         this.faultHandler = faultHandler;
         this.minBytesSinceLastSnapshot = minBytesSinceLastSnapshot;
-        this.minTimeSinceLastSnapshotNs = minTimeSinceLastSnapshotNs;
+        this.maxTimeSinceLastSnapshotNs = maxTimeSinceLastSnapshotNs;
         LogContext logContext = new LogContext("[SnapshotGenerator " + nodeId + "] ");
         this.log = logContext.logger(SnapshotGenerator.class);
         this.disabledReason = null;
@@ -219,11 +219,11 @@ public class SnapshotGenerator implements MetadataPublisher {
                 scheduleEmit("we have replayed at least " + minBytesSinceLastSnapshot +
                     " bytes", newImage);
             }
-        } else if (minTimeSinceLastSnapshotNs != 0 &&
-                (time.nanoseconds() - lastSnapshotTimeNs >= minTimeSinceLastSnapshotNs)) {
+        } else if (maxTimeSinceLastSnapshotNs != 0 &&
+                (time.nanoseconds() - lastSnapshotTimeNs >= maxTimeSinceLastSnapshotNs)) {
             if (eventQueue.isEmpty()) {
                 scheduleEmit("we have waited at least " +
-                    TimeUnit.NANOSECONDS.toMinutes(minTimeSinceLastSnapshotNs) + " minute(s)", newImage);
+                    TimeUnit.NANOSECONDS.toMinutes(maxTimeSinceLastSnapshotNs) + " minute(s)", newImage);
             }
         }
     }
