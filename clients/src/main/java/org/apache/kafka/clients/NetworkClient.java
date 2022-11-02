@@ -346,8 +346,16 @@ public class NetworkClient implements KafkaClient {
             }
 
             if (!request.isInternalRequest) {
-                if (responses != null)
-                    responses.add(request.disconnected(now, null));
+                if (responses != null) {
+                    ClientResponse disconnected;
+
+                    if (request.timeElapsedSinceSendMs(now) > request.requestTimeoutMs)
+                        disconnected = request.timedOut(now, null);
+                    else
+                        disconnected = request.disconnected(now, null);
+
+                    responses.add(disconnected);
+                }
             } else if (request.header.apiKey() == ApiKeys.METADATA) {
                 metadataUpdater.handleFailedRequest(now, Optional.empty());
             }
@@ -1282,6 +1290,11 @@ public class NetworkClient implements KafkaClient {
         public ClientResponse disconnected(long timeMs, AuthenticationException authenticationException) {
             return new ClientResponse(header, callback, destination, createdTimeMs, timeMs,
                     true, null, authenticationException, null);
+        }
+
+        public ClientResponse timedOut(long timeMs, AuthenticationException authenticationException) {
+            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs,
+                    true, true, null, authenticationException, null);
         }
 
         @Override

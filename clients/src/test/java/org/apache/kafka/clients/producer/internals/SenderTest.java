@@ -2518,7 +2518,7 @@ public class SenderTest {
 
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
         responseMap.put(tp0, new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
-        client.respond(new ProduceResponse(responseMap));
+        client.respond(new ProduceResponse(responseMap), true, true);
 
         time.sleep(deliveryTimeoutMs);
         sender.runOnce();  // receive first response
@@ -2528,6 +2528,7 @@ public class SenderTest {
             fail("The expired batch should throw a TimeoutException");
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof TimeoutException);
+            assertTrue(metadata.updateRequested());
         }
     }
 

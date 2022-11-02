@@ -552,9 +552,11 @@ public class Sender implements Runnable {
         if (response.wasDisconnected()) {
             log.trace("Cancelled request with header {} due to node {} being disconnected",
                 requestHeader, response.destination());
-            for (ProducerBatch batch : batches.values())
-                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION, String.format("Disconnected from node %s", response.destination())),
+            for (ProducerBatch batch : batches.values()) {
+                Errors e = response.wasTimedOut() ? Errors.REQUEST_TIMED_OUT : Errors.NETWORK_EXCEPTION;
+                completeBatch(batch, new ProduceResponse.PartitionResponse(e, String.format("Disconnected from node %s", response.destination())),
                         correlationId, now);
+            }
         } else if (response.versionMismatch() != null) {
             log.warn("Cancelled request {} due to a version mismatch with node {}",
                     response, response.destination(), response.versionMismatch());
@@ -641,7 +643,7 @@ public class Sender implements Runnable {
                 // thus it is not safe to reassign the sequence.
                 failBatch(batch, response, batch.attempts() < this.retries);
             }
-            if (error.exception() instanceof InvalidMetadataException) {
+            if (error.exception() instanceof InvalidMetadataException || error.exception() instanceof TimeoutException) {
                 if (error.exception() instanceof UnknownTopicOrPartitionException) {
                     log.warn("Received unknown topic or partition error in produce request on partition {}. The " +
                             "topic-partition may not exist or the user may not have Describe access to it",

@@ -486,6 +486,7 @@ public class NetworkClientTest {
         ClientResponse clientResponse = responses.get(0);
         assertEquals(node.idString(), clientResponse.destination());
         assertTrue(clientResponse.wasDisconnected(), "Expected response to fail due to disconnection");
+        assertTrue(clientResponse.wasTimedOut(), "Expected response to fail due to timeout");
     }
 
     @Test

@@ -384,12 +384,16 @@ public class MockClient implements KafkaClient {
 
 
     public void respond(AbstractResponse response, boolean disconnected) {
+        respond(response, disconnected, false);
+    }
+
+    public void respond(AbstractResponse response, boolean disconnected, boolean timedOut) {
         if (requests.isEmpty())
             throw new IllegalStateException("No requests pending for inbound response " + response);
         ClientRequest request = requests.poll();
         short version = request.requestBuilder().latestAllowedVersion();
         responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
-                request.createdTimeMs(), time.milliseconds(), disconnected, null, null, response));
+                request.createdTimeMs(), time.milliseconds(), disconnected, timedOut, null, null, response));
     }
 
     public void respondFrom(AbstractResponse response, Node node) {
