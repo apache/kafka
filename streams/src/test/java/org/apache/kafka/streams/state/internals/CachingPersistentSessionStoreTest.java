@@ -44,6 +44,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.InOrder;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.nio.charset.StandardCharsets;
@@ -68,10 +69,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
@@ -265,33 +265,34 @@ public class CachingPersistentSessionStoreTest {
     @Test
     public void shouldCloseWrappedStoreAndCacheAfterErrorDuringCacheFlush() {
         setUpCloseTests();
+        InOrder inOrder = inOrder(cache, underlyingStore);
         doThrow(new RuntimeException("Simulating an error on flush")).doNothing().when(cache).flush(CACHE_NAMESPACE);
 
         assertThrows(RuntimeException.class, cachingStore::close);
-        verify(cache).close(CACHE_NAMESPACE);
-        verify(underlyingStore).close();
+        inOrder.verify(cache).close(CACHE_NAMESPACE);
+        inOrder.verify(underlyingStore).close();
     }
 
     @Test
     public void shouldCloseWrappedStoreAfterErrorDuringCacheClose() {
         setUpCloseTests();
-
+        InOrder inOrder = inOrder(cache, underlyingStore);
         doThrow(new RuntimeException("Simulating an error on close")).doNothing().when(cache).close(CACHE_NAMESPACE);
 
         assertThrows(RuntimeException.class, cachingStore::close);
-        verify(cache).flush(CACHE_NAMESPACE);
-        verify(underlyingStore).close();
+        inOrder.verify(cache).flush(CACHE_NAMESPACE);
+        inOrder.verify(underlyingStore).close();
     }
 
     @Test
     public void shouldCloseCacheAfterErrorDuringWrappedStoreClose() {
         setUpCloseTests();
-
+        InOrder inOrder = inOrder(cache);
         doThrow(new RuntimeException("Simulating an error on close")).doNothing().when(underlyingStore).close();
 
         assertThrows(RuntimeException.class, cachingStore::close);
-        verify(cache).flush(CACHE_NAMESPACE);
-        verify(cache).close(CACHE_NAMESPACE);
+        inOrder.verify(cache).flush(CACHE_NAMESPACE);
+        inOrder.verify(cache).close(CACHE_NAMESPACE);
     }
 
     @SuppressWarnings("unchecked")
