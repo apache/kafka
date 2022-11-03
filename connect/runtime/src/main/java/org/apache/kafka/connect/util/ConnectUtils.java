@@ -28,8 +28,6 @@ import org.apache.kafka.connect.source.SourceConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -179,24 +177,19 @@ public final class ConnectUtils {
      * Create the base of a {@link CommonClientConfigs#CLIENT_ID_DOC client ID} that can be
      * used for Kafka clients instantiated by this worker. Workers should append an extra identifier
      * to the end of this base ID to include extra information on what they are using it for; for example,
-     * {@code clientIdBase(config, advertisedUrl) + "configs"} could be used as the client ID for a
-     * consumer, producer, or admin client used to interact with a worker's config topic.
+     * {@code clientIdBase(config) + "configs"} could be used as the client ID for a consumer, producer,
+     * or admin client used to interact with a worker's config topic.
      * @param config the worker config; may not be null
-     * @param advertisedUrl the advertised URL for the worker; may not be null
      * @return the base client ID for this worker; never null, never empty, and will always end in a
      * hyphen ('-')
      */
-    public static String clientIdBase(WorkerConfig config, String advertisedUrl) {
-        String clusterId = Optional.ofNullable(config.groupId())
+    public static String clientIdBase(WorkerConfig config) {
+        String result = Optional.ofNullable(config.groupId())
                 .orElse("connect");
-        // An identifier for this worker to be used in client IDs
-        // We allow the user to specify this explicitly via the client.id property,
-        // and fall back on the base64-encoded advertised URL if they don't
-        String workerId = Optional.ofNullable(config.getString(CLIENT_ID_CONFIG))
-                .orElseGet(() -> {
-                    byte[] advertisedUrlBytes = advertisedUrl.getBytes(StandardCharsets.UTF_8);
-                    return Base64.getEncoder().withoutPadding().encodeToString(advertisedUrlBytes);
-                });
-        return clusterId + "-" + workerId + "-";
+        String userSpecifiedClientId = config.getString(CLIENT_ID_CONFIG);
+        if (userSpecifiedClientId != null) {
+            result += "-" + userSpecifiedClientId;
+        }
+        return result + "-";
     }
 }

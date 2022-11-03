@@ -105,7 +105,7 @@ public class ConnectDistributed {
         URI advertisedUrl = rest.advertisedUrl();
         String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
 
-        String clientIdBase = ConnectUtils.clientIdBase(config, advertisedUrl.toString());
+        String clientIdBase = ConnectUtils.clientIdBase(config);
 
         // Create the admin client to be shared by all backing stores.
         Map<String, Object> adminProps = new HashMap<>(config.originals());

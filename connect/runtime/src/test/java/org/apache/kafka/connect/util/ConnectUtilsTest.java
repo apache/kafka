@@ -141,28 +141,25 @@ public class ConnectUtilsTest {
     public void testClientIdBase() {
         String groupId = "connect-cluster";
         String userSpecifiedClientId = "worker-57";
-        String advertisedUrl = "localhost:8083";
-
-        String encodedAdvertisedUrl = "bG9jYWxob3N0OjgwODM";
 
         String expectedClientIdBase = groupId + "-" + userSpecifiedClientId + "-";
-        assertClientIdBase(groupId, userSpecifiedClientId, advertisedUrl, expectedClientIdBase);
+        assertClientIdBase(groupId, userSpecifiedClientId, expectedClientIdBase);
 
-        expectedClientIdBase = groupId + "-" + encodedAdvertisedUrl + "-";
-        assertClientIdBase(groupId, null, advertisedUrl, expectedClientIdBase);
+        expectedClientIdBase = groupId + "-";
+        assertClientIdBase(groupId, null, expectedClientIdBase);
 
-        expectedClientIdBase = "connect-" + encodedAdvertisedUrl + "-";
-        assertClientIdBase(null, null, advertisedUrl, expectedClientIdBase);
+        expectedClientIdBase = "connect-";
+        assertClientIdBase(null, null, expectedClientIdBase);
 
         expectedClientIdBase = "connect-" + userSpecifiedClientId + "-";
-        assertClientIdBase(null, userSpecifiedClientId, advertisedUrl, expectedClientIdBase);
+        assertClientIdBase(null, userSpecifiedClientId, expectedClientIdBase);
     }
 
-    private void assertClientIdBase(String groupId, String userSpecifiedClientId, String advertisedUrl, String expectedClientIdBase) {
+    private void assertClientIdBase(String groupId, String userSpecifiedClientId, String expectedClientIdBase) {
         WorkerConfig config = mock(WorkerConfig.class);
         when(config.groupId()).thenReturn(groupId);
         when(config.getString(CLIENT_ID_CONFIG)).thenReturn(userSpecifiedClientId);
-        String actualClientIdBase = ConnectUtils.clientIdBase(config, advertisedUrl);
+        String actualClientIdBase = ConnectUtils.clientIdBase(config);
         assertEquals(expectedClientIdBase, actualClientIdBase);
     }
 
