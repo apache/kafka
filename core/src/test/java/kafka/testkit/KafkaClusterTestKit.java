@@ -200,11 +200,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id());
                     BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
                         fromVersion(nodes.bootstrapMetadataVersion(), "testkit");
+                    String threadNamePrefix = (nodes.brokerNodes().containsKey(node.id())) ?
+                        String.format("colocated%d", node.id()) :
+                            String.format("controller%d", node.id());
                     JointServer jointServer = new JointServer(config,
                             metaProperties,
                             Time.SYSTEM,
                             new Metrics(),
-                            Option.apply(String.format("controller%d_", node.id())),
+                            Option.apply(threadNamePrefix),
                             connectFutureManager.future,
                             faultHandlerFactory);
                     ControllerServer controller = null;
@@ -233,8 +236,15 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), roles(node.id()));
                     props.put(KafkaConfig$.MODULE$.BrokerIdProp(),
                         Integer.toString(node.id()));
-                    props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
-                        node.metadataDirectory());
+                    if (nodes.controllerNodes().containsKey(node.id())) {
+                        // Combined mode: use the metadata log dir of the associated controller node.
+                        props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
+                                nodes.controllerNodes().get(node.id()).metadataDirectory());
+                    } else {
+                        // Separate mode: use the broker node's log dir.
+                        props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
+                                node.metadataDirectory());
+                    }
                     props.put(KafkaConfig$.MODULE$.LogDirsProp(),
                         String.join(",", node.logDataDirectories()));
                     props.put(KafkaConfig$.MODULE$.ListenerSecurityProtocolMapProp(),
@@ -371,10 +381,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     controller, futures::add);
             }
             for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
-                int nodeId = entry.getKey();
-                BrokerServer broker = entry.getValue();
-                formatNodeAndLog(nodes.brokerProperties(nodeId), broker.config().metadataLogDir(),
-                    broker, futures::add);
+                if (!controllers.containsKey(entry.getKey())) {
+                    int nodeId = entry.getKey();
+                    BrokerServer broker = entry.getValue();
+                    formatNodeAndLog(nodes.brokerProperties(nodeId), broker.config().metadataLogDir(),
+                            broker, futures::add);
+                }
             }
             for (Future<?> future: futures) {
                 future.get();
