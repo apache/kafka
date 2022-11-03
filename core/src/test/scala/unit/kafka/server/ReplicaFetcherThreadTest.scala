@@ -17,7 +17,7 @@
 package kafka.server
 
 import kafka.cluster.{BrokerEndPoint, Partition}
-import kafka.log.{HighWatermarkUpdate, LogAppendInfo, LogManager, UnifiedLog}
+import kafka.log.{LogAppendInfo, LogManager, UnifiedLog}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.epoch.util.MockBlockingSender
@@ -45,6 +45,8 @@ import java.util
 import java.util.{Collections, Optional}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
@@ -1100,23 +1102,19 @@ class ReplicaFetcherThreadTest {
     assertEquals(Collections.singletonList(tid1p0), fetchRequestBuilder2.removed())
   }
 
-  @Test
-  def testFetchResponseWithPartitionData(): Unit = {
-    verifyLocalFetchCompletionAfterHighWatermarkUpdate(hasHighWatermarkChanged = true)
-    verifyLocalFetchCompletionAfterHighWatermarkUpdate(hasHighWatermarkChanged = false)
-  }
-
-  private def verifyLocalFetchCompletionAfterHighWatermarkUpdate(hasHighWatermarkChanged: Boolean): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testLocalFetchCompletionIfHighWatermarkUpdated(highWatermarkUpdated: Boolean): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     val config = KafkaConfig.fromProps(props)
-    val newHighWatermark = 100L
+    val highWatermarkReceivedFromLeader = 100L
 
     val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
     when(mockBlockingSend.brokerEndPoint()).thenReturn(brokerEndPoint)
 
     val log: UnifiedLog = mock(classOf[UnifiedLog])
-    when(log.updateHighWatermark(newHighWatermark))
-      .thenReturn(HighWatermarkUpdate(newHighWatermark, hasHighWatermarkChanged))
+    when(log.maybeUpdateHighWatermark(highWatermarkReceivedFromLeader))
+      .thenReturn(highWatermarkUpdated)
 
     val appendInfo: Option[LogAppendInfo] = Some(mock(classOf[LogAppendInfo]))
 
@@ -1144,18 +1142,20 @@ class ReplicaFetcherThreadTest {
     val tp1 = new TopicPartition("testTopic", 1)
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
-    val partitionData = new FetchResponseData.PartitionData().setRecords(records)
+    val partitionData = new FetchResponseData.PartitionData()
+      .setRecords(records)
+      .setHighWatermark(highWatermarkReceivedFromLeader)
 
-    thread.processPartitionData(tp0, 0, partitionData.setPartitionIndex(0).setHighWatermark(newHighWatermark))
-    thread.processPartitionData(tp1, 0, partitionData.setPartitionIndex(1).setHighWatermark(newHighWatermark))
+    thread.processPartitionData(tp0, 0, partitionData.setPartitionIndex(0))
+    thread.processPartitionData(tp1, 0, partitionData.setPartitionIndex(1))
     thread.doWork()
 
-    if (hasHighWatermarkChanged) {
+    if (highWatermarkUpdated) {
       verify(replicaManager, times(1)).completeDelayedFetchRequests(Seq(tp0, tp1))
     } else {
       verify(replicaManager, times(0)).completeDelayedFetchRequests(any[Seq[TopicPartition]])
     }
-    assertEquals(mutable.Buffer.empty, thread.partitionsWithNewRecords)
+    assertEquals(mutable.Buffer.empty, thread.partitionsWithNewHighWatermark)
   }
 
   private def newOffsetForLeaderPartitionResult(

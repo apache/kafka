@@ -42,16 +42,18 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   def overridingProps: Properties = {
     val props = new Properties
     props.put(KafkaConfig.NumPartitionsProp, numParts.toString)
-
     props
   }
 
-  override def generateConfigs: collection.Seq[KafkaConfig] =
+  override def generateConfigs: collection.Seq[KafkaConfig] = {
     TestUtils.createBrokerConfigs(numNodes, zkConnectOrNull, enableControlledShutdown = false, enableFetchFromFollower = true)
       .map(KafkaConfig.fromProps(_, overridingProps))
+  }
 
-  @BeforeEach
-  def initializeFetchFromFollowerCluster(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  @Timeout(15)
+  def testFollowerCompleteDelayedFetchesOnReplication(quorum: String): Unit = {
     // Create a 2 broker cluster where broker 0 is the leader and 1 is the follower.
     admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
@@ -60,22 +62,14 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       brokers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
-  }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  @Timeout(15)
-  def testFollowerCompleteDelayedPurgatoryOnReplication(quorum: String): Unit = {
     // Set fetch.max.wait.ms to a value (20 seconds) greater than the timeout (15 seconds).
     // Send a fetch request before the record is replicated to ensure that the replication
     // triggers purgatory completion.
 
-    val numMessages = 1
     val version = ApiKeys.FETCH.latestVersion()
     val topicPartition = new TopicPartition(topic, 0)
-    val offsetMap = Map[TopicPartition, Long](
-      topicPartition -> 0
-    )
+    val offsetMap = Map(topicPartition -> 0L)
 
     val fetchRequest = createConsumerFetchRequest(
       maxResponseBytes = 1000,
@@ -90,11 +84,10 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     val socket = connect(brokerSocketServer(followerBrokerId))
     try {
       send(fetchRequest, socket)
-      TestUtils.generateAndProduceMessages(brokers, topic, numMessages)
+      TestUtils.generateAndProduceMessages(brokers, topic, numMessages = 1)
       val response = receive[FetchResponse](socket, ApiKeys.FETCH, version)
       assertEquals(Errors.NONE, response.error())
-      response.errorCounts().keySet().asScala.foreach { error => assertEquals(Errors.NONE, error)}
-
+      assertEquals(Map(Errors.NONE -> 2).asJava, response.errorCounts())
     } finally {
       socket.close()
     }

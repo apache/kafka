@@ -44,7 +44,7 @@ class ReplicaFetcherThread(name: String,
   this.logIdent = logPrefix
 
   // Visible for testing
-  private[server] val partitionsWithNewRecords = mutable.Buffer[TopicPartition]()
+  private[server] val partitionsWithNewHighWatermark = mutable.Buffer[TopicPartition]()
 
   override protected val isOffsetForLeaderEpochSupported: Boolean = metadataVersionSupplier().isOffsetForLeaderEpochSupported
 
@@ -127,11 +127,7 @@ class ReplicaFetcherThread(name: String,
 
     // For the follower replica, we do not need to keep its segment base offset and physical position.
     // These values will be computed upon becoming leader or handling a preferred read replica fetch.
-    val highWatermarkUpdate = log.updateHighWatermark(partitionData.highWatermark)
-    info(s"follower high watermark: ${highWatermarkUpdate.highWatermark}")
     log.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented)
-    if (logTrace)
-      trace(s"Follower set replica high watermark for partition $topicPartition to ${highWatermarkUpdate.highWatermark}")
 
     // Traffic from both in-sync and out of sync replicas are accounted for in replication quota to ensure total replication
     // traffic doesn't exceed quota.
@@ -143,16 +139,19 @@ class ReplicaFetcherThread(name: String,
 
     brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
 
-    if (highWatermarkUpdate.hasHighWatermarkChanged) {
-      logAppendInfo.foreach { _ => partitionsWithNewRecords += topicPartition }
+    val highWatermarkChanged = log.maybeUpdateHighWatermark(partitionData.highWatermark)
+    if (highWatermarkChanged) {
+      logAppendInfo.foreach { _ => partitionsWithNewHighWatermark += topicPartition }
+      if (logTrace)
+        trace(s"Follower updated replica high watermark for partition $topicPartition to ${partitionData.highWatermark}")
     }
     logAppendInfo
   }
 
   private def completeDelayedFetchRequests(): Unit = {
-    if (partitionsWithNewRecords.nonEmpty) {
-      replicaMgr.completeDelayedFetchRequests(partitionsWithNewRecords.toSeq)
-      partitionsWithNewRecords.clear()
+    if (partitionsWithNewHighWatermark.nonEmpty) {
+      replicaMgr.completeDelayedFetchRequests(partitionsWithNewHighWatermark.toSeq)
+      partitionsWithNewHighWatermark.clear()
     }
   }
 

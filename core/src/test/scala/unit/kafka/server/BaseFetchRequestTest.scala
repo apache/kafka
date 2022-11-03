@@ -46,11 +46,15 @@ class BaseFetchRequestTest extends BaseRequestTest {
     super.tearDown()
   }
 
-  protected def createConsumerFetchRequest(maxResponseBytes: Int, maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
-                                   offsetMap: Map[TopicPartition, Long],
-                                   version: Short,
-                                   maxWaitMs: Int = Int.MaxValue,
-                                   minBytes: Int = 0): FetchRequest = {
+  protected def createConsumerFetchRequest(
+    maxResponseBytes: Int,
+    maxPartitionBytes: Int,
+    topicPartitions: Seq[TopicPartition],
+    offsetMap: Map[TopicPartition, Long],
+    version: Short,
+    maxWaitMs: Int = Int.MaxValue,
+    minBytes: Int = 0
+  ): FetchRequest = {
     FetchRequest.Builder.forConsumer(version, maxWaitMs, minBytes, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap))
       .setMaxBytes(maxResponseBytes).build()
   }
