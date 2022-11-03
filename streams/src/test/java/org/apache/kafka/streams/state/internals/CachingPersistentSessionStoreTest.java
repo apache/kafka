@@ -265,7 +265,7 @@ public class CachingPersistentSessionStoreTest {
     @Test
     public void shouldCloseWrappedStoreAndCacheAfterErrorDuringCacheFlush() {
         setUpCloseTests();
-        InOrder inOrder = inOrder(cache, underlyingStore);
+        final InOrder inOrder = inOrder(cache, underlyingStore);
         doThrow(new RuntimeException("Simulating an error on flush")).doNothing().when(cache).flush(CACHE_NAMESPACE);
 
         assertThrows(RuntimeException.class, cachingStore::close);
@@ -276,7 +276,7 @@ public class CachingPersistentSessionStoreTest {
     @Test
     public void shouldCloseWrappedStoreAfterErrorDuringCacheClose() {
         setUpCloseTests();
-        InOrder inOrder = inOrder(cache, underlyingStore);
+        final InOrder inOrder = inOrder(cache, underlyingStore);
         doThrow(new RuntimeException("Simulating an error on close")).doNothing().when(cache).close(CACHE_NAMESPACE);
 
         assertThrows(RuntimeException.class, cachingStore::close);
@@ -287,7 +287,7 @@ public class CachingPersistentSessionStoreTest {
     @Test
     public void shouldCloseCacheAfterErrorDuringWrappedStoreClose() {
         setUpCloseTests();
-        InOrder inOrder = inOrder(cache);
+        final InOrder inOrder = inOrder(cache);
         doThrow(new RuntimeException("Simulating an error on close")).doNothing().when(underlyingStore).close();
 
         assertThrows(RuntimeException.class, cachingStore::close);

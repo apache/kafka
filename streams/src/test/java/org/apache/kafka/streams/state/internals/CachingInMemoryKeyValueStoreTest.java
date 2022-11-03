@@ -154,7 +154,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldCloseWrappedStoreAndCacheAfterErrorDuringCacheFlush() {
         setUpCloseTests();
-        InOrder inOrder = inOrder(cache, underlyingStore);
+        final InOrder inOrder = inOrder(cache, underlyingStore);
         doThrow(new RuntimeException("Simulating an error on flush")).when(cache).flush(CACHE_NAMESPACE);
 
         assertThrows(RuntimeException.class, store::close);
@@ -166,7 +166,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldCloseWrappedStoreAfterErrorDuringCacheClose() {
         setUpCloseTests();
-        InOrder inOrder = inOrder(cache, underlyingStore);
+        final InOrder inOrder = inOrder(cache, underlyingStore);
         doThrow(new RuntimeException("Simulating an error on close")).when(cache).close(CACHE_NAMESPACE);
 
         assertThrows(RuntimeException.class, store::close);
@@ -178,7 +178,7 @@ public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest 
     @Test
     public void shouldCloseCacheAfterErrorDuringStateStoreClose() {
         setUpCloseTests();
-        InOrder inOrder = inOrder(cache);
+        final InOrder inOrder = inOrder(cache);
         doThrow(new RuntimeException("Simulating an error on close")).when(underlyingStore).close();
 
         assertThrows(RuntimeException.class, store::close);
