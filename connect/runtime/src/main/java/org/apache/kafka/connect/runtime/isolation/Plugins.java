@@ -133,6 +133,21 @@ public class Plugins {
         return current;
     }
 
+    /**
+     * Perform the following operations with a specified thread context classloader.
+     * <p>
+     * Intended for use in a try-with-resources block such as the following:
+     * <pre>{@code
+     * try (LoaderSwap loaderSwap = plugins.withClassLoader(loader)) {
+     *     // operation(s) sensitive to the thread context classloader
+     * }
+     * }</pre>
+     * After the completion of the try block, the previous context classloader will be restored.
+     * @see Thread#getContextClassLoader()
+     * @see LoaderSwap
+     * @param loader ClassLoader to use as the thread context classloader
+     * @return A {@link LoaderSwap} handle which restores the prior classloader on {@link LoaderSwap#close()}.
+     */
     public LoaderSwap withClassLoader(ClassLoader loader) {
         ClassLoader savedLoader = compareAndSwapLoaders(loader);
         try {
@@ -143,6 +158,13 @@ public class Plugins {
         }
     }
 
+    /**
+     * Wrap a {@link Runnable} such that it is performed with the specified thread context classloader
+     * @see Thread#getContextClassLoader()
+     * @param classLoader {@link ClassLoader} to use as the thread context classloader
+     * @param operation {@link Runnable} which is sensitive to the thread context classloader
+     * @return A wrapper {@link Runnable} which will execute the wrapped operation
+     */
     public Runnable withClassLoader(ClassLoader classLoader, Runnable operation) {
         return () -> {
             try (LoaderSwap loaderSwap = withClassLoader(classLoader)) {

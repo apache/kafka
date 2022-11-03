@@ -151,19 +151,6 @@ public class AbstractHerderTest {
     @Mock private LoaderSwap loaderSwap;
     @Mock private Plugins plugins;
 
-    private ClassLoader loader;
-    private Connector connector;
-
-    @Before
-    public void before() {
-        loader = Utils.getContextOrKafkaClassLoader();
-    }
-
-    @After
-    public void tearDown() {
-        if (loader != null) Plugins.compareAndSwapLoaders(loader);
-    }
-
     @Test
     public void testConnectors() {
         AbstractHerder herder = mock(AbstractHerder.class, withSettings()
@@ -1085,7 +1072,6 @@ public class AbstractHerderTest {
             when(plugins.connectorLoader(connectorClass.getName())).thenReturn(classLoader);
             when(plugins.withClassLoader(classLoader)).thenReturn(loaderSwap);
         }
-        this.connector = connector;
         return herder;
     }
 

@@ -455,11 +455,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             throw new BadRequestException("Connector config " + connectorProps + " contains no connector type");
 
         Connector connector = getConnector(connType);
-        org.apache.kafka.connect.health.ConnectorType connectorType;
         ClassLoader connectorLoader = plugins().connectorLoader(connType);
-        ConfigDef enrichedConfigDef;
-        Map<String, ConfigValue> validatedConnectorConfig;
         try (LoaderSwap loaderSwap = plugins().withClassLoader(connectorLoader)) {
+            org.apache.kafka.connect.health.ConnectorType connectorType;
+            ConfigDef enrichedConfigDef;
+            Map<String, ConfigValue> validatedConnectorConfig;
             if (connector instanceof SourceConnector) {
                 connectorType = org.apache.kafka.connect.health.ConnectorType.SOURCE;
                 enrichedConfigDef = ConnectorConfig.enrich(plugins(), SourceConnectorConfig.configDef(), connectorProps, false);
