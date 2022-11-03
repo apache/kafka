@@ -29,7 +29,6 @@ import kafka.tools.StorageTool;
 import kafka.utils.Logging;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.ThreadUtils;
@@ -198,9 +197,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
                     KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
-                    String threadNamePrefix = String.format("controller%d", node.id());
                     MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id());
-                    TopicPartition metadataPartition = new TopicPartition(KafkaRaftServer.MetadataTopic(), 0);
                     BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
                         fromVersion(nodes.bootstrapMetadataVersion(), "testkit");
                     JointServer jointServer = new JointServer(config,
@@ -257,19 +254,17 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     props.putAll(node.propertyOverrides());
                     KafkaConfig config = new KafkaConfig(props, false, Option.empty());
 
-                    String threadNamePrefix = String.format("broker%d_", node.id());
-                    JointServer jointServer;
-                    if (jointServers.containsKey(node.id())) {
-                        jointServer = jointServers.get(node.id());
-                    } else {
+                    JointServer jointServer = jointServers.get(node.id());
+                    if (jointServer == null) {
                         MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id());
                         jointServer = new JointServer(config,
                                 metaProperties,
                                 Time.SYSTEM,
                                 new Metrics(),
-                                Option.apply(String.format("controller%d_", node.id())),
+                                Option.apply(String.format("broker%d_", node.id())),
                                 connectFutureManager.future,
                                 faultHandlerFactory);
+                        jointServers.put(node.id(), jointServer);
                     }
                     BrokerServer broker = null;
                     try {

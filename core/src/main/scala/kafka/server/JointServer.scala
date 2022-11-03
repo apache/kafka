@@ -208,6 +208,7 @@ class JointServer(
         metrics,
         threadNamePrefix,
         controllerQuorumVotersFuture)
+      raftManager.startup()
       snapshotEmitter = new SnapshotEmitter.Builder().
         setNodeId(config.nodeId).
         setRaftClient(raftManager.client).
@@ -228,9 +229,14 @@ class JointServer(
         loaderBuilder.setMetadataLoaderMetrics(brokerMetrics)
       }
       metadataLoader = loaderBuilder.build()
+      metadataLoader.installPublishers(util.Arrays.asList(snapshotGenerator))
       raftManager.client.register(metadataLoader)
+      debug("Completed JointServer startup.")
     } catch {
-      case e: Throwable => stop()
+      case e: Throwable => {
+        error("Got exception while starting JointServer", e)
+        stop()
+      }
     }
   }
 

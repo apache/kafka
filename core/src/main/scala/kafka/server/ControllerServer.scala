@@ -109,8 +109,6 @@ class ControllerServer(
   def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
     try {
-      jointServer.startForController()
-
       info("Starting controller")
 
       maybeChangeStatus(STARTING, STARTED)
@@ -166,7 +164,7 @@ class ControllerServer(
         throw new ConfigException("No controller.listener.names defined for controller")
       }
 
-      val threadNamePrefixAsString = jointServer.threadNamePrefix.getOrElse("")
+      jointServer.startForController()
 
       createTopicPolicy = Option(config.
         getConfiguredInstance(CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
@@ -190,7 +188,7 @@ class ControllerServer(
 
         new QuorumController.Builder(config.nodeId, jointServer.metaProps.clusterId).
           setTime(time).
-          setThreadNamePrefix(threadNamePrefixAsString).
+          setThreadNamePrefix(jointServer.threadNamePrefix.getOrElse("")).
           setConfigSchema(configSchema).
           setRaftClient(jointServer.raftManager.client).
           setQuorumFeatures(quorumFeatures).
