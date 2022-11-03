@@ -28,9 +28,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 import java.nio.charset.StandardCharsets
-import java.util
 import java.util.{Collections, Properties}
-import scala.collection.JavaConverters._
 
 class DegradedLeaderTest extends ZooKeeperTestHarness {
   @Test
