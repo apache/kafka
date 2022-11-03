@@ -14,9 +14,8 @@ package kafka.api
 
 import java.nio.file.Files
 import java.time.Duration
-import java.util.Collections
+import java.util.{Collections, Properties}
 import java.util.concurrent.{ExecutionException, TimeUnit}
-
 import scala.jdk.CollectionConverters._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
@@ -30,6 +29,8 @@ import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with SaslSetup {
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
@@ -76,14 +77,24 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     closeSasl()
   }
 
-  @Test
-  def testProducerWithAuthenticationFailure(): Unit = {
-    val producer = createProducer()
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testProducerWithAuthenticationFailure(isIdempotenceEnabled: Boolean): Unit = {
+    val prop = new Properties()
+    prop.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, isIdempotenceEnabled.toString)
+    val producer = createProducer(configOverrides = prop)
+
     verifyAuthenticationException(sendOneRecord(producer, maxWaitMs = 10000))
     verifyAuthenticationException(producer.partitionsFor(topic))
 
     createClientCredential()
-    verifyWithRetry(sendOneRecord(producer))
+    // in idempotence producer, we need to create another producer because the previous one is in FATEL_ERROR state (due to authentication error)
+    // If the transaction state in FATAL_ERROR, it'll never transit to other state. check TransactionManager#isTransitionValid for detail
+    val producer2 = if (isIdempotenceEnabled)
+      createProducer(configOverrides = prop)
+    else
+      producer
+    verifyWithRetry(sendOneRecord(producer2))
   }
 
   @Test

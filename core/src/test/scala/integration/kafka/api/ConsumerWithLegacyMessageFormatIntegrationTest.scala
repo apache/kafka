@@ -18,6 +18,7 @@ package kafka.api
 
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
+import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows}
 import org.junit.jupiter.api.Test
@@ -101,7 +102,10 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
   def testEarliestOrLatestOffsets(): Unit = {
     val topic0 = "topicWithNewMessageFormat"
     val topic1 = "topicWithOldMessageFormat"
-    val producer = createProducer()
+    val prop = new Properties()
+    // idempotence producer doesn't support old version of messages
+    prop.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
+    val producer = createProducer(configOverrides = prop)
     createTopicAndSendRecords(producer, topicName = topic0, numPartitions = 2, recordsPerPartition = 100)
     val props = new Properties()
     props.setProperty(LogConfig.MessageFormatVersionProp, "0.9.0")
