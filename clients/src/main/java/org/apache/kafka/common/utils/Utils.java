@@ -1460,7 +1460,7 @@ public final class Utils {
      * @return string value of a given timestamp in the format "yyyy-MM-dd HH:mm:ss,SSS"
      */
     public static String toLogDateTimeFormat(long timestamp) {
-        final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss,SSS");
+        final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss,SSS XXX");
         return Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault()).format(dateTimeFormatter);
     }
 
