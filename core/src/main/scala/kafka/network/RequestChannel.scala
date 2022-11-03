@@ -25,7 +25,7 @@ import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network
-import kafka.server.{BrokerMetadataStats, Defaults, KafkaConfig, Observer}
+import kafka.server.{BrokerMetadataStats, KafkaConfig, Observer}
 import kafka.utils.{Logging, NotNothing, Pool}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource

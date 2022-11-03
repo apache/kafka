@@ -24,8 +24,8 @@ import java.nio.ByteBuffer
 import java.util.{Collections, Optional, Properties}
 import com.fasterxml.jackson.databind.ObjectMapper
 import kafka.network
-import kafka.network.RequestChannel.{Metrics, Request}
-import kafka.server.{Defaults, KafkaConfig}
+import kafka.network.RequestChannel.Metrics
+import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.TopicPartition
