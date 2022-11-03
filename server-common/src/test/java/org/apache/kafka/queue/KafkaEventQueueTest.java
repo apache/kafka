@@ -244,13 +244,16 @@ public class KafkaEventQueueTest {
     }
 
     @Test
-    public void testEmpty() throws Exception {
+    public void testSize() throws Exception {
         KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
                 "testEmpty");
         assertTrue(queue.isEmpty());
         CompletableFuture<Void> future = new CompletableFuture<>();
         queue.append(() -> future.get());
         assertFalse(queue.isEmpty());
+        assertEquals(1, queue.size());
+        queue.append(() -> future.get());
+        assertEquals(2, queue.size());
         future.complete(null);
         TestUtils.waitForCondition(() -> queue.isEmpty(), "Failed to see the queue become empty.");
         queue.scheduleDeferred("later",

@@ -147,6 +147,8 @@ public final class KafkaEventQueue implements EventQueue {
     }
 
     private class EventHandler implements Runnable {
+        private int size = 0;
+
         /**
          * Event contexts indexed by tag.  Events without a tag are not included here.
          */
@@ -195,13 +197,19 @@ public final class KafkaEventQueue implements EventQueue {
             while (true) {
                 if (toTimeout != null) {
                     toTimeout.completeWithTimeout();
-                    toTimeout = null;
                 } else if (toRun != null) {
                     toRun.run(log);
-                    toRun = null;
                 }
                 lock.lock();
                 try {
+                    if (toTimeout != null) {
+                        size--;
+                        toTimeout = null;
+                    }
+                    if (toRun != null) {
+                        size--;
+                        toRun = null;
+                    }
                     long awaitNs = Long.MAX_VALUE;
                     Map.Entry<Long, EventContext> entry = deadlineMap.firstEntry();
                     if (entry != null) {
@@ -272,6 +280,7 @@ public final class KafkaEventQueue implements EventQueue {
                     if (toRemove != null) {
                         existingDeadlineNs = toRemove.deadlineNs;
                         remove(toRemove);
+                        size--;
                     }
                 }
                 OptionalLong deadlineNs = deadlineNsCalculator.apply(existingDeadlineNs);
@@ -311,6 +320,7 @@ public final class KafkaEventQueue implements EventQueue {
                         shouldSignal = true;
                     }
                 }
+                size++;
                 if (shouldSignal) {
                     cond.signal();
                 }
@@ -326,6 +336,7 @@ public final class KafkaEventQueue implements EventQueue {
                 EventContext eventContext = tagToEventContext.get(tag);
                 if (eventContext != null) {
                     remove(eventContext);
+                    size--;
                 }
             } finally {
                 lock.unlock();
@@ -341,12 +352,10 @@ public final class KafkaEventQueue implements EventQueue {
             }
         }
 
-        boolean isEmpty() {
+        int size() {
             lock.lock();
             try {
-                if (head != head.next) return false;
-                if (!deadlineMap.isEmpty()) return false;
-                return true;
+                return size;
             } finally {
                 lock.unlock();
             }
@@ -424,8 +433,8 @@ public final class KafkaEventQueue implements EventQueue {
     }
 
     @Override
-    public boolean isEmpty() {
-        return eventHandler.isEmpty();
+    public int size() {
+        return eventHandler.size();
     }
 
     @Override
