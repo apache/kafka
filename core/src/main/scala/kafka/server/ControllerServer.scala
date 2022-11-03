@@ -17,38 +17,32 @@
 
 package kafka.server
 
-import java.util
 import java.util.OptionalLong
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import kafka.cluster.Broker.ServerInfo
 import kafka.metrics.{KafkaMetricsGroup, LinuxIoMetricsCollector}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
-import kafka.raft.RaftManager
+import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
 import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.DynamicConfigPublisher
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.clients.ApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.controller.{Controller, ControllerMetrics, QuorumController, QuorumFeatures}
+import org.apache.kafka.controller.{Controller, QuorumController, QuorumControllerMetrics, QuorumFeatures}
 import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.image.loader.MetadataLoader
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
-import org.apache.kafka.server.fault.FaultHandler
+import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 
@@ -60,24 +54,16 @@ import scala.compat.java8.OptionConverters._
  * A Kafka controller that runs in KRaft (Kafka Raft) mode.
  */
 class ControllerServer(
-  val metaProperties: MetaProperties,
-  val config: KafkaConfig,
-  val raftManager: RaftManager[ApiMessageAndVersion],
-  val time: Time,
-  val metrics: Metrics,
-  val controllerMetrics: ControllerMetrics,
-  val threadNamePrefix: Option[String],
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
+  val jointServer: JointServer,
   val configSchema: KafkaConfigSchema,
-  val raftApiVersions: ApiVersions,
   val bootstrapMetadata: BootstrapMetadata,
-  val metadataFaultHandler: FaultHandler,
-  val fatalFaultHandler: FaultHandler,
-  val metadataLoader: MetadataLoader,
 ) extends Logging with KafkaMetricsGroup {
-  import kafka.server.Server._
+  val config = jointServer.config
+  val time = jointServer.time
+  val metrics = jointServer.metrics
+  def raftManager: KafkaRaftManager[ApiMessageAndVersion] = jointServer.raftManager
 
-  config.dynamicConfig.initialize(zkClientOpt = None)
+  import kafka.server.Server._
 
   val lock = new ReentrantLock()
   val awaitShutdownCond = lock.newCondition()
@@ -91,6 +77,7 @@ class ControllerServer(
   val socketServerFirstBoundPortFuture = new CompletableFuture[Integer]()
   var createTopicPolicy: Option[CreateTopicPolicy] = None
   var alterConfigPolicy: Option[AlterConfigPolicy] = None
+  var controllerMetrics: QuorumControllerMetrics = _
   var controller: Controller = _
   var quotaManagers: QuotaManagers = _
   var controllerApis: ControllerApis = _
@@ -117,11 +104,13 @@ class ControllerServer(
     new DynamicMetricReporterState(config.nodeId, config, metrics, clusterId)
   }
 
-  def clusterId: String = metaProperties.clusterId
+  def clusterId: String = jointServer.metaProps.clusterId
 
   def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
     try {
+      jointServer.startForController()
+
       info("Starting controller")
 
       maybeChangeStatus(STARTING, STARTED)
@@ -177,15 +166,18 @@ class ControllerServer(
         throw new ConfigException("No controller.listener.names defined for controller")
       }
 
-      val threadNamePrefixAsString = threadNamePrefix.getOrElse("")
+      val threadNamePrefixAsString = jointServer.threadNamePrefix.getOrElse("")
 
       createTopicPolicy = Option(config.
         getConfiguredInstance(CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get())
-      val quorumFeatures = QuorumFeatures.create(config.nodeId, raftApiVersions, QuorumFeatures.defaultFeatureMap(), controllerNodes)
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(jointServer.controllerQuorumVotersFuture.get())
+      val quorumFeatures = QuorumFeatures.create(config.nodeId,
+        jointServer.raftManager.apiVersions,
+        QuorumFeatures.defaultFeatureMap(),
+        controllerNodes)
 
       val controllerBuilder = {
         val leaderImbalanceCheckIntervalNs = if (config.autoLeaderRebalanceEnable) {
@@ -196,11 +188,11 @@ class ControllerServer(
 
         val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.fold(OptionalLong.empty)(OptionalLong.of)
 
-        new QuorumController.Builder(config.nodeId, metaProperties.clusterId).
+        new QuorumController.Builder(config.nodeId, jointServer.metaProps.clusterId).
           setTime(time).
           setThreadNamePrefix(threadNamePrefixAsString).
           setConfigSchema(configSchema).
-          setRaftClient(raftManager.client).
+          setRaftClient(jointServer.raftManager.client).
           setQuorumFeatures(quorumFeatures).
           setDefaultReplicationFactor(config.defaultReplicationFactor.toShort).
           setDefaultNumPartitions(config.numPartitions.intValue()).
@@ -208,13 +200,13 @@ class ControllerServer(
             TimeUnit.MILLISECONDS)).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
           setMaxIdleIntervalNs(maxIdleIntervalNs).
-          setMetrics(controllerMetrics).
+          setMetrics(jointServer.controllerMetrics).
           setCreateTopicPolicy(createTopicPolicy.asJava).
           setAlterConfigPolicy(alterConfigPolicy.asJava).
           setConfigurationValidator(new ControllerConfigurationValidator()).
           setStaticConfig(config.originals).
           setBootstrapMetadata(bootstrapMetadata).
-          setFatalFaultHandler(fatalFaultHandler)
+          setFatalFaultHandler(jointServer.quorumControllerFaultHandler)
       }
       authorizer match {
         case Some(a: ClusterMetadataAuthorizer) => controllerBuilder.setAuthorizer(a)
@@ -227,15 +219,15 @@ class ControllerServer(
         doRemoteKraftSetup()
       }
 
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
+      quotaManagers = QuotaFactory.instantiate(config, metrics, time, jointServer.threadNamePrefix.getOrElse(""))
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
         quotaManagers,
         time,
         controller,
-        raftManager,
+        jointServer.raftManager,
         config,
-        metaProperties,
+        jointServer.metaProps,
         controllerNodes.asScala.toSeq,
         apiVersionManager)
       controllerApisHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
@@ -271,9 +263,9 @@ class ControllerServer(
         ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
       dynamicConfigPublisher = new DynamicConfigPublisher(
         config,
-        fatalFaultHandler,
+        jointServer.metadataPublishingFaultHandler,
         dynamicConfigHandlers)
-      metadataLoader.installPublishers(List(dynamicConfigPublisher).asJava)
+      jointServer.metadataLoader.installPublishers(List(dynamicConfigPublisher).asJava)
     }
   }
 
@@ -286,7 +278,10 @@ class ControllerServer(
       if (controller != null) {
         controller.beginShutdown()
       }
-      metadataLoader.beginShutdown()
+      if (controllerMetrics != null) {
+        CoreUtils.swallow(controllerApis.close(), this)
+        controllerMetrics = null
+      }
       if (socketServer != null)
         CoreUtils.swallow(socketServer.shutdown(), this)
       if (controllerApisHandlerPool != null)
@@ -297,11 +292,11 @@ class ControllerServer(
         CoreUtils.swallow(quotaManagers.shutdown(), this)
       if (controller != null)
         controller.close()
-      CoreUtils.swallow(metadataLoader.close(), this)
       CoreUtils.swallow(authorizer.foreach(_.close()), this)
       createTopicPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
       alterConfigPolicy.foreach(policy => CoreUtils.swallow(policy.close(), this))
       socketServerFirstBoundPortFuture.completeExceptionally(new RuntimeException("shutting down"))
+      jointServer.stopForController()
     } catch {
       case e: Throwable =>
         fatal("Fatal error during controller shutdown.", e)

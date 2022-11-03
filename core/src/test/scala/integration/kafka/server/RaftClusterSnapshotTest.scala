@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import kafka.raft.KafkaRaftManager
+
 import java.util.Collections
 import kafka.testkit.KafkaClusterTestKit
 import kafka.testkit.TestKitNodes
@@ -24,16 +26,21 @@ import kafka.utils.TestUtils
 import kafka.server.KafkaConfig.{MetadataMaxIdleIntervalMsProp, MetadataSnapshotMaxNewRecordBytesProp}
 import org.apache.kafka.common.utils.BufferSupplier
 import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.snapshot.RecordsSnapshotReader
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
 class RaftClusterSnapshotTest {
+  private def allRaftManagers(cluster: KafkaClusterTestKit): Iterable[KafkaRaftManager[ApiMessageAndVersion]] = {
+    (cluster.brokers().values().asScala.map(_.jointServer.raftManager) ++
+      cluster.controllers().values().asScala.map(_.jointServer.raftManager))
+  }
 
   @Test
   def testSnapshotsGenerated(): Unit = {
@@ -58,21 +65,17 @@ class RaftClusterSnapshotTest {
       // Check that every controller and broker has a snapshot
       TestUtils.waitUntilTrue(
         () => {
-          cluster.raftManagers().asScala.forall { case (_, raftManager) =>
-            raftManager.replicatedLog.latestSnapshotId.isPresent
+          allRaftManagers(cluster).forall {
+            case raftManager => raftManager.replicatedLog.latestSnapshotId().isPresent
           }
         },
         s"Expected for every controller and broker to generate a snapshot: ${
-          cluster.raftManagers().asScala.map { case (id, raftManager) =>
-            (id, raftManager.replicatedLog.latestSnapshotId)
-          }
+          allRaftManagers(cluster).map(_.replicatedLog.latestSnapshotId())
         }"
       )
 
-      assertEquals(numberOfControllers + numberOfBrokers, cluster.raftManagers.size())
-
       // For every controller and broker perform some sanity checks against the lastest snapshot
-      for ((_, raftManager) <- cluster.raftManagers().asScala) {
+      allRaftManagers(cluster).foreach(raftManager => {
         TestUtils.resource(
           RecordsSnapshotReader.of(
             raftManager.replicatedLog.latestSnapshot.get(),
@@ -92,7 +95,7 @@ class RaftClusterSnapshotTest {
             assertNotEquals(Collections.emptyList(), batch.records())
           }
         }
-      }
+      })
     }
   }
 }

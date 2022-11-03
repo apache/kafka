@@ -27,28 +27,24 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
-import kafka.raft.RaftManager
+import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.metadata.{BrokerMetadataPublisher, ClientQuotaMetadataManager, DynamicConfigPublisher, KRaftMetadataCache}
 import kafka.utils.{CoreUtils, KafkaScheduler}
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
-import org.apache.kafka.image.loader.MetadataLoader
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
-import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import scala.collection.{Map, Seq}
@@ -59,18 +55,14 @@ import scala.jdk.CollectionConverters._
  * A Kafka broker that runs in KRaft (Kafka Raft) mode.
  */
 class BrokerServer(
-  val config: KafkaConfig,
-  val metaProps: MetaProperties,
-  val raftManager: RaftManager[ApiMessageAndVersion],
-  val time: Time,
-  val metrics: Metrics,
-  val threadNamePrefix: Option[String],
+  val jointServer: JointServer,
   val initialOfflineDirs: Seq[String],
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
-  val fatalFaultHandler: FaultHandler,
-  val metadataPublishingFaultHandler: FaultHandler,
-  val metadataLoader: MetadataLoader,
 ) extends KafkaBroker {
+  val threadNamePrefix = jointServer.threadNamePrefix
+  val config = jointServer.config
+  val time = jointServer.time
+  val metrics = jointServer.metrics
+  def raftManager: KafkaRaftManager[ApiMessageAndVersion] = jointServer.raftManager
 
   class Builder
 
@@ -132,7 +124,7 @@ class BrokerServer(
 
   @volatile var brokerTopicStats: BrokerTopicStats = _
 
-  val clusterId: String = metaProps.clusterId
+  val clusterId: String = jointServer.metaProps.clusterId
 
   var metadataPublisher: BrokerMetadataPublisher = _
 
@@ -164,9 +156,9 @@ class BrokerServer(
   override def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
     try {
-      info("Starting broker")
+      jointServer.startForBroker()
 
-      config.dynamicConfig.initialize(zkClientOpt = None)
+      info("Starting broker")
 
       lifecycleManager = new BrokerLifecycleManager(config,
         time,
@@ -195,8 +187,8 @@ class BrokerServer(
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-      val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
-      val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(jointServer.controllerQuorumVotersFuture.get()).asScala
+      val controllerNodeProvider = RaftControllerNodeProvider(jointServer.raftManager, config, controllerNodes)
 
       clientToControllerChannelManager = BrokerToControllerChannelManager(
         controllerNodeProvider,
@@ -312,9 +304,9 @@ class BrokerServer(
         config.brokerSessionTimeoutMs.toLong
       )
       lifecycleManager.start(
-        () => metadataLoader.lastAppliedOffset(),
+        () => jointServer.metadataLoader.lastAppliedOffset(),
         brokerLifecycleChannelManager,
-        metaProps.clusterId,
+        clusterId,
         networkListeners,
         featuresRemapped
       )
@@ -390,13 +382,14 @@ class BrokerServer(
       // Block until we've caught up with the latest metadata from the controller quorum.
       info("Waiting for broker metadata to catch up.")
       try {
-        lifecycleManager.initialCatchUpFuture.get()
+        lifecycleManager.initialCatchUpFuture.get(20, TimeUnit.SECONDS)
       } catch {
         case t: Throwable => throw new RuntimeException("Received a fatal error while " +
           "waiting for the broker to catch up with the current cluster metadata.", t)
       }
 
       // Apply the metadata log changes that we've accumulated.
+      val metadataPublishingFaultHandler = jointServer.metadataPublishingFaultHandler
       metadataPublisher = new BrokerMetadataPublisher(config,
         metadataCache,
         logManager,
@@ -409,7 +402,7 @@ class BrokerServer(
           metadataPublishingFaultHandler,
           dynamicConfigHandlers.toMap),
         authorizer,
-        fatalFaultHandler,
+        jointServer.initialBrokerMetadataLoadFaultHandler,
         metadataPublishingFaultHandler)
 
       // Tell the metadata listener to start publishing its output, and wait for the first
@@ -417,7 +410,7 @@ class BrokerServer(
       // replicaManager, groupCoordinator, and txnCoordinator. The log manager may perform
       // a potentially lengthy recovery-from-unclean-shutdown operation here, if required.
       try {
-        metadataLoader.installPublishers(List(metadataPublisher).asJava).get()
+        jointServer.metadataLoader.installPublishers(List(metadataPublisher).asJava).get(20, TimeUnit.SECONDS)
       } catch {
         case t: Throwable => throw new RuntimeException("Received a fatal error while " +
           "publishing the initial metadata update.", t)
@@ -441,7 +434,7 @@ class BrokerServer(
       // We're now ready to unfence the broker. This also allows this broker to transition
       // from RECOVERY state to RUNNING state, once the controller unfences the broker.
       try {
-        lifecycleManager.setReadyToUnfence().get()
+        lifecycleManager.setReadyToUnfence().get(20, TimeUnit.SECONDS)
       } catch {
         case t: Throwable => throw new RuntimeException("Received a fatal error while " +
           "waiting for the broker to be unfenced.", t)
@@ -477,8 +470,6 @@ class BrokerServer(
         }
       }
 
-      metadataLoader.beginShutdown()
-
       lifecycleManager.beginShutdown()
 
       // Stop socket server to stop accepting any more connections and requests.
@@ -493,7 +484,6 @@ class BrokerServer(
       if (controlPlaneRequestProcessor != null)
         CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
       CoreUtils.swallow(authorizer.foreach(_.close()), this)
-      CoreUtils.swallow(metadataLoader.close(), this)
 
       /**
        * We must shutdown the scheduler early because otherwise, the scheduler could touch other
@@ -531,19 +521,18 @@ class BrokerServer(
       if (quotaManagers != null)
         CoreUtils.swallow(quotaManagers.shutdown(), this)
 
-      if (socketServer != null)
+      if (socketServer != null) {
         CoreUtils.swallow(socketServer.shutdown(), this)
+      }
       if (metrics != null)
         CoreUtils.swallow(metrics.close(), this)
       if (brokerTopicStats != null)
         CoreUtils.swallow(brokerTopicStats.close(), this)
 
-      // Clear all reconfigurable instances stored in DynamicBrokerConfig
-      config.dynamicConfig.clear()
-
       isShuttingDown.set(false)
 
       CoreUtils.swallow(lifecycleManager.close(), this)
+      jointServer.stopForBroker()
 
       CoreUtils.swallow(AppInfoParser.unregisterAppInfo(MetricsPrefix, config.nodeId.toString, metrics), this)
       info("shut down completed")

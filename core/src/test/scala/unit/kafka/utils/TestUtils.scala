@@ -1224,7 +1224,7 @@ object TestUtils extends Logging {
     TestUtils.waitUntilTrue(
       () => {
         brokers.forall { broker =>
-          val metadataOffset = broker.asInstanceOf[BrokerServer].metadataLoader.lastAppliedOffset()
+          val metadataOffset = broker.asInstanceOf[BrokerServer].jointServer.metadataLoader.lastAppliedOffset()
           metadataOffset >= controllerOffset
         }
       }, msg)
