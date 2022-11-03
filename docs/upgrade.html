@@ -76,7 +76,8 @@
 
 <h5><a id="upgrade_301_notable" href="#upgrade_301_notable">Notable changes in 3.0.1</a></h5>
 <ul>
-    <li>A bug prevented the producer idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
+    <li>Idempotence for the producer is enabled by default if no conflicting configurations are set.
+        A bug prevented the producer idempotence default from being applied which meant that it remained disabled unless the user had explicitly set
         <code>enable.idempotence</code> to true. See <a href="https://issues.apache.org/jira/browse/KAFKA-13598">KAFKA-13598</a>for more details.
         This issue was fixed and the default is properly applied.</li>
 </ul>

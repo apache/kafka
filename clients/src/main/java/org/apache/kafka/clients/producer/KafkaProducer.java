@@ -514,7 +514,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                                                          LogContext logContext) {
         TransactionManager transactionManager = null;
 
-        if (config.idempotenceEnabled()) {
+        if (config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG)) {
             final String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
             final int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
             final long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
