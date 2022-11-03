@@ -176,6 +176,7 @@ public class SnapshotGenerator implements MetadataPublisher {
         this.disabledReason = null;
         this.eventQueue = new KafkaEventQueue(time, logContext, "SnapshotGenerator" + nodeId);
         resetSnapshotCounters();
+        log.debug("Starting SnapshotGenerator.");
     }
 
     @Override
@@ -194,7 +195,8 @@ public class SnapshotGenerator implements MetadataPublisher {
         MetadataImage newImage,
         SnapshotManifest manifest
     ) {
-        // Reset the snapshot counters because we just read a snapshot.
+        log.debug("Resetting the snapshot counters because we just read a snapshot at offset {}.",
+                newImage.provenance().offset());
         resetSnapshotCounters();
     }
 
@@ -204,6 +206,8 @@ public class SnapshotGenerator implements MetadataPublisher {
         MetadataImage preVersionChangeImage,
         PreVersionChangeManifest manifest
     ) {
+        log.info("Scheduling snapshot on metadata version change from {} to {}.",
+                manifest.change().oldVersion(), manifest.change().newVersion());
         scheduleEmit("the metadata version changed", preVersionChangeImage);
     }
 
@@ -218,13 +222,19 @@ public class SnapshotGenerator implements MetadataPublisher {
             if (eventQueue.isEmpty()) {
                 scheduleEmit("we have replayed at least " + minBytesSinceLastSnapshot +
                     " bytes", newImage);
+            } else if (log.isTraceEnabled()) {
+                log.trace("Not scheduling bytes-based snapshot because event queue is not empty yet.");
             }
         } else if (maxTimeSinceLastSnapshotNs != 0 &&
                 (time.nanoseconds() - lastSnapshotTimeNs >= maxTimeSinceLastSnapshotNs)) {
             if (eventQueue.isEmpty()) {
                 scheduleEmit("we have waited at least " +
                     TimeUnit.NANOSECONDS.toMinutes(maxTimeSinceLastSnapshotNs) + " minute(s)", newImage);
+            } else if (log.isTraceEnabled()) {
+                log.trace("Not scheduling time-based snapshot because event queue is not empty yet.");
             }
+        } else if (log.isTraceEnabled()) {
+            log.trace("Neither time-based nor bytes-based criteria are met; not scheduling snapshot.");
         }
     }
 
@@ -252,6 +262,7 @@ public class SnapshotGenerator implements MetadataPublisher {
     }
 
     public void beginShutdown() {
+        log.debug("Beginning shutdown of SnapshotGenerator.");
         this.disabledReason = "we are shutting down";
         eventQueue.beginShutdown("beginShutdown");
     }
@@ -264,6 +275,7 @@ public class SnapshotGenerator implements MetadataPublisher {
     @Override
     public void close() throws InterruptedException {
         eventQueue.beginShutdown("close");
+        log.debug("Closing SnapshotGenerator.");
         eventQueue.close();
     }
 }
