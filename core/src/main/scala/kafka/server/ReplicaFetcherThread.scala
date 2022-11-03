@@ -139,11 +139,11 @@ class ReplicaFetcherThread(name: String,
 
     brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
 
-    val highWatermarkChanged = log.maybeUpdateHighWatermark(partitionData.highWatermark)
-    if (highWatermarkChanged) {
-      logAppendInfo.foreach { _ => partitionsWithNewHighWatermark += topicPartition }
+    log.maybeUpdateHighWatermark(partitionData.highWatermark).foreach { newHighWatermark =>
+      partitionsWithNewHighWatermark += topicPartition
       if (logTrace)
-        trace(s"Follower updated replica high watermark for partition $topicPartition to ${partitionData.highWatermark}")
+        trace(s"Follower received high watermark ${partitionData.highWatermark} from the leader and " +
+          s"updated replica high watermark to $newHighWatermark for partition $topicPartition")
     }
     logAppendInfo
   }

@@ -23,7 +23,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.FetchResponse
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{BeforeEach, Timeout}
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -54,7 +54,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   @ValueSource(strings = Array("zk", "kraft"))
   @Timeout(15)
   def testFollowerCompleteDelayedFetchesOnReplication(quorum: String): Unit = {
-    // Create a 2 broker cluster where broker 0 is the leader and 1 is the follower.
+    // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
     admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
       admin,
@@ -63,14 +63,13 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
 
-    // Set fetch.max.wait.ms to a value (20 seconds) greater than the timeout (15 seconds).
-    // Send a fetch request before the record is replicated to ensure that the replication
-    // triggers purgatory completion.
-
     val version = ApiKeys.FETCH.latestVersion()
     val topicPartition = new TopicPartition(topic, 0)
     val offsetMap = Map(topicPartition -> 0L)
 
+    // Set fetch.max.wait.ms to a value (20 seconds) greater than the timeout (15 seconds).
+    // Send a fetch request before the record is replicated to ensure that the replication
+    // triggers purgatory completion.
     val fetchRequest = createConsumerFetchRequest(
       maxResponseBytes = 1000,
       maxPartitionBytes = 1000,
