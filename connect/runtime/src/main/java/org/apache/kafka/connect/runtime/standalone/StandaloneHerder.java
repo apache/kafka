@@ -421,24 +421,19 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     private void updateConnectorTasks(String connName) {
-        try {
-            if (!worker.isRunning(connName)) {
-                log.info("Skipping update of connector {} since it is not running", connName);
-                return;
-            }
+        if (!worker.isRunning(connName)) {
+            log.info("Skipping update of connector {} since it is not running", connName);
+            return;
+        }
 
-            List<Map<String, String>> newTaskConfigs = recomputeTaskConfigs(connName);
-            List<Map<String, String>> oldTaskConfigs = configState.allTaskConfigs(connName);
+        List<Map<String, String>> newTaskConfigs = recomputeTaskConfigs(connName);
+        List<Map<String, String>> oldTaskConfigs = configState.allTaskConfigs(connName);
 
-            if (!newTaskConfigs.equals(oldTaskConfigs)) {
-                removeConnectorTasks(connName);
-                List<Map<String, String>> rawTaskConfigs = reverseTransform(connName, configState, newTaskConfigs);
-                configBackingStore.putTaskConfigs(connName, rawTaskConfigs);
-                createConnectorTasks(connName);
-            }
-        } catch (Throwable t) {
-            // TODO: when this throws errors where do they go
-            log.error("Unable to update connector tasks", t);
+        if (!newTaskConfigs.equals(oldTaskConfigs)) {
+            removeConnectorTasks(connName);
+            List<Map<String, String>> rawTaskConfigs = reverseTransform(connName, configState, newTaskConfigs);
+            configBackingStore.putTaskConfigs(connName, rawTaskConfigs);
+            createConnectorTasks(connName);
         }
     }
 
