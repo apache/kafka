@@ -193,10 +193,6 @@ public class DelegatingClassLoader extends URLClassLoader {
                : null;
     }
 
-    public ClassLoader connectorLoader(Connector connector) {
-        return connectorLoader(connector.getClass().getName());
-    }
-
     public ClassLoader connectorLoader(String connectorClassOrAlias) {
         String fullName = aliases.getOrDefault(connectorClassOrAlias, connectorClassOrAlias);
         ClassLoader classLoader = pluginClassLoader(fullName);

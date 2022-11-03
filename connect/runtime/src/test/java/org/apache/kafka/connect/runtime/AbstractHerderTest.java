@@ -33,6 +33,7 @@ import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverri
 import org.apache.kafka.connect.connector.policy.PrincipalConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
@@ -147,6 +148,7 @@ public class AbstractHerderTest {
     @Mock private ConfigBackingStore configStore;
     @Mock private StatusBackingStore statusStore;
     @Mock private ClassLoader classLoader;
+    @Mock private LoaderSwap loaderSwap;
     @Mock private Plugins plugins;
 
     private ClassLoader loader;
@@ -452,7 +454,8 @@ public class AbstractHerderTest {
         assertEquals(1, infos.get("required").configValue().errors().size());
 
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verify(plugins).withClassLoader(classLoader);
+        verify(loaderSwap).close();
     }
 
     @Test
@@ -468,7 +471,8 @@ public class AbstractHerderTest {
         assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verify(plugins).withClassLoader(classLoader);
+        verify(loaderSwap).close();
     }
 
     @Test
@@ -484,7 +488,8 @@ public class AbstractHerderTest {
         assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verify(plugins).withClassLoader(classLoader);
+        verify(loaderSwap).close();
     }
 
     @Test
@@ -500,7 +505,8 @@ public class AbstractHerderTest {
         assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verify(plugins).withClassLoader(classLoader);
+        verify(loaderSwap).close();
     }
 
     @Test
@@ -553,7 +559,8 @@ public class AbstractHerderTest {
 
         verify(plugins, times(2)).transformations();
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verify(plugins).withClassLoader(classLoader);
+        verify(loaderSwap).close();
     }
 
     @Test
@@ -616,7 +623,8 @@ public class AbstractHerderTest {
         verify(plugins).transformations();
         verify(plugins, times(2)).predicates();
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verify(plugins).withClassLoader(classLoader);
+        verify(loaderSwap).close();
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -669,7 +677,8 @@ public class AbstractHerderTest {
             configInfo -> saslConfigKey.equals(configInfo.configValue().name()) && configInfo.configValue().errors().isEmpty()));
 
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verify(plugins).withClassLoader(classLoader);
+        verify(loaderSwap).close();
     }
 
     @Test
@@ -720,7 +729,8 @@ public class AbstractHerderTest {
         assertEquals(rawOverriddenClientConfigs, validatedOverriddenClientConfigs);
 
         verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verify(plugins).withClassLoader(classLoader);
+        verify(loaderSwap).close();
     }
 
     @Test
@@ -1072,7 +1082,8 @@ public class AbstractHerderTest {
         }
         if (countOfCallingNewConnector > 0) {
             when(plugins.newConnector(connectorClass.getName())).thenReturn(connector);
-            when(plugins.compareAndSwapLoaders(connector)).thenReturn(classLoader);
+            when(plugins.connectorLoader(connectorClass.getName())).thenReturn(classLoader);
+            when(plugins.withClassLoader(classLoader)).thenReturn(loaderSwap);
         }
         this.connector = connector;
         return herder;

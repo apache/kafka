@@ -70,16 +70,13 @@ public class Plugins {
         return Utils.join(plugins, ", ");
     }
 
-    protected static <T> T newPlugin(Class<T> klass) {
+    private <T> T newPlugin(Class<T> klass) {
         // KAFKA-8340: The thread classloader is used during static initialization and must be
         // set to the plugin's classloader during instantiation
-        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
-        try {
+        try (LoaderSwap loaderSwap = withClassLoader(klass.getClassLoader())) {
             return Utils.newInstance(klass);
         } catch (Throwable t) {
             throw new ConnectException("Instantiation error", t);
-        } finally {
-            compareAndSwapLoaders(savedLoader);
         }
     }
 
@@ -128,21 +125,12 @@ public class Plugins {
         return current;
     }
 
-    public ClassLoader currentThreadLoader() {
-        return Thread.currentThread().getContextClassLoader();
-    }
-
     public ClassLoader compareAndSwapWithDelegatingLoader() {
         ClassLoader current = Thread.currentThread().getContextClassLoader();
         if (!current.equals(delegatingLoader)) {
             Thread.currentThread().setContextClassLoader(delegatingLoader);
         }
         return current;
-    }
-
-    public ClassLoader compareAndSwapLoaders(Connector connector) {
-        ClassLoader connectorLoader = delegatingLoader.connectorLoader(connector);
-        return compareAndSwapLoaders(connectorLoader);
     }
 
     public LoaderSwap withClassLoader(ClassLoader loader) {
@@ -155,8 +143,20 @@ public class Plugins {
         }
     }
 
+    public Runnable withClassLoader(ClassLoader classLoader, Runnable operation) {
+        return () -> {
+            try (LoaderSwap loaderSwap = withClassLoader(classLoader)) {
+                operation.run();
+            }
+        };
+    }
+
     public DelegatingClassLoader delegatingLoader() {
         return delegatingLoader;
+    }
+
+    public ClassLoader connectorLoader(String connectorClassOrAlias) {
+        return delegatingLoader.connectorLoader(connectorClassOrAlias);
     }
 
     public Set<PluginDesc<SinkConnector>> sinkConnectors() {
@@ -291,12 +291,9 @@ public class Plugins {
                   isKeyConverter ? "key" : "value", System.lineSeparator(), converterConfig.keySet());
 
         Converter plugin;
-        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
-        try {
+        try (LoaderSwap loaderSwap = withClassLoader(klass.getClassLoader())) {
             plugin = newPlugin(klass);
             plugin.configure(converterConfig, isKeyConverter);
-        } finally {
-            compareAndSwapLoaders(savedLoader);
         }
         return plugin;
     }
@@ -319,12 +316,9 @@ public class Plugins {
         }
 
         Converter plugin;
-        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
-        try {
+        try (LoaderSwap loaderSwap = withClassLoader(klass.getClassLoader())) {
             plugin = newPlugin(klass);
             plugin.configure(converterConfig, isKey);
-        } finally {
-            compareAndSwapLoaders(savedLoader);
         }
         return plugin;
     }
@@ -381,12 +375,9 @@ public class Plugins {
         log.debug("Configuring the header converter with configuration keys:{}{}", System.lineSeparator(), converterConfig.keySet());
 
         HeaderConverter plugin;
-        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
-        try {
+        try (LoaderSwap loaderSwap = withClassLoader(klass.getClassLoader())) {
             plugin = newPlugin(klass);
             plugin.configure(converterConfig);
-        } finally {
-            compareAndSwapLoaders(savedLoader);
         }
         return plugin;
     }
@@ -427,12 +418,9 @@ public class Plugins {
         Map<String, Object> configProviderConfig = config.originalsWithPrefix(configPrefix);
 
         ConfigProvider plugin;
-        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
-        try {
+        try (LoaderSwap loaderSwap = withClassLoader(klass.getClassLoader())) {
             plugin = newPlugin(klass);
             plugin.configure(configProviderConfig);
-        } finally {
-            compareAndSwapLoaders(savedLoader);
         }
         return plugin;
     }
@@ -467,8 +455,7 @@ public class Plugins {
                                        + "name matches %s", pluginKlass, klassName);
             throw new ConnectException(msg);
         }
-        ClassLoader savedLoader = compareAndSwapLoaders(klass.getClassLoader());
-        try {
+        try (LoaderSwap loaderSwap = withClassLoader(klass.getClassLoader())) {
             plugin = newPlugin(klass);
             if (plugin instanceof Versioned) {
                 Versioned versionedPlugin = (Versioned) plugin;
@@ -479,8 +466,6 @@ public class Plugins {
             if (plugin instanceof Configurable) {
                 ((Configurable) plugin).configure(config.originals());
             }
-        } finally {
-            compareAndSwapLoaders(savedLoader);
         }
         return plugin;
     }
