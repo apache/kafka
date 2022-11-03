@@ -29,7 +29,7 @@
     // fields from the LeaderAndIsr response
     { "name": "LeaderAndIsrErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error." },
-    { "name": "LeaderAndIsrPartitionErrors", "type": "[]LeaderAndIsrPartitionError", "versions": "0",
+    { "name": "LeaderAndIsrPartitionErrors", "type": "[]LeaderAndIsrPartitionError", "versions": "0+",
       "about": "Each partition."},
     { "name":  "LeaderAndIsrTopics", "type": "[]LeaderAndIsrTopicError", "versions": "1+",
       "about": "Each topic", "fields": [
