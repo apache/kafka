@@ -149,13 +149,56 @@ public class KafkaClusterTestKit implements AutoCloseable {
             return this;
         }
 
+        private KafkaConfig createNodeConfig(TestKitNode node) {
+            BrokerNode brokerNode = nodes.brokerNodes().get(node.id());
+            ControllerNode controllerNode = nodes.controllerNodes().get(node.id());
+
+            Map<String, String> props = new HashMap<>(configProps);
+            props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), roles(node.id()));
+            props.put(KafkaConfig$.MODULE$.NodeIdProp(),
+                    Integer.toString(node.id()));
+            // In combined mode, always prefer the metadata log directory of the controller node.
+            if (controllerNode != null) {
+                props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
+                        controllerNode.metadataDirectory());
+            } else {
+                props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
+                        node.metadataDirectory());
+            }
+            // Set the log.dirs according to the broker node setting (if there is a broker node)
+            if (brokerNode != null) {
+                props.put(KafkaConfig$.MODULE$.LogDirsProp(),
+                        String.join(",", brokerNode.logDataDirectories()));
+            }
+            props.put(KafkaConfig$.MODULE$.ListenerSecurityProtocolMapProp(),
+                    "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
+            props.put(KafkaConfig$.MODULE$.ListenersProp(), listeners(node.id()));
+            props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(),
+                    nodes.interBrokerListenerName().value());
+            props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
+                    "CONTROLLER");
+            // Note: we can't accurately set controller.quorum.voters yet, since we don't
+            // yet know what ports each controller will pick.  Set it to a dummy string \
+            // for now as a placeholder.
+            String uninitializedQuorumVotersString = nodes.controllerNodes().keySet().stream().
+                    map(n -> String.format("%d@0.0.0.0:0", n)).
+                    collect(Collectors.joining(","));
+            props.put(RaftConfig.QUORUM_VOTERS_CONFIG, uninitializedQuorumVotersString);
+
+            // reduce log cleaner offset map memory usage
+            props.put(KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), "2097152");
+
+            // Add associated broker node property overrides
+            if (brokerNode != null) {
+                props.putAll(brokerNode.propertyOverrides());
+            }
+            return new KafkaConfig(props, false, Option.empty());
+        }
+
         public KafkaClusterTestKit build() throws Exception {
             Map<Integer, ControllerServer> controllers = new HashMap<>();
             Map<Integer, BrokerServer> brokers = new HashMap<>();
             Map<Integer, JointServer> jointServers = new HashMap<>();
-            String uninitializedQuorumVotersString = nodes.controllerNodes().keySet().stream().
-                map(controllerNode -> String.format("%d@0.0.0.0:0", controllerNode)).
-                collect(Collectors.joining(","));
             /*
               Number of threads = Total number of brokers + Total number of controllers + Total number of Raft Managers
                                 = Total number of brokers + Total number of controllers * 2
@@ -173,37 +216,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 executorService = Executors.newFixedThreadPool(numOfExecutorThreads,
                     ThreadUtils.createThreadFactory("KafkaClusterTestKit%d", false));
                 for (ControllerNode node : nodes.controllerNodes().values()) {
-                    Map<String, String> props = new HashMap<>(configProps);
-                    props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), roles(node.id()));
-                    props.put(KafkaConfig$.MODULE$.NodeIdProp(),
-                        Integer.toString(node.id()));
-                    props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
-                        node.metadataDirectory());
-                    props.put(KafkaConfig$.MODULE$.ListenerSecurityProtocolMapProp(),
-                        "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
-                    props.put(KafkaConfig$.MODULE$.ListenersProp(), listeners(node.id()));
-                    props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(),
-                        nodes.interBrokerListenerName().value());
-                    props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
-                        "CONTROLLER");
-                    // Note: we can't accurately set controller.quorum.voters yet, since we don't
-                    // yet know what ports each controller will pick.  Set it to a dummy string \
-                    // for now as a placeholder.
-                    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, uninitializedQuorumVotersString);
-
-                    // reduce log cleaner offset map memory usage
-                    props.put(KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), "2097152");
-
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
-                    KafkaConfig config = new KafkaConfig(props, false, Option.empty());
-
                     MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id());
                     BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
                         fromVersion(nodes.bootstrapMetadataVersion(), "testkit");
                     String threadNamePrefix = (nodes.brokerNodes().containsKey(node.id())) ?
                         String.format("colocated%d", node.id()) :
                             String.format("controller%d", node.id());
-                    JointServer jointServer = new JointServer(config,
+                    JointServer jointServer = new JointServer(createNodeConfig(node),
                             metaProperties,
                             Time.SYSTEM,
                             new Metrics(),
@@ -232,42 +252,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     jointServers.put(node.id(), jointServer);
                 }
                 for (BrokerNode node : nodes.brokerNodes().values()) {
-                    Map<String, String> props = new HashMap<>(configProps);
-                    props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), roles(node.id()));
-                    props.put(KafkaConfig$.MODULE$.BrokerIdProp(),
-                        Integer.toString(node.id()));
-                    if (nodes.controllerNodes().containsKey(node.id())) {
-                        // Combined mode: use the metadata log dir of the associated controller node.
-                        props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
-                                nodes.controllerNodes().get(node.id()).metadataDirectory());
-                    } else {
-                        // Separate mode: use the broker node's log dir.
-                        props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
-                                node.metadataDirectory());
-                    }
-                    props.put(KafkaConfig$.MODULE$.LogDirsProp(),
-                        String.join(",", node.logDataDirectories()));
-                    props.put(KafkaConfig$.MODULE$.ListenerSecurityProtocolMapProp(),
-                        "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
-                    props.put(KafkaConfig$.MODULE$.ListenersProp(), listeners(node.id()));
-                    props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(),
-                        nodes.interBrokerListenerName().value());
-                    props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
-                        "CONTROLLER");
-
-                    setupNodeDirectories(baseDirectory, node.metadataDirectory(),
-                        node.logDataDirectories());
-
-                    // Just like above, we set a placeholder voter list here until we
-                    // find out what ports the controllers picked.
-                    props.put(RaftConfig.QUORUM_VOTERS_CONFIG, uninitializedQuorumVotersString);
-                    props.putAll(node.propertyOverrides());
-                    KafkaConfig config = new KafkaConfig(props, false, Option.empty());
-
                     JointServer jointServer = jointServers.get(node.id());
                     if (jointServer == null) {
                         MetaProperties metaProperties = MetaProperties.apply(nodes.clusterId().toString(), node.id());
-                        jointServer = new JointServer(config,
+                        jointServer = new JointServer(createNodeConfig(node),
                                 metaProperties,
                                 Time.SYSTEM,
                                 new Metrics(),
