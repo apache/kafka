@@ -139,7 +139,7 @@ class QuotaUtilsTest {
       val timeMs = time.milliseconds()
       val deltaMs = timeMs - startTimeMs;
       // Skip the first few iterations before we have a full window of data to assert on
-      if (deltaMs >= numSamples * TimeUnit.SECONDS.toMillis(sampleWindowSec)) {
+      if (deltaMs >= Math.max(2, numSamples) * TimeUnit.SECONDS.toMillis(sampleWindowSec)) {
         val errorBound = TestUtils.errorBoundForWindowedRateQuota(numSamples, sampleWindowSec, deltaMs)
         val actualRate = i.toDouble*1000/deltaMs
         val rateCap = errorBound * maxConnectionRate
