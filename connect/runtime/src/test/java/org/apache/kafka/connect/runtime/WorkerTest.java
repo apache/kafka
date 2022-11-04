@@ -306,7 +306,7 @@ public class WorkerTest {
 
         // Create
         mockConnectorIsolation(connectorClass, sourceConnector);
-        mockExecutorSubmit(true);
+        mockExecutorRealSubmit(WorkerConnector.class);
         workerConfigMockedStatic.when(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)))
                                 .thenReturn(CLUSTER_ID);
 
@@ -414,7 +414,7 @@ public class WorkerTest {
     public void testAddConnectorByAlias() throws Throwable {
         final String connectorAlias = "SampleSourceConnector";
         mockConnectorIsolation(connectorAlias, sinkConnector);
-        mockExecutorSubmit(true);
+        mockExecutorRealSubmit(WorkerConnector.class);
         workerConfigMockedStatic.when(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)))
                                 .thenReturn("test-cluster");
 
@@ -459,7 +459,7 @@ public class WorkerTest {
         final String shortConnectorAlias = "WorkerTest";
 
         mockConnectorIsolation(shortConnectorAlias, sinkConnector);
-        mockExecutorSubmit(true);
+        mockExecutorRealSubmit(WorkerConnector.class);
         connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, shortConnectorAlias);
 
         connectorProps.put(SinkConnectorConfig.TOPICS_CONFIG, "gfieyls, wfru");
@@ -511,6 +511,7 @@ public class WorkerTest {
         final String connectorClass = SampleSourceConnector.class.getName();
 
         mockConnectorIsolation(connectorClass, sinkConnector);
+        mockExecutorRealSubmit(WorkerConnector.class);
 
         Map<String, String> taskProps = Collections.singletonMap("foo", "bar");
         when(sinkConnector.taskConfigs(2)).thenReturn(Arrays.asList(taskProps, taskProps));
@@ -518,7 +519,6 @@ public class WorkerTest {
         // Use doReturn().when() syntax due to when().thenReturn() not being able to return wildcard generic types
         doReturn(TestSourceTask.class).when(sinkConnector).taskClass();
 
-        mockExecutorSubmit(true);
 
         connectorProps.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
         connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass);
@@ -584,7 +584,7 @@ public class WorkerTest {
         mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, taskKeyConverter);
         mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, taskValueConverter);
         mockTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
-        mockExecutorSubmit(false);
+        mockExecutorFakeSubmit(WorkerTask.class);
 
         Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
@@ -623,7 +623,7 @@ public class WorkerTest {
         mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, taskKeyConverter);
         mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, taskValueConverter);
         mockTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
-        mockExecutorSubmit(false);
+        mockExecutorFakeSubmit(WorkerTask.class);
 
         Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, TestSinkTask.class.getName());
 
@@ -679,7 +679,7 @@ public class WorkerTest {
         mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, taskKeyConverter);
         mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, taskValueConverter);
         mockTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
-        mockExecutorSubmit(false);
+        mockExecutorFakeSubmit(WorkerTask.class);
 
         Runnable preProducer = mock(Runnable.class);
         Runnable postProducer = mock(Runnable.class);
@@ -726,7 +726,7 @@ public class WorkerTest {
         mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, taskKeyConverter);
         mockTaskConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, taskValueConverter);
         mockTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, taskHeaderConverter);
-        mockExecutorSubmit(false);
+        mockExecutorFakeSubmit(WorkerTask.class);
 
 
         // Each time we check the task metrics, the worker will call the herder
@@ -860,7 +860,7 @@ public class WorkerTest {
         mockTaskConverter(ClassLoaderUsage.PLUGINS, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, taskValueConverter);
         mockTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, null);
         mockTaskHeaderConverter(ClassLoaderUsage.PLUGINS, taskHeaderConverter);
-        mockExecutorSubmit(false);
+        mockExecutorFakeSubmit(WorkerTask.class);
 
         Map<String, String> origProps = Collections.singletonMap(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
 
@@ -906,7 +906,7 @@ public class WorkerTest {
         mockTaskConverter(ClassLoaderUsage.PLUGINS, WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, taskValueConverter);
         mockTaskHeaderConverter(ClassLoaderUsage.CURRENT_CLASSLOADER, null);
         mockTaskHeaderConverter(ClassLoaderUsage.PLUGINS, taskHeaderConverter);
-        mockExecutorSubmit(false);
+        mockExecutorFakeSubmit(WorkerTask.class);
 
         worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, executorService,
                             noneConnectorClientConfigOverridePolicy);
@@ -1825,23 +1825,33 @@ public class WorkerTest {
         verify(task).version();
     }
 
-    private void mockExecutorSubmit(boolean startRunnable) {
-        ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+    private void mockExecutorRealSubmit(Class<? extends Runnable> runnableClass) {
+        // This test expects the runnable to be executed, so have the isolated runnable pass-through.
+        // Requires using the Worker constructor without the mocked executorService
+        ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(runnableClass);
         when(plugins.withClassLoader(same(pluginLoader), runnableCaptor.capture())).thenReturn(isolatedRunnable);
-        if (startRunnable) {
-            // This test expects the runnable to be executed, so have the isolated runnable pass-through.
-            doAnswer(invocation -> {
-                runnableCaptor.getValue().run();
-                return null;
-            }).when(isolatedRunnable).run();
-        } else {
-            // This test does not expect the runnable to be executed, so skip it.
-            when(executorService.submit(isolatedRunnable)).thenReturn(null);
-        }
+        doAnswer(invocation -> {
+            runnableCaptor.getValue().run();
+            return null;
+        }).when(isolatedRunnable).run();
+    }
+
+    private void mockExecutorFakeSubmit(Class<? extends Runnable> runnableClass) {
+        // This test does not expect the runnable to be executed, so skip it.
+        // Requires using the Worker constructor with the mocked executorService
+        when(plugins.withClassLoader(same(pluginLoader), any(runnableClass))).thenReturn(isolatedRunnable);
+        doNothing().when(isolatedRunnable).run();
+        when(executorService.submit(isolatedRunnable)).thenAnswer(invocation -> {
+            isolatedRunnable.run(); // performs the doNothing action but marks the isolatedRunnable as having run.
+            return null;
+        });
     }
 
     private void verifyExecutorSubmit() {
         verify(plugins).withClassLoader(same(pluginLoader), any(Runnable.class));
+        verify(isolatedRunnable).run();
+        // Don't assert that the executorService.submit() was called explicitly, in case the real executor was used.
+        // We learn that it was called via the isolatedRunnable.run() method being called.
     }
 
     private Map<String, String> anyConnectorConfigMap() {
