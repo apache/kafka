@@ -1928,13 +1928,13 @@ object TestUtils extends Logging {
     t0         t0.9 t1.2        t2.1  t2.4       t3.3
      1         m-1  1           m-1   1          m-1
     |1_________*___|1___________*____|1__________*___|
-    The event arriving at t1.2 and t2.4 start the new window late, effectively stretching the previous windows.
+    The events arriving at t1.2 and t2.4 start the new window late, effectively stretching the previous windows.
     Then when the burst of events at t2.1 arrives, the window starting at t0 is cleared and m-1 events are allowed.
     With n-samples, this algorithm effectively allows m=rn requests every l=n-1 windows by expiring the earliest window.
     In a fixed-width window scenario, l=n, as the earliest window will still keep the earliest relevant sample.
     In the case of n=1, l=1 because the condition to start a new sample and clear the old sample are the same.
 
-    The locally worst intervals i_n,k,eps starting right before time t, and overlapping k l-sample windows have a rate of:
+    The locally worst intervals i_n,l,k,eps starting right before time t, and overlapping k+1 l-sample windows have a rate of:
     R(i_n,l,k,eps) = max t (R(t-eps, t+lk-1+eps)) = max t ((k+1)nr/((t+lk-1+eps)-(t-eps))) = rn(k+1) / (lk-1+2*eps)
     R_n,l,k = lim eps->0 R(i_n,l,k,eps) = lim eps->0 rn(k+1) / (lk-1 + 2*eps) = rn(k+1)/(lk-1)
     The error ratio of this actual rate R_n,l,k to the average rate r is
@@ -1953,14 +1953,14 @@ object TestUtils extends Logging {
 
     Some example bounds:
     For this test's params, n = quotaSamples, k = floor(elapsedTime/quotaWindowSizeTime/effectiveWindows)
-    params               error bound              worst case diagram
-    n=2, t= 2001ms, k=2: R_2,2/r = 6/1   = 6      |1_*_|1_*_|*___|
-    n=3, t= 4001ms, k=2: R_3,2/r = 9/3   = 3      |1_*_|____|1_*_|____|*___|
-    n=4, t= 6001ms, k=2: R_4,2/r = 12/5  = 2.4    |1_*_|____|____|1_*_|____|____|*___|
-    n=2, t= 3001ms, k=3: R_2,3/r = 8/2   = 4      |1_*_|1_*_|1_*_|*___|
-    n=2, t= 4001ms, k=4, R_2,4/r = 10/3  = 3.3333 |1_*_|1_*_|1_*_|1_*_|*___|
-    n=2, t= 5001ms, k=5, R_2,5/r = 12/4  = 3      |1_*_|1_*_|1_*_|1_*_|1_*_|*___|
-    n=2, t= 6001ms, k=6, R_2,6/r = 14/5  = 2.8    |1_*_|1_*_|1_*_|1_*_|1_*_|1_*_|*___|
+    params              error bound              worst case diagram
+    n=2, t=2001ms, k=2: R_2,2/r = 6/1   = 6      |1_*_|1_*_|*___|
+    n=3, t=4001ms, k=2: R_3,2/r = 9/3   = 3      |1_*_|____|1_*_|____|*___|
+    n=4, t=6001ms, k=2: R_4,2/r = 12/5  = 2.4    |1_*_|____|____|1_*_|____|____|*___|
+    n=2, t=3001ms, k=3: R_2,3/r = 8/2   = 4      |1_*_|1_*_|1_*_|*___|
+    n=2, t=4001ms, k=4: R_2,4/r = 10/3  = 3.3333 |1_*_|1_*_|1_*_|1_*_|*___|
+    n=2, t=5001ms, k=5: R_2,5/r = 12/4  = 3      |1_*_|1_*_|1_*_|1_*_|1_*_|*___|
+    n=2, t=6001ms, k=6: R_2,6/r = 14/5  = 2.8    |1_*_|1_*_|1_*_|1_*_|1_*_|1_*_|*___|
      */
     val n = quotaSamples
     // If the windowing algorithm changes to fixed-width, use l=n instead
