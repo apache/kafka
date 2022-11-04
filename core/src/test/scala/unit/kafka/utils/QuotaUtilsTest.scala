@@ -116,9 +116,9 @@ class QuotaUtilsTest {
 
   @ParameterizedTest
   @CsvSource(Array(
-    " 1,0", " 1,1", " 1,2", " 1,10", " 1,20", " 1,30", " 1,39", " 1,40",
-    " 2,0", " 2,1", " 2,2", " 2,10", " 2,20", " 2,30", " 2,39", " 2,40",
-    "10,0",	"10,1", "10,2", "10,10", "10,20", "10,30", "10,39", "10,40"
+    "1,0", "1,1", "1,2", "1,3", "1,4", "1,5", "1,6", "1,7", "1,8", "1,9", "1,10", "1,11", "1,12", "1,13", "1,14", "1,15", "1,16", "1,17", "1,18", "1,17", "1,19", "1,20", "1,30", "1,40",
+    "2,0", "2,1", "2,2", "2,3", "2,4", "2,5", "2,6", "2,7", "2,8", "2,9", "2,10", "2,11", "2,12", "2,13", "2,14", "2,15", "2,16", "2,17", "2,18", "2,17", "2,19", "2,20", "2,30", "2,40",
+    "10,0", "10,1", "10,2", "10,3", "10,4", "10,5", "10,6", "10,7", "10,8", "10,9", "10,10", "10,11", "10,12", "10,13", "10,14", "10,15", "10,16", "10,17", "10,18", "10,17", "10,19", "10,20", "10,30", "10,40"
   ))
   def testErrorBoundWorstCase(numSamples: Int, minInterval: Int): Unit = {
     val maxConnectionRate = 30
@@ -130,8 +130,8 @@ class QuotaUtilsTest {
     val sensor = metrics.sensor("quotasensor", metricConfig, Long.MaxValue);
     sensor.add(metricName, new Rate, null)
     // start the window early, so that the main iteration fills the window at the end of the first sample
-    assertEquals(0, recordAndGetThrottleTimeMs(sensor, time.milliseconds()))
-    time.sleep(TimeUnit.SECONDS.toMillis(sampleWindowSec)-1)
+    val initialThrottle = recordAndGetThrottleTimeMs(sensor, time.milliseconds());
+    time.sleep(Math.max(initialThrottle, TimeUnit.SECONDS.toMillis(sampleWindowSec)-1));
     var i = 0
     val startTimeMs = time.milliseconds()
     while (i < 10000) {
@@ -147,7 +147,7 @@ class QuotaUtilsTest {
       }
       // Follow the throttle strategy under test
       val throttleTime = recordAndGetThrottleTimeMs(sensor, timeMs)
-      val waitTime = Math.min(throttleTime, minInterval)
+      val waitTime = Math.max(throttleTime, minInterval)
       time.sleep(waitTime)
     }
   }
