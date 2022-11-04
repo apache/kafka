@@ -897,11 +897,15 @@ class ConnectionQuotasTest {
     val startNumConnections = connectionQuotas.get(listenerDesc.defaultIp)
     acceptConnections(connectionQuotas, listenerDesc.listenerName, listenerDesc.defaultIp, numConnections,
       timeIntervalMs, expectIpThrottle)
-    val elapsedSeconds = MetricsUtils.convert(time.milliseconds - startTimeMs, TimeUnit.SECONDS)
+    val elapsedMs = time.milliseconds - startTimeMs
+    val elapsedSeconds = MetricsUtils.convert(elapsedMs, TimeUnit.SECONDS)
     val createdConnections = connectionQuotas.get(listenerDesc.defaultIp) - startNumConnections
     val actualRate = createdConnections.toDouble / elapsedSeconds
-    assertEquals(expectedRate.toDouble, actualRate, epsilon,
-      s"Expected rate ($expectedRate +- $epsilon), but got $actualRate ($createdConnections connections / $elapsedSeconds sec)")
+    val errorBound = TestUtils.errorBoundForWindowedRateQuota(numQuotaSamples, quotaWindowSizeSeconds, elapsedMs)
+    val rateCap = errorBound * expectedRate.toDouble
+    val minConnectionRate = expectedRate - epsilon
+    assertTrue(actualRate <= rateCap, s"Listener $listenerDesc connection rate $actualRate must be below $rateCap ($errorBound * $expectedRate)")
+    assertTrue(actualRate >= minConnectionRate, s"Listener $listenerDesc connection rate $actualRate must be above $minConnectionRate")
   }
 
   /**
