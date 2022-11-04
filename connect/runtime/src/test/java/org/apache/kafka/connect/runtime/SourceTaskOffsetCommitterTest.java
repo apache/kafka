@@ -19,16 +19,12 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.easymock.Capture;
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.modules.junit4.PowerMockRunner;
-import org.powermock.reflect.Whitebox;
-import org.slf4j.Logger;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -39,23 +35,30 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 import static java.util.Collections.singletonMap;
-import static org.easymock.EasyMock.eq;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@RunWith(PowerMockRunner.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class SourceTaskOffsetCommitterTest {
 
     private final ConcurrentHashMap<ConnectorTaskId, ScheduledFuture<?>> committers = new ConcurrentHashMap<>();
 
-    @Mock private ScheduledExecutorService executor;
-    @Mock private Logger mockLog;
-    @Mock private ScheduledFuture<?> commitFuture;
-    @Mock private ScheduledFuture<?> taskFuture;
-    @Mock private ConnectorTaskId taskId;
-    @Mock private WorkerSourceTask task;
+    @Mock
+    private ScheduledExecutorService executor;
+    @Mock
+    private ScheduledFuture<?> commitFuture;
+    @Mock
+    private ScheduledFuture<?> taskFuture;
+    @Mock
+    private ConnectorTaskId taskId;
+    @Mock
+    private WorkerSourceTask task;
 
     private SourceTaskOffsetCommitter committer;
 
@@ -71,27 +74,21 @@ public class SourceTaskOffsetCommitterTest {
                 Long.toString(DEFAULT_OFFSET_COMMIT_INTERVAL_MS));
         WorkerConfig config = new StandaloneConfig(workerProps);
         committer = new SourceTaskOffsetCommitter(config, executor, committers);
-        Whitebox.setInternalState(SourceTaskOffsetCommitter.class, "log", mockLog);
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void testSchedule() {
-        Capture<Runnable> taskWrapper = EasyMock.newCapture();
+        ArgumentCaptor<Runnable> taskWrapper = ArgumentCaptor.forClass(Runnable.class);
 
-        EasyMock.expect(executor.scheduleWithFixedDelay(
-                EasyMock.capture(taskWrapper), eq(DEFAULT_OFFSET_COMMIT_INTERVAL_MS),
+        when(executor.scheduleWithFixedDelay(
+                taskWrapper.capture(), eq(DEFAULT_OFFSET_COMMIT_INTERVAL_MS),
                 eq(DEFAULT_OFFSET_COMMIT_INTERVAL_MS), eq(TimeUnit.MILLISECONDS))
-        ).andReturn((ScheduledFuture) commitFuture);
-
-        PowerMock.replayAll();
+        ).thenReturn((ScheduledFuture) commitFuture);
 
         committer.schedule(taskId, task);
-        assertTrue(taskWrapper.hasCaptured());
         assertNotNull(taskWrapper.getValue());
         assertEquals(singletonMap(taskId, commitFuture), committers);
-
-        PowerMock.verifyAll();
     }
 
     @Test
@@ -99,85 +96,45 @@ public class SourceTaskOffsetCommitterTest {
         long timeoutMs = 1000;
 
         // Normal termination, where termination times out.
-        executor.shutdown();
-        PowerMock.expectLastCall();
-
-        EasyMock.expect(executor.awaitTermination(eq(timeoutMs), eq(TimeUnit.MILLISECONDS)))
-                .andReturn(false);
-        mockLog.error(EasyMock.anyString());
-        PowerMock.expectLastCall();
-        PowerMock.replayAll();
+        when(executor.awaitTermination(timeoutMs, TimeUnit.MILLISECONDS)).thenReturn(false);
 
         committer.close(timeoutMs);
-
-        PowerMock.verifyAll();
-        PowerMock.resetAll();
 
         // Termination interrupted
-        executor.shutdown();
-        PowerMock.expectLastCall();
-
-        EasyMock.expect(executor.awaitTermination(eq(timeoutMs), eq(TimeUnit.MILLISECONDS)))
-                .andThrow(new InterruptedException());
-        PowerMock.replayAll();
+        when(executor.awaitTermination(timeoutMs, TimeUnit.MILLISECONDS)).thenThrow(new InterruptedException());
 
         committer.close(timeoutMs);
 
-        PowerMock.verifyAll();
+        verify(executor, times(2)).shutdown();
     }
 
     @Test
     public void testRemove() throws Exception {
         // Try to remove a non-existing task
-        PowerMock.replayAll();
-
         assertTrue(committers.isEmpty());
         committer.remove(taskId);
         assertTrue(committers.isEmpty());
-
-        PowerMock.verifyAll();
-        PowerMock.resetAll();
 
         // Try to remove an existing task
-        EasyMock.expect(taskFuture.cancel(eq(false))).andReturn(false);
-        EasyMock.expect(taskFuture.isDone()).andReturn(false);
-        EasyMock.expect(taskFuture.get()).andReturn(null);
-        EasyMock.expect(taskId.connector()).andReturn("MyConnector");
-        EasyMock.expect(taskId.task()).andReturn(1);
-        PowerMock.replayAll();
+        when(taskFuture.cancel(false)).thenReturn(false);
+        when(taskFuture.isDone()).thenReturn(false);
+        when(taskFuture.get())
+                .thenReturn(null)
+                .thenThrow(new CancellationException())
+                .thenThrow(new InterruptedException());
+        when(taskId.connector()).thenReturn("MyConnector");
+        when(taskId.task()).thenReturn(1);
 
         committers.put(taskId, taskFuture);
         committer.remove(taskId);
         assertTrue(committers.isEmpty());
-
-        PowerMock.verifyAll();
-        PowerMock.resetAll();
 
         // Try to remove a cancelled task
-        EasyMock.expect(taskFuture.cancel(eq(false))).andReturn(false);
-        EasyMock.expect(taskFuture.isDone()).andReturn(false);
-        EasyMock.expect(taskFuture.get()).andThrow(new CancellationException());
-        EasyMock.expect(taskId.connector()).andReturn("MyConnector");
-        EasyMock.expect(taskId.task()).andReturn(1);
-        mockLog.trace(EasyMock.anyString(), EasyMock.<Object>anyObject());
-        PowerMock.expectLastCall();
-        PowerMock.replayAll();
-
         committers.put(taskId, taskFuture);
         committer.remove(taskId);
         assertTrue(committers.isEmpty());
 
-        PowerMock.verifyAll();
-        PowerMock.resetAll();
-
         // Try to remove an interrupted task
-        EasyMock.expect(taskFuture.cancel(eq(false))).andReturn(false);
-        EasyMock.expect(taskFuture.isDone()).andReturn(false);
-        EasyMock.expect(taskFuture.get()).andThrow(new InterruptedException());
-        EasyMock.expect(taskId.connector()).andReturn("MyConnector");
-        EasyMock.expect(taskId.task()).andReturn(1);
-        PowerMock.replayAll();
-
         try {
             committers.put(taskId, taskFuture);
             committer.remove(taskId);
@@ -185,8 +142,6 @@ public class SourceTaskOffsetCommitterTest {
         } catch (ConnectException e) {
             //ignore
         }
-
-        PowerMock.verifyAll();
     }
 
 }
