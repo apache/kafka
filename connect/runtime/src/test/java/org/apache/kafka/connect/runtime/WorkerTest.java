@@ -342,7 +342,70 @@ public class WorkerTest {
         verify(sourceConnector).initialize(any(ConnectorContext.class));
         verify(sourceConnector).start(connectorProps);
         verify(connectorStatusListener).onStartup(CONNECTOR_ID);
-        verify(sourceConnector).stop();
+        verify(sourceConnector).stop(false);
+        verify(connectorStatusListener).onShutdown(CONNECTOR_ID);
+        verify(ctx).close();
+        MockFileConfigProvider.assertClosed(mockFileProviderTestId);
+    }
+
+    @Test
+    public void testStopDeletedConnector() throws Throwable {
+        final String connectorClass = SampleSourceConnector.class.getName();
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, connectorClass);
+
+        // Create
+        when(plugins.currentThreadLoader()).thenReturn(delegatingLoader);
+        when(plugins.delegatingLoader()).thenReturn(delegatingLoader);
+        when(delegatingLoader.connectorLoader(connectorClass)).thenReturn(pluginLoader);
+        when(plugins.newConnector(connectorClass)).thenReturn(sourceConnector);
+        when(sourceConnector.version()).thenReturn("1.0");
+
+        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(pluginLoader)).thenReturn(delegatingLoader);
+        pluginsMockedStatic.when(() -> Plugins.compareAndSwapLoaders(delegatingLoader)).thenReturn(pluginLoader);
+        workerConfigMockedStatic.when(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)))
+            .thenReturn(CLUSTER_ID);
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
+        worker.start();
+
+        assertEquals(Collections.emptySet(), worker.connectorNames());
+
+        FutureCallback<TargetState> onFirstStart = new FutureCallback<>();
+
+        worker.startConnector(CONNECTOR_ID, connectorProps, ctx, connectorStatusListener, TargetState.STARTED, onFirstStart);
+
+        // Wait for the connector to actually start
+        assertEquals(TargetState.STARTED, onFirstStart.get(1000, TimeUnit.MILLISECONDS));
+        assertEquals(Collections.singleton(CONNECTOR_ID), worker.connectorNames());
+
+        assertStatistics(worker, 1, 0);
+        assertStartupStatistics(worker, 1, 0, 0, 0);
+        worker.stopAndAwaitConnector(CONNECTOR_ID,  true);
+
+        assertStatistics(worker, 0, 0);
+        assertStartupStatistics(worker, 1, 0, 0, 0);
+        assertEquals(Collections.emptySet(), worker.connectorNames());
+
+        // Nothing should be left, so this should effectively be a nop
+        worker.stop();
+        assertStatistics(worker, 0, 0);
+
+
+        verify(plugins, times(2)).currentThreadLoader();
+        verify(plugins).delegatingLoader();
+        verify(delegatingLoader).connectorLoader(connectorClass);
+        verify(plugins).newConnector(connectorClass);
+        verify(sourceConnector, times(2)).version();
+        verify(sourceConnector).initialize(any(ConnectorContext.class));
+        verify(sourceConnector).start(connectorProps);
+        verify(connectorStatusListener).onStartup(CONNECTOR_ID);
+        verify(sourceConnector).stop(true);
+
+        pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(pluginLoader), times(2));
+        pluginsMockedStatic.verify(() -> Plugins.compareAndSwapLoaders(delegatingLoader), times(2));
+        workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)));
+
+        verify(sourceConnector).stop(true);
         verify(connectorStatusListener).onShutdown(CONNECTOR_ID);
         verify(ctx).close();
         MockFileConfigProvider.assertClosed(mockFileProviderTestId);
@@ -435,7 +498,7 @@ public class WorkerTest {
         verifyExecutorSubmit();
         verify(sinkConnector).initialize(any(ConnectorContext.class));
         verify(sinkConnector).start(connectorProps);
-        verify(sinkConnector).stop();
+        verify(sinkConnector).stop(false);
         verify(connectorStatusListener).onStartup(CONNECTOR_ID);
         verify(ctx).close();
     }
@@ -476,7 +539,7 @@ public class WorkerTest {
         verify(sinkConnector).initialize(any(ConnectorContext.class));
         verify(sinkConnector).start(connectorProps);
         verify(connectorStatusListener).onStartup(CONNECTOR_ID);
-        verify(sinkConnector).stop();
+        verify(sinkConnector).stop(false);
         verify(connectorStatusListener).onShutdown(CONNECTOR_ID);
         verify(ctx).close();
         verifyExecutorSubmit();
@@ -564,7 +627,7 @@ public class WorkerTest {
         verify(connectorStatusListener).onStartup(CONNECTOR_ID);
         verify(sinkConnector).taskClass();
         verify(sinkConnector).taskConfigs(2);
-        verify(sinkConnector).stop();
+        verify(sinkConnector).stop(false);
         verify(connectorStatusListener).onShutdown(CONNECTOR_ID);
         verify(ctx).close();
     }

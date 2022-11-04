@@ -74,6 +74,7 @@ public class WorkerConnector implements Runnable {
     private final CountDownLatch shutdownLatch;
     private volatile boolean stopping;  // indicates whether the Worker has asked the connector to stop
     private volatile boolean cancelled; // indicates whether the Worker has cancelled the connector (e.g. because of slow shutdown)
+    private volatile boolean deleted; // indicates whether the connector is being deleted.
 
     private State state;
     private final CloseableOffsetStorageReader offsetStorageReader;
@@ -103,6 +104,7 @@ public class WorkerConnector implements Runnable {
         this.shutdownLatch = new CountDownLatch(1);
         this.stopping = false;
         this.cancelled = false;
+        this.deleted = false;
     }
 
     public ClassLoader loader() {
@@ -251,8 +253,19 @@ public class WorkerConnector implements Runnable {
      * #{@link #awaitShutdown} to block until completion.
      */
     public synchronized void shutdown() {
+        shutdown(false);
+    }
+
+    /**
+     * Stop this connector. This method does not block, it only triggers shutdown. Use
+     * #{@link #awaitShutdown} to block until completion.
+     *
+     * @param deleted indicates if the connector is being shutdown due to deletion.
+     */
+    public synchronized void shutdown(boolean deleted) {
         log.info("Scheduled shutdown for {}", this);
-        stopping = true;
+        this.stopping = true;
+        this.deleted = deleted;
         notify();
     }
 
@@ -268,7 +281,7 @@ public class WorkerConnector implements Runnable {
                         null);
             }
             if (state == State.STARTED)
-                connector.stop();
+                connector.stop(deleted);
             this.state = State.STOPPED;
             statusListener.onShutdown(connName);
             log.info("Completed shutdown for {}", this);
@@ -309,13 +322,6 @@ public class WorkerConnector implements Runnable {
         } catch (InterruptedException e) {
             return false;
         }
-    }
-
-    /**
-     * Notify the {@link Connector connector} it has been deleted.
-     */
-    void deleted() {
-        connector.deleted();
     }
 
     public void transitionTo(TargetState targetState, Callback<TargetState> stateChangeCallback) {

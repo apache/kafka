@@ -1100,7 +1100,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testDestroyConnector() throws Exception {
+    public void testDestroyConnector() {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
         EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
         // Start with one connector
@@ -1819,7 +1819,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testConnectorConfigUpdate() throws Exception {
+    public void testConnectorConfigUpdate() {
         // Connector config can be applied without any rebalance
 
         EasyMock.expect(member.memberId()).andStubReturn("member");
@@ -1849,7 +1849,7 @@ public class DistributedHerderTest {
         member.ensureActive();
         PowerMock.expectLastCall();
         EasyMock.expect(configBackingStore.snapshot()).andReturn(SNAPSHOT); // for this test, it doesn't matter if we use the same config snapshot
-        worker.stopAndAwaitConnector(CONN1);
+        worker.stopAndAwaitConnector(CONN1, false);
         PowerMock.expectLastCall();
         EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
         Capture<Callback<TargetState>> onSecondStart = newCapture();
@@ -2605,7 +2605,7 @@ public class DistributedHerderTest {
         // As a result of reconfig, should need to update snapshot. With only connector updates, we'll just restart
         // connector without rebalance
         EasyMock.expect(configBackingStore.snapshot()).andReturn(SNAPSHOT_UPDATED_CONN1_CONFIG).times(2);
-        worker.stopAndAwaitConnector(CONN1);
+        worker.stopAndAwaitConnector(CONN1, false);
         PowerMock.expectLastCall();
         EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
         Capture<Callback<TargetState>> onSecondStart = newCapture();
@@ -2876,7 +2876,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testFailedToWriteSessionKey() throws Exception {
+    public void testFailedToWriteSessionKey() {
         // First tick -- after joining the group, we try to write a new
         // session key to the config topic, and fail
         EasyMock.expect(member.memberId()).andStubReturn("leader");

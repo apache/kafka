@@ -399,6 +399,15 @@ public class Worker {
      * @param connName the connector name.
      */
     private void stopConnector(String connName) {
+        stopConnector(connName, false);
+    }
+
+    /**
+     * Stop a connector managed by this worker.
+     *
+     * @param connName the connector name.
+     */
+    private void stopConnector(String connName, boolean deleted) {
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
             WorkerConnector workerConnector = connectors.get(connName);
             log.info("Stopping connector {}", connName);
@@ -409,7 +418,7 @@ public class Worker {
             }
 
             try (LoaderSwap loaderSwap = plugins.withClassLoader(workerConnector.loader())) {
-                workerConnector.shutdown();
+                workerConnector.shutdown(deleted);
             }
         }
     }
@@ -421,7 +430,7 @@ public class Worker {
             stopConnector(connector);
     }
 
-    private void awaitStopConnector(String connName, long timeout, boolean deleted) {
+    private void awaitStopConnector(String connName, long timeout) {
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
             WorkerConnector connector = connectors.remove(connName);
             if (connector == null) {
@@ -439,24 +448,15 @@ public class Worker {
             } else {
                 log.debug("Graceful stop of connector {} succeeded.", connName);
             }
-
-            if (deleted) {
-                log.debug("Connector {} has been deleted", connName);
-                connector.deleted();
-            }
         }
     }
 
     private void awaitStopConnectors(Collection<String> ids) {
-        awaitStopConnectors(ids, false);
-    }
-
-    private void awaitStopConnectors(Collection<String> ids, boolean deleted) {
         long now = time.milliseconds();
         long deadline = now + CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS;
         for (String id : ids) {
             long remaining = Math.max(0, deadline - time.milliseconds());
-            awaitStopConnector(id, remaining, deleted);
+            awaitStopConnector(id, remaining);
         }
     }
 
@@ -488,15 +488,13 @@ public class Worker {
     }
 
     /**
-     * Stop a connector that belongs to this worker and await its termination. If the connector has
-     * been deleted, it will also invoke its {@link Connector#deleted()} method so the connector can
-     * perform any cleanup tasks.
+     * Stop a connector that belongs to this worker and await its termination.
      *
      * @param connName the name of the connector to be stopped.
      */
     public void stopAndAwaitConnector(String connName, boolean deleted) {
-        stopConnector(connName);
-        awaitStopConnectors(Collections.singletonList(connName), deleted);
+        stopConnector(connName, deleted);
+        awaitStopConnectors(Collections.singletonList(connName));
     }
 
     /**

@@ -675,7 +675,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             boolean remains = configState.contains(connectorName);
             log.info("Handling connector-only config update by {} connector {}",
                     remains ? "restarting" : "stopping", connectorName);
-            worker.stopAndAwaitConnector(connectorName);
+            worker.stopAndAwaitConnector(connectorName, !remains);
             // The update may be a deletion, so verify we actually need to restart the connector
             if (remains) {
                 connectorsToStart.add(getConnectorStartingCallable(connectorName));

@@ -44,6 +44,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
@@ -158,7 +159,7 @@ public class WorkerConnectorTest {
         verifyInitialize();
         verify(connector).start(CONFIG);
         verify(listener).onStartup(CONNECTOR);
-        verifyCleanShutdown(true);
+        verifyCleanShutdown(true, true);
 
         verify(onStateChange).onCompletion(isNull(), eq(TargetState.STARTED));
         verifyNoMoreInteractions(onStateChange);
@@ -219,7 +220,7 @@ public class WorkerConnectorTest {
         verify(listener).onPause(CONNECTOR);
         verify(connector).start(CONFIG);
         verify(listener).onResume(CONNECTOR);
-        verifyCleanShutdown(true);
+        verifyCleanShutdown(true, true);
 
         InOrder inOrder = inOrder(onStateChange);
         inOrder.verify(onStateChange).onCompletion(isNull(), eq(TargetState.PAUSED));
@@ -287,7 +288,7 @@ public class WorkerConnectorTest {
 
         when(connector.version()).thenReturn(VERSION);
 
-        doThrow(exception).when(connector).stop();
+        doThrow(exception).when(connector).stop(anyBoolean());
 
         Callback<TargetState> onStateChange = mockCallback();
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, connector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
@@ -306,7 +307,7 @@ public class WorkerConnectorTest {
         verify(onStateChange).onCompletion(isNull(), eq(TargetState.STARTED));
         verifyNoMoreInteractions(onStateChange);
         verify(listener).onFailure(CONNECTOR, exception);
-        verifyShutdown(false, true);
+        verifyShutdown(false, true, true);
     }
 
     @Test
@@ -333,7 +334,7 @@ public class WorkerConnectorTest {
         verify(connector).start(CONFIG);
         // expect only one call to onStartup()
         verify(listener).onStartup(CONNECTOR);
-        verifyCleanShutdown(true);
+        verifyCleanShutdown(true, true);
         verify(onStateChange, times(2)).onCompletion(isNull(), eq(TargetState.STARTED));
         verifyNoMoreInteractions(onStateChange);
     }
@@ -453,10 +454,14 @@ public class WorkerConnectorTest {
     }
 
     private void verifyCleanShutdown(boolean started) {
-        verifyShutdown(true, started);
+        verifyCleanShutdown(started, false);
     }
 
-    private void verifyShutdown(boolean clean, boolean started) {
+    private void verifyCleanShutdown(boolean started, boolean running) {
+        verifyShutdown(true, started, running);
+    }
+
+    private void verifyShutdown(boolean clean, boolean started, boolean running) {
         verify(ctx).close();
         if (connector instanceof SourceConnector) {
             verify(offsetStorageReader).close();
@@ -465,7 +470,9 @@ public class WorkerConnectorTest {
         if (clean) {
             verify(listener).onShutdown(CONNECTOR);
         }
-        if (started) {
+        if (running) {
+            verify(connector).stop(false);
+        } else if (started) {
             verify(connector).stop();
         }
     }

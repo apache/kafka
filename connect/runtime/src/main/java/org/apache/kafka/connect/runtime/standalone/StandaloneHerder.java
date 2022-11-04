@@ -166,7 +166,7 @@ public class StandaloneHerder extends AbstractHerder {
             }
 
             removeConnectorTasks(connName);
-            worker.stopAndAwaitConnector(connName);
+            worker.stopAndAwaitConnector(connName, true);
             configBackingStore.removeConnectorConfig(connName);
             onDeletion(connName);
             callback.onCompletion(null, new Created<>(false, null));

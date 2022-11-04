@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.connector;
 
+import java.lang.invoke.MethodHandles;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
@@ -24,6 +25,8 @@ import org.apache.kafka.connect.components.Versioned;
 
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * <p>
@@ -44,6 +47,8 @@ import java.util.Map;
  * </p>
  */
 public abstract class Connector implements Versioned {
+
+    private static final Logger log = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
     protected ConnectorContext context;
 
@@ -129,10 +134,16 @@ public abstract class Connector implements Versioned {
     public abstract void stop();
 
     /**
-     * Callback invoked when the connector is deleted, so connectors can perform any cleanup tasks as
-     * they are removed.
+     * Stop this connector, and also indicate if the connector has been deleted.
+     * <p>
+     * Connectors are not required to override this method, unless they need to perform some cleanup
+     * actions in cases where the connector has been deleted.
+     *
+     * @param isDeleted indicates if the connector has been deleted.
      */
-    public void deleted() {
+    public void stop(boolean isDeleted) {
+        log.debug("Connector has been deleted", isDeleted);
+        stop();
     }
 
     /**
