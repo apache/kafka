@@ -129,6 +129,13 @@ public abstract class Connector implements Versioned {
     public abstract void stop();
 
     /**
+     * Callback invoked when the connector is deleted, so connectors can perform any cleanup tasks as
+     * they are removed.
+     */
+    public void deleted() {
+    }
+
+    /**
      * Validate the connector configuration values against configuration definitions.
      * @param connectorConfigs the provided configuration values
      * @return List of Config, each Config contains the updated configuration information given

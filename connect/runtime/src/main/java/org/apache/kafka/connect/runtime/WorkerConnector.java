@@ -311,6 +311,13 @@ public class WorkerConnector implements Runnable {
         }
     }
 
+    /**
+     * Notify the {@link Connector connector} it has been deleted.
+     */
+    void deleted() {
+        connector.deleted();
+    }
+
     public void transitionTo(TargetState targetState, Callback<TargetState> stateChangeCallback) {
         Callback<TargetState> preEmptedStateChangeCallback;
         TargetState preEmptedState;
