@@ -1152,8 +1152,9 @@ class ReplicaFetcherThreadTest {
 
     thread.processPartitionData(tp0, 0, partitionData.setPartitionIndex(0))
     thread.processPartitionData(tp1, 0, partitionData.setPartitionIndex(1))
-    thread.doWork()
+    verify(replicaManager, times(0)).completeDelayedFetchRequests(any[Seq[TopicPartition]])
 
+    thread.doWork()
     if (highWatermarkUpdated) {
       verify(replicaManager, times(1)).completeDelayedFetchRequests(Seq(tp0, tp1))
     } else {
