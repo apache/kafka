@@ -182,7 +182,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 fillAssignments(memberConfigs.keySet(), Assignment.NO_ERROR, leaderId,
                         memberConfigs.get(leaderId).url(), maxOffset,
                         clusterAssignment,
-                        (int) timer.remainingMs(), protocolVersion);
+                        (int) getDelay(), protocolVersion);
 
         log.debug("Actual assignments: {}", assignments);
         return serializeAssignments(assignments, protocolVersion);
@@ -296,9 +296,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         // Compute the connectors-and-tasks to be revoked for load balancing without taking into
         // account the deleted ones.
 //        log.debug("Can leader revoke tasks in this assignment? {} (delay: {})", canRevoke, delay);
-        if (timer != null) {
-            timer.update();
-        }
+        updateTimer();
 //        log.debug("Can leader revoke tasks in this assignment? {} (delay: {})", canRevoke, timer.remainingMs());
         if (canRevoke) {
             Map<String, ConnectorsAndTasks> toExplicitlyRevoke =
@@ -482,11 +480,9 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         Set<String> activeMembers = completeWorkerAssignment.stream()
                 .map(WorkerLoad::worker)
                 .collect(Collectors.toSet());
-        if (timer != null) {
-            timer.update();
-        }
+
 //        if (scheduledRebalance <= 0 && activeMembers.containsAll(previousMembers)) {
-        if (timer == null || timer.isExpired() && activeMembers.containsAll(previousMembers)) {
+        if (timer == null && activeMembers.containsAll(previousMembers)) {
             log.debug("No worker seems to have departed the group during the rebalance. The "
                     + "missing assignments that the leader is detecting are probably due to some "
                     + "workers failing to receive the new assignments in the previous rebalance. "
@@ -495,6 +491,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             newSubmissions.tasks().addAll(lostAssignments.tasks());
             return;
         }
+
+        updateTimer();
 
         if (timer != null && timer.isExpired()) {
 //        if (scheduledRebalance > 0 && now >= scheduledRebalance) {
@@ -537,18 +535,25 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         } else {
             candidateWorkersForReassignment
                     .addAll(candidateWorkersForReassignment(completeWorkerAssignment));
-            if (timer.notExpired()) {
-                // a delayed rebalance is in progress, but it's not yet time to reassign
-                // unaccounted resources
-                timer.update();
-                log.debug("Delayed rebalance in progress. Task reassignment is postponed. New computed rebalance delay: {}", timer.remainingMs());
+            if (timer != null) {
+                if (timer.notExpired()) {
+                    // a delayed rebalance is in progress, but it's not yet time to reassign
+                    // unaccounted resources
+                    updateTimer();
+                    log.debug("Delayed rebalance in progress. Task reassignment is postponed. New computed rebalance delay: {}", timer.remainingMs());
+                } else {
+                    // We could also extract the current minimum delay from the group, to make
+                    // independent of consecutive leader failures, but this optimization is skipped
+                    // at the moment
+                    timer.updateAndReset(maxDelay);
+                    log.debug("Resetting rebalance delay to the max: {}. scheduledRebalance: {} now: {} diff scheduledRebalance - now: {}",
+                            delay, timer.deadlineMs(), now, timer.deadlineMs() - now);
+                }
             } else {
-                // We could also extract the current minimum delay from the group, to make
-                // independent of consecutive leader failures, but this optimization is skipped
-                // at the moment
-                timer.updateAndReset(maxDelay);
+                timer = time.timer(maxDelay);
                 log.debug("Resetting rebalance delay to the max: {}. scheduledRebalance: {} now: {} diff scheduledRebalance - now: {}",
                         delay, timer.deadlineMs(), now, timer.deadlineMs() - now);
+
             }
             /*if (now < scheduledRebalance) {
                 // a delayed rebalance is in progress, but it's not yet time to reassign
@@ -828,17 +833,19 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     }
 
     long getScheduledRebalance() {
-        if (timer != null) {
-            timer.update();
-        }
+        updateTimer();
         return timer == null ? 0 : this.timer.deadlineMs();
     }
 
     long getDelay() {
+        updateTimer();
+        return timer == null ? 0 : this.timer.remainingMs();
+    }
+
+    private void updateTimer() {
         if (timer != null) {
             timer.update();
         }
-        return timer == null ? 0 : this.timer.remainingMs();
     }
 
     static class ClusterAssignment {
