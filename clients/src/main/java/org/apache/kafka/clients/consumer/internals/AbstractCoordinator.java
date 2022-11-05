@@ -825,9 +825,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                     log.info("SyncGroup failed: The group began another rebalance. Need to re-join the group. " +
                                  "Sent generation was {}", sentGeneration);
-                    // consumer didn't get assignment in this generation, so we need to reset generation
-                    // to avoid joinGroup with out-of-data ownedPartitions in cooperative rebalance
-                    resetStateOnResponseError(ApiKeys.SYNC_GROUP, error, false);
                     future.raise(error);
                 } else if (error == Errors.FENCED_INSTANCE_ID) {
                     // for sync-group request, even if the generation has changed we would not expect the instance id
