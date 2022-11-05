@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.Map.Entry;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.ConnectorsAndTasks;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.WorkerLoad;
 import org.apache.kafka.connect.util.ConnectUtils;
@@ -71,6 +72,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     protected int delay;
     protected int previousGenerationId;
     protected Set<String> previousMembers;
+    private Timer timer;
 
     public IncrementalCooperativeAssignor(LogContext logContext, Time time, int maxDelay) {
         this.log = logContext.logger(IncrementalCooperativeAssignor.class);
@@ -84,6 +86,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         this.delay = 0;
         this.previousGenerationId = -1;
         this.previousMembers = Collections.emptySet();
+        //this.timer = time.timer(maxDelay);
     }
 
     @Override
@@ -179,7 +182,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 fillAssignments(memberConfigs.keySet(), Assignment.NO_ERROR, leaderId,
                         memberConfigs.get(leaderId).url(), maxOffset,
                         clusterAssignment,
-                        delay, protocolVersion);
+                        (int) timer.remainingMs(), protocolVersion);
 
         log.debug("Actual assignments: {}", assignments);
         return serializeAssignments(assignments, protocolVersion);
@@ -287,11 +290,16 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         // Do not revoke resources for re-assignment while a delayed rebalance is active
         // Also we do not revoke in two consecutive rebalances by the same leader
-        canRevoke = delay == 0 && canRevoke;
+//        canRevoke = delay == 0 && canRevoke;
+        canRevoke = (timer == null || timer.isExpired()) && canRevoke;
 
         // Compute the connectors-and-tasks to be revoked for load balancing without taking into
         // account the deleted ones.
-        log.debug("Can leader revoke tasks in this assignment? {} (delay: {})", canRevoke, delay);
+//        log.debug("Can leader revoke tasks in this assignment? {} (delay: {})", canRevoke, delay);
+        if (timer != null) {
+            timer.update();
+        }
+//        log.debug("Can leader revoke tasks in this assignment? {} (delay: {})", canRevoke, timer.remainingMs());
         if (canRevoke) {
             Map<String, ConnectorsAndTasks> toExplicitlyRevoke =
                     performTaskRevocation(activeAssignments, currentWorkerAssignment);
@@ -309,7 +317,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             );
             canRevoke = toExplicitlyRevoke.size() == 0;
         } else {
-            canRevoke = delay == 0;
+//            canRevoke = delay == 0;
+            canRevoke = timer == null || timer.isExpired();
         }
 
         assignConnectors(completeWorkerAssignment, newSubmissions.connectors());
@@ -462,7 +471,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                                          ConnectorsAndTasks newSubmissions,
                                          List<WorkerLoad> completeWorkerAssignment) {
         if (lostAssignments.isEmpty()) {
-            resetDelay();
+            resetTimer();
             return;
         }
 
@@ -473,7 +482,11 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         Set<String> activeMembers = completeWorkerAssignment.stream()
                 .map(WorkerLoad::worker)
                 .collect(Collectors.toSet());
-        if (scheduledRebalance <= 0 && activeMembers.containsAll(previousMembers)) {
+        if (timer != null) {
+            timer.update();
+        }
+//        if (scheduledRebalance <= 0 && activeMembers.containsAll(previousMembers)) {
+        if (timer == null || timer.isExpired() && activeMembers.containsAll(previousMembers)) {
             log.debug("No worker seems to have departed the group during the rebalance. The "
                     + "missing assignments that the leader is detecting are probably due to some "
                     + "workers failing to receive the new assignments in the previous rebalance. "
@@ -483,7 +496,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             return;
         }
 
-        if (scheduledRebalance > 0 && now >= scheduledRebalance) {
+        if (timer != null && timer.isExpired()) {
+//        if (scheduledRebalance > 0 && now >= scheduledRebalance) {
             // delayed rebalance expired and it's time to assign resources
             log.debug("Delayed rebalance expired. Reassigning lost tasks");
             List<WorkerLoad> candidateWorkerLoad = Collections.emptyList();
@@ -519,11 +533,24 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 newSubmissions.connectors().addAll(lostAssignments.connectors());
                 newSubmissions.tasks().addAll(lostAssignments.tasks());
             }
-            resetDelay();
+            resetTimer();
         } else {
             candidateWorkersForReassignment
                     .addAll(candidateWorkersForReassignment(completeWorkerAssignment));
-            if (now < scheduledRebalance) {
+            if (timer.notExpired()) {
+                // a delayed rebalance is in progress, but it's not yet time to reassign
+                // unaccounted resources
+                timer.update();
+                log.debug("Delayed rebalance in progress. Task reassignment is postponed. New computed rebalance delay: {}", timer.remainingMs());
+            } else {
+                // We could also extract the current minimum delay from the group, to make
+                // independent of consecutive leader failures, but this optimization is skipped
+                // at the moment
+                timer.updateAndReset(maxDelay);
+                log.debug("Resetting rebalance delay to the max: {}. scheduledRebalance: {} now: {} diff scheduledRebalance - now: {}",
+                        delay, timer.deadlineMs(), now, timer.deadlineMs() - now);
+            }
+            /*if (now < scheduledRebalance) {
                 // a delayed rebalance is in progress, but it's not yet time to reassign
                 // unaccounted resources
                 delay = calculateDelay(now);
@@ -537,17 +564,18 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 log.debug("Resetting rebalance delay to the max: {}. scheduledRebalance: {} now: {} diff scheduledRebalance - now: {}",
                         delay, scheduledRebalance, now, scheduledRebalance - now);
             }
-            scheduledRebalance = now + delay;
+            scheduledRebalance = now + delay;*/
         }
     }
 
-    private void resetDelay() {
+    private void resetTimer() {
         candidateWorkersForReassignment.clear();
-        scheduledRebalance = 0;
+        timer = null;
+        /*scheduledRebalance = 0;
         if (delay != 0) {
             log.debug("Resetting delay from previous value: {} to 0", delay);
         }
-        delay = 0;
+        delay = 0;*/
     }
 
     private Set<String> candidateWorkersForReassignment(List<WorkerLoad> completeWorkerAssignment) {
@@ -716,8 +744,9 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     }
 
     private int calculateDelay(long now) {
-        long diff = scheduledRebalance - now;
-        return diff > 0 ? (int) Math.min(diff, maxDelay) : 0;
+        return (int) timer.remainingMs();
+        /*long diff = scheduledRebalance - now;
+        return diff > 0 ? (int) Math.min(diff, maxDelay) : 0;*/
     }
 
     /**
@@ -796,6 +825,20 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                                 .collect(Collectors.toList())
                         ).build()
                 ).collect(Collectors.toList());
+    }
+
+    long getScheduledRebalance() {
+        if (timer != null) {
+            timer.update();
+        }
+        return timer == null ? 0 : this.timer.deadlineMs();
+    }
+
+    long getDelay() {
+        if (timer != null) {
+            timer.update();
+        }
+        return timer == null ? 0 : this.timer.remainingMs();
     }
 
     static class ClusterAssignment {

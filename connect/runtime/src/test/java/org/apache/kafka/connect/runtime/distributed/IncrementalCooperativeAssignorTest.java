@@ -494,8 +494,8 @@ public class IncrementalCooperativeAssignorTest {
         initAssignor();
 
         assertTrue(assignor.candidateWorkersForReassignment.isEmpty());
-        assertEquals(0, assignor.scheduledRebalance);
-        assertEquals(0, assignor.delay);
+        assertEquals(0, assignor.getScheduledRebalance());
+        assertEquals(0, assignor.getDelay());
 
         Map<String, WorkerLoad> configuredAssignment = new HashMap<>();
         configuredAssignment.put("worker0", workerLoad("worker0", 0, 2, 0, 4));
@@ -512,8 +512,8 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
                 assignor.candidateWorkersForReassignment);
-        assertEquals(0, assignor.scheduledRebalance);
-        assertEquals(0, assignor.delay);
+        assertEquals(0, assignor.getScheduledRebalance());
+        assertEquals(0, assignor.getDelay());
 
         assignor.previousMembers = new HashSet<>(configuredAssignment.keySet());
 
@@ -529,8 +529,8 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
                 assignor.candidateWorkersForReassignment);
-        assertEquals(time.milliseconds() + rebalanceDelay, assignor.scheduledRebalance);
-        assertEquals(rebalanceDelay, assignor.delay);
+        assertEquals(time.milliseconds() + rebalanceDelay, assignor.getScheduledRebalance());
+        assertEquals(rebalanceDelay, assignor.getDelay());
 
         assignor.previousMembers = new HashSet<>(configuredAssignment.keySet());
         time.sleep(rebalanceDelay / 2);
@@ -544,8 +544,8 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals("Wrong set of workers for reassignments",
                 Collections.singleton(flakyWorker),
                 assignor.candidateWorkersForReassignment);
-        assertEquals(time.milliseconds() + rebalanceDelay, assignor.scheduledRebalance);
-        assertEquals(rebalanceDelay, assignor.delay);
+        assertEquals(time.milliseconds() + rebalanceDelay, assignor.getScheduledRebalance());
+        assertEquals(rebalanceDelay, assignor.getDelay());
 
         assignor.previousMembers = new HashSet<>(configuredAssignment.keySet());
         time.sleep(rebalanceDelay);
@@ -565,8 +565,8 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals("Wrong set of workers for reassignments",
                 Collections.emptySet(),
                 assignor.candidateWorkersForReassignment);
-        assertEquals(0, assignor.scheduledRebalance);
-        assertEquals(0, assignor.delay);
+        assertEquals(0, assignor.getScheduledRebalance());
+        assertEquals(0, assignor.getDelay());
     }
 
     @Test
@@ -1217,7 +1217,7 @@ public class IncrementalCooperativeAssignorTest {
         assertEquals(
                 "Wrong rebalance delay",
                 expectedDelay,
-                assignor.delay
+                assignor.getDelay()
         );
     }
 

@@ -173,6 +173,15 @@ public class Timer {
     }
 
     /**
+     * Get the deadline time in milliseconds when this timer would expire. The deadlineMs time
+     * is generally updated through {@link #reset(long)} method or {@link #updateAndReset(long)}
+     * method call.
+     *
+     * @return The deadline time in milliseconds at which the timer would expire.
+     */
+    public long deadlineMs() {return deadlineMs;}
+
+    /**
      * Get the amount of time that has elapsed since the timer began. If the timer was reset, this
      * will be the amount of time since the last reset.
      *
