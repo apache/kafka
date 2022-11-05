@@ -202,6 +202,24 @@ public class FeatureControlManagerTest {
     }
 
     @Test
+    public void testFeatureControlIteratorWithOldMetadataVersion() throws Exception {
+        // We require minimum of IBP_3_3_IV0 to write metadata version in the snapshot.
+
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+        FeatureControlManager manager = new FeatureControlManager.Builder()
+            .setLogContext(logContext)
+            .setSnapshotRegistry(snapshotRegistry)
+            .setMetadataVersion(MetadataVersion.IBP_3_2_IV0)
+            .build();
+
+        RecordTestUtils.assertBatchIteratorContains(
+            Collections.emptyList(),
+            manager.iterator(Long.MAX_VALUE)
+        );
+    }
+
+    @Test
     public void testFeatureControlIterator() throws Exception {
         LogContext logContext = new LogContext();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
