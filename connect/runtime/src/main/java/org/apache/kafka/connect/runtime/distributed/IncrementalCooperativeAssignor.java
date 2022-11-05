@@ -86,7 +86,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         this.delay = 0;
         this.previousGenerationId = -1;
         this.previousMembers = Collections.emptySet();
-        //this.timer = time.timer(maxDelay);
     }
 
     @Override
@@ -535,25 +534,19 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         } else {
             candidateWorkersForReassignment
                     .addAll(candidateWorkersForReassignment(completeWorkerAssignment));
-            if (timer != null) {
-                if (timer.notExpired()) {
-                    // a delayed rebalance is in progress, but it's not yet time to reassign
-                    // unaccounted resources
-                    updateTimer();
-                    log.debug("Delayed rebalance in progress. Task reassignment is postponed. New computed rebalance delay: {}", timer.remainingMs());
-                } else {
-                    // We could also extract the current minimum delay from the group, to make
-                    // independent of consecutive leader failures, but this optimization is skipped
-                    // at the moment
-                    timer.updateAndReset(maxDelay);
-                    log.debug("Resetting rebalance delay to the max: {}. scheduledRebalance: {} now: {} diff scheduledRebalance - now: {}",
-                            delay, timer.deadlineMs(), now, timer.deadlineMs() - now);
-                }
-            } else {
+
+            if (timer == null) {
+                // We could also extract the current minimum delay from the group, to make
+                // independent of consecutive leader failures, but this optimization is skipped
+                // at the moment
                 timer = time.timer(maxDelay);
                 log.debug("Resetting rebalance delay to the max: {}. scheduledRebalance: {} now: {} diff scheduledRebalance - now: {}",
                         delay, timer.deadlineMs(), now, timer.deadlineMs() - now);
-
+            } else {
+                // a delayed rebalance is in progress, but it's not yet time to reassign
+                // unaccounted resources
+                updateTimer();
+                log.debug("Delayed rebalance in progress. Task reassignment is postponed. New computed rebalance delay: {}", timer.remainingMs());
             }
             /*if (now < scheduledRebalance) {
                 // a delayed rebalance is in progress, but it's not yet time to reassign
