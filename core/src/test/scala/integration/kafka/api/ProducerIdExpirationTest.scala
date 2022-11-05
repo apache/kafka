@@ -113,7 +113,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     producer.flush()
 
     // Ensure producer IDs are added.
-    assertEquals(1, producerState.size)
+    TestUtils.waitUntilTrue(() => producerState.size == 1, "Producer IDs were not added.")
 
     producer.abortTransaction()
 
