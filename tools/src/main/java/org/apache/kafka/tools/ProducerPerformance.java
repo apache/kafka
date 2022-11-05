@@ -355,7 +355,6 @@ public class ProducerPerformance {
             this.latencies = new int[(int) (numRecords / this.sampling) + 1];
             this.index = 0;
             this.maxLatency = 0;
-            this.totalLatency = 0;
             this.windowCount = 0;
             this.windowMaxLatency = 0;
             this.windowTotalLatency = 0;
