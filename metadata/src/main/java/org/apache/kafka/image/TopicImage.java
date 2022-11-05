@@ -19,18 +19,14 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.image.writer.ImageWriter;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
-
-import static org.apache.kafka.common.metadata.MetadataRecordType.TOPIC_RECORD;
 
 
 /**
@@ -65,17 +61,15 @@ public final class TopicImage {
         return partitions;
     }
 
-    public void write(Consumer<List<ApiMessageAndVersion>> out) {
-        List<ApiMessageAndVersion> batch = new ArrayList<>();
-        batch.add(new ApiMessageAndVersion(new TopicRecord().
+    public void write(ImageWriter writer, ImageWriterOptions options) {
+        writer.write(0, new TopicRecord().
             setName(name).
-            setTopicId(id), TOPIC_RECORD.highestSupportedVersion()));
+            setTopicId(id));
         for (Entry<Integer, PartitionRegistration> entry : partitions.entrySet()) {
             int partitionId = entry.getKey();
             PartitionRegistration partition = entry.getValue();
-            batch.add(partition.toRecord(id, partitionId));
+            writer.write(partition.toRecord(id, partitionId));
         }
-        out.accept(batch);
     }
 
     @Override

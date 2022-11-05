@@ -60,6 +60,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -74,7 +75,6 @@ import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.LeaderRecoveryState;
-import org.apache.kafka.metadata.MockRandom;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
@@ -83,6 +83,7 @@ import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
+import org.apache.kafka.server.util.MockRandom;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -267,6 +268,21 @@ public class ReplicationControlManagerTest {
                 replay(result.records());
             }
             return topicResult;
+        }
+
+        void deleteTopic(Uuid topicId) throws Exception {
+            ControllerResult<Map<Uuid, ApiError>> result = replicationControl.deleteTopics(Collections.singleton(topicId));
+            assertEquals(Collections.singleton(topicId), result.response().keySet());
+            assertEquals(NONE, result.response().get(topicId).error());
+            assertEquals(1, result.records().size());
+
+            ApiMessageAndVersion removeRecordAndVersion = result.records().get(0);
+            assertTrue(removeRecordAndVersion.message() instanceof RemoveTopicRecord);
+
+            RemoveTopicRecord removeRecord = (RemoveTopicRecord) removeRecordAndVersion.message();
+            assertEquals(topicId, removeRecord.topicId());
+
+            replay(result.records());
         }
 
         void createPartitions(int count, String name,
@@ -699,6 +715,21 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
+    public void testCreateTopicWithCollisionChars() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext(Optional.empty());
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+
+        CreatableTopicResult initialTopic = ctx.createTestTopic("foo.bar", 2, (short) 2, NONE.code());
+        assertEquals(2, ctx.replicationControl.getTopic(initialTopic.topicId()).numPartitions(Long.MAX_VALUE));
+        ctx.deleteTopic(initialTopic.topicId());
+
+        CreatableTopicResult recreatedTopic = ctx.createTestTopic("foo.bar", 4, (short) 2, NONE.code());
+        assertNotEquals(initialTopic.topicId(), recreatedTopic.topicId());
+        assertEquals(4, ctx.replicationControl.getTopic(recreatedTopic.topicId()).numPartitions(Long.MAX_VALUE));
+    }
+
+    @Test
     public void testGlobalTopicAndPartitionMetrics() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext();
         ReplicationControlManager replicationControl = ctx.replicationControl;
@@ -809,9 +840,9 @@ public class ReplicationControlManagerTest {
         ReplicationControlManager.validateNewTopicNames(topicErrors, topics, Collections.emptyMap());
         Map<String, ApiError> expectedTopicErrors = new HashMap<>();
         expectedTopicErrors.put("", new ApiError(INVALID_TOPIC_EXCEPTION,
-            "Topic name is illegal, it can't be empty"));
+            "Topic name is invalid: the empty string is not allowed"));
         expectedTopicErrors.put(".", new ApiError(INVALID_TOPIC_EXCEPTION,
-            "Topic name cannot be \".\" or \"..\""));
+            "Topic name is invalid: '.' is not allowed"));
         assertEquals(expectedTopicErrors, topicErrors);
     }
 

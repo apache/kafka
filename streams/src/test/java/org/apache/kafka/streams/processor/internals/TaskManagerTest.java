@@ -49,7 +49,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory
 import org.apache.kafka.streams.processor.internals.StateUpdater.ExceptionAndTasks;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
-import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 
 import java.nio.file.Files;
@@ -247,6 +247,38 @@ public class TaskManagerTest {
         taskManager.handleAssignment(activeTasks, standbyTasks);
 
         Mockito.verifyNoInteractions(stateUpdater);
+    }
+
+    @Test
+    public void shouldNotUpdateExistingStandbyTaskIfStandbyIsReassignedWithSameInputPartitionWithoutStateUpdater() {
+        final StandbyTask standbyTask = standbyTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId03Partitions).build();
+        updateExistingStandbyTaskIfStandbyIsReassignedWithoutStateUpdater(standbyTask, taskId03Partitions);
+        Mockito.verify(standbyTask, never()).updateInputPartitions(Mockito.eq(taskId03Partitions), Mockito.any());
+    }
+
+    @Test
+    public void shouldUpdateExistingStandbyTaskIfStandbyIsReassignedWithDifferentInputPartitionWithoutStateUpdater() {
+        final StandbyTask standbyTask = standbyTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId03Partitions).build();
+        updateExistingStandbyTaskIfStandbyIsReassignedWithoutStateUpdater(standbyTask, taskId04Partitions);
+        Mockito.verify(standbyTask).updateInputPartitions(Mockito.eq(taskId04Partitions), Mockito.any());
+    }
+
+    private void updateExistingStandbyTaskIfStandbyIsReassignedWithoutStateUpdater(final Task standbyTask,
+                                                                                   final Set<TopicPartition> newInputPartition) {
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        when(tasks.allTasks()).thenReturn(mkSet(standbyTask));
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
+
+        taskManager.handleAssignment(
+            Collections.emptyMap(),
+            mkMap(mkEntry(standbyTask.id(), newInputPartition))
+        );
+
+        Mockito.verify(standbyTask).resume();
     }
 
     @Test
@@ -1400,7 +1432,36 @@ public class TaskManagerTest {
         );
 
         assertEquals(mkSet(taskId00, taskId01), thrown.corruptedTasks());
-        assertEquals("Tasks [0_1, 0_0] are corrupted and hence needs to be re-initialized", thrown.getMessage());
+        assertEquals("Tasks [0_1, 0_0] are corrupted and hence need to be re-initialized", thrown.getMessage());
+    }
+
+    @Test
+    public void shouldRethrowTaskCorruptedExceptionFromInitialization() {
+        final StreamTask statefulTask0 = statefulTask(taskId00, taskId00ChangelogPartitions)
+                .inState(State.CREATED)
+                .withInputPartitions(taskId00Partitions).build();
+        final StreamTask statefulTask1 = statefulTask(taskId01, taskId01ChangelogPartitions)
+                .inState(State.CREATED)
+                .withInputPartitions(taskId01Partitions).build();
+        final StreamTask statefulTask2 = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId02Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, tasks, true);
+        when(tasks.drainPendingTaskToInit()).thenReturn(mkSet(statefulTask0, statefulTask1, statefulTask2));
+        doThrow(new TaskCorruptedException(Collections.singleton(statefulTask0.id))).when(statefulTask0).initializeIfNeeded();
+        doThrow(new TaskCorruptedException(Collections.singleton(statefulTask1.id))).when(statefulTask1).initializeIfNeeded();
+
+        final TaskCorruptedException thrown = assertThrows(
+                TaskCorruptedException.class,
+                () -> taskManager.checkStateUpdater(time.milliseconds(), noOpResetter)
+        );
+
+        Mockito.verify(tasks).addTask(statefulTask0);
+        Mockito.verify(tasks).addTask(statefulTask1);
+        Mockito.verify(stateUpdater).add(statefulTask2);
+        assertEquals(mkSet(taskId00, taskId01), thrown.corruptedTasks());
+        assertEquals("Tasks [0_1, 0_0] are corrupted and hence need to be re-initialized", thrown.getMessage());
     }
 
     @Test
@@ -1447,6 +1508,36 @@ public class TaskManagerTest {
 
         verify(stateDirectory);
         assertThat(taskManager.lockedTaskDirectories(), is(singleton(taskId01)));
+    }
+
+    @Test
+    public void shouldPauseAllTopicsWithoutStateUpdaterOnRebalanceComplete() {
+        final Set<TopicPartition> assigned = mkSet(t1p0, t1p1);
+        expect(consumer.assignment()).andReturn(assigned);
+        consumer.pause(assigned);
+        replay(consumer);
+
+        taskManager.handleRebalanceComplete();
+
+        verify(consumer);
+    }
+
+    @Test
+    public void shouldNotPauseReadyTasksWithStateUpdaterOnRebalanceComplete() {
+        final StreamTask statefulTask0 = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .inState(State.RUNNING)
+            .withInputPartitions(taskId00Partitions).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(tasks.allTasks()).thenReturn(mkSet(statefulTask0));
+        final Set<TopicPartition> assigned = mkSet(t1p0, t1p1);
+        expect(consumer.assignment()).andReturn(assigned);
+        consumer.pause(mkSet(t1p1));
+        replay(consumer);
+
+        taskManager.handleRebalanceComplete();
+
+        verify(consumer);
     }
 
     @Test

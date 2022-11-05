@@ -418,10 +418,14 @@ public class NamedTopologyIntegrationTest {
                 streams.streamsMetadataForStore(topology2Store, TOPOLOGY_2),
                 streams2.streamsMetadataForStore(topology2Store, TOPOLOGY_2));
 
+            assertThat(streams.allStreamsClientsMetadataForTopology(TOPOLOGY_1).size(), equalTo(2));
+            assertThat(streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_1).size(), equalTo(2));
             verifyMetadataForTopology(
                 TOPOLOGY_1,
                 streams.allStreamsClientsMetadataForTopology(TOPOLOGY_1),
                 streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_1));
+            assertThat(streams.allStreamsClientsMetadataForTopology(TOPOLOGY_2).size(), equalTo(2));
+            assertThat(streams2.allStreamsClientsMetadataForTopology(TOPOLOGY_2).size(), equalTo(2));
             verifyMetadataForTopology(
                 TOPOLOGY_2,
                 streams.allStreamsClientsMetadataForTopology(TOPOLOGY_2),
@@ -820,7 +824,7 @@ public class NamedTopologyIntegrationTest {
         try {
             final AtomicInteger noOutputExpected = new AtomicInteger(0);
             final AtomicInteger outputExpected = new AtomicInteger(0);
-            props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+            props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
             props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 15000L);
             props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath());
             props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
@@ -924,8 +928,12 @@ public class NamedTopologyIntegrationTest {
                                                             .collect(Collectors.toList())),
             is(true));
 
-        // then verify that only this topology's one store appears
-        assertThat(metadata.stateStoreNames(), equalTo(singleton("store-" + topologyName)));
+        // then verify that only this topology's one store appears if the host has partitions assigned
+        if (!metadata.topicPartitions().isEmpty()) {
+            assertThat(metadata.stateStoreNames(), equalTo(singleton("store-" + topologyName)));
+        } else {
+            assertThat(metadata.stateStoreNames().isEmpty(), is(true));
+        }
 
         // finally make sure the standby fields are empty since they are not enabled for this test
         assertThat(metadata.standbyTopicPartitions().isEmpty(), is(true));

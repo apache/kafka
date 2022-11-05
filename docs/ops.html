@@ -2341,7 +2341,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   <!--#include virtual="generated/producer_metrics.html" -->
 
 
-  <h4 class="anchor-heading"><a id="consumer_monitoring" class="anchor-link"></a><a href="#consumer_monitoring">consumer monitoring</a></h4>
+  <h4 class="anchor-heading"><a id="consumer_monitoring" class="anchor-link"></a><a href="#consumer_monitoring">Consumer monitoring</a></h4>
 
   The following metrics are available on consumer instances.
 
@@ -3504,7 +3504,7 @@ foo
     <li>For redundancy, a Kafka cluster should use 3 controllers. More than 3 servers is not recommended in critical environments. In the rare case of a partial network failure it is possible for the cluster metadata quorum to become unavailable. This limitation will be addresses in a future release of Kafka.</li>
     <li>The Kafka controllers store all of the metadata for the cluster in memory and on disk. We believe that for a typical Kafka cluster 5GB of main memory and 5GB of disk space on the metadata log director is sufficient.</li>
 
-  <h4 class="anchor-heading"><a id="kraft_deployment" class="anchor-link"></a><a href="#kraft_deployment">Missing Features</a></h4>
+  <h4 class="anchor-heading"><a id="kraft_missing" class="anchor-link"></a><a href="#kraft_missing">Missing Features</a></h4>
 
   <p>The following features are not fullying implemented in KRaft mode:</p>
 

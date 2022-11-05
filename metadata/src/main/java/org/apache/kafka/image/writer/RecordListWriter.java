@@ -15,20 +15,37 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.metadata;
+package org.apache.kafka.image.writer;
 
-import java.util.Random;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+
+import java.util.ArrayList;
+import java.util.List;
 
 
 /**
- * A subclass of Random with a fixed seed and generation algorithm.
+ * Writes a metadata image to a list of records.
  */
-public class MockRandom extends Random {
-    private long state = 17;
+public class RecordListWriter implements ImageWriter {
+    private final List<ApiMessageAndVersion> records = new ArrayList<>();
+    private boolean closed = false;
 
     @Override
-    protected int next(int bits) {
-        state = (state * 2862933555777941757L) + 3037000493L;
-        return (int) (state >>> (64 - bits));
+    public void write(ApiMessageAndVersion record) {
+        if (closed) throw new ImageWriterClosedException();
+        records.add(record);
+    }
+
+    public List<ApiMessageAndVersion> records() {
+        return records;
+    }
+
+    @Override
+    public void close(boolean complete) {
+        if (closed) return;
+        closed = true;
+        if (!complete) {
+            records.clear();
+        }
     }
 }

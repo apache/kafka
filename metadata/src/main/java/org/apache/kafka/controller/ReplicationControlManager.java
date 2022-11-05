@@ -263,6 +263,10 @@ public class ReplicationControlManager {
         public Uuid topicId() {
             return id;
         }
+
+        public int numPartitions(long epoch) {
+            return parts.size(epoch);
+        }
     }
 
     /**
@@ -342,7 +346,7 @@ public class ReplicationControlManager {
      * Since we reject topic creations that would collide, under normal conditions the
      * sets in this map should only have a size of 1. However, if the cluster was
      * upgraded from a version prior to KAFKA-13743, it may be possible to have more
-     * values here, since collidiing topic names will be "grandfathered in."
+     * values here, since colliding topic names will be "grandfathered in."
      */
     private final TimelineHashMap<String, TimelineHashSet<String>> topicsWithCollisionChars;
 
@@ -527,7 +531,7 @@ public class ReplicationControlManager {
             if (colliding != null) {
                 colliding.remove(topic.name);
                 if (colliding.isEmpty()) {
-                    topicsWithCollisionChars.remove(topic.name);
+                    topicsWithCollisionChars.remove(normalizedName);
                 }
             }
         }
@@ -1440,7 +1444,7 @@ public class ReplicationControlManager {
      * Attempt to elect a preferred leader for all topic partitions which have a leader that is not the preferred replica.
      *
      * The response() method in the return object is true if this method returned without electing all possible preferred replicas.
-     * The quorum controlller should reschedule this operation immediately if it is true.
+     * The quorum controller should reschedule this operation immediately if it is true.
      *
      * @return All of the election records and if there may be more available preferred replicas to elect as leader
      */

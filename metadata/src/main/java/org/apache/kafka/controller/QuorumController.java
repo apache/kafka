@@ -158,7 +158,6 @@ public final class QuorumController implements Controller {
         private final int nodeId;
         private final String clusterId;
         private FaultHandler fatalFaultHandler = null;
-        private FaultHandler metadataFaultHandler = null;
         private Time time = Time.SYSTEM;
         private String threadNamePrefix = null;
         private LogContext logContext = null;
@@ -188,11 +187,6 @@ public final class QuorumController implements Controller {
 
         public Builder setFatalFaultHandler(FaultHandler fatalFaultHandler) {
             this.fatalFaultHandler = fatalFaultHandler;
-            return this;
-        }
-
-        public Builder setMetadataFaultHandler(FaultHandler metadataFaultHandler) {
-            this.metadataFaultHandler = metadataFaultHandler;
             return this;
         }
 
@@ -315,8 +309,6 @@ public final class QuorumController implements Controller {
                 throw new IllegalStateException("You must specify the quorum features");
             } else if (fatalFaultHandler == null) {
                 throw new IllegalStateException("You must specify a fatal fault handler.");
-            } else if (metadataFaultHandler == null) {
-                throw new IllegalStateException("You must specify a metadata fault handler.");
             }
 
             if (threadNamePrefix == null) {
@@ -335,7 +327,6 @@ public final class QuorumController implements Controller {
                 queue = new KafkaEventQueue(time, logContext, threadNamePrefix + "QuorumController");
                 return new QuorumController(
                     fatalFaultHandler,
-                    metadataFaultHandler,
                     logContext,
                     nodeId,
                     clusterId,
@@ -984,16 +975,20 @@ public final class QuorumController implements Controller {
                                             "controller, which was %d of %d record(s) in the batch with baseOffset %d.",
                                             message.message().getClass().getSimpleName(), i, messages.size(),
                                             batch.baseOffset());
-                                    throw metadataFaultHandler.handleFault(failureMessage, e);
+                                    throw fatalFaultHandler.handleFault(failureMessage, e);
                                 }
                                 i++;
                             }
                         }
-                        updateLastCommittedState(offset, epoch, batch.appendTimestamp());
-                        processedRecordsSize += batch.sizeInBytes();
+                        updateLastCommittedState(
+                            offset,
+                            epoch,
+                            batch.appendTimestamp(),
+                            committedBytesSinceLastSnapshot + batch.sizeInBytes()
+                        );
                     }
 
-                    maybeGenerateSnapshot(processedRecordsSize);
+                    maybeGenerateSnapshot();
                 } finally {
                     reader.close();
                 }
@@ -1040,7 +1035,7 @@ public final class QuorumController implements Controller {
                                         "%d record(s) in the batch with baseOffset %d.",
                                         message.message().getClass().getSimpleName(), reader.snapshotId(),
                                         i, messages.size(), batch.baseOffset());
-                                throw metadataFaultHandler.handleFault(failureMessage, e);
+                                throw fatalFaultHandler.handleFault(failureMessage, e);
                             }
                             i++;
                         }
@@ -1048,10 +1043,10 @@ public final class QuorumController implements Controller {
                     updateLastCommittedState(
                         reader.lastContainedLogOffset(),
                         reader.lastContainedLogEpoch(),
-                        reader.lastContainedLogTimestamp()
+                        reader.lastContainedLogTimestamp(),
+                        0
                     );
                     snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
-                    newBytesSinceLastSnapshot = 0L;
                     authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
                 } finally {
                     reader.close();
@@ -1203,10 +1198,16 @@ public final class QuorumController implements Controller {
         }
     }
 
-    private void updateLastCommittedState(long offset, int epoch, long timestamp) {
+    private void updateLastCommittedState(
+        long offset,
+        int epoch,
+        long timestamp,
+        long bytesSinceLastSnapshot
+    ) {
         lastCommittedOffset = offset;
         lastCommittedEpoch = epoch;
         lastCommittedTimestamp = timestamp;
+        committedBytesSinceLastSnapshot = bytesSinceLastSnapshot;
 
         controllerMetrics.setLastCommittedRecordOffset(offset);
         if (!isActiveController()) {
@@ -1232,7 +1233,6 @@ public final class QuorumController implements Controller {
             }
             snapshotRegistry.revertToSnapshot(lastCommittedOffset);
             authorizer.ifPresent(a -> a.loadSnapshot(aclControlManager.idToAcl()));
-            newBytesSinceLastSnapshot = 0L;
             updateWriteOffset(-1);
             clusterControl.deactivate();
             cancelMaybeFenceReplicas();
@@ -1454,9 +1454,8 @@ public final class QuorumController implements Controller {
         }
     }
 
-    private void maybeGenerateSnapshot(long batchSizeInBytes) {
-        newBytesSinceLastSnapshot += batchSizeInBytes;
-        if (newBytesSinceLastSnapshot >= snapshotMaxNewRecordBytes &&
+    private void maybeGenerateSnapshot() {
+        if (committedBytesSinceLastSnapshot >= snapshotMaxNewRecordBytes &&
             snapshotGeneratorManager.generator == null
         ) {
             if (!isActiveController()) {
@@ -1466,11 +1465,20 @@ public final class QuorumController implements Controller {
                 snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
             }
 
-            log.info("Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot because, {}.",
-                lastCommittedEpoch, lastCommittedOffset, newBytesSinceLastSnapshot, SnapshotReason.MaxBytesExceeded);
+            log.info(
+                "Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot because, {}.",
+                lastCommittedEpoch,
+                lastCommittedOffset,
+                committedBytesSinceLastSnapshot,
+                SnapshotReason.MaxBytesExceeded
+            );
 
-            snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset, lastCommittedEpoch, lastCommittedTimestamp);
-            newBytesSinceLastSnapshot = 0;
+            snapshotGeneratorManager.createSnapshotGenerator(
+                lastCommittedOffset,
+                lastCommittedEpoch,
+                lastCommittedTimestamp
+            );
+            committedBytesSinceLastSnapshot = 0;
         }
     }
 
@@ -1481,19 +1489,13 @@ public final class QuorumController implements Controller {
         snapshotGeneratorManager.cancel();
         snapshotRegistry.reset();
 
-        newBytesSinceLastSnapshot = 0;
-        updateLastCommittedState(-1, -1, -1);
+        updateLastCommittedState(-1, -1, -1, 0);
     }
 
     /**
      * Handles faults that should normally be fatal to the process.
      */
     private final FaultHandler fatalFaultHandler;
-
-    /**
-     * Handles faults in metadata handling that are normally not fatal.
-     */
-    private final FaultHandler metadataFaultHandler;
 
     /**
      * The slf4j log context, used to create new loggers.
@@ -1660,7 +1662,7 @@ public final class QuorumController implements Controller {
     /**
      * Number of bytes processed through handling commits since the last snapshot was generated.
      */
-    private long newBytesSinceLastSnapshot = 0;
+    private long committedBytesSinceLastSnapshot = 0;
 
     /**
      * How long to delay partition leader balancing operations.
@@ -1687,7 +1689,7 @@ public final class QuorumController implements Controller {
     private ImbalanceSchedule imbalancedScheduled = ImbalanceSchedule.DEFERRED;
 
     /**
-     * Tracks if the a write of the NoOpRecord has been scheduled.
+     * Tracks if the write of the NoOpRecord has been scheduled.
      */
     private boolean noOpRecordScheduled = false;
 
@@ -1703,7 +1705,6 @@ public final class QuorumController implements Controller {
 
     private QuorumController(
         FaultHandler fatalFaultHandler,
-        FaultHandler metadataFaultHandler,
         LogContext logContext,
         int nodeId,
         String clusterId,
@@ -1729,7 +1730,6 @@ public final class QuorumController implements Controller {
         int maxRecordsPerBatch
     ) {
         this.fatalFaultHandler = fatalFaultHandler;
-        this.metadataFaultHandler = metadataFaultHandler;
         this.logContext = logContext;
         this.log = logContext.logger(QuorumController.class);
         this.nodeId = nodeId;
@@ -2011,7 +2011,7 @@ public final class QuorumController implements Controller {
                 public void processBatchEndOffset(long offset) {
                     if (inControlledShutdown) {
                         clusterControl.heartbeatManager().
-                            updateControlledShutdownOffset(brokerId, offset);
+                            maybeUpdateControlledShutdownOffset(brokerId, offset);
                     }
                 }
             });
@@ -2117,8 +2117,13 @@ public final class QuorumController implements Controller {
         CompletableFuture<Long> future = new CompletableFuture<>();
         appendControlEvent("beginWritingSnapshot", () -> {
             if (snapshotGeneratorManager.generator == null) {
-                log.info("Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot because, {}.",
-                    lastCommittedEpoch, lastCommittedOffset, newBytesSinceLastSnapshot, SnapshotReason.UnknownReason);
+                log.info(
+                    "Generating a snapshot that includes (epoch={}, offset={}) after {} committed bytes since the last snapshot because, {}.",
+                    lastCommittedEpoch,
+                    lastCommittedOffset,
+                    committedBytesSinceLastSnapshot,
+                    SnapshotReason.UnknownReason
+                );
                 snapshotGeneratorManager.createSnapshotGenerator(
                     lastCommittedOffset,
                     lastCommittedEpoch,

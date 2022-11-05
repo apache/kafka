@@ -17,15 +17,12 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.image.writer.ImageWriter;
+import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerRegistration;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -54,12 +51,10 @@ public final class ClusterImage {
         return brokers.get(nodeId);
     }
 
-    public void write(Consumer<List<ApiMessageAndVersion>> out, MetadataVersion metadataVersion) {
-        List<ApiMessageAndVersion> batch = new ArrayList<>();
+    public void write(ImageWriter writer, ImageWriterOptions options) {
         for (BrokerRegistration broker : brokers.values()) {
-            batch.add(broker.toRecord(metadataVersion));
+            writer.write(broker.toRecord(options));
         }
-        out.accept(batch);
     }
 
     @Override

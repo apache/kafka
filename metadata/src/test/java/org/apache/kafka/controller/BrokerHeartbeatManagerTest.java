@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeSet;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
@@ -203,15 +204,36 @@ public class BrokerHeartbeatManagerTest {
         expected.add(new UsableBroker(3, Optional.of("rack2"), false));
         expected.add(new UsableBroker(4, Optional.of("rack1"), true));
         assertEquals(expected, usableBrokersToSet(manager));
-        manager.updateControlledShutdownOffset(2, 0);
+        manager.maybeUpdateControlledShutdownOffset(2, 0);
         assertEquals(100L, manager.lowestActiveOffset());
         assertThrows(RuntimeException.class,
-            () -> manager.updateControlledShutdownOffset(4, 0));
+            () -> manager.maybeUpdateControlledShutdownOffset(4, 0));
         manager.touch(4, false, 100);
-        manager.updateControlledShutdownOffset(4, 0);
+        manager.maybeUpdateControlledShutdownOffset(4, 0);
         expected.remove(new UsableBroker(2, Optional.of("rack1"), false));
         expected.remove(new UsableBroker(4, Optional.of("rack1"), true));
         assertEquals(expected, usableBrokersToSet(manager));
+    }
+
+    @Test
+    public void testControlledShutdownOffsetIsOnlyUpdatedOnce() {
+        BrokerHeartbeatManager manager = newBrokerHeartbeatManager();
+        assertEquals(Collections.emptySet(), usableBrokersToSet(manager));
+        manager.touch(0, false, 100);
+        manager.touch(1, false, 100);
+        manager.touch(2, false, 98);
+        manager.touch(3, false, 100);
+        manager.touch(4, true, 100);
+        assertEquals(OptionalLong.empty(), manager.controlledShutdownOffset(2));
+        manager.maybeUpdateControlledShutdownOffset(2, 98);
+        assertEquals(OptionalLong.of(98), manager.controlledShutdownOffset(2));
+        manager.maybeUpdateControlledShutdownOffset(2, 99);
+        assertEquals(OptionalLong.of(98), manager.controlledShutdownOffset(2));
+        assertEquals(OptionalLong.empty(), manager.controlledShutdownOffset(3));
+        manager.maybeUpdateControlledShutdownOffset(3, 101);
+        assertEquals(OptionalLong.of(101), manager.controlledShutdownOffset(3));
+        manager.maybeUpdateControlledShutdownOffset(3, 102);
+        assertEquals(OptionalLong.of(101), manager.controlledShutdownOffset(3));
     }
 
     @Test
@@ -256,7 +278,7 @@ public class BrokerHeartbeatManagerTest {
         manager.touch(3, false, 100);
         manager.touch(4, true, 100);
         manager.touch(5, false, 99);
-        manager.updateControlledShutdownOffset(5, 99);
+        manager.maybeUpdateControlledShutdownOffset(5, 99);
 
         assertEquals(98L, manager.lowestActiveOffset());
 
