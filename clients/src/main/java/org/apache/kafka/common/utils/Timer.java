@@ -179,7 +179,9 @@ public class Timer {
      *
      * @return The deadline time in milliseconds at which the timer would expire.
      */
-    public long deadlineMs() {return deadlineMs;}
+    public long deadlineMs() {
+        return deadlineMs;
+    }
 
     /**
      * Get the amount of time that has elapsed since the timer began. If the timer was reset, this
