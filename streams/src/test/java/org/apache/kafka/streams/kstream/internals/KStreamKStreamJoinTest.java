@@ -39,7 +39,6 @@ import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
@@ -67,9 +66,15 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.Optional;
+import java.util.Spliterator;
+import java.util.Spliterators;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMillis;
@@ -396,41 +401,31 @@ public class KStreamKStreamJoinTest {
 
         joinProcessor.init(procCtx);
 
-        final Record<String, String> record1 = new Record<>("key1", "value2", 10000L);
+        final Record<String, String> record1 = new Record<>("key1", "value1", 10000L);
         final Record<String, String> record2 = new Record<>("key2", "value2", 13000L);
-        final Record<String, String> record3 = new Record<>("key3", "value2", 15000L);
-        final Record<String, String> record4 = new Record<>("key3", "value2", 17000L);
+        final Record<String, String> record3 = new Record<>("key3", "value3", 15000L);
+        final Record<String, String> record4 = new Record<>("key4", "value4", 17000L);
 
-        /*
-        The whole test flow requires 4 `process(record)` invocations, we assume there is a 500ms delay between each invocation:
-
-        1. Process 1st record, there is no record in outerStore yet, so we skip the entire processing of outerStore.
-           But this help us to put record into outerStore.
-        2. Process 2nd record, we have 1st record in outerStore, so we will process outer records.
-        3. We simulate a clock drift, here we need to assume the real world has only moved 500ms, but our wall clock has moved 2000ms.
-        4. Process 3rd record, because of clock drift, no throttling happen.
-        5. Process 4th record, it should be throttled despite of clock drift in step 3.
-        * */
         procCtx.setSystemTimeMs(1000L);
         joinProcessor.process(record1);
-        try (final KeyValueIterator it = Mockito.verify(outerStore, Mockito.never()).all()) {
-        }
 
-        procCtx.setSystemTimeMs(1500L);
+        procCtx.setSystemTimeMs(2100L);
         joinProcessor.process(record2);
-        try (final KeyValueIterator it = Mockito.verify(outerStore, Mockito.times(1)).all()) {
-        }
 
-        procCtx.setSystemTimeMs(3500L);
+        procCtx.setSystemTimeMs(2500L);
         joinProcessor.process(record3);
-        try (final KeyValueIterator it = Mockito.verify(outerStore, Mockito.times(2)).all()) {
-        }
+        // being throttled, so the older value still exists
+        assertEquals(2, iteratorToList(outerStore.all()).size());
 
         procCtx.setSystemTimeMs(4000L);
         joinProcessor.process(record4);
-        try (final KeyValueIterator it = Mockito.verify(outerStore, Mockito.times(2)).all()) {
-        }
+        assertEquals(1, iteratorToList(outerStore.all()).size());
+    }
 
+    private <T> List<T> iteratorToList(final Iterator<T> iterator) {
+        return StreamSupport.stream(
+                        Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false)
+                .collect(Collectors.toList());
     }
 
     private void runJoin(final StreamJoined<String, Integer, Integer> streamJoined,
@@ -1908,7 +1903,7 @@ public class KStreamKStreamJoinTest {
             "      <-- second-join-this-join, second-join-other-join\n" +
             "    Sink: KSTREAM-SINK-0000000021 (topic: out-two)\n" +
             "      <-- second-join-merge\n\n";
-    
+
     private final String expectedTopologyWithGeneratedRepartitionTopic = "Topologies:\n" +
             "   Sub-topology: 0\n" +
             "    Source: KSTREAM-SOURCE-0000000000 (topics: [topic])\n" +
