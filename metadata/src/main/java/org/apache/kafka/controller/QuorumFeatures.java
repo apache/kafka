@@ -124,4 +124,8 @@ public class QuorumFeatures {
     VersionRange localSupportedFeature(String featureName) {
         return localSupportedFeatures.getOrDefault(featureName, DISABLED);
     }
+
+    boolean isQuorumNodeId(int nodeId) {
+        return quorumNodeIds.contains(nodeId);
+    }
 }

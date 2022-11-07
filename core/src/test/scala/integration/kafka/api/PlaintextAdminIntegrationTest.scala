@@ -44,12 +44,14 @@ import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
+import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.slf4j.LoggerFactory
 
+import java.util.AbstractMap.SimpleImmutableEntry
 import scala.annotation.nowarn
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
@@ -2500,22 +2502,32 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
    * Test that createTopics returns the dynamic configurations of the topics that were created.
    *
    * Note: this test requires some custom static broker and controller configurations, which are set up in
-   * BaseAdminIntegrationTest.modifyConfigs and BaseAdminIntegrationTest.kraftControllerConfigs.
+   * BaseAdminIntegrationTest.modifyConfigs.
    */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateTopicsReturnsConfigs(quorum: String): Unit = {
     client = Admin.create(super.createConfig)
-
     val newLogRetentionProperties = new Properties
     newLogRetentionProperties.put(KafkaConfig.LogRetentionTimeMillisProp, "10800000")
     TestUtils.incrementalAlterConfigs(null, client, newLogRetentionProperties, perBrokerConfig = false)
       .all().get(15, TimeUnit.SECONDS)
 
-    val newLogCleanerDeleteRetention = new Properties
-    newLogCleanerDeleteRetention.put(KafkaConfig.LogCleanerDeleteRetentionMsProp, "34")
-    TestUtils.incrementalAlterConfigs(brokers, client, newLogCleanerDeleteRetention, perBrokerConfig = true)
-      .all().get(15, TimeUnit.SECONDS)
+    if (isKRaftTest()) {
+      // In KRaft mode, we don't yet support altering configs on controller nodes, except by setting
+      // default node configs. Therefore, we have to set the dynamic config directly to test this.
+      val controllerNodeResource = new ConfigResource(ConfigResource.Type.BROKER,
+        controllerServer.config.nodeId.toString)
+      controllerServer.controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT,
+        Collections.singletonMap(controllerNodeResource,
+          Collections.singletonMap(KafkaConfig.LogCleanerDeleteRetentionMsProp,
+            new SimpleImmutableEntry(AlterConfigOp.OpType.SET, "34"))), false).get()
+    } else {
+      val newLogCleanerDeleteRetention = new Properties
+      newLogCleanerDeleteRetention.put(KafkaConfig.LogCleanerDeleteRetentionMsProp, "34")
+      TestUtils.incrementalAlterConfigs(brokers, client, newLogCleanerDeleteRetention, perBrokerConfig = true)
+        .all().get(15, TimeUnit.SECONDS)
+    }
 
     if (isKRaftTest()) {
       ensureConsistentKRaftMetadata()

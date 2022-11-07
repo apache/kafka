@@ -305,4 +305,8 @@ public class FeatureControlManager {
             }
         }
     }
+
+    boolean isQuorumNodeId(int nodeId) {
+        return quorumFeatures.isQuorumNodeId(nodeId);
+    }
 }
