@@ -196,7 +196,7 @@ For backwards compatibility, the following also works:
 
 ### Installing specific projects to the local Maven repository ###
 
-    ./gradlew -PskipSigning :streams:publishToMavenLocal
+    ./gradlew -PskipSigning=true :streams:publishToMavenLocal
     
 If needed, you can specify the Scala version with `-PscalaVersion=2.13`.
 

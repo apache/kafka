@@ -19,6 +19,8 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.source.SourceTask;
 
 import java.util.List;
 import java.util.Map;
@@ -39,7 +41,7 @@ public class SampleSourceConnector extends SourceConnector {
 
     @Override
     public Class<? extends Task> taskClass() {
-        return null;
+        return SampleSourceTask.class;
     }
 
     @Override
@@ -57,5 +59,28 @@ public class SampleSourceConnector extends SourceConnector {
         return new ConfigDef()
                 .define("required", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "required docs")
                 .define("optional", ConfigDef.Type.STRING, "defaultVal", ConfigDef.Importance.HIGH, "optional docs");
+    }
+
+    public static class SampleSourceTask extends SourceTask {
+
+        @Override
+        public String version() {
+            return VERSION;
+        }
+
+        @Override
+        public void start(Map<String, String> props) {
+
+        }
+
+        @Override
+        public List<SourceRecord> poll() throws InterruptedException {
+            return null;
+        }
+
+        @Override
+        public void stop() {
+
+        }
     }
 }

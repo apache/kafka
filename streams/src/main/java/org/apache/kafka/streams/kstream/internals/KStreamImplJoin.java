@@ -186,7 +186,8 @@ class KStreamImplJoin {
             thisWindowStore.name(),
             internalWindows,
             joiner,
-            sharedTimeTracker
+            sharedTimeTracker,
+            windows.size() + windows.gracePeriodMs()
         );
 
         final PassThrough<K, VOut> joinMerge = new PassThrough<>();

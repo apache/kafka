@@ -49,12 +49,12 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
 
     @Override
     public long lastContainedLogOffset() {
-        return snapshotId.offset - 1;
+        return snapshotId.offset() - 1;
     }
 
     @Override
     public int lastContainedLogEpoch() {
-        return snapshotId.epoch;
+        return snapshotId.epoch();
     }
 
     @Override

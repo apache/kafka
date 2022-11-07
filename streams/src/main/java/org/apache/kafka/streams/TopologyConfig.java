@@ -36,6 +36,8 @@ import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTIT
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_DOC;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_DOC;
+import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_DOC;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG;
@@ -48,6 +50,7 @@ import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_DOC;
 import static org.apache.kafka.streams.StreamsConfig.ROCKS_DB;
 import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
 
 /**
  * Streams configs that apply at the topology level. The values in the {@link StreamsConfig} parameter of the
@@ -55,6 +58,7 @@ import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
  * determine the defaults, which can then be overridden for specific topologies by passing them in when creating the
  * topology builders via the {@link org.apache.kafka.streams.StreamsBuilder()} method.
  */
+@SuppressWarnings("deprecation")
 public class TopologyConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
     static {
@@ -65,10 +69,15 @@ public class TopologyConfig extends AbstractConfig {
                 Importance.LOW,
                 BUFFERED_RECORDS_PER_PARTITION_DOC)
             .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                    Type.LONG,
+                    null,
+                    Importance.MEDIUM,
+                    CACHE_MAX_BYTES_BUFFERING_DOC)
+            .define(STATESTORE_CACHE_MAX_BYTES_CONFIG,
                 Type.LONG,
                 null,
                 Importance.MEDIUM,
-                CACHE_MAX_BYTES_BUFFERING_DOC)
+                STATESTORE_CACHE_MAX_BYTES_DOC)
             .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
                 Type.CLASS,
                 null,
@@ -132,11 +141,43 @@ public class TopologyConfig extends AbstractConfig {
             maxBufferedSize = globalAppConfigs.getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         }
 
-        if (isTopologyOverride(CACHE_MAX_BYTES_BUFFERING_CONFIG, topologyOverrides)) {
-            cacheSize = getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG);
-            log.info("Topology {} is overriding {} to {}", topologyName, CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSize);
+        final boolean stateStoreCacheMaxBytesOverridden = isTopologyOverride(STATESTORE_CACHE_MAX_BYTES_CONFIG, topologyOverrides);
+        final boolean cacheMaxBytesBufferingOverridden = isTopologyOverride(CACHE_MAX_BYTES_BUFFERING_CONFIG, topologyOverrides);
+
+        if (!stateStoreCacheMaxBytesOverridden && !cacheMaxBytesBufferingOverridden) {
+            cacheSize = getTotalCacheSize(globalAppConfigs);
         } else {
-            cacheSize = globalAppConfigs.getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG);
+            if (stateStoreCacheMaxBytesOverridden && cacheMaxBytesBufferingOverridden) {
+                cacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
+                log.info("Topology {} is using both deprecated config {} and new config {}, hence {} is ignored and the new config {} (value {}) is used",
+                        topologyName,
+                        CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                        STATESTORE_CACHE_MAX_BYTES_CONFIG,
+                        CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                        STATESTORE_CACHE_MAX_BYTES_CONFIG,
+                        cacheSize);
+            } else if (cacheMaxBytesBufferingOverridden) {
+                cacheSize = getLong(CACHE_MAX_BYTES_BUFFERING_CONFIG);
+                log.info("Topology {} is using only deprecated config {}, and will be used to set cache size to {}; " +
+                                "we suggest setting the new config {} instead as deprecated {} would be removed in the future.",
+                        topologyName,
+                        CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                        cacheSize,
+                        STATESTORE_CACHE_MAX_BYTES_CONFIG,
+                        CACHE_MAX_BYTES_BUFFERING_CONFIG);
+            } else {
+                cacheSize = getLong(STATESTORE_CACHE_MAX_BYTES_CONFIG);
+            }
+
+            if (cacheSize != 0) {
+                log.warn("Topology {} is overriding cache size to {} but this will not have any effect as the "
+                                + "topology-level cache size config only controls whether record buffering is enabled "
+                                + "or disabled, thus the only valid override value is 0",
+                        topologyName, cacheSize);
+            } else {
+                log.info("Topology {} is overriding cache size to {}, record buffering will be disabled",
+                        topologyName, cacheSize);
+            }
         }
 
         if (isTopologyOverride(MAX_TASK_IDLE_MS_CONFIG, topologyOverrides)) {

@@ -824,7 +824,7 @@ public class NamedTopologyIntegrationTest {
         try {
             final AtomicInteger noOutputExpected = new AtomicInteger(0);
             final AtomicInteger outputExpected = new AtomicInteger(0);
-            props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+            props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
             props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 15000L);
             props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath());
             props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
