@@ -338,6 +338,16 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Deprecated
+    public void setBaseBackgroundCompactions(final int baseBackgroundCompactions) {
+        // no-op
+    }
+
+    @Deprecated
+    public int baseBackgroundCompactions() {
+        return -1;
+    }
+
+    @Deprecated
     @Override
     public Options setMaxBackgroundCompactions(final int maxBackgroundCompactions) {
         dbOptions.setMaxBackgroundCompactions(maxBackgroundCompactions);
@@ -597,6 +607,17 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     @Override
     public AccessHint accessHintOnCompactionStart() {
         return dbOptions.accessHintOnCompactionStart();
+    }
+
+    @Deprecated
+    public Options setNewTableReaderForCompactionInputs(final boolean newTableReaderForCompactionInputs) {
+        // no-op
+        return this;
+    }
+
+    @Deprecated
+    public boolean newTableReaderForCompactionInputs() {
+        return false;
     }
 
     @Override
@@ -1462,6 +1483,17 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     @Override
     public boolean allowIngestBehind() {
         return dbOptions.allowIngestBehind();
+    }
+
+    @Deprecated
+    public Options setPreserveDeletes(final boolean preserveDeletes) {
+        // no-op
+        return this;
+    }
+
+    @Deprecated
+    public boolean preserveDeletes() {
+        return false;
     }
 
     @Override
