@@ -139,7 +139,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     }
 
     protected KafkaBasedLog<byte[], byte[]> offsetLog;
-    private final HashMap<ByteBuffer, ByteBuffer> data = new HashMap<>();
+    final HashMap<ByteBuffer, ByteBuffer> data = new HashMap<>();
     private final Supplier<TopicAdmin> topicAdminSupplier;
     private final Supplier<String> clientIdBase;
     private SharedTopicAdmin ownTopicAdmin;
@@ -230,7 +230,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         this.offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, adminSupplier);
     }
 
-    private KafkaBasedLog<byte[], byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
+    KafkaBasedLog<byte[], byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
                                                               Map<String, Object> consumerProps,
                                                               Callback<ConsumerRecord<byte[], byte[]>> consumedCallback,
                                                               final NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {
