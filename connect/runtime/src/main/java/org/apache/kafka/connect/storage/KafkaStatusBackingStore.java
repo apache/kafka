@@ -141,7 +141,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
 
     @Deprecated
     public KafkaStatusBackingStore(Time time, Converter converter) {
-        this(time, converter, null, "connect-distributed");
+        this(time, converter, null, "connect-distributed-");
     }
 
     public KafkaStatusBackingStore(Time time, Converter converter, Supplier<TopicAdmin> topicAdminSupplier, String clientIdBase) {

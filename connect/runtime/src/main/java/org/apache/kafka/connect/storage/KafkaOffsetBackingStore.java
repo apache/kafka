@@ -155,7 +155,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     @Deprecated
     public KafkaOffsetBackingStore() {
         this.topicAdminSupplier = null;
-        this.clientIdBase = KafkaOffsetBackingStore::noClientId;
+        this.clientIdBase = () -> "connect-distributed-";
     }
 
     /**
@@ -167,7 +167,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
      *                   may not be null, and may not return null
      * @param clientIdBase a {@link Supplier} that will be used to create a
      * {@link CommonClientConfigs#CLIENT_ID_DOC client ID} for Kafka clients instantiated by this store;
-     *                     may not be null, and may not return null, but may throw {@link UnsupportedVersionException}
+     *                     may not be null, and may not return null, but may throw {@link UnsupportedOperationException}
      *                     if this offset store should not create its own Kafka clients
      */
     public KafkaOffsetBackingStore(Supplier<TopicAdmin> topicAdmin, Supplier<String> clientIdBase) {

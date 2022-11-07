@@ -292,7 +292,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     @Deprecated
     public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer) {
-        this(converter, config, configTransformer, null, "connect-distributed");
+        this(converter, config, configTransformer, null, "connect-distributed-");
     }
 
     public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer, Supplier<TopicAdmin> adminSupplier, String clientIdBase) {
