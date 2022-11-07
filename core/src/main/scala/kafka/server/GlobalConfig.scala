@@ -20,4 +20,6 @@ package kafka.server
 object GlobalConfig {
   // a global flag to indicate whether the corrupted files should be dropped
   var liDropCorruptedFilesEnable = false
+  // The logRecoveryShouldThrowException should only be used for testing purposes. Never turn it on in a real cluster!
+  @volatile var logRecoveryShouldThrowException = false
 }

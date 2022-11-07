@@ -18,24 +18,42 @@
 package integration.kafka.api
 
 import kafka.controller.OfflinePartition
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.log.Log
+import kafka.log.LogManager.RecoveryPointCheckpointFile
+import kafka.server.{GlobalConfig, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.getBrokerListStrFromServers
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig}
-import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.network.ListenerName
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
+import org.apache.kafka.common.record.LegacyRecord
+import org.apache.kafka.common.record.Records.{HEADER_SIZE_UP_TO_MAGIC, SIZE_OFFSET}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.{AfterEach, Test}
 
-import java.io.{BufferedWriter, FileOutputStream, OutputStreamWriter}
+import java.io.{BufferedWriter, File, FileOutputStream, OutputStreamWriter, RandomAccessFile}
+import java.nio.channels.FileChannel
 import java.nio.charset.StandardCharsets
 import java.util.{Collections, Properties}
 import scala.collection.{Map, Seq}
 
 class DropCorruptedFilesTest extends ZooKeeperTestHarness {
+  val topic = "test"
+  val partition = 0
+  val tp = new TopicPartition(topic, partition)
+  var servers: Seq[KafkaServer] = _
+
+  @AfterEach
+  override def tearDown(): Unit = {
+    if (servers != null) {
+      TestUtils.shutdownServers(servers)
+    }
+    super.tearDown()
+  }
+
   /**
    * This test goes through the following stages with 2 data brokers, with broker0 being the initial leader
    * and broker1 being the initial follower of one partition. The partition's leadership will switch in different
@@ -76,19 +94,16 @@ class DropCorruptedFilesTest extends ZooKeeperTestHarness {
       }}
       .map(KafkaConfig.fromProps)
     // start servers in reverse order to ensure broker 2 becomes the controller
-    val servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
+    servers = serverConfigs.reverseMap{s => TestUtils.createServer(s)}
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
     assertTrue(controllerId == 2)
 
     // create a topic
-    val topic = "test"
-    val partition = 0
-    val tp = new TopicPartition(topic, partition)
     val topicConfig = new Properties()
     topicConfig.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
     val expectedReplicaAssignment = Map(0 -> List(0, 1))
-    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers, topicConfig = topicConfig)
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers, topicConfig = topicConfig)
 
 
     // collect the data brokers
@@ -165,7 +180,6 @@ class DropCorruptedFilesTest extends ZooKeeperTestHarness {
 
     adminClient.close()
     producer.close()
-    servers.foreach{_.shutdown()}
   }
 
   private def createAdminClient(servers: Seq[KafkaServer]): Admin = {
@@ -183,5 +197,118 @@ class DropCorruptedFilesTest extends ZooKeeperTestHarness {
     bw.close()
   }
 
+  private def setupSingleDataBrokerClusterWithTopic(segmentBytes: Long): (KafkaServer, KafkaProducer[Array[Byte], Array[Byte]]) = {
+    // create brokers
+    val serverConfigs = TestUtils.createBrokerConfigs(2, zkConnect, false)
+      .map { props => {
+        props.setProperty(KafkaConfig.LiDropCorruptedFilesEnableProp, "true")
+        // set the max segment size to a small value so that each path lands in a separate segment file
+        props.setProperty(KafkaConfig.LogSegmentBytesProp, segmentBytes.toString)
+        props.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
+        props
+      }}
+      .map(KafkaConfig.fromProps)
+    // start servers in reverse order to ensure broker 1 becomes the controller
+    servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    assertTrue(controllerId == 1)
+
+    // create a topic
+    val topicConfig = new Properties()
+    topicConfig.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
+    val expectedReplicaAssignment = Map(0 -> List(0))
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers, topicConfig = topicConfig)
+    val dataBroker = servers.find(_.config.brokerId == 0).get
+
+    val producerConfigs = new Properties()
+    producerConfigs.put(ProducerConfig.ACKS_CONFIG, "-1")
+    val producer = TestUtils.createProducer(getBrokerListStrFromServers(servers))
+    (dataBroker, producer)
+  }
+
+  @Test
+  def testCorruptedLog(): Unit = {
+    val (dataBroker, producer) = setupSingleDataBrokerClusterWithTopic(100)
+
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "key".getBytes(StandardCharsets.UTF_8),
+      "value".getBytes(StandardCharsets.UTF_8))
+    // produce 3 message
+    val totalMessages = 3
+    for (_ <- 0 until totalMessages)
+      producer.send(record).get
+
+    def segmentsOnBroker = dataBroker.replicaManager.logManager.getLog(tp).get.segments
+
+    assertEquals(totalMessages, segmentsOnBroker.numberOfSegments)
+
+    // create corruption in the middle segment
+    val middleSegment = segmentsOnBroker.get(1).get
+    val segmentFile = middleSegment.log.file()
+    val raf = new RandomAccessFile(segmentFile, "rw")
+    val mappedLogSegment = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, HEADER_SIZE_UP_TO_MAGIC)
+    val currentSize = mappedLogSegment.getInt(SIZE_OFFSET)
+    assertTrue(currentSize >= LegacyRecord.RECORD_OVERHEAD_V0)
+    // set the size to a value that's smaller than the smallest overhead to cause a corruption
+    mappedLogSegment.putInt(SIZE_OFFSET, 1)
+
+    dataBroker.shutdown()
+    // delete the broker's clean shutdown file, so that it tries to recover log segments upon startup
+    val logDir = dataBroker.config.logDirs(0)
+    val cleanShutdownFile = new File(logDir, Log.CleanShutdownFile)
+    cleanShutdownFile.delete()
+
+    // delete the recovery-point-offset-checkpoint file so that all log segments need to go through recovery
+    val recoveryPointCheckpointFile = new File(logDir, RecoveryPointCheckpointFile)
+    recoveryPointCheckpointFile.delete()
+
+    dataBroker.replicaManager.logManager
+    dataBroker.startup()
+
+    // verify that the segments after the corrupted are deleted and the corrupted segment is truncated to size 0
+    assertEquals(2, segmentsOnBroker.numberOfSegments)
+    assertEquals(0, segmentsOnBroker.lastSegment.get.size)
+
+    producer.close()
+  }
+
+  @Test
+  def testUnexpectedExceptionDuringLogLoading(): Unit = {
+    val (dataBroker, producer) = setupSingleDataBrokerClusterWithTopic(100)
+
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, "key".getBytes(StandardCharsets.UTF_8),
+      "value".getBytes(StandardCharsets.UTF_8))
+    // produce 3 message
+    val totalMessages = 3
+    for (_ <- 0 until totalMessages)
+      producer.send(record).get
+
+    def segmentsOnBroker = dataBroker.replicaManager.logManager.getLog(tp).get.segments
+
+    assertEquals(totalMessages, segmentsOnBroker.numberOfSegments)
+
+    dataBroker.shutdown()
+    // delete the broker's clean shutdown file, so that it tries to recover log segments upon startup
+    val logDir = dataBroker.config.logDirs(0)
+    val cleanShutdownFile = new File(logDir, Log.CleanShutdownFile)
+    cleanShutdownFile.delete()
+    // delete the recovery-point-offset-checkpoint file so that all log segments need to go through recovery
+    val recoveryPointCheckpointFile = new File(logDir, RecoveryPointCheckpointFile)
+    recoveryPointCheckpointFile.delete()
+
+    GlobalConfig.logRecoveryShouldThrowException = true
+    dataBroker.replicaManager.logManager
+    dataBroker.startup()
+
+    // verify that only the active segment is left with a size of 0
+    assertEquals(1, segmentsOnBroker.numberOfSegments)
+    assertEquals(0, segmentsOnBroker.lastSegment.get.size)
+
+    // verify that we can still produce messages after the log dir has been cleaned
+    // produce 3 message
+    for (i <- 0 until totalMessages)
+      assertEquals(i, producer.send(record).get.offset())
+    assertEquals(totalMessages, segmentsOnBroker.numberOfSegments)
+    producer.close()
+  }
 
 }

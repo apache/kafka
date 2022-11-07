@@ -19,10 +19,9 @@ package kafka.log
 
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
-
 import kafka.common.LogSegmentOffsetOverflowException
 import kafka.log.Log.{CleanedFileSuffix, DeletedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile}
-import kafka.server.{LogDirFailureChannel, LogOffsetMetadata}
+import kafka.server.{GlobalConfig, KafkaConfig, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils.{CoreUtils, Logging, Scheduler}
 import org.apache.kafka.common.TopicPartition
@@ -351,6 +350,12 @@ object LogLoader extends Logging {
    * @throws LogSegmentOffsetOverflowException if the segment contains messages that cause index offset overflow
    */
   private def recoverSegment(segment: LogSegment, params: LoadLogParams): Int = {
+    if (GlobalConfig.logRecoveryShouldThrowException) {
+      // we should only trigger the exception once
+      GlobalConfig.logRecoveryShouldThrowException = false
+      throw new IllegalStateException("Explicitly trigger an exception to test the log recovery logic")
+    }
+
     val producerStateManager = new ProducerStateManager(
       params.topicPartition,
       params.dir,
@@ -414,15 +419,21 @@ object LogLoader extends Logging {
       while (unflushed.hasNext && !truncated) {
         val segment = unflushed.next()
         info(s"${params.logIdentifier}Recovering unflushed segment ${segment.baseOffset}")
-        val truncatedBytes =
+        val truncatedBytes: Long =
           try {
             recoverSegment(segment, params)
           } catch {
-            case _: InvalidOffsetException =>
-              val startOffset = segment.baseOffset
-              warn(s"${params.logIdentifier}Found invalid offset during recovery. Deleting the" +
-                s" corrupt segment and creating an empty one with starting offset $startOffset")
-              segment.truncateTo(startOffset).bytesTruncated
+            case ooe: LogSegmentOffsetOverflowException =>
+              throw ooe
+            case e: Exception =>
+              if (e.isInstanceOf[InvalidOffsetException] || GlobalConfig.liDropCorruptedFilesEnable) {
+                val startOffset = segment.baseOffset
+                warn(s"${params.logIdentifier}Found exception during recovery. Deleting the" +
+                  s" corrupt segment and creating an empty one with starting offset $startOffset", e)
+                segment.truncateTo(startOffset).bytesTruncated
+              } else {
+                throw new IllegalStateException(s"Found corruption during log recovery and the ${KafkaConfig.LiDropCorruptedFilesEnableProp} property is set to false")
+              }
           }
         if (truncatedBytes > 0) {
           // we had an invalid message, delete all remaining log
