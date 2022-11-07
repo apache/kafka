@@ -763,7 +763,7 @@ public class ReplicationControlManager {
         successes.put(topic.name(), result);
         records.add(new ApiMessageAndVersion(new TopicRecord().
             setName(topic.name()).
-            setTopicId(topicId), TOPIC_RECORD.highestSupportedVersion()));
+            setTopicId(topicId), (short) 0));
         for (Entry<Integer, PartitionRegistration> partEntry : newParts.entrySet()) {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
@@ -898,7 +898,7 @@ public class ReplicationControlManager {
             throw new UnknownTopicIdException(UNKNOWN_TOPIC_ID.message());
         }
         records.add(new ApiMessageAndVersion(new RemoveTopicRecord().
-            setTopicId(id), REMOVE_TOPIC_RECORD.highestSupportedVersion()));
+            setTopicId(id), (short) 0));
     }
 
     // VisibleForTesting
@@ -1597,7 +1597,7 @@ public class ReplicationControlManager {
                 setAddingReplicas(Collections.emptyList()).
                 setLeader(isr.get(0)).
                 setLeaderEpoch(0).
-                setPartitionEpoch(0), PARTITION_RECORD.highestSupportedVersion()));
+                setPartitionEpoch(0), (short) 0));
             partitionId++;
         }
     }
@@ -1932,7 +1932,7 @@ public class ReplicationControlManager {
             List<ApiMessageAndVersion> records = new ArrayList<>();
             records.add(new ApiMessageAndVersion(new TopicRecord().
                 setName(topic.name).
-                setTopicId(topic.id), TOPIC_RECORD.highestSupportedVersion()));
+                setTopicId(topic.id), (short) 0));
             for (Entry<Integer, PartitionRegistration> entry : topic.parts.entrySet(epoch)) {
                 records.add(entry.getValue().toRecord(topic.id, entry.getKey()));
             }

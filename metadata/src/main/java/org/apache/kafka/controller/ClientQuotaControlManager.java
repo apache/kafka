@@ -160,7 +160,7 @@ public class ClientQuotaControlManager {
                             .setEntity(recordEntitySupplier.get())
                             .setKey(key)
                             .setRemove(true),
-                        CLIENT_QUOTA_RECORD.highestSupportedVersion()));
+                        (short) 0));
                 }
             } else {
                 ApiError validationError = validateQuotaKeyValue(configKeys, key, newValue);
@@ -175,7 +175,7 @@ public class ClientQuotaControlManager {
                                 .setEntity(recordEntitySupplier.get())
                                 .setKey(key)
                                 .setValue(newValue),
-                            CLIENT_QUOTA_RECORD.highestSupportedVersion()));
+                            (short) 0));
                     }
                 }
             }
@@ -321,8 +321,7 @@ public class ClientQuotaControlManager {
                 record.setKey(quotaEntry.getKey());
                 record.setValue(quotaEntry.getValue());
                 record.setRemove(false);
-                records.add(new ApiMessageAndVersion(record,
-                    CLIENT_QUOTA_RECORD.highestSupportedVersion()));
+                records.add(new ApiMessageAndVersion(record, (short) 0));
             }
             return records;
         }

@@ -327,8 +327,7 @@ public class PartitionChangeBuilder {
         if (changeRecordIsNoOp(record)) {
             return Optional.empty();
         } else {
-            return Optional.of(new ApiMessageAndVersion(record,
-                PARTITION_CHANGE_RECORD.highestSupportedVersion()));
+            return Optional.of(new ApiMessageAndVersion(record, (short) 0));
         }
     }
 
