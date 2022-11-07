@@ -43,9 +43,37 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
-public class RestClient {
+public class RestClient implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(RestClient.class);
     private static final ObjectMapper JSON_SERDE = new ObjectMapper();
+
+    private final HttpClient client;
+    public RestClient(WorkerConfig config) {
+        client = new HttpClient(SSLUtils.createClientSideSslContextFactory(config));
+
+        client.setFollowRedirects(false);
+
+        try {
+            client.start();
+        } catch (Exception e) {
+            log.error("Failed to start RestClient: ", e);
+            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "Failed to start RestClient: " + e.getMessage(), e);
+        }
+    }
+
+    // VisibleForTesting
+    RestClient(HttpClient client) {
+        this.client = client;
+    }
+
+    @Override
+    public void close() {
+        try {
+            client.stop();
+        } catch (Exception e) {
+            log.error("Failed to stop HTTP client", e);
+        }
+    }
 
     /**
      * Sends HTTP request to remote REST server
@@ -58,9 +86,9 @@ public class RestClient {
      * @param <T>             The type of the deserialized response to the HTTP request.
      * @return The deserialized response to the HTTP request, or null if no data is expected.
      */
-    public static <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
-                                                  TypeReference<T> responseFormat, WorkerConfig config) {
-        return httpRequest(url, method, headers, requestBodyData, responseFormat, config, null, null);
+    public <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
+                                                  TypeReference<T> responseFormat) {
+        return httpRequest(url, method, headers, requestBodyData, responseFormat, null, null);
     }
 
     /**
@@ -78,38 +106,7 @@ public class RestClient {
      *                                  may be null if the request doesn't need to be signed
      * @return The deserialized response to the HTTP request, or null if no data is expected.
      */
-    public static <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
-                                                  TypeReference<T> responseFormat, WorkerConfig config,
-                                                  SecretKey sessionKey, String requestSignatureAlgorithm) {
-        HttpClient client;
-
-        if (url.startsWith("https://")) {
-            client = new HttpClient(SSLUtils.createClientSideSslContextFactory(config));
-        } else {
-            client = new HttpClient();
-        }
-
-        client.setFollowRedirects(false);
-
-        try {
-            client.start();
-        } catch (Exception e) {
-            log.error("Failed to start RestClient: ", e);
-            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "Failed to start RestClient: " + e.getMessage(), e);
-        }
-
-        try {
-            return httpRequest(client, url, method, headers, requestBodyData, responseFormat, sessionKey, requestSignatureAlgorithm);
-        } finally {
-            try {
-                client.stop();
-            } catch (Exception e) {
-                log.error("Failed to stop HTTP client", e);
-            }
-        }
-    }
-
-    static <T> HttpResponse<T> httpRequest(HttpClient client, String url, String method,
+    public <T> HttpResponse<T> httpRequest(String url, String method,
                                            HttpHeaders headers, Object requestBodyData,
                                            TypeReference<T> responseFormat, SecretKey sessionKey,
                                            String requestSignatureAlgorithm) {

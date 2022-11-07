@@ -74,15 +74,16 @@ public class RestClientTest {
     }
 
     private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient, String requestSignatureAlgorithm) {
-        return RestClient.httpRequest(
-                httpClient,
-                "https://localhost:1234/api/endpoint",
-                "GET",
-                null,
-                new TestDTO("requestBodyData"),
-                TEST_TYPE,
-                MOCK_SECRET_KEY,
-                requestSignatureAlgorithm);
+        try (RestClient client = new RestClient(httpClient)) {
+            return client.httpRequest(
+                    "https://localhost:1234/api/endpoint",
+                    "GET",
+                    null,
+                    new TestDTO("requestBodyData"),
+                    TEST_TYPE,
+                    MOCK_SECRET_KEY,
+                    requestSignatureAlgorithm);
+        }
     }
 
     private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient) {

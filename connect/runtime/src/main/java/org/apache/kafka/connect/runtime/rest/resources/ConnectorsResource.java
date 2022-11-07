@@ -82,7 +82,7 @@ public class ConnectorsResource implements ConnectResource {
         new TypeReference<List<Map<String, String>>>() { };
 
     private final Herder herder;
-    private final WorkerConfig config;
+    private final RestClient restClient;
     private long requestTimeoutMs;
     @javax.ws.rs.core.Context
     private ServletContext context;
@@ -90,8 +90,11 @@ public class ConnectorsResource implements ConnectResource {
     private final boolean isTopicTrackingResetDisabled;
 
     public ConnectorsResource(Herder herder, WorkerConfig config) {
+        this(herder, config, new RestClient(config));
+    }
+    public ConnectorsResource(Herder herder, WorkerConfig config, RestClient restClient) {
         this.herder = herder;
-        this.config = config;
+        this.restClient = restClient;
         isTopicTrackingDisabled = !config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         isTopicTrackingResetDisabled = !config.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG);
         this.requestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
@@ -425,7 +428,7 @@ public class ConnectorsResource implements ConnectResource {
                     }
                     String forwardUrl = uriBuilder.build().toString();
                     log.debug("Forwarding request {} {} {}", forwardUrl, method, body);
-                    return translator.translate(RestClient.httpRequest(forwardUrl, method, headers, body, resultType, config));
+                    return translator.translate(restClient.httpRequest(forwardUrl, method, headers, body, resultType));
                 } else {
                     // we should find the right target for the query within two hops, so if
                     // we don't, it probably means that a rebalance has taken place.

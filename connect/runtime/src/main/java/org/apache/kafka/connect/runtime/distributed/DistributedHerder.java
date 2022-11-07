@@ -166,6 +166,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private final String requestSignatureAlgorithm;
     private final List<String> keySignatureVerificationAlgorithms;
     private final KeyGenerator keyGenerator;
+    private final RestClient restClient;
 
     // Visible for testing
     ExecutorService forwardRequestExecutor;
@@ -240,9 +241,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                              StatusBackingStore statusBackingStore,
                              ConfigBackingStore configBackingStore,
                              String restUrl,
+                             RestClient restClient,
                              ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
                              AutoCloseable... uponShutdown) {
-        this(config, worker, worker.workerId(), kafkaClusterId, statusBackingStore, configBackingStore, null, restUrl, worker.metrics(),
+        this(config, worker, worker.workerId(), kafkaClusterId, statusBackingStore, configBackingStore,
+             null, restUrl, restClient, worker.metrics(),
              time, connectorClientConfigOverridePolicy, uponShutdown);
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
     }
@@ -256,6 +259,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                       ConfigBackingStore configBackingStore,
                       WorkerGroupMember member,
                       String restUrl,
+                      RestClient restClient,
                       ConnectMetrics metrics,
                       Time time,
                       ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
@@ -272,6 +276,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.keyRotationIntervalMs = config.getInt(DistributedConfig.INTER_WORKER_KEY_TTL_MS_CONFIG);
         this.keySignatureVerificationAlgorithms = config.getList(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG);
         this.keyGenerator = config.getInternalRequestKeyGenerator();
+        this.restClient = restClient;
         this.isTopicTrackingEnabled = config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.uponShutdown = Arrays.asList(uponShutdown);
 
@@ -1161,7 +1166,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 log.trace("Forwarding zombie fencing request for connector {} to leader at {}", id.connector(), forwardedUrl);
                 forwardRequestExecutor.execute(() -> {
                     try {
-                        RestClient.httpRequest(forwardedUrl, "PUT", null, null, null, config, sessionKey, requestSignatureAlgorithm);
+                        restClient.httpRequest(forwardedUrl, "PUT", null, null, null, sessionKey, requestSignatureAlgorithm);
                         callback.onCompletion(null, null);
                     } catch (Throwable t) {
                         callback.onCompletion(t, null);
@@ -1925,7 +1930,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                                     .build()
                                     .toString();
                             log.trace("Forwarding task configurations for connector {} to leader", connName);
-                            RestClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, null, config, sessionKey, requestSignatureAlgorithm);
+                            restClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, null, sessionKey, requestSignatureAlgorithm);
                             cb.onCompletion(null, null);
                         } catch (ConnectException e) {
                             log.error("Request to leader to reconfigure connector tasks failed", e);
