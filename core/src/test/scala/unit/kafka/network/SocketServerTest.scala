@@ -469,6 +469,10 @@ class SocketServerTest {
       processRequest(overrideServer.dataPlaneRequestChannel, request0)
       assertTrue(openChannel(request0, overrideServer).nonEmpty, "Channel not open")
       assertEquals(openChannel(request0, overrideServer), openOrClosingChannel(request0, overrideServer))
+      // Receive response to make sure activity on socket server processor thread quiesces, otherwise
+      // it may continue after the mock time sleep, so there would be events that would mark the
+      // connection as "up-to-date" after the sleep and prevent connection from being idle.
+      receiveResponse(socket0)
       TestUtils.waitUntilTrue(() => !openChannel(request0, overrideServer).get.isMuted, "Failed to unmute channel")
       time.sleep(idleTimeMs + 1)
       TestUtils.waitUntilTrue(() => openOrClosingChannel(request0, overrideServer).isEmpty, "Failed to close idle channel")
