@@ -39,8 +39,8 @@ import java.util.concurrent.TimeUnit;
 import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -93,7 +93,7 @@ public class SourceTaskOffsetCommitterTest {
     }
 
     @Test
-    public void testCloseWithinTimeout() throws Exception {
+    public void testCloseTimeout() throws Exception {
         long timeoutMs = 1000;
 
         // Normal termination, where termination times out.
@@ -108,7 +108,7 @@ public class SourceTaskOffsetCommitterTest {
     }
 
     @Test
-    public void testCloseOutsideOfTimeout() throws InterruptedException {
+    public void testCloseInterrupted() throws InterruptedException {
         long timeoutMs = 1000;
 
         // Termination interrupted
@@ -128,7 +128,7 @@ public class SourceTaskOffsetCommitterTest {
 
     @Test
     public void testRemoveSuccess() {
-        removeSetup();
+        expectRemove();
         committers.put(taskId, taskFuture);
         committer.remove(taskId);
         assertTrue(committers.isEmpty());
@@ -136,7 +136,7 @@ public class SourceTaskOffsetCommitterTest {
 
     @Test
     public void testRemoveCancelledTask() throws ExecutionException, InterruptedException {
-        removeSetup();
+        expectRemove();
         when(taskFuture.get()).thenThrow(new CancellationException());
 
         committers.put(taskId, taskFuture);
@@ -150,19 +150,14 @@ public class SourceTaskOffsetCommitterTest {
 
     @Test
     public void testRemoveTaskAndInterrupted() throws ExecutionException, InterruptedException {
-        removeSetup();
+        expectRemove();
         when(taskFuture.get()).thenThrow(new InterruptedException());
 
-        try {
-            committers.put(taskId, taskFuture);
-            committer.remove(taskId);
-            fail("Expected ConnectException to be raised");
-        } catch (ConnectException e) {
-            //ignore
-        }
+        committers.put(taskId, taskFuture);
+        assertThrows(ConnectException.class, () -> committer.remove(taskId));
     }
 
-    private void removeSetup() {
+    private void expectRemove() {
         when(taskFuture.cancel(false)).thenReturn(false);
         when(taskFuture.isDone()).thenReturn(false);
         when(taskId.connector()).thenReturn("MyConnector");
