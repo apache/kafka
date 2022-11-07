@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.internals.TaskAndAction.Action;
 import org.slf4j.Logger;
 
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -62,6 +63,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private final AtomicBoolean isRunning = new AtomicBoolean(true);
         private final Map<TaskId, Task> updatingTasks = new ConcurrentHashMap<>();
         private final Map<TaskId, Task> pausedTasks = new ConcurrentHashMap<>();
+        private final Queue<Task> tasksToInitialize = new ArrayDeque<>();
         private final Logger log;
 
         public StateUpdaterThread(final String name, final ChangelogReader changelogReader) {
@@ -115,6 +117,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void runOnce() throws InterruptedException {
             performActionsOnTasks();
+            initializeTasksIfNeeded();
             restoreTasks();
             checkAllUpdatingTaskStates(time.milliseconds());
             waitIfAllChangelogsCompletelyRead();
@@ -136,6 +139,20 @@ public class DefaultStateUpdater implements StateUpdater {
                 }
             } finally {
                 tasksAndActionsLock.unlock();
+            }
+        }
+
+        private void initializeTasksIfNeeded() {
+            while (!tasksToInitialize.isEmpty()) {
+                final Task task = tasksToInitialize.remove();
+                try {
+                    task.initializeIfNeeded();
+                } catch (final TaskCorruptedException taskCorruptedException) {
+                    handleTaskCorruptedException(taskCorruptedException);
+                } catch (final StreamsException streamsException) {
+                    streamsException.setTaskId(task.id());
+                    handleStreamsException(streamsException);
+                }
             }
         }
 
@@ -276,6 +293,9 @@ public class DefaultStateUpdater implements StateUpdater {
                         changelogReader.transitToUpdateStandby();
                     }
                 }
+            }
+            if (task.state() == Task.State.CREATED) {
+                tasksToInitialize.offer(task);
             }
         }
 
@@ -486,11 +506,11 @@ public class DefaultStateUpdater implements StateUpdater {
     }
 
     private void verifyStateFor(final Task task) {
-        if (task.isActive() && task.state() != State.RESTORING) {
-            throw new IllegalStateException("Active task " + task.id() + " is not in state RESTORING. " + BUG_ERROR_MESSAGE);
+        if (task.isActive() && task.state() != State.RESTORING && task.state() != State.CREATED) {
+            throw new IllegalStateException("Active task " + task.id() + " is not in state RESTORING or CREATED. " + BUG_ERROR_MESSAGE);
         }
-        if (!task.isActive() && task.state() != State.RUNNING) {
-            throw new IllegalStateException("Standby task " + task.id() + " is not in state RUNNING. " + BUG_ERROR_MESSAGE);
+        if (!task.isActive() && task.state() != State.RUNNING && task.state() != State.CREATED) {
+            throw new IllegalStateException("Standby task " + task.id() + " is not in state RUNNING or CREATED. " + BUG_ERROR_MESSAGE);
         }
     }
 

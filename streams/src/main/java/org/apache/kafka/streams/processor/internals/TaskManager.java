@@ -395,10 +395,8 @@ public class TaskManager {
             tasks.addActiveTasks(newActiveTasks);
             tasks.addStandbyTasks(newStandbyTask);
         } else {
-            final Map<TaskId, RuntimeException> taskInitExceptions = new LinkedHashMap<>();
             Stream.concat(newActiveTasks.stream(), newStandbyTask.stream())
-                    .forEach(t -> addTaskToStateUpdater(t, taskInitExceptions));
-            maybeThrowTaskExceptions(taskInitExceptions);
+                    .forEach(stateUpdater::add);
         }
     }
 
@@ -807,17 +805,6 @@ public class TaskManager {
                     task.id()),
                 timeoutException
             );
-        }
-    }
-
-    private void addTaskToStateUpdater(final Task task, final Map<TaskId, RuntimeException> taskExceptions) {
-        try {
-            task.initializeIfNeeded();
-            stateUpdater.add(task);
-        } catch (final RuntimeException e) {
-            // need to add task back to the bookkeeping to be handled by the stream thread
-            tasks.addTask(task);
-            taskExceptions.put(task.id(), e);
         }
     }
 

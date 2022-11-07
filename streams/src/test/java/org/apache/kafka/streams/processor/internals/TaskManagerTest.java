@@ -517,7 +517,6 @@ public class TaskManagerTest {
         );
 
         verify(activeTaskCreator, standbyTaskCreator);
-        Mockito.verify(activeTaskToBeCreated).initializeIfNeeded();
         Mockito.verify(stateUpdater).add(activeTaskToBeCreated);
     }
 
@@ -541,40 +540,7 @@ public class TaskManagerTest {
         );
 
         verify(activeTaskCreator, standbyTaskCreator);
-        Mockito.verify(standbyTaskToBeCreated).initializeIfNeeded();
         Mockito.verify(stateUpdater).add(standbyTaskToBeCreated);
-    }
-
-    @Test
-    public void shouldRethrowTaskCorruptedExceptionFromInitialization() {
-        final StreamTask activeTaskToBeCreated = statefulTask(taskId03, taskId03ChangelogPartitions)
-                .inState(State.CREATED)
-                .withInputPartitions(taskId03Partitions).build();
-        final StandbyTask standbyTaskToBeCreated = standbyTask(taskId02, taskId02ChangelogPartitions)
-                .inState(State.CREATED)
-                .withInputPartitions(taskId02Partitions).build();
-        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
-        expect(activeTaskCreator.createTasks(consumer, mkMap(
-                mkEntry(activeTaskToBeCreated.id(), activeTaskToBeCreated.inputPartitions())))
-        ).andReturn(mkSet(activeTaskToBeCreated));
-        expect(standbyTaskCreator.createTasks(mkMap(
-                mkEntry(standbyTaskToBeCreated.id(), standbyTaskToBeCreated.inputPartitions())))
-        ).andReturn(mkSet(standbyTaskToBeCreated));
-        doThrow(new TaskCorruptedException(Collections.singleton(activeTaskToBeCreated.id))).when(activeTaskToBeCreated).initializeIfNeeded();
-        doThrow(new TaskCorruptedException(Collections.singleton(standbyTaskToBeCreated.id))).when(standbyTaskToBeCreated).initializeIfNeeded();
-        replay(activeTaskCreator, standbyTaskCreator);
-
-        final TaskCorruptedException thrown = assertThrows(
-                TaskCorruptedException.class,
-                () ->
-                    taskManager.handleAssignment(
-                            mkMap(mkEntry(activeTaskToBeCreated.id(), activeTaskToBeCreated.inputPartitions())),
-                            mkMap(mkEntry(standbyTaskToBeCreated.id(), standbyTaskToBeCreated.inputPartitions()))
-                    )
-        );
-        assertEquals(mkSet(taskId02, taskId03), thrown.corruptedTasks());
-        assertEquals("Tasks [0_3, 0_2] are corrupted and hence needs to be re-initialized", thrown.getMessage());
     }
 
     @Test
