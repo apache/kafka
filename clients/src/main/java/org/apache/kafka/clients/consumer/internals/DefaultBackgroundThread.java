@@ -64,27 +64,6 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final AtomicReference<Optional<RuntimeException>> exception =
         new AtomicReference<>(Optional.empty());
 
-    public DefaultBackgroundThread(final ConsumerConfig config,
-                                   final LogContext logContext,
-                                   final BlockingQueue<ApplicationEvent> applicationEventQueue,
-                                   final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                                   final SubscriptionState subscriptions,
-                                   final ConsumerMetadata metadata,
-                                   final ConsumerNetworkClient networkClient,
-                                   final Metrics metrics) {
-        this(
-            Time.SYSTEM,
-            config,
-            logContext,
-            applicationEventQueue,
-            backgroundEventQueue,
-            subscriptions,
-            metadata,
-            networkClient,
-            metrics
-        );
-    }
-
     public DefaultBackgroundThread(final Time time,
                                    final ConsumerConfig config,
                                    final LogContext logContext,
