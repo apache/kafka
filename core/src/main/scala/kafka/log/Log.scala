@@ -2022,16 +2022,26 @@ class Log(@volatile private var _dir: File,
         false
       } else {
         var bytesTruncated = 0L
+        var messagesTruncated = 0L
         val originalLogEndOffset = logEndOffset
+        var offsetTruncatedTo = UnknownOffset
         lock synchronized {
           checkIfMemoryMappedBufferClosed()
           if (segments.firstSegment.get.baseOffset > targetOffset) {
+            bytesTruncated = logSegments.map(_.size).sum
+            messagesTruncated = logEndOffset - logStartOffset
             truncateFullyAndStartAt(targetOffset)
-            bytesTruncated += logSegments.map(_.size).sum
+            offsetTruncatedTo = targetOffset
           } else {
             val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
             bytesTruncated += removeAndDeleteSegments(deletable, asyncDelete = true, LogTruncation)
-            bytesTruncated += activeSegment.truncateTo(targetOffset)
+            val activeSegmentTruncationInfo = activeSegment.truncateTo(targetOffset)
+            bytesTruncated += activeSegmentTruncationInfo.bytesTruncated
+            // TODO:
+            //  Note that .offsetTruncatedTo can be inaccurate, but since this is for estimation, we accept it for now.
+            //  See details inside LogSegment#truncateTo
+            offsetTruncatedTo = activeSegmentTruncationInfo.offsetTruncatedTo
+            messagesTruncated = originalLogEndOffset - offsetTruncatedTo
 
             leaderEpochCache.foreach(_.truncateFromEnd(targetOffset))
 
@@ -2041,8 +2051,8 @@ class Log(@volatile private var _dir: File,
               endOffset = targetOffset
             )
           }
-          val messagesTruncated = originalLogEndOffset - targetOffset
-          warn(s"Truncated to offset $targetOffset from the log end offset $originalLogEndOffset " +
+          // FIXME: this code path involves not only data plane segments but also KRaft metadata logs.  Should find a way to distinguish after moving to KRaft.
+          warn(s"Attempted truncating to offset $targetOffset. Resulted in truncated to $offsetTruncatedTo from the original log end offset $originalLogEndOffset, " +
             s"with $messagesTruncated messages and $bytesTruncated bytes truncated")
           LogTruncationStats.logTruncatedBytesRate.mark(bytesTruncated)
           LogTruncationStats.logTruncatedMessagesRate.mark(messagesTruncated)

@@ -422,7 +422,7 @@ object LogLoader extends Logging {
               val startOffset = segment.baseOffset
               warn(s"${params.logIdentifier}Found invalid offset during recovery. Deleting the" +
                 s" corrupt segment and creating an empty one with starting offset $startOffset")
-              segment.truncateTo(startOffset)
+              segment.truncateTo(startOffset).bytesTruncated
           }
         if (truncatedBytes > 0) {
           // we had an invalid message, delete all remaining log

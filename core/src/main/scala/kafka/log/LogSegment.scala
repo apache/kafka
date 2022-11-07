@@ -21,6 +21,7 @@ import java.nio.file.{Files, NoSuchFileException}
 import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
 import kafka.common.LogSegmentOffsetOverflowException
+import kafka.log.Log.UnknownOffset
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{FetchDataInfo, LogOffsetMetadata}
@@ -412,18 +413,26 @@ class LogSegment private[log] (val log: FileRecords,
     ", largestRecordTimestamp=" + largestRecordTimestamp +
     ")"
 
+  case class SegmentTruncationResult(bytesTruncated: Long, offsetTruncatedTo: Long)
+
   /**
    * Truncate off all index and log entries with offsets >= the given offset.
    * If the given offset is larger than the largest message in this segment, do nothing.
    *
    * @param offset The offset to truncate to
-   * @return The number of log bytes truncated
+   * @return SegmentTruncationResult containing the number of log bytes truncated and the offset after truncate,
+   *         which may differ from the offset parameter because log segment truncation must be performed over a batch
    */
   @nonthreadsafe
-  def truncateTo(offset: Long): Int = {
+  def truncateTo(offset: Long): SegmentTruncationResult = {
     // Do offset translation before truncating the index to avoid needless scanning
     // in case we truncate the full index
-    val mapping = translateOffset(offset)
+    val startingFilePosition = 0
+    val batch = log.searchForBatchOffsetIsAt(offset, max(offsetIndex.lookup(offset).position, startingFilePosition))
+    // The offset methods on file records cannot be re-invoked because they're file channel based.  Capture them first
+    val (batchBaseOffset, batchPosition) = if (batch == null) (Option.empty[Long], Option.empty[Int])
+                                           else (Some(batch.baseOffset()), Some(batch.position()))
+
     offsetIndex.truncateTo(offset)
     timeIndex.truncateTo(offset)
     txnIndex.truncateTo(offset)
@@ -432,16 +441,33 @@ class LogSegment private[log] (val log: FileRecords,
     offsetIndex.resize(offsetIndex.maxIndexSize)
     timeIndex.resize(timeIndex.maxIndexSize)
 
-    val bytesTruncated = if (mapping == null) 0 else log.truncateTo(mapping.position)
+    val bytesTruncated = batchPosition match {
+      case Some(position) => log.truncateTo(position)
+      case None => 0
+    }
     if (log.sizeInBytes == 0) {
       created = time.milliseconds
       rollingBasedTimestamp = None
     }
 
     bytesSinceLastIndexEntry = 0
-    if (maxTimestampSoFar >= 0)
+    if (maxTimestampSoFar >= 0) {
       loadLargestTimestamp()
-    bytesTruncated
+    }
+    SegmentTruncationResult(bytesTruncated = bytesTruncated,
+                            offsetTruncatedTo = batchBaseOffset match {
+                              case Some(i) => i
+                              // TODO:
+                              //  Note that this estimation can be inaccurate if non-consecutive offsets exists in the
+                              //  segments (e.g. missing segment files, KIP-319).  The flow won't be able to find the
+                              //  correct batch if the target falls in the offset gaps.  Also, offsetIndex.lastOffset may
+                              //  not have been flushed yet, causing the lastOffset inaccurate.
+                              //  If we want to have correct offset, we'll have to extract the search for target offset loop,
+                              //  looking into batches, and find out the exact nextOffset.  That can be make the implementation
+                              //  too hard to reason, and since we expose this only for the truncation metrics, which doesn't
+                              //  have to be very accurate, so we use this sub-optimal approach for now.
+                              case None => offsetIndex.lastOffset + 1
+                            })
   }
 
   /**

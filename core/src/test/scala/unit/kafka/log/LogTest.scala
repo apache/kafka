@@ -23,9 +23,9 @@ import java.nio.file.Files
 import java.util.concurrent.{Callable, Executors}
 import java.util.regex.Pattern
 import java.util.{Collections, Optional, Properties}
-
 import kafka.common.{RecordValidationException, UnexpectedAppendOffsetException}
 import kafka.log.Log.DeleteDirSuffix
+import kafka.log.LogTest.allRecords
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
@@ -57,7 +57,9 @@ class LogTest {
   def metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
   @BeforeEach
-  def setUp(): Unit = {}
+  def setUp(): Unit = {
+    resetLogTruncationStats()
+  }
 
   @AfterEach
   def tearDown(): Unit = {
@@ -211,6 +213,46 @@ class LogTest {
     truncateFunc(reopened)(0L)
     assertEquals(None, reopened.firstUnstableOffset)
     assertEquals(Map.empty, reopened.producerStateManager.activeProducers)
+  }
+
+  private def resetLogTruncationStats(): Unit = {
+    Seq(
+      LogTruncationStats.logTruncatedBytesRate,
+      LogTruncationStats.logTruncatedMessagesRate,
+    ).foreach(m => m.mark(-m.count()))
+  }
+
+  @Test
+  def testCleanLogTruncationStatsMaintenance(): Unit = {
+    // Setup: 3 messages(offset = 3); HW=1 (2 message replicated to all followers)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+    val leaderEpoch = 0
+
+    def assertHighWatermark(offset: Long): Unit = {
+      assertEquals(offset, log.highWatermark)
+      assertValidLogOffsetMetadata(log, log.fetchOffsetSnapshot.highWatermark)
+    }
+
+    assertHighWatermark(0L)
+
+    val setupRecords =
+      List("0", "1", "2", "3", "4", "5")
+        .map(k => new SimpleRecord(mockTime.milliseconds, k.getBytes(), "value".getBytes))
+
+    log.appendAsLeader(
+      TestUtils.records(setupRecords, baseOffset = 0L, partitionLeaderEpoch = leaderEpoch),
+      leaderEpoch
+    )
+    log.maybeIncrementHighWatermark(LogOffsetMetadata(2L))
+
+    // Execute: truncate to exactly the high watermark
+    log.truncateTo(2L)
+
+    val currExistingRecords = allRecords(log)
+
+    // Assert: verify recorded messages truncated matches.  Actual final offset may differ from target so verify with `allRecords`
+    assertEquals(setupRecords.size - currExistingRecords.size, LogTruncationStats.logTruncatedMessagesRate.count())
   }
 
   @Test
