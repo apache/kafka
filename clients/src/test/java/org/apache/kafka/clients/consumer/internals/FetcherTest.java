@@ -195,7 +195,7 @@ public class FetcherTest {
     private Metrics metrics;
     private ApiVersions apiVersions = new ApiVersions();
     private ConsumerNetworkClient consumerClient;
-    private KafkaFetcher<?, ?> fetcher;
+    private FetcherThreadSafe<?, ?> fetcher;
 
     private MemoryRecords records;
     private MemoryRecords nextRecords;
@@ -2532,7 +2532,7 @@ public class FetcherTest {
         buildFetcher();
 
         MockSelector selector = new MockSelector(time);
-        Sensor throttleTimeSensor = KafkaFetcher.throttleTimeSensor(metrics, metricsRegistry);
+        Sensor throttleTimeSensor = FetcherThreadSafe.throttleTimeSensor(metrics, metricsRegistry);
         Cluster cluster = TestUtils.singletonCluster("test", 1);
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
@@ -2893,7 +2893,7 @@ public class FetcherTest {
         assertTrue(partitionRecords.containsKey(tp0));
 
         // Create throttle metrics
-        KafkaFetcher.throttleTimeSensor(metrics, metricsRegistry);
+        FetcherThreadSafe.throttleTimeSensor(metrics, metricsRegistry);
 
         // Verify that all metrics except metrics-count have registered templates
         Set<MetricNameTemplate> allMetrics = new HashSet<>();
@@ -3795,7 +3795,7 @@ public class FetcherTest {
         LogContext logContext = new LogContext();
         buildDependencies(new MetricConfig(), Long.MAX_VALUE, new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST), logContext);
 
-        fetcher = new KafkaFetcher<byte[], byte[]>(
+        fetcher = new FetcherThreadSafe<byte[], byte[]>(
                 new LogContext(),
                 consumerClient,
                 minBytes,
@@ -4614,7 +4614,7 @@ public class FetcherTest {
 
         // Complete reset and now we can fetch
         fetcher.resetOffsetIfNeeded(tp0, OffsetResetStrategy.LATEST,
-                new KafkaFetcher.ListOffsetData(100, 1L, Optional.empty()));
+                new FetcherThreadSafe.ListOffsetData(100, 1L, Optional.empty()));
         assertEquals(1, fetcher.sendFetches());
     }
 
@@ -5082,7 +5082,7 @@ public class FetcherTest {
     }
 
     /**
-     * Assert that the {@link KafkaFetcher#collectFetch() latest fetch} does not contain any
+     * Assert that the {@link FetcherThreadSafe#collectFetch() latest fetch} does not contain any
      * {@link Fetch#records() user-visible records}, did not
      * {@link Fetch#positionAdvanced() advance the consumer's position},
      * and is {@link Fetch#isEmpty() empty}.
@@ -5171,7 +5171,7 @@ public class FetcherTest {
                                      SubscriptionState subscriptionState,
                                      LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
-        fetcher = new KafkaFetcher<>(
+        fetcher = new FetcherThreadSafe<>(
                 new LogContext(),
                 consumerClient,
                 minBytes,

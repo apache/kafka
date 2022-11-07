@@ -48,7 +48,7 @@ public class PrototypeAsyncConsumerBackground<K, V> {
 
     private final Logger log;
 
-    private final PrototypeAsyncFetcher<K, V> fetcher;
+    private final FetcherThreadUnsafe<K, V> fetcher;
 
     private final ConsumerCoordinator coordinator;
 
@@ -99,7 +99,7 @@ public class PrototypeAsyncConsumerBackground<K, V> {
             config.ignore(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
         }
 
-        this.fetcher = new PrototypeAsyncFetcher<>(
+        this.fetcher = new FetcherThreadUnsafe<>(
                 logContext,
                 client,
                 config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),

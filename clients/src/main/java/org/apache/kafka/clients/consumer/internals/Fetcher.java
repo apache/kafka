@@ -19,10 +19,12 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -35,14 +37,58 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+
+/**
+ * This class manages the fetching process with the brokers.
+ */
 public interface Fetcher<K, V> extends Closeable {
 
-    void close();
+    /**
+     * Return whether we have any completed fetches pending return to the user. This method is thread-safe. Has
+     * visibility for testing.
+     * @return true if there are completed fetches, false otherwise
+     */
+    boolean hasCompletedFetches();
 
+    /**
+     * Return whether we have any completed fetches that are fetchable. This method is thread-safe.
+     * @return true if there are completed fetches that can be returned, false otherwise
+     */
+    boolean hasAvailableFetches();
+
+    /**
+     * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
+     * an in-flight fetch or pending fetch data.
+     * @return number of fetches sent
+     */
+    int sendFetches();
+
+    /**
+     * Return the fetched records, empty the record buffer and update the consumed position.
+     *
+     * NOTE: returning an {@link Fetch#isEmpty empty} fetch guarantees the consumed position is not updated.
+     *
+     * @return A {@link Fetch} for the requested partitions
+     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
+     *         the defaultResetPolicy is NONE
+     * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
+     */
     Fetch<K, V> collectFetch();
 
+    /**
+     * Get metadata for all topics present in Kafka cluster
+     *
+     * @param request The MetadataRequest to send
+     * @param timer Timer bounding how long this method can block
+     * @return The map of topics with their partition information
+     */
     Map<String, List<PartitionInfo>> getTopicMetadata(MetadataRequest.Builder request, Timer timer);
 
+    /**
+     * Get topic metadata for all topics in the cluster
+     * @param timer Timer bounding how long this method can block
+     * @return The map of topics with their partition information
+     */
     Map<String, List<PartitionInfo>> getAllTopicMetadata(Timer timer);
 
     Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch, Timer timer);
@@ -51,22 +97,34 @@ public interface Fetcher<K, V> extends Closeable {
 
     Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Timer timer);
 
-    boolean hasCompletedFetches();
-
-    boolean hasAvailableFetches();
-
-    int sendFetches();
-
+    /**
+     * Reset offsets for all assigned partitions that require it.
+     *
+     * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset reset strategy is defined
+     *   and one or more partitions aren't awaiting a seekToBeginning() or seekToEnd().
+     */
     void resetOffsetsIfNeeded();
 
     void resetOffsetIfNeeded(TopicPartition partition, OffsetResetStrategy requestedResetStrategy, ListOffsetData offsetData);
 
+    /**
+     * Determine which replica to read from.
+     */
     Node selectReadReplica(TopicPartition partition, Node leaderReplica, long currentTimeMs);
 
+    /**
+     * Clear the buffered data which are not a part of newly assigned partitions
+     *
+     * @param assignedPartitions  newly assigned {@link TopicPartition}
+     */
     void clearBufferedDataForUnassignedPartitions(Collection<TopicPartition> assignedPartitions);
 
+    /**
+     * Validate offsets for all assigned partitions for which a leader change has been detected.
+     */
     void validateOffsetsIfNeeded();
 
+    void close();
 
     /**
      * Represents data about an offset returned by a broker.
