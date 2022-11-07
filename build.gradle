@@ -865,7 +865,7 @@ project(':core') {
     api libs.scalaLibrary
 
     implementation project(':server-common')
-    implementation project(':coordinator')
+    implementation project(':group-coordinator')
     implementation project(':metadata')
     implementation project(':raft')
     implementation project(':storage')
@@ -898,7 +898,7 @@ project(':core') {
     compileOnly libs.log4j
 
     testImplementation project(':clients').sourceSets.test.output
-    testImplementation project(':coordinator').sourceSets.test.output
+    testImplementation project(':group-coordinator').sourceSets.test.output
     testImplementation project(':metadata').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
@@ -1225,8 +1225,8 @@ project(':metadata') {
   }
 }
 
-project(':coordinator') {
-  archivesBaseName = "kafka-coordinator"
+project(':group-coordinator') {
+  archivesBaseName = "kafka-group-coordinator"
 
   dependencies {
     implementation project(':server-common')
