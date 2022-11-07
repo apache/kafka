@@ -992,6 +992,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertTrue(changelogReader.isEmpty());
         assertNull(changelogReader.changelogMetadata(tp1));
         assertNull(changelogReader.changelogMetadata(tp2));
+        assertEquals(changelogReader.state(), ACTIVE_RESTORING);
     }
 
     @Test
@@ -1070,6 +1071,21 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
         assertEquals(mkSet(tp, tp1, tp2), consumer.assignment());
         assertEquals(mkSet(tp1, tp2), consumer.paused());
+    }
+
+    @Test
+    public void shouldTransitStateBackToActiveRestoringAfterRemovingLastTask() {
+        final StoreChangelogReader changelogReader = new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback);
+        EasyMock.expect(standbyStateManager.storeMetadata(tp1)).andReturn(storeMetadataOne).anyTimes();
+        EasyMock.expect(storeMetadataOne.changelogPartition()).andReturn(tp1).anyTimes();
+        EasyMock.expect(storeMetadataOne.store()).andReturn(store).anyTimes();
+        EasyMock.replay(standbyStateManager, store, storeMetadataOne);
+        changelogReader.register(tp1, standbyStateManager);
+        changelogReader.transitToUpdateStandby();
+
+        changelogReader.unregister(mkSet(tp1));
+        assertTrue(changelogReader.isEmpty());
+        assertEquals(ACTIVE_RESTORING, changelogReader.state());
     }
 
     @Test

@@ -90,6 +90,7 @@ public class StoreChangelogReader implements ChangelogReader {
     //   1) restoring active task or
     //   2) updating standby task at a given time,
     // but never doing both
+    // A changelog reader with no tasks at all is in state ACTIVE_RESTORING
     enum ChangelogReaderState {
         ACTIVE_RESTORING("ACTIVE_RESTORING"),
 
@@ -990,6 +991,10 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         removeChangelogsFromRestoreConsumer(revokedInitializedChangelogs);
+
+        if (changelogs.isEmpty()) {
+            state = ChangelogReaderState.ACTIVE_RESTORING;
+        }
     }
 
     @Override
@@ -998,6 +1003,8 @@ public class StoreChangelogReader implements ChangelogReader {
             changelogMetadata.clear();
         }
         changelogs.clear();
+
+        state = ChangelogReaderState.ACTIVE_RESTORING;
 
         try {
             restoreConsumer.unsubscribe();
