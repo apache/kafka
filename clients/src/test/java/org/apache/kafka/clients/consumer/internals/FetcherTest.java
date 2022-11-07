@@ -195,7 +195,7 @@ public class FetcherTest {
     private Metrics metrics;
     private ApiVersions apiVersions = new ApiVersions();
     private ConsumerNetworkClient consumerClient;
-    private FetcherThreadSafe<?, ?> fetcher;
+    private Fetcher<?, ?> fetcher;
 
     private MemoryRecords records;
     private MemoryRecords nextRecords;
@@ -2532,7 +2532,7 @@ public class FetcherTest {
         buildFetcher();
 
         MockSelector selector = new MockSelector(time);
-        Sensor throttleTimeSensor = FetcherThreadSafe.throttleTimeSensor(metrics, metricsRegistry);
+        Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry);
         Cluster cluster = TestUtils.singletonCluster("test", 1);
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
@@ -2893,7 +2893,7 @@ public class FetcherTest {
         assertTrue(partitionRecords.containsKey(tp0));
 
         // Create throttle metrics
-        FetcherThreadSafe.throttleTimeSensor(metrics, metricsRegistry);
+        Fetcher.throttleTimeSensor(metrics, metricsRegistry);
 
         // Verify that all metrics except metrics-count have registered templates
         Set<MetricNameTemplate> allMetrics = new HashSet<>();
@@ -4614,7 +4614,7 @@ public class FetcherTest {
 
         // Complete reset and now we can fetch
         fetcher.resetOffsetIfNeeded(tp0, OffsetResetStrategy.LATEST,
-                new FetcherThreadSafe.ListOffsetData(100, 1L, Optional.empty()));
+                new Fetcher.ListOffsetData(100, 1L, Optional.empty()));
         assertEquals(1, fetcher.sendFetches());
     }
 
@@ -5082,7 +5082,7 @@ public class FetcherTest {
     }
 
     /**
-     * Assert that the {@link FetcherThreadSafe#collectFetch() latest fetch} does not contain any
+     * Assert that the {@link Fetcher#collectFetch() latest fetch} does not contain any
      * {@link Fetch#records() user-visible records}, did not
      * {@link Fetch#positionAdvanced() advance the consumer's position},
      * and is {@link Fetch#isEmpty() empty}.

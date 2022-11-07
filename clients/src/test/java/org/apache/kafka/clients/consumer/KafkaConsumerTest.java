@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.FetcherThreadSafe;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
@@ -2614,7 +2615,7 @@ public class KafkaConsumerTest {
                 interceptors,
                 throwOnStableOffsetNotSupported);
         }
-        FetcherThreadSafe<String, String> fetcher = new FetcherThreadSafe<>(
+        Fetcher<String, String> fetcher = new FetcherThreadSafe<>(
                 loggerFactory,
                 consumerClient,
                 minBytes,

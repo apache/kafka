@@ -161,25 +161,25 @@ public class FetcherThreadSafe<K, V> implements Closeable, Fetcher<K, V> {
     private CompletedFetch nextInLineFetch = null;
 
     public FetcherThreadSafe(LogContext logContext,
-                        ConsumerNetworkClient client,
-                        int minBytes,
-                        int maxBytes,
-                        int maxWaitMs,
-                        int fetchSize,
-                        int maxPollRecords,
-                        boolean checkCrcs,
-                        String clientRackId,
-                        Deserializer<K> keyDeserializer,
-                        Deserializer<V> valueDeserializer,
-                        ConsumerMetadata metadata,
-                        SubscriptionState subscriptions,
-                        Metrics metrics,
-                        FetcherMetricsRegistry metricsRegistry,
-                        Time time,
-                        long retryBackoffMs,
-                        long requestTimeoutMs,
-                        IsolationLevel isolationLevel,
-                        ApiVersions apiVersions) {
+                             ConsumerNetworkClient client,
+                             int minBytes,
+                             int maxBytes,
+                             int maxWaitMs,
+                             int fetchSize,
+                             int maxPollRecords,
+                             boolean checkCrcs,
+                             String clientRackId,
+                             Deserializer<K> keyDeserializer,
+                             Deserializer<V> valueDeserializer,
+                             ConsumerMetadata metadata,
+                             SubscriptionState subscriptions,
+                             Metrics metrics,
+                             FetcherMetricsRegistry metricsRegistry,
+                             Time time,
+                             long retryBackoffMs,
+                             long requestTimeoutMs,
+                             IsolationLevel isolationLevel,
+                             ApiVersions apiVersions) {
         this.log = logContext.logger(FetcherThreadSafe.class);
         this.logContext = logContext;
         this.time = time;
@@ -1455,15 +1455,6 @@ public class FetcherThreadSafe<K, V> implements Closeable, Fetcher<K, V> {
     // Visible for testing
     protected FetchSessionHandler sessionHandler(int node) {
         return sessionHandlers.get(node);
-    }
-
-    public static Sensor throttleTimeSensor(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
-        Sensor fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
-        fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeAvg), new Avg());
-
-        fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeMax), new Max());
-
-        return fetchThrottleTimeSensor;
     }
 
     private class CompletedFetch {

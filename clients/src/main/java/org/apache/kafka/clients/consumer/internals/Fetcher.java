@@ -26,6 +26,10 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
@@ -120,6 +124,13 @@ public interface Fetcher<K, V> extends Closeable {
     void clearBufferedDataForUnassignedPartitions(Collection<TopicPartition> assignedPartitions);
 
     /**
+     * Clear the buffered data which are not a part of newly assigned topics
+     *
+     * @param assignedTopics  newly assigned topics
+     */
+    void clearBufferedDataForUnassignedTopics(Collection<String> assignedTopics);
+
+    /**
      * Validate offsets for all assigned partitions for which a leader change has been detected.
      */
     void validateOffsetsIfNeeded();
@@ -148,5 +159,15 @@ public interface Fetcher<K, V> extends Closeable {
 
         return OffsetsForLeaderEpochRequest.supportsTopicPermission(apiVersion.maxVersion());
     }
+
+    static Sensor throttleTimeSensor(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
+        Sensor fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
+        fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeAvg), new Avg());
+
+        fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeMax), new Max());
+
+        return fetchThrottleTimeSensor;
+    }
+
 
 }
