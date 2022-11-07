@@ -106,12 +106,20 @@ public class EmbeddedKafkaCluster {
     private final String[] currentBrokerLogDirs;
     private final boolean hasListenerConfig;
 
+    final Map<String, String> clientConfigs;
+
     private EmbeddedZookeeper zookeeper = null;
     private ListenerName listenerName = new ListenerName("PLAINTEXT");
     private KafkaProducer<byte[], byte[]> producer;
 
     public EmbeddedKafkaCluster(final int numBrokers,
                                 final Properties brokerConfig) {
+        this(numBrokers, brokerConfig, Collections.emptyMap());
+    }
+
+    public EmbeddedKafkaCluster(final int numBrokers,
+                                final Properties brokerConfig,
+                                final Map<String, String> clientConfigs) {
         brokers = new KafkaServer[numBrokers];
         currentBrokerPorts = new int[numBrokers];
         currentBrokerLogDirs = new String[numBrokers];
@@ -120,6 +128,8 @@ public class EmbeddedKafkaCluster {
         // a listener config is defined during initialization in order to know if it's
         // safe to override it
         hasListenerConfig = brokerConfig.get(KafkaConfig.ListenersProp()) != null;
+
+        this.clientConfigs = clientConfigs;
     }
 
     /**
@@ -167,7 +177,7 @@ public class EmbeddedKafkaCluster {
             currentBrokerPorts[i] = brokers[i].boundPort(listenerName);
         }
 
-        Map<String, Object> producerProps = new HashMap<>();
+        Map<String, Object> producerProps = new HashMap<>(clientConfigs);
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         if (sslEnabled()) {
             producerProps.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
@@ -367,7 +377,7 @@ public class EmbeddedKafkaCluster {
      * @param topic The name of the topic.
      */
     public void createTopic(String topic, int partitions, int replication, Map<String, String> topicConfig) {
-        createTopic(topic, partitions, replication, topicConfig, new Properties());
+        createTopic(topic, partitions, replication, topicConfig, Collections.emptyMap());
     }
 
     /**
@@ -379,7 +389,7 @@ public class EmbeddedKafkaCluster {
      * @param topicConfig       Additional topic-level configuration settings.
      * @param adminClientConfig Additional admin client configuration settings.
      */
-    public void createTopic(String topic, int partitions, int replication, Map<String, String> topicConfig, Properties adminClientConfig) {
+    public void createTopic(String topic, int partitions, int replication, Map<String, String> topicConfig, Map<String, Object> adminClientConfig) {
         if (replication > brokers.length) {
             throw new InvalidReplicationFactorException("Insufficient brokers ("
                     + brokers.length + ") for desired replication (" + replication + ")");
@@ -427,19 +437,21 @@ public class EmbeddedKafkaCluster {
         }
     }
 
-    public Admin createAdminClient(Properties adminClientConfig) {
-        adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+    public Admin createAdminClient(Map<String, Object> adminClientConfig) {
+        Properties props = Utils.mkProperties(clientConfigs);
+        props.putAll(adminClientConfig);
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         final Object listeners = brokerConfig.get(KafkaConfig.ListenersProp());
         if (listeners != null && listeners.toString().contains("SSL")) {
-            adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
-            adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
-            adminClientConfig.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
+            props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+            props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
+            props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
         }
-        return Admin.create(adminClientConfig);
+        return Admin.create(props);
     }
 
     public Admin createAdminClient() {
-        return createAdminClient(new Properties());
+        return createAdminClient(Collections.emptyMap());
     }
 
     /**
@@ -509,7 +521,7 @@ public class EmbeddedKafkaCluster {
         long endTimeMs = System.currentTimeMillis() + maxDurationMs;
 
         Consumer<byte[], byte[]> consumer = createConsumer(consumerProps != null ? consumerProps : Collections.emptyMap());
-        Admin admin = createAdminClient(Utils.mkObjectProperties(adminProps != null ? adminProps : Collections.emptyMap()));
+        Admin admin = createAdminClient(adminProps != null ? adminProps : Collections.emptyMap());
 
         long remainingTimeMs = endTimeMs - System.currentTimeMillis();
         Set<TopicPartition> topicPartitions = listPartitions(remainingTimeMs, admin, Arrays.asList(topics));
@@ -595,7 +607,8 @@ public class EmbeddedKafkaCluster {
     }
 
     public KafkaConsumer<byte[], byte[]> createConsumer(Map<String, Object> consumerProps) {
-        Map<String, Object> props = new HashMap<>(consumerProps);
+        Map<String, Object> props = new HashMap<>(clientConfigs);
+        props.putAll(consumerProps);
 
         putIfAbsent(props, GROUP_ID_CONFIG, UUID.randomUUID().toString());
         putIfAbsent(props, BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
@@ -624,8 +637,8 @@ public class EmbeddedKafkaCluster {
     }
 
     public KafkaProducer<byte[], byte[]> createProducer(Map<String, Object> producerProps) {
-        Map<String, Object> props = new HashMap<>(producerProps);
-
+        Map<String, Object> props = new HashMap<>(clientConfigs);
+        props.putAll(producerProps);
         putIfAbsent(props, BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         putIfAbsent(props, KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         putIfAbsent(props, VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");

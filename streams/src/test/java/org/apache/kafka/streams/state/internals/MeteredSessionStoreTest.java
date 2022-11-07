@@ -95,6 +95,7 @@ public class MeteredSessionStoreTest {
     private static final byte[] VALUE_BYTES = VALUE.getBytes();
     private static final long START_TIMESTAMP = 24L;
     private static final long END_TIMESTAMP = 42L;
+    private static final int RETENTION_PERIOD = 100;
 
     private final String threadId = Thread.currentThread().getName();
     private final TaskId taskId = new TaskId(0, 0, "My-Topology");
@@ -427,6 +428,54 @@ public class MeteredSessionStoreTest {
         final KafkaMetric metric = metric("fetch-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(innerStore);
+    }
+
+    @Test
+    public void shouldReturnNoSessionsWhenFetchedKeyHasExpired() {
+        final long systemTime = Time.SYSTEM.milliseconds();
+        expect(innerStore.findSessions(KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
+                .andReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
+        init();
+
+        final KeyValueIterator<Windowed<String>, String> iterator = store.findSessions(KEY, systemTime - RETENTION_PERIOD, systemTime);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+    }
+
+    @Test
+    public void shouldReturnNoSessionsInBackwardOrderWhenFetchedKeyHasExpired() {
+        final long systemTime = Time.SYSTEM.milliseconds();
+        expect(innerStore.backwardFindSessions(KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
+                .andReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
+        init();
+
+        final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFindSessions(KEY, systemTime - RETENTION_PERIOD, systemTime);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+    }
+
+    @Test
+    public void shouldNotFindExpiredSessionRangeFromStore() {
+        final long systemTime = Time.SYSTEM.milliseconds();
+        expect(innerStore.findSessions(KEY_BYTES, KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
+                .andReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
+        init();
+
+        final KeyValueIterator<Windowed<String>, String> iterator = store.findSessions(KEY, KEY, systemTime - RETENTION_PERIOD, systemTime);
+        assertFalse(iterator.hasNext());
+        iterator.close();
+    }
+
+    @Test
+    public void shouldNotFindExpiredSessionRangeInBackwardOrderFromStore() {
+        final long systemTime = Time.SYSTEM.milliseconds();
+        expect(innerStore.backwardFindSessions(KEY_BYTES, KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
+                .andReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
+        init();
+
+        final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFindSessions(KEY, KEY, systemTime - RETENTION_PERIOD, systemTime);
+        assertFalse(iterator.hasNext());
+        iterator.close();
     }
 
     @Test

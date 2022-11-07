@@ -255,9 +255,9 @@ public class PluginsTest {
         TestPlugins.assertAvailable();
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestPlugin.SAMPLING_CONVERTER.getClassName());
         ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_CONVERTER.getClassName());
-        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(classLoader);
-        createConfig();
-        Plugins.compareAndSwapLoaders(savedLoader);
+        try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
+            createConfig();
+        }
 
         Converter plugin = plugins.newConverter(
             config,
@@ -279,9 +279,9 @@ public class PluginsTest {
 
         PluginClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_CONFIG_PROVIDER.getClassName());
         assertNotNull(classLoader);
-        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(classLoader);
-        createConfig();
-        Plugins.compareAndSwapLoaders(savedLoader);
+        try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
+            createConfig();
+        }
 
         ConfigProvider plugin = plugins.newConfigProvider(
             config,
@@ -300,9 +300,9 @@ public class PluginsTest {
         TestPlugins.assertAvailable();
         props.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, TestPlugin.SAMPLING_HEADER_CONVERTER.getClassName());
         ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_HEADER_CONVERTER.getClassName());
-        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(classLoader);
-        createConfig();
-        Plugins.compareAndSwapLoaders(savedLoader);
+        try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
+            createConfig();
+        }
 
         HeaderConverter plugin = plugins.newHeaderConverter(
             config,
