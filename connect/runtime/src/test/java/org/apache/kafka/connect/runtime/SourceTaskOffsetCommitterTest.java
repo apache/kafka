@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -30,6 +31,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -40,7 +42,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -92,49 +93,66 @@ public class SourceTaskOffsetCommitterTest {
     }
 
     @Test
-    public void testClose() throws Exception {
+    public void testCloseWithinTimeout() throws Exception {
         long timeoutMs = 1000;
 
         // Normal termination, where termination times out.
         when(executor.awaitTermination(timeoutMs, TimeUnit.MILLISECONDS)).thenReturn(false);
 
-        committer.close(timeoutMs);
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(SourceTaskOffsetCommitter.class)) {
+            committer.close(timeoutMs);
+            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("ERROR")));
+        }
+
+        verify(executor).shutdown();
+    }
+
+    @Test
+    public void testCloseOutsideOfTimeout() throws InterruptedException {
+        long timeoutMs = 1000;
 
         // Termination interrupted
         when(executor.awaitTermination(timeoutMs, TimeUnit.MILLISECONDS)).thenThrow(new InterruptedException());
 
         committer.close(timeoutMs);
 
-        verify(executor, times(2)).shutdown();
+        verify(executor).shutdown();
     }
 
     @Test
-    public void testRemove() throws Exception {
-        // Try to remove a non-existing task
+    public void testRemoveNonExistentTask() {
         assertTrue(committers.isEmpty());
         committer.remove(taskId);
         assertTrue(committers.isEmpty());
+    }
 
-        // Try to remove an existing task
-        when(taskFuture.cancel(false)).thenReturn(false);
-        when(taskFuture.isDone()).thenReturn(false);
-        when(taskFuture.get())
-                .thenReturn(null)
-                .thenThrow(new CancellationException())
-                .thenThrow(new InterruptedException());
-        when(taskId.connector()).thenReturn("MyConnector");
-        when(taskId.task()).thenReturn(1);
-
+    @Test
+    public void testRemoveSuccess() {
+        removeSetup();
         committers.put(taskId, taskFuture);
         committer.remove(taskId);
         assertTrue(committers.isEmpty());
+    }
 
-        // Try to remove a cancelled task
+    @Test
+    public void testRemoveCancelledTask() throws ExecutionException, InterruptedException {
+        removeSetup();
+        when(taskFuture.get()).thenThrow(new CancellationException());
+
         committers.put(taskId, taskFuture);
-        committer.remove(taskId);
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(SourceTaskOffsetCommitter.class)) {
+            LogCaptureAppender.setClassLoggerToTrace(SourceTaskOffsetCommitter.class);
+            committer.remove(taskId);
+            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("TRACE")));
+        }
         assertTrue(committers.isEmpty());
+    }
 
-        // Try to remove an interrupted task
+    @Test
+    public void testRemoveTaskAndInterrupted() throws ExecutionException, InterruptedException {
+        removeSetup();
+        when(taskFuture.get()).thenThrow(new InterruptedException());
+
         try {
             committers.put(taskId, taskFuture);
             committer.remove(taskId);
@@ -142,6 +160,13 @@ public class SourceTaskOffsetCommitterTest {
         } catch (ConnectException e) {
             //ignore
         }
+    }
+
+    private void removeSetup() {
+        when(taskFuture.cancel(false)).thenReturn(false);
+        when(taskFuture.isDone()).thenReturn(false);
+        when(taskId.connector()).thenReturn("MyConnector");
+        when(taskId.task()).thenReturn(1);
     }
 
 }
