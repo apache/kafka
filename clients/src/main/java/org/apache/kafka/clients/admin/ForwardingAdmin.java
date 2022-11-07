@@ -40,7 +40,7 @@ import java.util.Set;
 /**
  * {@code ForwardingAdmin} is the default value of {@code forwarding.admin.class} in MirrorMaker.
  * Users who wish to customize the MirrorMaker behaviour for the creation of topics and access control lists can extend this
-  * class without needing to provide a whole implementation of {@code Admin}.
+ * class without needing to provide a whole implementation of {@code Admin}.
  * The class must have a constructor with signature {@code (Map<String, Object> config)} for configuring
  * a decorated {@link KafkaAdminClient} and any other clients needed for external resource management.
  */
