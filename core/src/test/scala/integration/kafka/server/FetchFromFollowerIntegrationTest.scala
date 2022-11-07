@@ -18,7 +18,6 @@ package integration.kafka.server
 
 import kafka.server.{BaseFetchRequestTest, KafkaConfig}
 import kafka.utils.{TestInfoUtils, TestUtils}
-import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.FetchResponse
