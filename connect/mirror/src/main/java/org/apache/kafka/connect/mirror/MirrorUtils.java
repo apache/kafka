@@ -133,7 +133,7 @@ final class MirrorUtils {
             }
             if (cause instanceof UnsupportedVersionException) {
                 log.debug("Unable to create topic '{}' since the brokers do not support the CreateTopics API." +
-                                " Falling back to assume topic exist or will be auto-created by the broker.",
+                                " Falling back to assume topic exists or will be auto-created by the broker.",
                         topicName);
             }
             if (cause instanceof ClusterAuthorizationException) {

@@ -31,13 +31,11 @@ import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -60,13 +58,16 @@ public class FakeForwardingAdminWithLocalMetadata extends ForwardingAdmin {
         CreateTopicsResult createTopicsResult = super.createTopics(newTopics, options);
         newTopics.forEach(newTopic -> {
             try {
+                log.info("Add topic '{}' to cluster and metadata store", newTopic);
                 // Wait for topic to be created before edit the fake local store
                 createTopicsResult.values().get(newTopic.name()).get(timeout, TimeUnit.MILLISECONDS);
-                Map<String, String> configs = new HashMap<>(newTopic.configs());
-                configs.put("partitions", String.valueOf(newTopic.numPartitions()));
-                FakeLocalMetadataStore.allTopics.put(newTopic.name(), configs);
+                FakeLocalMetadataStore.addTopicToLocalMetadataStore(newTopic);
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                log.error(e.getMessage());
+                if (e.getCause() instanceof TopicExistsException) {
+                    log.warn("Topic '{}' already exists. Update the local metadata store if absent", newTopic.name());
+                    FakeLocalMetadataStore.addTopicToLocalMetadataStore(newTopic);
+                } else
+                    log.error(e.getMessage());
             }
         });
         return createTopicsResult;
@@ -79,9 +80,7 @@ public class FakeForwardingAdminWithLocalMetadata extends ForwardingAdmin {
             try {
                 // Wait for topic partition to be created before edit the fake local store
                 createPartitionsResult.values().get(topic).get(timeout, TimeUnit.MILLISECONDS);
-                Map<String, String> configs = FakeLocalMetadataStore.allTopics.get(topic);
-                configs.put("partitions", String.valueOf(newPartition.totalCount()));
-                FakeLocalMetadataStore.allTopics.put(topic, configs);
+                FakeLocalMetadataStore.updatePartitionCount(topic, newPartition.totalCount());
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 log.error(e.getMessage());
             }
@@ -98,11 +97,7 @@ public class FakeForwardingAdminWithLocalMetadata extends ForwardingAdmin {
                 if (configResource.type() == ConfigResource.Type.TOPIC) {
                     // Wait for config to be altered before edit the fake local store
                     alterConfigsResult.values().get(configResource).get(timeout, TimeUnit.MILLISECONDS);
-                    Map<String, String> topicConfigs = FakeLocalMetadataStore.allTopics.get(configResource.name());
-                    newConfigs.entries().stream().forEach(configEntry -> {
-                        topicConfigs.put(configEntry.name(), configEntry.value());
-                    });
-                    FakeLocalMetadataStore.allTopics.put(configResource.name(), topicConfigs);
+                    FakeLocalMetadataStore.updateTopicConfig(configResource.name(), newConfigs);
                 }
             } catch (InterruptedException | ExecutionException | TimeoutException e) {
                 log.error(e.getMessage());
@@ -119,10 +114,7 @@ public class FakeForwardingAdminWithLocalMetadata extends ForwardingAdmin {
             // Wait for acls to be created before edit the fake local store
             aclsResult.all().get(timeout, TimeUnit.MILLISECONDS);
             acls.forEach(aclBinding -> {
-                String principal = aclBinding.entry().principal();
-                List<AclBinding> aclBindings = FakeLocalMetadataStore.allAcls.getOrDefault(principal, new ArrayList<>());
-                aclBindings.add(aclBinding);
-                FakeLocalMetadataStore.allAcls.put(principal, aclBindings);
+                FakeLocalMetadataStore.addACLs(aclBinding.entry().principal(), aclBinding);
             });
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error(e.getMessage());

@@ -110,7 +110,7 @@ public class MirrorConnectorsIntegrationBaseTest {
 
     protected Map<String, String> additionalPrimaryClusterClientsConfigs = new HashMap<>();
     protected Map<String, String> additionalBackupClusterClientsConfigs = new HashMap<>();
-
+    protected Boolean createReplicatedTopicsUpfront = false; // enable to speed up the test cases
     protected Exit.Procedure exitProcedure;
     private Exit.Procedure haltProcedure;
     
@@ -200,14 +200,15 @@ public class MirrorConnectorsIntegrationBaseTest {
 
         backup.start();
         backup.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Workers of " + BACKUP_CLUSTER_ALIAS + "-connect-cluster did not start in time.");
+            "Workers of " + BACKUP_CLUSTER_ALIAS + "-connect-cluster did not start in time.");
+
+        createTopics();
 
         waitForTopicCreated(backup, "mm2-status.primary.internal");
         waitForTopicCreated(backup, "mm2-offsets.primary.internal");
         waitForTopicCreated(backup, "mm2-configs.primary.internal");
-
-        createTopics();
- 
+        waitForTopicCreated(backup, "test-topic-1");
+        waitForTopicCreated(primary, "test-topic-1");
         warmUpConsumer(Collections.singletonMap("group.id", "consumer-group-dummy"));
         
         log.info(PRIMARY_CLUSTER_ALIAS + " REST service: {}", primary.endpointForResource("connectors"));
@@ -439,8 +440,8 @@ public class MirrorConnectorsIntegrationBaseTest {
 
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
 
-        // make sure the topic is created in the other cluster
-        waitForTopicCreated(primary, "backup.test-topic-1");
+        // make sure the topic is created in the primary cluster only
+        topicShouldNotBeCreated(primary, "backup.test-topic-1");
         waitForTopicCreated(backup, "primary.test-topic-1");
         // create a consumer at backup cluster with same consumer group Id to consume 1 topic
         Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(
@@ -647,7 +648,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     protected static void waitForTopicCreated(EmbeddedConnectCluster cluster, String topicName) throws InterruptedException {
         try (final Admin adminClient = cluster.kafka().createAdminClient()) {
             waitForCondition(() -> {
-                    Set<String> topics = adminClient.listTopics().names().get();
+                    Set<String> topics = adminClient.listTopics().names().get(REQUEST_TIMEOUT_DURATION_MS, TimeUnit.MILLISECONDS);
                     return topics.contains(topicName);
                 }, OFFSET_SYNC_DURATION_MS,
                 "Topic: " + topicName + " didn't get created in the cluster"
@@ -658,7 +659,7 @@ public class MirrorConnectorsIntegrationBaseTest {
     /*
      * delete all topics of the input kafka cluster
      */
-    private static void deleteAllTopics(EmbeddedKafkaCluster cluster) throws Exception {
+    public static void deleteAllTopics(EmbeddedKafkaCluster cluster) throws Exception {
         try (final Admin adminClient = cluster.createAdminClient()) {
             Set<String> topicsToBeDeleted = adminClient.listTopics().names().get();
             log.debug("Deleting topics: {} ", topicsToBeDeleted);
@@ -778,13 +779,17 @@ public class MirrorConnectorsIntegrationBaseTest {
             AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_DURATION_MS);
 
         // create these topics before starting the connectors so we don't need to wait for discovery
-        primary.kafka().createTopic("test-topic-1", NUM_PARTITIONS, 1, topicConfig, adminClientConfig);
-        primary.kafka().createTopic("backup.test-topic-1", 1, 1, emptyMap, adminClientConfig);
-        primary.kafka().createTopic("heartbeats", 1, 1, emptyMap, adminClientConfig);
         primary.kafka().createTopic("test-topic-no-checkpoints", 1, 1, emptyMap, adminClientConfig);
+        primary.kafka().createTopic("test-topic-1", NUM_PARTITIONS, 1, topicConfig, adminClientConfig);
         backup.kafka().createTopic("test-topic-1", NUM_PARTITIONS, 1, emptyMap, adminClientConfig);
-        backup.kafka().createTopic("primary.test-topic-1", 1, 1, emptyMap, adminClientConfig);
+        primary.kafka().createTopic("heartbeats", 1, 1, emptyMap, adminClientConfig);
         backup.kafka().createTopic("heartbeats", 1, 1, emptyMap, adminClientConfig);
+
+        // This can speed up some test cases
+        if (createReplicatedTopicsUpfront) {
+            primary.kafka().createTopic("backup.test-topic-1", 1, 1, emptyMap, adminClientConfig);
+            backup.kafka().createTopic("primary.test-topic-1", 1, 1, emptyMap, adminClientConfig);
+        }
     }
 
     /*
@@ -799,5 +804,31 @@ public class MirrorConnectorsIntegrationBaseTest {
         dummyConsumer.poll(CONSUMER_POLL_TIMEOUT_MS);
         dummyConsumer.commitSync();
         dummyConsumer.close();
+    }
+
+    /*
+     * making sure the topic isn't created on the cluster
+     */
+    protected static void topicShouldNotBeCreated(EmbeddedConnectCluster cluster, String topicName) throws InterruptedException {
+        try (final Admin adminClient = cluster.kafka().createAdminClient()) {
+            waitForCondition(() ->
+                    !adminClient.listTopics().names()
+                        .get(REQUEST_TIMEOUT_DURATION_MS, TimeUnit.MILLISECONDS)
+                        .contains(topicName), TOPIC_SYNC_DURATION_MS,
+                "Topic: " + topicName + " get created on cluster: " + cluster.getName()
+            );
+        }
+    }
+
+    /*
+     * wait for the topic created on the cluster
+     */
+    protected static void waitForTopicPartitionCreated(EmbeddedConnectCluster cluster, String topicName, int totalNumPartitions) throws InterruptedException {
+        try (final Admin adminClient = cluster.kafka().createAdminClient()) {
+            waitForCondition(() -> adminClient.describeTopics(Collections.singleton(topicName)).allTopicNames().get()
+                    .get(topicName).partitions().size() == totalNumPartitions, TOPIC_SYNC_DURATION_MS,
+                "Topic: " + topicName + "'s partitions didn't get created on cluster: " + cluster.getName()
+            );
+        }
     }
 }
