@@ -25,7 +25,6 @@ import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.provider.DirectoryConfigProvider;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -33,6 +32,7 @@ import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverri
 import org.apache.kafka.connect.connector.policy.PrincipalConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
@@ -49,8 +49,6 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -147,20 +145,8 @@ public class AbstractHerderTest {
     @Mock private ConfigBackingStore configStore;
     @Mock private StatusBackingStore statusStore;
     @Mock private ClassLoader classLoader;
+    @Mock private LoaderSwap loaderSwap;
     @Mock private Plugins plugins;
-
-    private ClassLoader loader;
-    private Connector connector;
-
-    @Before
-    public void before() {
-        loader = Utils.getContextOrKafkaClassLoader();
-    }
-
-    @After
-    public void tearDown() {
-        if (loader != null) Plugins.compareAndSwapLoaders(loader);
-    }
 
     @Test
     public void testConnectors() {
@@ -333,6 +319,7 @@ public class AbstractHerderTest {
 
         assertEquals(1, configInfos.errorCount());
         assertErrorForKey(configInfos, "testKey");
+        verifyValidationIsolation();
     }
 
     @Test
@@ -351,6 +338,7 @@ public class AbstractHerderTest {
         assertEquals(2, configInfos.errorCount());
         assertErrorForKey(configInfos, "testKey");
         assertErrorForKey(configInfos, "secondTestKey");
+        verifyValidationIsolation();
     }
 
     @Test
@@ -451,8 +439,7 @@ public class AbstractHerderTest {
         assertEquals("required", infos.get("required").configValue().name());
         assertEquals(1, infos.get("required").configValue().errors().size());
 
-        verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verifyValidationIsolation();
     }
 
     @Test
@@ -467,8 +454,7 @@ public class AbstractHerderTest {
 
         assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
-        verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verifyValidationIsolation();
     }
 
     @Test
@@ -483,8 +469,7 @@ public class AbstractHerderTest {
 
         assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
-        verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verifyValidationIsolation();
     }
 
     @Test
@@ -499,8 +484,7 @@ public class AbstractHerderTest {
 
         assertThrows(ConfigException.class, () -> herder.validateConnectorConfig(config, false));
 
-        verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verifyValidationIsolation();
     }
 
     @Test
@@ -552,8 +536,7 @@ public class AbstractHerderTest {
         assertFalse(infos.get("transforms.xformB.type").configValue().errors().isEmpty());
 
         verify(plugins, times(2)).transformations();
-        verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verifyValidationIsolation();
     }
 
     @Test
@@ -615,8 +598,7 @@ public class AbstractHerderTest {
 
         verify(plugins).transformations();
         verify(plugins, times(2)).predicates();
-        verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verifyValidationIsolation();
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -668,8 +650,7 @@ public class AbstractHerderTest {
         assertTrue(result.values().stream().anyMatch(
             configInfo -> saslConfigKey.equals(configInfo.configValue().name()) && configInfo.configValue().errors().isEmpty()));
 
-        verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verifyValidationIsolation();
     }
 
     @Test
@@ -719,8 +700,7 @@ public class AbstractHerderTest {
 
         assertEquals(rawOverriddenClientConfigs, validatedOverriddenClientConfigs);
 
-        verify(plugins).newConnector(connectorClass.getName());
-        verify(plugins).compareAndSwapLoaders(connector);
+        verifyValidationIsolation();
     }
 
     @Test
@@ -1071,12 +1051,23 @@ public class AbstractHerderTest {
             throw new RuntimeException("Couldn't create connector", e);
         }
         if (countOfCallingNewConnector > 0) {
-            when(plugins.newConnector(connectorClass.getName())).thenReturn(connector);
-            when(plugins.compareAndSwapLoaders(connector)).thenReturn(classLoader);
+            mockValidationIsolation(connectorClass.getName(), connector);
         }
-        this.connector = connector;
         return herder;
     }
+
+    private void mockValidationIsolation(String connectorClass, Connector connector) {
+        when(plugins.newConnector(connectorClass)).thenReturn(connector);
+        when(plugins.connectorLoader(connectorClass)).thenReturn(classLoader);
+        when(plugins.withClassLoader(classLoader)).thenReturn(loaderSwap);
+    }
+
+    private void verifyValidationIsolation() {
+        verify(plugins).newConnector(anyString());
+        verify(plugins).withClassLoader(classLoader);
+        verify(loaderSwap).close();
+    }
+
 
     private static String producerOverrideKey(String config) {
         return ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + config;

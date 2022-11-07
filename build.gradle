@@ -410,7 +410,7 @@ subprojects {
       "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
       "**/SourceTaskOffsetCommitterTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
-      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*", "**/ExactlyOnceWorkerSourceTaskTest.*",
+      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*",
       "**/WorkerTaskTest.*"
     ])
   }
@@ -1495,6 +1495,7 @@ project(':server-common') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
+    testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jlog4j
   }
