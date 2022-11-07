@@ -34,8 +34,12 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRec
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.{LogContext, SystemTime}
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyLong}
 import org.mockito.Mockito.{mock, never, times, verify, when}
@@ -43,10 +47,6 @@ import org.mockito.Mockito.{mock, never, times, verify, when}
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.{Collections, Optional}
-import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
@@ -1194,6 +1194,7 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val records = MemoryRecords.withRecords(CompressionType.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
+    when(log.maybeUpdateHighWatermark(hw = 0)).thenReturn(None)
 
     val partition: Partition = mock(classOf[Partition])
     when(partition.localLogOrException).thenReturn(log)

@@ -3466,7 +3466,8 @@ class UnifiedLogTest {
     }
 
     assertEquals(Some(100L), log.maybeUpdateHighWatermark(100L))
-    assertEquals(None, log.maybeUpdateHighWatermark(100L))
+    assertEquals(Some(99L), log.maybeUpdateHighWatermark(99L))
+    assertEquals(None, log.maybeUpdateHighWatermark(99L))
     assertEquals(None, log.maybeUpdateHighWatermark(101L))
   }
 

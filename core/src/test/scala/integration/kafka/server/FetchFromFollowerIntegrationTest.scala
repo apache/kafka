@@ -37,7 +37,6 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   val topic = "test-fetch-from-follower"
   val leaderBrokerId = 0
   val followerBrokerId = 1
-  var admin: Admin = null
 
   def overridingProps: Properties = {
     val props = new Properties
@@ -55,7 +54,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
   @Timeout(15)
   def testFollowerCompleteDelayedFetchesOnReplication(quorum: String): Unit = {
     // Create a topic with 2 replicas where broker 0 is the leader and 1 is the follower.
-    admin = createAdminClient()
+    val admin = createAdminClient()
     TestUtils.createTopicWithAdmin(
       admin,
       topic,
@@ -85,7 +84,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       send(fetchRequest, socket)
       TestUtils.generateAndProduceMessages(brokers, topic, numMessages = 1)
       val response = receive[FetchResponse](socket, ApiKeys.FETCH, version)
-      assertEquals(Errors.NONE, response.error())
+      assertEquals(Errors.NONE, response.error)
       assertEquals(Map(Errors.NONE -> 2).asJava, response.errorCounts())
     } finally {
       socket.close()
