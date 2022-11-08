@@ -56,7 +56,7 @@ import java.util.concurrent.TimeUnit;
 public class JsonRestServer {
     private static final Logger log = LoggerFactory.getLogger(JsonRestServer.class);
 
-    private static final long GRACEFUL_SHUTDOWN_TIMEOUT_MS = 100;
+    private static final long GRACEFUL_SHUTDOWN_TIMEOUT_MS = 10 * 1000;
 
     private final ScheduledExecutorService shutdownExecutor;
 
@@ -138,13 +138,13 @@ public class JsonRestServer {
                     log.info("Stopping REST server");
                     jettyServer.stop();
                     jettyServer.join();
+                    jettyServer.destroy();
                     log.info("REST server stopped");
                 } catch (Exception e) {
                     log.error("Unable to stop REST server", e);
                 } finally {
-                    jettyServer.destroy();
+                    shutdownExecutor.shutdown();
                 }
-                shutdownExecutor.shutdown();
                 return null;
             });
         }
