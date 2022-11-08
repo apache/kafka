@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.NodeApiVersions;
@@ -41,11 +40,25 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-
 /**
  * This class manages the fetching process with the brokers.
  */
 public interface Fetcher<K, V> extends Closeable {
+
+    /**
+     * Represents data about an offset returned by a broker.
+     */
+    class ListOffsetData {
+        final long offset;
+        final Long timestamp; //  null if the broker does not support returning timestamps
+        final Optional<Integer> leaderEpoch; // empty if the leader epoch is not known
+
+        ListOffsetData(long offset, Long timestamp, Optional<Integer> leaderEpoch) {
+            this.offset = offset;
+            this.timestamp = timestamp;
+            this.leaderEpoch = leaderEpoch;
+        }
+    }
 
     /**
      * Return whether we have any completed fetches pending return to the user. This method is thread-safe. Has
@@ -68,16 +81,11 @@ public interface Fetcher<K, V> extends Closeable {
     int sendFetches();
 
     /**
-     * Return the fetched records, empty the record buffer and update the consumed position.
-     *
-     * NOTE: returning an {@link Fetch#isEmpty empty} fetch guarantees the consumed position is not updated.
-     *
-     * @return A {@link Fetch} for the requested partitions
-     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
-     *         the defaultResetPolicy is NONE
-     * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
+     * Get topic metadata for all topics in the cluster
+     * @param timer Timer bounding how long this method can block
+     * @return The map of topics with their partition information
      */
-    Fetch<K, V> collectFetch();
+    Map<String, List<PartitionInfo>> getAllTopicMetadata(Timer timer);
 
     /**
      * Get metadata for all topics present in Kafka cluster
@@ -89,11 +97,17 @@ public interface Fetcher<K, V> extends Closeable {
     Map<String, List<PartitionInfo>> getTopicMetadata(MetadataRequest.Builder request, Timer timer);
 
     /**
-     * Get topic metadata for all topics in the cluster
-     * @param timer Timer bounding how long this method can block
-     * @return The map of topics with their partition information
+     * Reset offsets for all assigned partitions that require it.
+     *
+     * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset reset strategy is defined
+     *   and one or more partitions aren't awaiting a seekToBeginning() or seekToEnd().
      */
-    Map<String, List<PartitionInfo>> getAllTopicMetadata(Timer timer);
+    void resetOffsetsIfNeeded();
+
+    /**
+     * Validate offsets for all assigned partitions for which a leader change has been detected.
+     */
+    void validateOffsetsIfNeeded();
 
     Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch, Timer timer);
 
@@ -102,14 +116,27 @@ public interface Fetcher<K, V> extends Closeable {
     Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Timer timer);
 
     /**
-     * Reset offsets for all assigned partitions that require it.
+     * Return the fetched records, empty the record buffer and update the consumed position.
+     * <p/>
+     * NOTE: returning an {@link Fetch#isEmpty empty} fetch guarantees the consumed position is not updated.
      *
-     * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset reset strategy is defined
-     *   and one or more partitions aren't awaiting a seekToBeginning() or seekToEnd().
+     * @return A {@link Fetch} for the requested partitions
+     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
+     *         the defaultResetPolicy is NONE
+     * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
      */
-    void resetOffsetsIfNeeded();
+    Fetch<K, V> collectFetch();
 
+    // Visible for testing
     void resetOffsetIfNeeded(TopicPartition partition, OffsetResetStrategy requestedResetStrategy, ListOffsetData offsetData);
+
+    static boolean hasUsableOffsetForLeaderEpochVersion(NodeApiVersions nodeApiVersions) {
+        ApiVersionsResponseData.ApiVersion apiVersion = nodeApiVersions.apiVersion(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
+        if (apiVersion == null)
+            return false;
+
+        return OffsetsForLeaderEpochRequest.supportsTopicPermission(apiVersion.maxVersion());
+    }
 
     /**
      * Determine which replica to read from.
@@ -130,36 +157,6 @@ public interface Fetcher<K, V> extends Closeable {
      */
     void clearBufferedDataForUnassignedTopics(Collection<String> assignedTopics);
 
-    /**
-     * Validate offsets for all assigned partitions for which a leader change has been detected.
-     */
-    void validateOffsetsIfNeeded();
-
-    void close();
-
-    /**
-     * Represents data about an offset returned by a broker.
-     */
-    class ListOffsetData {
-        final long offset;
-        final Long timestamp; //  null if the broker does not support returning timestamps
-        final Optional<Integer> leaderEpoch; // empty if the leader epoch is not known
-
-        ListOffsetData(long offset, Long timestamp, Optional<Integer> leaderEpoch) {
-            this.offset = offset;
-            this.timestamp = timestamp;
-            this.leaderEpoch = leaderEpoch;
-        }
-    }
-
-    static boolean hasUsableOffsetForLeaderEpochVersion(NodeApiVersions nodeApiVersions) {
-        ApiVersionsResponseData.ApiVersion apiVersion = nodeApiVersions.apiVersion(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
-        if (apiVersion == null)
-            return false;
-
-        return OffsetsForLeaderEpochRequest.supportsTopicPermission(apiVersion.maxVersion());
-    }
-
     static Sensor throttleTimeSensor(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
         Sensor fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
         fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeAvg), new Avg());
@@ -169,5 +166,5 @@ public interface Fetcher<K, V> extends Closeable {
         return fetchThrottleTimeSensor;
     }
 
-
+    void close();
 }
