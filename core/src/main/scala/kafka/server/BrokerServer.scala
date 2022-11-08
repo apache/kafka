@@ -22,9 +22,8 @@ import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
-
 import kafka.cluster.Broker.ServerInfo
-import kafka.coordinator.group.GroupCoordinator
+import kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorAdapter}
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
@@ -404,6 +403,7 @@ class BrokerServer(
         metadataSupport = raftSupport,
         replicaManager = replicaManager,
         groupCoordinator = groupCoordinator,
+        newGroupCoordinator = new GroupCoordinatorAdapter(groupCoordinator),
         txnCoordinator = transactionCoordinator,
         autoTopicCreationManager = autoTopicCreationManager,
         brokerId = config.nodeId,
