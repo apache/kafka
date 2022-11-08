@@ -116,9 +116,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
-import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECORD;
-import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_TOPIC_RECORD;
-import static org.apache.kafka.common.metadata.MetadataRecordType.TOPIC_RECORD;
 import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.Errors.INELIGIBLE_REPLICA;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
