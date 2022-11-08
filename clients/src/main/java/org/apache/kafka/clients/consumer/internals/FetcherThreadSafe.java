@@ -128,7 +128,7 @@ import java.util.stream.Collectors;
  *     on a different thread.</li>
  * </ul>
  */
-public class FetcherThreadSafe<K, V> implements Closeable, Fetcher<K, V> {
+public class FetcherThreadSafe<K, V> implements Fetcher<K, V> {
     private final Logger log;
     private final LogContext logContext;
     private final ConsumerNetworkClient client;
