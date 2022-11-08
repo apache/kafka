@@ -782,6 +782,7 @@ public class TaskManagerTest {
             .withInputPartitions(taskId00Partitions).build();
         final StreamTask task01Converted = statefulTask(taskId01, taskId01Partitions)
             .withInputPartitions(taskId01Partitions).build();
+        when(stateUpdater.hasRemovedTasks()).thenReturn(true);
         when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(task00, task01));
         final TasksRegistry tasks = mock(TasksRegistry.class);
         when(tasks.removePendingTaskToRecycle(task00.id())).thenReturn(taskId00Partitions);
@@ -814,6 +815,7 @@ public class TaskManagerTest {
         final StandbyTask task01 = standbyTask(taskId01, taskId01ChangelogPartitions)
             .withInputPartitions(taskId01Partitions)
             .inState(State.RUNNING).build();
+        when(stateUpdater.hasRemovedTasks()).thenReturn(true);
         when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(task00, task01));
         final TasksRegistry tasks = mock(TasksRegistry.class);
         when(tasks.removePendingTaskToRecycle(any())).thenReturn(null);
@@ -841,6 +843,7 @@ public class TaskManagerTest {
         final StandbyTask task01 = standbyTask(taskId01, taskId01ChangelogPartitions)
             .withInputPartitions(taskId01Partitions)
             .inState(State.RUNNING).build();
+        when(stateUpdater.hasRemovedTasks()).thenReturn(true);
         when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(task00, task01));
         final TasksRegistry tasks = mock(TasksRegistry.class);
         when(tasks.removePendingTaskToRecycle(any())).thenReturn(null);
@@ -870,6 +873,7 @@ public class TaskManagerTest {
         when(tasks.removePendingTaskToRecycle(statefulTask.id())).thenReturn(null);
         when(tasks.removePendingTaskToUpdateInputPartitions(statefulTask.id())).thenReturn(null);
         when(tasks.removePendingActiveTaskToSuspend(statefulTask.id())).thenReturn(true);
+        when(stateUpdater.hasRemovedTasks()).thenReturn(true);
         when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(statefulTask));
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         replay(consumer);
@@ -896,6 +900,7 @@ public class TaskManagerTest {
         final StreamTask taskToUpdateInputPartitions = statefulTask(taskId03, taskId03ChangelogPartitions)
             .inState(State.RESTORING)
             .withInputPartitions(taskId03Partitions).build();
+        when(stateUpdater.hasRemovedTasks()).thenReturn(true);
         when(stateUpdater.drainRemovedTasks())
             .thenReturn(mkSet(taskToRecycle0, taskToRecycle1, taskToClose, taskToUpdateInputPartitions));
         when(stateUpdater.restoresActiveTasks()).thenReturn(true);
@@ -1366,6 +1371,7 @@ public class TaskManagerTest {
             Collections.singleton(statefulTask),
             exception
         );
+        when(stateUpdater.hasExceptionsAndFailedTasks()).thenReturn(true);
         when(stateUpdater.drainExceptionsAndFailedTasks()).thenReturn(Collections.singletonList(exceptionAndTasks));
 
         final TasksRegistry tasks = mock(TasksRegistry.class);
@@ -1390,6 +1396,7 @@ public class TaskManagerTest {
             Collections.singleton(statefulTask),
             exception
         );
+        when(stateUpdater.hasExceptionsAndFailedTasks()).thenReturn(true);
         when(stateUpdater.drainExceptionsAndFailedTasks()).thenReturn(Collections.singletonList(exceptionAndTasks));
 
         final TasksRegistry tasks = mock(TasksRegistry.class);
@@ -1421,6 +1428,7 @@ public class TaskManagerTest {
             Collections.singleton(statefulTask1),
             new TaskCorruptedException(Collections.singleton(taskId01))
         );
+        when(stateUpdater.hasExceptionsAndFailedTasks()).thenReturn(true);
         when(stateUpdater.drainExceptionsAndFailedTasks()).thenReturn(Arrays.asList(exceptionAndTasks0, exceptionAndTasks1));
 
         final TasksRegistry tasks = mock(TasksRegistry.class);
@@ -1432,7 +1440,36 @@ public class TaskManagerTest {
         );
 
         assertEquals(mkSet(taskId00, taskId01), thrown.corruptedTasks());
-        assertEquals("Tasks [0_1, 0_0] are corrupted and hence needs to be re-initialized", thrown.getMessage());
+        assertEquals("Tasks [0_1, 0_0] are corrupted and hence need to be re-initialized", thrown.getMessage());
+    }
+
+    @Test
+    public void shouldRethrowTaskCorruptedExceptionFromInitialization() {
+        final StreamTask statefulTask0 = statefulTask(taskId00, taskId00ChangelogPartitions)
+                .inState(State.CREATED)
+                .withInputPartitions(taskId00Partitions).build();
+        final StreamTask statefulTask1 = statefulTask(taskId01, taskId01ChangelogPartitions)
+                .inState(State.CREATED)
+                .withInputPartitions(taskId01Partitions).build();
+        final StreamTask statefulTask2 = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId02Partitions).build();
+        final TasksRegistry tasks = mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, tasks, true);
+        when(tasks.drainPendingTaskToInit()).thenReturn(mkSet(statefulTask0, statefulTask1, statefulTask2));
+        doThrow(new TaskCorruptedException(Collections.singleton(statefulTask0.id))).when(statefulTask0).initializeIfNeeded();
+        doThrow(new TaskCorruptedException(Collections.singleton(statefulTask1.id))).when(statefulTask1).initializeIfNeeded();
+
+        final TaskCorruptedException thrown = assertThrows(
+                TaskCorruptedException.class,
+                () -> taskManager.checkStateUpdater(time.milliseconds(), noOpResetter)
+        );
+
+        Mockito.verify(tasks).addTask(statefulTask0);
+        Mockito.verify(tasks).addTask(statefulTask1);
+        Mockito.verify(stateUpdater).add(statefulTask2);
+        assertEquals(mkSet(taskId00, taskId01), thrown.corruptedTasks());
+        assertEquals("Tasks [0_1, 0_0] are corrupted and hence need to be re-initialized", thrown.getMessage());
     }
 
     @Test

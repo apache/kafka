@@ -1060,7 +1060,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             // snapshot yet. The existing task info should still be accurate.
                             ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
                                 // validateConnectorConfig have checked the existence of CONNECTOR_CLASS_CONFIG
-                                connectorTypeForConfig(config));
+                                connectorType(config));
                             callback.onCompletion(null, new Created<>(!exists, info));
                             return null;
                         },
@@ -1700,7 +1700,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private boolean startTask(ConnectorTaskId taskId) {
         log.info("Starting task {}", taskId);
         Map<String, String> connProps = configState.connectorConfig(taskId.connector());
-        switch (connectorTypeForConfig(connProps)) {
+        switch (connectorType(connProps)) {
             case SINK:
                 return worker.startSinkTask(
                         taskId,
@@ -2377,7 +2377,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private boolean isSourceConnector(String connName) {
-        return ConnectorType.SOURCE.equals(connectorTypeForConfig(configState.connectorConfig(connName)));
+        return ConnectorType.SOURCE.equals(connectorType(configState.connectorConfig(connName)));
     }
 
     /**

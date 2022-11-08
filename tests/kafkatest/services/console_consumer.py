@@ -65,7 +65,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                  enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False, print_partition=False,
                  isolation_level="read_uncommitted", jaas_override_variables=None,
                  kafka_opts_override="", client_prop_file_override="", consumer_properties={},
-                 wait_until_partitions_assigned=False):
+                 wait_until_partitions_assigned=False, log_level="DEBUG"):
         """
         Args:
             context:                    standard context
@@ -113,7 +113,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.client_id = client_id
         self.print_key = print_key
         self.print_partition = print_partition
-        self.log_level = "TRACE"
+        self.log_level = log_level
         self.stop_timeout_sec = stop_timeout_sec
 
         self.isolation_level = isolation_level

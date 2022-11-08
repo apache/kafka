@@ -54,7 +54,6 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -76,6 +75,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+
 
 import static java.util.UUID.randomUUID;
 
@@ -957,8 +957,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 shouldEncodeProbingRebalance = false;
             } else if (shouldEncodeProbingRebalance) {
                 final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
-                log.info("Requesting followup rebalance be scheduled by {} for {} ms to probe for caught-up replica tasks.",
-                        consumer, nextRebalanceTimeMs);
+                log.info("Requesting followup rebalance be scheduled by {} for {} to probe for caught-up replica tasks.",
+                        consumer, Utils.toLogDateTimeFormat(nextRebalanceTimeMs));
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
                 shouldEncodeProbingRebalance = false;
             }
@@ -1358,7 +1358,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         } else if (encodedNextScheduledRebalanceMs < Long.MAX_VALUE) {
             log.info(
                 "Requested to schedule next probing rebalance at {} to try for a more balanced assignment.",
-                Instant.ofEpochMilli(encodedNextScheduledRebalanceMs) // The Instant#toString format is more readable.
+                Utils.toLogDateTimeFormat(encodedNextScheduledRebalanceMs)
             );
             nextScheduledRebalanceMs.set(encodedNextScheduledRebalanceMs);
         } else {

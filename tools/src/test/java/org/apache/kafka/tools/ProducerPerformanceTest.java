@@ -40,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
@@ -173,5 +174,11 @@ public class ProducerPerformanceTest {
 
         assertNotNull(prop);
         assertEquals("perf-producer-client", prop.getProperty("client.id"));
+    }
+
+    @Test
+    public void testStatsInitializationWithLargeNumRecords() throws Exception {
+        long numRecords = Long.MAX_VALUE;
+        assertDoesNotThrow(() -> new ProducerPerformance.Stats(numRecords, 5000));
     }
 }

@@ -43,8 +43,6 @@ import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.metadata.MetadataRecordType.CLIENT_QUOTA_RECORD;
-
 
 public class ClientQuotaControlManager {
     private final SnapshotRegistry snapshotRegistry;
@@ -158,7 +156,7 @@ public class ClientQuotaControlManager {
                             .setEntity(recordEntitySupplier.get())
                             .setKey(key)
                             .setRemove(true),
-                        CLIENT_QUOTA_RECORD.highestSupportedVersion()));
+                        (short) 0));
                 }
             } else {
                 ApiError validationError = validateQuotaKeyValue(configKeys, key, newValue);
@@ -173,7 +171,7 @@ public class ClientQuotaControlManager {
                                 .setEntity(recordEntitySupplier.get())
                                 .setKey(key)
                                 .setValue(newValue),
-                            CLIENT_QUOTA_RECORD.highestSupportedVersion()));
+                            (short) 0));
                     }
                 }
             }
