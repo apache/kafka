@@ -49,7 +49,6 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
-import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.common.protocol.Errors.INVALID_CONFIG;
 
 
@@ -236,7 +235,7 @@ public class ConfigurationControlManager {
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
                     setName(key).
-                    setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
+                    setValue(newValue), (short) 0));
             }
         }
         ApiError error = validateAlterConfig(configResource, newRecords, Collections.emptyList(), newlyCreatedResource);
@@ -338,7 +337,7 @@ public class ConfigurationControlManager {
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
                     setName(key).
-                    setValue(newValue), CONFIG_RECORD.highestSupportedVersion()));
+                    setValue(newValue), (short) 0));
             }
         }
         List<ApiMessageAndVersion> recordsImplicitlyDeleted = new ArrayList<>();
@@ -348,7 +347,7 @@ public class ConfigurationControlManager {
                     setResourceType(configResource.type().id()).
                     setResourceName(configResource.name()).
                     setName(key).
-                    setValue(null), CONFIG_RECORD.highestSupportedVersion()));
+                    setValue(null), (short) 0));
             }
         }
         ApiError error = validateAlterConfig(configResource, recordsExplicitlyAltered, recordsImplicitlyDeleted, newlyCreatedResource);
@@ -501,7 +500,7 @@ public class ConfigurationControlManager {
                     setResourceName(resource.name()).
                     setResourceType(resource.type().id()).
                     setName(configEntry.getKey()).
-                    setValue(configEntry.getValue()), CONFIG_RECORD.highestSupportedVersion()));
+                    setValue(configEntry.getValue()), (short) 0));
             }
             return records;
         }
