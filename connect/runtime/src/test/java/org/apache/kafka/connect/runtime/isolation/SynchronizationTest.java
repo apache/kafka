@@ -216,7 +216,7 @@ public class SynchronizationTest {
     // If the test times out, then there's a deadlock in the test but not necessarily the code
     @Test(timeout = 15000L)
     public void testSimultaneousUpwardAndDownwardDelegating() throws Exception {
-        String t1Class = TestPlugins.SAMPLING_CONVERTER;
+        String t1Class = TestPlugins.TestPlugin.SAMPLING_CONVERTER.getClassName();
         // Grab a reference to the target PluginClassLoader before activating breakpoints
         ClassLoader connectorLoader = plugins.connectorLoader(t1Class);
 
@@ -295,7 +295,7 @@ public class SynchronizationTest {
     // Ensure the PluginClassLoader is parallel capable and not synchronized on its monitor lock
     public void testPluginClassLoaderDoesntHoldMonitorLock()
         throws InterruptedException, TimeoutException, BrokenBarrierException {
-        String t1Class = TestPlugins.SAMPLING_CONVERTER;
+        String t1Class = TestPlugins.TestPlugin.SAMPLING_CONVERTER.getClassName();
         ClassLoader connectorLoader = plugins.connectorLoader(t1Class);
 
         Object externalTestLock = new Object();
@@ -319,7 +319,7 @@ public class SynchronizationTest {
             synchronized (externalTestLock) {
                 try {
                     progress.await(null);
-                    Class.forName(TestPlugins.SAMPLING_CONVERTER, true, connectorLoader);
+                    Class.forName(TestPlugins.TestPlugin.SAMPLING_CONVERTER.getClassName(), true, connectorLoader);
                 } catch (ClassNotFoundException e) {
                     throw new RuntimeException("Failed to load test plugin", e);
                 }
