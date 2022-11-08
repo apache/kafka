@@ -45,7 +45,7 @@ public class FetcherThreadSafeTest extends FetcherTest {
                                                 long requestTimeoutMs,
                                                 IsolationLevel isolationLevel,
                                                 ApiVersions apiVersions) {
-        return new FetcherThreadSafe<>(new LogContext(),
+        return new FetcherThreadSafe<>(logContext,
                                        client,
                                        minBytes,
                                        maxBytes,
