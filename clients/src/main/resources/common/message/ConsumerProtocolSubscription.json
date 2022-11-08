@@ -22,7 +22,8 @@
   // it encounters a newer version, it parses it using the current format. This basically means
   // that new versions cannot remove or reorder any of the existing fields.
 
-  // Starting from version 2, a new field "GenerationId" is added to indicate if the member has out-of-date ownedPartitions.
+  // Version 1 added the "OwnedPartitions" field to allow assigner know what partitions each member owned
+  // Version 2 added a new field "GenerationId" to indicate if the member has out-of-date ownedPartitions.
   "validVersions": "0-2",
   "flexibleVersions": "none",
   "fields": [
@@ -35,6 +36,6 @@
         { "name": "Partitions", "type": "[]int32", "versions": "1+"}
       ]
     },
-    { "name": "GenerationId", "type": "int32", "versions": "2+", "default": "-1", "ignorable": true}
+    { "name": "GenerationId", "type": "int32", "versions": "2+", "default": "-1", "ignorable": true }
   ]
 }

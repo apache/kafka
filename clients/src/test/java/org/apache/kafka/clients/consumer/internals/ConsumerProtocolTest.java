@@ -73,9 +73,9 @@ public class ConsumerProtocolTest {
             }
 
             if (version >= 2) {
-                assertEquals(generationId, parsedSubscription.generationId());
+                assertEquals(generationId, parsedSubscription.generationId().orElse(DEFAULT_GENERATION));
             } else {
-                assertEquals(DEFAULT_GENERATION, parsedSubscription.generationId());
+                assertFalse(parsedSubscription.generationId().isPresent());
             }
         }
     }
@@ -88,7 +88,7 @@ public class ConsumerProtocolTest {
         assertEquals(toSet(subscription.topics()), toSet(parsedSubscription.topics()));
         assertEquals(0, parsedSubscription.userData().limit());
         assertFalse(parsedSubscription.groupInstanceId().isPresent());
-        assertEquals(DEFAULT_GENERATION, parsedSubscription.generationId());
+        assertFalse(parsedSubscription.generationId().isPresent());
     }
 
     @Test
@@ -101,7 +101,7 @@ public class ConsumerProtocolTest {
         assertEquals(toSet(subscription.topics()), toSet(parsedSubscription.topics()));
         assertEquals(0, parsedSubscription.userData().limit());
         assertEquals(groupInstanceId, parsedSubscription.groupInstanceId());
-        assertEquals(DEFAULT_GENERATION, parsedSubscription.generationId());
+        assertFalse(parsedSubscription.generationId().isPresent());
     }
 
     @Test
@@ -145,7 +145,7 @@ public class ConsumerProtocolTest {
         assertEquals(toSet(parsedSubscription.topics()), toSet(parsedSubscription.topics()));
         assertNull(parsedSubscription.userData());
         assertTrue(parsedSubscription.ownedPartitions().isEmpty());
-        assertEquals(DEFAULT_GENERATION, parsedSubscription.generationId());
+        assertFalse(parsedSubscription.generationId().isPresent());
     }
 
     @ParameterizedTest
@@ -165,22 +165,19 @@ public class ConsumerProtocolTest {
         assertNull(parsedSubscription.userData());
         assertTrue(parsedSubscription.ownedPartitions().isEmpty());
         assertFalse(parsedSubscription.groupInstanceId().isPresent());
-        assertEquals(DEFAULT_GENERATION, parsedSubscription.generationId());
+        assertFalse(parsedSubscription.generationId().isPresent());
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void deserializeFutureSubscriptionVersion(boolean hasGenerationId) {
-        ByteBuffer buffer = generateFutureSubscriptionVersionData(hasGenerationId);
+    @Test
+    public void deserializeFutureSubscriptionVersion() {
+        ByteBuffer buffer = generateFutureSubscriptionVersionData();
 
         Subscription subscription = ConsumerProtocol.deserializeSubscription(buffer);
         subscription.setGroupInstanceId(groupInstanceId);
         assertEquals(Collections.singleton("topic"), toSet(subscription.topics()));
         assertEquals(Collections.singleton(tp2), toSet(subscription.ownedPartitions()));
         assertEquals(groupInstanceId, subscription.groupInstanceId());
-        if (hasGenerationId) {
-            assertEquals(generationId, subscription.generationId());
-        }
+        assertEquals(generationId, subscription.generationId().orElse(DEFAULT_GENERATION));
     }
 
     @Test
@@ -246,7 +243,7 @@ public class ConsumerProtocolTest {
         assertEquals(toSet(Collections.singletonList(tp1)), toSet(assignment.partitions()));
     }
 
-    private ByteBuffer generateFutureSubscriptionVersionData(boolean hasGenerationId) {
+    private ByteBuffer generateFutureSubscriptionVersionData() {
         // verify that a new version which adds a field is still parseable
         short version = 100;
 
@@ -255,7 +252,7 @@ public class ConsumerProtocolTest {
             new Field("user_data", Type.NULLABLE_BYTES),
             new Field("owned_partitions", new ArrayOf(
                 ConsumerProtocolSubscription.TopicPartition.SCHEMA_1)),
-            hasGenerationId ? new Field("generation_id", Type.INT32) : new Field("foo", Type.STRING),
+            new Field("generation_id", Type.INT32),
             new Field("bar", Type.STRING));
 
         Struct subscriptionV100 = new Struct(subscriptionSchemaV100);
@@ -265,11 +262,7 @@ public class ConsumerProtocolTest {
             ConsumerProtocolSubscription.TopicPartition.SCHEMA_1)
             .set("topic", tp2.topic())
             .set("partitions", new Object[]{tp2.partition()})});
-        if (hasGenerationId) {
-            subscriptionV100.set("generation_id", generationId);
-        } else {
-            subscriptionV100.set("foo", "foo");
-        }
+        subscriptionV100.set("generation_id", generationId);
         subscriptionV100.set("bar", "bar");
 
         Struct headerV100 = new Struct(new Schema(new Field("version", Type.INT16)));

@@ -47,13 +47,17 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
 
     @Override
     public Subscription buildSubscription(List<String> topics, List<TopicPartition> partitions) {
-        return new Subscription(topics, assignor.subscriptionUserData(new HashSet<>(topics)), partitions);
+        return new Subscription(topics, null, partitions, DEFAULT_GENERATION);
     }
 
     @Override
-    public Subscription buildSubscriptionWithGeneration(List<String> topics, List<TopicPartition> partitions, int generation) {
-        assignor.onAssignment(null, new ConsumerGroupMetadata("dummy-group-id", generation, "dummy-member-id", Optional.empty()));
-        return new Subscription(topics, assignor.subscriptionUserData(new HashSet<>(topics)), partitions);
+    public Subscription buildSubscriptionWithGeneration(boolean isV2Above, List<String> topics, List<TopicPartition> partitions, int generation) {
+        if (isV2Above) {
+            return new Subscription(topics, null, partitions, generation);
+        } else {
+            assignor.onAssignment(null, new ConsumerGroupMetadata("dummy-group-id", generation, "dummy-member-id", Optional.empty()));
+            return new Subscription(topics, assignor.subscriptionUserData(new HashSet<>(topics)), partitions);
+        }
     }
 
     @Test

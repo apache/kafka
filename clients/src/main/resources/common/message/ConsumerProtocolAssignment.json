@@ -22,7 +22,7 @@
   // it encounters a newer version, it parses it using the current format. This basically means
   // that new versions cannot remove or reorder any of the existing fields.
   //
-  // version 2 is to support a new field "GenerationId" in ConsumerProtocolSubscription.
+  // Version 2 is to support a new field "GenerationId" in ConsumerProtocolSubscription.
   "validVersions": "0-2",
   "flexibleVersions": "none",
   "fields": [

@@ -104,14 +104,14 @@ public interface ConsumerPartitionAssignor {
         private final ByteBuffer userData;
         private final List<TopicPartition> ownedPartitions;
         private Optional<String> groupInstanceId;
-        private final int generationId;
+        private final Optional<Integer> generationId;
 
         public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions, int generationId) {
             this.topics = topics;
             this.userData = userData;
             this.ownedPartitions = ownedPartitions;
             this.groupInstanceId = Optional.empty();
-            this.generationId = generationId;
+            this.generationId = generationId < 0 ? Optional.empty() : Optional.of(generationId);
         }
 
         public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
@@ -146,7 +146,7 @@ public interface ConsumerPartitionAssignor {
             return groupInstanceId;
         }
 
-        public int generationId() {
+        public Optional<Integer> generationId() {
             return generationId;
         }
 
@@ -157,6 +157,7 @@ public interface ConsumerPartitionAssignor {
                 (userData == null ? "" : ", userDataSize=" + userData.remaining()) +
                 ", ownedPartitions=" + ownedPartitions +
                 ", groupInstanceId=" + (groupInstanceId.map(String::toString).orElse("null")) +
+                ", generationId=" + (generationId.orElse(-1)) +
                 ")";
         }
     }

@@ -37,6 +37,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static java.util.Collections.emptyList;
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
@@ -63,12 +65,15 @@ public abstract class AbstractStickyAssignorTest {
     protected TopicPartition tp1 = tp(topic, 1);
     protected TopicPartition tp2 = tp(topic, 2);
     protected String groupId = "group";
+    protected int generationId = 1;
 
     protected abstract AbstractStickyAssignor createAssignor();
 
+
+
     protected abstract Subscription buildSubscription(List<String> topics, List<TopicPartition> partitions);
 
-    protected abstract Subscription buildSubscriptionWithGeneration(List<String> topics, List<TopicPartition> partitions, int generation);
+    protected abstract Subscription buildSubscriptionWithGeneration(boolean isV2Above, List<String> topics, List<TopicPartition> partitions, int generation);
 
     @BeforeEach
     public void setUp() {
@@ -895,16 +900,17 @@ public abstract class AbstractStickyAssignorTest {
         assertTrue(isFullyBalanced(assignment));
     }
 
-    @Test
-    public void testOwnedPartitionsAreInvalidatedForConsumerWithStaleGeneration() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOwnedPartitionsAreInvalidatedForConsumerWithStaleGeneration(boolean isV2Above) {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
         partitionsPerTopic.put(topic2, 3);
 
         int currentGeneration = 10;
 
-        subscriptions.put(consumer1, buildSubscriptionWithGeneration(topics(topic, topic2), partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1)), currentGeneration));
-        subscriptions.put(consumer2, buildSubscriptionWithGeneration(topics(topic, topic2), partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1)), currentGeneration - 1));
+        subscriptions.put(consumer1, buildSubscriptionWithGeneration(isV2Above, topics(topic, topic2), partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1)), currentGeneration));
+        subscriptions.put(consumer2, buildSubscriptionWithGeneration(isV2Above, topics(topic, topic2), partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1)), currentGeneration - 1));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(new HashSet<>(partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1))), new HashSet<>(assignment.get(consumer1)));
@@ -915,16 +921,17 @@ public abstract class AbstractStickyAssignorTest {
         assertTrue(isFullyBalanced(assignment));
     }
 
-    @Test
-    public void testOwnedPartitionsAreInvalidatedForConsumerWithNoGeneration() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOwnedPartitionsAreInvalidatedForConsumerWithNoGeneration(boolean isV2Above) {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
         partitionsPerTopic.put(topic2, 3);
 
         int currentGeneration = 10;
 
-        subscriptions.put(consumer1, buildSubscriptionWithGeneration(topics(topic, topic2), partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1)), currentGeneration));
-        subscriptions.put(consumer2, buildSubscriptionWithGeneration(topics(topic, topic2), partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1)), DEFAULT_GENERATION));
+        subscriptions.put(consumer1, buildSubscriptionWithGeneration(isV2Above, topics(topic, topic2), partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1)), currentGeneration));
+        subscriptions.put(consumer2, buildSubscriptionWithGeneration(isV2Above, topics(topic, topic2), partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1)), DEFAULT_GENERATION));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(new HashSet<>(partitions(tp(topic, 0), tp(topic, 2), tp(topic2, 1))), new HashSet<>(assignment.get(consumer1)));

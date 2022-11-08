@@ -119,11 +119,11 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
             Optional<Integer> generation;
             List<TopicPartition> ownedPartitionsInMetadata;
-            if (!subscription.ownedPartitions().isEmpty() && subscription.generationId() != DEFAULT_GENERATION) {
+            if (!subscription.ownedPartitions().isEmpty() && subscription.generationId().isPresent()) {
                 // In ConsumerProtocolSubscription v2 or higher, we don't need to deserialize the byte buffer
                 // and take from fields directly
                 ownedPartitionsInMetadata = subscription.ownedPartitions();
-                generation = Optional.of(subscription.generationId());
+                generation = subscription.generationId();
             } else {
                 MemberData memberData = memberData(subscription);
                 ownedPartitionsInMetadata = memberData.partitions;
