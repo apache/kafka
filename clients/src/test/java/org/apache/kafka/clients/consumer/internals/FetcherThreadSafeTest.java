@@ -21,7 +21,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.MockTime;
 
 public class FetcherThreadSafeTest extends FetcherTest {
 
@@ -40,31 +40,30 @@ public class FetcherThreadSafeTest extends FetcherTest {
                                                 SubscriptionState subscriptions,
                                                 Metrics metrics,
                                                 FetcherMetricsRegistry metricsRegistry,
-                                                Time time,
+                                                MockTime time,
                                                 long retryBackoffMs,
                                                 long requestTimeoutMs,
                                                 IsolationLevel isolationLevel,
                                                 ApiVersions apiVersions) {
-        return new FetcherThreadSafe<>(
-            new LogContext(),
-            client,
-            minBytes,
-            maxBytes,
-            maxWaitMs,
-            fetchSize,
-            maxPollRecords,
-            checkCrcs,
-            clientRackId,
-            keyDeserializer,
-            valueDeserializer,
-            metadata,
-            subscriptions,
-            metrics,
-            metricsRegistry,
-            time,
-            retryBackoffMs,
-            requestTimeoutMs,
-            isolationLevel,
-            apiVersions);
+        return new FetcherThreadSafe<>(new LogContext(),
+                                       client,
+                                       minBytes,
+                                       maxBytes,
+                                       maxWaitMs,
+                                       fetchSize,
+                                       maxPollRecords,
+                                       checkCrcs,
+                                       clientRackId,
+                                       keyDeserializer,
+                                       valueDeserializer,
+                                       metadata,
+                                       subscriptions,
+                                       metrics,
+                                       metricsRegistry,
+                                       time,
+                                       retryBackoffMs,
+                                       requestTimeoutMs,
+                                       isolationLevel,
+                                       apiVersions);
     }
 }

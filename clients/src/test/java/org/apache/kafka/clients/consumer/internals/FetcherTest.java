@@ -101,7 +101,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
@@ -5209,7 +5208,7 @@ public abstract class FetcherTest {
         SubscriptionState subscriptions,
         Metrics metrics,
         FetcherMetricsRegistry metricsRegistry,
-        Time time,
+        MockTime time,
         long retryBackoffMs,
         long requestTimeoutMs,
         IsolationLevel isolationLevel,
