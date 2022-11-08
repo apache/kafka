@@ -125,6 +125,9 @@
     <suppress checks="NPathComplexity"
               files="MemoryRecordsTest|MetricsTest|RequestResponseTest|TestSslUtils|AclAuthorizerBenchmark"/>
 
+    <suppress checks="ParameterNumber"
+              files="(Fetcher|DefaultFetcher)Test.java"/>
+
     <suppress checks="(WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
               files="Murmur3Test.java"/>
 
