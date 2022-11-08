@@ -26,7 +26,6 @@ import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
-import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
@@ -251,13 +250,13 @@ public class MirrorMaker {
                 distributedConfig,
                 configTransformer,
                 sharedAdmin);
-        RestClient restClient = new RestClient(distributedConfig);
         // Pass the shared admin to the distributed herder as an additional AutoCloseable object that should be closed when the
         // herder is stopped. MirrorMaker has multiple herders, and having the herder own the close responsibility is much easier than
         // tracking the various shared admin objects in this class.
+        // Do not provide a restClient to the DistributedHerder to indicate that request forwarding is disabled
         Herder herder = new DistributedHerder(distributedConfig, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
-                advertisedUrl, restClient, CLIENT_CONFIG_OVERRIDE_POLICY, sharedAdmin, restClient);
+                advertisedUrl, null, CLIENT_CONFIG_OVERRIDE_POLICY, sharedAdmin);
         herders.put(sourceAndTarget, herder);
     }
 

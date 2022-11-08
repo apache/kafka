@@ -407,7 +407,10 @@ public class ConnectorsResource implements ConnectResource {
             Throwable cause = e.getCause();
 
             if (cause instanceof RequestTargetException) {
-                if (forward == null || forward) {
+                if (restClient == null) {
+                    throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(),
+                            "Cannot complete request as non-leader with request forwarding disabled");
+                } else if (forward == null || forward) {
                     // the only time we allow recursive forwarding is when no forward flag has
                     // been set, which should only be seen by the first worker to handle a user request.
                     // this gives two total hops to resolve the request before giving up.
