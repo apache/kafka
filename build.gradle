@@ -1231,15 +1231,16 @@ project(':group-coordinator') {
   dependencies {
     implementation project(':server-common')
     implementation project(':clients')
-    compileOnly libs.log4j
-    testImplementation libs.junitJupiter
-    testImplementation libs.jqwik
-    testImplementation libs.hamcrest
-    testImplementation libs.mockitoCore
-    testImplementation libs.mockitoInline
-    testImplementation libs.slf4jlog4j
+    implementation libs.slf4jApi
+
+    testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+
+    testRuntimeOnly libs.slf4jlog4j
   }
 
   sourceSets {
