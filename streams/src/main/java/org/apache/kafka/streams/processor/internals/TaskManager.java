@@ -731,8 +731,12 @@ public class TaskManager {
     public boolean checkStateUpdater(final long now,
                                      final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         addTasksToStateUpdater();
-        handleExceptionsFromStateUpdater();
-        handleRemovedTasksFromStateUpdater();
+        if (stateUpdater.hasExceptionsAndFailedTasks()) {
+            handleExceptionsFromStateUpdater();
+        }
+        if (stateUpdater.hasRemovedTasks()) {
+            handleRemovedTasksFromStateUpdater();
+        }
         if (stateUpdater.restoresActiveTasks()) {
             handleRestoredTasksFromStateUpdater(now, offsetResetter);
         }
