@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.DefaultFetcher;
+import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
@@ -2614,7 +2615,7 @@ public class KafkaConsumerTest {
                 interceptors,
                 throwOnStableOffsetNotSupported);
         }
-        DefaultFetcher<String, String> fetcher = new DefaultFetcher<>(
+        Fetcher<String, String> fetcher = new DefaultFetcher<>(
                 loggerFactory,
                 consumerClient,
                 minBytes,

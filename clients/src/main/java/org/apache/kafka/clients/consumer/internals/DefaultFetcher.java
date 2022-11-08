@@ -86,7 +86,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.helpers.MessageFormatter;
 
-import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -130,7 +129,7 @@ import java.util.stream.Collectors;
  *     on a different thread.</li>
  * </ul>
  */
-public class DefaultFetcher<K, V> implements Closeable {
+public class DefaultFetcher<K, V> implements Fetcher<K, V> {
     private final Logger log;
     private final LogContext logContext;
     private final ConsumerNetworkClient client;
@@ -163,25 +162,25 @@ public class DefaultFetcher<K, V> implements Closeable {
     private CompletedFetch nextInLineFetch = null;
 
     public DefaultFetcher(LogContext logContext,
-                   ConsumerNetworkClient client,
-                   int minBytes,
-                   int maxBytes,
-                   int maxWaitMs,
-                   int fetchSize,
-                   int maxPollRecords,
-                   boolean checkCrcs,
-                   String clientRackId,
-                   Deserializer<K> keyDeserializer,
-                   Deserializer<V> valueDeserializer,
-                   ConsumerMetadata metadata,
-                   SubscriptionState subscriptions,
-                   Metrics metrics,
-                   FetcherMetricsRegistry metricsRegistry,
-                   Time time,
-                   long retryBackoffMs,
-                   long requestTimeoutMs,
-                   IsolationLevel isolationLevel,
-                   ApiVersions apiVersions) {
+                          ConsumerNetworkClient client,
+                          int minBytes,
+                          int maxBytes,
+                          int maxWaitMs,
+                          int fetchSize,
+                          int maxPollRecords,
+                          boolean checkCrcs,
+                          String clientRackId,
+                          Deserializer<K> keyDeserializer,
+                          Deserializer<V> valueDeserializer,
+                          ConsumerMetadata metadata,
+                          SubscriptionState subscriptions,
+                          Metrics metrics,
+                          FetcherMetricsRegistry metricsRegistry,
+                          Time time,
+                          long retryBackoffMs,
+                          long requestTimeoutMs,
+                          IsolationLevel isolationLevel,
+                          ApiVersions apiVersions) {
         this.log = logContext.logger(DefaultFetcher.class);
         this.logContext = logContext;
         this.time = time;
@@ -209,26 +208,11 @@ public class DefaultFetcher<K, V> implements Closeable {
     }
 
     /**
-     * Represents data about an offset returned by a broker.
-     */
-    static class ListOffsetData {
-        final long offset;
-        final Long timestamp; //  null if the broker does not support returning timestamps
-        final Optional<Integer> leaderEpoch; // empty if the leader epoch is not known
-
-        ListOffsetData(long offset, Long timestamp, Optional<Integer> leaderEpoch) {
-            this.offset = offset;
-            this.timestamp = timestamp;
-            this.leaderEpoch = leaderEpoch;
-        }
-    }
-
-    /**
      * Return whether we have any completed fetches pending return to the user. This method is thread-safe. Has
      * visibility for testing.
      * @return true if there are completed fetches, false otherwise
      */
-    protected boolean hasCompletedFetches() {
+    public boolean hasCompletedFetches() {
         return !completedFetches.isEmpty();
     }
 
@@ -513,6 +497,7 @@ public class DefaultFetcher<K, V> implements Closeable {
         validateOffsetsAsync(partitionsToValidate);
     }
 
+    @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                                    Timer timer) {
         metadata.addTransientTopics(topicsForPartitions(timestampsToSearch.keySet()));
@@ -606,10 +591,12 @@ public class DefaultFetcher<K, V> implements Closeable {
         throw new TimeoutException("Failed to get offsets by times in " + timer.elapsedMs() + "ms");
     }
 
+    @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Timer timer) {
         return beginningOrEndOffset(partitions, ListOffsetsRequest.EARLIEST_TIMESTAMP, timer);
     }
 
+    @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Timer timer) {
         return beginningOrEndOffset(partitions, ListOffsetsRequest.LATEST_TIMESTAMP, timer);
     }
@@ -756,7 +743,7 @@ public class DefaultFetcher<K, V> implements Closeable {
     }
 
     // Visible for testing
-    void resetOffsetIfNeeded(TopicPartition partition, OffsetResetStrategy requestedResetStrategy, ListOffsetData offsetData) {
+    public void resetOffsetIfNeeded(TopicPartition partition, OffsetResetStrategy requestedResetStrategy, ListOffsetData offsetData) {
         FetchPosition position = new FetchPosition(
             offsetData.offset,
             Optional.empty(), // This will ensure we skip validation
@@ -1145,7 +1132,7 @@ public class DefaultFetcher<K, V> implements Closeable {
     /**
      * Determine which replica to read from.
      */
-    Node selectReadReplica(TopicPartition partition, Node leaderReplica, long currentTimeMs) {
+    public Node selectReadReplica(TopicPartition partition, Node leaderReplica, long currentTimeMs) {
         Optional<Integer> nodeId = subscriptions.preferredReadReplica(partition, currentTimeMs);
         if (nodeId.isPresent()) {
             Optional<Node> node = nodeId.flatMap(id -> metadata.fetch().nodeIfOnline(partition, id));
@@ -1445,6 +1432,7 @@ public class DefaultFetcher<K, V> implements Closeable {
      *
      * @param assignedPartitions  newly assigned {@link TopicPartition}
      */
+    @Override
     public void clearBufferedDataForUnassignedPartitions(Collection<TopicPartition> assignedPartitions) {
         Iterator<CompletedFetch> completedFetchesItr = completedFetches.iterator();
         while (completedFetchesItr.hasNext()) {
@@ -1480,15 +1468,6 @@ public class DefaultFetcher<K, V> implements Closeable {
     // Visible for testing
     protected FetchSessionHandler sessionHandler(int node) {
         return sessionHandlers.get(node);
-    }
-
-    public static Sensor throttleTimeSensor(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
-        Sensor fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
-        fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeAvg), new Avg());
-
-        fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeMax), new Max());
-
-        return fetchThrottleTimeSensor;
     }
 
     private class CompletedFetch {

@@ -155,7 +155,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class FetcherTest {
+public abstract class FetcherTest {
     private static final double EPSILON = 0.0001;
 
     private ConsumerRebalanceListener listener = new NoOpConsumerRebalanceListener();
@@ -195,7 +195,7 @@ public class FetcherTest {
     private Metrics metrics;
     private ApiVersions apiVersions = new ApiVersions();
     private ConsumerNetworkClient consumerClient;
-    private DefaultFetcher<?, ?> fetcher;
+    private Fetcher<?, ?> fetcher;
 
     private MemoryRecords records;
     private MemoryRecords nextRecords;
@@ -2532,7 +2532,7 @@ public class FetcherTest {
         buildFetcher();
 
         MockSelector selector = new MockSelector(time);
-        Sensor throttleTimeSensor = DefaultFetcher.throttleTimeSensor(metrics, metricsRegistry);
+        Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry);
         Cluster cluster = TestUtils.singletonCluster("test", 1);
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
@@ -2893,7 +2893,7 @@ public class FetcherTest {
         assertTrue(partitionRecords.containsKey(tp0));
 
         // Create throttle metrics
-        DefaultFetcher.throttleTimeSensor(metrics, metricsRegistry);
+        Fetcher.throttleTimeSensor(metrics, metricsRegistry);
 
         // Verify that all metrics except metrics-count have registered templates
         Set<MetricNameTemplate> allMetrics = new HashSet<>();
@@ -5171,8 +5171,7 @@ public class FetcherTest {
                                      SubscriptionState subscriptionState,
                                      LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
-        fetcher = new DefaultFetcher<>(
-                new LogContext(),
+        fetcher = buildFetcher(new LogContext(),
                 consumerClient,
                 minBytes,
                 maxBytes,
@@ -5193,6 +5192,27 @@ public class FetcherTest {
                 isolationLevel,
                 apiVersions);
     }
+
+    protected abstract <K, V> Fetcher<K, V> buildFetcher(LogContext logContext,
+        ConsumerNetworkClient client,
+        int minBytes,
+        int maxBytes,
+        int maxWaitMs,
+        int fetchSize,
+        int maxPollRecords,
+        boolean checkCrcs,
+        String clientRackId,
+        Deserializer<K> keyDeserializer,
+        Deserializer<V> valueDeserializer,
+        ConsumerMetadata metadata,
+        SubscriptionState subscriptions,
+        Metrics metrics,
+        FetcherMetricsRegistry metricsRegistry,
+        MockTime time,
+        long retryBackoffMs,
+        long requestTimeoutMs,
+        IsolationLevel isolationLevel,
+        ApiVersions apiVersions);
 
     private void buildDependencies(MetricConfig metricConfig,
                                    long metadataExpireMs,
