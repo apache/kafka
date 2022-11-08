@@ -68,6 +68,8 @@
     <suppress checks="ParameterNumber"
               files="KafkaConsumer.java"/>
     <suppress checks="ParameterNumber"
+              files="PrototypeAsyncConsumerBackground.java"/>
+    <suppress checks="ParameterNumber"
               files="Fetcher.java"/>
     <suppress checks="ParameterNumber"
               files="Sender.java"/>

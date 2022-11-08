@@ -28,6 +28,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.Fetch;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
+import org.apache.kafka.clients.consumer.internals.FetcherThreadSafe;
 import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
 import org.apache.kafka.clients.consumer.internals.KafkaConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
@@ -792,7 +793,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         this.interceptors,
                         config.getBoolean(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
             }
-            this.fetcher = new Fetcher<>(
+            this.fetcher = new FetcherThreadSafe<>(
                     logContext,
                     this.client,
                     config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),

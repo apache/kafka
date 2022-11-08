@@ -101,6 +101,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
@@ -155,7 +156,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class FetcherTest {
+public abstract class FetcherTest {
     private static final double EPSILON = 0.0001;
 
     private ConsumerRebalanceListener listener = new NoOpConsumerRebalanceListener();
@@ -3795,7 +3796,7 @@ public class FetcherTest {
         LogContext logContext = new LogContext();
         buildDependencies(new MetricConfig(), Long.MAX_VALUE, new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST), logContext);
 
-        fetcher = new Fetcher<byte[], byte[]>(
+        fetcher = new FetcherThreadSafe<byte[], byte[]>(
                 new LogContext(),
                 consumerClient,
                 minBytes,
@@ -5171,7 +5172,7 @@ public class FetcherTest {
                                      SubscriptionState subscriptionState,
                                      LogContext logContext) {
         buildDependencies(metricConfig, metadataExpireMs, subscriptionState, logContext);
-        fetcher = new Fetcher<>(
+        fetcher = buildFetcher(
                 new LogContext(),
                 consumerClient,
                 minBytes,
@@ -5193,6 +5194,26 @@ public class FetcherTest {
                 isolationLevel,
                 apiVersions);
     }
+    protected abstract <K, V> Fetcher<K, V> buildFetcher(LogContext logContext,
+        ConsumerNetworkClient client,
+        int minBytes,
+        int maxBytes,
+        int maxWaitMs,
+        int fetchSize,
+        int maxPollRecords,
+        boolean checkCrcs,
+        String clientRackId,
+        Deserializer<K> keyDeserializer,
+        Deserializer<V> valueDeserializer,
+        ConsumerMetadata metadata,
+        SubscriptionState subscriptions,
+        Metrics metrics,
+        FetcherMetricsRegistry metricsRegistry,
+        Time time,
+        long retryBackoffMs,
+        long requestTimeoutMs,
+        IsolationLevel isolationLevel,
+        ApiVersions apiVersions);
 
     private void buildDependencies(MetricConfig metricConfig,
                                    long metadataExpireMs,
