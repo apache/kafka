@@ -130,7 +130,7 @@ import java.util.stream.Collectors;
  *     on a different thread.</li>
  * </ul>
  */
-public class Fetcher<K, V> implements Closeable {
+public class DefaultFetcher<K, V> implements Closeable {
     private final Logger log;
     private final LogContext logContext;
     private final ConsumerNetworkClient client;
@@ -162,7 +162,7 @@ public class Fetcher<K, V> implements Closeable {
 
     private CompletedFetch nextInLineFetch = null;
 
-    public Fetcher(LogContext logContext,
+    public DefaultFetcher(LogContext logContext,
                    ConsumerNetworkClient client,
                    int minBytes,
                    int maxBytes,
@@ -182,7 +182,7 @@ public class Fetcher<K, V> implements Closeable {
                    long requestTimeoutMs,
                    IsolationLevel isolationLevel,
                    ApiVersions apiVersions) {
-        this.log = logContext.logger(Fetcher.class);
+        this.log = logContext.logger(DefaultFetcher.class);
         this.logContext = logContext;
         this.time = time;
         this.client = client;
@@ -280,7 +280,7 @@ public class Fetcher<K, V> implements Closeable {
             future.addListener(new RequestFutureListener<ClientResponse>() {
                 @Override
                 public void onSuccess(ClientResponse resp) {
-                    synchronized (Fetcher.this) {
+                    synchronized (DefaultFetcher.this) {
                         try {
                             FetchResponse response = (FetchResponse) resp.responseBody();
                             FetchSessionHandler handler = sessionHandler(fetchTarget.id());
@@ -341,7 +341,7 @@ public class Fetcher<K, V> implements Closeable {
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    synchronized (Fetcher.this) {
+                    synchronized (DefaultFetcher.this) {
                         try {
                             FetchSessionHandler handler = sessionHandler(fetchTarget.id());
                             if (handler != null) {
