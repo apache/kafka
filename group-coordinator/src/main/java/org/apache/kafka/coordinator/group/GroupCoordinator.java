@@ -14,8 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
+
+import java.util.concurrent.CompletableFuture;
+
 public interface GroupCoordinator {
+
+    /**
+     * Join a Generic Group.
+     *
+     * @param context The coordinator request context.
+     * @param request The JoinGroupRequest data.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<JoinGroupResponseData> joinGroup(
+        GroupCoordinatorRequestContext context,
+        JoinGroupRequestData request
+    );
+
 }
+
