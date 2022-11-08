@@ -46,6 +46,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
+
 /**
  * <p>
  * Command line utility that runs Kafka Connect in distributed mode. In this mode, the process joints a group of other workers
@@ -103,12 +105,15 @@ public class ConnectDistributed {
         URI advertisedUrl = rest.advertisedUrl();
         String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
 
+        String clientIdBase = ConnectUtils.clientIdBase(config);
+
         // Create the admin client to be shared by all backing stores.
         Map<String, Object> adminProps = new HashMap<>(config.originals());
         ConnectUtils.addMetricsContextProperties(adminProps, config, kafkaClusterId);
+        adminProps.put(CLIENT_ID_CONFIG, clientIdBase + "shared-admin");
         SharedTopicAdmin sharedAdmin = new SharedTopicAdmin(adminProps);
 
-        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin);
+        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin, () -> clientIdBase);
         offsetBackingStore.configure(config);
 
         ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy = plugins.newPlugin(
@@ -119,14 +124,15 @@ public class ConnectDistributed {
         WorkerConfigTransformer configTransformer = worker.configTransformer();
 
         Converter internalValueConverter = worker.getInternalValueConverter();
-        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter, sharedAdmin);
+        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter, sharedAdmin, clientIdBase);
         statusBackingStore.configure(config);
 
         ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(
                 internalValueConverter,
                 config,
                 configTransformer,
-                sharedAdmin);
+                sharedAdmin,
+                clientIdBase);
 
         // Pass the shared admin to the distributed herder as an additional AutoCloseable object that should be closed when the
         // herder is stopped. This is easier than having to track and own the lifecycle ourselves.
