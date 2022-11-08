@@ -1233,9 +1233,7 @@ project(':group-coordinator') {
     implementation project(':clients')
     implementation libs.slf4jApi
 
-    testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
-    testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
