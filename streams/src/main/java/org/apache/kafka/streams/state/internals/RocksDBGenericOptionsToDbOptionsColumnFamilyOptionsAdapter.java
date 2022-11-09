@@ -1503,6 +1503,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     public Options setPreserveDeletes(final boolean preserveDeletes) {
         String message = "This method has been removed from the underlying RocksDB. " +
                 "It was marked for deprecation in earlier versions. " +
+                "The behaviour can be replicated by using user-defined timestamps. " +
                 "It is currently a no-op method.";
         log.warn(message);
         // no-op
