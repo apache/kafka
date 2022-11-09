@@ -117,29 +117,18 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 isAllSubscriptionsEqual = false;
             }
 
-            Optional<Integer> generation;
-            List<TopicPartition> ownedPartitionsInMetadata;
-            if (!subscription.ownedPartitions().isEmpty() && subscription.generationId().isPresent()) {
-                // In ConsumerProtocolSubscription v2 or higher, we don't need to deserialize the byte buffer
-                // and take from fields directly
-                ownedPartitionsInMetadata = subscription.ownedPartitions();
-                generation = subscription.generationId();
-            } else {
-                MemberData memberData = memberData(subscription);
-                ownedPartitionsInMetadata = memberData.partitions;
-                generation = memberData.generation;
-            }
+            OwnedPartitionsWithGeneration partitionsWithGen = findOwnedPartitionsWithGeneration(subscription);
 
             List<TopicPartition> ownedPartitions = new ArrayList<>();
             consumerToOwnedPartitions.put(consumer, ownedPartitions);
 
             // Only consider this consumer's owned partitions as valid if it is a member of the current highest
             // generation, or it's generation is not present but we have not seen any known generation so far
-            if (generation.isPresent() && generation.get() >= maxGeneration
-                || !generation.isPresent() && maxGeneration == DEFAULT_GENERATION) {
+            if (partitionsWithGen.generation.isPresent() && partitionsWithGen.generation.get() >= maxGeneration
+                || !partitionsWithGen.generation.isPresent() && maxGeneration == DEFAULT_GENERATION) {
 
                 // If the current member's generation is higher, all the previously owned partitions are invalid
-                if (generation.isPresent() && generation.get() > maxGeneration) {
+                if (partitionsWithGen.generation.isPresent() && partitionsWithGen.generation.get() > maxGeneration) {
                     allPreviousPartitionsToOwner.clear();
                     partitionsWithMultiplePreviousOwners.clear();
                     for (String droppedOutConsumer : membersOfCurrentHighestGeneration) {
@@ -147,11 +136,11 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                     }
 
                     membersOfCurrentHighestGeneration.clear();
-                    maxGeneration = generation.get();
+                    maxGeneration = partitionsWithGen.generation.get();
                 }
 
                 membersOfCurrentHighestGeneration.add(consumer);
-                for (final TopicPartition tp : ownedPartitionsInMetadata) {
+                for (final TopicPartition tp : partitionsWithGen.ownedPartitions) {
                     // filter out any topics that no longer exist or aren't part of the current subscription
                     if (allTopics.contains(tp.topic())) {
                         String otherConsumer = allPreviousPartitionsToOwner.put(tp, consumer);
@@ -171,6 +160,23 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         }
 
         return isAllSubscriptionsEqual;
+    }
+
+    private OwnedPartitionsWithGeneration findOwnedPartitionsWithGeneration(Subscription subscription) {
+        Optional<Integer> generation;
+        List<TopicPartition> ownedPartitionsInMetadata;
+        if (!subscription.ownedPartitions().isEmpty() && subscription.generationId().isPresent()) {
+            // In ConsumerProtocolSubscription v2 or higher, we don't need to deserialize the byte buffer
+            // and take from fields directly
+            ownedPartitionsInMetadata = subscription.ownedPartitions();
+            generation = subscription.generationId();
+        } else {
+            MemberData memberData = memberData(subscription);
+            ownedPartitionsInMetadata = memberData.partitions;
+            generation = memberData.generation;
+        }
+
+        return new OwnedPartitionsWithGeneration(ownedPartitionsInMetadata, generation);
     }
 
     /**
@@ -631,7 +637,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                                                Map<TopicPartition, ConsumerGenerationPair> prevAssignment) {
         // we need to process subscriptions' user data with each consumer's reported generation in mind
         // higher generations overwrite lower generations in case of a conflict
-        // note that a conflict could exists only if user data is for different generations
+        // note that a conflict could exist only if user data is for different generations
 
         for (Map.Entry<String, Subscription> subscriptionEntry: subscriptions.entrySet()) {
             String consumer = subscriptionEntry.getKey();
@@ -640,16 +646,17 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 // since this is our 2nd time to deserialize memberData, rewind userData is necessary
                 subscription.userData().rewind();
             }
-            MemberData memberData = memberData(subscriptionEntry.getValue());
+
+            OwnedPartitionsWithGeneration partitionsWithGen = findOwnedPartitionsWithGeneration(subscription);
 
             // we already have the maxGeneration info, so just compare the current generation of memberData, and put into prevAssignment
-            if (memberData.generation.isPresent() && memberData.generation.get() < maxGeneration) {
+            if (partitionsWithGen.generation.isPresent() && partitionsWithGen.generation.get() < maxGeneration) {
                 // if the current member's generation is lower than maxGeneration, put into prevAssignment if needed
-                updatePrevAssignment(prevAssignment, memberData.partitions, consumer, memberData.generation.get());
-            } else if (!memberData.generation.isPresent() && maxGeneration > DEFAULT_GENERATION) {
-                // if maxGeneration is larger then DEFAULT_GENERATION
+                updatePrevAssignment(prevAssignment, partitionsWithGen.ownedPartitions, consumer, partitionsWithGen.generation.get());
+            } else if (!partitionsWithGen.generation.isPresent() && maxGeneration > DEFAULT_GENERATION) {
+                // if maxGeneration is larger than DEFAULT_GENERATION
                 // put all (no generation) partitions as DEFAULT_GENERATION into prevAssignment if needed
-                updatePrevAssignment(prevAssignment, memberData.partitions, consumer, DEFAULT_GENERATION);
+                updatePrevAssignment(prevAssignment, partitionsWithGen.ownedPartitions, consumer, DEFAULT_GENERATION);
             }
         }
     }
@@ -1238,6 +1245,24 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 if (this.equals(pair))
                     return true;
             return false;
+        }
+    }
+
+    private static class OwnedPartitionsWithGeneration {
+        private final List<TopicPartition> ownedPartitions;
+        private final Optional<Integer> generation;
+
+        OwnedPartitionsWithGeneration(List<TopicPartition> ownedPartitions, Optional<Integer> generation) {
+            this.ownedPartitions = ownedPartitions;
+            this.generation = generation;
+        }
+
+        public List<TopicPartition> ownedPartitions() {
+            return ownedPartitions;
+        }
+
+        public Optional<Integer> generation() {
+            return generation;
         }
     }
 }
