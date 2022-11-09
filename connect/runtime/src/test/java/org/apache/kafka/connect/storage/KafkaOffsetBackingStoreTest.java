@@ -76,7 +76,6 @@ public class KafkaOffsetBackingStoreTest {
     private static final short TOPIC_PARTITIONS = 2;
     private static final short TOPIC_REPLICATION_FACTOR = 5;
     private static final Map<String, String> DEFAULT_PROPS = new HashMap<>();
-    private static final DistributedConfig DEFAULT_DISTRIBUTED_CONFIG;
     static {
         DEFAULT_PROPS.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "broker1:9092,broker2:9093");
         DEFAULT_PROPS.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, TOPIC);
@@ -88,8 +87,6 @@ public class KafkaOffsetBackingStoreTest {
         DEFAULT_PROPS.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
         DEFAULT_PROPS.put(DistributedConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         DEFAULT_PROPS.put(DistributedConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        DEFAULT_DISTRIBUTED_CONFIG = new DistributedConfig(DEFAULT_PROPS);
-
     }
     private static final Map<ByteBuffer, ByteBuffer> FIRST_SET = new HashMap<>();
     static {
@@ -106,6 +103,8 @@ public class KafkaOffsetBackingStoreTest {
     private static final ByteBuffer TP0_VALUE_NEW = buffer("VAL0_NEW");
     private static final ByteBuffer TP1_VALUE_NEW = buffer("VAL1_NEW");
 
+    private Map<String, String> props = new HashMap<>(DEFAULT_PROPS);
+    private DistributedConfig config;
     @Mock
     KafkaBasedLog<byte[], byte[]> storeLog;
     private KafkaOffsetBackingStore store;
@@ -134,17 +133,15 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testStartStop() throws Exception {
+        props.put("offset.storage.min.insync.replicas", "3");
+        props.put("offset.storage.max.message.bytes", "1001");
         expectConfigure();
         expectStart(Collections.emptyList());
         expectStop();
-        expectClusterId();
 
         PowerMock.replayAll();
 
-        Map<String, String> settings = new HashMap<>(DEFAULT_PROPS);
-        settings.put("offset.storage.min.insync.replicas", "3");
-        settings.put("offset.storage.max.message.bytes", "1001");
-        store.configure(new DistributedConfig(settings));
+        store.configure(config);
         assertEquals(TOPIC, capturedTopic.getValue());
         assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
         assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
@@ -175,11 +172,10 @@ public class KafkaOffsetBackingStoreTest {
                     new RecordHeaders(), Optional.empty())
         ));
         expectStop();
-        expectClusterId();
 
         PowerMock.replayAll();
 
-        store.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        store.configure(config);
         store.start();
         HashMap<ByteBuffer, ByteBuffer> data = Whitebox.getInternalState(store, "data");
         assertEquals(TP0_VALUE_NEW, data.get(TP0_KEY));
@@ -240,10 +236,9 @@ public class KafkaOffsetBackingStoreTest {
             return null;
         });
 
-        expectClusterId();
         PowerMock.replayAll();
 
-        store.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        store.configure(config);
         store.start();
 
         // Getting from empty store should return nulls
@@ -310,11 +305,10 @@ public class KafkaOffsetBackingStoreTest {
         });
 
         expectStop();
-        expectClusterId();
 
         PowerMock.replayAll();
 
-        store.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        store.configure(config);
         store.start();
 
         // Set offsets using null keys and values
@@ -359,11 +353,9 @@ public class KafkaOffsetBackingStoreTest {
         storeLog.send(EasyMock.aryEq(TP2_KEY.array()), EasyMock.aryEq(TP2_VALUE.array()), EasyMock.capture(callback2));
         PowerMock.expectLastCall();
 
-        expectClusterId();
-
         PowerMock.replayAll();
 
-        store.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        store.configure(config);
         store.start();
 
         // Set some offsets
@@ -403,13 +395,9 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testConsumerPropertiesInsertedByDefaultWithExactlyOnceSourceEnabled() throws Exception {
-        Map<String, String> workerProps = new HashMap<>(DEFAULT_PROPS);
-        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
-        workerProps.remove(ISOLATION_LEVEL_CONFIG);
-        DistributedConfig config = new DistributedConfig(workerProps);
-
+        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
+        props.remove(ISOLATION_LEVEL_CONFIG);
         expectConfigure();
-        expectClusterId();
         PowerMock.replayAll();
 
         store.configure(config);
@@ -424,13 +412,9 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testConsumerPropertiesOverrideUserSuppliedValuesWithExactlyOnceSourceEnabled() throws Exception {
-        Map<String, String> workerProps = new HashMap<>(DEFAULT_PROPS);
-        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
-        workerProps.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
-        DistributedConfig config = new DistributedConfig(workerProps);
-
+        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
+        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
         expectConfigure();
-        expectClusterId();
         PowerMock.replayAll();
 
         store.configure(config);
@@ -445,13 +429,9 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testConsumerPropertiesNotInsertedByDefaultWithoutExactlyOnceSourceEnabled() throws Exception {
-        Map<String, String> workerProps = new HashMap<>(DEFAULT_PROPS);
-        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
-        workerProps.remove(ISOLATION_LEVEL_CONFIG);
-        DistributedConfig config = new DistributedConfig(workerProps);
-
+        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
+        props.remove(ISOLATION_LEVEL_CONFIG);
         expectConfigure();
-        expectClusterId();
         PowerMock.replayAll();
 
         store.configure(config);
@@ -463,13 +443,9 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testConsumerPropertiesDoNotOverrideUserSuppliedValuesWithoutExactlyOnceSourceEnabled() throws Exception {
-        Map<String, String> workerProps = new HashMap<>(DEFAULT_PROPS);
-        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
-        workerProps.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
-        DistributedConfig config = new DistributedConfig(workerProps);
-
+        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
+        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
         expectConfigure();
-        expectClusterId();
         PowerMock.replayAll();
 
         store.configure(config);
@@ -484,11 +460,7 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testClientIds() throws Exception {
-        Map<String, String> workerProps = new HashMap<>(DEFAULT_PROPS);
-        DistributedConfig config = new DistributedConfig(workerProps);
-
         expectConfigure();
-        expectClusterId();
         PowerMock.replayAll();
 
         store.configure(config);
@@ -501,6 +473,11 @@ public class KafkaOffsetBackingStoreTest {
     }
 
     private void expectConfigure() throws Exception {
+        config = EasyMock.createMockBuilder(DistributedConfig.class)
+                .withConstructor(props)
+                .addMockedMethod("kafkaClusterId")
+                .createMock();
+        EasyMock.expect(config.kafkaClusterId()).andReturn("test-cluster").anyTimes();
         PowerMock.expectPrivate(store, "createKafkaBasedLog", EasyMock.capture(capturedTopic), EasyMock.capture(capturedProducerProps),
                 EasyMock.capture(capturedConsumerProps), EasyMock.capture(capturedConsumedCallback),
                 EasyMock.capture(capturedNewTopic), EasyMock.capture(capturedAdminSupplier))
@@ -519,11 +496,6 @@ public class KafkaOffsetBackingStoreTest {
     private void expectStop() {
         storeLog.stop();
         PowerMock.expectLastCall();
-    }
-
-    private void expectClusterId() {
-        PowerMock.mockStaticPartial(WorkerConfig.class, "lookupKafkaClusterId");
-        EasyMock.expect(WorkerConfig.lookupKafkaClusterId(EasyMock.anyObject())).andReturn("test-cluster").anyTimes();
     }
 
     private static ByteBuffer buffer(String v) {
