@@ -533,11 +533,14 @@ public class ErrorHandlingTaskTest {
         TransformationChain<SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SourceRecord>()), retryWithToleranceOperator);
 
         workerSourceTask = spy(new WorkerSourceTask(
-            taskId, sourceTask, statusListener, initialState, converter, converter, headerConverter, sourceTransforms,
-            producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
-            offsetReader, offsetWriter, offsetStore, workerConfig,
-            ClusterConfigState.EMPTY, metrics, pluginLoader, time, retryWithToleranceOperator,
-            statusBackingStore, (Executor) Runnable::run));
+            taskId, sourceTask, statusListener, initialState, converter,
+                converter, errorHandlingMetrics, headerConverter,
+                sourceTransforms, producer, admin,
+                TopicCreationGroup.configuredGroups(sourceConfig),
+                offsetReader, offsetWriter, offsetStore, workerConfig,
+                ClusterConfigState.EMPTY, metrics, pluginLoader, time,
+                retryWithToleranceOperator,
+                statusBackingStore, (Executor) Runnable::run));
     }
 
     private ConsumerRecords<byte[], byte[]> records(ConsumerRecord<byte[], byte[]> record) {
