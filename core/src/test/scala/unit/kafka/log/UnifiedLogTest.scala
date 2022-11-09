@@ -3465,10 +3465,13 @@ class UnifiedLogTest {
       log.appendAsLeader(records, leaderEpoch = 0)
     }
 
-    assertEquals(Some(100L), log.maybeUpdateHighWatermark(100L))
     assertEquals(Some(99L), log.maybeUpdateHighWatermark(99L))
     assertEquals(None, log.maybeUpdateHighWatermark(99L))
-    assertEquals(Some(100L), log.maybeUpdateHighWatermark(101L))
+
+    assertEquals(Some(100L), log.maybeUpdateHighWatermark(100L))
+    assertEquals(None, log.maybeUpdateHighWatermark(100L))
+
+    // bound by the log end offset
     assertEquals(None, log.maybeUpdateHighWatermark(101L))
   }
 

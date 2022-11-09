@@ -1112,9 +1112,10 @@ class ReplicaFetcherThreadTest {
     val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
     when(mockBlockingSend.brokerEndPoint()).thenReturn(brokerEndPoint)
 
-    var maybeNewHighWatermark: Option[Long] = None
-    if (highWatermarkUpdated) {
-      maybeNewHighWatermark = Some(highWatermarkReceivedFromLeader)
+    val maybeNewHighWatermark = if (highWatermarkUpdated) {
+      Some(highWatermarkReceivedFromLeader)
+    } else {
+      None
     }
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     when(log.maybeUpdateHighWatermark(highWatermarkReceivedFromLeader))

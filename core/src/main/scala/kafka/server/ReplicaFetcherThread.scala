@@ -153,7 +153,9 @@ class ReplicaFetcherThread(name: String,
 
   private def completeDelayedFetchRequests(): Unit = {
     if (partitionsWithNewHighWatermark.nonEmpty) {
-      replicaMgr.completeDelayedFetchRequests(partitionsWithNewHighWatermark.toSeq)
+      // Scala 2.12 Buffer.toSeq returns a mutable Seq object whereas 2.13 returns an immutable copy.
+      // Forcing a copy to unify the behavior.
+      replicaMgr.completeDelayedFetchRequests(partitionsWithNewHighWatermark.clone)
       partitionsWithNewHighWatermark.clear()
     }
   }
