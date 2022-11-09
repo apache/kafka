@@ -175,7 +175,18 @@ public class TaskManager {
     void handleRebalanceComplete() {
         // we should pause consumer only within the listener since
         // before then the assignment has not been updated yet.
-        mainConsumer.pause(mainConsumer.assignment());
+        if (stateUpdater == null) {
+            mainConsumer.pause(mainConsumer.assignment());
+        } else {
+            // All tasks that are owned by the task manager are ready and do not need to be paused
+            final Set<TopicPartition> partitionsNotToPause = tasks.allTasks()
+                .stream()
+                .flatMap(task -> task.inputPartitions().stream())
+                .collect(Collectors.toSet());
+            final Set<TopicPartition> partitionsToPause = new HashSet<>(mainConsumer.assignment());
+            partitionsToPause.removeAll(partitionsNotToPause);
+            mainConsumer.pause(partitionsToPause);
+        }
 
         releaseLockedUnassignedTaskDirectories();
 
@@ -720,8 +731,12 @@ public class TaskManager {
     public boolean checkStateUpdater(final long now,
                                      final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
         addTasksToStateUpdater();
-        handleExceptionsFromStateUpdater();
-        handleRemovedTasksFromStateUpdater();
+        if (stateUpdater.hasExceptionsAndFailedTasks()) {
+            handleExceptionsFromStateUpdater();
+        }
+        if (stateUpdater.hasRemovedTasks()) {
+            handleRemovedTasksFromStateUpdater();
+        }
         if (stateUpdater.restoresActiveTasks()) {
             handleRestoredTasksFromStateUpdater(now, offsetResetter);
         }
@@ -799,10 +814,19 @@ public class TaskManager {
     }
 
     private void addTasksToStateUpdater() {
+        final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
         for (final Task task : tasks.drainPendingTaskToInit()) {
-            task.initializeIfNeeded();
-            stateUpdater.add(task);
+            try {
+                task.initializeIfNeeded();
+                stateUpdater.add(task);
+            } catch (final RuntimeException e) {
+                // need to add task back to the bookkeeping to be handled by the stream thread
+                tasks.addTask(task);
+                taskExceptions.put(task.id(), e);
+            }
         }
+
+        maybeThrowTaskExceptions(taskExceptions);
     }
 
     public void handleExceptionsFromStateUpdater() {

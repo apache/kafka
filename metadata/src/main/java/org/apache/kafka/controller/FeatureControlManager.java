@@ -212,11 +212,9 @@ public class FeatureControlManager {
             // Perform additional checks if we're updating metadata.version
             return updateMetadataVersion(newVersion, upgradeType.equals(FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE), records::add);
         } else {
-            records.add(new ApiMessageAndVersion(
-                new FeatureLevelRecord()
-                    .setName(featureName)
-                    .setFeatureLevel(newVersion),
-                FEATURE_LEVEL_RECORD.highestSupportedVersion()));
+            records.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(featureName).
+                setFeatureLevel(newVersion), (short) 0));
             return ApiError.NONE;
         }
     }
@@ -320,26 +318,29 @@ public class FeatureControlManager {
 
         @Override
         public boolean hasNext() {
-            return !wroteVersion || iterator.hasNext();
+            return needsWriteMetadataVersion() || iterator.hasNext();
+        }
+
+        private boolean needsWriteMetadataVersion() {
+            return !wroteVersion && metadataVersion.isAtLeast(minimumBootstrapVersion);
         }
 
         @Override
         public List<ApiMessageAndVersion> next() {
             // Write the metadata.version first
-            if (!wroteVersion) {
-                if (metadataVersion.isAtLeast(minimumBootstrapVersion)) {
-                    wroteVersion = true;
-                    return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord()
-                            .setName(MetadataVersion.FEATURE_NAME)
-                            .setFeatureLevel(metadataVersion.featureLevel()), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
-                }
+            if (needsWriteMetadataVersion()) {
+                wroteVersion = true;
+                return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord()
+                    .setName(MetadataVersion.FEATURE_NAME)
+                    .setFeatureLevel(metadataVersion.featureLevel()), FEATURE_LEVEL_RECORD.lowestSupportedVersion()));
             }
+
             // Then write the rest of the features
-            if (!hasNext()) throw new NoSuchElementException();
+            if (!iterator.hasNext()) throw new NoSuchElementException();
             Entry<String, Short> entry = iterator.next();
             return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord()
                 .setName(entry.getKey())
-                .setFeatureLevel(entry.getValue()), FEATURE_LEVEL_RECORD.highestSupportedVersion()));
+                .setFeatureLevel(entry.getValue()), (short) 0));
         }
     }
 

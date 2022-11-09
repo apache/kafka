@@ -370,7 +370,7 @@ class BrokerToControllerRequestThread(
       debug("Controller isn't cached, looking for local metadata changes")
       controllerNodeProvider.get() match {
         case Some(controllerNode) =>
-          info(s"Recorded new controller, from now on will use broker $controllerNode")
+          info(s"Recorded new controller, from now on will use node $controllerNode")
           updateControllerAddress(controllerNode)
           metadataUpdater.setNodes(Seq(controllerNode).asJava)
         case None =>

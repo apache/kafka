@@ -214,7 +214,9 @@ public class DefaultStateUpdater implements StateUpdater {
         private void addToExceptionsAndFailedTasksThenRemoveFromUpdatingTasks(final ExceptionAndTasks exceptionAndTasks) {
             exceptionsAndFailedTasks.add(exceptionAndTasks);
             exceptionAndTasks.getTasks().stream().map(Task::id).forEach(updatingTasks::remove);
-            transitToUpdateStandbysIfOnlyStandbysLeft();
+            if (exceptionAndTasks.getTasks().stream().anyMatch(Task::isActive)) {
+                transitToUpdateStandbysIfOnlyStandbysLeft();
+            }
         }
 
         private void addToExceptionsAndFailedTasksThenClearUpdatingTasks(final ExceptionAndTasks exceptionAndTasks) {
@@ -310,7 +312,9 @@ public class DefaultStateUpdater implements StateUpdater {
             task.maybeCheckpoint(true);
             pausedTasks.put(taskId, task);
             updatingTasks.remove(taskId);
-            transitToUpdateStandbysIfOnlyStandbysLeft();
+            if (task.isActive()) {
+                transitToUpdateStandbysIfOnlyStandbysLeft();
+            }
             log.debug((task.isActive() ? "Active" : "Standby")
                 + " task " + task.id() + " was paused from the updating tasks and added to the paused tasks.");
         }
@@ -536,11 +540,20 @@ public class DefaultStateUpdater implements StateUpdater {
         return new HashSet<>(result);
     }
 
+    public boolean hasRemovedTasks() {
+        return !removedTasks.isEmpty();
+    }
+
     @Override
     public List<ExceptionAndTasks> drainExceptionsAndFailedTasks() {
         final List<ExceptionAndTasks> result = new ArrayList<>();
         exceptionsAndFailedTasks.drainTo(result);
         return result;
+    }
+
+    @Override
+    public boolean hasExceptionsAndFailedTasks() {
+        return !exceptionsAndFailedTasks.isEmpty();
     }
 
     public Set<StandbyTask> getUpdatingStandbyTasks() {

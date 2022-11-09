@@ -33,6 +33,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -611,7 +612,7 @@ public class StreamThread extends Thread {
                 }
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
-                    log.info("Triggering the followup rebalance scheduled for {} ms.", nextProbingRebalanceMs.get());
+                    log.info("Triggering the followup rebalance scheduled for {}.", Utils.toLogDateTimeFormat(nextProbingRebalanceMs.get()));
                     mainConsumer.enforceRebalance("Scheduled probing rebalance");
                     nextProbingRebalanceMs.set(Long.MAX_VALUE);
                 }
@@ -938,7 +939,7 @@ public class StreamThread extends Thread {
         final ConsumerRecords<byte[], byte[]> records;
         log.debug("Invoking poll on main Consumer");
 
-        if (state == State.PARTITIONS_ASSIGNED) {
+        if (state == State.PARTITIONS_ASSIGNED && !stateUpdaterEnabled) {
             // try to fetch some records with zero poll millis
             // to unblock the restoration as soon as possible
             records = pollRequests(Duration.ZERO);
@@ -946,7 +947,7 @@ public class StreamThread extends Thread {
             // try to fetch some records with zero poll millis to unblock
             // other useful work while waiting for the join response
             records = pollRequests(Duration.ZERO);
-        } else if (state == State.RUNNING || state == State.STARTING) {
+        } else if (state == State.RUNNING || state == State.STARTING || (state == State.PARTITIONS_ASSIGNED && stateUpdaterEnabled)) {
             // try to fetch some records with normal poll time
             // in order to get long polling
             records = pollRequests(pollTime);
@@ -1080,6 +1081,11 @@ public class StreamThread extends Thread {
             log.info(logMessage, topic, resetPolicy);
         }
         partitions.add(partition);
+    }
+
+    // This method is added for usage in tests where mocking the underlying native call is not possible.
+    public boolean isThreadAlive() {
+        return isAlive();
     }
 
     /**

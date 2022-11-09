@@ -33,7 +33,6 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
@@ -643,10 +642,12 @@ public class ExactlyOnceSourceIntegrationTest {
         final String globalOffsetsTopic = "connect-worker-offsets-topic";
         workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, globalOffsetsTopic);
 
+        connectBuilder.clientConfigs(superUserClientConfig);
+
         startConnect();
 
         String topic = "test-topic";
-        Admin admin = connect.kafka().createAdminClient(Utils.mkProperties(superUserClientConfig));
+        Admin admin = connect.kafka().createAdminClient();
         admin.createTopics(Collections.singleton(new NewTopic(topic, 3, (short) 1))).all().get();
 
         Map<String, String> props = new HashMap<>();

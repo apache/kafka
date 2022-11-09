@@ -65,6 +65,7 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
@@ -84,6 +85,7 @@ import static org.junit.Assert.assertTrue;
 @PrepareForTest({KafkaConfigBackingStore.class, WorkerConfig.class})
 @PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
 public class KafkaConfigBackingStoreTest {
+    private static final String CLIENT_ID_BASE = "test-client-id-";
     private static final String TOPIC = "connect-configs";
     private static final short TOPIC_REPLICATION_FACTOR = 5;
     private static final Map<String, String> DEFAULT_CONFIG_STORAGE_PROPS = new HashMap<>();
@@ -183,7 +185,7 @@ public class KafkaConfigBackingStoreTest {
         configStorage = PowerMock.createPartialMock(
                 KafkaConfigBackingStore.class,
                 new String[]{"createKafkaBasedLog", "createFencableProducer"},
-                converter, config, null);
+                converter, config, null, null, CLIENT_ID_BASE);
         Whitebox.setInternalState(configStorage, "configLog", storeLog);
         configStorage.setUpdateListener(configUpdateListener);
     }
@@ -1412,6 +1414,27 @@ public class KafkaConfigBackingStoreTest {
                 IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testClientIds() throws Exception {
+        Map<String, String> workerProps = new HashMap<>(DEFAULT_CONFIG_STORAGE_PROPS);
+        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
+        DistributedConfig config = new DistributedConfig(workerProps);
+        createStore(config, storeLog);
+
+        expectConfigure();
+        PowerMock.replayAll();
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        Map<String, Object> fencableProducerProps = configStorage.fencableProducerProps(config);
+
+        final String expectedClientId = CLIENT_ID_BASE + "configs";
+        assertEquals(expectedClientId, capturedProducerProps.getValue().get(CLIENT_ID_CONFIG));
+        assertEquals(expectedClientId, capturedConsumerProps.getValue().get(CLIENT_ID_CONFIG));
+        assertEquals(expectedClientId + "-leader", fencableProducerProps.get(CLIENT_ID_CONFIG));
 
         PowerMock.verifyAll();
     }

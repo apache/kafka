@@ -28,7 +28,6 @@ import org.slf4j.Logger;
 import java.util.Arrays;
 import java.util.Objects;
 
-import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECORD;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
@@ -182,7 +181,7 @@ public class PartitionRegistration {
             setLeader(leader).
             setLeaderRecoveryState(leaderRecoveryState.value()).
             setLeaderEpoch(leaderEpoch).
-            setPartitionEpoch(partitionEpoch), PARTITION_RECORD.highestSupportedVersion());
+            setPartitionEpoch(partitionEpoch), (short) 0);
     }
 
     public LeaderAndIsrPartitionState toLeaderAndIsrPartitionState(TopicPartition tp,
@@ -211,8 +210,8 @@ public class PartitionRegistration {
 
     @Override
     public int hashCode() {
-        return Objects.hash(replicas, isr, removingReplicas, addingReplicas, leader, leaderRecoveryState,
-            leaderEpoch, partitionEpoch);
+        return Objects.hash(Arrays.hashCode(replicas), Arrays.hashCode(isr), Arrays.hashCode(removingReplicas),
+            Arrays.hashCode(addingReplicas), leader, leaderRecoveryState, leaderEpoch, partitionEpoch);
     }
 
     @Override

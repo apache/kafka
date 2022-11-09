@@ -178,7 +178,7 @@ apply from: file('wrapper.gradle')
 
 if (file('.git').exists()) {
   rat {
-    verbose = true
+    verbose.set(true)
     reportDir.set(project.file('build/rat'))
     stylesheet.set(file('gradle/resources/rat-output-to-html.xsl'))
 
@@ -221,7 +221,7 @@ subprojects {
   task allDeps(type: DependencyReportTask) {}
   // enable running :dependencyInsight task recursively on all subprojects
   // eg: ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
-  task allDepInsight(type: DependencyInsightReportTask) doLast {}
+  task allDepInsight(type: DependencyInsightReportTask) {showingAllVariants = false} doLast {}
 
   apply plugin: 'java-library'
   apply plugin: 'checkstyle'
@@ -405,15 +405,13 @@ subprojects {
     testsToExclude.addAll([
       // connect tests
       "**/ConnectorPluginsResourceTest.*",
-      "**/ConnectorsResourceTest.*", "**/DistributedHerderTest.*", "**/FileOffsetBakingStoreTest.*",
+      "**/DistributedHerderTest.*", "**/FileOffsetBakingStoreTest.*",
       "**/KafkaConfigBackingStoreTest.*", "**/KafkaOffsetBackingStoreTest.*",
       "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
       "**/SourceTaskOffsetCommitterTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
-      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*", "**/ExactlyOnceWorkerSourceTaskTest.*",
-      "**/WorkerTaskTest.*",
-      // streams tests
-      "**/KafkaStreamsTest.*"
+      "**/WorkerSourceTaskTest.*", "**/AbstractWorkerSourceTaskTest.*",
+      "**/WorkerTaskTest.*"
     ])
   }
 
@@ -867,9 +865,11 @@ project(':core') {
     api libs.scalaLibrary
 
     implementation project(':server-common')
+    implementation project(':group-coordinator')
     implementation project(':metadata')
     implementation project(':raft')
     implementation project(':storage')
+
 
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
@@ -898,6 +898,7 @@ project(':core') {
     compileOnly libs.log4j
 
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':group-coordinator').sourceSets.test.output
     testImplementation project(':metadata').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
@@ -1224,6 +1225,40 @@ project(':metadata') {
   }
 }
 
+project(':group-coordinator') {
+  archivesBaseName = "kafka-group-coordinator"
+
+  dependencies {
+    implementation project(':server-common')
+    implementation project(':clients')
+    implementation libs.slf4jApi
+
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+
+    testRuntimeOnly libs.slf4jlog4j
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
+  }
+
+  javadoc {
+    enabled = false
+  }
+}
+
 project(':examples') {
   archivesBaseName = "kafka-examples"
 
@@ -1273,14 +1308,15 @@ project(':clients') {
     compileOnly libs.jose4j          // for SASL/OAUTHBEARER JWT validation; only used by broker
 
     testImplementation libs.bcpkix
+    testImplementation libs.jacksonJaxrsJsonProvider
+    testImplementation libs.jose4j
     testImplementation libs.junitJupiter
+    testImplementation libs.log4j
     testImplementation libs.mockitoInline
 
     testRuntimeOnly libs.slf4jlog4j
     testRuntimeOnly libs.jacksonDatabind
     testRuntimeOnly libs.jacksonJDK8Datatypes
-    testImplementation libs.jose4j
-    testImplementation libs.jacksonJaxrsJsonProvider
 
     generator project(':generator')
   }
@@ -1496,6 +1532,7 @@ project(':server-common') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
+    testImplementation libs.hamcrest
 
     testRuntimeOnly libs.slf4jlog4j
   }
