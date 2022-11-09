@@ -865,9 +865,11 @@ project(':core') {
     api libs.scalaLibrary
 
     implementation project(':server-common')
+    implementation project(':group-coordinator')
     implementation project(':metadata')
     implementation project(':raft')
     implementation project(':storage')
+
 
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
@@ -896,6 +898,7 @@ project(':core') {
     compileOnly libs.log4j
 
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':group-coordinator').sourceSets.test.output
     testImplementation project(':metadata').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
@@ -1203,6 +1206,40 @@ project(':metadata') {
   }
 
   compileJava.dependsOn 'processMessages'
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
+  }
+
+  javadoc {
+    enabled = false
+  }
+}
+
+project(':group-coordinator') {
+  archivesBaseName = "kafka-group-coordinator"
+
+  dependencies {
+    implementation project(':server-common')
+    implementation project(':clients')
+    implementation libs.slf4jApi
+
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation libs.junitJupiter
+    testImplementation libs.mockitoCore
+
+    testRuntimeOnly libs.slf4jlog4j
+  }
 
   sourceSets {
     main {
