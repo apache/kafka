@@ -2865,6 +2865,17 @@ project(':connect:mirror') {
     implementation libs.argparse4j
     implementation libs.jacksonAnnotations
     implementation libs.slf4jApi
+    implementation libs.jacksonAnnotations
+    implementation libs.jacksonJaxrsJsonProvider
+    implementation libs.jerseyContainerServlet
+    implementation libs.jerseyHk2
+    implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
+    implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
+    implementation libs.jettyServer
+    implementation libs.jettyServlet
+    implementation libs.jettyServlets
+    implementation libs.jettyClient
+    implementation libs.swaggerAnnotations
 
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore

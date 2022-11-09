@@ -138,7 +138,7 @@
     <suppress checks="ParameterNumber"
               files="Worker(SinkTask|SourceTask|Coordinator).java"/>
     <suppress checks="ParameterNumber"
-              files="ConfigKeyInfo.java"/>
+              files="(ConfigKeyInfo|DistributedHerder).java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files="(RestServer|AbstractHerder|DistributedHerder|Worker).java"/>
