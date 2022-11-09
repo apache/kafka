@@ -27,6 +27,8 @@ import java.util.Collections;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
+
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -57,12 +59,10 @@ public class TaskExecutorTest {
         when(taskManager.threadProducer()).thenReturn(producer);
         when(producer.transactionInFlight()).thenReturn(true);
 
-        producer.commitTransaction(Collections.emptyMap(), groupMetadata);
-
         final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext());
         taskExecutor.commitOffsetsOrTransaction(Collections.emptyMap());
 
-        verify(producer);
+        verify(producer).commitTransaction(Collections.emptyMap(), groupMetadata);
     }
 
     @Test
@@ -83,11 +83,9 @@ public class TaskExecutorTest {
         when(taskManager.streamsProducerForTask(taskId)).thenReturn(producer);
         when(producer.transactionInFlight()).thenReturn(true);
 
-        producer.commitTransaction(Mockito.isNull(), groupMetadata);
-
         final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext());
         taskExecutor.commitOffsetsOrTransaction(Collections.emptyMap());
 
-        verify(producer);
+        verify(producer).commitTransaction(Mockito.isNull(), eq(groupMetadata));
     }
 }
