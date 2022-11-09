@@ -1734,7 +1734,7 @@ class DefaultStateUpdaterTest {
                     && failedTasks.size() == expectedExceptionAndTasks.size();
             },
             VERIFICATION_TIMEOUT,
-            String.format(
+            () -> String.format(
                 "Did not get all exceptions and failed tasks within the given timeout! Got: %s",
                 failedTasks
             )
@@ -1755,7 +1755,10 @@ class DefaultStateUpdaterTest {
                             && failedTasks.size() == expectedFailedTasks.size();
                 },
                 VERIFICATION_TIMEOUT,
-                "Did not get all exceptions and failed tasks within the given timeout!"
+            () -> String.format(
+                "Did not get all exceptions and failed tasks within the given timeout! Got: %s",
+                failedTasks
+            )
         );
     }
 
