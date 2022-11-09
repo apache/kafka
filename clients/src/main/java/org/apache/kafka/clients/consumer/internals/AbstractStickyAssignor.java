@@ -1248,6 +1248,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         }
     }
 
+    // An inner class to store ownedPartitions and generation data
     private static class OwnedPartitionsWithGeneration {
         private final List<TopicPartition> ownedPartitions;
         private final Optional<Integer> generation;

@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignorTest;
 import org.apache.kafka.common.TopicPartition;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -30,6 +29,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
 
@@ -84,8 +85,9 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
         assertFalse(((CooperativeStickyAssignor) assignor).memberData(subscription).generation.isPresent());
     }
 
-    @Test
-    public void testCooperativeStickyAssignorHonorSubscriptionUserdataIfNoGenerationIdInField() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testCooperativeStickyAssignorHonorSubscriptionUserdataIfNoGenerationIdInField(boolean isV2Above) {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 2);
         int higherGenerationId = 2;
@@ -94,10 +96,11 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
         assignor.onAssignment(new ConsumerPartitionAssignor.Assignment(partitions(tp1)), new ConsumerGroupMetadata(groupId, higherGenerationId, consumer1, Optional.empty()));
         ByteBuffer userDataWithHigherGenerationId = assignor.subscriptionUserData(new HashSet<>(topics(topic)));
 
-        // subscription provides no generation id, so we'll honor the generation id in userData,
+        // The owned partitions and generation id are provided in user data and different owned partition is provided in subscription without generation id
+        // If subscription provides no generation id, we'll honor the generation id in userData and owned partitions in subscription,
         // and get rid of the owned partition for consumer2 due to lower generation id
-        subscriptions.put(consumer1, new Subscription(topics(topic), userDataWithHigherGenerationId, Collections.singletonList(tp0)));
-        subscriptions.put(consumer2, new Subscription(topics(topic), null, Collections.singletonList(tp0), lowerGenerationId));
+        subscriptions.put(consumer1, new Subscription(topics(topic), userDataWithHigherGenerationId, partitions(tp0)));
+        subscriptions.put(consumer2, buildSubscriptionWithGeneration(isV2Above, topics(topic), partitions(tp0), lowerGenerationId));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp0), assignment.get(consumer1));

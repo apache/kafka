@@ -152,22 +152,6 @@ public abstract class AbstractStickyAssignorTest {
     }
 
     @Test
-    public void testAssignorShouldHonorSubscriptionOwnedPartitionAndGeneration() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 3);
-
-        subscriptions.put(consumer1, new Subscription(topics(topic), null, Collections.singletonList(tp0), 1));
-        subscriptions.put(consumer2, new Subscription(topics(topic), null, Collections.singletonList(tp2), 1));
-        subscriptions.put(consumer3, new Subscription(topics(topic), null, Collections.singletonList(tp1), 1));
-
-        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(partitions(tp0), assignment.get(consumer1));
-        assertEquals(partitions(tp2), assignment.get(consumer2));
-        assertEquals(partitions(tp1), assignment.get(consumer3));
-        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
-    }
-
-    @Test
     public void testAssignorShouldTakeSubscriptionOwnedPartitionAndGenerationOverUserdata() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
@@ -177,6 +161,7 @@ public abstract class AbstractStickyAssignorTest {
         assignor.onAssignment(new ConsumerPartitionAssignor.Assignment(partitions(tp0, tp1, tp2)), new ConsumerGroupMetadata(groupId, higherGenerationId, consumer1, Optional.empty()));
         ByteBuffer userDataWithHigherGenerationId = assignor.subscriptionUserData(new HashSet<>(topics(topic)));
 
+        // provide inconsistent generation id in user data and subscription
         subscriptions.put(consumer1, new Subscription(topics(topic), userDataWithHigherGenerationId, Collections.singletonList(tp0), lowerGenerationId));
         subscriptions.put(consumer2, new Subscription(topics(topic), userDataWithHigherGenerationId, Collections.singletonList(tp2), lowerGenerationId));
         subscriptions.put(consumer3, new Subscription(topics(topic), userDataWithHigherGenerationId, Collections.singletonList(tp1), lowerGenerationId));
