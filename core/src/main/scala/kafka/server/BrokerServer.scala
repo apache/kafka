@@ -22,22 +22,19 @@ import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
-
 import kafka.cluster.Broker.ServerInfo
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
-import kafka.raft.RaftManager
+import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.KafkaRaftServer.ControllerRole
-import kafka.server.metadata.BrokerServerMetrics
 import kafka.server.metadata.{BrokerMetadataListener, BrokerMetadataPublisher, BrokerMetadataSnapshotter, ClientQuotaMetadataManager, KRaftMetadataCache, SnapshotWriterBuilder}
 import kafka.utils.{CoreUtils, KafkaScheduler}
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
@@ -46,11 +43,9 @@ import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, Endpoint}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.{BrokerState, VersionRange}
-import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.raft.{RaftClient, RaftConfig}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.snapshot.SnapshotWriter
 
@@ -72,19 +67,14 @@ class BrokerSnapshotWriterBuilder(raftClient: RaftClient[ApiMessageAndVersion])
  * A Kafka broker that runs in KRaft (Kafka Raft) mode.
  */
 class BrokerServer(
-  val config: KafkaConfig,
-  val metaProps: MetaProperties,
-  val raftManager: RaftManager[ApiMessageAndVersion],
-  val time: Time,
-  val metrics: Metrics,
-  val brokerMetrics: BrokerServerMetrics,
-  val threadNamePrefix: Option[String],
+  val jointServer: JointServer,
   val initialOfflineDirs: Seq[String],
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
-  val fatalFaultHandler: FaultHandler,
-  val metadataLoadingFaultHandler: FaultHandler,
-  val metadataPublishingFaultHandler: FaultHandler
 ) extends KafkaBroker {
+  val threadNamePrefix = jointServer.threadNamePrefix
+  val config = jointServer.config
+  val time = jointServer.time
+  val metrics = jointServer.metrics
+  def raftManager: KafkaRaftManager[ApiMessageAndVersion] = jointServer.raftManager
 
   override def brokerState: BrokerState = Option(lifecycleManager).
     flatMap(m => Some(m.state)).getOrElse(BrokerState.NOT_RUNNING)
@@ -144,7 +134,7 @@ class BrokerServer(
 
   @volatile var brokerTopicStats: BrokerTopicStats = _
 
-  val clusterId: String = metaProps.clusterId
+  val clusterId: String = jointServer.metaProps.clusterId
 
   var metadataSnapshotter: Option[BrokerMetadataSnapshotter] = None
 
@@ -180,6 +170,8 @@ class BrokerServer(
   override def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
     try {
+      jointServer.startForBroker()
+
       info("Starting broker")
 
       config.dynamicConfig.initialize(zkClientOpt = None)
@@ -211,7 +203,7 @@ class BrokerServer(
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-      val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
+      val controllerNodes = RaftConfig.voterConnectionsToNodes(jointServer.controllerQuorumVotersFuture.get()).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
 
       clientToControllerChannelManager = BrokerToControllerChannelManager(
@@ -320,8 +312,8 @@ class BrokerServer(
         threadNamePrefix,
         config.metadataSnapshotMaxNewRecordBytes,
         metadataSnapshotter,
-        brokerMetrics,
-        metadataLoadingFaultHandler)
+        jointServer.brokerMetrics,
+        jointServer.metadataLoaderFaultHandler)
 
       val networkListeners = new ListenerCollection()
       config.effectiveAdvertisedListeners.foreach { ep =>
@@ -349,7 +341,7 @@ class BrokerServer(
       lifecycleManager.start(
         () => metadataListener.highestMetadataOffset,
         brokerLifecycleChannelManager,
-        metaProps.clusterId,
+        jointServer.metaProps.clusterId,
         networkListeners,
         featuresRemapped
       )
@@ -438,8 +430,8 @@ class BrokerServer(
         clientQuotaMetadataManager,
         dynamicConfigHandlers.toMap,
         authorizer,
-        fatalFaultHandler,
-        metadataPublishingFaultHandler)
+        jointServer.initialBrokerMetadataLoadFaultHandler,
+        jointServer.metadataPublishingFaultHandler)
 
       // Tell the metadata listener to start publishing its output, and wait for the first
       // publish operation to complete. This first operation will initialize logManager,
@@ -571,12 +563,10 @@ class BrokerServer(
       if (brokerTopicStats != null)
         CoreUtils.swallow(brokerTopicStats.close(), this)
 
-      // Clear all reconfigurable instances stored in DynamicBrokerConfig
-      config.dynamicConfig.clear()
-
       isShuttingDown.set(false)
 
       CoreUtils.swallow(lifecycleManager.close(), this)
+      jointServer.stopForBroker()
 
       CoreUtils.swallow(AppInfoParser.unregisterAppInfo(MetricsPrefix, config.nodeId.toString, metrics), this)
       info("shut down completed")
