@@ -1196,6 +1196,7 @@ class DefaultStateUpdaterTest {
 
     @Test
     public void shouldDrainRemovedTasks() throws Exception {
+        assertFalse(stateUpdater.hasRemovedTasks());
         assertTrue(stateUpdater.drainRemovedTasks().isEmpty());
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
         when(changelogReader.allChangelogsCompleted()).thenReturn(false);
@@ -1333,6 +1334,7 @@ class DefaultStateUpdaterTest {
 
     @Test
     public void shouldDrainFailedTasksAndExceptions() throws Exception {
+        assertFalse(stateUpdater.hasExceptionsAndFailedTasks());
         assertTrue(stateUpdater.drainExceptionsAndFailedTasks().isEmpty());
 
         final StreamTask task1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
@@ -1714,13 +1716,18 @@ class DefaultStateUpdaterTest {
         final Set<Task> removedTasks = new HashSet<>();
         waitForCondition(
             () -> {
-                removedTasks.addAll(stateUpdater.drainRemovedTasks());
+                if (stateUpdater.hasRemovedTasks()) {
+                    final Set<Task> drainedTasks = stateUpdater.drainRemovedTasks();
+                    assertFalse(drainedTasks.isEmpty());
+                    removedTasks.addAll(drainedTasks);
+                }
                 return removedTasks.containsAll(mkSet(tasks))
                     && removedTasks.size() == expectedRemovedTasks.size();
             },
             VERIFICATION_TIMEOUT,
             "Did not get all restored active task within the given timeout!"
         );
+        assertFalse(stateUpdater.hasRemovedTasks());
         assertTrue(stateUpdater.drainRemovedTasks().isEmpty());
     }
 
@@ -1767,13 +1774,18 @@ class DefaultStateUpdaterTest {
         final List<ExceptionAndTasks> failedTasks = new ArrayList<>();
         waitForCondition(
             () -> {
-                failedTasks.addAll(stateUpdater.drainExceptionsAndFailedTasks());
+                if (stateUpdater.hasExceptionsAndFailedTasks()) {
+                    final List<ExceptionAndTasks> exceptionAndTasks = stateUpdater.drainExceptionsAndFailedTasks();
+                    assertFalse(exceptionAndTasks.isEmpty());
+                    failedTasks.addAll(exceptionAndTasks);
+                }
                 return failedTasks.containsAll(expectedExceptionAndTasks)
                     && failedTasks.size() == expectedExceptionAndTasks.size();
             },
             VERIFICATION_TIMEOUT,
             "Did not get all exceptions and failed tasks within the given timeout!"
         );
+        assertFalse(stateUpdater.hasExceptionsAndFailedTasks());
         assertTrue(stateUpdater.drainExceptionsAndFailedTasks().isEmpty());
     }
 }
