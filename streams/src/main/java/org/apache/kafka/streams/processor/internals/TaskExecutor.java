@@ -193,12 +193,12 @@ public class TaskExecutor {
                     }
                 }
             } else {
-                if (!offsetsPerTask.isEmpty() || taskManager.threadProducer().transactionInFlight()) {
+                final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
+                    .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-                    final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
-                        .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                if (executionMetadata.processingMode() == EXACTLY_ONCE_V2) {
+                    if (!offsetsPerTask.isEmpty() || taskManager.threadProducer().transactionInFlight()) {
 
-                    if (executionMetadata.processingMode() == EXACTLY_ONCE_V2) {
                         try {
                             taskManager.threadProducer().commitTransaction(allOffsets, taskManager.mainConsumer().groupMetadata());
                             updateTaskCommitMetadata(allOffsets);
@@ -216,7 +216,10 @@ public class TaskExecutor {
                                 .keySet()
                                 .forEach(task -> corruptedTasks.add(task.id()));
                         }
-                    } else {
+                    }
+                    // processingMode == ALOS
+                } else {
+                    if (!offsetsPerTask.isEmpty()) {
                         try {
                             taskManager.mainConsumer().commitSync(allOffsets);
                             updateTaskCommitMetadata(allOffsets);
@@ -246,11 +249,13 @@ public class TaskExecutor {
     }
 
     private void updateTaskCommitMetadata(final Map<TopicPartition, OffsetAndMetadata> allOffsets) {
-        for (final Task task: tasks.activeTasks()) {
-            if (task instanceof StreamTask) {
-                for (final TopicPartition topicPartition : task.inputPartitions()) {
-                    if (allOffsets.containsKey(topicPartition)) {
-                        ((StreamTask) task).updateCommittedOffsets(topicPartition, allOffsets.get(topicPartition).offset());
+        if (!(allOffsets == null || allOffsets.isEmpty())) {
+            for (final Task task : tasks.activeTasks()) {
+                if (task instanceof StreamTask) {
+                    for (final TopicPartition topicPartition : task.inputPartitions()) {
+                        if (allOffsets.containsKey(topicPartition)) {
+                            ((StreamTask) task).updateCommittedOffsets(topicPartition, allOffsets.get(topicPartition).offset());
+                        }
                     }
                 }
             }
