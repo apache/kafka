@@ -339,11 +339,19 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Deprecated
     public void setBaseBackgroundCompactions(final int baseBackgroundCompactions) {
+        String message = "This method has been removed from the underlying RocksDB. " +
+                "It was not affecting compaction even in earlier versions. " +
+                "It is currently a no-op method. " +
+                "RocksDB decides the number of background compactions based on the maxBackgroundJobs(...) method";
+        log.warn(message);
         // no-op
     }
 
     @Deprecated
     public int baseBackgroundCompactions() {
+        String message = "This method has been removed from the underlying RocksDB. " +
+                "It is currently a no-op method which returns a default value of -1.";
+        log.warn(message);
         return -1;
     }
 
@@ -611,12 +619,18 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Deprecated
     public Options setNewTableReaderForCompactionInputs(final boolean newTableReaderForCompactionInputs) {
-        // no-op
+        String message = "This method has been removed from the underlying RocksDB. " +
+                "It was not affecting compaction even in earlier versions. " +
+                "It is currently a no-op method.";
+        log.warn(message);
         return this;
     }
 
     @Deprecated
     public boolean newTableReaderForCompactionInputs() {
+        String message = "This method has been removed from the underlying RocksDB. " +
+                "It is now a method which always return false.";
+        log.warn(message);
         return false;
     }
 
@@ -1487,12 +1501,20 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Deprecated
     public Options setPreserveDeletes(final boolean preserveDeletes) {
+        String message = "This method has been removed from the underlying RocksDB. " +
+                "It was marked for deprecation in earlier versions. " +
+                "It is currently a no-op method.";
+        log.warn(message);
         // no-op
         return this;
     }
 
     @Deprecated
     public boolean preserveDeletes() {
+        String message = "This method has been removed from the underlying RocksDB. " +
+                "It was marked for deprecation in earlier versions. " +
+                "It is currently a no-op method with a default value of false.";
+        log.warn(message);
         return false;
     }
 
@@ -1682,6 +1704,28 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     public Options setCompactionFilterFactory(final AbstractCompactionFilterFactory<? extends AbstractCompactionFilter<?>> compactionFilterFactory) {
         columnFamilyOptions.setCompactionFilterFactory(compactionFilterFactory);
         return this;
+    }
+
+    @Override
+    public Options setBlobCompactionReadaheadSize(long blobCompactionReadaheadSize) {
+        columnFamilyOptions.setBlobCompactionReadaheadSize(blobCompactionReadaheadSize);
+        return this;
+    }
+
+    @Override
+    public long blobCompactionReadaheadSize() {
+        return columnFamilyOptions.blobCompactionReadaheadSize();
+    }
+
+    @Override
+    public Options setMemtableWholeKeyFiltering(boolean memtableWholeKeyFiltering) {
+        columnFamilyOptions.setMemtableWholeKeyFiltering(memtableWholeKeyFiltering);
+        return this;
+    }
+
+    @Override
+    public boolean memtableWholeKeyFiltering() {
+        return columnFamilyOptions.memtableWholeKeyFiltering();
     }
 
     //
