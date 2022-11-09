@@ -2971,11 +2971,9 @@ public class DistributedHerderTest {
         member.wakeup();
         EasyMock.expectLastCall();
 
-        PowerMock.mockStatic(RestClient.class);
-
         org.easymock.IExpectationSetters<RestClient.HttpResponse<Object>> expectRequest = EasyMock.expect(
                 restClient.httpRequest(
-                        EasyMock.eq("PUT"), EasyMock.isNull(), EasyMock.isNull(), EasyMock.isNull(), anyObject(), anyObject(), anyObject()
+                        anyObject(), EasyMock.eq("PUT"), EasyMock.isNull(), EasyMock.isNull(), EasyMock.isNull(), anyObject(), anyObject()
                 ));
         if (succeed) {
             expectRequest.andReturn(null);
@@ -3837,7 +3835,7 @@ public class DistributedHerderTest {
         return PowerMock.createPartialMock(DistributedHerder.class,
                 new String[]{"connectorType", "updateDeletedConnectorStatus", "updateDeletedTaskStatus", "validateConnectorConfig"},
                 new DistributedConfig(config), worker, WORKER_ID, KAFKA_CLUSTER_ID,
-                statusBackingStore, configBackingStore, member, MEMBER_URL, metrics, time, noneConnectorClientConfigOverridePolicy,
+                statusBackingStore, configBackingStore, member, MEMBER_URL, restClient, metrics, time, noneConnectorClientConfigOverridePolicy,
                 new AutoCloseable[0]);
     }
 
