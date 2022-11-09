@@ -26,6 +26,7 @@ import javax.security.auth.login.AppConfigurationEntry
 import scala.collection.Seq
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
+import kafka.utils.TestInfoUtils
 import kafka.utils.JaasTestUtils._
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
@@ -34,13 +35,18 @@ import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.security.plain.PlainAuthenticateCallback
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 object SaslPlainSslEndToEndAuthorizationTest {
 
   class TestPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
 
     override def build(context: AuthenticationContext): KafkaPrincipal = {
+      println("TestPrincipalBuilder SaslAuthenticationContext = " + context.listenerName())
+      context.listenerName() match {
+        case "CONTROLLER" => new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "admin")
+        case _ => {
       val saslContext = context.asInstanceOf[SaslAuthenticationContext]
 
       // Verify that peer principal can be obtained from the SSLSession provided in the context
@@ -55,6 +61,8 @@ object SaslPlainSslEndToEndAuthorizationTest {
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
         case _ =>
           KafkaPrincipal.ANONYMOUS
+      }
+      }
       }
     }
   }
@@ -90,8 +98,9 @@ object SaslPlainSslEndToEndAuthorizationTest {
         callback match {
           case nameCallback: NameCallback => nameCallback.setName(username)
           case passwordCallback: PasswordCallback =>
-            if (username == KafkaPlainUser || username == KafkaPlainAdmin)
+            if (username == KafkaPlainUser || username == KafkaPlainAdmin) {
               passwordCallback.setPassword(Credentials.allUsers(username).toCharArray)
+            }
           case _ => throw new UnsupportedCallbackException(callback)
         }
       }
@@ -111,16 +120,17 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
 
   this.serverConfig.setProperty(s"${listenerName.configPrefix}${KafkaConfig.SslClientAuthProp}", "required")
   this.serverConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)
+
   this.serverConfig.put(KafkaConfig.SaslClientCallbackHandlerClassProp, classOf[TestClientCallbackHandler].getName)
   val mechanismPrefix = listenerName.saslMechanismConfigPrefix("PLAIN")
   this.serverConfig.put(s"$mechanismPrefix${KafkaConfig.SaslServerCallbackHandlerClassProp}", classOf[TestServerCallbackHandler].getName)
+
+  // We need a login to principal conversion for the controller running in KRAFT mode.
+  this.controllerConfig.setProperty(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[TestPrincipalBuilder].getName)
+
   this.producerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   this.consumerConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
   this.adminClientConfig.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, classOf[TestClientCallbackHandler].getName)
-  private val plainLogin = s"org.apache.kafka.common.security.plain.PlainLoginModule username=$KafkaPlainUser required;"
-  this.producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
-  this.consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
-  this.adminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, plainLogin)
 
   override protected def kafkaClientSaslMechanism = "PLAIN"
   override protected def kafkaServerSaslMechanisms = List("PLAIN")
@@ -147,10 +157,11 @@ class SaslPlainSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
 
   /**
    * Checks that secure paths created by broker and acl paths created by AclCommand
-   * have expected ACLs.
+   * have expected ACLs. This only applies for zookeeper
    */
-  @Test
-  def testAcls(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testAcls(quorum: String): Unit = {
     TestUtils.verifySecureZkAcls(zkClient, 1)
   }
 }

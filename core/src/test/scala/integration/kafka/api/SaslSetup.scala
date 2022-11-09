@@ -105,6 +105,7 @@ trait SaslSetup {
       (kafkaServerSaslMechanisms.contains("GSSAPI") || kafkaClientSaslMechanism.contains("GSSAPI"))
     if (hasKerberos)
       maybeCreateEmptyKeytabFiles()
+    System.out.println("This is a test " + mode)
     mode match {
       case ZkSasl => JaasTestUtils.zkSections
       case KafkaSasl =>
@@ -117,6 +118,7 @@ trait SaslSetup {
 
   private def writeJaasConfigurationToFile(jaasSections: Seq[JaasSection]): Unit = {
     val file = JaasTestUtils.writeJaasContextsToFile(jaasSections)
+    System.out.println("writeJaasConfigurationToFile " + file.getAbsolutePath)
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, file.getAbsolutePath)
     // This will cause a reload of the Configuration singleton when `getConfiguration` is called
     Configuration.setConfiguration(null)
@@ -154,6 +156,13 @@ trait SaslSetup {
       JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile)
   }
 
+  def jaasAdminLoginModule(clientSaslMechanism: String, serviceName: Option[String] = None): String = {
+    if (serviceName.isDefined)
+      JaasTestUtils.adminLoginModule(clientSaslMechanism, clientKeytabFile, serviceName.get)
+    else
+      JaasTestUtils.adminLoginModule(clientSaslMechanism, clientKeytabFile)
+  }
+
   def jaasScramClientLoginModule(clientSaslScramMechanism: String, scramUser: String, scramPassword: String): String = {
     JaasTestUtils.scramClientLoginModule(clientSaslScramMechanism, scramUser, scramPassword)
   }
@@ -171,6 +180,7 @@ trait SaslSetup {
       TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
     securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
     config.put(SaslConfigs.SASL_JAAS_CONFIG, jaasScramClientLoginModule(scramMechanism, user, password))
+    System.out.println("Created admin client in " + workDir)
     Admin.create(config)
   }
 
