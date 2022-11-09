@@ -58,15 +58,18 @@ import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.ParameterizedTest;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
+import org.mockito.quality.Strictness;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -106,8 +109,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.doReturn;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+
+@RunWith(Parameterized.class)
 public class ErrorHandlingTaskTest {
+    @Rule
+    public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
     private static final String TOPIC = "test";
     private static final int PARTITION1 = 12;
@@ -175,13 +181,14 @@ public class ErrorHandlingTaskTest {
 
     private ErrorHandlingMetrics errorHandlingMetrics;
     private boolean enableTopicCreation;
-    
-    @ParameterizedTest.Parameters
+    @Parameterized.Parameters
     public static Collection<Boolean> parameters() {
         return Arrays.asList(false, true);
     }
 
-
+    public ErrorHandlingTaskTest(boolean enableTopicCreation) {
+        this.enableTopicCreation = enableTopicCreation;
+    }
     @Before
     public void setup() {
         time = new MockTime(0, 0, 0);
@@ -191,11 +198,9 @@ public class ErrorHandlingTaskTest {
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(enableTopicCreation));
-        pluginLoader = mock(PluginClassLoader.class);
         workerConfig = new StandaloneConfig(workerProps);
         sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorProps(TOPIC), true);
         errorHandlingMetrics = new ErrorHandlingMetrics(taskId, metrics);
-
     }
 
     private Map<String, String> sourceConnectorProps(String topic) {
@@ -229,13 +234,11 @@ public class ErrorHandlingTaskTest {
         retryWithToleranceOperator.reporters(singletonList(reporter));
 
         createSinkTask(initialState, retryWithToleranceOperator);
-
         workerSinkTask.initialize(TASK_CONFIG);
         workerSinkTask.initializeAndStart();
         workerSinkTask.close();
-
         // verify if invocation happened exactly 1 time
-        verifyInitializeTask();
+        verifyInitializeSink();
         verify(reporter).close();
         verify(sinkTask).stop();
         verify(consumer).close();
@@ -253,7 +256,7 @@ public class ErrorHandlingTaskTest {
 
         workerSourceTask.initialize(TASK_CONFIG);
         workerSourceTask.close();
-        verifyClose();
+        verifyCloseSource();
         verify(reporter).close();
     }
 
@@ -276,7 +279,7 @@ public class ErrorHandlingTaskTest {
 
         verify(reporterA).close();
         verify(reporterB).close();
-        verifyClose();
+        verifyCloseSource();
     }
 
     @Test
@@ -310,7 +313,7 @@ public class ErrorHandlingTaskTest {
 
         workerSinkTask.iteration();
 
-        verifyInitializeTask();
+        verifyInitializeSink();
         verify(sinkTask, times(2)).put(any());
 
         // two records were consumed from Kafka
@@ -323,7 +326,6 @@ public class ErrorHandlingTaskTest {
         assertErrorHandlingMetricValue("total-record-failures", 3.0);
         // one record completely failed (converter issues), and thus was skipped
         assertErrorHandlingMetricValue("total-records-skipped", 1.0);
-
     }
 
     private RetryWithToleranceOperator operator() {
@@ -363,27 +365,17 @@ public class ErrorHandlingTaskTest {
 
         expectTopicCreation(TOPIC);
 
-        when(producer.send(any(), any()))
-                .thenReturn(null)
-                .thenReturn(null);
-
         workerSourceTask.initialize(TASK_CONFIG);
         workerSourceTask.initializeAndStart();
         workerSourceTask.execute();
-
         verify(workerSourceTask, times(3)).isStopping();
         verify(workerSourceTask).commitOffsets();
-
         verify(offsetStore).start();
-
         verify(sourceTask).initialize(any());
         verify(sourceTask).start(any());
-
         verify(sourceTask, times(2)).poll();
-
         verify(producer, times(2)).send(any(), any());
         assertEquals(null, producer.send(any()));
-
         // two records were consumed from Kafka
         assertSourceMetricValue("source-record-poll-total", 2.0);
         // only one was written to the task
@@ -394,7 +386,6 @@ public class ErrorHandlingTaskTest {
         assertErrorHandlingMetricValue("total-record-failures", 4.0);
         // one record completely failed (converter issues), and thus was skipped
         assertErrorHandlingMetricValue("total-records-skipped", 0.0);
-
     }
 
     private ConnectorConfig connConfig(Map<String, String> connProps) {
@@ -434,16 +425,9 @@ public class ErrorHandlingTaskTest {
                 .thenReturn(singletonList(record1))
                 .thenReturn(singletonList(record2));
         expectTopicCreation(TOPIC);
-
-        when(producer.send(any(), any()))
-                .thenReturn(null)
-                .thenReturn(null);
-
         workerSourceTask.initialize(TASK_CONFIG);
         workerSourceTask.initializeAndStart();
         workerSourceTask.execute();
-
-
         // two records were consumed from Kafka
         assertSourceMetricValue("source-record-poll-total", 2.0);
         // only one was written to the task
@@ -457,16 +441,11 @@ public class ErrorHandlingTaskTest {
 
         verify(workerSourceTask, times(3)).isStopping();
         verify(workerSourceTask).commitOffsets();
-
         verify(offsetStore).start();
-
         verify(sourceTask).initialize(any());
         verify(sourceTask).start(any());
-
         verify(sourceTask, times(2)).poll();
-
         verify(producer, times(2)).send(any(), any());
-
     }
 
     private void assertSinkMetricValue(String name, double expected) {
@@ -475,7 +454,7 @@ public class ErrorHandlingTaskTest {
         assertEquals(expected, measured, 0.001d);
     }
 
-    private void verifyInitializeTask() {
+    private void verifyInitializeSink() {
         verify(sinkTask).start(TASK_PROPS);
         verify(sinkTask).initialize(any(WorkerSinkTaskContext.class));
         verify(consumer).subscribe(eq(singletonList(TOPIC)),
@@ -494,8 +473,7 @@ public class ErrorHandlingTaskTest {
         assertEquals(expected, measured, 0.001d);
     }
 
-    private void verifyClose() throws IOException {
-
+    private void verifyCloseSource() throws IOException {
         verify(producer).close(any(Duration.class));
         verify(admin).close(any(Duration.class));
         verify(offsetReader).close();
@@ -505,17 +483,12 @@ public class ErrorHandlingTaskTest {
     }
 
     private void expectTopicCreation(String topic) {
-        if (workerConfig.topicCreationEnable()) {
+        if (enableTopicCreation) {
             when(admin.describeTopics(topic)).thenReturn(Collections.emptyMap());
-
-            if (enableTopicCreation) {
-                Set<String> created = Collections.singleton(topic);
-                Set<String> existing = Collections.emptySet();
-                TopicAdmin.TopicCreationResponse response = new TopicAdmin.TopicCreationResponse(created, existing);
-                when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(response);
-            } else {
-                when(admin.createTopic(any(NewTopic.class))).thenReturn(true);
-            }
+            Set<String> created = Collections.singleton(topic);
+            Set<String> existing = Collections.emptySet();
+            TopicAdmin.TopicCreationResponse response = new TopicAdmin.TopicCreationResponse(created, existing);
+            when(admin.createOrFindTopics(any(NewTopic.class))).thenReturn(response);
         }
     }
 
