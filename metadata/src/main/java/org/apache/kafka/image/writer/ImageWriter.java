@@ -48,18 +48,13 @@ public interface ImageWriter extends AutoCloseable {
     void write(ApiMessageAndVersion record);
 
     /**
-     * Close the image writer, dicarding all progress. Calling this function more than once has
-     * no effect.
+     * Successfully complete the image. Calling this function more than once has no effect.
      */
-    default void close() {
-        close(false);
-    }
+    void freeze();
 
    /**
     * Close the image writer. Calling this function more than once has no effect.
-    *
-    * @param complete               True if we should complete the image successfully.
-    *                               False if we should discard all progress.
+    * If this is called before freeze() has been called, all progress may be lost.
     */
-    void close(boolean complete);
+    void close();
 }

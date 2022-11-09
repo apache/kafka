@@ -52,10 +52,19 @@ public class RaftSnapshotWriter implements ImageWriter {
     }
 
     @Override
-    public void close(boolean complete) {
+    public void freeze() {
+        cleanup(true);
+    }
+
+    @Override
+    public void close() {
+        cleanup(false);
+    }
+
+    private void cleanup(boolean freeze) {
         if (records == null) return;
         try {
-            if (complete) {
+            if (freeze) {
                 if (!records.isEmpty()) {
                     snapshotWriter.append(records);
                 }

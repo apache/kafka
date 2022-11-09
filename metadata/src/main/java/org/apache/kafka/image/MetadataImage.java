@@ -128,7 +128,7 @@ public final class MetadataImage {
         clientQuotas.write(writer, options);
         producerIds.write(writer, options);
         acls.write(writer, options);
-        writer.close(true);
+        writer.freeze();
     }
 
     @Override
