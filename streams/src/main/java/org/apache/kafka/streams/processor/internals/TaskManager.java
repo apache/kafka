@@ -752,7 +752,6 @@ public class TaskManager {
             newTask = task.isActive() ?
                 convertActiveToStandby((StreamTask) task, inputPartitions) :
                 convertStandbyToActive((StandbyTask) task, inputPartitions);
-            newTask.initializeIfNeeded();
             stateUpdater.add(newTask);
         } catch (final RuntimeException e) {
             final TaskId taskId = task.id();

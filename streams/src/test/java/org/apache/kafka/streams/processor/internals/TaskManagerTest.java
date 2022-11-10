@@ -781,8 +781,6 @@ public class TaskManagerTest {
         verify(activeTaskCreator, standbyTaskCreator);
         Mockito.verify(task00).suspend();
         Mockito.verify(task01).suspend();
-        Mockito.verify(task00Converted).initializeIfNeeded();
-        Mockito.verify(task01Converted).initializeIfNeeded();
         Mockito.verify(stateUpdater).add(task00Converted);
         Mockito.verify(stateUpdater).add(task01Converted);
     }
@@ -908,8 +906,6 @@ public class TaskManagerTest {
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter -> { });
 
         verify(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer);
-        Mockito.verify(convertedTask0).initializeIfNeeded();
-        Mockito.verify(convertedTask1).initializeIfNeeded();
         Mockito.verify(stateUpdater).add(convertedTask0);
         Mockito.verify(stateUpdater).add(convertedTask1);
         Mockito.verify(taskToClose).closeClean();
@@ -1085,7 +1081,6 @@ public class TaskManagerTest {
 
         verify(activeTaskCreator, standbyTaskCreator);
         Mockito.verify(statefulTask).suspend();
-        Mockito.verify(standbyTask).initializeIfNeeded();
         Mockito.verify(stateUpdater).add(standbyTask);
     }
 
@@ -1107,30 +1102,6 @@ public class TaskManagerTest {
         verify(standbyTaskCreator);
         Mockito.verify(stateUpdater, never()).add(any());
         Mockito.verify(statefulTask).closeDirty();
-    }
-
-    @Test
-    public void shouldHandleExceptionThrownDuringTaskInitInRecycleRestoredTask() {
-        final StreamTask statefulTask = statefulTask(taskId00, taskId00ChangelogPartitions)
-            .inState(State.CLOSED)
-            .withInputPartitions(taskId00Partitions).build();
-        final StandbyTask standbyTask = standbyTask(taskId00, taskId00ChangelogPartitions)
-            .inState(State.CREATED)
-            .withInputPartitions(taskId00Partitions).build();
-        final TaskManager taskManager = setUpRecycleRestoredTask(statefulTask);
-        expect(standbyTaskCreator.createStandbyTaskFromActive(statefulTask, statefulTask.inputPartitions()))
-            .andStubReturn(standbyTask);
-        doThrow(StreamsException.class).when(standbyTask).initializeIfNeeded();
-        replay(standbyTaskCreator);
-
-        assertThrows(
-            StreamsException.class,
-            () -> taskManager.checkStateUpdater(time.milliseconds(), noOpResetter)
-        );
-
-        verify(standbyTaskCreator);
-        Mockito.verify(stateUpdater, never()).add(any());
-        Mockito.verify(standbyTask).closeDirty();
     }
 
     private TaskManager setUpRecycleRestoredTask(final StreamTask statefulTask) {
