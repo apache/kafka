@@ -197,14 +197,14 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   override def setUp(testInfo: TestInfo): Unit = {
     println("testinfo = " + testInfo)
     if (TestInfoUtils.isKRaft(testInfo)) {
-      this.serverConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, "User:admin")
-      this.controllerConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, "User:admin")
+      this.serverConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString)
+      this.controllerConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString)
       this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
       this.controllerConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
     } else {
-       // The next two configuration parameters enable ZooKeeper secure ACLs
-       // and sets the Kafka authorizer, both necessary to enable security.
-      this.serverConfig.setProperty(AclAuthorizer.SuperUsersProp, "User:admin")
+      // The next two configuration parameters enable ZooKeeper secure ACLs
+      // and sets the Kafka authorizer, both necessary to enable security.
+      this.serverConfig.setProperty(AclAuthorizer.SuperUsersProp, kafkaPrincipal.toString)
       this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
       this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, authorizerClass.getName)
     }
@@ -215,7 +215,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     // addAndVerifyAcls(ClusterActionAndClusterAlterAcls, clusterResource)
 
     println(" 1 ")
-    val adminClient = createAdminClient()
+    val adminClient = createSuperUserAdminClient()
 
     println(" 2 ")
     adminClient.createAcls(List(AclClusterAction, AclAlter).asJava).values
@@ -322,7 +322,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   private def setWildcardResourceAcls(): Unit = {
     // AclCommand.main(produceConsumeWildcardAclArgs)
-    val adminClient = createAdminClient()
+    val adminClient = createSuperUserAdminClient()
     adminClient.createAcls(List(AclWildcardTopicWrite, AclWildcardTopicCreate, AclWildcardTopicDescribe, AclWildcardTopicRead).asJava).values
     adminClient.createAcls(List(AclWildcardGroupRead).asJava).values
 
@@ -336,7 +336,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   private def setPrefixedResourceAcls(): Unit = {
     // AclCommand.main(produceConsumePrefixedAclsArgs)
-    val adminClient = createAdminClient()
+    val adminClient = createSuperUserAdminClient()
     adminClient.createAcls(List(AclPrefixedTopicWrite, AclPrefixedTopicCreate, AclPrefixedTopicDescribe, AclPrefixedTopicRead).asJava).values
     adminClient.createAcls(List(AclPrefixedGroupRead).asJava).values
 
@@ -351,7 +351,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val tptopicresource = new ResourcePattern(TOPIC, tp.topic, LITERAL)
 
     println("We are here 1")
-    val adminClient = createAdminClient()
+    val adminClient = createSuperUserAdminClient()
 
     println("We are here 2")
 
@@ -382,7 +382,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   private def setConsumerGroupAcls(): Unit = {
     //AclCommand.main(groupAclArgs)
-    val adminClient = createAdminClient()
+    val adminClient = createSuperUserAdminClient()
     adminClient.createAcls(List(AclGroupRead).asJava).values
     brokers.foreach { s =>
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
@@ -466,7 +466,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   @ValueSource(booleans = Array(true, false))
   def testNoProduceWithDescribeAcl(isIdempotenceEnabled: Boolean): Unit = {
     // AclCommand.main(describeAclArgs)
-    val adminClient = createAdminClient()
+    val adminClient = createSuperUserAdminClient()
     adminClient.createAcls(List(AclTopicDescribe()).asJava).values
 
     brokers.foreach { s =>
@@ -523,7 +523,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   private def noConsumeWithoutDescribeAclSetup(): Unit = {
-    val adminClient = createAdminClient()
+    val adminClient = createSuperUserAdminClient()
     // AclCommand.main(produceAclArgs(tp.topic))
     adminClient.createAcls(List(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe()).asJava).values
 
@@ -573,7 +573,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   private def noConsumeWithDescribeAclSetup(): Unit = {
-    val adminClient = createAdminClient()
+    val adminClient = createSuperUserAdminClient()
     // AclCommand.main(produceAclArgs(tp.topic))
     adminClient.createAcls(List(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe()).asJava).values
     // AclCommand.main(groupAclArgs)
@@ -593,7 +593,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testNoGroupAcl(quorum: String): Unit = {
-    val adminClient = createAdminClient()
+    val adminClient = createSuperUserAdminClient()
     // AclCommand.main(produceAclArgs(tp.topic))
     adminClient.createAcls(List(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe()).asJava).values
     brokers.foreach { s =>

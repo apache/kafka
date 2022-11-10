@@ -45,6 +45,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   val producerConfig = new Properties
   val consumerConfig = new Properties
   val adminClientConfig = new Properties
+  val superUserConfig = new Properties
   val serverConfig = new Properties
   val controllerConfig = new Properties
 
@@ -107,12 +108,17 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     doSetup(testInfo, createOffsetsTopic = true)
   }
 
+  protected def doSuperUserSetup(testInfo: TestInfo): Unit = {
+    superUserConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
+  }
+
   def doSetup(testInfo: TestInfo,
               createOffsetsTopic: Boolean): Unit = {
     // Generate client security properties before starting the brokers in case certs are needed
     producerConfig ++= clientSecurityProps("producer")
     consumerConfig ++= clientSecurityProps("consumer")
     adminClientConfig ++= clientSecurityProps("adminClient")
+    superUserConfig ++= clientSecurityProps("superUserClient")
 
     super.setUp(testInfo)
 
@@ -129,8 +135,11 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
     adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
 
+    doSuperUserSetup(testInfo)
+
     if (createOffsetsTopic) {
-      super.createOffsetsTopic(listenerName, adminClientConfig)
+    //  super.createOffsetsTopic(listenerName, adminClientConfig)
+      super.createOffsetsTopic(listenerName, superUserConfig)
     }
   }
 
@@ -169,6 +178,18 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   ): Admin = {
     val props = new Properties
     props ++= adminClientConfig
+    props ++= configOverrides
+    val admin = TestUtils.createAdminClient(brokers, listenerName, props)
+    adminClients += admin
+    admin
+  }
+
+  def createSuperUserAdminClient(
+    listenerName: ListenerName = listenerName,
+    configOverrides: Properties = new Properties
+  ): Admin = {
+    val props = new Properties
+    props ++= superUserConfig
     props ++= configOverrides
     val admin = TestUtils.createAdminClient(brokers, listenerName, props)
     adminClients += admin

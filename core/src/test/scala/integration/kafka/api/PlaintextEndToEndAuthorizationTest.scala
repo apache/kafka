@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.clients.admin.AdminClientConfig
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.apache.kafka.common.errors.TopicAuthorizationException
@@ -34,6 +35,7 @@ object PlaintextEndToEndAuthorizationTest {
   class TestClientPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       clientListenerName = Some(context.listenerName)
+      println("In TestClientPrincipalBuilder")
       context match {
         case ctx: PlaintextAuthenticationContext if ctx.clientAddress != null =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
@@ -46,6 +48,7 @@ object PlaintextEndToEndAuthorizationTest {
   class TestServerPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       serverListenerName = Some(context.listenerName)
+      println("In TestServerPrincipalBuilder")
       context match {
         case ctx: PlaintextAuthenticationContext =>
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "server")
@@ -67,6 +70,8 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     classOf[TestClientPrincipalBuilder].getName)
   this.serverConfig.setProperty("listener.name.server." + BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
     classOf[TestServerPrincipalBuilder].getName)
+  this.controllerConfig.setProperty("listener.name.controller." + BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
+    classOf[TestServerPrincipalBuilder].getName)
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
   override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "server")
 
@@ -74,6 +79,10 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(List.empty, None, ZkSasl))
     super.setUp(testInfo)
+  }
+
+  override def doSuperUserSetup(testInfo: TestInfo): Unit = {
+    superUserConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(interBrokerListenerName))
   }
 
   @Test

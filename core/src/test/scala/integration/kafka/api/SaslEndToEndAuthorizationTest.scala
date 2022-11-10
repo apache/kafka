@@ -48,6 +48,7 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     // This needs a different value
     val adminLoginContext = jaasAdminLoginModule(kafkaClientSaslMechanism)
     adminClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, adminLoginContext)
+    superUserConfig.put(SaslConfigs.SASL_JAAS_CONFIG, adminLoginContext)
     super.setUp(testInfo)
   }
 
