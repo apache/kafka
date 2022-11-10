@@ -77,6 +77,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -84,13 +86,12 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForStandbyCompletion;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -441,8 +442,12 @@ public class RestoreIntegrationTest {
         purgeLocalStreamsState(props2);
         final KafkaStreams client2 = new KafkaStreams(builder.build(), props2);
 
+        final Set<KafkaStreams.State> transitionedStates1 = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        final Set<KafkaStreams.State> transitionedStates2 = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final TrackingStateRestoreListener restoreListener = new TrackingStateRestoreListener();
         client1.setGlobalStateRestoreListener(restoreListener);
+        client1.setStateListener((newState, oldState) -> transitionedStates1.add(newState));
+        client2.setStateListener((newState, oldState) -> transitionedStates2.add(newState));
 
         startApplicationAndWaitUntilRunning(asList(client1, client2), Duration.ofSeconds(60));
 
@@ -456,10 +461,12 @@ public class RestoreIntegrationTest {
         final int initialStoreCloseCount = CloseCountingInMemoryStore.numStoresClosed();
         final long initialNunRestoredCount = restoreListener.totalNumRestored();
 
+        transitionedStates1.clear();
+        transitionedStates2.clear();
         client2.close();
-        waitForApplicationState(singletonList(client2), State.NOT_RUNNING, Duration.ofSeconds(60));
-        waitForApplicationState(singletonList(client1), State.REBALANCING, Duration.ofSeconds(60));
-        waitForApplicationState(singletonList(client1), State.RUNNING, Duration.ofSeconds(60));
+        waitForTransitionTo(transitionedStates2, State.NOT_RUNNING, Duration.ofSeconds(60));
+        waitForTransitionTo(transitionedStates1, State.REBALANCING, Duration.ofSeconds(60));
+        waitForTransitionTo(transitionedStates1, State.RUNNING, Duration.ofSeconds(60));
 
         waitForCompletion(client1, 1, 30 * 1000L);
         waitForStandbyCompletion(client1, 1, 30 * 1000L);
@@ -471,7 +478,7 @@ public class RestoreIntegrationTest {
         assertThat(CloseCountingInMemoryStore.numStoresClosed(), equalTo(initialStoreCloseCount + 2));
 
         client1.close();
-        waitForApplicationState(singletonList(client2), State.NOT_RUNNING, Duration.ofSeconds(60));
+        waitForTransitionTo(transitionedStates1, State.NOT_RUNNING, Duration.ofSeconds(60));
 
         assertThat(CloseCountingInMemoryStore.numStoresClosed(), CoreMatchers.equalTo(initialStoreCloseCount + 4));
     }
@@ -575,5 +582,13 @@ public class RestoreIntegrationTest {
 
         consumer.commitSync();
         consumer.close();
+    }
+
+    private void waitForTransitionTo(final Set<KafkaStreams.State> observed, final KafkaStreams.State state, final Duration timeout) throws Exception {
+        waitForCondition(
+            () -> observed.contains(state),
+            timeout.toMillis(),
+            () -> "Client did not transition to " + state + " on time. Observed transitions: " + observed
+        );
     }
 }
