@@ -1127,8 +1127,14 @@ class ReplicaFetcherThreadTest {
     when(partition.localLogOrException).thenReturn(log)
     when(partition.appendRecordsToFollowerOrFutureReplica(any[MemoryRecords], any[Boolean])).thenReturn(appendInfo)
 
+    // In Scala 2.12, the partitionsWithNewHighWatermark buffer is cleared before the replicaManager mock is verified.
+    // Capture the argument at the time of invocation.
+    val completeDelayedFetchRequestsArgument = mutable.Buffer.empty[TopicPartition]
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     when(replicaManager.getPartitionOrException(any[TopicPartition])).thenReturn(partition)
+    when(replicaManager.completeDelayedFetchRequests(any[Seq[TopicPartition]])).thenAnswer(invocation =>
+      completeDelayedFetchRequestsArgument ++= invocation.getArguments()(0).asInstanceOf[Seq[TopicPartition]]
+    )
     val brokerTopicStats = new BrokerTopicStats
     when(replicaManager.brokerTopicStats).thenReturn(brokerTopicStats)
 
@@ -1157,7 +1163,8 @@ class ReplicaFetcherThreadTest {
 
     thread.doWork()
     if (highWatermarkUpdated) {
-      verify(replicaManager, times(1)).completeDelayedFetchRequests(Seq(tp0, tp1))
+      assertEquals(Seq(tp0, tp1), completeDelayedFetchRequestsArgument)
+      verify(replicaManager, times(1)).completeDelayedFetchRequests(any[Seq[TopicPartition]])
     } else {
       verify(replicaManager, times(0)).completeDelayedFetchRequests(any[Seq[TopicPartition]])
     }
