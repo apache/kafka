@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.config.ConfigException;
@@ -33,6 +34,7 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -42,7 +44,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
@@ -352,6 +356,31 @@ public class KafkaStatusBackingStoreTest {
         assertEquals(new HashSet<>(Collections.singletonList(taskStatus)), new HashSet<>(store.getAll(CONNECTOR)));
         store.read(consumerRecord(0, "status-task-conn-0", null));
         assertTrue(store.getAll(CONNECTOR).isEmpty());
+    }
+
+    @Test
+    public void testClientIds() {
+        String clientIdBase = "test-client-id-";
+        Supplier<TopicAdmin> topicAdminSupplier = () -> mock(TopicAdmin.class);
+
+        Map<String, Object> capturedProducerProps = new HashMap<>();
+        Map<String, Object> capturedConsumerProps = new HashMap<>();
+
+        store = new KafkaStatusBackingStore(new MockTime(), converter, topicAdminSupplier, clientIdBase) {
+            @Override
+            protected KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps, Map<String, Object> consumerProps, org.apache.kafka.connect.util.Callback<ConsumerRecord<String, byte[]>> consumedCallback, NewTopic topicDescription, Supplier<TopicAdmin> adminSupplier) {
+                capturedProducerProps.putAll(producerProps);
+                capturedConsumerProps.putAll(consumerProps);
+                return kafkaBasedLog;
+            }
+        };
+
+        when(workerConfig.getString(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG)).thenReturn("connect-statuses");
+        store.configure(workerConfig);
+
+        final String expectedClientId = clientIdBase + "statuses";
+        assertEquals(expectedClientId, capturedProducerProps.get(CLIENT_ID_CONFIG));
+        assertEquals(expectedClientId, capturedConsumerProps.get(CLIENT_ID_CONFIG));
     }
 
     private static ConsumerRecord<String, byte[]> consumerRecord(long offset, String key, byte[] value) {

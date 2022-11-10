@@ -212,11 +212,9 @@ public class FeatureControlManager {
             // Perform additional checks if we're updating metadata.version
             return updateMetadataVersion(newVersion, upgradeType.equals(FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE), records::add);
         } else {
-            records.add(new ApiMessageAndVersion(
-                new FeatureLevelRecord()
-                    .setName(featureName)
-                    .setFeatureLevel(newVersion),
-                FEATURE_LEVEL_RECORD.highestSupportedVersion()));
+            records.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                setName(featureName).
+                setFeatureLevel(newVersion), (short) 0));
             return ApiError.NONE;
         }
     }
@@ -342,7 +340,7 @@ public class FeatureControlManager {
             Entry<String, Short> entry = iterator.next();
             return Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord()
                 .setName(entry.getKey())
-                .setFeatureLevel(entry.getValue()), FEATURE_LEVEL_RECORD.highestSupportedVersion()));
+                .setFeatureLevel(entry.getValue()), (short) 0));
         }
     }
 

@@ -29,7 +29,6 @@ import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.AbstractStatus.State;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
@@ -252,7 +251,6 @@ abstract class WorkerTask implements Runnable {
         LoggingContext.clear();
 
         try (LoggingContext loggingContext = LoggingContext.forTask(id())) {
-            ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
             String savedName = Thread.currentThread().getName();
             try {
                 Thread.currentThread().setName(THREAD_NAME_PREFIX + id);
@@ -265,7 +263,6 @@ abstract class WorkerTask implements Runnable {
                     throw (Error) t;
             } finally {
                 Thread.currentThread().setName(savedName);
-                Plugins.compareAndSwapLoaders(savedLoader);
                 shutdownLatch.countDown();
             }
         }

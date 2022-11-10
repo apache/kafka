@@ -31,6 +31,7 @@ import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePo
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
@@ -454,11 +455,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             throw new BadRequestException("Connector config " + connectorProps + " contains no connector type");
 
         Connector connector = getConnector(connType);
-        org.apache.kafka.connect.health.ConnectorType connectorType;
-        ClassLoader savedLoader = plugins().compareAndSwapLoaders(connector);
-        ConfigDef enrichedConfigDef;
-        Map<String, ConfigValue> validatedConnectorConfig;
-        try {
+        ClassLoader connectorLoader = plugins().connectorLoader(connType);
+        try (LoaderSwap loaderSwap = plugins().withClassLoader(connectorLoader)) {
+            org.apache.kafka.connect.health.ConnectorType connectorType;
+            ConfigDef enrichedConfigDef;
+            Map<String, ConfigValue> validatedConnectorConfig;
             if (connector instanceof SourceConnector) {
                 connectorType = org.apache.kafka.connect.health.ConnectorType.SOURCE;
                 enrichedConfigDef = ConnectorConfig.enrich(plugins(), SourceConnectorConfig.configDef(), connectorProps, false);
@@ -546,8 +547,6 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                     connectorClientConfigOverridePolicy);
             }
             return mergeConfigInfos(connType, configInfos, producerConfigInfos, consumerConfigInfos, adminConfigInfos);
-        } finally {
-            Plugins.compareAndSwapLoaders(savedLoader);
         }
     }
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -86,7 +87,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
             Consumer<byte[], byte[]> consumer,
             TopicAdmin topicAdmin
     ) {
-        return new KafkaOffsetBackingStore(() -> topicAdmin) {
+        return new KafkaOffsetBackingStore(() -> topicAdmin, KafkaOffsetBackingStore::noClientId) {
             @Override
             public void configure(final WorkerConfig config) {
                 this.exactlyOnce = config.exactlyOnceSourceEnabled();
@@ -116,7 +117,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
             Consumer<byte[], byte[]> consumer,
             TopicAdmin topicAdmin
     ) {
-        return new KafkaOffsetBackingStore(() -> topicAdmin) {
+        return new KafkaOffsetBackingStore(() -> topicAdmin, KafkaOffsetBackingStore::noClientId) {
             @Override
             public void configure(final WorkerConfig config) {
                 this.exactlyOnce = config.exactlyOnceSourceEnabled();
@@ -133,9 +134,14 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         };
     }
 
+    private static String noClientId() {
+        throw new UnsupportedOperationException("This offset store should not instantiate any Kafka clients");
+    }
+
     protected KafkaBasedLog<byte[], byte[]> offsetLog;
     private final HashMap<ByteBuffer, ByteBuffer> data = new HashMap<>();
     private final Supplier<TopicAdmin> topicAdminSupplier;
+    private final Supplier<String> clientIdBase;
     private SharedTopicAdmin ownTopicAdmin;
     protected boolean exactlyOnce;
 
@@ -144,11 +150,12 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
      * store to instantiate and close its own {@link TopicAdmin} during {@link #configure(WorkerConfig)}
      * and {@link #stop()}, respectively.
      *
-     * @deprecated use {@link #KafkaOffsetBackingStore(Supplier)} instead
+     * @deprecated use {@link #KafkaOffsetBackingStore(Supplier, Supplier)} instead
      */
     @Deprecated
     public KafkaOffsetBackingStore() {
         this.topicAdminSupplier = null;
+        this.clientIdBase = () -> "connect-distributed-";
     }
 
     /**
@@ -158,9 +165,14 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
      * {@link TopicAdmin#close(Duration) closing} it when it is no longer needed.
      * @param topicAdmin a {@link Supplier} for the {@link TopicAdmin} to use for this backing store;
      *                   may not be null, and may not return null
+     * @param clientIdBase a {@link Supplier} that will be used to create a
+     * {@link CommonClientConfigs#CLIENT_ID_DOC client ID} for Kafka clients instantiated by this store;
+     *                     may not be null, and may not return null, but may throw {@link UnsupportedOperationException}
+     *                     if this offset store should not create its own Kafka clients
      */
-    public KafkaOffsetBackingStore(Supplier<TopicAdmin> topicAdmin) {
+    public KafkaOffsetBackingStore(Supplier<TopicAdmin> topicAdmin, Supplier<String> clientIdBase) {
         this.topicAdminSupplier = Objects.requireNonNull(topicAdmin);
+        this.clientIdBase = Objects.requireNonNull(clientIdBase);
     }
 
 
@@ -173,6 +185,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         this.exactlyOnce = config.exactlyOnceSourceEnabled();
 
         String clusterId = config.kafkaClusterId();
+        String clientId = Objects.requireNonNull(clientIdBase.get()) + "offsets";
 
         Map<String, Object> originals = config.originals();
         Map<String, Object> producerProps = new HashMap<>(originals);
@@ -185,11 +198,13 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         // These settings might change when https://cwiki.apache.org/confluence/display/KAFKA/KIP-318%3A+Make+Kafka+Connect+Source+idempotent
         // gets approved and scheduled for release.
         producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false");
+        producerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(producerProps, config, clusterId);
 
         Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+        consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
         if (config.exactlyOnceSourceEnabled()) {
             ConnectUtils.ensureProperty(
@@ -200,6 +215,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         }
 
         Map<String, Object> adminProps = new HashMap<>(originals);
+        adminProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
         Supplier<TopicAdmin> adminSupplier;
         if (topicAdminSupplier != null) {
@@ -276,8 +292,8 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
      * <p>
      * <b>Note:</b> if the now-deprecated {@link #KafkaOffsetBackingStore()} constructor was used to create
      * this store, the underlying admin client allocated for interacting with the offsets topic will be closed.
-     * On the other hand, if the recommended {@link #KafkaOffsetBackingStore(Supplier)} constructor was used to
-     * create this store, the admin client derived from the given {@link Supplier} will not be closed and it is the
+     * On the other hand, if the recommended {@link #KafkaOffsetBackingStore(Supplier, Supplier)} constructor was
+     * used to create this store, the admin client derived from the given {@link Supplier} will not be closed and it is the
      * caller's responsibility to manage its lifecycle accordingly.
      */
     @Override
