@@ -339,7 +339,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Deprecated
     public void setBaseBackgroundCompactions(final int baseBackgroundCompactions) {
-        String message = "This method has been removed from the underlying RocksDB. " +
+        final String message = "This method has been removed from the underlying RocksDB. " +
                 "It was not affecting compaction even in earlier versions. " +
                 "It is currently a no-op method. " +
                 "RocksDB decides the number of background compactions based on the maxBackgroundJobs(...) method";
@@ -349,7 +349,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Deprecated
     public int baseBackgroundCompactions() {
-        String message = "This method has been removed from the underlying RocksDB. " +
+        final String message = "This method has been removed from the underlying RocksDB. " +
                 "It is currently a no-op method which returns a default value of -1.";
         log.warn(message);
         return -1;
@@ -619,7 +619,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Deprecated
     public Options setNewTableReaderForCompactionInputs(final boolean newTableReaderForCompactionInputs) {
-        String message = "This method has been removed from the underlying RocksDB. " +
+        final String message = "This method has been removed from the underlying RocksDB. " +
                 "It was not affecting compaction even in earlier versions. " +
                 "It is currently a no-op method.";
         log.warn(message);
@@ -628,8 +628,8 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Deprecated
     public boolean newTableReaderForCompactionInputs() {
-        String message = "This method has been removed from the underlying RocksDB. " +
-                "It is now a method which always return false.";
+        final String message = "This method has been removed from the underlying RocksDB. " +
+                "It is now a method which always returns false.";
         log.warn(message);
         return false;
     }
@@ -1501,7 +1501,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Deprecated
     public Options setPreserveDeletes(final boolean preserveDeletes) {
-        String message = "This method has been removed from the underlying RocksDB. " +
+        final String message = "This method has been removed from the underlying RocksDB. " +
                 "It was marked for deprecation in earlier versions. " +
                 "The behaviour can be replicated by using user-defined timestamps. " +
                 "It is currently a no-op method.";
@@ -1512,7 +1512,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Deprecated
     public boolean preserveDeletes() {
-        String message = "This method has been removed from the underlying RocksDB. " +
+        final String message = "This method has been removed from the underlying RocksDB. " +
                 "It was marked for deprecation in earlier versions. " +
                 "It is currently a no-op method with a default value of false.";
         log.warn(message);
@@ -1708,7 +1708,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Override
-    public Options setBlobCompactionReadaheadSize(long blobCompactionReadaheadSize) {
+    public Options setBlobCompactionReadaheadSize(final long blobCompactionReadaheadSize) {
         columnFamilyOptions.setBlobCompactionReadaheadSize(blobCompactionReadaheadSize);
         return this;
     }
@@ -1719,7 +1719,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     }
 
     @Override
-    public Options setMemtableWholeKeyFiltering(boolean memtableWholeKeyFiltering) {
+    public Options setMemtableWholeKeyFiltering(final boolean memtableWholeKeyFiltering) {
         columnFamilyOptions.setMemtableWholeKeyFiltering(memtableWholeKeyFiltering);
         return this;
     }
