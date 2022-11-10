@@ -210,7 +210,7 @@ commons-cli-1.4
 commons-lang3-3.12.0
 jackson-annotations-2.13.4
 jackson-core-2.13.4
-jackson-databind-2.13.4
+jackson-databind-2.13.4.2
 jackson-dataformat-csv-2.13.4
 jackson-dataformat-yaml-2.13.4
 jackson-datatype-jdk8-2.13.4
