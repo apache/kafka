@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignorTest;
 import org.apache.kafka.common.TopicPartition;
 
-import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -29,8 +28,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
 
@@ -47,18 +44,20 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
     }
 
     @Override
-    public Subscription buildSubscription(List<String> topics, List<TopicPartition> partitions) {
-        return new Subscription(topics, null, partitions, DEFAULT_GENERATION);
+    public Subscription buildSubscriptionV0(List<String> topics, List<TopicPartition> partitions, int generationId) {
+        // cooperative sticky assignor only supports ConsumerProtocolSubscription V1 or above
+        return null;
     }
 
     @Override
-    public Subscription buildSubscriptionWithGeneration(boolean isV2Above, List<String> topics, List<TopicPartition> partitions, int generation) {
-        if (isV2Above) {
-            return new Subscription(topics, null, partitions, generation);
-        } else {
-            assignor.onAssignment(null, new ConsumerGroupMetadata("dummy-group-id", generation, "dummy-member-id", Optional.empty()));
-            return new Subscription(topics, assignor.subscriptionUserData(new HashSet<>(topics)), partitions);
-        }
+    public Subscription buildSubscriptionV1(List<String> topics, List<TopicPartition> partitions, int generationId) {
+        assignor.onAssignment(new ConsumerPartitionAssignor.Assignment(partitions), new ConsumerGroupMetadata(groupId, generationId, consumer1, Optional.empty()));
+        return new Subscription(topics, assignor.subscriptionUserData(new HashSet<>(topics)), partitions, DEFAULT_GENERATION);
+    }
+
+    @Override
+    public Subscription buildSubscriptionV2Above(List<String> topics, List<TopicPartition> partitions, int generationId) {
+        return new Subscription(topics, null, partitions, generationId);
     }
 
     @Test
@@ -85,36 +84,14 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
         assertFalse(((CooperativeStickyAssignor) assignor).memberData(subscription).generation.isPresent());
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testCooperativeStickyAssignorHonorSubscriptionUserdataIfNoGenerationIdInField(boolean isV2Above) {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 2);
-        int higherGenerationId = 2;
-        int lowerGenerationId = 1;
-
-        assignor.onAssignment(new ConsumerPartitionAssignor.Assignment(partitions(tp1)), new ConsumerGroupMetadata(groupId, higherGenerationId, consumer1, Optional.empty()));
-        ByteBuffer userDataWithHigherGenerationId = assignor.subscriptionUserData(new HashSet<>(topics(topic)));
-
-        // The owned partitions and generation id are provided in user data and different owned partition is provided in subscription without generation id
-        // If subscription provides no generation id, we'll honor the generation id in userData and owned partitions in subscription,
-        // and get rid of the owned partition for consumer2 due to lower generation id
-        subscriptions.put(consumer1, new Subscription(topics(topic), userDataWithHigherGenerationId, partitions(tp0)));
-        subscriptions.put(consumer2, buildSubscriptionWithGeneration(isV2Above, topics(topic), partitions(tp0), lowerGenerationId));
-
-        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(partitions(tp0), assignment.get(consumer1));
-        assertEquals(partitions(tp1), assignment.get(consumer2));
-    }
-
     @Test
     public void testAllConsumersHaveOwnedPartitionInvalidatedWhenClaimedByMultipleConsumersInSameGenerationWithEqualPartitionsPerConsumer() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 3);
 
-        subscriptions.put(consumer1, buildSubscription(topics(topic), partitions(tp(topic, 0), tp(topic, 1))));
-        subscriptions.put(consumer2, buildSubscription(topics(topic), partitions(tp(topic, 0), tp(topic, 2))));
-        subscriptions.put(consumer3, buildSubscription(topics(topic), emptyList()));
+        subscriptions.put(consumer1, buildSubscriptionV2Above(topics(topic), partitions(tp(topic, 0), tp(topic, 1)), generationId));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(topics(topic), partitions(tp(topic, 0), tp(topic, 2)), generationId));
+        subscriptions.put(consumer3, buildSubscriptionV2Above(topics(topic), emptyList(), generationId));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic, 1)), assignment.get(consumer1));
@@ -131,9 +108,9 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         partitionsPerTopic.put(topic, 4);
 
-        subscriptions.put(consumer1, buildSubscription(topics(topic), partitions(tp(topic, 0), tp(topic, 1))));
-        subscriptions.put(consumer2, buildSubscription(topics(topic), partitions(tp(topic, 0), tp(topic, 2))));
-        subscriptions.put(consumer3, buildSubscription(topics(topic), emptyList()));
+        subscriptions.put(consumer1, buildSubscriptionV2Above(topics(topic), partitions(tp(topic, 0), tp(topic, 1)), generationId));
+        subscriptions.put(consumer2, buildSubscriptionV2Above(topics(topic), partitions(tp(topic, 0), tp(topic, 2)), generationId));
+        subscriptions.put(consumer3, buildSubscriptionV2Above(topics(topic), emptyList(), generationId));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(partitions(tp(topic, 1), tp(topic, 3)), assignment.get(consumer1));
@@ -167,7 +144,7 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
             for (Map.Entry<String, List<TopicPartition>> entry : assignments.entrySet()) {
                 String consumer = entry.getKey();
                 Subscription oldSubscription = subscriptions.get(consumer);
-                subscriptions.put(consumer, buildSubscription(oldSubscription.topics(), entry.getValue()));
+                subscriptions.put(consumer, buildSubscriptionV2Above(oldSubscription.topics(), entry.getValue(), generationId));
             }
 
             assignments.clear();

@@ -156,8 +156,8 @@ public interface ConsumerPartitionAssignor {
                 "topics=" + topics +
                 (userData == null ? "" : ", userDataSize=" + userData.remaining()) +
                 ", ownedPartitions=" + ownedPartitions +
-                ", groupInstanceId=" + (groupInstanceId.map(String::toString).orElse("null")) +
-                ", generationId=" + (generationId.orElse(-1)) +
+                ", groupInstanceId=" + groupInstanceId.map(String::toString).orElse("null") +
+                ", generationId=" + generationId.orElse(-1) +
                 ")";
         }
     }
