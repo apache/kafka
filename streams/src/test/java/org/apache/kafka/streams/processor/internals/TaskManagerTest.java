@@ -4424,8 +4424,6 @@ public class TaskManagerTest {
 
     @Test
     public void shouldNotFailForTimeoutExceptionOnCommitWithEosAlpha() {
-        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_ALPHA, false);
-
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.streamsProducerForTask(anyObject(TaskId.class)))
             .andReturn(producer)
@@ -4449,6 +4447,10 @@ public class TaskManagerTest {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
         task01.setCommittableOffsetsAndMetadata(offsetsT01);
         final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
+
+        final Tasks tasks = new Tasks(new LogContext());
+        tasks.addActiveTasks(asList(task00, task01, task02));
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_ALPHA, tasks, false);
 
         expect(consumer.groupMetadata()).andStubReturn(null);
         replay(activeTaskCreator, consumer);

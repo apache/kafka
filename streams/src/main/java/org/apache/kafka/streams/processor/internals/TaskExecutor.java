@@ -27,6 +27,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.slf4j.Logger;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -35,10 +36,11 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
+
+import static java.util.Collections.emptyMap;
 
 /**
  * Single-threaded executor class for the active tasks assigned to this thread.
@@ -177,12 +179,12 @@ public class TaskExecutor {
 
         if (executionMetadata.processingMode() == EXACTLY_ONCE_ALPHA) {
             for (final Task task : taskManager.activeTaskIterable()) {
-                final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = offsetsPerTask.get(task);
-                if (offsetsToCommit != null || taskManager.streamsProducerForTask(task.id()).transactionInFlight()) {
+                final Map<TopicPartition, OffsetAndMetadata> taskOffsetsToCommit = offsetsPerTask.getOrDefault(task, emptyMap());
+                if (!taskOffsetsToCommit.isEmpty() || taskManager.streamsProducerForTask(task.id()).transactionInFlight()) {
                     try {
                         taskManager.streamsProducerForTask(task.id())
-                            .commitTransaction(offsetsToCommit, taskManager.consumerGroupMetadata());
-                        updateTaskCommitMetadata(offsetsToCommit);
+                            .commitTransaction(taskOffsetsToCommit, taskManager.consumerGroupMetadata());
+                        updateTaskCommitMetadata(taskOffsetsToCommit);
                     } catch (final TimeoutException timeoutException) {
                         log.error(
                             String.format("Committing task %s failed.", task.id()),
@@ -192,54 +194,54 @@ public class TaskExecutor {
                     }
                 }
             }
-        } else {
-            final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
-                .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        } else if (executionMetadata.processingMode() == EXACTLY_ONCE_V2) {
+            if (!offsetsPerTask.isEmpty() || taskManager.threadProducer().transactionInFlight()) {
+                final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
+                    .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-            if (executionMetadata.processingMode() == EXACTLY_ONCE_V2) {
-                if (!offsetsPerTask.isEmpty() || taskManager.threadProducer().transactionInFlight()) {
-
-                    try {
-                        taskManager.threadProducer().commitTransaction(allOffsets, taskManager.consumerGroupMetadata());
-                        updateTaskCommitMetadata(allOffsets);
-                    } catch (final TimeoutException timeoutException) {
-                        log.error(
-                            String.format("Committing task(s) %s failed.",
-                                          offsetsPerTask
-                                              .keySet()
-                                              .stream()
-                                              .map(t -> t.id().toString())
-                                              .collect(Collectors.joining(", "))),
-                            timeoutException
-                        );
-                        offsetsPerTask
-                            .keySet()
-                            .forEach(task -> corruptedTasks.add(task.id()));
-                    }
+                try {
+                    taskManager.threadProducer().commitTransaction(allOffsets, taskManager.consumerGroupMetadata());
+                    updateTaskCommitMetadata(allOffsets);
+                } catch (final TimeoutException timeoutException) {
+                    log.error(
+                        String.format("Committing task(s) %s failed.",
+                                      offsetsPerTask
+                                          .keySet()
+                                          .stream()
+                                          .map(t -> t.id().toString())
+                                          .collect(Collectors.joining(", "))),
+                        timeoutException
+                    );
+                    offsetsPerTask
+                        .keySet()
+                        .forEach(task -> corruptedTasks.add(task.id()));
                 }
-                // processingMode == ALOS
-            } else {
-                if (!offsetsPerTask.isEmpty()) {
-                    try {
-                        taskManager.consumerCommitSync(allOffsets);
-                        updateTaskCommitMetadata(allOffsets);
-                    } catch (final CommitFailedException error) {
-                        throw new TaskMigratedException("Consumer committing offsets failed, " +
-                                                            "indicating the corresponding thread is no longer part of the group", error);
-                    } catch (final TimeoutException timeoutException) {
-                        log.error(
-                            String.format("Committing task(s) %s failed.",
-                                          offsetsPerTask
-                                              .keySet()
-                                              .stream()
-                                              .map(t -> t.id().toString())
-                                              .collect(Collectors.joining(", "))),
-                            timeoutException
-                        );
-                        throw timeoutException;
-                    } catch (final KafkaException error) {
-                        throw new StreamsException("Error encountered committing offsets via consumer", error);
-                    }
+            }
+        } else {
+            // processingMode == ALOS
+            if (!offsetsPerTask.isEmpty()) {
+                final Map<TopicPartition, OffsetAndMetadata> allOffsets = offsetsPerTask.values().stream()
+                    .flatMap(e -> e.entrySet().stream()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+                try {
+                    taskManager.consumerCommitSync(allOffsets);
+                    updateTaskCommitMetadata(allOffsets);
+                } catch (final CommitFailedException error) {
+                    throw new TaskMigratedException("Consumer committing offsets failed, " +
+                                                        "indicating the corresponding thread is no longer part of the group", error);
+                } catch (final TimeoutException timeoutException) {
+                    log.error(
+                        String.format("Committing task(s) %s failed.",
+                                      offsetsPerTask
+                                          .keySet()
+                                          .stream()
+                                          .map(t -> t.id().toString())
+                                          .collect(Collectors.joining(", "))),
+                        timeoutException
+                    );
+                    throw timeoutException;
+                } catch (final KafkaException error) {
+                    throw new StreamsException("Error encountered committing offsets via consumer", error);
                 }
             }
         }
@@ -249,7 +251,7 @@ public class TaskExecutor {
     }
 
     private void updateTaskCommitMetadata(final Map<TopicPartition, OffsetAndMetadata> allOffsets) {
-        if (!(allOffsets == null || allOffsets.isEmpty())) {
+        if (!allOffsets.isEmpty()) {
             for (final Task task : tasks.activeTasks()) {
                 if (task instanceof StreamTask) {
                     for (final TopicPartition topicPartition : task.inputPartitions()) {
