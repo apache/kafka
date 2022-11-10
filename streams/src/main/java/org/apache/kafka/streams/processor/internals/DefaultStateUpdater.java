@@ -129,13 +129,8 @@ public class DefaultStateUpdater implements StateUpdater {
                     final Action action = taskAndAction.getAction();
                     switch (action) {
                         case ADD:
-                            final Task task = taskAndAction.getTask();
-                            final Task existingTask = updatingTasks.putIfAbsent(task.id(), task);
-                            if (existingTask != null) {
-                                throw new IllegalStateException((existingTask.isActive() ? "Active" : "Standby") + " task " + task.id() + " already exist, " +
-                                    "should not try to add another " + (task.isActive() ? "active" : "standby") + " task with the same id. " + BUG_ERROR_MESSAGE);
-                            }
-                            toInitialize = task;
+                            addTask(taskAndAction.getTask());
+                            toInitialize = taskAndAction.getTask();
                             break;
                         case REMOVE:
                             removeTask(taskAndAction.getTaskId());
@@ -261,6 +256,14 @@ public class DefaultStateUpdater implements StateUpdater {
             pausedTasks.clear();
         }
 
+        private void addTask(final Task task) {
+            final Task existingTask = updatingTasks.putIfAbsent(task.id(), task);
+            if (existingTask != null) {
+                throw new IllegalStateException((existingTask.isActive() ? "Active" : "Standby") + " task " + task.id() + " already exist, " +
+                    "should not try to add another " + (task.isActive() ? "active" : "standby") + " task with the same id. " + BUG_ERROR_MESSAGE);
+            }
+        }
+
         private void initializeTask(final Task task) {
             boolean initializationFailed = false;
             if (task.state() == Task.State.CREATED) {
@@ -272,20 +275,24 @@ public class DefaultStateUpdater implements StateUpdater {
                 }
             }
             if (!initializationFailed) {
-                if (isStateless(task)) {
-                    addToRestoredTasks((StreamTask) task);
-                    updatingTasks.remove(task.id());
-                    log.info("Stateless active task " + task.id() + " was added to the restored tasks of the state updater");
+                postInitializeTask(task);
+            }
+        }
+
+        private void postInitializeTask(final Task task) {
+            if (isStateless(task)) {
+                addToRestoredTasks((StreamTask) task);
+                updatingTasks.remove(task.id());
+                log.info("Stateless active task " + task.id() + " was added to the restored tasks of the state updater");
+            } else {
+                changelogReader.register(task.changelogPartitions(), task.stateManager());
+                if (task.isActive()) {
+                    log.info("Stateful active task " + task.id() + " was added to the state updater");
+                    changelogReader.enforceRestoreActive();
                 } else {
-                    changelogReader.register(task.changelogPartitions(), task.stateManager());
-                    if (task.isActive()) {
-                        log.info("Stateful active task " + task.id() + " was added to the state updater");
-                        changelogReader.enforceRestoreActive();
-                    } else {
-                        log.info("Standby task " + task.id() + " was added to the state updater");
-                        if (updatingTasks.size() == 1) {
-                            changelogReader.transitToUpdateStandby();
-                        }
+                    log.info("Standby task " + task.id() + " was added to the state updater");
+                    if (updatingTasks.size() == 1) {
+                        changelogReader.transitToUpdateStandby();
                     }
                 }
             }
