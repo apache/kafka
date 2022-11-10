@@ -265,18 +265,15 @@ public class DefaultStateUpdater implements StateUpdater {
         }
 
         private void initializeTask(final Task task) {
-            boolean initializationFailed = false;
             if (task.state() == Task.State.CREATED) {
                 try {
                     task.initializeIfNeeded();
                 } catch (final StreamsException streamsException) {
                     addToExceptionsAndFailedTasksThenRemoveFromUpdatingTasks(new ExceptionAndTasks(Collections.singleton(task), streamsException));
-                    initializationFailed = true;
+                    return;
                 }
             }
-            if (!initializationFailed) {
-                postInitializeTask(task);
-            }
+            postInitializeTask(task);
         }
 
         private void postInitializeTask(final Task task) {
