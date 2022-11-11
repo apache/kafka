@@ -4450,10 +4450,10 @@ public class TaskManagerTest {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true);
         task01.setCommittableOffsetsAndMetadata(offsetsT01);
         final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true);
-
-        expect(tasks.allTasks()).andStubReturn(mkSet(task00, task01, task02));
+        when(tasks.allTasks()).thenReturn(mkSet(task00, task01, task02));
+        
         expect(consumer.groupMetadata()).andStubReturn(null);
-        replay(activeTaskCreator, consumer, tasks);
+        replay(activeTaskCreator, consumer);
 
         task00.setCommitNeeded();
         task01.setCommitNeeded();
