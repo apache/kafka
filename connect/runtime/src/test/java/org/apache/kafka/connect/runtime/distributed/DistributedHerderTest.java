@@ -231,7 +231,6 @@ public class DistributedHerderTest {
     public void setUp() throws Exception {
         time = new MockTime();
         metrics = new MockConnectMetrics(time);
-        restClient = PowerMock.createMock(RestClient.class);
         worker = PowerMock.createMock(Worker.class);
         EasyMock.expect(worker.isSinkConnector(CONN1)).andStubReturn(Boolean.TRUE);
         AutoCloseable uponShutdown = () -> shutdownCalled.countDown();

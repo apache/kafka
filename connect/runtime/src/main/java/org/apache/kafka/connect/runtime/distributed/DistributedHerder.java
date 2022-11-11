@@ -1161,17 +1161,22 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         fenceZombieSourceTasks(id.connector(), (error, ignored) -> {
             if (error == null) {
                 callback.onCompletion(null, null);
-            } else if (error instanceof NotLeaderException && restClient != null) {
-                String forwardedUrl = ((NotLeaderException) error).forwardUrl() + "connectors/" + id.connector() + "/fence";
-                log.trace("Forwarding zombie fencing request for connector {} to leader at {}", id.connector(), forwardedUrl);
-                forwardRequestExecutor.execute(() -> {
-                    try {
-                        restClient.httpRequest(forwardedUrl, "PUT", null, null, null, sessionKey, requestSignatureAlgorithm);
-                        callback.onCompletion(null, null);
-                    } catch (Throwable t) {
-                        callback.onCompletion(t, null);
-                    }
-                });
+            } else if (error instanceof NotLeaderException) {
+                if (restClient != null) {
+                    String forwardedUrl = ((NotLeaderException) error).forwardUrl() + "connectors/" + id.connector() + "/fence";
+                    log.trace("Forwarding zombie fencing request for connector {} to leader at {}", id.connector(), forwardedUrl);
+                    forwardRequestExecutor.execute(() -> {
+                        try {
+                            restClient.httpRequest(forwardedUrl, "PUT", null, null, null, sessionKey, requestSignatureAlgorithm);
+                            callback.onCompletion(null, null);
+                        } catch (Throwable t) {
+                            callback.onCompletion(t, null);
+                        }
+                    });
+                } else {
+                    error = ConnectUtils.maybeWrap(error, "Request forwarding disabled in distributed MirrorMaker2; fencing zombie source tasks must be performed by the leader");
+                    callback.onCompletion(error, null);
+                }
             } else {
                 error = ConnectUtils.maybeWrap(error, "Failed to perform zombie fencing");
                 callback.onCompletion(error, null);
@@ -1912,7 +1917,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     writeToConfigTopicAsLeader(() -> configBackingStore.putTaskConfigs(connName, rawTaskProps));
                     cb.onCompletion(null, null);
                 } else if (restClient == null) {
-                    throw new NotLeaderException("Only the leader may write task configs when forwarding is disabled", leaderUrl());
+                    throw new NotLeaderException("Request forwarding disabled in distributed MirrorMaker2; reconfiguring tasks must be performed by the leader", leaderUrl());
                 } else {
                     // We cannot forward the request on the same thread because this reconfiguration can happen as a result of connector
                     // addition or removal. If we blocked waiting for the response from leader, we may be kicked out of the worker group.

@@ -43,6 +43,10 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
+/**
+ * Client for outbound REST requests to other members of a Connect cluster
+ * This class is thread-safe.
+ */
 public class RestClient implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(RestClient.class);
     private static final ObjectMapper JSON_SERDE = new ObjectMapper();
@@ -67,12 +71,8 @@ public class RestClient implements AutoCloseable {
     }
 
     @Override
-    public void close() {
-        try {
-            client.stop();
-        } catch (Exception e) {
-            log.error("Failed to stop HTTP client", e);
-        }
+    public void close() throws Exception {
+        client.stop();
     }
 
     /**

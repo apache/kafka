@@ -89,9 +89,6 @@ public class ConnectorsResource implements ConnectResource {
     private final boolean isTopicTrackingDisabled;
     private final boolean isTopicTrackingResetDisabled;
 
-    public ConnectorsResource(Herder herder, WorkerConfig config) {
-        this(herder, config, new RestClient(config));
-    }
     public ConnectorsResource(Herder herder, WorkerConfig config, RestClient restClient) {
         this.herder = herder;
         this.restClient = restClient;

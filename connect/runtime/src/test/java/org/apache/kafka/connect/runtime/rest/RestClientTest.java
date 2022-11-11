@@ -73,7 +73,7 @@ public class RestClientTest {
         return mockKey;
     }
 
-    private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient, String requestSignatureAlgorithm) {
+    private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient, String requestSignatureAlgorithm) throws Exception {
         try (RestClient client = new RestClient(httpClient)) {
             return client.httpRequest(
                     "https://localhost:1234/api/endpoint",
@@ -86,7 +86,7 @@ public class RestClientTest {
         }
     }
 
-    private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient) {
+    private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient) throws Exception {
         String validRequestSignatureAlgorithm = "HmacSHA1";
         return httpRequest(httpClient, validRequestSignatureAlgorithm);
     }

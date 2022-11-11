@@ -159,7 +159,6 @@ public class ConnectorsResourceTest {
 
     @Before
     public void setUp() throws NoSuchMethodException {
-        restClient = mock(RestClient.class);
         when(workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG)).thenReturn(true);
         when(workerConfig.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG)).thenReturn(true);
         connectorsResource = new ConnectorsResource(herder, workerConfig, restClient);
@@ -297,7 +296,6 @@ public class ConnectorsResourceTest {
         when(restClient.httpRequest(eq(LEADER_URL + "connectors?forward=false"), eq("POST"), isNull(), eq(body), any()))
                 .thenReturn(new RestClient.HttpResponse<>(201, new HashMap<>(), new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES, ConnectorType.SOURCE)));
         connectorsResource.createConnector(FORWARD, NULL_HEADERS, body);
-        verify(restClient).httpRequest(eq(LEADER_URL + "connectors?forward=false"), eq("POST"), isNull(), eq(body), any());
     }
 
     @Test
@@ -311,7 +309,6 @@ public class ConnectorsResourceTest {
         when(restClient.httpRequest(eq(LEADER_URL + "connectors?forward=false"), eq("POST"), eq(httpHeaders), any(), any()))
                 .thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
         connectorsResource.createConnector(FORWARD, httpHeaders, body);
-        verify(restClient).httpRequest(eq(LEADER_URL + "connectors?forward=false"), eq("POST"), eq(httpHeaders), any(), any());
     }
 
     @Test
@@ -389,7 +386,6 @@ public class ConnectorsResourceTest {
         when(restClient.httpRequest(LEADER_URL + "connectors/" + CONNECTOR_NAME + "?forward=false", "DELETE", NULL_HEADERS, null, null))
                 .thenReturn(new RestClient.HttpResponse<>(204, new HashMap<>(), null));
         connectorsResource.destroyConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
-        verify(restClient).httpRequest(LEADER_URL + "connectors/" + CONNECTOR_NAME + "?forward=false", "DELETE", NULL_HEADERS, null, null);
     }
 
     // Not found exceptions should pass through to caller so they can be processed for 404s
@@ -652,7 +648,6 @@ public class ConnectorsResourceTest {
                 .thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
         Response response = connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, restartRequest.includeTasks(), restartRequest.onlyFailed(), null);
         assertEquals(Response.Status.ACCEPTED.getStatusCode(), response.getStatus());
-        verify(restClient).httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/restart?forward=true&includeTasks=" + restartRequest.includeTasks() + "&onlyFailed=" + restartRequest.onlyFailed()), eq("POST"), isNull(), isNull(), any());
     }
 
     @Test
@@ -757,7 +752,6 @@ public class ConnectorsResourceTest {
         when(restClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/restart?forward=true"), eq("POST"), isNull(), isNull(), any()))
                 .thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
         Response response = connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, false, false, null);
-        verify(restClient).httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/restart?forward=true"), eq("POST"), isNull(), isNull(), any());
         assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
     }
 
@@ -770,7 +764,6 @@ public class ConnectorsResourceTest {
         when(restClient.httpRequest(eq("http://owner:8083/connectors/" + CONNECTOR_NAME + "/restart?forward=false"), eq("POST"), isNull(), isNull(), any()))
                 .thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
         Response response = connectorsResource.restartConnector(CONNECTOR_NAME, NULL_HEADERS, false, false, true);
-        verify(restClient).httpRequest(eq("http://owner:8083/connectors/" + CONNECTOR_NAME + "/restart?forward=false"), eq("POST"), isNull(), isNull(), any());
         assertEquals(Response.Status.NO_CONTENT.getStatusCode(), response.getStatus());
     }
 
@@ -795,7 +788,6 @@ public class ConnectorsResourceTest {
         when(restClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/tasks/0/restart?forward=true"), eq("POST"), isNull(), isNull(), any()))
                 .thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
         connectorsResource.restartTask(CONNECTOR_NAME, 0, NULL_HEADERS, null);
-        verify(restClient).httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/tasks/0/restart?forward=true"), eq("POST"), isNull(), isNull(), any());
     }
 
     @Test
@@ -810,7 +802,6 @@ public class ConnectorsResourceTest {
         when(restClient.httpRequest(eq("http://owner:8083/connectors/" + CONNECTOR_NAME + "/tasks/0/restart?forward=false"), eq("POST"), isNull(), isNull(), any()))
                 .thenReturn(new RestClient.HttpResponse<>(202, new HashMap<>(), null));
         connectorsResource.restartTask(CONNECTOR_NAME, 0, NULL_HEADERS, true);
-        verify(restClient).httpRequest(eq("http://owner:8083/connectors/" + CONNECTOR_NAME + "/tasks/0/restart?forward=false"), eq("POST"), isNull(), isNull(), any());
     }
 
     @Test
