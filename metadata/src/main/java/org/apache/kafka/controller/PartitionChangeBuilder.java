@@ -32,7 +32,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 
-import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 
@@ -327,8 +326,7 @@ public class PartitionChangeBuilder {
         if (changeRecordIsNoOp(record)) {
             return Optional.empty();
         } else {
-            return Optional.of(new ApiMessageAndVersion(record,
-                PARTITION_CHANGE_RECORD.highestSupportedVersion()));
+            return Optional.of(new ApiMessageAndVersion(record, (short) 0));
         }
     }
 

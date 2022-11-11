@@ -616,9 +616,6 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
 
         if self.UPGRADE_FROM is not None:
             properties['upgrade.from'] = self.UPGRADE_FROM
-        if (self.UPGRADE_FROM is not None and KafkaVersion(self.UPGRADE_FROM).supports_fk_joins()) or \
-            (self.KAFKA_STREAMS_VERSION is not None and KafkaVersion(self.KAFKA_STREAMS_VERSION).supports_fk_joins()):
-            properties['test.run_fk_join'] = "true"
         if self.UPGRADE_TO == "future_version":
             properties['test.future.metadata'] = "any_value"
 

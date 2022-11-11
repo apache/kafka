@@ -540,11 +540,20 @@ public class DefaultStateUpdater implements StateUpdater {
         return new HashSet<>(result);
     }
 
+    public boolean hasRemovedTasks() {
+        return !removedTasks.isEmpty();
+    }
+
     @Override
     public List<ExceptionAndTasks> drainExceptionsAndFailedTasks() {
         final List<ExceptionAndTasks> result = new ArrayList<>();
         exceptionsAndFailedTasks.drainTo(result);
         return result;
+    }
+
+    @Override
+    public boolean hasExceptionsAndFailedTasks() {
+        return !exceptionsAndFailedTasks.isEmpty();
     }
 
     public Set<StandbyTask> getUpdatingStandbyTasks() {

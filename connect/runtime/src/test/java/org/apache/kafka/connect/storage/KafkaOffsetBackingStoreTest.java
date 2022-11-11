@@ -29,6 +29,7 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -56,6 +57,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
 import static org.junit.Assert.assertEquals;
@@ -69,6 +71,7 @@ import static org.junit.Assert.fail;
 @PrepareForTest({KafkaOffsetBackingStore.class, WorkerConfig.class})
 @PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
 public class KafkaOffsetBackingStoreTest {
+    private static final String CLIENT_ID_BASE = "test-client-id-";
     private static final String TOPIC = "connect-offsets";
     private static final short TOPIC_PARTITIONS = 2;
     private static final short TOPIC_REPLICATION_FACTOR = 5;
@@ -116,7 +119,17 @@ public class KafkaOffsetBackingStoreTest {
 
     @Before
     public void setUp() throws Exception {
-        store = PowerMock.createPartialMockAndInvokeDefaultConstructor(KafkaOffsetBackingStore.class, "createKafkaBasedLog");
+        Supplier<SharedTopicAdmin> adminSupplier = () -> {
+            fail("Should not attempt to instantiate admin in these tests");
+            // Should never be reached; only add this thrown exception to satisfy the compiler
+            throw new AssertionError();
+        };
+        Supplier<String> clientIdBase = () -> CLIENT_ID_BASE;
+        store = PowerMock.createPartialMock(
+                KafkaOffsetBackingStore.class,
+                new String[] {"createKafkaBasedLog"},
+                adminSupplier, clientIdBase
+        );
     }
 
     @Test
@@ -465,6 +478,24 @@ public class KafkaOffsetBackingStoreTest {
                 IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testClientIds() throws Exception {
+        Map<String, String> workerProps = new HashMap<>(DEFAULT_PROPS);
+        DistributedConfig config = new DistributedConfig(workerProps);
+
+        expectConfigure();
+        expectClusterId();
+        PowerMock.replayAll();
+
+        store.configure(config);
+
+        final String expectedClientId = CLIENT_ID_BASE + "offsets";
+        assertEquals(expectedClientId, capturedProducerProps.getValue().get(CLIENT_ID_CONFIG));
+        assertEquals(expectedClientId, capturedConsumerProps.getValue().get(CLIENT_ID_CONFIG));
 
         PowerMock.verifyAll();
     }

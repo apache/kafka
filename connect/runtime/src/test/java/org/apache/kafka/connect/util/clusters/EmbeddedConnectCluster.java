@@ -94,11 +94,12 @@ public class EmbeddedConnectCluster {
 
     private EmbeddedConnectCluster(String name, Map<String, String> workerProps, int numWorkers,
                                    int numBrokers, Properties brokerProps,
-                                   boolean maskExitProcedures) {
+                                   boolean maskExitProcedures,
+                                   Map<String, String> additionalKafkaClusterClientConfigs) {
         this.workerProps = workerProps;
         this.connectClusterName = name;
         this.numBrokers = numBrokers;
-        this.kafkaCluster = new EmbeddedKafkaCluster(numBrokers, brokerProps);
+        this.kafkaCluster = new EmbeddedKafkaCluster(numBrokers, brokerProps, additionalKafkaClusterClientConfigs);
         this.connectCluster = new LinkedHashSet<>();
         this.numInitialWorkers = numWorkers;
         this.maskExitProcedures = maskExitProcedures;
@@ -808,6 +809,8 @@ public class EmbeddedConnectCluster {
         private Properties brokerProps = DEFAULT_BROKER_CONFIG;
         private boolean maskExitProcedures = true;
 
+        private Map<String, String> clientConfigs = new HashMap<>();
+
         public Builder name(String name) {
             this.name = name;
             return this;
@@ -833,6 +836,11 @@ public class EmbeddedConnectCluster {
             return this;
         }
 
+        public Builder clientConfigs(Map<String, String> clientConfigs) {
+            this.clientConfigs.putAll(clientConfigs);
+            return this;
+        }
+
         /**
          * In the event of ungraceful shutdown, embedded clusters call exit or halt with non-zero
          * exit statuses. Exiting with a non-zero status forces a test to fail and is hard to
@@ -852,7 +860,7 @@ public class EmbeddedConnectCluster {
 
         public EmbeddedConnectCluster build() {
             return new EmbeddedConnectCluster(name, workerProps, numWorkers, numBrokers,
-                    brokerProps, maskExitProcedures);
+                    brokerProps, maskExitProcedures, clientConfigs);
         }
     }
 
