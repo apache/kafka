@@ -1591,8 +1591,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Seeking past the end of the highest known offset means an invalid offset is reached.
      * Invalid offset behaviour is controlled by
      * the {@link ConsumerConfig AUTO_RESET_CONFIG} property. If this is set to "earliest", the next poll() will seek to the beginning
-     * before returning a record. If it is set to "latest", once new records are added, the next poll() will
-     * try to seek to the given offset, or if it is still in an invalid position seek to the end before returning a record.
+     * before returning a record. If it is set to "latest", it will seek to the last known record (similar to seekToEnd()).
+     * Note that, in the "latest" if any new records show up before {@link ConsumerConfig FETCH_MAX_WAIT_MS_CONFIG}, then
+     * the next poll() may succeed in seeking to the requested offset, or otherwise it will seek to the new latest known offset.
      * If it is set to "none", an {@link OffsetOutOfRangeException} will be thrown.
      *
      *

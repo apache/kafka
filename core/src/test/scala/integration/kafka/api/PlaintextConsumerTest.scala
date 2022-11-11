@@ -713,9 +713,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @Test
-  def testFetchInvalidOffsetResetConfigLatest(): Unit = {
+  def testFetchInvalidOffsetResetConfigLatestRecordsBeforeTimeout(): Unit = {
 
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
+    // long wait time should (theoretically) mean that more records show up before this expires
+    this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "3000")
     val consumer = createConsumer(configOverrides = this.consumerConfig)
     val totalRecords = 10L
 
@@ -730,16 +732,18 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.seek(tp, outOfRangePos)
     // assert that poll resets to the ending position
     assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
+    //some new records show up before fetch max wait time
     sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = totalRecords)
-    // ensure that new records start with the offset that was passed to seek()
+    // ensure that new records start with the offset that was passed to seek(), as new records have arrived
     val nextRecord = consumer.poll(Duration.ofMillis(50)).iterator().next()
     assertEquals(outOfRangePos,nextRecord.offset())
 
   }
 
   @Test
-  def testFetchInvalidOffsetResetConfigLatestPastEnd(): Unit = {
+  def testFetchInvalidOffsetResetConfigLatestNoRecordsBeforeTimeout(): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
+    this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
     val consumer = createConsumer(configOverrides = this.consumerConfig)
     val totalRecords = 10L
 
@@ -748,20 +752,17 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = startingTimestamp)
     consumer.assign(List(tp).asJava)
     consumer.seek(tp, 0)
-    consumeAndVerifyRecords(consumer = consumer, numRecords = totalRecords.toInt, startingOffset = 0)
+    //consume some, but not all of the records
+    consumeAndVerifyRecords(consumer = consumer, numRecords = totalRecords.toInt/2, startingOffset = 0)
     // seek to out of range position
     val outOfRangePos = totalRecords + 17 //arbitrary, much higher offset
     consumer.seek(tp, outOfRangePos)
     // assert that poll resets to the ending position
     assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
     sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = totalRecords)
-    // ensure that, if we haven't reached the offset passed to seek(), no records are returned even though they are added
-    val newEnd = totalRecords+totalRecords
-    assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
-    sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = totalRecords)
-    // ensure that once poll is called on new records, the position is set to the new end of the queue
     val nextRecord = consumer.poll(Duration.ofMillis(50)).iterator().next()
-    assertEquals(newEnd,nextRecord.offset())
+    //ensure the seek went to the last known record at the time of the previous poll
+    assertEquals(totalRecords,nextRecord.offset())
   }
 
   @Test
