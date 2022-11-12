@@ -104,7 +104,7 @@ versions += [
   netty: "4.1.78.Final",
   powermock: "2.0.9",
   reflections: "0.9.12",
-  rocksDB: "6.27.3",
+  rocksDB: "7.1.2",
   scalaCollectionCompat: "2.4.4",
   scalafmt: "1.5.1",
   scalaJava8Compat : "1.0.0",
