@@ -70,7 +70,7 @@ public class RecordCollectorImpl implements RecordCollector {
 
     private final StreamsMetricsImpl streamsMetrics;
     private final Sensor droppedRecordsSensor;
-    private final Map<String, Map<String, Sensor>> sinkNodeToProducedSensorByTopic = new HashMap<>();
+    private final Map<String, Sensor> producedSensorByTopic = new HashMap<>();
 
     private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
 
@@ -94,7 +94,7 @@ public class RecordCollectorImpl implements RecordCollector {
         this.droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), streamsMetrics);
         for (final String topic : topology.sinkTopics()) {
             final String processorNodeId = topology.sink(topic).name();
-            sinkNodeToProducedSensorByTopic.computeIfAbsent(processorNodeId, t -> new HashMap<>()).put(
+            producedSensorByTopic.put(
                 topic,
                 TopicMetrics.producedSensor(
                     threadId,
@@ -219,26 +219,20 @@ public class RecordCollectorImpl implements RecordCollector {
                 }
 
                 if (!topic.endsWith("-changelog")) {
-                    final Map<String, Sensor> producedSensorByTopic = sinkNodeToProducedSensorByTopic.get(processorNodeId);
-                    if (producedSensorByTopic == null) {
-                        log.error("Unable to records bytes produced to topic {} by sink node {} as the node is not recognized.\n"
-                                      + "Known sink nodes are {}.", topic, processorNodeId, sinkNodeToProducedSensorByTopic.keySet());
-                    } else {
-                        // we may not have created a sensor during initialization if the node uses dynamic topic routing,
-                        // as all topics are not known up front, so create the sensor for that topic if absent
-                        final Sensor topicProducedSensor = producedSensorByTopic.computeIfAbsent(
+                    // we may not have created a sensor during initialization if the node uses dynamic topic routing,
+                    // as all topics are not known up front, so create the sensor for this topic if absent
+                    final Sensor topicProducedSensor = producedSensorByTopic.computeIfAbsent(
+                        topic,
+                        t -> TopicMetrics.producedSensor(
+                            Thread.currentThread().getName(),
+                            taskId.toString(),
+                            processorNodeId,
                             topic,
-                            t -> TopicMetrics.producedSensor(
-                                Thread.currentThread().getName(),
-                                taskId.toString(),
-                                processorNodeId,
-                                topic,
-                                context.metrics()
-                            )
-                        );
-                        final long bytesProduced = producerRecordSizeInBytes(serializedRecord);
-                        topicProducedSensor.record(bytesProduced, context.currentSystemTimeMs());
-                    }
+                            context.metrics()
+                        )
+                    );
+                    final long bytesProduced = producerRecordSizeInBytes(serializedRecord);
+                    topicProducedSensor.record(bytesProduced, context.currentSystemTimeMs());
                 }
             } else {
                 recordSendError(topic, exception, serializedRecord);
@@ -341,10 +335,8 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     private void removeAllProducedSensors() {
-        for (final Map<String, Sensor> nodeMap : sinkNodeToProducedSensorByTopic.values()) {
-            for (final Sensor sensor : nodeMap.values()) {
-                streamsMetrics.removeSensor(sensor);
-            }
+        for (final Sensor sensor : producedSensorByTopic.values()) {
+            streamsMetrics.removeSensor(sensor);
         }
     }
 
