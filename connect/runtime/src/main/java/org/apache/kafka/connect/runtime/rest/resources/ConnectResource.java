@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import java.util.concurrent.TimeUnit;
+import javax.ws.rs.BadRequestException;
 
 /**
  * This interface defines shared logic for all Connect REST resources.
@@ -36,5 +37,15 @@ public interface ConnectResource {
      * @param requestTimeoutMs the new timeout in milliseconds; must be positive
      */
     void requestTimeout(long requestTimeoutMs);
+
+    default void validateTimeout(long requestTimeoutMs, long maxRequestTimeoutMs) {
+        if (requestTimeoutMs <= 0) {
+            throw new BadRequestException("The request timeout must be positive");
+        }
+
+        if (requestTimeoutMs > maxRequestTimeoutMs) {
+            throw new BadRequestException("The request timeout cannot be greater than: " + maxRequestTimeoutMs);
+        }
+    }
 
 }

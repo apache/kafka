@@ -23,6 +23,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Range;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslClientAuth;
@@ -49,6 +50,7 @@ import org.eclipse.jetty.util.StringUtil;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_PREFIX;
+import static org.apache.kafka.connect.runtime.rest.resources.ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
 /**
  * Common base class providing configuration for Kafka Connect workers, whether standalone or distributed.
@@ -231,6 +233,11 @@ public class WorkerConfig extends AbstractConfig {
     protected static final String RESPONSE_HTTP_HEADERS_DOC = "Rules for REST API HTTP response headers";
     protected static final String RESPONSE_HTTP_HEADERS_DEFAULT = "";
 
+    public static final String REST_REQUEST_MAX_TIMEOUT_MS_CONFIG = "rest.max.request.timeout.ms";
+    protected static final String REST_REQUEST_MAX_TIMEOUT_MS_DOC = "The maximum REST API request timeout in milliseconds that can be "
+            + "set via the 'timeout' query parameter on supported endpoints.";
+    public static final Long REST_REQUEST_MAX_TIMEOUT_MS_DEFAULT = 600_000L;
+
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
      * bootstrap their own ConfigDef.
@@ -262,6 +269,9 @@ public class WorkerConfig extends AbstractConfig {
                 .define(REST_ADVERTISED_HOST_NAME_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_HOST_NAME_DOC)
                 .define(REST_ADVERTISED_PORT_CONFIG, Type.INT,  null, Importance.LOW, REST_ADVERTISED_PORT_DOC)
                 .define(REST_ADVERTISED_LISTENER_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_LISTENER_DOC)
+                .define(REST_REQUEST_MAX_TIMEOUT_MS_CONFIG, Type.LONG,
+                        REST_REQUEST_MAX_TIMEOUT_MS_DEFAULT, Range.atLeast(DEFAULT_REST_REQUEST_TIMEOUT_MS),
+                        Importance.LOW, REST_REQUEST_MAX_TIMEOUT_MS_DOC)
                 .define(ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, Type.STRING,
                         ACCESS_CONTROL_ALLOW_ORIGIN_DEFAULT, Importance.LOW,
                         ACCESS_CONTROL_ALLOW_ORIGIN_DOC)
@@ -455,6 +465,14 @@ public class WorkerConfig extends AbstractConfig {
             kafkaClusterId = lookupKafkaClusterId(this);
         }
         return kafkaClusterId;
+    }
+
+    /**
+     * @return the maximum REST request timeout in milliseconds that can be set via the 'timeout' query
+     * parameter on endpoints that support it.
+     */
+    public long maxRestRequestTimeoutMs() {
+        return getLong(REST_REQUEST_MAX_TIMEOUT_MS_CONFIG);
     }
 
     @Override

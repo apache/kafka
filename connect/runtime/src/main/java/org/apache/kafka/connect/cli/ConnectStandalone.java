@@ -42,6 +42,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 
+import static org.apache.kafka.connect.runtime.rest.resources.ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS;
+
 /**
  * <p>
  * Command line utility that runs Kafka Connect as a standalone process. In this mode, work is not
@@ -113,7 +115,7 @@ public class ConnectStandalone {
                     });
                     herder.putConnectorConfig(
                             connectorProps.get(ConnectorConfig.NAME_CONFIG),
-                            connectorProps, false, cb);
+                            connectorProps, false, cb, DEFAULT_REST_REQUEST_TIMEOUT_MS);
                     cb.get();
                 }
             } catch (Throwable t) {

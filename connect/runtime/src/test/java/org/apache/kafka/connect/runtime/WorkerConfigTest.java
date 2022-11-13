@@ -33,7 +33,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
 
-import static org.apache.kafka.connect.runtime.WorkerConfig.LISTENERS_DEFAULT;
+import static org.apache.kafka.connect.runtime.rest.resources.ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -88,7 +88,7 @@ public class WorkerConfigTest {
 
         // no value set for "listeners"
         WorkerConfig config = new WorkerConfig(WorkerConfig.baseConfigDef(), props);
-        assertEquals(LISTENERS_DEFAULT, config.getList(WorkerConfig.LISTENERS_CONFIG));
+        assertEquals(WorkerConfig.LISTENERS_DEFAULT, config.getList(WorkerConfig.LISTENERS_CONFIG));
 
         props.put(WorkerConfig.LISTENERS_CONFIG, "http://a.b:9999");
         config = new WorkerConfig(WorkerConfig.baseConfigDef(), props);
@@ -104,7 +104,7 @@ public class WorkerConfigTest {
     @Test
     public void testListenersConfigNotAllowedValues() {
         Map<String, String> props = baseProps();
-        assertEquals(LISTENERS_DEFAULT, new WorkerConfig(WorkerConfig.baseConfigDef(), props).getList(WorkerConfig.LISTENERS_CONFIG));
+        assertEquals(WorkerConfig.LISTENERS_DEFAULT, new WorkerConfig(WorkerConfig.baseConfigDef(), props).getList(WorkerConfig.LISTENERS_CONFIG));
 
         props.put(WorkerConfig.LISTENERS_CONFIG, "");
         ConfigException ce = assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
@@ -223,6 +223,14 @@ public class WorkerConfigTest {
         // next calls hit the cache
         assertEquals(CLUSTER_ID, config.kafkaClusterId());
         workerConfigMockedStatic.verify(() -> WorkerConfig.lookupKafkaClusterId(any(WorkerConfig.class)), times(1));
+    }
+
+    @Test
+    public void testRestRequestMaxTimeoutIsAtLeastDefaultRestRequestTimeout() {
+        Map<String, String> props = baseProps();
+        props.put(WorkerConfig.REST_REQUEST_MAX_TIMEOUT_MS_CONFIG, String.valueOf(DEFAULT_REST_REQUEST_TIMEOUT_MS - 1));
+        ConfigException e = assertThrows(ConfigException.class, () -> new WorkerConfig(WorkerConfig.baseConfigDef(), props));
+        assertTrue(e.getMessage().contains("Value must be at least"));
     }
 
     private void assertInvalidHeaderConfig(String config) {

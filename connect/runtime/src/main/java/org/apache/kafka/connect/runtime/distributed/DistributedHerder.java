@@ -1023,13 +1023,32 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     @Override
     public void putConnectorConfig(final String connName, final Map<String, String> config, final boolean allowReplace,
-                                   final Callback<Created<ConnectorInfo>> callback) {
+                                   final Callback<Created<ConnectorInfo>> callback, long requestTimeoutMs) {
         log.trace("Submitting connector config write request {}", connName);
         addRequest(
             () -> {
+                // Although connector config validations can be done on any worker, directly forwarding the request to the leader avoids
+                // doing two config validations (one on a follower worker, and then again on the leader after the request is forwarded).
+                // While this could be avoided by introducing an internal only endpoint that puts connector configs without doing a
+                // config validation, it's not much overhead to let the leader handle all config validations from this request (connector
+                // config validations are done on their own thread and are typically short-lived operations).
+                if (!isLeader()) {
+                    callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
+                    return null;
+                }
+
+                long validateStartTime = time.milliseconds();
                 validateConnectorConfig(config, (error, configInfos) -> {
                     if (error != null) {
                         callback.onCompletion(error, null);
+                        return;
+                    }
+
+                    if (time.milliseconds() - validateStartTime > requestTimeoutMs) {
+                        // don't proceed to the actual connector config write since the request timeout was exceeded
+                        // by the connector config validation
+                        log.info("Connector config validation timed out for {}, the submitted configs won't be written", connName);
+                        callback.onCompletion(new org.apache.kafka.common.errors.TimeoutException(), null);
                         return;
                     }
 

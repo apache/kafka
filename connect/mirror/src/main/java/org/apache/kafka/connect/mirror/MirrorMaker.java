@@ -59,6 +59,8 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import java.io.File;
 
+import static org.apache.kafka.connect.runtime.rest.resources.ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS;
+
 /**
  *  Entry point for "MirrorMaker 2.0".
  *  <p>
@@ -212,7 +214,7 @@ public class MirrorMaker {
                     } else {
                         log.info("Connector {} configured.", sourceAndTarget, e);
                     }
-                });
+                }, DEFAULT_REST_REQUEST_TIMEOUT_MS);
     }
 
     private void checkHerder(SourceAndTarget sourceAndTarget) {

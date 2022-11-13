@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.connect.connector.Task;
@@ -64,6 +65,8 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
     public static final String TRANSACTION_BOUNDARIES_UNSUPPORTED = "unsupported";
     public static final String TRANSACTION_BOUNDARIES_NULL = "null";
     public static final String TRANSACTION_BOUNDARIES_FAIL = "fail";
+
+    public static final String VALIDATION_BLOCK_MS_CONFIG = "validation.block.ms";
 
     private String connectorName;
     private ConnectorHandle connectorHandle;
@@ -140,6 +143,16 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
             case TRANSACTION_BOUNDARIES_UNSUPPORTED:
                 return ConnectorTransactionBoundaries.UNSUPPORTED;
         }
+    }
+
+    @Override
+    public Config validate(Map<String, String> connectorConfigs) {
+        try {
+            Thread.sleep(Long.parseLong(connectorConfigs.getOrDefault(VALIDATION_BLOCK_MS_CONFIG, "0")));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return super.validate(connectorConfigs);
     }
 
     public static String taskId(String connectorName, int taskId) {

@@ -201,6 +201,7 @@ public class DistributedHerderTest {
     private static final String KAFKA_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
     private static final Runnable EMPTY_RUNNABLE = () -> {
     };
+    private static final long REQUEST_TIMEOUT_MS = 1000;
 
     @Mock private ConfigBackingStore configBackingStore;
     @Mock private StatusBackingStore statusBackingStore;
@@ -737,7 +738,7 @@ public class DistributedHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONN2, CONN2_CONFIG, false, putConnectorCallback);
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, false, putConnectorCallback, REQUEST_TIMEOUT_MS);
         // First tick runs the initial herder request, which issues an asynchronous request for
         // connector validation
         herder.tick();
@@ -795,7 +796,7 @@ public class DistributedHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONN2, config, false, putConnectorCallback);
+        herder.putConnectorConfig(CONN2, config, false, putConnectorCallback, REQUEST_TIMEOUT_MS);
         herder.tick();
         herder.tick();
 
@@ -805,6 +806,60 @@ public class DistributedHerderTest {
         time.sleep(1000L);
         assertStatistics(3, 1, 100, 1000L);
 
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testCreateConnectorValidationTimeout() throws Exception {
+        EasyMock.expect(member.memberId()).andStubReturn("leader");
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        member.wakeup();
+        PowerMock.expectLastCall();
+
+        // mock the actual validation since its asynchronous nature is difficult to test and should
+        // be covered sufficiently by the unit tests for the AbstractHerder class
+        Capture<Callback<ConfigInfos>> validateCallback = newCapture();
+        herder.validateConnectorConfig(EasyMock.eq(CONN2_CONFIG), capture(validateCallback));
+        PowerMock.expectLastCall().andAnswer(() -> {
+            // exceed the request timeout
+            time.sleep(2 * REQUEST_TIMEOUT_MS);
+            validateCallback.getValue().onCompletion(null, CONN2_CONFIG_INFOS);
+            return null;
+        });
+
+        // First tick
+        Capture<Throwable> error = newCapture();
+        putConnectorCallback.onCompletion(capture(error), EasyMock.isNull());
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        // These will occur just before/during the second tick
+        member.ensureActive();
+        PowerMock.expectLastCall();
+        member.poll(EasyMock.anyInt());
+        PowerMock.expectLastCall();
+
+        // No immediate action besides this -- change will be picked up via the config log
+
+        PowerMock.replayAll();
+
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, false, putConnectorCallback, REQUEST_TIMEOUT_MS);
+        // First tick runs the initial herder request, which issues an asynchronous request for
+        // connector validation
+        herder.tick();
+
+        // Once that validation is complete, another request would be added to the herder request queue
+        // for actually performing the config write only if the connector config validation succeeds without
+        // exceeding the request timeout
+        herder.tick();
+
+        time.sleep(1000L);
+        assertStatistics(3, 1, 100, 3000L);
+        assertTrue(error.getValue() instanceof org.apache.kafka.common.errors.TimeoutException);
         PowerMock.verifyAll();
     }
 
@@ -1102,7 +1157,7 @@ public class DistributedHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONN1, CONN1_CONFIG, false, putConnectorCallback);
+        herder.putConnectorConfig(CONN1, CONN1_CONFIG, false, putConnectorCallback, REQUEST_TIMEOUT_MS);
         herder.tick();
         herder.tick();
 
@@ -2596,7 +2651,7 @@ public class DistributedHerderTest {
 
         // Apply new config.
         FutureCallback<Herder.Created<ConnectorInfo>> putConfigCb = new FutureCallback<>();
-        herder.putConnectorConfig(CONN1, CONN1_CONFIG_UPDATED, true, putConfigCb);
+        herder.putConnectorConfig(CONN1, CONN1_CONFIG_UPDATED, true, putConfigCb, REQUEST_TIMEOUT_MS);
         herder.tick();
         assertTrue(putConfigCb.isDone());
         ConnectorInfo updatedInfo = new ConnectorInfo(CONN1, CONN1_CONFIG_UPDATED, Arrays.asList(TASK0, TASK1, TASK2),

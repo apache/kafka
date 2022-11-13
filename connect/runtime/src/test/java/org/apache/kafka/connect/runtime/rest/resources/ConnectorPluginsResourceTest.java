@@ -32,6 +32,7 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.SampleSinkConnector;
 import org.apache.kafka.connect.runtime.SampleSourceConnector;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
@@ -77,6 +78,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.connect.runtime.WorkerConfig.REST_REQUEST_MAX_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.REST_REQUEST_MAX_TIMEOUT_MS_DEFAULT;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -183,6 +186,7 @@ public class ConnectorPluginsResourceTest {
     }
 
     private final Herder herder = mock(DistributedHerder.class);
+    private final WorkerConfig workerConfig = mock(WorkerConfig.class);
     private final Plugins plugins = mock(Plugins.class);
     private ConnectorPluginsResource connectorPluginsResource;
 
@@ -195,7 +199,8 @@ public class ConnectorPluginsResourceTest {
         doReturn(HEADER_CONVERTER_PLUGINS).when(plugins).headerConverters();
         doReturn(TRANSFORMATION_PLUGINS).when(plugins).transformations();
         doReturn(PREDICATE_PLUGINS).when(plugins).predicates();
-        connectorPluginsResource = new ConnectorPluginsResource(herder);
+        when(workerConfig.getLong(REST_REQUEST_MAX_TIMEOUT_MS_CONFIG)).thenReturn(REST_REQUEST_MAX_TIMEOUT_MS_DEFAULT);
+        connectorPluginsResource = new ConnectorPluginsResource(herder, workerConfig);
     }
 
     @Test
@@ -230,6 +235,7 @@ public class ConnectorPluginsResourceTest {
         // validateConnectorConfig.
         ConfigInfos configInfos = connectorPluginsResource.validateConfigs(
             ConnectorPluginsResourceTestConnector.class.getSimpleName(),
+            null,
             PARTIAL_PROPS
         );
         assertEquals(PARTIAL_CONFIG_INFOS.name(), configInfos.name());
@@ -273,6 +279,7 @@ public class ConnectorPluginsResourceTest {
         // make a request to connector-plugins resource using just the simple class name.
         ConfigInfos configInfos = connectorPluginsResource.validateConfigs(
             ConnectorPluginsResourceTestConnector.class.getSimpleName(),
+            null,
             PROPS
         );
         assertEquals(CONFIG_INFOS.name(), configInfos.name());
@@ -313,6 +320,7 @@ public class ConnectorPluginsResourceTest {
         // make a request to connector-plugins resource using a valid alias.
         ConfigInfos configInfos = connectorPluginsResource.validateConfigs(
             "ConnectorPluginsResourceTest",
+            null,
             PROPS
         );
         assertEquals(CONFIG_INFOS.name(), configInfos.name());
@@ -328,12 +336,20 @@ public class ConnectorPluginsResourceTest {
         // simple name but different package.
         String customClassname = "com.custom.package."
             + ConnectorPluginsResourceTestConnector.class.getSimpleName();
-        assertThrows(BadRequestException.class, () -> connectorPluginsResource.validateConfigs(customClassname, PROPS));
+        assertThrows(BadRequestException.class, () -> connectorPluginsResource.validateConfigs(customClassname, null, PROPS));
     }
 
     @Test
     public void testValidateConfigWithNonExistentAlias() {
-        assertThrows(BadRequestException.class, () -> connectorPluginsResource.validateConfigs("ConnectorPluginsTest", PROPS));
+        assertThrows(BadRequestException.class, () -> connectorPluginsResource.validateConfigs("ConnectorPluginsTest", null, PROPS));
+    }
+
+    @Test
+    public void testValidateConfigWithInvalidTimeout() {
+        assertThrows(BadRequestException.class, () -> connectorPluginsResource.validateConfigs(
+                ConnectorPluginsResourceTestConnector.class.getSimpleName(), -1L, PROPS));
+        assertThrows(BadRequestException.class, () -> connectorPluginsResource.validateConfigs(
+                ConnectorPluginsResourceTestConnector.class.getSimpleName(), REST_REQUEST_MAX_TIMEOUT_MS_DEFAULT + 1, PROPS));
     }
 
     @Test

@@ -219,7 +219,7 @@ public class RestServer {
         this.resources = new ArrayList<>();
         resources.add(new RootResource(herder));
         resources.add(new ConnectorsResource(herder, config));
-        resources.add(new ConnectorPluginsResource(herder));
+        resources.add(new ConnectorPluginsResource(herder, config));
         resources.forEach(resourceConfig::register);
 
         resourceConfig.register(ConnectExceptionMapper.class);

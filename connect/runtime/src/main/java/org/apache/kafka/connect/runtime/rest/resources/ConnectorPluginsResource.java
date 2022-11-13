@@ -21,6 +21,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.PredicatedTransformation;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
@@ -65,8 +66,9 @@ public class ConnectorPluginsResource implements ConnectResource {
 
     private static final String ALIAS_SUFFIX = "Connector";
     private final Herder herder;
+    private final WorkerConfig config;
     private final List<PluginInfo> connectorPlugins;
-    private long requestTimeoutMs;
+    private long defaultRequestTimeoutMs;
 
     static final List<Class<? extends SinkConnector>> SINK_CONNECTOR_EXCLUDES = Arrays.asList(
             VerifiableSinkConnector.class,
@@ -84,10 +86,11 @@ public class ConnectorPluginsResource implements ConnectResource {
             (Class) PredicatedTransformation.class
     );
 
-    public ConnectorPluginsResource(Herder herder) {
+    public ConnectorPluginsResource(Herder herder, WorkerConfig config) {
         this.herder = herder;
+        this.config = config;
         this.connectorPlugins = new ArrayList<>();
-        this.requestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
+        this.defaultRequestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
         // TODO: improve once plugins are allowed to be added/removed during runtime.
         addConnectorPlugins(herder.plugins().sinkConnectors(), SINK_CONNECTOR_EXCLUDES);
@@ -107,7 +110,7 @@ public class ConnectorPluginsResource implements ConnectResource {
 
     @Override
     public void requestTimeout(long requestTimeoutMs) {
-        this.requestTimeoutMs = requestTimeoutMs;
+        this.defaultRequestTimeoutMs = requestTimeoutMs;
     }
 
     @PUT
@@ -115,6 +118,7 @@ public class ConnectorPluginsResource implements ConnectResource {
     @Operation(summary = "Validate the provided configuration against the configuration definition for the specified pluginName")
     public ConfigInfos validateConfigs(
         final @PathParam("pluginName") String pluginName,
+        final @QueryParam("timeout") Long timeout,
         final Map<String, String> connectorConfig
     ) throws Throwable {
         String includedConnType = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
@@ -126,12 +130,16 @@ public class ConnectorPluginsResource implements ConnectResource {
             );
         }
 
+        if (timeout != null) {
+            validateTimeout(timeout, config.maxRestRequestTimeoutMs());
+        }
+
         // the validated configs don't need to be logged
         FutureCallback<ConfigInfos> validationCallback = new FutureCallback<>();
         herder.validateConnectorConfig(connectorConfig, validationCallback, false);
 
         try {
-            return validationCallback.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
+            return validationCallback.get(timeout != null ? timeout : defaultRequestTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
             // error is the best option

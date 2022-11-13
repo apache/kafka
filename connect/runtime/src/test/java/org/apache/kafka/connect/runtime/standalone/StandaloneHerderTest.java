@@ -19,6 +19,8 @@ package org.apache.kafka.connect.runtime.standalone;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -102,6 +104,7 @@ public class StandaloneHerderTest {
     private static final String TOPICS_LIST_STR = "topic1,topic2";
     private static final String WORKER_ID = "localhost:8083";
     private static final String KAFKA_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
+    private static final long REQUEST_TIMEOUT_MS = 1000;
 
     private enum SourceSink {
         SOURCE, SINK
@@ -110,6 +113,7 @@ public class StandaloneHerderTest {
     private StandaloneHerder herder;
 
     private Connector connector;
+    private MockTime time;
     @Mock protected Worker worker;
     @Mock protected WorkerConfigTransformer transformer;
     @Mock private Plugins plugins;
@@ -127,9 +131,10 @@ public class StandaloneHerderTest {
     @Before
     public void setup() {
         worker = PowerMock.createMock(Worker.class);
+        time = new MockTime();
         String[] methodNames = new String[]{"connectorType", "buildRestartPlan", "recordRestarting"};
         herder = PowerMock.createPartialMock(StandaloneHerder.class, methodNames,
-                worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy);
+                worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy, time);
         createCallback = new FutureCallback<>();
         plugins = PowerMock.createMock(Plugins.class);
         pluginLoader = PowerMock.createMock(PluginClassLoader.class);
@@ -150,7 +155,7 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
@@ -183,10 +188,47 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback, REQUEST_TIMEOUT_MS);
 
         ExecutionException exception = assertThrows(ExecutionException.class, () -> createCallback.get(1000L, TimeUnit.SECONDS));
         if (BadRequestException.class != exception.getCause().getClass()) {
+            throw new AssertionError(exception.getCause());
+        }
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testCreateConnectorValidationTimeout() {
+        connector = PowerMock.createMock(BogusSourceConnector.class);
+
+        Map<String, String> config = connectorConfig(SourceSink.SOURCE);
+        config.remove(ConnectorConfig.NAME_CONFIG);
+
+        Connector connectorMock = PowerMock.createMock(SourceConnector.class);
+        EasyMock.expect(worker.configTransformer()).andReturn(transformer).times(2);
+        final Capture<Map<String, String>> configCapture = EasyMock.newCapture();
+        EasyMock.expect(transformer.transform(EasyMock.capture(configCapture))).andAnswer(configCapture::getValue);
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(4);
+        EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
+        EasyMock.expect(plugins.connectorLoader(EasyMock.anyString())).andReturn(pluginLoader);
+        EasyMock.expect(plugins.withClassLoader(pluginLoader)).andReturn(loaderSwap);
+
+        EasyMock.expect(connectorMock.config()).andStubReturn(new ConfigDef());
+
+        ConfigValue validatedValue = new ConfigValue("foo.bar");
+        EasyMock.expect(connectorMock.validate(config)).andAnswer(() -> {
+            time.sleep(2 * REQUEST_TIMEOUT_MS);
+            return new Config(singletonList(validatedValue));
+        });
+        loaderSwap.close();
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback, REQUEST_TIMEOUT_MS);
+
+        ExecutionException exception = assertThrows(ExecutionException.class, () -> createCallback.get(1000L, TimeUnit.SECONDS));
+        if (TimeoutException.class != exception.getCause().getClass()) {
             throw new AssertionError(exception.getCause());
         }
         PowerMock.verifyAll();
@@ -214,13 +256,13 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         // Second should fail
         FutureCallback<Herder.Created<ConnectorInfo>> failedCreateCallback = new FutureCallback<>();
-        herder.putConnectorConfig(CONNECTOR_NAME, config, false, failedCreateCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, config, false, failedCreateCallback, REQUEST_TIMEOUT_MS);
         ExecutionException exception = assertThrows(ExecutionException.class, () -> failedCreateCallback.get(1000L, TimeUnit.SECONDS));
         if (AlreadyExistsException.class != exception.getCause().getClass()) {
             throw new AssertionError(exception.getCause());
@@ -238,7 +280,7 @@ public class StandaloneHerderTest {
         expectConfigValidation(connectorMock, true, config);
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SINK), connectorInfo.result());
 
@@ -262,7 +304,7 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
@@ -309,7 +351,7 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
@@ -356,7 +398,7 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
@@ -389,7 +431,7 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
@@ -434,7 +476,7 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
@@ -475,7 +517,7 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
@@ -517,7 +559,7 @@ public class StandaloneHerderTest {
         expectConfigValidation(connectorMock, true, connectorConfig);
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SINK), connectorInfo.result());
 
@@ -549,7 +591,7 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SINK), connectorInfo.result());
 
@@ -593,7 +635,7 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SINK), connectorInfo.result());
 
@@ -647,7 +689,7 @@ public class StandaloneHerderTest {
         EasyMock.expectLastCall().andReturn(true);
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SINK), connectorInfo.result());
 
@@ -713,7 +755,7 @@ public class StandaloneHerderTest {
         EasyMock.expectLastCall().andReturn(true);
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SINK), connectorInfo.result());
 
@@ -744,7 +786,7 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
@@ -801,7 +843,7 @@ public class StandaloneHerderTest {
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
         herder.taskConfigs(CONNECTOR_NAME, taskConfigsCb);
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
@@ -859,14 +901,14 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
 
         FutureCallback<Herder.Created<ConnectorInfo>> reconfigureCallback = new FutureCallback<>();
-        herder.putConnectorConfig(CONNECTOR_NAME, newConnConfig, true, reconfigureCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, newConnConfig, true, reconfigureCallback, REQUEST_TIMEOUT_MS);
         Herder.Created<ConnectorInfo> newConnectorInfo = reconfigureCallback.get(1000L, TimeUnit.SECONDS);
         ConnectorInfo newConnInfo = new ConnectorInfo(CONNECTOR_NAME, newConnConfig, Arrays.asList(new ConnectorTaskId(CONNECTOR_NAME, 0)),
             ConnectorType.SOURCE);
@@ -920,7 +962,7 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, config, true, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, config, true, createCallback, REQUEST_TIMEOUT_MS);
         try {
             createCallback.get(1000L, TimeUnit.SECONDS);
             fail("Should have failed to configure connector");
@@ -1047,6 +1089,15 @@ public class StandaloneHerderTest {
             boolean shouldCreateConnector,
             Map<String, String>... configs
     ) {
+        expectConfigValidation(connectorMock, shouldCreateConnector, 0, configs);
+    }
+
+    private void expectConfigValidation(
+            Connector connectorMock,
+            boolean shouldCreateConnector,
+            long validationSleepMs,
+            Map<String, String>... configs
+    ) {
         // config validation
         EasyMock.expect(worker.configTransformer()).andReturn(transformer).times(2);
         final Capture<Map<String, String>> configCapture = EasyMock.newCapture();
@@ -1061,7 +1112,10 @@ public class StandaloneHerderTest {
         EasyMock.expect(connectorMock.config()).andStubReturn(new ConfigDef());
 
         for (Map<String, String> config : configs)
-            EasyMock.expect(connectorMock.validate(config)).andReturn(new Config(Collections.emptyList()));
+            EasyMock.expect(connectorMock.validate(config)).andAnswer(() -> {
+                time.sleep(validationSleepMs);
+                return new Config(Collections.emptyList());
+            });
         loaderSwap.close();
         EasyMock.expectLastCall();
     }

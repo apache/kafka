@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.runtime.standalone;
 
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -67,17 +69,19 @@ public class StandaloneHerder extends AbstractHerder {
 
     private final AtomicLong requestSeqNum = new AtomicLong();
     private final ScheduledExecutorService requestExecutorService;
+    private final Time time;
 
     private ClusterConfigState configState;
 
     public StandaloneHerder(Worker worker, String kafkaClusterId,
                             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
         this(worker,
-                worker.workerId(),
-                kafkaClusterId,
-                new MemoryStatusBackingStore(),
-                new MemoryConfigBackingStore(worker.configTransformer()),
-             connectorClientConfigOverridePolicy);
+             worker.workerId(),
+             kafkaClusterId,
+             new MemoryStatusBackingStore(),
+             new MemoryConfigBackingStore(worker.configTransformer()),
+             connectorClientConfigOverridePolicy,
+             Time.SYSTEM);
     }
 
     // visible for testing
@@ -86,10 +90,12 @@ public class StandaloneHerder extends AbstractHerder {
                      String kafkaClusterId,
                      StatusBackingStore statusBackingStore,
                      MemoryConfigBackingStore configBackingStore,
-                     ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+                     ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                     Time time) {
         super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
         this.configState = ClusterConfigState.EMPTY;
         this.requestExecutorService = Executors.newSingleThreadScheduledExecutor();
+        this.time = time;
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
     }
 
@@ -180,14 +186,23 @@ public class StandaloneHerder extends AbstractHerder {
     public synchronized void putConnectorConfig(String connName,
                                                 final Map<String, String> config,
                                                 boolean allowReplace,
-                                                final Callback<Created<ConnectorInfo>> callback) {
+                                                final Callback<Created<ConnectorInfo>> callback,
+                                                long requestTimeoutMs) {
         try {
+            long validateStartTime = time.milliseconds();
             validateConnectorConfig(config, (error, configInfos) -> {
                 if (error != null) {
                     callback.onCompletion(error, null);
                     return;
                 }
 
+                if (time.milliseconds() - validateStartTime > requestTimeoutMs) {
+                    // don't proceed to the actual connector config write since the request timeout was exceeded
+                    // by the connector config validation
+                    log.info("Connector config validation timed out for {}, the submitted configs won't be written", connName);
+                    callback.onCompletion(new TimeoutException(), null);
+                    return;
+                }
                 requestExecutorService.submit(
                     () -> putConnectorConfig(connName, config, allowReplace, callback, configInfos)
                 );

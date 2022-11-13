@@ -101,8 +101,9 @@ public interface Herder {
      * @param allowReplace if true, allow overwriting previous configs; if false, throw AlreadyExistsException if a connector
      *                     with the same name already exists
      * @param callback callback to invoke when the configuration has been written
+     * @param requestTimeoutMs the request timeout in milliseconds
      */
-    void putConnectorConfig(String connName, Map<String, String> config, boolean allowReplace, Callback<Created<ConnectorInfo>> callback);
+    void putConnectorConfig(String connName, Map<String, String> config, boolean allowReplace, Callback<Created<ConnectorInfo>> callback, long requestTimeoutMs);
 
     /**
      * Delete a connector and its configuration.

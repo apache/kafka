@@ -328,6 +328,10 @@ public class EmbeddedConnectCluster {
         return putConnectorConfig(url, connConfig);
     }
 
+    public ConfigInfos validateConnectorConfig(String connClassName, Map<String, String> connConfig) {
+        return validateConnectorConfig(connClassName, connConfig, null);
+    }
+
     /**
      * Validate a given connector configuration. If the configuration validates or
      * has a configuration error, an instance of {@link ConfigInfos} is returned. If the validation fails
@@ -335,11 +339,16 @@ public class EmbeddedConnectCluster {
      *
      * @param connClassName the name of the connector class
      * @param connConfig    the intended configuration
+     * @param requestTimeoutMs the request timeout in milliseconds, can be {@code null}.
      * @throws ConnectRestException if the REST api returns error status
      * @throws ConnectException if the configuration fails to serialize/deserialize or if the request failed to send
      */
-    public ConfigInfos validateConnectorConfig(String connClassName, Map<String, String> connConfig) {
-        String url = endpointForResource(String.format("connector-plugins/%s/config/validate", connClassName));
+    public ConfigInfos validateConnectorConfig(String connClassName, Map<String, String> connConfig, Long requestTimeoutMs) {
+        String validateResource = String.format("connector-plugins/%s/config/validate", connClassName);
+        if (requestTimeoutMs != null) {
+            validateResource += String.format("?timeout=%d", requestTimeoutMs);
+        }
+        String url = endpointForResource(validateResource);
         String response = putConnectorConfig(url, connConfig);
         ConfigInfos configInfos;
         try {

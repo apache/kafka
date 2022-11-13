@@ -27,7 +27,6 @@ import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -61,8 +60,10 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.NAME_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
+import static org.apache.kafka.connect.runtime.rest.resources.ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -154,6 +155,26 @@ public class BlockingConnectorTest {
 
         createNormalConnector();
         verifyNormalConnector();
+    }
+
+    @Test
+    public void testSlowConnectorValidateRequestTimesOut() {
+        Map<String, String> props = normalConnectorConfigs();
+        props.put(MonitorableSourceConnector.VALIDATION_BLOCK_MS_CONFIG, String.valueOf(DEFAULT_REST_REQUEST_TIMEOUT_MS + 1000));
+        ConnectRestException e = assertThrows(
+                ConnectRestException.class,
+                () -> connect.validateConnectorConfig(MonitorableSourceConnector.class.getSimpleName(), props)
+        );
+        assertTrue(e.getMessage().contains("Request timed out"));
+    }
+
+    @Test
+    public void testSlowConnectorValidateWithLongCustomRequestTimeout() {
+        Map<String, String> props = normalConnectorConfigs();
+        props.put(MonitorableSourceConnector.VALIDATION_BLOCK_MS_CONFIG, String.valueOf(DEFAULT_REST_REQUEST_TIMEOUT_MS + 1000));
+
+        // should not throw timeout exception
+        connect.validateConnectorConfig(MonitorableSourceConnector.class.getSimpleName(), props, DEFAULT_REST_REQUEST_TIMEOUT_MS + 5000);
     }
 
     @Test
@@ -299,10 +320,7 @@ public class BlockingConnectorTest {
         normalConnectorHandle.expectedRecords(NUM_RECORDS_PRODUCED);
         normalConnectorHandle.expectedCommits(NUM_RECORDS_PRODUCED);
 
-        Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
-        props.put(TASKS_MAX_CONFIG, "1");
-        props.put(MonitorableSourceConnector.TOPIC_CONFIG, TEST_TOPIC);
+        Map<String, String> props = normalConnectorConfigs();
         log.info("Creating normal connector");
         try {
             connect.configureConnector(NORMAL_CONNECTOR_NAME, props);
@@ -310,6 +328,15 @@ public class BlockingConnectorTest {
             log.info("Failed to create connector", e);
             throw e;
         }
+    }
+
+    private Map<String, String> normalConnectorConfigs() {
+        Map<String, String> props = new HashMap<>();
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
+        props.put(NAME_CONFIG, NORMAL_CONNECTOR_NAME);
+        props.put(TASKS_MAX_CONFIG, "1");
+        props.put(MonitorableSourceConnector.TOPIC_CONFIG, TEST_TOPIC);
+        return props;
     }
 
     private void waitForConnectorStart(String connector) throws InterruptedException {
@@ -346,7 +373,7 @@ public class BlockingConnectorTest {
                 exception.getMessage().contains("Request timed out")
         );
         // Reset the REST request timeout so that other requests aren't impacted
-        connect.requestTimeout(ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
+        connect.requestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
     }
 
     private static class Block {

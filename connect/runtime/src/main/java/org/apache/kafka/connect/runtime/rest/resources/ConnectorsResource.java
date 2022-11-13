@@ -83,7 +83,7 @@ public class ConnectorsResource implements ConnectResource {
 
     private final Herder herder;
     private final WorkerConfig config;
-    private long requestTimeoutMs;
+    private long defaultRequestTimeoutMs;
     @javax.ws.rs.core.Context
     private ServletContext context;
     private final boolean isTopicTrackingDisabled;
@@ -94,7 +94,7 @@ public class ConnectorsResource implements ConnectResource {
         this.config = config;
         isTopicTrackingDisabled = !config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         isTopicTrackingResetDisabled = !config.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG);
-        this.requestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
+        this.defaultRequestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
     }
 
     @Override
@@ -102,7 +102,7 @@ public class ConnectorsResource implements ConnectResource {
         if (requestTimeoutMs < 1) {
             throw new IllegalArgumentException("REST request timeout must be positive");
         }
-        this.requestTimeoutMs = requestTimeoutMs;
+        this.defaultRequestTimeoutMs = requestTimeoutMs;
     }
 
     @GET
@@ -147,6 +147,7 @@ public class ConnectorsResource implements ConnectResource {
     @Path("/")
     @Operation(summary = "Create a new connector")
     public Response createConnector(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
+                                    final @QueryParam("timeout") Long timeout,
                                     final @Context HttpHeaders headers,
                                     final CreateConnectorRequest createRequest) throws Throwable {
         // Trim leading and trailing whitespaces from the connector name, replace null with empty string
@@ -154,13 +155,19 @@ public class ConnectorsResource implements ConnectResource {
         // allows null values)
         String name = createRequest.name() == null ? "" : createRequest.name().trim();
 
+        long requestTimeoutMs = defaultRequestTimeoutMs;
+        if (timeout != null) {
+            validateTimeout(timeout, config.maxRestRequestTimeoutMs());
+            requestTimeoutMs = timeout;
+        }
+
         Map<String, String> configs = createRequest.config();
         checkAndPutConnectorConfigName(name, configs);
 
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
-        herder.putConnectorConfig(name, configs, false, cb);
+        herder.putConnectorConfig(name, configs, false, cb, requestTimeoutMs);
         Herder.Created<ConnectorInfo> info = completeOrForwardRequest(cb, "/connectors", "POST", headers, createRequest,
-                new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
+                new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward, requestTimeoutMs);
 
         URI location = UriBuilder.fromUri("/connectors").path(name).build();
         return Response.created(location).entity(info.result()).build();
@@ -174,7 +181,7 @@ public class ConnectorsResource implements ConnectResource {
                                       final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<ConnectorInfo> cb = new FutureCallback<>();
         herder.connectorInfo(connector, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector, "GET", headers, null, forward);
+        return completeOrForwardRequest(cb, "/connectors/" + connector, "GET", headers, null, forward, defaultRequestTimeoutMs);
     }
 
     @GET
@@ -185,7 +192,7 @@ public class ConnectorsResource implements ConnectResource {
                                                   final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Map<String, String>> cb = new FutureCallback<>();
         herder.connectorConfig(connector, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", headers, null, forward);
+        return completeOrForwardRequest(cb, "/connectors/" + connector + "/config", "GET", headers, null, forward, defaultRequestTimeoutMs);
     }
 
     @GET
@@ -197,7 +204,7 @@ public class ConnectorsResource implements ConnectResource {
             final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Map<ConnectorTaskId, Map<String, String>>> cb = new FutureCallback<>();
         herder.tasksConfig(connector, cb);
-        return completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks-config", "GET", headers, null, forward);
+        return completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks-config", "GET", headers, null, forward, defaultRequestTimeoutMs);
     }
 
     @GET
@@ -241,13 +248,20 @@ public class ConnectorsResource implements ConnectResource {
     public Response putConnectorConfig(final @PathParam("connector") String connector,
                                        final @Context HttpHeaders headers,
                                        final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
+                                       final @QueryParam("timeout") Long timeout,
                                        final Map<String, String> connectorConfig) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         checkAndPutConnectorConfigName(connector, connectorConfig);
 
-        herder.putConnectorConfig(connector, connectorConfig, true, cb);
+        long requestTimeoutMs = defaultRequestTimeoutMs;
+        if (timeout != null) {
+            validateTimeout(timeout, config.maxRestRequestTimeoutMs());
+            requestTimeoutMs = timeout;
+        }
+
+        herder.putConnectorConfig(connector, connectorConfig, true, cb, requestTimeoutMs);
         Herder.Created<ConnectorInfo> createdInfo = completeOrForwardRequest(cb, "/connectors/" + connector + "/config",
-                "PUT", headers, connectorConfig, new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
+                "PUT", headers, connectorConfig, new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward, requestTimeoutMs);
         Response.ResponseBuilder response;
         if (createdInfo.created()) {
             URI location = UriBuilder.fromUri("/connectors").path(connector).build();
@@ -272,7 +286,7 @@ public class ConnectorsResource implements ConnectResource {
             // For backward compatibility, just restart the connector instance and return OK with no body
             FutureCallback<Void> cb = new FutureCallback<>();
             herder.restartConnector(connector, cb);
-            completeOrForwardRequest(cb, forwardingPath, "POST", headers, null, forward);
+            completeOrForwardRequest(cb, forwardingPath, "POST", headers, null, forward, defaultRequestTimeoutMs);
             return Response.noContent().build();
         }
 
@@ -283,7 +297,7 @@ public class ConnectorsResource implements ConnectResource {
         queryParameters.put("includeTasks", includeTasks.toString());
         queryParameters.put("onlyFailed", onlyFailed.toString());
         ConnectorStateInfo stateInfo = completeOrForwardRequest(cb, forwardingPath, "POST", headers, queryParameters, null, new TypeReference<ConnectorStateInfo>() {
-        }, new IdentityTranslator<>(), forward);
+        }, new IdentityTranslator<>(), forward, defaultRequestTimeoutMs);
         return Response.accepted().entity(stateInfo).build();
     }
 
@@ -314,7 +328,7 @@ public class ConnectorsResource implements ConnectResource {
         FutureCallback<List<TaskInfo>> cb = new FutureCallback<>();
         herder.taskConfigs(connector, cb);
         return completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "GET", headers, null, new TypeReference<List<TaskInfo>>() {
-        }, forward);
+        }, forward, defaultRequestTimeoutMs);
     }
 
     @POST
@@ -327,7 +341,7 @@ public class ConnectorsResource implements ConnectResource {
         List<Map<String, String>> taskConfigs = new ObjectMapper().readValue(requestBody, TASK_CONFIGS_TYPE);
         FutureCallback<Void> cb = new FutureCallback<>();
         herder.putTaskConfigs(connector, taskConfigs, cb, InternalRequestSignature.fromHeaders(requestBody, headers));
-        completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "POST", headers, taskConfigs, forward);
+        completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "POST", headers, taskConfigs, forward, defaultRequestTimeoutMs);
     }
 
     @PUT
@@ -339,7 +353,7 @@ public class ConnectorsResource implements ConnectResource {
                              final byte[] requestBody) throws Throwable {
         FutureCallback<Void> cb = new FutureCallback<>();
         herder.fenceZombieSourceTasks(connector, cb, InternalRequestSignature.fromHeaders(requestBody, headers));
-        completeOrForwardRequest(cb, "/connectors/" + connector + "/fence", "PUT", headers, requestBody, forward);
+        completeOrForwardRequest(cb, "/connectors/" + connector + "/fence", "PUT", headers, requestBody, forward, defaultRequestTimeoutMs);
     }
 
     @GET
@@ -361,7 +375,7 @@ public class ConnectorsResource implements ConnectResource {
         FutureCallback<Void> cb = new FutureCallback<>();
         ConnectorTaskId taskId = new ConnectorTaskId(connector, task);
         herder.restartTask(taskId, cb);
-        completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/restart", "POST", headers, null, forward);
+        completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/restart", "POST", headers, null, forward, defaultRequestTimeoutMs);
     }
 
     @DELETE
@@ -372,7 +386,7 @@ public class ConnectorsResource implements ConnectResource {
                                  final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         herder.deleteConnectorConfig(connector, cb);
-        completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", headers, null, forward);
+        completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", headers, null, forward, defaultRequestTimeoutMs);
     }
 
     // Check whether the connector name from the url matches the one (if there is one) provided in the connectorConfig
@@ -397,7 +411,8 @@ public class ConnectorsResource implements ConnectResource {
                                               Object body,
                                               TypeReference<U> resultType,
                                               Translator<T, U> translator,
-                                              Boolean forward) throws Throwable {
+                                              Boolean forward,
+                                              long requestTimeoutMs) throws Throwable {
         try {
             return cb.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
@@ -435,6 +450,8 @@ public class ConnectorsResource implements ConnectResource {
             } else if (cause instanceof RebalanceNeededException) {
                 throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
                         "Cannot complete request momentarily due to stale configuration (typically caused by a concurrent config change)");
+            } else if (cause instanceof org.apache.kafka.common.errors.TimeoutException) {
+                throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), "Request timed out");
             }
 
             throw cause;
@@ -448,18 +465,18 @@ public class ConnectorsResource implements ConnectResource {
     }
 
     private <T, U> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers, Object body,
-                                              TypeReference<U> resultType, Translator<T, U> translator, Boolean forward) throws Throwable {
-        return completeOrForwardRequest(cb, path, method, headers, null, body, resultType, translator, forward);
+                                              TypeReference<U> resultType, Translator<T, U> translator, Boolean forward, long requestTimeoutMs) throws Throwable {
+        return completeOrForwardRequest(cb, path, method, headers, null, body, resultType, translator, forward, requestTimeoutMs);
     }
 
     private <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers, Object body,
-                                           TypeReference<T> resultType, Boolean forward) throws Throwable {
-        return completeOrForwardRequest(cb, path, method, headers, body, resultType, new IdentityTranslator<>(), forward);
+                                           TypeReference<T> resultType, Boolean forward, long requestTimeoutMs) throws Throwable {
+        return completeOrForwardRequest(cb, path, method, headers, body, resultType, new IdentityTranslator<>(), forward, requestTimeoutMs);
     }
 
     private <T> T completeOrForwardRequest(FutureCallback<T> cb, String path, String method, HttpHeaders headers,
-                                           Object body, Boolean forward) throws Throwable {
-        return completeOrForwardRequest(cb, path, method, headers, body, null, new IdentityTranslator<>(), forward);
+                                           Object body, Boolean forward, long requestTimeoutMs) throws Throwable {
+        return completeOrForwardRequest(cb, path, method, headers, body, null, new IdentityTranslator<>(), forward, requestTimeoutMs);
     }
 
     private interface Translator<T, U> {
