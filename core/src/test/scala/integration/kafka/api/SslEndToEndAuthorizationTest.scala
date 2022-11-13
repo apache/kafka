@@ -37,8 +37,8 @@ object SslEndToEndAuthorizationTest {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       val peerPrincipal = context.asInstanceOf[SslAuthenticationContext].session.getPeerPrincipal.getName
       peerPrincipal match {
-        case Pattern(name, _) =>
-          val principal = if (name == "server") name else peerPrincipal
+        case Pattern(name, extra) =>
+          val principal = if ((name == "server") || (extra == "server")) "server" else peerPrincipal
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, principal)
         case _ =>
           KafkaPrincipal.ANONYMOUS
@@ -78,6 +78,15 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override def clientSecurityProps(certAlias: String): Properties = {
     val props = TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile,
       certAlias, clientCn, clientSaslProperties, tlsProtocol)
+    props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
+    props
+  }
+  // This test doesn't really care about matching the SSL certificate to a particular principal
+  // We can override the CN and create a principal based on it or on the server SSL
+  // This is really ugly and I'd like a better way to do this.
+  override def superuserSecurityProps(certAlias: String): Properties = {
+    val props = TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile,
+      certAlias, "server", clientSaslProperties, tlsProtocol)
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props
   }
