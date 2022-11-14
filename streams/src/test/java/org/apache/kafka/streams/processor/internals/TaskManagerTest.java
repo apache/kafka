@@ -2502,7 +2502,7 @@ public class TaskManagerTest {
         expectLastCall();
 
         final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
-        expect(consumer.groupMetadata()).andReturn(groupMetadata);
+        expect(consumer.groupMetadata()).andStubReturn(groupMetadata);
 
         doThrow(new TimeoutException()).when(producer).commitTransaction(expectedCommittedOffsets, groupMetadata);
 
@@ -2719,8 +2719,7 @@ public class TaskManagerTest {
         final StreamsProducer threadProducer = EasyMock.createNiceMock(StreamsProducer.class);
 
         final Tasks tasks = EasyMock.createNiceMock(Tasks.class);
-        EasyMock.expect(tasks.threadProducer()).andReturn(threadProducer);
-        EasyMock.expect(tasks.allTasks()).andReturn(singletonList(task00));
+        EasyMock.expect(tasks.allTasks()).andReturn(singleton(task00));
         replay(tasks);
         threadProducer.commitTransaction(anyObject(), anyObject());
         EasyMock.expectLastCall().times(1);
@@ -2796,7 +2795,7 @@ public class TaskManagerTest {
             .andReturn(singletonList(task10));
 
         final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
-        expect(consumer.groupMetadata()).andReturn(groupMetadata);
+        expect(consumer.groupMetadata()).andStubReturn(groupMetadata);
         producer.commitTransaction(expectedCommittedOffsets, groupMetadata);
         expectLastCall();
 
@@ -4649,6 +4648,7 @@ public class TaskManagerTest {
         expect(activeTask.inputPartitions()).andStubReturn(taskId00Partitions);
         expect(activeTask.isActive()).andStubReturn(true);
         expect(activeTask.prepareCommit()).andStubReturn(Collections.emptyMap());
+        expect(activeTask.commitNeeded()).andStubReturn(false);
 
         final StandbyTask standbyTask = EasyMock.mock(StandbyTask.class);
         expect(standbyTask.id()).andStubReturn(taskId00);

@@ -1632,9 +1632,10 @@ public class StreamThreadTest {
 
         final StreamsProducer threadProducer = EasyMock.createNiceMock(StreamsProducer.class);
 
+        final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
         final Tasks tasks = EasyMock.createNiceMock(Tasks.class);
-        EasyMock.expect(tasks.threadProducer()).andReturn(threadProducer);
-        EasyMock.expect(tasks.allTasks()).andReturn(Arrays.asList(task1, task2));
+        EasyMock.expect(activeTaskCreator.threadProducer()).andReturn(threadProducer);
+        EasyMock.expect(tasks.allTasks()).andReturn(mkSet(task1, task2));
         replay(tasks);
 
         thread.taskManager().handleAssignment(activeTasks, emptyMap());
@@ -1672,9 +1673,10 @@ public class StreamThreadTest {
 
         final StreamsProducer threadProducer = EasyMock.createNiceMock(StreamsProducer.class);
 
+        final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
         final Tasks tasks = EasyMock.createNiceMock(Tasks.class);
-        EasyMock.expect(tasks.threadProducer()).andReturn(threadProducer);
-        EasyMock.expect(tasks.allTasks()).andReturn(Arrays.asList(task1, task2));
+        EasyMock.expect(activeTaskCreator.threadProducer()).andReturn(threadProducer);
+        EasyMock.expect(tasks.allTasks()).andReturn(mkSet(task1, task2));
         replay(tasks);
 
         thread.taskManager().handleAssignment(activeTasks, emptyMap());
@@ -1711,10 +1713,12 @@ public class StreamThreadTest {
         EasyMock.expect(task1.state()).andReturn(Task.State.RESTORING);
 
         final StreamsProducer threadProducer = EasyMock.createNiceMock(StreamsProducer.class);
+        final ActiveTaskCreator activeTaskCreator = mock(ActiveTaskCreator.class);
+
 
         final Tasks tasks = EasyMock.createNiceMock(Tasks.class);
-        EasyMock.expect(tasks.threadProducer()).andReturn(threadProducer);
-        EasyMock.expect(tasks.allTasks()).andReturn(Arrays.asList(task1, task2));
+        EasyMock.expect(activeTaskCreator.threadProducer()).andReturn(threadProducer);
+        EasyMock.expect(tasks.allTasks()).andReturn(mkSet(task1, task2));
         replay(tasks);
 
         thread.taskManager().handleAssignment(activeTasks, emptyMap());

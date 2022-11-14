@@ -298,6 +298,42 @@ public class TaskManager {
         }
     }
 
+    private void commitActiveTasks(final Set<Task> activeTasksNeedCommit, final AtomicReference<RuntimeException> activeTasksCommitException) {
+
+        final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsPerTask = new HashMap<>();
+        prepareCommitAndAddOffsetsToMap(activeTasksNeedCommit, consumedOffsetsPerTask);
+
+        final Set<Task> dirtyTasks = new HashSet<>();
+        try {
+            taskExecutor.commitOffsetsOrTransaction(consumedOffsetsPerTask);
+        } catch (final TaskCorruptedException e) {
+            log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
+                    e.corruptedTasks());
+
+            // If we hit a TaskCorruptedException it must be EOS, just handle the cleanup for those corrupted tasks right here
+            dirtyTasks.addAll(tasks.tasks(e.corruptedTasks()));
+            closeDirtyAndRevive(dirtyTasks, true);
+        } catch (final RuntimeException e) {
+            log.error("Exception caught while committing active tasks: " + consumedOffsetsPerTask.keySet(), e);
+            activeTasksCommitException.compareAndSet(null, e);
+            dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
+        }
+
+        // for non-revoking active tasks, we should not enforce checkpoint
+        // as it's EOS enabled in which case no checkpoint should be written while
+        // the task is in RUNNING tate
+        for (final Task task : activeTasksNeedCommit) {
+            if (!dirtyTasks.contains(task)) {
+                try {
+                    task.postCommit(true);
+                } catch (final RuntimeException e) {
+                    log.error("Exception caught while post-committing task: " + task.id(), e);
+                    maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), activeTasksCommitException);
+                }
+            }
+        }
+    }
+
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      * @throws StreamsException fatal error while creating / initializing the task
@@ -342,7 +378,18 @@ public class TaskManager {
 
         maybeThrowTaskExceptions(taskCloseExceptions);
 
-        createNewTasks(activeTasksToCreate, standbyTasksToCreate);
+        final Collection<Task> newActiveTasks = createNewTasks(activeTasksToCreate, standbyTasksToCreate);
+        final Set<Task> activeTasksNeedCommit;
+        // Find new active tasks which need commit.
+        if (newActiveTasks == null || newActiveTasks.isEmpty()) {
+            activeTasksNeedCommit = new HashSet<>();
+        } else {
+            activeTasksNeedCommit = newActiveTasks.stream().filter(Task::commitNeeded).collect(Collectors.toSet());
+        }
+        if (processingMode == EXACTLY_ONCE_V2 && !activeTasksNeedCommit.isEmpty()) {
+            final AtomicReference<RuntimeException> activeTasksCommitException = new AtomicReference<>(null);
+            commitActiveTasks(activeTasksNeedCommit, activeTasksCommitException);
+        }
     }
 
     // Wrap and throw the exception in the following order
@@ -391,7 +438,7 @@ public class TaskManager {
         }
     }
 
-    private void createNewTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+    private Collection<Task> createNewTasks(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                                 final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate) {
         final Collection<Task> newActiveTasks = activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate);
         final Collection<Task> newStandbyTask = standbyTaskCreator.createTasks(standbyTasksToCreate);
@@ -403,6 +450,7 @@ public class TaskManager {
             tasks.addPendingTaskToInit(newActiveTasks);
             tasks.addPendingTaskToInit(newStandbyTask);
         }
+        return newActiveTasks;
     }
 
     private void handleTasksWithoutStateUpdater(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
@@ -706,6 +754,7 @@ public class TaskManager {
             }
         }
 
+        final Set<Task> restoringTasks = new HashSet<>();
         if (allRunning && !activeTasks.isEmpty()) {
 
             final Set<TopicPartition> restored = changelogReader.completedChangelogs();
@@ -730,6 +779,7 @@ public class TaskManager {
                     // we found a restoring task that isn't done restoring, which is evidence that
                     // not all tasks are running
                     allRunning = false;
+                    restoringTasks.add(task);
                 }
             }
         }
@@ -737,6 +787,14 @@ public class TaskManager {
             // we can call resume multiple times since it is idempotent.
             mainConsumer.resume(mainConsumer.assignment());
             changelogReader.transitToUpdateStandby();
+        } else {
+            // There are still some tasks in RESTORING phase.
+            final AtomicReference<RuntimeException> activeTasksCommitException = new AtomicReference<>(null);
+            commitActiveTasks(restoringTasks, activeTasksCommitException);
+
+            if (activeTasksCommitException.get() != null) {
+                throw activeTasksCommitException.get();
+            }
         }
 
         return allRunning;
