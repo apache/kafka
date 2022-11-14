@@ -257,7 +257,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         // Derived set: The set of new connectors-and-tasks is a derived set from the set
         // difference of configured - previous - active
         ConnectorsAndTasks created = diff(configured, previousAssignment, activeAssignments);
-        log.debug("New assignments: {}", created);
+        log.debug("Created: {}", created);
 
         // A collection of the current assignment excluding the connectors-and-tasks to be deleted
         List<WorkerLoad> currentWorkerAssignment = workerAssignment(memberAssignments, deleted);
@@ -618,12 +618,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     }
 
     /**
-     * Revoke connectors and tasks from each worker in the cluster until no worker is running more than it would be if:
-     * <ul>
-     *     <li>The allocation of connectors and tasks across the cluster were as balanced as possible (i.e., the difference in allocation size between any two workers is at most one)</li>
-     *     <li>Any workers that left the group within the scheduled rebalance delay permanently left the group</li>
-     *     <li>All currently-configured connectors and tasks were allocated (including instances that may be revoked in this round because they are duplicated across workers)</li>
-     * </ul>
+     * Revoke connectors and tasks from each worker in the cluster until no worker is running more than it
+     * would be with a perfectly-balanced assignment.
      * @param configured the set of configured connectors and tasks across the entire cluster
      * @param workers the workers in the cluster, whose assignments should not include any deleted or duplicated connectors or tasks
      *                that are already due to be revoked from the worker in this rebalance
@@ -702,7 +698,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         if (workersAllocatedSingleExtra == workersToAllocateExtra
                 && workersAllocatedMinimum + workersAllocatedSingleExtra == totalWorkers) {
             log.trace(
-                    "No load-balancing {} revocations required; the current allocations, when combined with any newly-created {}, should be balanced",
+                    "No load-balancing {} revocations required; the current allocations, when combined with any newly-created {}s, should be balanced",
                     allocatedResourceName,
                     allocatedResourceName
             );
@@ -712,6 +708,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         Map<String, Set<E>> result = new HashMap<>();
         // How many workers we've allocated a single extra resource instance to
         int allocatedExtras = 0;
+        // Calculate how many (and which) connectors/tasks to revoke from each worker here
         for (WorkerLoad worker : workers) {
             int currentAllocationSizeForWorker = workerAllocationSize.apply(worker);
             if (currentAllocationSizeForWorker <= minAllocatedPerWorker) {
