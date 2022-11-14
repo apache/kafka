@@ -2498,7 +2498,7 @@ public class TaskManagerTest {
             );
 
         expect(consumer.groupMetadata()).andReturn(groupMetadata);
-        Set<TopicPartition> assignments = union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions);
+        final Set<TopicPartition> assignments = union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions);
         expect(consumer.assignment()).andStubReturn(assignments);
         consumer.resume(assignments);
         expectLastCall();
