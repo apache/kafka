@@ -80,7 +80,7 @@ public class MirrorMakerConfigTest {
     @Test
     public void testClientConfigProperties() {
         String clusterABootstrap = "one:9092, two:9092";
-        String clusterBBoostrap = "three:9092, four:9092";
+        String clusterBBootstrap = "three:9092, four:9092";
         MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
             "clusters", "a, b",
             "config.providers", "fake",
@@ -91,7 +91,7 @@ public class MirrorMakerConfigTest {
             "a.security.protocol", "PLAINTEXT",
             "a.producer.security.protocol", "SSL",
             "a.bootstrap.servers", clusterABootstrap,
-            "b.bootstrap.servers", clusterBBoostrap,
+            "b.bootstrap.servers", clusterBBootstrap,
             "metrics.reporter", FakeMetricsReporter.class.getName(),
             "a.metrics.reporter", FakeMetricsReporter.class.getName(),
             "b->a.metrics.reporter", FakeMetricsReporter.class.getName(),
