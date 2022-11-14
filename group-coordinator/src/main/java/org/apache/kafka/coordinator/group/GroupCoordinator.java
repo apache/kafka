@@ -18,6 +18,8 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
+import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.BufferSupplier;
 
@@ -40,5 +42,17 @@ public interface GroupCoordinator {
         BufferSupplier bufferSupplier
     );
 
+    /**
+     * Leave a Generic Group.
+     *
+     * @param context           The coordinator request context.
+     * @param request           The LeaveGroupRequest data.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<LeaveGroupResponseData> leaveGroup(
+        RequestContext context,
+        LeaveGroupRequestData request
+    );
 }
 

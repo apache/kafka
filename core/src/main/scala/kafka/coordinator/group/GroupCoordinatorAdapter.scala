@@ -17,7 +17,7 @@
 package kafka.coordinator.group
 
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData}
+import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData}
 import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.utils.BufferSupplier
 
@@ -79,6 +79,33 @@ class GroupCoordinatorAdapter(
       callback,
       Option(request.reason),
       RequestLocal(bufferSupplier)
+    )
+
+    future
+  }
+
+  override def leaveGroup(
+    context: RequestContext,
+    request: LeaveGroupRequestData
+  ): CompletableFuture[LeaveGroupResponseData] = {
+    val future = new CompletableFuture[LeaveGroupResponseData]()
+
+    def callback(leaveGroupResult: LeaveGroupResult): Unit = {
+      future.complete(new LeaveGroupResponseData()
+        .setErrorCode(leaveGroupResult.topLevelError.code)
+        .setMembers(leaveGroupResult.memberResponses.map { member =>
+          new LeaveGroupResponseData.MemberResponse()
+            .setErrorCode(member.error.code)
+            .setMemberId(member.memberId)
+            .setGroupInstanceId(member.groupInstanceId.orNull)
+        }.asJava)
+      )
+    }
+
+    coordinator.handleLeaveGroup(
+      request.groupId,
+      request.members.asScala.toList,
+      callback
     )
 
     future

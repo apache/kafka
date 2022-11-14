@@ -18,7 +18,7 @@ package kafka.coordinator.group
 
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.JoinGroupCallback
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData}
+import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
@@ -28,6 +28,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.BufferSupplier
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{mock, verify}
@@ -136,6 +137,66 @@ class GroupCoordinatorAdapterTest {
       .setLeader("leader")
       .setSkipAssignment(true)
       .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code)
+
+    assertTrue(future.isDone)
+    assertEquals(expectedData, future.get())
+  }
+
+  @Test
+  def testLeaveGroup(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+
+    val ctx = makeContext(ApiKeys.LEAVE_GROUP, ApiKeys.LEAVE_GROUP.latestVersion)
+    val data = new LeaveGroupRequestData()
+      .setGroupId("group")
+      .setMembers(List(
+        new LeaveGroupRequestData.MemberIdentity()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1"),
+        new LeaveGroupRequestData.MemberIdentity()
+          .setMemberId("member-2")
+          .setGroupInstanceId("instance-2")
+      ).asJava)
+
+    val future = adapter.leaveGroup(ctx, data)
+
+    val capturedCallback: ArgumentCaptor[LeaveGroupResult => Unit] =
+      ArgumentCaptor.forClass(classOf[LeaveGroupResult => Unit])
+
+    verify(groupCoordinator).handleLeaveGroup(
+      ArgumentMatchers.eq(data.groupId),
+      ArgumentMatchers.eq(data.members.asScala.toList),
+      capturedCallback.capture(),
+    )
+
+    assertFalse(future.isDone)
+
+    capturedCallback.getValue.apply(LeaveGroupResult(
+      topLevelError = Errors.NONE,
+      memberResponses = List(
+        LeaveMemberResponse(
+          memberId = "member-1",
+          groupInstanceId = Some("instance-1"),
+          error = Errors.NONE
+        ),
+        LeaveMemberResponse(
+          memberId = "member-2",
+          groupInstanceId = Some("instance-2"),
+          error = Errors.NONE
+        )
+      )
+    ))
+
+    val expectedData = new LeaveGroupResponseData()
+      .setMembers(List(
+        new LeaveGroupResponseData.MemberResponse()
+          .setMemberId("member-1")
+          .setGroupInstanceId("instance-1"),
+        new LeaveGroupResponseData.MemberResponse()
+          .setMemberId("member-2")
+          .setGroupInstanceId("instance-2")
+      ).asJava)
 
     assertTrue(future.isDone)
     assertEquals(expectedData, future.get())
