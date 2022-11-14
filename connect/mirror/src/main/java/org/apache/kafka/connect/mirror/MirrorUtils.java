@@ -46,7 +46,7 @@ import static java.util.Collections.singleton;
 
 /** Internal utility methods. */
 final class MirrorUtils {
-    private static final Logger log = LoggerFactory.getLogger(MirrorCheckpointTask.class);
+    private static final Logger log = LoggerFactory.getLogger(MirrorUtils.class);
 
     // utility class
     private MirrorUtils() {}
