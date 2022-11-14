@@ -165,6 +165,8 @@ def determineCommitId() {
       headRef = headRef.replaceAll('ref: ', '').trim()
       if (file("$rootDir/.git/$headRef").exists()) {
         file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
+      } else {
+      	"unknown"
       }
     } else {
       headRef.trim().take(takeFromHash)
