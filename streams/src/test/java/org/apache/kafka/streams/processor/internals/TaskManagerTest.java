@@ -2458,6 +2458,7 @@ public class TaskManagerTest {
     @Test
     public void shouldCloseAndReviveUncorruptedTasksWhenTimeoutExceptionThrownFromCommitDuringRevocationWithEOS() {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
+        final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
         final StreamsProducer producer = mock(StreamsProducer.class);
         expect(activeTaskCreator.threadProducer()).andStubReturn(producer);
         final ProcessorStateManager stateManager = EasyMock.createMock(ProcessorStateManager.class);
@@ -2487,6 +2488,8 @@ public class TaskManagerTest {
 
         stateManager.markChangelogAsCorrupted(taskId00ChangelogPartitions);
         stateManager.markChangelogAsCorrupted(taskId01ChangelogPartitions);
+        stateManager.markChangelogAsCorrupted(mkSet());
+        stateManager.markChangelogAsCorrupted(mkSet());
 
         final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
             mkEntry(taskId00, taskId00Partitions),
@@ -2494,6 +2497,11 @@ public class TaskManagerTest {
             mkEntry(taskId02, taskId02Partitions)
             );
 
+        expect(consumer.groupMetadata()).andReturn(groupMetadata);
+        Set<TopicPartition> assignments = union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions);
+        expect(consumer.assignment()).andStubReturn(assignments);
+        consumer.resume(assignments);
+        expectLastCall();
         expectRestoreToBeCompleted(consumer, changeLogReader);
 
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive))).andReturn(asList(revokedActiveTask, unrevokedActiveTask, unrevokedActiveTaskWithoutCommitNeeded));
@@ -2501,12 +2509,8 @@ public class TaskManagerTest {
         activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId00);
         expectLastCall();
 
-        final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
-        expect(consumer.groupMetadata()).andStubReturn(groupMetadata);
 
         doThrow(new TimeoutException()).when(producer).commitTransaction(expectedCommittedOffsets, groupMetadata);
-
-        expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
 
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader, stateManager);
 
@@ -2525,7 +2529,7 @@ public class TaskManagerTest {
 
         assertThat(unrevokedTaskChangelogMarkedAsCorrupted.get(), is(true));
         assertThat(revokedActiveTask.state(), is(State.SUSPENDED));
-        assertThat(unrevokedActiveTask.state(), is(State.CREATED));
+        assertThat(unrevokedActiveTask.state(), is(State.RUNNING));
         assertThat(unrevokedActiveTaskWithoutCommitNeeded.state(), is(State.RUNNING));
     }
 
@@ -2784,6 +2788,8 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignmentStandby = mkMap(
             mkEntry(taskId10, taskId10Partitions)
         );
+        final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
+        expect(consumer.groupMetadata()).andReturn(groupMetadata);
         expectRestoreToBeCompleted(consumer, changeLogReader);
 
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignmentActive)))
@@ -2794,8 +2800,6 @@ public class TaskManagerTest {
         expect(standbyTaskCreator.createTasks(eq(assignmentStandby)))
             .andReturn(singletonList(task10));
 
-        final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
-        expect(consumer.groupMetadata()).andStubReturn(groupMetadata);
         producer.commitTransaction(expectedCommittedOffsets, groupMetadata);
         expectLastCall();
 
