@@ -17,27 +17,23 @@
 
 package org.apache.kafka.metadata.placement;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.errors.InvalidReplicationFactorException;
-
+import java.util.List;
 
 /**
- * The interface which a Kafka replica placement policy must implement.
+ * The KRaft topic assignment.
  */
-@InterfaceStability.Unstable
-public interface ReplicaPlacer {
+public class TopicAssignment {
+    private List<PartitionAssignment> assignments;
+
+    public TopicAssignment(List<PartitionAssignment> assignments) {
+        this.assignments = assignments;
+    }
+
     /**
-     * Create a new replica placement.
-     *
-     * @param placement     What we're trying to place.
-     * @param cluster       A description of the cluster we're trying to place in.
-     *
-     * @return              A topic assignment.
-     *
-     * @throws InvalidReplicationFactorException    If too many replicas were requested.
+     * @return The replica assignment for each partition, where the index in the list corresponds to different partition.
      */
-    TopicAssignment place(
-        PlacementSpec placement,
-        ClusterDescriber cluster
-    ) throws InvalidReplicationFactorException;
+    public List<PartitionAssignment> assignments() {
+        return assignments;
+    }
+
 }

@@ -41,9 +41,7 @@ import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
-import org.apache.kafka.metadata.placement.ClusterDescriber;
 import org.apache.kafka.metadata.placement.PlacementSpec;
-import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -56,9 +54,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -407,13 +405,8 @@ public class ClusterControlManagerTest {
                 new PlacementSpec(0,
                     1,
                     (short) 3),
-                new ClusterDescriber() {
-                    @Override
-                    public Iterator<UsableBroker> usableBrokers() {
-                        return clusterControl.usableBrokers();
-                    }
-                }
-            );
+                    () -> clusterControl.usableBrokers()
+            ).assignments().stream().map(x -> x.replicas()).collect(Collectors.toList());
             HashSet<Integer> seen = new HashSet<>();
             for (Integer result : results.get(0)) {
                 assertTrue(result >= 0);
