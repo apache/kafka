@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
@@ -148,8 +149,12 @@ public class TaskManager {
         return topologyMetadata;
     }
 
-    Consumer<byte[], byte[]> mainConsumer() {
-        return mainConsumer;
+    ConsumerGroupMetadata consumerGroupMetadata() {
+        return mainConsumer.groupMetadata();
+    }
+
+    void consumerCommitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        mainConsumer.commitSync(offsets);
     }
 
     StreamsProducer streamsProducerForTask(final TaskId taskId) {
