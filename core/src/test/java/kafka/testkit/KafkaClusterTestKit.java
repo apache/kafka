@@ -132,7 +132,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 return fatalFaultHandler;
             } else {
                 return nonFatalFaultHandler;
-
             }
         }
     }
@@ -180,7 +179,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
                     "CONTROLLER");
             // Note: we can't accurately set controller.quorum.voters yet, since we don't
-            // yet know what ports each controller will pick.  Set it to a dummy string \
+            // yet know what ports each controller will pick.  Set it to a dummy string
             // for now as a placeholder.
             String uninitializedQuorumVotersString = nodes.controllerNodes().keySet().stream().
                     map(n -> String.format("%d@0.0.0.0:0", n)).

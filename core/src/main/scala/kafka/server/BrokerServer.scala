@@ -558,8 +558,6 @@ class BrokerServer(
 
       if (socketServer != null)
         CoreUtils.swallow(socketServer.shutdown(), this)
-      if (metrics != null)
-        CoreUtils.swallow(metrics.close(), this)
       if (brokerTopicStats != null)
         CoreUtils.swallow(brokerTopicStats.close(), this)
 

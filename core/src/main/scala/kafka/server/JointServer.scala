@@ -142,8 +142,8 @@ class JointServer(
    * The fault handler to use when metadata loading fails.
    */
   def metadataLoaderFaultHandler: FaultHandler = faultHandlerFactory.build("metadata loading",
-    config.processRoles.contains(ControllerRole),
-    () => {
+    fatal = config.processRoles.contains(ControllerRole),
+    action = () => {
       if (brokerMetrics != null) brokerMetrics.metadataLoadErrorCount.getAndIncrement()
       if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
     })
@@ -152,8 +152,8 @@ class JointServer(
    * The fault handler to use when the initial broker metadata load fails.
    */
   def initialBrokerMetadataLoadFaultHandler: FaultHandler = faultHandlerFactory.build("initial metadata loading",
-    true,
-    () => {
+    fatal = true,
+    action = () => {
       if (brokerMetrics != null) brokerMetrics.metadataApplyErrorCount.getAndIncrement()
       if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
     })
@@ -162,16 +162,16 @@ class JointServer(
    * The fault handler to use when the QuorumController experiences a fault.
    */
   def quorumControllerFaultHandler: FaultHandler = faultHandlerFactory.build("quorum controller",
-    true,
-    () => {}
+    fatal = true,
+    action = () => {}
   )
 
   /**
    * The fault handler to use when metadata cannot be published.
    */
   def metadataPublishingFaultHandler: FaultHandler = faultHandlerFactory.build("metadata publishing",
-    false,
-    () => {
+    fatal = false,
+    action = () => {
       if (brokerMetrics != null) brokerMetrics.metadataApplyErrorCount.getAndIncrement()
       if (controllerMetrics != null) controllerMetrics.incrementMetadataErrorCount()
     })
@@ -231,6 +231,7 @@ class JointServer(
       CoreUtils.swallow(brokerMetrics.close(), this)
       brokerMetrics = null
     }
+    CoreUtils.swallow(metrics.close(), this)
     // Clear all reconfigurable instances stored in DynamicBrokerConfig
     config.dynamicConfig.clear()
   }

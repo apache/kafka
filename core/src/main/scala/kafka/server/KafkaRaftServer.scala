@@ -102,9 +102,9 @@ class KafkaRaftServer(
   }
 
   override def shutdown(): Unit = {
-    // In combined mode, we want to shut down the broker first, since it may take longer to complete.
-    // Additionally, the controller shutdown process stops the raft client early on (currently),
-    // which would disrupt broker shutdown.
+    // In combined mode, we want to shut down the broker first, since the controller may be
+    // needed for controlled shutdown. Additionally, the controller shutdown process currently
+    // stops the raft client early on, which would disrupt broker shutdown.
     broker.foreach(_.shutdown())
     controller.foreach(_.shutdown())
     CoreUtils.swallow(AppInfoParser.unregisterAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics), this)

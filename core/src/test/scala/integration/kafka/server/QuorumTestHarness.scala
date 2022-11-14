@@ -110,6 +110,7 @@ class KRaftQuorumImplementation(
     } catch {
       case e: Throwable => {
         if (broker != null) CoreUtils.swallow(broker.shutdown(), log)
+        jointServer.stopForBroker()
         throw e
       }
     }
