@@ -211,7 +211,7 @@ class BrokerToControllerChannelManagerImpl(
         50,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
-        config.requestTimeoutMs,
+        if (retryTimeoutMs > Integer.MAX_VALUE) Integer.MAX_VALUE else retryTimeoutMs.toInt,
         config.connectionSetupTimeoutMs,
         config.connectionSetupTimeoutMaxMs,
         time,
@@ -283,7 +283,7 @@ class BrokerToControllerRequestThread(
   time: Time,
   threadName: String,
   retryTimeoutMs: Long
-) extends InterBrokerSendThread(threadName, networkClient, config.controllerSocketTimeoutMs, time, isInterruptible = false) {
+) extends InterBrokerSendThread(threadName, networkClient, if (retryTimeoutMs > Integer.MAX_VALUE) Integer.MAX_VALUE else retryTimeoutMs.toInt, time, isInterruptible = false) {
 
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
   private val activeController = new AtomicReference[Node](null)

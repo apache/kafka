@@ -344,7 +344,7 @@ class BrokerServer(
         config,
         "heartbeat",
         threadNamePrefix,
-        config.brokerSessionTimeoutMs.toLong
+        config.brokerSessionTimeoutMs.toLong / 2
       )
       lifecycleManager.start(
         () => metadataListener.highestMetadataOffset,
