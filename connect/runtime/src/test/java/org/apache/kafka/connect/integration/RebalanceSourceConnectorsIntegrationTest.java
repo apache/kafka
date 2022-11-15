@@ -188,7 +188,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
     }
 
     @Test
-    @Ignore // TODO: To be re-enabled once we can make it less flaky (KAFKA-8391)
     public void testDeleteConnector() throws Exception {
         // create test topic
         connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
