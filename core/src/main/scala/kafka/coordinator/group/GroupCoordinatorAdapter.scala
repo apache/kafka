@@ -89,19 +89,23 @@ class GroupCoordinatorAdapter(
     request: ListGroupsRequestData
   ): CompletableFuture[ListGroupsResponseData] = {
     // Handle a null array the same as empty
-    val states = Option(request.statesFilter).map(_.asScala.toSet).getOrElse(Set.empty)
-
-    val (error, groups) = coordinator.handleListGroups(states)
-
-    CompletableFuture.completedFuture(
-      new ListGroupsResponseData()
-        .setErrorCode(error.code)
-        .setGroups(groups.map { group =>
-          new ListGroupsResponseData.ListedGroup()
-            .setGroupId(group.groupId)
-            .setProtocolType(group.protocolType)
-            .setGroupState(group.state)
-        }.asJava)
+    val (error, groups) = coordinator.handleListGroups(
+      Option(request.statesFilter).map(_.asScala.toSet).getOrElse(Set.empty)
     )
+
+    val response = new ListGroupsResponseData()
+      .setErrorCode(error.code)
+
+    // Copying results this way to ensure that a native Java collections
+    // is returned to the caller. The caller uses Iterator#remove and it
+    // does not work with wrapped scala collections.
+    groups.foreach { group =>
+      response.groups.add(new ListGroupsResponseData.ListedGroup()
+        .setGroupId(group.groupId)
+        .setProtocolType(group.protocolType)
+        .setGroupState(group.state))
+    }
+
+    CompletableFuture.completedFuture(response)
   }
 }
