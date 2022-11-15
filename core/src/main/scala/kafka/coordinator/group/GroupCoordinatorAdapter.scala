@@ -17,7 +17,7 @@
 package kafka.coordinator.group
 
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData}
+import org.apache.kafka.common.message.{DescribeGroupsResponseData, JoinGroupRequestData, JoinGroupResponseData}
 import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.utils.BufferSupplier
 
@@ -82,5 +82,29 @@ class GroupCoordinatorAdapter(
     )
 
     future
+  }
+
+  override def describeGroup(
+    context: RequestContext,
+    groupId: String
+  ): CompletableFuture[DescribeGroupsResponseData.DescribedGroup] = {
+    val (error, summary) = coordinator.handleDescribeGroup(groupId)
+
+    CompletableFuture.completedFuture(new DescribeGroupsResponseData.DescribedGroup()
+      .setErrorCode(error.code)
+      .setGroupId(groupId)
+      .setGroupState(summary.state)
+      .setProtocolType(summary.protocolType)
+      .setProtocolData(summary.protocol)
+      .setMembers(summary.members.map { member =>
+        new DescribeGroupsResponseData.DescribedGroupMember()
+          .setMemberId(member.memberId)
+          .setGroupInstanceId(member.groupInstanceId.orNull)
+          .setClientId(member.clientId)
+          .setClientHost(member.clientHost)
+          .setMemberAssignment(member.assignment)
+          .setMemberMetadata(member.metadata)
+      }.asJava)
+    )
   }
 }

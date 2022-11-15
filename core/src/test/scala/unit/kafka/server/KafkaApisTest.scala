@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-import java.util.{Collections, Optional, Properties, Random}
+import java.util.{Collections, Optional, Properties}
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerContext, KafkaController}
@@ -1992,49 +1992,106 @@ class KafkaApisTest {
   }
 
   @Test
-  def testDescribeGroups(): Unit = {
-    val groupId = "groupId"
-    val random = new Random()
-    val metadata = new Array[Byte](10)
-    random.nextBytes(metadata)
-    val assignment = new Array[Byte](10)
-    random.nextBytes(assignment)
+  def testHandleDescribeGroups(): Unit = {
+    val describeGroupsRequest = new DescribeGroupsRequestData()
+      .setGroups(List(
+        "group-1",
+        "group-2",
+        "group-3"
+      ).asJava)
 
-    val memberSummary = MemberSummary("memberid", Some("instanceid"), "clientid", "clienthost", metadata, assignment)
-    val groupSummary = GroupSummary("Stable", "consumer", "roundrobin", List(memberSummary))
+    val requestChannelRequest = buildRequest(new DescribeGroupsRequest.Builder(describeGroupsRequest).build())
 
-    reset(groupCoordinator, replicaManager, clientRequestQuotaManager, requestChannel)
+    val future1 = new CompletableFuture[DescribeGroupsResponseData.DescribedGroup]()
+    when(newGroupCoordinator.describeGroup(
+      requestChannelRequest.context,
+      "group-1"
+    )).thenReturn(future1)
 
-    val describeGroupsRequest = new DescribeGroupsRequest.Builder(
-      new DescribeGroupsRequestData().setGroups(List(groupId).asJava)
-    ).build()
-    val request = buildRequest(describeGroupsRequest)
+    val future2 = new CompletableFuture[DescribeGroupsResponseData.DescribedGroup]()
+    when(newGroupCoordinator.describeGroup(
+      requestChannelRequest.context,
+      "group-2"
+    )).thenReturn(future2)
 
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-    when(groupCoordinator.handleDescribeGroup(ArgumentMatchers.eq(groupId)))
-      .thenReturn((Errors.NONE, groupSummary))
+    val future3 = new CompletableFuture[DescribeGroupsResponseData.DescribedGroup]()
+    when(newGroupCoordinator.describeGroup(
+      requestChannelRequest.context,
+      "group-3"
+    )).thenReturn(future3)
 
-    createKafkaApis().handleDescribeGroupRequest(request)
+    createKafkaApis().handleDescribeGroupsRequest(requestChannelRequest)
 
-    val capturedResponse = verifyNoThrottling(request)
+    future1.complete(new DescribeGroupsResponseData.DescribedGroup()
+      .setGroupId("group-1")
+      .setProtocolType("consumer")
+      .setProtocolData("range")
+      .setGroupState("Stable")
+      .setMembers(List(
+        new DescribeGroupsResponseData.DescribedGroupMember()
+          .setMemberId("member-1")).asJava))
+
+    future2.complete(DescribeGroupsResponse.forError(
+      "group-2",
+      Errors.NOT_COORDINATOR
+    ))
+
+    future3.completeExceptionally(Errors.REQUEST_TIMED_OUT.exception)
+
+    val expectedDescribeGroupsResponse = new DescribeGroupsResponseData()
+      .setGroups(List(
+        new DescribeGroupsResponseData.DescribedGroup()
+          .setGroupId("group-1")
+          .setProtocolType("consumer")
+          .setProtocolData("range")
+          .setGroupState("Stable")
+          .setMembers(List(
+            new DescribeGroupsResponseData.DescribedGroupMember()
+              .setMemberId("member-1")).asJava),
+        new DescribeGroupsResponseData.DescribedGroup()
+          .setGroupId("group-2")
+          .setErrorCode(Errors.NOT_COORDINATOR.code),
+        new DescribeGroupsResponseData.DescribedGroup()
+          .setGroupId("group-3")
+          .setErrorCode(Errors.REQUEST_TIMED_OUT.code)).asJava)
+
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
     val response = capturedResponse.getValue.asInstanceOf[DescribeGroupsResponse]
+    assertEquals(expectedDescribeGroupsResponse, response.data)
+  }
 
-    val group = response.data.groups().get(0)
-    assertEquals(Errors.NONE, Errors.forCode(group.errorCode))
-    assertEquals(groupId, group.groupId())
-    assertEquals(groupSummary.state, group.groupState())
-    assertEquals(groupSummary.protocolType, group.protocolType())
-    assertEquals(groupSummary.protocol, group.protocolData())
-    assertEquals(groupSummary.members.size, group.members().size())
+  @Test
+  def testHandleDescribeGroupsAuthenticationFailed(): Unit = {
+    val describeGroupsRequest = new DescribeGroupsRequestData()
+      .setGroups(List(
+        "group-1",
+        "group-2",
+        "group-3"
+      ).asJava)
 
-    val member = group.members().get(0)
-    assertEquals(memberSummary.memberId, member.memberId())
-    assertEquals(memberSummary.groupInstanceId.orNull, member.groupInstanceId())
-    assertEquals(memberSummary.clientId, member.clientId())
-    assertEquals(memberSummary.clientHost, member.clientHost())
-    assertArrayEquals(memberSummary.metadata, member.memberMetadata())
-    assertArrayEquals(memberSummary.assignment, member.memberAssignment())
+    val requestChannelRequest = buildRequest(new DescribeGroupsRequest.Builder(describeGroupsRequest).build())
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
+
+    createKafkaApis(authorizer = Some(authorizer)).handleDescribeGroupsRequest(requestChannelRequest)
+
+    val expectedDescribeGroupsResponse = new DescribeGroupsResponseData()
+      .setGroups(List(
+        new DescribeGroupsResponseData.DescribedGroup()
+          .setGroupId("group-1")
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code),
+        new DescribeGroupsResponseData.DescribedGroup()
+          .setGroupId("group-2")
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code),
+        new DescribeGroupsResponseData.DescribedGroup()
+          .setGroupId("group-3")
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)).asJava)
+
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[DescribeGroupsResponse]
+    assertEquals(expectedDescribeGroupsResponse, response.data)
   }
 
   @Test

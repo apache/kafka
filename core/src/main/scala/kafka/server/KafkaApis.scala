@@ -197,7 +197,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
         case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
         case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request, requestLocal)
-        case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
+        case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupsRequest(request).exceptionally(handleError)
         case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
@@ -1572,53 +1572,56 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleDescribeGroupRequest(request: RequestChannel.Request): Unit = {
+  def handleDescribeGroupsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val describeRequest = request.body[DescribeGroupsRequest]
+    val includeAuthorizedOperations = describeRequest.data.includeAuthorizedOperations
 
-    def sendResponseCallback(describeGroupsResponseData: DescribeGroupsResponseData): Unit = {
-      def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        describeGroupsResponseData.setThrottleTimeMs(requestThrottleMs)
-        new DescribeGroupsResponse(describeGroupsResponseData)
-      }
-      requestHelper.sendResponseMaybeThrottle(request, createResponse)
+    def sendResponse(response: AbstractResponse): Unit = {
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+        response.maybeSetThrottleTimeMs(requestThrottleMs)
+        response
+      })
     }
 
-    val describeRequest = request.body[DescribeGroupsRequest]
-    val describeGroupsResponseData = new DescribeGroupsResponseData()
-
+    val futures = mutable.ArrayBuffer.empty[CompletableFuture[DescribeGroupsResponseData.DescribedGroup]]
     describeRequest.data.groups.forEach { groupId =>
       if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupId)) {
-        describeGroupsResponseData.groups.add(DescribeGroupsResponse.forError(groupId, Errors.GROUP_AUTHORIZATION_FAILED))
+        futures += CompletableFuture.completedFuture(DescribeGroupsResponse.forError(
+          groupId,
+          Errors.GROUP_AUTHORIZATION_FAILED
+        ))
       } else {
-        val (error, summary) = groupCoordinator.handleDescribeGroup(groupId)
-        val members = summary.members.map { member =>
-          new DescribeGroupsResponseData.DescribedGroupMember()
-            .setMemberId(member.memberId)
-            .setGroupInstanceId(member.groupInstanceId.orNull)
-            .setClientId(member.clientId)
-            .setClientHost(member.clientHost)
-            .setMemberAssignment(member.assignment)
-            .setMemberMetadata(member.metadata)
-        }
-
-        val describedGroup = new DescribeGroupsResponseData.DescribedGroup()
-          .setErrorCode(error.code)
-          .setGroupId(groupId)
-          .setGroupState(summary.state)
-          .setProtocolType(summary.protocolType)
-          .setProtocolData(summary.protocol)
-          .setMembers(members.asJava)
-
-        if (request.header.apiVersion >= 3) {
-          if (error == Errors.NONE && describeRequest.data.includeAuthorizedOperations) {
-            describedGroup.setAuthorizedOperations(authHelper.authorizedOperations(request, new Resource(ResourceType.GROUP, groupId)))
+        futures += newGroupCoordinator.describeGroup(
+          request.context,
+          groupId
+        ).handle[DescribeGroupsResponseData.DescribedGroup] { (response, exception) =>
+          if (exception != null) {
+            DescribeGroupsResponse.forError(
+              groupId,
+              Errors.forException(exception)
+            )
+          } else {
+            if (request.header.apiVersion >= 3 &&
+              response.errorCode == Errors.NONE.code &&
+              includeAuthorizedOperations) {
+              response.setAuthorizedOperations(authHelper.authorizedOperations(
+                request,
+                new Resource(ResourceType.GROUP, groupId)
+              ))
+            }
+            response
           }
         }
-
-        describeGroupsResponseData.groups.add(describedGroup)
       }
     }
 
-    sendResponseCallback(describeGroupsResponseData)
+    CompletableFuture.allOf(futures.toArray: _*).handle[Unit] { (_, _) =>
+      val describeGroupsResponseData = new DescribeGroupsResponseData()
+      futures.foreach { future =>
+        describeGroupsResponseData.groups.add(future.get())
+      }
+      sendResponse(new DescribeGroupsResponse(describeGroupsResponseData))
+    }
   }
 
   def handleListGroupsRequest(request: RequestChannel.Request): Unit = {

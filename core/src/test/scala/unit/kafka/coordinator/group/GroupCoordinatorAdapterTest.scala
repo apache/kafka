@@ -18,7 +18,8 @@ package kafka.coordinator.group
 
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.JoinGroupCallback
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData}
+import org.junit.jupiter.api.Test
+import org.apache.kafka.common.message.{DescribeGroupsResponseData, JoinGroupRequestData, JoinGroupResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
@@ -30,7 +31,7 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.Mockito.{mock, verify}
+import org.mockito.Mockito.{mock, verify, when}
 
 import java.net.InetAddress
 import scala.jdk.CollectionConverters._
@@ -139,6 +140,49 @@ class GroupCoordinatorAdapterTest {
 
     assertTrue(future.isDone)
     assertEquals(expectedData, future.get())
+  }
+
+  @Test
+  def testDescribeGroup(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+
+    when(groupCoordinator.handleDescribeGroup("group")).thenReturn {
+      (Errors.INVALID_GROUP_ID, GroupSummary(
+        "Stable",
+        "consumer",
+        "roundrobin",
+        List(MemberSummary(
+          "memberid",
+          Some("instanceid"),
+          "clientid",
+          "clienthost",
+          "metadata".getBytes(),
+          "assignment".getBytes()
+        ))
+      ))
+    }
+
+    val ctx = makeContext(ApiKeys.DESCRIBE_GROUPS, ApiKeys.DESCRIBE_GROUPS.latestVersion)
+    val future = adapter.describeGroup(ctx, "group")
+    assertTrue(future.isDone)
+
+    val expectedDescribedGroup = new DescribeGroupsResponseData.DescribedGroup()
+      .setErrorCode(Errors.INVALID_GROUP_ID.code)
+      .setGroupId("group")
+      .setProtocolType("consumer")
+      .setProtocolData("roundrobin")
+      .setGroupState("Stable")
+      .setMembers(List(new DescribeGroupsResponseData.DescribedGroupMember()
+        .setMemberId("memberid")
+        .setGroupInstanceId("instanceid")
+        .setClientId("clientid")
+        .setClientHost("clienthost")
+        .setMemberMetadata("metadata".getBytes())
+        .setMemberAssignment("assignment".getBytes())
+      ).asJava)
+
+    assertEquals(expectedDescribedGroup, future.get())
   }
 
 }

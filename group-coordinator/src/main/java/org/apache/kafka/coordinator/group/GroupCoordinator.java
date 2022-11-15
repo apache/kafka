@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.requests.RequestContext;
@@ -38,6 +39,19 @@ public interface GroupCoordinator {
         RequestContext context,
         JoinGroupRequestData request,
         BufferSupplier bufferSupplier
+    );
+
+    /**
+     * Describe a Group.
+     *
+     * @param context           The coordinator request context.
+     * @param groupId           The group id.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<DescribeGroupsResponseData.DescribedGroup> describeGroup(
+        RequestContext context,
+        String groupId
     );
 
 }
