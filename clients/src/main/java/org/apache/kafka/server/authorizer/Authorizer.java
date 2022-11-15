@@ -219,11 +219,11 @@ public interface Authorizer extends Configurable, Closeable {
         String hostAddr = requestContext.clientAddress().getHostAddress();
 
         for (AclBinding binding : acls(aclFilter)) {
-            if (!binding.entry().host().equals(hostAddr) && !binding.entry().host().equals("*"))
+            if (!binding.entry().host().equals(hostAddr) && !"*".equals(binding.entry().host()))
                 continue;
 
             if (!SecurityUtils.parseKafkaPrincipal(binding.entry().principal()).equals(principal)
-                    && !binding.entry().principal().equals("User:*"))
+                    && !"User:*".equals(binding.entry().principal()))
                 continue;
 
             if (binding.entry().operation() != op

@@ -99,7 +99,7 @@ public final class FindCommandHandler implements Commands.Handler {
         if (node instanceof DirectoryNode) {
             DirectoryNode directory = (DirectoryNode) node;
             for (Entry<String, MetadataNode> entry : directory.children().entrySet()) {
-                String nextPath = path.equals("/") ?
+                String nextPath = "/".equals(path) ?
                     path + entry.getKey() : path + "/" + entry.getKey();
                 find(writer, nextPath, entry.getValue());
             }

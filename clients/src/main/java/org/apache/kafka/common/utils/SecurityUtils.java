@@ -78,7 +78,7 @@ public class SecurityUtils {
 
     public static void addConfiguredSecurityProviders(Map<String, ?> configs) {
         String securityProviderClassesStr = (String) configs.get(SecurityConfig.SECURITY_PROVIDERS_CONFIG);
-        if (securityProviderClassesStr == null || securityProviderClassesStr.equals("")) {
+        if (securityProviderClassesStr == null || "".equals(securityProviderClassesStr)) {
             return;
         }
         try {

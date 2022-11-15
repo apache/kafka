@@ -311,8 +311,8 @@ public class KafkaStreamsNamedTopologyWrapper extends KafkaStreams {
                 final Throwable error = ex.getCause() != null ? ex.getCause() : ex;
 
                 if (error instanceof GroupSubscribedToTopicException &&
-                    error.getMessage()
-                        .equals("Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.")) {
+                    "Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it."
+                        .equals(error.getMessage())) {
                     log.debug("Offset reset failed, there may be other nodes which have not yet finished removing this topology", error);
                 } else if (error instanceof GroupIdNotFoundException) {
                     log.info("The offsets have been reset by another client or the group has been deleted, no need to retry further.");

@@ -58,7 +58,7 @@ public class Named implements NamedOperation<Named> {
     protected static void validate(final String name) {
         if (name.isEmpty())
             throw new TopologyException("Name is illegal, it can't be empty");
-        if (name.equals(".") || name.equals(".."))
+        if (".".equals(name) || "..".equals(name))
             throw new TopologyException("Name cannot be \".\" or \"..\"");
         if (name.length() > MAX_NAME_LENGTH)
             throw new TopologyException("Name is illegal, it can't be longer than " + MAX_NAME_LENGTH +

@@ -763,7 +763,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                                 possibleVersions(presentAndTaggedVersions).
                                 alwaysEmitBlockScope(true).
                                 ifShouldNotBeNull(() -> {
-                                    if (!field.defaultString().equals("null")) {
+                                    if (!"null".equals(field.defaultString())) {
                                         field.generateNonDefaultValueCheck(headerGenerator,
                                             structRegistry, buffer, "this.", Versions.NONE);
                                         buffer.incrementIndent();
@@ -810,12 +810,12 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                                         buffer.printf("%s;%n",
                                             primitiveWriteExpression(field.type(), field.camelCaseName()));
                                     }
-                                    if (!field.defaultString().equals("null")) {
+                                    if (!"null".equals(field.defaultString())) {
                                         buffer.decrementIndent();
                                         buffer.printf("}%n");
                                     }
                                 });
-                            if (!field.defaultString().equals("null")) {
+                            if (!"null".equals(field.defaultString())) {
                                 cond.ifNull(() -> {
                                     buffer.printf("_writable.writeUnsignedVarint(%d);%n", field.tag().get());
                                     buffer.printf("_writable.writeUnsignedVarint(1);%n");
@@ -1119,7 +1119,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             possibleVersions(possibleVersions).
             nullableVersions(field.nullableVersions()).
             ifNull(() -> {
-                if (!tagged || !field.defaultString().equals("null")) {
+                if (!tagged || !"null".equals(field.defaultString())) {
                     VersionConditional.forVersions(fieldFlexibleVersions(field), possibleVersions).
                         ifMember(__ -> {
                             if (tagged) {
@@ -1147,7 +1147,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             }).
             ifShouldNotBeNull(() -> {
                 if (tagged) {
-                    if (!field.defaultString().equals("null")) {
+                    if (!"null".equals(field.defaultString())) {
                         field.generateNonDefaultValueCheck(headerGenerator,
                             structRegistry, buffer, "this.", Versions.NONE);
                         buffer.incrementIndent();
@@ -1274,7 +1274,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                 } else {
                     throw new RuntimeException("unhandled type " + field.type());
                 }
-                if (tagged && !field.defaultString().equals("null")) {
+                if (tagged && !"null".equals(field.defaultString())) {
                     buffer.decrementIndent();
                     buffer.printf("}%n");
                 }

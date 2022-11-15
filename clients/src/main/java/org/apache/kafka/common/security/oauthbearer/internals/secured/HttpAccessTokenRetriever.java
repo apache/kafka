@@ -297,7 +297,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
     }
 
     static String formatErrorMessage(String errorResponseBody) {
-        if (errorResponseBody == null || errorResponseBody.trim().equals("")) {
+        if (errorResponseBody == null || "".equals(errorResponseBody.trim())) {
             return "{}";
         }
         ObjectMapper mapper = new ObjectMapper();

@@ -55,7 +55,7 @@ public class AccessTokenRetrieverFactory  {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
-        if (tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
+        if ("file".equals(tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT))) {
             return new FileTokenRetriever(cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL));
         } else {
             JaasOptionsUtils jou = new JaasOptionsUtils(jaasConfig);

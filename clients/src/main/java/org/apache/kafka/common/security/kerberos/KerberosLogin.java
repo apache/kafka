@@ -113,7 +113,7 @@ public class KerberosLogin extends AbstractLogin {
             AppConfigurationEntry entry = entries[0];
             if (entry.getOptions().get("useTicketCache") != null) {
                 String val = (String) entry.getOptions().get("useTicketCache");
-                isUsingTicketCache = val.equals("true");
+                isUsingTicketCache = "true".equals(val);
             } else
                 isUsingTicketCache = false;
             if (entry.getOptions().get("principal") != null)

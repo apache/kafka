@@ -60,7 +60,7 @@ public class JaasOptionsUtils {
     }
 
     public boolean shouldCreateSSLSocketFactory(URL url) {
-        return url.getProtocol().equalsIgnoreCase("https");
+        return "https".equalsIgnoreCase(url.getProtocol());
     }
 
     public Map<String, ?> getSslClientConfig() {

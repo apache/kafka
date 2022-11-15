@@ -84,9 +84,9 @@ public abstract class BaseRecordBatchBenchmark {
         // offset and measureValidation will mutate these batches between iterations
         startingOffset = messageVersion == 2 ? 0 : 42;
 
-        if (bufferSupplierStr.equals("NO_CACHING")) {
+        if ("NO_CACHING".equals(bufferSupplierStr)) {
             requestLocal = RequestLocal.NoCaching();
-        } else if (bufferSupplierStr.equals("CREATE")) {
+        } else if ("CREATE".equals(bufferSupplierStr)) {
             requestLocal = RequestLocal.withThreadConfinedCaching();
         } else {
             throw new IllegalArgumentException("Unsupported buffer supplier " + bufferSupplierStr);
