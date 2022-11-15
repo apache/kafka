@@ -59,6 +59,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.AdditionalMatchers.aryEq;
@@ -111,8 +112,6 @@ public class KafkaOffsetBackingStoreTest {
 
     @Mock
     KafkaBasedLog<byte[], byte[]> storeLog;
-    @Mock
-    Supplier<TopicAdmin> topicAdminSupplier;
     private KafkaOffsetBackingStore store;
 
     private MockedStatic<WorkerConfig> workerConfigMockedStatic;
@@ -131,8 +130,6 @@ public class KafkaOffsetBackingStoreTest {
     private ArgumentCaptor<Callback<ConsumerRecord<byte[], byte[]>>> capturedConsumedCallback;
     @Captor
     private ArgumentCaptor<Callback<Void>> storeLogCallbackArgumentCaptor;
-    @Captor
-    private ArgumentCaptor<Callback<Void>> secondGetReadToEndCallback;
 
     @Before
     public void setup() throws Exception {
@@ -160,7 +157,7 @@ public class KafkaOffsetBackingStoreTest {
     }
 
     @Test
-    public void testStartStop() throws Exception {
+    public void testStartStop() {
         Map<String, String> settings = new HashMap<>(DEFAULT_PROPS);
         settings.put("offset.storage.min.insync.replicas", "3");
         settings.put("offset.storage.max.message.bytes", "1001");
@@ -186,7 +183,7 @@ public class KafkaOffsetBackingStoreTest {
     }
 
     @Test
-    public void testReloadOnStart() throws Exception {
+    public void testReloadOnStart() {
         doAnswer(invocation -> {
             capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP0_KEY.array(), TP0_VALUE.array(),
                     new RecordHeaders(), Optional.empty()));
@@ -298,9 +295,9 @@ public class KafkaOffsetBackingStoreTest {
             capturedConsumedCallback.getValue().onCompletion(null,
                     new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0, 0, TP1_KEY.array(), null,
                             new RecordHeaders(), Optional.empty()));
-            secondGetReadToEndCallback.getValue().onCompletion(null, null);
+            storeLogCallbackArgumentCaptor.getValue().onCompletion(null, null);
             return null;
-        }).when(storeLog).readToEnd(secondGetReadToEndCallback.capture());
+        }).when(storeLog).readToEnd(storeLogCallbackArgumentCaptor.capture());
 
         store.configure(DEFAULT_DISTRIBUTED_CONFIG);
         store.start();
@@ -338,7 +335,7 @@ public class KafkaOffsetBackingStoreTest {
     }
 
     @Test
-    public void testSetFailure() throws Exception {
+    public void testSetFailure() {
         store.configure(DEFAULT_DISTRIBUTED_CONFIG);
         store.start();
 
@@ -372,14 +369,9 @@ public class KafkaOffsetBackingStoreTest {
         assertTrue(invoked.get());
         assertTrue(invokedFailure.get());
         callback0.getValue().onCompletion(null, null);
-        try {
-            setFuture.get(10000, TimeUnit.MILLISECONDS);
-            fail("Should have seen KafkaException thrown when waiting on KafkaOffsetBackingStore.set() future");
-        } catch (ExecutionException e) {
-            // expected
-            assertNotNull(e.getCause());
-            assertTrue(e.getCause() instanceof KafkaException);
-        }
+        ExecutionException e = assertThrows(ExecutionException.class, () -> setFuture.get(10000, TimeUnit.MILLISECONDS));
+        assertNotNull(e.getCause());
+        assertTrue(e.getCause() instanceof KafkaException);
 
         store.stop();
 

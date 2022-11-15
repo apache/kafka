@@ -139,6 +139,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     }
 
     protected KafkaBasedLog<byte[], byte[]> offsetLog;
+    // Visible for testing
     final HashMap<ByteBuffer, ByteBuffer> data = new HashMap<>();
     private final Supplier<TopicAdmin> topicAdminSupplier;
     private final Supplier<String> clientIdBase;
@@ -230,6 +231,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         this.offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, adminSupplier);
     }
 
+    // Visible for testing
     KafkaBasedLog<byte[], byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
                                                               Map<String, Object> consumerProps,
                                                               Callback<ConsumerRecord<byte[], byte[]>> consumedCallback,
