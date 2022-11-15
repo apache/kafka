@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.admin.ForwardingAdmin;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.ValidString;
@@ -92,6 +94,9 @@ public class MirrorConnectorConfig extends AbstractConfig {
     private static final String REPLICATION_POLICY_SEPARATOR_DOC = "Separator used in remote topic naming convention.";
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
             MirrorClientConfig.REPLICATION_POLICY_SEPARATOR_DEFAULT;
+    public static final String FORWARDING_ADMIN_CLASS = MirrorClientConfig.FORWARDING_ADMIN_CLASS;
+    public static final Class<?> FORWARDING_ADMIN_CLASS_DEFAULT = MirrorClientConfig.FORWARDING_ADMIN_CLASS_DEFAULT;
+    private static final String FORWARDING_ADMIN_CLASS_DOC = MirrorClientConfig.FORWARDING_ADMIN_CLASS_DOC;
     public static final String REPLICATION_FACTOR = "replication.factor";
     private static final String REPLICATION_FACTOR_DOC = "Replication factor for newly created remote topics.";
     public static final int REPLICATION_FACTOR_DEFAULT = 2;
@@ -436,6 +441,17 @@ public class MirrorConnectorConfig extends AbstractConfig {
         return getConfiguredInstance(REPLICATION_POLICY_CLASS, ReplicationPolicy.class);
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    ForwardingAdmin forwardingAdmin(Map<String, Object> config) {
+        try {
+            return Utils.newParameterizedInstance(
+                    getClass(FORWARDING_ADMIN_CLASS).getName(), (Class<Map<String, Object>>) (Class) Map.class, config
+            );
+        } catch (ClassNotFoundException e) {
+            throw new KafkaException("Can't create instance of " + get(FORWARDING_ADMIN_CLASS), e);
+        }
+    }
+
     int replicationFactor() {
         return getInt(REPLICATION_FACTOR);
     }
@@ -666,6 +682,12 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     REPLICATION_POLICY_SEPARATOR_DEFAULT,
                     ConfigDef.Importance.LOW,
                     REPLICATION_POLICY_SEPARATOR_DOC)
+            .define(
+                    FORWARDING_ADMIN_CLASS,
+                    ConfigDef.Type.CLASS,
+                    FORWARDING_ADMIN_CLASS_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    FORWARDING_ADMIN_CLASS_DOC)
             .define(
                     REPLICATION_FACTOR,
                     ConfigDef.Type.INT,

@@ -110,7 +110,7 @@ versions += [
   powermock: "2.0.9",
   reflections: "0.9.12",
   reload4j: "1.2.19",
-  rocksDB: "6.29.4.1",
+  rocksDB: "7.1.2",
   scalaCollectionCompat: "2.6.0",
   // When updating the scalafmt version please also update the version field in checkstyle/.scalafmt.conf. scalafmt now
   // has the version field as mandatory in its configuration, see

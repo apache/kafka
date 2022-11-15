@@ -27,7 +27,6 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
 
@@ -97,8 +96,8 @@ public class MirrorCheckpointTask extends SourceTask {
         interval = config.emitCheckpointsInterval();
         pollTimeout = config.consumerPollTimeout();
         offsetSyncStore = new OffsetSyncStore(config);
-        sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
-        targetAdminClient = AdminClient.create(config.targetAdminConfig());
+        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
+        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig());
         metrics = config.metrics();
         idleConsumerGroupsOffset = new HashMap<>();
         checkpointsPerConsumerGroup = new HashMap<>();

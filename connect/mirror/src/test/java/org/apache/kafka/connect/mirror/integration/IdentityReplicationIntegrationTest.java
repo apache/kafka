@@ -217,8 +217,8 @@ public class IdentityReplicationIntegrationTest extends MirrorConnectorsIntegrat
 
         waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
 
-        // make sure the topic is created in the other cluster
-        waitForTopicCreated(primary, "backup.test-topic-1");
+        // make sure the topic is created in the backup cluster with same name.
+        topicShouldNotBeCreated(primary, "backup.test-topic-1");
         waitForTopicCreated(backup, "test-topic-1");
         // create a consumer at backup cluster with same consumer group Id to consume 1 topic
         Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(
