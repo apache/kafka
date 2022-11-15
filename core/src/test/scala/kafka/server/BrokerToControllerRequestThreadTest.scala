@@ -49,7 +49,7 @@ class BrokerToControllerRequestThreadTest {
 
     val retryTimeoutMs = 30000
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", retryTimeoutMs, retryTimeoutMs)
+      config, time, "", Defaults.ControllerSocketTimeoutMs, retryTimeoutMs)
     testRequestThread.started = true
 
     val completionHandler = new TestControllerRequestCompletionHandler(None)
@@ -86,7 +86,7 @@ class BrokerToControllerRequestThreadTest {
 
     val expectedResponse = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", networkClientRetryTimeoutMs = Integer.MAX_VALUE, requestThreadRetryTimeoutMs = Long.MaxValue)
+      config, time, "", networkClientRetryTimeoutMs = 30000, requestThreadRetryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
     mockClient.prepareResponse(expectedResponse)
 
@@ -128,7 +128,7 @@ class BrokerToControllerRequestThreadTest {
 
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(),
-      controllerNodeProvider, config, time, "", networkClientRetryTimeoutMs = Integer.MAX_VALUE, requestThreadRetryTimeoutMs = Long.MaxValue)
+      controllerNodeProvider, config, time, "", networkClientRetryTimeoutMs = Defaults.ControllerSocketTimeoutMs, requestThreadRetryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
 
     val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
@@ -178,7 +178,7 @@ class BrokerToControllerRequestThreadTest {
       Collections.singletonMap("a", 2))
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", networkClientRetryTimeoutMs = Integer.MAX_VALUE, requestThreadRetryTimeoutMs = Long.MaxValue)
+      config, time, "", networkClientRetryTimeoutMs = Defaults.ControllerSocketTimeoutMs, requestThreadRetryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
 
     val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
@@ -241,7 +241,7 @@ class BrokerToControllerRequestThreadTest {
     val expectedResponse = RequestTestUtils.metadataUpdateWith(3, Collections.singletonMap("a", 2))
 
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", networkClientRetryTimeoutMs = Integer.MAX_VALUE, requestThreadRetryTimeoutMs = Long.MaxValue)
+      config, time, "", networkClientRetryTimeoutMs = Defaults.ControllerSocketTimeoutMs, requestThreadRetryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
 
     val completionHandler = new TestControllerRequestCompletionHandler(Some(expectedResponse))
@@ -303,7 +303,7 @@ class BrokerToControllerRequestThreadTest {
       Collections.singletonMap("a", Errors.NOT_CONTROLLER),
       Collections.singletonMap("a", 2))
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", retryTimeoutMs, retryTimeoutMs)
+      config, time, "", Defaults.ControllerSocketTimeoutMs, retryTimeoutMs)
     testRequestThread.started = true
 
     val completionHandler = new TestControllerRequestCompletionHandler()
@@ -361,7 +361,7 @@ class BrokerToControllerRequestThreadTest {
     mockClient.prepareUnsupportedVersionResponse(request => request.apiKey == ApiKeys.METADATA)
 
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", networkClientRetryTimeoutMs = Integer.MAX_VALUE, requestThreadRetryTimeoutMs = Long.MaxValue)
+      config, time, "", networkClientRetryTimeoutMs = Defaults.ControllerSocketTimeoutMs, requestThreadRetryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
 
     testRequestThread.enqueue(queueItem)
@@ -398,7 +398,7 @@ class BrokerToControllerRequestThreadTest {
     mockClient.createPendingAuthenticationError(activeController, 50)
 
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", networkClientRetryTimeoutMs = Integer.MAX_VALUE, requestThreadRetryTimeoutMs = Long.MaxValue)
+      config, time, "", networkClientRetryTimeoutMs = Defaults.ControllerSocketTimeoutMs, requestThreadRetryTimeoutMs = Long.MaxValue)
     testRequestThread.started = true
 
     testRequestThread.enqueue(queueItem)
@@ -418,7 +418,7 @@ class BrokerToControllerRequestThreadTest {
     val controllerNodeProvider = mock(classOf[ControllerNodeProvider])
 
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), controllerNodeProvider,
-      config, time, "", networkClientRetryTimeoutMs = Integer.MAX_VALUE, requestThreadRetryTimeoutMs = Long.MaxValue)
+      config, time, "", networkClientRetryTimeoutMs = Defaults.ControllerSocketTimeoutMs, requestThreadRetryTimeoutMs = Long.MaxValue)
 
     val completionHandler = new TestControllerRequestCompletionHandler(None)
     val queueItem = BrokerToControllerQueueItem(
