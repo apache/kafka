@@ -49,7 +49,7 @@ public class KStreamNewProcessorApiTest {
 
     @Test
     @DisplayName("Test for using new Processor API and state stores with the DSL")
-    void getStateStoreTest() {
+    void shouldGetStateStoreWithNewProcessor() {
         final StreamsBuilder builder = new StreamsBuilder();
         final StoreBuilder<?> storeBuilder = Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("store"), Serdes.String(), Serdes.String());
 
