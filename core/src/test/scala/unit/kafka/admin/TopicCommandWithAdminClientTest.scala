@@ -36,6 +36,7 @@ import org.mockito.ArgumentMatcher
 import org.mockito.ArgumentMatchers.{eq => eqThat, _}
 import org.mockito.Mockito._
 
+import java.util
 import java.util.{Collections, Optional, Properties}
 import scala.collection.Seq
 import scala.concurrent.ExecutionException
@@ -775,7 +776,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     assertTrue(exception.getCause.isInstanceOf[ThrottlingQuotaExceededException])
 
     verify(adminClient, times(1)).deleteTopics(
-      eqThat(Seq(testTopicName).asJavaCollection),
+      argThat((_.contains(testTopicName)): ArgumentMatcher[util.Collection[String]]),
       argThat((_.shouldRetryOnQuotaViolation() == false): ArgumentMatcher[DeleteTopicsOptions])
     )
   }

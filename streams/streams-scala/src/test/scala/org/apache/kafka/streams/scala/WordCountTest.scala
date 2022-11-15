@@ -34,6 +34,8 @@ import ImplicitConversions._
 import org.apache.kafka.common.serialization.{LongDeserializer, StringDeserializer, StringSerializer}
 import org.junit.experimental.categories.Category
 
+import scala.annotation.nowarn
+
 /**
  * Test suite that does a classic word count example.
  * <p>
@@ -128,6 +130,7 @@ class WordCountTest extends WordCountTestData {
     assertEquals(actualWordCounts.asScala.take(expectedWordCounts.size).sortBy(_.key), expectedWordCounts.sortBy(_.key))
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testShouldCountWordsJava(): Unit = {
 

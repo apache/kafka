@@ -549,6 +549,9 @@ subprojects {
       "-Xlint:unused"
     ]
 
+    if (versions.baseScala == '2.13')
+      scalaCompileOptions.additionalParameters += ["-Wconf:msg=@nowarn annotation does not suppress any warnings:s"] // See https://github.com/scala/scala/pull/9960
+
     // See README.md for details on this option and the meaning of each value
     if (userScalaOptimizerMode.equals("method"))
       scalaCompileOptions.additionalParameters += ["-opt:l:method"]
