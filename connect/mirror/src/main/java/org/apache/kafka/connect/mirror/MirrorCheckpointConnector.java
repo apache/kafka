@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -47,7 +47,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     private Scheduler scheduler;
     private MirrorConnectorConfig config;
     private GroupFilter groupFilter;
-    private AdminClient sourceAdminClient;
+    private Admin sourceAdminClient;
     private SourceAndTarget sourceAndTarget;
     private List<String> knownConsumerGroups = Collections.emptyList();
 
@@ -70,7 +70,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         String connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
         groupFilter = config.groupFilter();
-        sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
+        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig());
         scheduler = new Scheduler(MirrorCheckpointConnector.class, config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
         scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
@@ -160,7 +160,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     private void createInternalTopics() {
         MirrorUtils.createSinglePartitionCompactedTopic(config.checkpointsTopic(),
-            config.checkpointsTopicReplicationFactor(), config.targetAdminConfig());
+            config.checkpointsTopicReplicationFactor(), config.forwardingAdmin(config.targetAdminConfig()));
     } 
 
     boolean shouldReplicate(String group) {

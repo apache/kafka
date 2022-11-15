@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.admin.ForwardingAdmin;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
@@ -56,7 +58,11 @@ public class MirrorClientConfig extends AbstractConfig {
     private static final String REPLICATION_POLICY_SEPARATOR_DOC = "Separator used in remote topic naming convention.";
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
         DefaultReplicationPolicy.SEPARATOR_DEFAULT;
-    
+
+    public static final String FORWARDING_ADMIN_CLASS = "forwarding.admin.class";
+    public static final String FORWARDING_ADMIN_CLASS_DOC = "Class which extends ForwardingAdmin to define custom cluster resource management (topics, configs, etc). " +
+            "The class must have a constructor with signature <code>(Map<String, Object> config)</code> that is used to configure a KafkaAdminClient and may also be used to configure clients for external systems if necessary.";
+    public static final Class<?> FORWARDING_ADMIN_CLASS_DEFAULT = ForwardingAdmin.class;
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
     public static final String CONSUMER_CLIENT_PREFIX = "consumer.";
     public static final String PRODUCER_CLIENT_PREFIX = "producer.";
@@ -67,6 +73,17 @@ public class MirrorClientConfig extends AbstractConfig {
 
     public ReplicationPolicy replicationPolicy() {
         return getConfiguredInstance(REPLICATION_POLICY_CLASS, ReplicationPolicy.class);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    ForwardingAdmin forwardingAdmin(Map<String, Object> config) {
+        try {
+            return Utils.newParameterizedInstance(
+                    getClass(FORWARDING_ADMIN_CLASS).getName(), (Class<Map<String, Object>>) (Class) Map.class, config
+            );
+        } catch (ClassNotFoundException e) {
+            throw new KafkaException("Can't create instance of " + get(FORWARDING_ADMIN_CLASS), e);
+        }
     }
 
     /** Sub-config for Admin clients. */
@@ -127,6 +144,12 @@ public class MirrorClientConfig extends AbstractConfig {
             REPLICATION_POLICY_SEPARATOR_DEFAULT,
             ConfigDef.Importance.LOW,
             REPLICATION_POLICY_SEPARATOR_DOC)
+        .define(
+                FORWARDING_ADMIN_CLASS,
+                ConfigDef.Type.CLASS,
+                FORWARDING_ADMIN_CLASS_DEFAULT,
+                ConfigDef.Importance.LOW,
+                FORWARDING_ADMIN_CLASS_DOC)
         .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                 Type.STRING,
                 CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
