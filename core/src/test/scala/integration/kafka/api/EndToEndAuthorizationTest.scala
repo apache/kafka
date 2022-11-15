@@ -103,13 +103,13 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   def AclAlter = new AclBinding(clusterResource,
     new AccessControlEntry(kafkaPrincipal.toString, "*", AclOperation.ALTER, AclPermissionType.ALLOW))
 
-  def AclTopicWrite(tptopicresource : ResourcePattern = topicResource) = new AclBinding(tptopicresource,
+  def AclTopicWrite(topicResource : ResourcePattern = topicResource) = new AclBinding(topicResource,
     new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.WRITE, AclPermissionType.ALLOW))
-  def AclTopicCreate(tptopicresource : ResourcePattern = topicResource) = new AclBinding(tptopicresource,
+  def AclTopicCreate(topicResource : ResourcePattern = topicResource) = new AclBinding(topicResource,
     new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.CREATE, AclPermissionType.ALLOW))
-  def AclTopicDescribe(tptopicresource : ResourcePattern = topicResource) = new AclBinding(tptopicresource,
+  def AclTopicDescribe(topicResource : ResourcePattern = topicResource) = new AclBinding(topicResource,
     new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
-  def AclTopicRead(tptopicresource : ResourcePattern = topicResource) = new AclBinding(tptopicresource,
+  def AclTopicRead(topicResource : ResourcePattern = topicResource) = new AclBinding(topicResource,
     new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.READ, AclPermissionType.ALLOW))
   def AclGroupRead = new AclBinding(groupResource,
     new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.READ, AclPermissionType.ALLOW))
@@ -135,7 +135,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.READ, AclPermissionType.ALLOW))
   def AclPrefixedGroupRead = new AclBinding(prefixedGroupResource,
     new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.READ, AclPermissionType.ALLOW))
-
 
   // Some needed configuration for brokers, producers, and consumers
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
@@ -277,11 +276,11 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   private def setReadAndWriteAcls(tp: TopicPartition): Unit = {
-    val tptopicresource = new ResourcePattern(TOPIC, tp.topic, LITERAL)
+    val topicResource = new ResourcePattern(TOPIC, tp.topic, LITERAL)
     val superuserAdminClient = createSuperuserAdminClient()
 
-    superuserAdminClient.createAcls(List(AclTopicWrite(tptopicresource), AclTopicCreate(tptopicresource), AclTopicDescribe(tptopicresource)).asJava).values
-    superuserAdminClient.createAcls(List(AclTopicRead(tptopicresource)).asJava).values
+    superuserAdminClient.createAcls(List(AclTopicWrite(topicResource), AclTopicCreate(topicResource), AclTopicDescribe(topicResource)).asJava).values
+    superuserAdminClient.createAcls(List(AclTopicRead(topicResource)).asJava).values
     superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
 
     servers.foreach { s =>

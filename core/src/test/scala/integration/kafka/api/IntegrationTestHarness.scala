@@ -187,7 +187,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     admin
   }
 
-
   def createSuperuserAdminClient(
     listenerName: ListenerName = listenerName,
     configOverrides: Properties = new Properties

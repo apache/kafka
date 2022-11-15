@@ -78,7 +78,7 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   }
 
   /*
-   * The principal used for all authenticated connections to listernerName is always clientPrincipal.
+   * The principal used for all authenticated connections to listenerName is always clientPrincipal.
    * The super user runs as kafkaPrincipal so we set the superuser admin client to connect directly to
    * the interBrokerListenerName for superuser operations.
    */ 
