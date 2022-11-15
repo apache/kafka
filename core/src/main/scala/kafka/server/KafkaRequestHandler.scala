@@ -450,3 +450,7 @@ class BrokerTopicStats extends Logging {
 object BrokerMetadataStats extends KafkaMetricsGroup {
   val outgoingBytesRate: Meter = newMeter("MetadataOutgoingBytesPerSec", "bytes", TimeUnit.SECONDS)
 }
+
+object ConsumerStats extends KafkaMetricsGroup {
+  val consumedDataAgeHist = newHistogram("ConsumedDataAgeMs")
+}

@@ -330,6 +330,7 @@ object Defaults {
   val LiNumControllerInitThreads = 1
   val LiLogCleanerFineGrainedLockEnabled = true
   val LiDropCorruptedFilesEnabled = false
+  val LiConsumerFetchSampleRatio = 0.01
 }
 
 object KafkaConfig {
@@ -448,6 +449,7 @@ object KafkaConfig {
   val LiNumControllerInitThreadsProp = "li.num.controller.init.threads"
   val LiLogCleanerFineGrainedLockEnableProp = "li.log.cleaner.fine.grained.lock.enable"
   val LiDropCorruptedFilesEnableProp = "li.drop.corrupted.files.enable"
+  val LiConsumerFetchSampleRatioProp = "li.consumer.fetch.sample.ratio"
   val AllowPreferredControllerFallbackProp = "allow.preferred.controller.fallback"
   val UnofficialClientLoggingEnableProp = "unofficial.client.logging.enable"
   val UnofficialClientCacheTtlProp = "unofficial.client.cache.ttl"
@@ -785,6 +787,7 @@ object KafkaConfig {
   val LiCombinedControlRequestEnableDoc = "Specifies whether the controller should use the LiCombinedControlRequest."
   val LiUpdateMetadataDelayMsDoc = "Specifies how long a UpdateMetadata request with partitions should be delayed before its processing can start. This config is purely for testing the LiCombinedControl feature and should not be enabled in a production environment."
   val LiDropCorruptedFilesEnableDoc = "Specifies whether the broker should delete corrupted files during startup."
+  val LiConsumerFetchSampleRatioDoc = "Specifies the ratio of consumer Fetch requests to sample, which must be a number in the range [0.0, 1.0]. For now, the sampling is used to derive the age of consumed data."
   val LiDropFetchFollowerEnableDoc = "Specifies whether a leader should drop Fetch requests from followers. This config is used to simulate a slow leader and test the leader initiated leadership transfer"
   val LiAlterIsrEnabledDoc = "Specifies whether the brokers should use the AlterISR request to propagate ISR changes to the controller. If set to false, brokers will propagate the updates via Zookeeper."
   val LiNumControllerInitThreadsDoc = "Number of threads (and Zookeeper clients + connections) to be used while recursing the topic-partitions tree in Zookeeper during controller startup/failover."
@@ -1233,6 +1236,7 @@ object KafkaConfig {
       .define(LiNumControllerInitThreadsProp, INT, Defaults.LiNumControllerInitThreads, atLeast(1), LOW, LiNumControllerInitThreadsDoc)
       .define(LiLogCleanerFineGrainedLockEnableProp, BOOLEAN, Defaults.LiLogCleanerFineGrainedLockEnabled, LOW, LiLogCleanerFineGrainedLockEnableDoc)
       .define(LiDropCorruptedFilesEnableProp, BOOLEAN, Defaults.LiDropCorruptedFilesEnabled, HIGH, LiDropCorruptedFilesEnableDoc)
+      .define(LiConsumerFetchSampleRatioProp, DOUBLE, Defaults.LiConsumerFetchSampleRatio, between(0.0, 1.0), LOW, LiConsumerFetchSampleRatioDoc)
       .define(AllowPreferredControllerFallbackProp, BOOLEAN, Defaults.AllowPreferredControllerFallback, HIGH, AllowPreferredControllerFallbackDoc)
       .define(UnofficialClientLoggingEnableProp, BOOLEAN, Defaults.UnofficialClientLoggingEnable, LOW, UnofficialClientLoggingEnableDoc)
       .define(UnofficialClientCacheTtlProp, LONG, Defaults.UnofficialClientCacheTtl, LOW, UnofficialClientCacheTtlDoc)
@@ -1770,7 +1774,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   def liNumControllerInitThreads = getInt(KafkaConfig.LiNumControllerInitThreadsProp)
   def liLogCleanerFineGrainedLockEnable = getBoolean(KafkaConfig.LiLogCleanerFineGrainedLockEnableProp)
   val liDropCorruptedFilesEnable = getBoolean(KafkaConfig.LiDropCorruptedFilesEnableProp)
-
+  val liConsumerFetchSampleRatio = getDouble(KafkaConfig.LiConsumerFetchSampleRatioProp)
   def unofficialClientLoggingEnable = getBoolean(KafkaConfig.UnofficialClientLoggingEnableProp)
   def unofficialClientCacheTtl = getLong(KafkaConfig.UnofficialClientCacheTtlProp)
   def expectedClientSoftwareNames = getList(KafkaConfig.ExpectedClientSoftwareNamesProp)

@@ -21,7 +21,6 @@ import java.util.Optional
 import java.util.concurrent.{CompletableFuture, RejectedExecutionException, TimeUnit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
-
 import com.yammer.metrics.core.Meter
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition}
@@ -65,6 +64,7 @@ import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.compat.java8.OptionConverters._
+import scala.util.Random
 
 /*
  * Result metadata of a log append operation on the log
@@ -257,7 +257,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   private var logDirFailureHandler: LogDirFailureHandler = null
   val recompressedBatchCount: AtomicLong = new AtomicLong(0)
-
+  val random = new Random
   def getHighWatermarkCheckpoints: Map[String, OffsetCheckpointFile] = highWatermarkCheckpoints
 
   private class LogDirFailureHandler(name: String, haltBrokerOnDirFailure: Boolean) extends ShutdownableThread(name) {
@@ -1088,7 +1088,17 @@ class ReplicaManager(val config: KafkaConfig,
         quota = quota,
         clientMetadata = clientMetadata)
       if (isFromFollower) updateFollowerFetchState(replicaId, result)
-      else result
+      else {
+        // the fetch is from a consumer, sample the age of consumed data
+        if (random.nextDouble() <= config.liConsumerFetchSampleRatio) {
+          result.foreach { case (_, logReadResult) =>
+            logReadResult.info.records.batches().asScala.foreach { batch =>
+              ConsumerStats.consumedDataAgeHist.update(time.milliseconds - batch.maxTimestamp())
+            }
+          }
+        }
+        result
+      }
     }
 
     val logReadResults = readFromLog()
