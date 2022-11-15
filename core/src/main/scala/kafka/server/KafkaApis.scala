@@ -1636,7 +1636,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       request.context,
       listGroupsRequest.data
     ).handle[Unit] { (response, exception) =>
-      println(response, exception)
       if (exception != null) {
         sendResponse(listGroupsRequest.getErrorResponse(exception))
       } else {
