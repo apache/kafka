@@ -1623,34 +1623,39 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleListGroupsRequest(request: RequestChannel.Request): Unit = {
     val listGroupsRequest = request.body[ListGroupsRequest]
-    val states = if (listGroupsRequest.data.statesFilter == null)
-      // Handle a null array the same as empty
-      immutable.Set[String]()
-    else
-      listGroupsRequest.data.statesFilter.asScala.toSet
 
-    def createResponse(throttleMs: Int, groups: List[GroupOverview], error: Errors): AbstractResponse = {
-       new ListGroupsResponse(new ListGroupsResponseData()
-            .setErrorCode(error.code)
-            .setGroups(groups.map { group =>
-                val listedGroup = new ListGroupsResponseData.ListedGroup()
-                  .setGroupId(group.groupId)
-                  .setProtocolType(group.protocolType)
-                  .setGroupState(group.state)
-                listedGroup
-            }.asJava)
-            .setThrottleTimeMs(throttleMs)
-        )
+    def sendResponse(response: AbstractResponse): Unit = {
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+        response.maybeSetThrottleTimeMs(requestThrottleMs)
+        response
+      })
     }
-    val (error, groups) = groupCoordinator.handleListGroups(states)
-    if (authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME, logIfDenied = false))
-      // With describe cluster access all groups are returned. We keep this alternative for backward compatibility.
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        createResponse(requestThrottleMs, groups, error))
-    else {
-      val filteredGroups = groups.filter(group => authHelper.authorize(request.context, DESCRIBE, GROUP, group.groupId, logIfDenied = false))
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        createResponse(requestThrottleMs, filteredGroups, error))
+
+    val hasClusterDescribe = authHelper.authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME, logIfDenied = false)
+    newGroupCoordinator.listGroups(
+      request.context,
+      listGroupsRequest.data
+    ).handle[Unit] { (response, exception) =>
+      println(response, exception)
+      if (exception != null) {
+        sendResponse(listGroupsRequest.getErrorResponse(exception))
+      } else {
+        val listGroupsResponse = if (hasClusterDescribe) {
+          // With describe cluster access all groups are returned. We keep this alternative for backward compatibility.
+          new ListGroupsResponse(response)
+        } else {
+          // Otherwise, only groups with described group are returned.
+          val iterator = response.groups.iterator()
+          while (iterator.hasNext()) {
+            val listedGroup = iterator.next()
+            if (!authHelper.authorize(request.context, DESCRIBE, GROUP, listedGroup.groupId, logIfDenied = false)) {
+              iterator.remove()
+            }
+          }
+          new ListGroupsResponse(response)
+        }
+        sendResponse(listGroupsResponse)
+      }
     }
   }
 

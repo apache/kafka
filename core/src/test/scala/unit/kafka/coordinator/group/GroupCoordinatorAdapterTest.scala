@@ -18,7 +18,7 @@ package kafka.coordinator.group
 
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.JoinGroupCallback
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData}
+import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData, ListGroupsRequestData, ListGroupsResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
@@ -28,9 +28,10 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.BufferSupplier
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.Mockito.{mock, verify}
+import org.mockito.Mockito.{mock, verify, when}
 
 import java.net.InetAddress
 import scala.jdk.CollectionConverters._
@@ -138,6 +139,50 @@ class GroupCoordinatorAdapterTest {
       .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code)
 
     assertTrue(future.isDone)
+    assertEquals(expectedData, future.get())
+  }
+
+  @Test
+  def testListGroups(): Unit = {
+    testListGroups(null, Set.empty)
+    testListGroups(List(), Set.empty)
+    testListGroups(List("Stable"), Set("Stable"))
+  }
+
+  def testListGroups(
+    statesFilter: List[String],
+    expectedStatesFilter: Set[String]
+  ): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+
+    val ctx = makeContext(ApiKeys.LIST_GROUPS, ApiKeys.LIST_GROUPS.latestVersion)
+    val data = new ListGroupsRequestData()
+      .setStatesFilter(statesFilter.asJava)
+
+    when(groupCoordinator.handleListGroups(expectedStatesFilter)).thenReturn {
+      (Errors.NOT_COORDINATOR, List(
+        GroupOverview("group1", "protocol1", "Stable"),
+        GroupOverview("group2", "qwerty", "Empty")
+      ))
+    }
+
+    val future = adapter.listGroups(ctx, data)
+    assertTrue(future.isDone)
+
+    val expectedData = new ListGroupsResponseData()
+      .setErrorCode(Errors.NOT_COORDINATOR.code)
+      .setGroups(List(
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId("group1")
+          .setGroupState("Stable")
+          .setProtocolType("protocol1"),
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId("group2")
+          .setGroupState("Empty")
+          .setProtocolType("qwerty")
+      ).asJava)
+
     assertEquals(expectedData, future.get())
   }
 

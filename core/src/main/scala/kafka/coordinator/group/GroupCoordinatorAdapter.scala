@@ -17,7 +17,7 @@
 package kafka.coordinator.group
 
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData}
+import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData, ListGroupsRequestData, ListGroupsResponseData}
 import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.utils.BufferSupplier
 
@@ -82,5 +82,26 @@ class GroupCoordinatorAdapter(
     )
 
     future
+  }
+
+  override def listGroups(
+    context: RequestContext,
+    request: ListGroupsRequestData
+  ): CompletableFuture[ListGroupsResponseData] = {
+    // Handle a null array the same as empty
+    val states = Option(request.statesFilter).map(_.asScala.toSet).getOrElse(Set.empty)
+
+    val (error, groups) = coordinator.handleListGroups(states)
+
+    CompletableFuture.completedFuture(
+      new ListGroupsResponseData()
+        .setErrorCode(error.code)
+        .setGroups(groups.map { group =>
+          new ListGroupsResponseData.ListedGroup()
+            .setGroupId(group.groupId)
+            .setProtocolType(group.protocolType)
+            .setGroupState(group.state)
+        }.asJava)
+    )
   }
 }
