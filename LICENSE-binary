@@ -249,7 +249,7 @@ netty-transport-native-unix-common-4.1.73.Final
 plexus-utils-3.2.1
 rocksdbjni-6.19.3
 scala-collection-compat_2.13-2.4.4
-scala-library-2.13.6
+scala-library-2.13.10
 scala-logging_2.13-3.9.3
 scala-reflect-2.13.6
 scala-java8-compat_2.13-1.0.0
