@@ -91,7 +91,8 @@ object AlterPartitionManager {
       config = config,
       channelName = "alterPartition",
       threadNamePrefix = threadNamePrefix,
-      retryTimeoutMs = Long.MaxValue
+      networkClientRetryTimeoutMs = if (config.processRoles.isEmpty) config.controllerSocketTimeoutMs else config.brokerSessionTimeoutMs / 2,
+      requestThreadRetryTimeoutMs = Long.MaxValue
     )
     new DefaultAlterPartitionManager(
       controllerChannelManager = channelManager,

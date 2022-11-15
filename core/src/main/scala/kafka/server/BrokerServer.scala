@@ -221,7 +221,7 @@ class BrokerServer(
         config,
         channelName = "forwarding",
         threadNamePrefix,
-        retryTimeoutMs = 60000
+        retryTimeoutMs = config.brokerSessionTimeoutMs / 2
       )
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
@@ -344,7 +344,7 @@ class BrokerServer(
         config,
         "heartbeat",
         threadNamePrefix,
-        config.brokerSessionTimeoutMs.toLong / 2
+        config.brokerSessionTimeoutMs / 2
       )
       lifecycleManager.start(
         () => metadataListener.highestMetadataOffset,
