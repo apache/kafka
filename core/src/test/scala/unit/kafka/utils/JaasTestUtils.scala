@@ -120,17 +120,7 @@ object JaasTestUtils {
     }
   }
 
-  private val isIbmSecurity = try {
-      Class.forName("sun.security.krb5.Config"); false
-    } catch {
-      case ex: Exception => {
-        if (Java.isIbmJdk) {
-          Class.forName("com.ibm.security.krb5.internal.Config"); true
-        } else {
-          throw ex
-        }
-      }
-    }
+  private val isIbmSecurity = Java.isIbmJdk && !Java.isIbmJdkSemeru
 
   private val ZkServerContextName = "Server"
   private val ZkClientContextName = "Client"
