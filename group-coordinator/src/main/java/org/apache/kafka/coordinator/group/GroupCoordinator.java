@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.BufferSupplier;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public interface GroupCoordinator {
@@ -40,5 +42,19 @@ public interface GroupCoordinator {
         BufferSupplier bufferSupplier
     );
 
+    /**
+     * Delete Groups.
+     *
+     * @param context           The coordinator request context.
+     * @param groupIds          The group ids.
+     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> deleteGroups(
+        RequestContext context,
+        List<String> groupIds,
+        BufferSupplier bufferSupplier
+    );
 }
 

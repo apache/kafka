@@ -17,10 +17,12 @@
 package kafka.coordinator.group
 
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{JoinGroupRequestData, JoinGroupResponseData}
+import kafka.utils.Implicits.MapExtensionMethods
+import org.apache.kafka.common.message.{DeleteGroupsResponseData, JoinGroupRequestData, JoinGroupResponseData}
 import org.apache.kafka.common.requests.RequestContext
 import org.apache.kafka.common.utils.BufferSupplier
 
+import java.util
 import java.util.concurrent.CompletableFuture
 import scala.jdk.CollectionConverters._
 
@@ -82,5 +84,22 @@ class GroupCoordinatorAdapter(
     )
 
     future
+  }
+
+  override def deleteGroups(
+    context: RequestContext,
+    groupIds: util.List[String],
+    bufferSupplier: BufferSupplier
+  ): CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection] = {
+    val results = new DeleteGroupsResponseData.DeletableGroupResultCollection()
+    coordinator.handleDeleteGroups(
+      groupIds.asScala.toSet,
+      RequestLocal(bufferSupplier)
+    ).forKeyValue { (groupId, error) =>
+      results.add(new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId(groupId)
+        .setErrorCode(error.code))
+    }
+    CompletableFuture.completedFuture(results)
   }
 }

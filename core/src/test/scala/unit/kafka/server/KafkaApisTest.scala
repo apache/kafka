@@ -1992,6 +1992,168 @@ class KafkaApisTest {
   }
 
   @Test
+  def testHandleDeleteGroups(): Unit = {
+    val deleteGroupsRequest = new DeleteGroupsRequestData()
+      .setGroupsNames(List(
+        "group-1",
+        "group-2",
+        "group-3"
+      ).asJava)
+
+    val requestChannelRequest = buildRequest(new DeleteGroupsRequest.Builder(deleteGroupsRequest).build())
+
+    val future = new CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection]()
+    when(newGroupCoordinator.deleteGroups(
+      requestChannelRequest.context,
+      List("group-1", "group-2", "group-3").asJava,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis().handleDeleteGroupsRequest(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    val results = new DeleteGroupsResponseData.DeletableGroupResultCollection(List(
+      new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId("group-1")
+        .setErrorCode(Errors.NONE.code),
+      new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId("group-2")
+        .setErrorCode(Errors.NOT_CONTROLLER.code),
+      new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId("group-3")
+        .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code),
+    ).iterator.asJava)
+
+    future.complete(results)
+
+    val expectedDeleteGroupsResponse = new DeleteGroupsResponseData()
+      .setResults(results)
+
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[DeleteGroupsResponse]
+    assertEquals(expectedDeleteGroupsResponse, response.data)
+  }
+
+  @Test
+  def testHandleDeleteGroupsFutureFailed(): Unit = {
+    val deleteGroupsRequest = new DeleteGroupsRequestData()
+      .setGroupsNames(List(
+        "group-1",
+        "group-2",
+        "group-3"
+      ).asJava)
+
+    val requestChannelRequest = buildRequest(new DeleteGroupsRequest.Builder(deleteGroupsRequest).build())
+
+    val future = new CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection]()
+    when(newGroupCoordinator.deleteGroups(
+      requestChannelRequest.context,
+      List("group-1", "group-2", "group-3").asJava,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis().handleDeleteGroupsRequest(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    future.completeExceptionally(Errors.NOT_CONTROLLER.exception)
+
+    val expectedDeleteGroupsResponse = new DeleteGroupsResponseData()
+      .setResults(new DeleteGroupsResponseData.DeletableGroupResultCollection(List(
+        new DeleteGroupsResponseData.DeletableGroupResult()
+          .setGroupId("group-1")
+          .setErrorCode(Errors.NOT_CONTROLLER.code),
+        new DeleteGroupsResponseData.DeletableGroupResult()
+          .setGroupId("group-2")
+          .setErrorCode(Errors.NOT_CONTROLLER.code),
+        new DeleteGroupsResponseData.DeletableGroupResult()
+          .setGroupId("group-3")
+          .setErrorCode(Errors.NOT_CONTROLLER.code),
+      ).iterator.asJava))
+
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[DeleteGroupsResponse]
+    assertEquals(expectedDeleteGroupsResponse, response.data)
+  }
+
+  @Test
+  def testHandleDeleteGroupsAuthenticationFailed(): Unit = {
+    val deleteGroupsRequest = new DeleteGroupsRequestData()
+      .setGroupsNames(List(
+        "group-1",
+        "group-2",
+        "group-3"
+      ).asJava)
+
+    val requestChannelRequest = buildRequest(new DeleteGroupsRequest.Builder(deleteGroupsRequest).build())
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+
+    def makeDeleteAction(groupId: String): Action = {
+      new Action(
+        AclOperation.DELETE,
+        new ResourcePattern(ResourceType.GROUP, groupId, PatternType.LITERAL),
+        1,
+        true,
+        true
+      )
+    }
+
+    when(authorizer.authorize(
+      any[RequestContext],
+      ArgumentMatchers.eq(Seq(
+        makeDeleteAction("group-3"),
+        makeDeleteAction("group-2"),
+        makeDeleteAction("group-1"),
+      ).asJava)
+    )).thenReturn(Seq(
+      AuthorizationResult.ALLOWED,
+      AuthorizationResult.ALLOWED,
+      AuthorizationResult.DENIED
+    ).asJava)
+
+    val future = new CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection]()
+    when(newGroupCoordinator.deleteGroups(
+      requestChannelRequest.context,
+      List("group-2", "group-3").asJava,
+      RequestLocal.NoCaching.bufferSupplier
+    )).thenReturn(future)
+
+    createKafkaApis(authorizer = Some(authorizer)).handleDeleteGroupsRequest(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    future.complete(new DeleteGroupsResponseData.DeletableGroupResultCollection(List(
+      new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId("group-2")
+        .setErrorCode(Errors.NONE.code),
+      new DeleteGroupsResponseData.DeletableGroupResult()
+        .setGroupId("group-3")
+        .setErrorCode(Errors.NONE.code)
+    ).iterator.asJava))
+
+    val expectedDeleteGroupsResponse = new DeleteGroupsResponseData()
+      .setResults(new DeleteGroupsResponseData.DeletableGroupResultCollection(List(
+        new DeleteGroupsResponseData.DeletableGroupResult()
+          .setGroupId("group-2")
+          .setErrorCode(Errors.NONE.code),
+        new DeleteGroupsResponseData.DeletableGroupResult()
+          .setGroupId("group-3")
+          .setErrorCode(Errors.NONE.code),
+        new DeleteGroupsResponseData.DeletableGroupResult()
+          .setGroupId("group-1")
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)).iterator.asJava))
+
+    val capturedResponse = verifyNoThrottling(requestChannelRequest)
+    val response = capturedResponse.getValue.asInstanceOf[DeleteGroupsResponse]
+    assertEquals(expectedDeleteGroupsResponse, response.data)
+  }
+
+  @Test
   def testDescribeGroups(): Unit = {
     val groupId = "groupId"
     val random = new Random()
