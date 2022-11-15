@@ -621,6 +621,9 @@ subprojects {
 
   tasks.withType(ScalaCompile) {
 
+    // Gradle 7.6 introduced the keepAliveMode.
+    // Setting it to DAEMON allows re-use of scala compilers between builds
+    scalaCompileOptions.keepAliveMode = KeepAliveMode.DAEMON
     scalaCompileOptions.additionalParameters = [
       "-deprecation",
       "-unchecked",
