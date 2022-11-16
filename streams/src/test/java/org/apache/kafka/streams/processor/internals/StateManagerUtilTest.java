@@ -28,6 +28,7 @@ import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -42,9 +43,11 @@ import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
@@ -95,6 +98,8 @@ public class StateManagerUtilTest {
         final MockKeyValueStore store2 = new MockKeyValueStore("store2", false);
         final List<StateStore> stateStores = Arrays.asList(store1, store2);
 
+        InOrder inOrder = inOrder(stateManager);
+
         when(topology.stateStores()).thenReturn(stateStores);
 
         when(stateManager.taskId()).thenReturn(taskId);
@@ -107,12 +112,15 @@ public class StateManagerUtilTest {
         StateManagerUtil.registerStateStores(logger, "logPrefix:",
             topology, stateManager, stateDirectory, processorContext);
 
-        verify(stateManager).registerStateStores(stateStores, processorContext);
-        verify(stateManager).initializeStoreOffsetsFromCheckpoint(true);
+        inOrder.verify(stateManager).registerStateStores(stateStores, processorContext);
+        inOrder.verify(stateManager).initializeStoreOffsetsFromCheckpoint(true);
+        verifyNoMoreInteractions(stateManager);
     }
 
     @Test
     public void testCloseStateManagerClean() {
+        InOrder inOrder = inOrder(stateManager, stateDirectory);
+
         when(stateManager.taskId()).thenReturn(taskId);
 
         when(stateDirectory.lock(taskId)).thenReturn(true);
@@ -120,8 +128,9 @@ public class StateManagerUtilTest {
         StateManagerUtil.closeStateManager(logger,
             "logPrefix:", true, false, stateManager, stateDirectory, TaskType.ACTIVE);
 
-        verify(stateManager).close();
-        verify(stateDirectory).unlock(taskId);
+        inOrder.verify(stateManager).close();
+        inOrder.verify(stateDirectory).unlock(taskId);
+        verifyNoMoreInteractions(stateManager, stateDirectory);
     }
 
     @Test
@@ -161,6 +170,8 @@ public class StateManagerUtilTest {
 
     @Test
     public void testCloseStateManagerWithStateStoreWipeOut() {
+        InOrder inOrder = inOrder(stateManager, stateDirectory);
+
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateDirectory.lock(taskId)).thenReturn(true);
 
@@ -170,12 +181,13 @@ public class StateManagerUtilTest {
         StateManagerUtil.closeStateManager(logger,
             "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE);
 
-        verify(stateManager).close();
-        verify(stateDirectory).unlock(taskId);
+        inOrder.verify(stateManager).close();
+        inOrder.verify(stateDirectory).unlock(taskId);
+        verifyNoMoreInteractions(stateManager, stateDirectory);
     }
 
     @Test
-    public void  shouldStillWipeStateStoresIfCloseThrowsException() throws IOException {
+    public void  shouldStillWipeStateStoresIfCloseThrowsException() {
         final File randomFile = new File("/random/path");
 
         when(stateManager.taskId()).thenReturn(taskId);
@@ -194,8 +206,10 @@ public class StateManagerUtilTest {
     }
 
     @Test
-    public void testCloseStateManagerWithStateStoreWipeOutRethrowWrappedIOException() throws IOException {
+    public void testCloseStateManagerWithStateStoreWipeOutRethrowWrappedIOException() {
         final File unknownFile = new File("/unknown/path");
+
+        InOrder inOrder = inOrder(stateManager, stateDirectory);
 
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateDirectory.lock(taskId)).thenReturn(true);
@@ -211,20 +225,24 @@ public class StateManagerUtilTest {
             assertEquals(IOException.class, thrown.getCause().getClass());
         }
 
-        verify(stateManager).close();
-        verify(stateDirectory).unlock(taskId);
+        inOrder.verify(stateManager).close();
+        inOrder.verify(stateDirectory).unlock(taskId);
+        verifyNoMoreInteractions(stateManager, stateDirectory);
     }
 
     @Test
     public void shouldNotWipeStateStoresIfUnableToLockTaskDirectory() {
+        InOrder inOrder = inOrder(stateManager, stateDirectory);
+
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateDirectory.lock(taskId)).thenReturn(false);
 
         StateManagerUtil.closeStateManager(
                 logger, "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE);
 
-        verify(stateManager, never()).close();
-        verify(stateManager, never()).baseDir();
-        verify(stateDirectory, never()).unlock(taskId);
+        inOrder.verify(stateManager, never()).close();
+        inOrder.verify(stateManager, never()).baseDir();
+        inOrder.verify(stateDirectory, never()).unlock(taskId);
+        verifyNoMoreInteractions(stateManager, stateDirectory);
     }
 }
