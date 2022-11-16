@@ -50,7 +50,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 @RunWith(Enclosed.class)
@@ -73,17 +75,18 @@ public class RestClientTest {
         return mockKey;
     }
 
-    private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient, String requestSignatureAlgorithm) throws Exception {
-        try (RestClient client = new RestClient(httpClient)) {
-            return client.httpRequest(
-                    "https://localhost:1234/api/endpoint",
-                    "GET",
-                    null,
-                    new TestDTO("requestBodyData"),
-                    TEST_TYPE,
-                    MOCK_SECRET_KEY,
-                    requestSignatureAlgorithm);
-        }
+    private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient, String requestSignatureAlgorithm) {
+        RestClient client = spy(new RestClient(null));
+        doReturn(httpClient).when(client).httpClient();
+        return client.httpRequest(
+                        "https://localhost:1234/api/endpoint",
+                        "GET",
+                        null,
+                        new TestDTO("requestBodyData"),
+                        TEST_TYPE,
+                        MOCK_SECRET_KEY,
+                        requestSignatureAlgorithm
+                );
     }
 
     private static RestClient.HttpResponse<TestDTO> httpRequest(HttpClient httpClient) throws Exception {

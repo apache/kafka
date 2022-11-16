@@ -47,32 +47,18 @@ import java.util.concurrent.TimeoutException;
  * Client for outbound REST requests to other members of a Connect cluster
  * This class is thread-safe.
  */
-public class RestClient implements AutoCloseable {
+public class RestClient {
     private static final Logger log = LoggerFactory.getLogger(RestClient.class);
     private static final ObjectMapper JSON_SERDE = new ObjectMapper();
+    private WorkerConfig config;
 
-    private final HttpClient client;
     public RestClient(WorkerConfig config) {
-        client = new HttpClient(SSLUtils.createClientSideSslContextFactory(config));
-
-        client.setFollowRedirects(false);
-
-        try {
-            client.start();
-        } catch (Exception e) {
-            log.error("Failed to start RestClient: ", e);
-            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "Failed to start RestClient: " + e.getMessage(), e);
-        }
+        this.config = config;
     }
 
     // VisibleForTesting
-    RestClient(HttpClient client) {
-        this.client = client;
-    }
-
-    @Override
-    public void close() throws Exception {
-        client.stop();
+    HttpClient httpClient() {
+        return new HttpClient(SSLUtils.createClientSideSslContextFactory(config));
     }
 
     /**
@@ -113,6 +99,16 @@ public class RestClient implements AutoCloseable {
         try {
             String serializedBody = requestBodyData == null ? null : JSON_SERDE.writeValueAsString(requestBodyData);
             log.trace("Sending {} with input {} to {}", method, serializedBody, url);
+            HttpClient client = httpClient();
+
+            client.setFollowRedirects(false);
+
+            try {
+                client.start();
+            } catch (Exception e) {
+                log.error("Failed to start RestClient: ", e);
+                throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "Failed to start RestClient: " + e.getMessage(), e);
+            }
 
             Request req = client.newRequest(url);
             req.method(method);

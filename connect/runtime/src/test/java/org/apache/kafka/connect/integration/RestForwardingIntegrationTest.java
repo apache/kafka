@@ -108,9 +108,7 @@ public class RestForwardingIntegrationTest {
                 firstException,
                 "clientsAndServers",
                 httpClient,
-                followerClient,
                 followerServer != null ? followerServer::stop : null,
-                leaderClient,
                 leaderServer != null ? leaderServer::stop : null,
                 factory != null ? factory::stop : null
         );
