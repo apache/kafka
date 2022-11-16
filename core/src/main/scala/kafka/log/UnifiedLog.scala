@@ -443,7 +443,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   def maybeUpdateHighWatermark(hw: Long): Option[Long] = {
     lock.synchronized {
-      val oldHighWatermark = fetchHighWatermarkMetadata
+      val oldHighWatermark = highWatermarkMetadata
       updateHighWatermark(LogOffsetMetadata(hw)) match {
         case oldHighWatermark.messageOffset =>
           None
