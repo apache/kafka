@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -43,6 +44,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DefaultEventHandlerTest {
+    private int sessionTimeoutMs = 1000;
+    private int rebalanceTimeoutMs = 1000;
+    private int heartbeatIntervalMs = 1000;
+    private String groupId = "g-1";
+    private Optional<String> groupInstanceId = Optional.of("g-1");
+    private long retryBackoffMs = 1000;
     private final Properties properties = new Properties();
 
     @BeforeEach
@@ -50,6 +57,14 @@ public class DefaultEventHandlerTest {
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(RETRY_BACKOFF_MS_CONFIG, "100");
+
+        new GroupRebalanceConfig(sessionTimeoutMs,
+                rebalanceTimeoutMs,
+                heartbeatIntervalMs,
+                groupId,
+                groupInstanceId,
+                retryBackoffMs,
+                true);
     }
 
     @Test
@@ -74,6 +89,7 @@ public class DefaultEventHandlerTest {
         final DefaultEventHandler handler = new DefaultEventHandler(
             time,
             new ConsumerConfig(properties),
+            null,
             logContext,
             aq,
             bq,

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -48,6 +50,12 @@ import static org.mockito.Mockito.when;
 
 public class DefaultBackgroundThreadTest {
     private static final long REFRESH_BACK_OFF_MS = 100;
+    private int sessionTimeoutMs = 1000;
+    private int rebalanceTimeoutMs = 1000;
+    private int heartbeatIntervalMs = 1000;
+    private String groupId = "g-1";
+    private Optional<String> groupInstanceId = Optional.of("g-1");
+    private long retryBackoffMs = 1000;
     private final Properties properties = new Properties();
     private MockTime time;
     private SubscriptionState subscriptions;
@@ -156,9 +164,17 @@ public class DefaultBackgroundThreadTest {
     }
 
     private DefaultBackgroundThread setupMockHandler() {
+        GroupRebalanceConfig groupConfig = new GroupRebalanceConfig(sessionTimeoutMs,
+                rebalanceTimeoutMs,
+                heartbeatIntervalMs,
+                groupId,
+                groupInstanceId,
+                retryBackoffMs,
+                true);
         return new DefaultBackgroundThread(
             this.time,
             new ConsumerConfig(properties),
+            groupConfig,
             new LogContext(),
             applicationEventsQueue,
             backgroundEventsQueue,

@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
@@ -24,12 +26,14 @@ import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
@@ -55,6 +59,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final ConsumerMetadata metadata;
     private final Metrics metrics;
     private final ConsumerConfig config;
+    private final CoordinatorStateMachine stateMachine;
 
     private String clientId;
     private long retryBackoffMs;
@@ -66,6 +71,7 @@ public class DefaultBackgroundThread extends KafkaThread {
 
     public DefaultBackgroundThread(final Time time,
                                    final ConsumerConfig config,
+                                   final GroupRebalanceConfig rebalanceConfig,
                                    final LogContext logContext,
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                    final BlockingQueue<BackgroundEvent> backgroundEventQueue,
@@ -88,11 +94,15 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.networkClient = networkClient;
             this.metrics = metrics;
             this.running = true;
+            stateMachine = new CoordinatorStateMachine(time,
+                    rebalanceConfig,
+                    logContext, networkClient);
         } catch (final Exception e) {
             // now propagate the exception
             close();
             throw new KafkaException("Failed to construct background processor", e);
         }
+
     }
 
     private void setConfig() {
@@ -154,7 +164,26 @@ public class DefaultBackgroundThread extends KafkaThread {
         // if there are no events to process, poll until timeout. The timeout
         // will be the minimum of the requestTimeoutMs, nextHeartBeatMs, and
         // nextMetadataUpdate. See NetworkClient.poll impl.
-        networkClient.poll(time.timer(timeToNextHeartbeatMs(time.milliseconds())));
+        handleNetworkResponses(networkClient.poll(
+                time.timer(timeToNextHeartbeatMs(time.milliseconds())),
+                null,
+                false));
+
+    }
+
+    private void handleNetworkResponses(List<ClientResponse> res) {
+        res.stream().forEach(this::handleNetowkrResponse);
+    }
+
+    private boolean handleNetowkrResponse(ClientResponse res) {
+        if (res.responseBody() instanceof FindCoordinatorResponse) {
+            FindCoordinatorResponse response = (FindCoordinatorResponse) res.responseBody();
+            if (!response.hasError()) {
+                return stateMachine.handleSuccessFindCoordinatorResponse(response);
+            }
+            return stateMachine.handleFailedCoordinatorResponse(response);
+        }
+        return false;
     }
 
     private long timeToNextHeartbeatMs(final long nowMs) {
