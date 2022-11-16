@@ -90,18 +90,11 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   def clientPrincipal: KafkaPrincipal
   def kafkaPrincipal: KafkaPrincipal
 
-  def ClusterActionAndClusterAlterAcls = Set(new AccessControlEntry(kafkaPrincipal.toString, WildcardHost, CLUSTER_ACTION, ALLOW),
-    new AccessControlEntry(kafkaPrincipal.toString, WildcardHost, ALTER, ALLOW))
   def GroupReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, READ, ALLOW))
   def TopicReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, READ, ALLOW))
   def TopicWriteAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, WRITE, ALLOW))
   def TopicDescribeAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, DESCRIBE, ALLOW))
   def TopicCreateAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, CREATE, ALLOW))
-
-  def AclClusterAction = new AclBinding(clusterResource,
-    new AccessControlEntry(kafkaPrincipal.toString, "*", AclOperation.CLUSTER_ACTION, AclPermissionType.ALLOW))
-  def AclAlter = new AclBinding(clusterResource,
-    new AccessControlEntry(kafkaPrincipal.toString, "*", AclOperation.ALTER, AclPermissionType.ALLOW))
 
   def AclTopicWrite(topicResource : ResourcePattern = topicResource) = new AclBinding(topicResource,
     new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.WRITE, AclPermissionType.ALLOW))

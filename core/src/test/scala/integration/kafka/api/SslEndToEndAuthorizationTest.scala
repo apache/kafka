@@ -29,6 +29,8 @@ import org.apache.kafka.common.utils.Java
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 object SslEndToEndAuthorizationTest {
+  val superuserCn = "super-user"
+
   class TestPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
     private val Pattern = "O=A (.*?),CN=(.*?)".r
 
@@ -37,8 +39,8 @@ object SslEndToEndAuthorizationTest {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
       val peerPrincipal = context.asInstanceOf[SslAuthenticationContext].session.getPeerPrincipal.getName
       peerPrincipal match {
-        case Pattern(name, extra) =>
-          val principal = if ((name == "server") || (extra == "server")) "server" else peerPrincipal
+        case Pattern(name, cn) =>
+          val principal = if ((name == "server") || (cn == superuserCn)) "server" else peerPrincipal
           new KafkaPrincipal(KafkaPrincipal.USER_TYPE, principal)
         case _ =>
           KafkaPrincipal.ANONYMOUS
@@ -49,7 +51,7 @@ object SslEndToEndAuthorizationTest {
 
 class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 
-  import kafka.api.SslEndToEndAuthorizationTest.TestPrincipalBuilder
+  import kafka.api.SslEndToEndAuthorizationTest.{TestPrincipalBuilder,superuserCn}
 
   override protected def securityProtocol = SecurityProtocol.SSL
   // Since there are other E2E tests that enable SSL, running this test with TLSv1.3 if supported
@@ -83,10 +85,9 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   }
   // This test doesn't really care about matching the SSL certificate to a particular principal
   // We can override the CN and create a principal based on it or on the server SSL
-  // This is really ugly and I'd like a better way to do this.
   override def superuserSecurityProps(certAlias: String): Properties = {
     val props = TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile,
-      certAlias, "server", clientSaslProperties, tlsProtocol)
+      certAlias, superuserCn, clientSaslProperties, tlsProtocol)
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props
   }
