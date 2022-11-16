@@ -650,7 +650,8 @@ public interface SessionWindowedKStream<K, V> {
      * For example, for {@link EmitStrategy#onWindowClose} strategy, the aggregated result for a
      * window will only be emitted when the window closes. For {@link EmitStrategy#onWindowUpdate()}
      * strategy, the aggregated result for a window will be emitted whenever there is an update to
-     * the window.
+     * the window. Note that whether the result will be available in downstream also depends on
+     * cache policy.
      *
      * @param emitStrategy {@link EmitStrategy} to configure when the aggregated result for a window will be emitted.
      * @return a {@code SessionWindowedKStream} with {@link EmitStrategy} configured.
