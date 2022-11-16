@@ -33,6 +33,7 @@ import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Tag
 
 import java.io.File
+import scala.annotation.nowarn
 
 /**
  * Test suite that does a classic word count example.
@@ -132,6 +133,7 @@ class WordCountTest extends WordCountTestData {
     assertEquals(actualWordCounts.asScala.take(expectedWordCounts.size).sortBy(_.key), expectedWordCounts.sortBy(_.key))
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testShouldCountWordsJava(): Unit = {
 

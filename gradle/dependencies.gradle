@@ -28,7 +28,7 @@ ext {
 
 // Add Scala version
 def defaultScala212Version = '2.12.14'
-def defaultScala213Version = '2.13.6'
+def defaultScala213Version = '2.13.10'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version
@@ -62,11 +62,12 @@ versions += [
   checkstyle: "8.36.2",
   commonsCli: "1.4",
   dropwizardMetrics: "4.1.12.1",
-  gradle: "7.1.1",
+  gradle: "7.0.2",
   grgit: "4.1.1",
   httpclient: "4.5.13",
   easymock: "4.3",
-  jackson: "2.13.3",
+  jackson: "2.13.2",
+  jacksonDatabind: "2.13.4.2",
   jacoco: "0.8.7",
   javassist: "3.27.0-GA",
   jetty: "9.4.48.v20220622",
@@ -74,7 +75,7 @@ versions += [
   jline: "3.12.1",
   jmh: "1.32",
   hamcrest: "2.2",
-  log4j: "1.2.17",
+  reload4j: "1.2.19",
   scalaLogging: "3.9.3",
   jaxb: "2.3.0",
   jaxrs: "2.1.1",
@@ -101,7 +102,7 @@ versions += [
   mavenArtifact: "3.8.1",
   metrics: "2.2.0",
   mockito: "3.9.0",
-  netty: "4.1.78.Final",
+  netty: "4.1.79.Final",
   powermock: "2.0.9",
   reflections: "0.9.12",
   rocksDB: "7.1.2",
@@ -109,7 +110,7 @@ versions += [
   scalafmt: "1.5.1",
   scalaJava8Compat : "1.0.0",
   scoverage: "1.4.1",
-  slf4j: "1.7.30",
+  slf4j: "1.7.36",
   snappy: "1.1.8.1",
   spotbugs: "4.2.2",
   zinc: "1.3.5",
@@ -130,9 +131,10 @@ libs += [
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
   bcpkix: "org.bouncycastle:bcpkix-jdk15on:$versions.bcpkix",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
+  commonsCodec: "commons-codec:commons-codec:$versions.commonsCodec",
   easymock: "org.easymock:easymock:$versions.easymock",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
-  jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
+  jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jacksonDatabind",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",
   jacksonModuleScala: "com.fasterxml.jackson.module:jackson-module-scala_$versions.baseScala:$versions.jackson",
   jacksonJDK8Datatypes: "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$versions.jackson",
@@ -171,7 +173,7 @@ libs += [
   kafkaStreams_26: "org.apache.kafka:kafka-streams:$versions.kafka_26",
   kafkaStreams_27: "org.apache.kafka:kafka-streams:$versions.kafka_27",
   kafkaStreams_28: "org.apache.kafka:kafka-streams:$versions.kafka_28",
-  log4j: "log4j:log4j:$versions.log4j",
+  log4j: "ch.qos.reload4j:reload4j:$versions.reload4j",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
   dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",
@@ -190,11 +192,11 @@ libs += [
   scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLogging",
   scalaReflect: "org.scala-lang:scala-reflect:$versions.scala",
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
-  slf4jlog4j: "org.slf4j:slf4j-log4j12:$versions.slf4j",
+  slf4jreload4j: "org.slf4j:slf4j-reload4j:$versions.slf4j",
   snappy: "org.xerial.snappy:snappy-java:$versions.snappy",
   zookeeper: "org.apache.zookeeper:zookeeper:$versions.zookeeper",
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
-  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient"
+  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
 ]
