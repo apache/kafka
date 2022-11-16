@@ -43,6 +43,10 @@ public class Topic {
         });
     }
 
+    public static boolean isReserved(String name) {
+	return METADATA_TOPIC_NAME.equals(name);
+    }
+
     private static String detectInvalidTopic(String name) {
         if (name.isEmpty())
             return "the empty string is not allowed";
@@ -55,6 +59,8 @@ public class Topic {
         if (!containsValidPattern(name))
             return "'" + name + "' contains one or more characters other than " +
                 "ASCII alphanumerics, '.', '_' and '-'";
+	if (isReserved(name))
+	    return "'" + name + "' is a reserved topic name";
         return null;
     }
 

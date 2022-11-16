@@ -103,6 +103,20 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testClusterMetadataTopicFails(quorum: String): Unit = {
+    val clusterMetadata = "__cluster_metadata"
+    validateErrorCreateTopicsRequests(
+      topicsReq(
+        Seq(
+          topicReq(clusterMetadata)
+        )
+      ),
+      Map(clusterMetadata -> error(Errors.INVALID_TOPIC_EXCEPTION, Some("Topic name is invalid: '__cluster_metadata' is a reserved topic name")))
+    )
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk"))
   def testCreateTopicsWithVeryShortTimeouts(quorum: String): Unit = {
     // When using ZooKeeper, we don't expect a request to ever complete within 1ms.
