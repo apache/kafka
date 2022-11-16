@@ -23,6 +23,8 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.common.MetadataVersion
 
+import scala.collection.mutable
+
 class ReplicaFetcherThread(name: String,
                            leader: LeaderEndPoint,
                            brokerConfig: KafkaConfig,
@@ -40,6 +42,9 @@ class ReplicaFetcherThread(name: String,
                                 replicaMgr.brokerTopicStats) {
 
   this.logIdent = logPrefix
+
+  // Visible for testing
+  private[server] val partitionsWithNewHighWatermark = mutable.Buffer[TopicPartition]()
 
   override protected val isOffsetForLeaderEpochSupported: Boolean = metadataVersionSupplier().isOffsetForLeaderEpochSupported
 
@@ -88,6 +93,11 @@ class ReplicaFetcherThread(name: String,
     }
   }
 
+  override def doWork(): Unit = {
+    super.doWork()
+    completeDelayedFetchRequests()
+  }
+
   // process fetched data
   override def processPartitionData(topicPartition: TopicPartition,
                                     fetchOffset: Long,
@@ -117,10 +127,16 @@ class ReplicaFetcherThread(name: String,
 
     // For the follower replica, we do not need to keep its segment base offset and physical position.
     // These values will be computed upon becoming leader or handling a preferred read replica fetch.
-    val followerHighWatermark = log.updateHighWatermark(partitionData.highWatermark)
+    var maybeUpdateHighWatermarkMessage = s"but did not update replica high watermark"
+    log.maybeUpdateHighWatermark(partitionData.highWatermark).foreach { newHighWatermark =>
+      maybeUpdateHighWatermarkMessage = s"and updated replica high watermark to $newHighWatermark"
+      partitionsWithNewHighWatermark += topicPartition
+    }
+
     log.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented)
     if (logTrace)
-      trace(s"Follower set replica high watermark for partition $topicPartition to $followerHighWatermark")
+      trace(s"Follower received high watermark ${partitionData.highWatermark} from the leader " +
+        s"$maybeUpdateHighWatermarkMessage for partition $topicPartition")
 
     // Traffic from both in-sync and out of sync replicas are accounted for in replication quota to ensure total replication
     // traffic doesn't exceed quota.
@@ -133,6 +149,13 @@ class ReplicaFetcherThread(name: String,
     brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
 
     logAppendInfo
+  }
+
+  private def completeDelayedFetchRequests(): Unit = {
+    if (partitionsWithNewHighWatermark.nonEmpty) {
+      replicaMgr.completeDelayedFetchRequests(partitionsWithNewHighWatermark.toSeq)
+      partitionsWithNewHighWatermark.clear()
+    }
   }
 
   def maybeWarnIfOversizedRecords(records: MemoryRecords, topicPartition: TopicPartition): Unit = {
