@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.NoopBackgroundEvent;
-
 import java.util.concurrent.BlockingQueue;
 
 /**
@@ -29,14 +27,9 @@ public class NoopApplicationEvent extends ApplicationEvent {
 
     public NoopApplicationEvent(final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                 final String message) {
-
+        super(Type.NOOP);
         this.message = message;
         this.backgroundEventQueue = backgroundEventQueue;
-    }
-
-    @Override
-    public boolean process() {
-        return backgroundEventQueue.add(new NoopBackgroundEvent(message));
     }
 
     @Override

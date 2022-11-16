@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
@@ -27,7 +28,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -44,7 +44,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -61,7 +61,7 @@ public class DefaultBackgroundThreadTest {
     private SubscriptionState subscriptions;
     private ConsumerMetadata metadata;
     private LogContext context;
-    private ConsumerNetworkClient consumerClient;
+    private KafkaClient networkClient;
     private Metrics metrics;
     private BlockingQueue<BackgroundEvent> backgroundEventsQueue;
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
@@ -73,7 +73,7 @@ public class DefaultBackgroundThreadTest {
         this.subscriptions = mock(SubscriptionState.class);
         this.metadata = mock(ConsumerMetadata.class);
         this.context = new LogContext();
-        this.consumerClient = mock(ConsumerNetworkClient.class);
+        this.networkClient = new MockClient(this.time);
         this.metrics = mock(Metrics.class);
         this.applicationEventsQueue = (BlockingQueue<ApplicationEvent>) mock(BlockingQueue.class);
         this.backgroundEventsQueue = (BlockingQueue<BackgroundEvent>) mock(BlockingQueue.class);
@@ -85,15 +85,6 @@ public class DefaultBackgroundThreadTest {
     @Test
     public void testStartupAndTearDown() throws InterruptedException {
         final MockClient client = new MockClient(time, metadata);
-        this.consumerClient = new ConsumerNetworkClient(
-            context,
-            client,
-            metadata,
-            time,
-            100,
-            1000,
-            100
-        );
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
         final DefaultBackgroundThread backgroundThread = setupMockHandler();
         backgroundThread.start();
@@ -105,15 +96,6 @@ public class DefaultBackgroundThreadTest {
     @Test
     public void testInterruption() throws InterruptedException {
         final MockClient client = new MockClient(time, metadata);
-        this.consumerClient = new ConsumerNetworkClient(
-            context,
-            client,
-            metadata,
-            time,
-            100,
-            1000,
-            100
-        );
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
         final DefaultBackgroundThread backgroundThread = setupMockHandler();
         backgroundThread.start();
@@ -126,15 +108,6 @@ public class DefaultBackgroundThreadTest {
     void testWakeup() {
         this.time = new MockTime(0);
         final MockClient client = new MockClient(time, metadata);
-        this.consumerClient = new ConsumerNetworkClient(
-            context,
-            client,
-            metadata,
-            time,
-            100,
-            1000,
-            100
-        );
         when(applicationEventsQueue.isEmpty()).thenReturn(true);
         when(applicationEventsQueue.isEmpty()).thenReturn(true);
         final DefaultBackgroundThread runnable = setupMockHandler();
@@ -156,10 +129,10 @@ public class DefaultBackgroundThreadTest {
         when(applicationEventsQueue.isEmpty()).thenReturn(false);
         when(applicationEventsQueue.poll())
             .thenReturn(new NoopApplicationEvent(backgroundEventsQueue, "nothing"));
-        final InOrder inOrder = Mockito.inOrder(applicationEventsQueue, this.consumerClient);
+        final InOrder inOrder = Mockito.inOrder(applicationEventsQueue, this.networkClient);
         assertFalse(inOrder.verify(applicationEventsQueue).isEmpty());
         inOrder.verify(applicationEventsQueue).poll();
-        inOrder.verify(this.consumerClient).poll(any(Timer.class));
+        inOrder.verify(this.networkClient).poll(anyLong(), anyLong());
         runnable.close();
     }
 
@@ -172,16 +145,13 @@ public class DefaultBackgroundThreadTest {
                 retryBackoffMs,
                 true);
         return new DefaultBackgroundThread(
-            this.time,
-            new ConsumerConfig(properties),
-            groupConfig,
-            new LogContext(),
-            applicationEventsQueue,
-            backgroundEventsQueue,
-            this.subscriptions,
-            this.metadata,
-            this.consumerClient,
-            this.metrics
-        );
+                this.time,
+                new ConsumerConfig(properties),
+                groupConfig,
+                new LogContext(),
+                applicationEventsQueue,
+                backgroundEventsQueue,
+                this.metadata,
+                this.networkClient);
     }
 }

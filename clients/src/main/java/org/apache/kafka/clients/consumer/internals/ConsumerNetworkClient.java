@@ -257,8 +257,7 @@ public class ConsumerNetworkClient implements Closeable {
      * @param pollCondition Nullable blocking condition
      * @param disableWakeup If TRUE disable triggering wake-ups
      */
-    public List<ClientResponse> poll(Timer timer, PollCondition pollCondition, boolean disableWakeup) {
-        List<ClientResponse> responses = new ArrayList<>();
+    public void poll(Timer timer, PollCondition pollCondition, boolean disableWakeup) {
         // there may be handlers which need to be invoked if we woke up the previous call to poll
         firePendingCompletedRequests();
 
@@ -278,9 +277,9 @@ public class ConsumerNetworkClient implements Closeable {
                 long pollTimeout = Math.min(timer.remainingMs(), pollDelayMs);
                 if (client.inFlightRequestCount() == 0)
                     pollTimeout = Math.min(pollTimeout, retryBackoffMs);
-                responses = client.poll(pollTimeout, timer.currentTimeMs());
+                client.poll(pollTimeout, timer.currentTimeMs());
             } else {
-                responses = client.poll(0, timer.currentTimeMs());
+                client.poll(0, timer.currentTimeMs());
             }
             timer.update();
 
@@ -313,7 +312,6 @@ public class ConsumerNetworkClient implements Closeable {
         firePendingCompletedRequests();
 
         metadata.maybeThrowAnyException();
-        return responses;
     }
 
     /**

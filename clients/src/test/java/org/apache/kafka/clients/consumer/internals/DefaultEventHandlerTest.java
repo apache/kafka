@@ -75,35 +75,24 @@ public class DefaultEventHandlerTest {
         final SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         final ConsumerMetadata metadata = newConsumerMetadata(false, subscriptions);
         final MockClient client = new MockClient(time, metadata);
-        final ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(
-            logContext,
-            client,
-            metadata,
-            time,
-            100,
-            1000,
-            100
-        );
         final BlockingQueue<ApplicationEvent> aq = new LinkedBlockingQueue<>();
         final BlockingQueue<BackgroundEvent> bq = new LinkedBlockingQueue<>();
         final DefaultEventHandler handler = new DefaultEventHandler(
-            time,
-            new ConsumerConfig(properties),
-            null,
-            logContext,
-            aq,
-            bq,
-            subscriptions,
-            metadata,
-            consumerClient
-        );
+                time,
+                new ConsumerConfig(properties),
+                null,
+                logContext,
+                aq,
+                bq,
+                metadata,
+                client);
         assertTrue(client.active());
         assertTrue(handler.isEmpty());
         handler.add(
-            new NoopApplicationEvent(
-                bq,
-                "testBasicPollAndAddWithNoopEvent"
-            )
+                new NoopApplicationEvent(
+                        bq,
+                        "testBasicPollAndAddWithNoopEvent"
+                )
         );
         while (handler.isEmpty()) {
             time.sleep(100);

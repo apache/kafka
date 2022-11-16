@@ -479,11 +479,7 @@ public class PrototypeAsyncConsumer<K, V> implements Consumer<K, V> {
         CompletableFuture<Void> commitFuture = new CompletableFuture<>();
 
         public CommitApplicationEvent() {
-        }
-
-        @Override
-        public boolean process() {
-            return true;
+            super(Type.COMMIT);
         }
     }
 
