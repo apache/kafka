@@ -778,6 +778,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             super.stopServices();
         } finally {
             this.uponShutdown.forEach(closeable -> Utils.closeQuietly(closeable, closeable != null ? closeable.toString() : "<unknown>"));
+            Utils.closeQuietly(restClient, "RestClient");
         }
     }
 

@@ -141,7 +141,7 @@ public class ConnectDistributed {
         // herder is stopped. This is easier than having to track and own the lifecycle ourselves.
         DistributedHerder herder = new DistributedHerder(config, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
-                advertisedUrl.toString(), restClient, connectorClientConfigOverridePolicy, sharedAdmin, restClient);
+                advertisedUrl.toString(), restClient, connectorClientConfigOverridePolicy, sharedAdmin);
 
         final Connect connect = new Connect(herder, rest);
         log.info("Kafka Connect distributed worker initialization took {}ms", time.hiResClockMs() - initStart);
