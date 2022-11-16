@@ -1652,22 +1652,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a join-group response
     def sendResponseCallback(joinResult: JoinGroupResult): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val protocolName = if (request.context.apiVersion() >= 7)
-          joinResult.protocolName.orNull
-        else
-          joinResult.protocolName.getOrElse(GroupCoordinator.NoProtocol)
-
         val responseBody = new JoinGroupResponse(
           new JoinGroupResponseData()
             .setThrottleTimeMs(requestThrottleMs)
             .setErrorCode(joinResult.error.code)
             .setGenerationId(joinResult.generationId)
             .setProtocolType(joinResult.protocolType.orNull)
-            .setProtocolName(protocolName)
+            .setProtocolName(joinResult.protocolName.orNull)
             .setLeader(joinResult.leaderId)
             .setSkipAssignment(joinResult.skipAssignment)
             .setMemberId(joinResult.memberId)
-            .setMembers(joinResult.members.asJava)
+            .setMembers(joinResult.members.asJava),
+          request.context.apiVersion
         )
 
         trace("Sending join group response %s for correlation id %d to client %s."
