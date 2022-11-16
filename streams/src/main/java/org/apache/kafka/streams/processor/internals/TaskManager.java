@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
@@ -148,8 +149,12 @@ public class TaskManager {
         return topologyMetadata;
     }
 
-    Consumer<byte[], byte[]> mainConsumer() {
-        return mainConsumer;
+    ConsumerGroupMetadata consumerGroupMetadata() {
+        return mainConsumer.groupMetadata();
+    }
+
+    void consumerCommitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        mainConsumer.commitSync(offsets);
     }
 
     StreamsProducer streamsProducerForTask(final TaskId taskId) {
@@ -395,8 +400,8 @@ public class TaskManager {
             tasks.addActiveTasks(newActiveTasks);
             tasks.addStandbyTasks(newStandbyTask);
         } else {
-            tasks.addPendingTaskToInit(newActiveTasks);
-            tasks.addPendingTaskToInit(newStandbyTask);
+            Stream.concat(newActiveTasks.stream(), newStandbyTask.stream())
+                    .forEach(stateUpdater::add);
         }
     }
 
@@ -730,7 +735,6 @@ public class TaskManager {
 
     public boolean checkStateUpdater(final long now,
                                      final java.util.function.Consumer<Set<TopicPartition>> offsetResetter) {
-        addTasksToStateUpdater();
         if (stateUpdater.hasExceptionsAndFailedTasks()) {
             handleExceptionsFromStateUpdater();
         }
@@ -753,7 +757,6 @@ public class TaskManager {
             newTask = task.isActive() ?
                 convertActiveToStandby((StreamTask) task, inputPartitions) :
                 convertStandbyToActive((StandbyTask) task, inputPartitions);
-            newTask.initializeIfNeeded();
             stateUpdater.add(newTask);
         } catch (final RuntimeException e) {
             final TaskId taskId = task.id();
@@ -811,22 +814,6 @@ public class TaskManager {
                 timeoutException
             );
         }
-    }
-
-    private void addTasksToStateUpdater() {
-        final Map<TaskId, RuntimeException> taskExceptions = new LinkedHashMap<>();
-        for (final Task task : tasks.drainPendingTaskToInit()) {
-            try {
-                task.initializeIfNeeded();
-                stateUpdater.add(task);
-            } catch (final RuntimeException e) {
-                // need to add task back to the bookkeeping to be handled by the stream thread
-                tasks.addTask(task);
-                taskExceptions.put(task.id(), e);
-            }
-        }
-
-        maybeThrowTaskExceptions(taskExceptions);
     }
 
     public void handleExceptionsFromStateUpdater() {

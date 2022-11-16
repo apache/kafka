@@ -213,18 +213,18 @@ class DefaultStateUpdaterTest {
     }
 
     private void shouldThrowIfActiveTaskNotInStateRestoring(final StreamTask task) {
-        shouldThrowIfTaskNotInGivenState(task, State.RESTORING);
+        shouldThrowIfTaskNotInGivenState(task, mkSet(State.RESTORING, State.CREATED));
     }
 
     @Test
     public void shouldThrowIfStandbyTaskNotInStateRunning() {
         final StandbyTask task = standbyTask(TASK_0_0, mkSet(TOPIC_PARTITION_B_0)).build();
-        shouldThrowIfTaskNotInGivenState(task, State.RUNNING);
+        shouldThrowIfTaskNotInGivenState(task, mkSet(State.RUNNING, State.CREATED));
     }
 
-    private void shouldThrowIfTaskNotInGivenState(final Task task, final State correctState) {
+    private void shouldThrowIfTaskNotInGivenState(final Task task, final Set<State> correctStates) {
         for (final State state : State.values()) {
-            if (state != correctState) {
+            if (!correctStates.contains(state)) {
                 when(task.state()).thenReturn(state);
                 assertThrows(IllegalStateException.class, () -> stateUpdater.add(task));
             }
@@ -369,6 +369,54 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task);
 
         assertTrue(stateUpdater.restoresActiveTasks());
+    }
+
+    @Test
+    public void shouldInitializeAddedTasksInCreatedState() throws Exception {
+        final StreamTask task1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0))
+                .inState(State.CREATED).build();
+        final StandbyTask task2 = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_A_1))
+                .inState(State.CREATED).build();
+        final StandbyTask task3 = standbyTask(TASK_1_0, mkSet(TOPIC_PARTITION_B_0))
+                .inState(State.RUNNING).build();
+        final StreamTask task4 = statefulTask(TASK_A_0_0, mkSet(TOPIC_PARTITION_C_0))
+                .inState(State.RESTORING).build();
+        stateUpdater.start();
+        stateUpdater.add(task1);
+        stateUpdater.add(task2);
+        stateUpdater.add(task3);
+        stateUpdater.add(task4);
+        verifyUpdatingTasks(task1, task2, task3, task4);
+
+        verify(task1).initializeIfNeeded();
+        verify(task2).initializeIfNeeded();
+        verify(task3, never()).initializeIfNeeded();
+        verify(task3, never()).initializeIfNeeded();
+    }
+
+    @Test
+    public void shouldForwardExceptionsFromFailedInitializations() throws Exception {
+        final StreamTask task1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0))
+                .inState(State.CREATED).build();
+        final StandbyTask task2 = standbyTask(TASK_0_1, mkSet(TOPIC_PARTITION_A_1))
+                .inState(State.CREATED).build();
+        final StandbyTask task3 = standbyTask(TASK_1_1, mkSet(TOPIC_PARTITION_B_0))
+                .inState(State.CREATED).build();
+        final TaskCorruptedException taskCorruptedException = new TaskCorruptedException(Collections.singleton(TASK_0_0));
+        doThrow(taskCorruptedException).when(task1).initializeIfNeeded();
+        final StreamsException streamsException = new StreamsException("Kaboom!");
+        doThrow(streamsException).when(task2).initializeIfNeeded();
+        stateUpdater.start();
+        stateUpdater.add(task1);
+        stateUpdater.add(task2);
+        stateUpdater.add(task3);
+
+        verifyExceptionsAndFailedTasks(
+            new ExceptionAndTasks(mkSet(task1), taskCorruptedException),
+            new ExceptionAndTasks(mkSet(task2), streamsException)
+        );
+        verifyUpdatingTasks(task3);
+        verify(task3).initializeIfNeeded();
     }
 
     @Test
@@ -1693,7 +1741,10 @@ class DefaultStateUpdaterTest {
                     && failedTasks.size() == expectedExceptionAndTasks.size();
             },
             VERIFICATION_TIMEOUT,
-            "Did not get all exceptions and failed tasks within the given timeout!"
+            () -> String.format(
+                "Did not get all exceptions and failed tasks within the given timeout! Got: %s",
+                failedTasks
+            )
         );
     }
 
@@ -1711,7 +1762,10 @@ class DefaultStateUpdaterTest {
                             && failedTasks.size() == expectedFailedTasks.size();
                 },
                 VERIFICATION_TIMEOUT,
-                "Did not get all exceptions and failed tasks within the given timeout!"
+            () -> String.format(
+                "Did not get all exceptions and failed tasks within the given timeout! Got: %s",
+                failedTasks
+            )
         );
     }
 
