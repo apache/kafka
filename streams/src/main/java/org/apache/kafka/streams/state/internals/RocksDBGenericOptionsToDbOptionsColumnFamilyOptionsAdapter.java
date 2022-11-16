@@ -65,7 +65,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     private final DBOptions dbOptions;
     private final ColumnFamilyOptions columnFamilyOptions;
 
-    private static final org.slf4j.Logger LOG = LoggerFactory.getLogger(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class);
+    private static final org.slf4j.Logger log = LoggerFactory.getLogger(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class);
 
     RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(final DBOptions dbOptions,
                                                                final ColumnFamilyOptions columnFamilyOptions) {
@@ -480,7 +480,7 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
 
     @Override
     public Options setWalTtlSeconds(final long walTtlSeconds) {
-        LOG.warn("option walTtlSeconds will be ignored: Streams does not expose RocksDB ttl functionality");
+        log.warn("option walTtlSeconds will be ignored: Streams does not expose RocksDB ttl functionality");
         dbOptions.setWalTtlSeconds(walTtlSeconds);
         return this;
     }
