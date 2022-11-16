@@ -1777,7 +1777,7 @@ public class RequestResponseTest {
         if (version >= 1)
             data.setThrottleTimeMs(1000);
 
-        return new JoinGroupResponse(data);
+        return new JoinGroupResponse(data, version);
     }
 
     private SyncGroupRequest createSyncGroupRequest(short version) {
