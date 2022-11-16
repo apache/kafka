@@ -198,12 +198,15 @@ public class CoordinatorStateMachine {
                     coordinatorData.port());
             log.info("Discovered group coordinator {}", coordinator);
             client.tryConnect(coordinator);
+            this.currentState = State.CONNECTED;
             return true;
             // heartbeat.resetSessionTimeout();
         } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+            this.currentState = State.UNKNOWN;
             throw GroupAuthorizationException.forGroupId(rebalanceConfig.groupId);
         } else {
             log.debug("Group coordinator lookup failed: {}", coordinatorData.errorMessage());
+            this.currentState = State.UNKNOWN;
             throw error.exception();
         }
     }
@@ -211,6 +214,7 @@ public class CoordinatorStateMachine {
 
     public boolean handleFailedCoordinatorResponse(FindCoordinatorResponse response) {
         log.debug("FindCoordinator request failed due to {}", response.error().toString());
+        this.currentState = State.UNKNOWN;
 
         if (!(response.error().exception() instanceof RetriableException)) {
             // Remember the exception if fatal so we can ensure
