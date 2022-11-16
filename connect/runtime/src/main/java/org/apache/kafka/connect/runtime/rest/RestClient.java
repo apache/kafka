@@ -92,23 +92,37 @@ public class RestClient {
      *                                  may be null if the request doesn't need to be signed
      * @return The deserialized response to the HTTP request, or null if no data is expected.
      */
-    public <T> HttpResponse<T> httpRequest(String url, String method,
+    public <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
+                                                  TypeReference<T> responseFormat,
+                                                  SecretKey sessionKey, String requestSignatureAlgorithm) {
+        HttpClient client = httpClient();
+        client.setFollowRedirects(false);
+
+        try {
+            client.start();
+        } catch (Exception e) {
+            log.error("Failed to start RestClient: ", e);
+            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "Failed to start RestClient: " + e.getMessage(), e);
+        }
+
+        try {
+            return httpRequest(client, url, method, headers, requestBodyData, responseFormat, sessionKey, requestSignatureAlgorithm);
+        } finally {
+            try {
+                client.stop();
+            } catch (Exception e) {
+                log.error("Failed to stop HTTP client", e);
+            }
+        }
+    }
+
+    private <T> HttpResponse<T> httpRequest(HttpClient client, String url, String method,
                                            HttpHeaders headers, Object requestBodyData,
                                            TypeReference<T> responseFormat, SecretKey sessionKey,
                                            String requestSignatureAlgorithm) {
         try {
             String serializedBody = requestBodyData == null ? null : JSON_SERDE.writeValueAsString(requestBodyData);
             log.trace("Sending {} with input {} to {}", method, serializedBody, url);
-            HttpClient client = httpClient();
-
-            client.setFollowRedirects(false);
-
-            try {
-                client.start();
-            } catch (Exception e) {
-                log.error("Failed to start RestClient: ", e);
-                throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "Failed to start RestClient: " + e.getMessage(), e);
-            }
 
             Request req = client.newRequest(url);
             req.method(method);
