@@ -1175,8 +1175,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         }
                     });
                 } else {
-                    error = ConnectUtils.maybeWrap(error, "Request forwarding disabled in distributed MirrorMaker2; fencing zombie source tasks must be performed by the leader");
-                    callback.onCompletion(error, null);
+                    callback.onCompletion(
+                            new ConnectException(
+                                    // TODO: Update this message if KIP-710 is accepted and merged
+                                    //       (https://cwiki.apache.org/confluence/display/KAFKA/KIP-710%3A+Full+support+for+distributed+mode+in+dedicated+MirrorMaker+2.0+clusters)
+                                    "This worker is not able to communicate with the leader of the cluster, "
+                                            + "which is required for exactly-once source tasks. If running MirrorMaker 2 "
+                                            + "in dedicated mode, consider either disabling exactly-once support, or deploying "
+                                            + "the connectors for MirrorMaker 2 directly onto a distributed Kafka Connect cluster."
+                            ),
+                            null
+                    );
                 }
             } else {
                 error = ConnectUtils.maybeWrap(error, "Failed to perform zombie fencing");
@@ -1918,7 +1927,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     writeToConfigTopicAsLeader(() -> configBackingStore.putTaskConfigs(connName, rawTaskProps));
                     cb.onCompletion(null, null);
                 } else if (restClient == null) {
-                    throw new NotLeaderException("Request forwarding disabled in distributed MirrorMaker2; reconfiguring tasks must be performed by the leader", leaderUrl());
+                    // TODO: Update this message if KIP-710 is accepted and merged
+                    //       (https://cwiki.apache.org/confluence/display/KAFKA/KIP-710%3A+Full+support+for+distributed+mode+in+dedicated+MirrorMaker+2.0+clusters)
+                    throw new NotLeaderException("This worker is not able to communicate with the leader of the cluster, "
+                            + "which is required for dynamically-reconfiguring connectors. If running MirrorMaker 2 "
+                            + "in dedicated mode, consider deploying the connectors for MirrorMaker 2 directly onto a "
+                            + "distributed Kafka Connect cluster.",
+                            leaderUrl()
+                    );
                 } else {
                     // We cannot forward the request on the same thread because this reconfiguration can happen as a result of connector
                     // addition or removal. If we blocked waiting for the response from leader, we may be kicked out of the worker group.
