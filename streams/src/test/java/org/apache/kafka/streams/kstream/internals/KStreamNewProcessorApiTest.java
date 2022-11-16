@@ -51,45 +51,24 @@ public class KStreamNewProcessorApiTest {
     @Test
     @DisplayName("Should attach the state store using ConnectedStoreProvider")
     void shouldGetStateStoreWithConnectedStoreProvider() {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final StoreBuilder<?> storeBuilder = Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("store"), Serdes.String(), Serdes.String());
-
-        builder.stream("input", Consumed.with(Serdes.String(), Serdes.String()))
-                .processValues(new TransformerSupplier(storeBuilder), "store")
-                .to("output", Produced.with(Serdes.String(), Serdes.String()));
-
-        final List<KeyValue<String, String>> words = Arrays.asList(KeyValue.pair("a", "foo"), KeyValue.pair("b", "bar"), KeyValue.pair("c", "baz"));
-        try (TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
-            final TestInputTopic<String, String>
-                    testDriverInputTopic =
-                    testDriver.createInputTopic("input", Serdes.String().serializer(), Serdes.String().serializer());
-
-            words.forEach(clk -> testDriverInputTopic.pipeInput(clk.key, clk.value));
-
-            final List<String> expectedOutput = asList("fooUpdated", "barUpdated", "bazUpdated");
-
-            final Deserializer<String> keyDeserializer = Serdes.String().deserializer();
-            final List<String> actualOutput =
-                    new ArrayList<>(testDriver.createOutputTopic("output", keyDeserializer, Serdes.String().deserializer()).readValuesToList());
-
-            final KeyValueStore<String, String> stateStore = testDriver.getKeyValueStore("store");
-
-            Assertions.assertEquals(expectedOutput, actualOutput);
-            Assertions.assertEquals(stateStore.get("a"), "fooUpdated");
-            Assertions.assertEquals(stateStore.get("b"), "barUpdated");
-            Assertions.assertEquals(stateStore.get("c"), "bazUpdated");
-        }
+       runTest(false);
     }
 
     @Test
     @DisplayName("Should attach the state store StreamBuilder.addStateStore")
     void shouldGetStateStoreWithStreamBuilder() {
+        runTest(true);
+    }
+
+    private void runTest(final boolean shouldAddStoreDirectly) {
         final StreamsBuilder builder = new StreamsBuilder();
         final StoreBuilder<?> storeBuilder = Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("store"), Serdes.String(), Serdes.String());
 
-        builder.addStateStore(storeBuilder);
+        if (shouldAddStoreDirectly) {
+            builder.addStateStore(storeBuilder);
+        }
         builder.stream("input", Consumed.with(Serdes.String(), Serdes.String()))
-                .processValues(new TransformerSupplier(null), "store")
+                .processValues(new TransformerSupplier(shouldAddStoreDirectly ? null : storeBuilder), "store")
                 .to("output", Produced.with(Serdes.String(), Serdes.String()));
 
         final List<KeyValue<String, String>> words = Arrays.asList(KeyValue.pair("a", "foo"), KeyValue.pair("b", "bar"), KeyValue.pair("c", "baz"));
@@ -107,13 +86,14 @@ public class KStreamNewProcessorApiTest {
                     new ArrayList<>(testDriver.createOutputTopic("output", keyDeserializer, Serdes.String().deserializer()).readValuesToList());
 
             final KeyValueStore<String, String> stateStore = testDriver.getKeyValueStore("store");
-            
+
             Assertions.assertEquals(expectedOutput, actualOutput);
             Assertions.assertEquals(stateStore.get("a"), "fooUpdated");
             Assertions.assertEquals(stateStore.get("b"), "barUpdated");
             Assertions.assertEquals(stateStore.get("c"), "bazUpdated");
         }
     }
+    
     private static class TransformerSupplier implements FixedKeyProcessorSupplier<String, String, String> {
         private final StoreBuilder<?> storeBuilder;
         public TransformerSupplier(final StoreBuilder<?> storeBuilder) {
@@ -147,7 +127,6 @@ public class KStreamNewProcessorApiTest {
                 }
             };
         }
-
         @Override
         public Set<StoreBuilder<?>> stores() {
             if (storeBuilder != null) {
