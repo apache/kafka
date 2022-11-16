@@ -51,7 +51,7 @@ public class KStreamNewProcessorApiTest {
     @Test
     @DisplayName("Should attach the state store using ConnectedStoreProvider")
     void shouldGetStateStoreWithConnectedStoreProvider() {
-       runTest(false);
+        runTest(false);
     }
 
     @Test
