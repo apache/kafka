@@ -129,8 +129,8 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
     @Override
     public String toString() {
         return "ProcessorParameters{" +
-            "processor class=" + (processorSupplier != null ? processorSupplier.get().getClass() : "null") +
-            ", fixed key processor class=" + (fixedKeyProcessorSupplier != null ? fixedKeyProcessorSupplier.get().getClass() : "null") +
+            "processor supplier class=" + (processorSupplier != null ? processorSupplier.getClass() : "null") +
+            ", fixed key processor supplier class=" + (fixedKeyProcessorSupplier != null ? fixedKeyProcessorSupplier.getClass() : "null") +
             ", processor name='" + processorName + '\'' +
             '}';
     }
