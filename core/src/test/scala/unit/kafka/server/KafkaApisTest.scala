@@ -2637,6 +2637,7 @@ class KafkaApisTest {
     assertEquals(GroupCoordinator.NoGeneration, response.data.generationId)
     assertEquals(GroupCoordinator.NoLeader, response.data.leader)
     assertNull(response.data.protocolType)
+
     if (version >= 7) {
       assertNull(response.data.protocolName)
     } else {
