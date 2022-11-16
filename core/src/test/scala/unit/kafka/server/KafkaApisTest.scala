@@ -66,7 +66,7 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadata
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, MessageUtil}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
@@ -547,7 +547,7 @@ class KafkaApisTest {
     forwardCallback.getValue.apply(Some(expectedResponse))
 
     val capturedResponse = verifyNoThrottling[AbstractResponse](request)
-    assertEquals(expectedResponse, capturedResponse)
+    assertEquals(expectedResponse.data, capturedResponse.data)
 
     if (kafkaApis.metadataSupport.isInstanceOf[ZkSupport]) {
       verify(controller).isActive
@@ -2676,7 +2676,7 @@ class KafkaApisTest {
       protocolType = Some(protocolType),
       protocolName = Some(protocolName),
       leaderId = memberId,
-      skipAssignment = true,
+      skipAssignment = if (version >= 9) true else false,
       error = Errors.NONE
     ))
     val response = verifyNoThrottling[JoinGroupResponse](requestChannelRequest)
@@ -2687,8 +2687,16 @@ class KafkaApisTest {
     assertEquals(0, response.data.generationId)
     assertEquals(memberId, response.data.leader)
     assertEquals(protocolName, response.data.protocolName)
-    assertEquals(protocolType, response.data.protocolType)
-    assertTrue(response.data.skipAssignment)
+    if (version >= 7) {
+      assertEquals(protocolType, response.data.protocolType)
+    } else {
+      assertNull(response.data.protocolType)
+    }
+    if (version >= 9) {
+      assertTrue(response.data.skipAssignment)
+    } else {
+      assertFalse(response.data.skipAssignment)
+    }
   }
 
   @Test
@@ -2744,7 +2752,13 @@ class KafkaApisTest {
 
     assertEquals(Errors.NONE, response.error)
     assertArrayEquals(Array.empty[Byte], response.data.assignment)
-    assertEquals(protocolType, response.data.protocolType)
+    if (version >= 5) {
+      assertEquals(protocolType, response.data.protocolType)
+      assertEquals(protocolName, response.data.protocolName)
+    } else {
+      assertNull(response.data.protocolType)
+      assertNull(response.data.protocolName)
+    }
   }
 
   @Test
@@ -3431,7 +3445,16 @@ class KafkaApisTest {
       capturedResponse.capture(),
       any()
     )
-    capturedResponse.getValue.asInstanceOf[T]
+    val response = capturedResponse.getValue
+    val buffer = MessageUtil.toByteBuffer(
+      response.data,
+      request.context.header.apiVersion
+    )
+    AbstractResponse.parseResponse(
+      request.context.header.apiKey,
+      buffer,
+      request.context.header.apiVersion,
+    ).asInstanceOf[T]
   }
 
   private def createBasicMetadataRequest(topic: String,
