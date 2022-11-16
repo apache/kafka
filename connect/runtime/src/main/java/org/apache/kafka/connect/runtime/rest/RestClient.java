@@ -20,6 +20,7 @@ package org.apache.kafka.connect.runtime.rest;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.distributed.CryptoLibrary;
 import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
@@ -129,6 +130,7 @@ public class RestClient {
 
             if (sessionKey != null && requestSignatureAlgorithm != null) {
                 InternalRequestSignature.addToRequest(
+                    CryptoLibrary.SYSTEM,
                     sessionKey,
                     serializedBody != null ? serializedBody.getBytes(StandardCharsets.UTF_8) : null,
                     requestSignatureAlgorithm,
