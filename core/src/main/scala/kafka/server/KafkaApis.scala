@@ -59,7 +59,6 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
-import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
@@ -1398,76 +1397,190 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def handleOffsetFetchRequestBetweenV1AndV7(request: RequestChannel.Request): Unit = {
-    val header = request.header
     val offsetFetchRequest = request.body[OffsetFetchRequest]
-    val groupId = offsetFetchRequest.groupId()
-    val (error, partitionData) = fetchOffsets(groupId, offsetFetchRequest.isAllPartitions,
-      offsetFetchRequest.requireStable, offsetFetchRequest.partitions, request.context)
-    def createResponse(requestThrottleMs: Int): AbstractResponse = {
-      val offsetFetchResponse =
-        if (error != Errors.NONE) {
-          offsetFetchRequest.getErrorResponse(requestThrottleMs, error)
-        } else {
-          new OffsetFetchResponse(requestThrottleMs, Errors.NONE, partitionData.asJava)
-        }
-      trace(s"Sending offset fetch response $offsetFetchResponse for correlation id ${header.correlationId} to client ${header.clientId}.")
-      offsetFetchResponse
+    val requireStable = offsetFetchRequest.data.requireStable
+
+    def sendResponse(response: AbstractResponse): Unit = {
+      trace(s"Sending offset fetch response $response for correlation id ${request.header.correlationId} to " +
+        s"client ${request.header.clientId}.")
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+        response.maybeSetThrottleTimeMs(requestThrottleMs)
+        response
+      })
     }
-    requestHelper.sendResponseMaybeThrottle(request, createResponse)
+
+    val isAllPartitions = offsetFetchRequest.data.topics == null
+
+    val groupData = new OffsetFetchRequestData.OffsetFetchRequestGroup()
+      .setGroupId(offsetFetchRequest.data.groupId)
+
+    val future = if (isAllPartitions) {
+      fetchAllOffsets(
+        request,
+        groupData,
+        requireStable
+      )
+    } else {
+      offsetFetchRequest.data.topics.forEach { topic =>
+        groupData.topics.add(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+          .setName(topic.name)
+          .setPartitionIndexes(topic.partitionIndexes))
+      }
+
+      fetchOffsets(
+        request,
+        groupData,
+        requireStable
+      )
+    }
+
+    future.handle[Unit] { (response, exception) =>
+      if (exception != null) {
+        sendResponse(offsetFetchRequest.getErrorResponse(Errors.forException(exception)))
+      } else {
+        val offsetFetchResponse = new OffsetFetchResponseData()
+        response.topics.forEach { topic =>
+          val newTopic = new OffsetFetchResponseData.OffsetFetchResponseTopic()
+            .setName(topic.name)
+          topic.partitions.forEach { partition =>
+            newTopic.partitions.add(new OffsetFetchResponseData.OffsetFetchResponsePartition()
+              .setPartitionIndex(partition.partitionIndex)
+              .setErrorCode(partition.errorCode)
+              .setCommittedOffset(partition.committedOffset)
+              .setCommittedLeaderEpoch(partition.committedLeaderEpoch)
+              .setMetadata(partition.metadata))
+          }
+          offsetFetchResponse.topics.add(newTopic)
+        }
+        sendResponse(new OffsetFetchResponse(offsetFetchResponse, request.context.apiVersion))
+      }
+    }
   }
 
   private def handleOffsetFetchRequestV8AndAbove(request: RequestChannel.Request): Unit = {
-    val header = request.header
     val offsetFetchRequest = request.body[OffsetFetchRequest]
-    val groupIds = offsetFetchRequest.groupIds().asScala
-    val groupToErrorMap =  mutable.Map.empty[String, Errors]
-    val groupToPartitionData =  mutable.Map.empty[String, util.Map[TopicPartition, PartitionData]]
-    val groupToTopicPartitions = offsetFetchRequest.groupIdsToPartitions()
-    groupIds.foreach(g => {
-      val (error, partitionData) = fetchOffsets(g,
-        offsetFetchRequest.isAllPartitionsForGroup(g),
-        offsetFetchRequest.requireStable(),
-        groupToTopicPartitions.get(g), request.context)
-      groupToErrorMap += (g -> error)
-      groupToPartitionData += (g -> partitionData.asJava)
-    })
+    val requireStable = offsetFetchRequest.data.requireStable
 
-    def createResponse(requestThrottleMs: Int): AbstractResponse = {
-      val offsetFetchResponse = new OffsetFetchResponse(requestThrottleMs,
-        groupToErrorMap.asJava, groupToPartitionData.asJava)
-      trace(s"Sending offset fetch response $offsetFetchResponse for correlation id ${header.correlationId} to client ${header.clientId}.")
-      offsetFetchResponse
+    def sendResponse(response: AbstractResponse): Unit = {
+      trace(s"Sending offset fetch response $response for correlation id ${request.header.correlationId} to " +
+        s"client ${request.header.clientId}.")
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+        response.maybeSetThrottleTimeMs(requestThrottleMs)
+        response
+      })
     }
 
-    requestHelper.sendResponseMaybeThrottle(request, createResponse)
+    val futures = new mutable.ArrayBuffer[CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]](
+      offsetFetchRequest.data.groups.size
+    )
+    offsetFetchRequest.data.groups.forEach { groupOffsetFetch =>
+      val isAllPartitions = groupOffsetFetch.topics == null
+      val future = if (isAllPartitions) {
+        fetchAllOffsets(
+          request,
+          groupOffsetFetch,
+          requireStable
+        )
+      } else {
+        fetchOffsets(
+          request,
+          groupOffsetFetch,
+          requireStable
+        )
+      }
+      futures += future
+    }
+
+    CompletableFuture.allOf(futures.toArray: _*).handle[Unit] { (_, _) =>
+      val offsetFetchResponse = new OffsetFetchResponseData()
+      futures.foreach { future =>
+        offsetFetchResponse.groups.add(future.get())
+      }
+      sendResponse(new OffsetFetchResponse(offsetFetchResponse, request.context.apiVersion))
+    }
   }
 
-  private def fetchOffsets(groupId: String, isAllPartitions: Boolean, requireStable: Boolean,
-                           partitions: util.List[TopicPartition], context: RequestContext): (Errors, Map[TopicPartition, OffsetFetchResponse.PartitionData]) = {
-    if (!authHelper.authorize(context, DESCRIBE, GROUP, groupId)) {
-      (Errors.GROUP_AUTHORIZATION_FAILED, Map.empty)
-    } else {
-      if (isAllPartitions) {
-        val (error, allPartitionData) = groupCoordinator.handleFetchOffsets(groupId, requireStable)
-        if (error != Errors.NONE) {
-          (error, allPartitionData)
-        } else {
-          // clients are not allowed to see offsets for topics that are not authorized for Describe
-          val (authorizedPartitionData, _) = authHelper.partitionMapByAuthorized(context,
-            DESCRIBE, TOPIC, allPartitionData)(_.topic)
-          (Errors.NONE, authorizedPartitionData)
-        }
+  private def fetchAllOffsets(
+    request: RequestChannel.Request,
+    groupOffsetFetch: OffsetFetchRequestData.OffsetFetchRequestGroup,
+    requireStable: Boolean
+  ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
+    if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupOffsetFetch.groupId)) {
+      return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
+        .setGroupId(groupOffsetFetch.groupId)
+        .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code))
+    }
+
+    newGroupCoordinator.fetchAllOffsets(
+      request.context,
+      groupOffsetFetch.groupId,
+      requireStable
+    ).handle[OffsetFetchResponseData.OffsetFetchResponseGroup] { (offsets, exception) =>
+      if (exception != null) {
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId(groupOffsetFetch.groupId)
+          .setErrorCode(Errors.forException(exception).code)
       } else {
-        val (authorizedPartitions, unauthorizedPartitions) = partitionByAuthorized(
-          partitions.asScala, context)
-        val (error, authorizedPartitionData) = groupCoordinator.handleFetchOffsets(groupId,
-          requireStable, Some(authorizedPartitions))
-        if (error != Errors.NONE) {
-          (error, authorizedPartitionData)
-        } else {
-          val unauthorizedPartitionData = unauthorizedPartitions.map(_ -> OffsetFetchResponse.UNAUTHORIZED_PARTITION).toMap
-          (Errors.NONE, authorizedPartitionData ++ unauthorizedPartitionData)
+        // Clients are not allowed to see offsets for topics that are not authorized for Describe.
+        val (authorizedOffsets, _) = authHelper.partitionSeqByAuthorized(
+          request.context,
+          DESCRIBE,
+          TOPIC,
+          offsets.asScala
+        )(_.name)
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId(groupOffsetFetch.groupId)
+          .setTopics(authorizedOffsets.asJava)
+      }
+    }
+  }
+
+  private def fetchOffsets(
+    request: RequestChannel.Request,
+    groupOffsetFetch: OffsetFetchRequestData.OffsetFetchRequestGroup,
+    requireStable: Boolean
+  ): CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
+    if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupOffsetFetch.groupId)) {
+      return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
+        .setGroupId(groupOffsetFetch.groupId)
+        .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code))
+    }
+
+    // Clients are not allowed to see offsets for topics that are not authorized for Describe.
+    val (authorizedTopics, unauthorizedTopics) = authHelper.partitionSeqByAuthorized(
+      request.context,
+      DESCRIBE,
+      TOPIC,
+      groupOffsetFetch.topics.asScala
+    )(_.name)
+
+    newGroupCoordinator.fetchOffsets(
+      request.context,
+      groupOffsetFetch.groupId,
+      authorizedTopics.asJava,
+      requireStable
+    ).handle[OffsetFetchResponseData.OffsetFetchResponseGroup] { (topicOffsets, exception) =>
+      if (exception != null) {
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId(groupOffsetFetch.groupId)
+          .setErrorCode(Errors.forException(exception).code)
+      } else {
+        val response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId(groupOffsetFetch.groupId)
+          .setTopics(topicOffsets)
+
+        unauthorizedTopics.foreach { topic =>
+          val topicResponse = new OffsetFetchResponseData.OffsetFetchResponseTopics().setName(topic.name)
+          topic.partitionIndexes.forEach { partitionIndex =>
+            topicResponse.partitions.add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(partitionIndex)
+              .setCommittedOffset(-1)
+              .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code))
+          }
+          response.topics.add(topicResponse)
         }
+
+        response
       }
     }
   }

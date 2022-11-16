@@ -119,12 +119,6 @@ public class OffsetFetchResponse extends AbstractResponse {
         }
     }
 
-    public OffsetFetchResponse(OffsetFetchResponseData data) {
-        super(ApiKeys.OFFSET_FETCH);
-        this.data = data;
-        this.error = null;
-    }
-
     /**
      * Constructor without throttle time.
      * @param error Potential coordinator or group level error code (for api version 2 and later)
