@@ -224,7 +224,7 @@ public class InternalTopologyBuilder {
 
     private static class ProcessorNodeFactory<KIn, VIn, KOut, VOut> extends NodeFactory<KIn, VIn, KOut, VOut> {
         private final ProcessorSupplier<KIn, VIn, KOut, VOut> supplier;
-        private final Set<String> stateStoreNames = new HashSet<>();
+        final Set<String> stateStoreNames = new HashSet<>();
 
         ProcessorNodeFactory(final String name,
                              final String[] predecessors,
@@ -250,17 +250,12 @@ public class InternalTopologyBuilder {
 
     private static class FixedKeyProcessorNodeFactory<KIn, VIn, VOut> extends ProcessorNodeFactory<KIn, VIn, KIn, VOut> {
         private final FixedKeyProcessorSupplier<KIn, VIn, VOut> supplier;
-        private final Set<String> stateStoreNames = new HashSet<>();
 
         FixedKeyProcessorNodeFactory(final String name,
                              final String[] predecessors,
                              final FixedKeyProcessorSupplier<KIn, VIn, VOut> supplier) {
             super(name, predecessors.clone(), null);
             this.supplier = supplier;
-        }
-
-        public void addStateStore(final String stateStoreName) {
-            stateStoreNames.add(stateStoreName);
         }
 
         @Override
