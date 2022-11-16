@@ -121,29 +121,8 @@ object BrokerToControllerChannelManager {
     config: KafkaConfig,
     channelName: String,
     threadNamePrefix: Option[String],
-    retryTimeoutMs: Long
-  ): BrokerToControllerChannelManager = {
-    new BrokerToControllerChannelManagerImpl(
-      controllerNodeProvider,
-      time,
-      metrics,
-      config,
-      channelName,
-      threadNamePrefix,
-      if (retryTimeoutMs > Integer.MAX_VALUE) Integer.MAX_VALUE else retryTimeoutMs.toInt,
-      retryTimeoutMs
-    )
-  }
-
-  def apply(
-     controllerNodeProvider: ControllerNodeProvider,
-     time: Time,
-     metrics: Metrics,
-     config: KafkaConfig,
-     channelName: String,
-     threadNamePrefix: Option[String],
-     networkClientRetryTimeoutMs: Int,
-     requestThreadRetryTimeoutMs: Long
+    retryTimeoutMs: Long,
+    networkClientRetryTimeoutMs: Option[Int] = None
    ): BrokerToControllerChannelManager = {
     new BrokerToControllerChannelManagerImpl(
       controllerNodeProvider,
@@ -152,8 +131,8 @@ object BrokerToControllerChannelManager {
       config,
       channelName,
       threadNamePrefix,
-      networkClientRetryTimeoutMs,
-      requestThreadRetryTimeoutMs
+      retryTimeoutMs,
+      networkClientRetryTimeoutMs
     )
   }
 }
@@ -182,8 +161,8 @@ class BrokerToControllerChannelManagerImpl(
   config: KafkaConfig,
   channelName: String,
   threadNamePrefix: Option[String],
-  networkClientRetryTimeoutMs: Int,
-  requestThreadRetryTimeoutMs: Long
+  retryTimeoutMs: Long,
+  networkClientRetryTimeoutMs: Option[Int] = None
 ) extends BrokerToControllerChannelManager with Logging {
   private val logContext = new LogContext(s"[BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
@@ -235,7 +214,7 @@ class BrokerToControllerChannelManagerImpl(
         50,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
-        networkClientRetryTimeoutMs,
+        networkClientRetryTimeoutMs.getOrElse(config.controllerSocketTimeoutMs),
         config.connectionSetupTimeoutMs,
         config.connectionSetupTimeoutMaxMs,
         time,
@@ -256,8 +235,8 @@ class BrokerToControllerChannelManagerImpl(
       config,
       time,
       threadName,
-      networkClientRetryTimeoutMs,
-      requestThreadRetryTimeoutMs
+      retryTimeoutMs,
+      networkClientRetryTimeoutMs
     )
   }
 
@@ -307,9 +286,9 @@ class BrokerToControllerRequestThread(
   config: KafkaConfig,
   time: Time,
   threadName: String,
-  networkClientRetryTimeoutMs: Int,
-  requestThreadRetryTimeoutMs: Long
-) extends InterBrokerSendThread(threadName, networkClient, networkClientRetryTimeoutMs, time, isInterruptible = false) {
+  retryTimeoutMs: Long,
+  networkClientRetryTimeoutMs: Option[Int] = None
+) extends InterBrokerSendThread(threadName, networkClient, networkClientRetryTimeoutMs.getOrElse(config.controllerSocketTimeoutMs), time, isInterruptible = false) {
 
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
   private val activeController = new AtomicReference[Node](null)
@@ -345,7 +324,7 @@ class BrokerToControllerRequestThread(
     val requestIter = requestQueue.iterator()
     while (requestIter.hasNext) {
       val request = requestIter.next
-      if (currentTimeMs - request.createdTimeMs >= requestThreadRetryTimeoutMs) {
+      if (currentTimeMs - request.createdTimeMs >= retryTimeoutMs) {
         requestIter.remove()
         request.callback.onTimeout()
       } else {

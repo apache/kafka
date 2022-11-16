@@ -283,8 +283,7 @@ class KafkaServer(
           config = config,
           channelName = "forwarding",
           threadNamePrefix = threadNamePrefix,
-          networkClientRetryTimeoutMs = config.controllerSocketTimeoutMs,
-          requestThreadRetryTimeoutMs = config.requestTimeoutMs.longValue
+          retryTimeoutMs = config.requestTimeoutMs.longValue
         )
         clientToControllerChannelManager.start()
 
