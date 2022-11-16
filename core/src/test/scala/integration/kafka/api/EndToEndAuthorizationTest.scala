@@ -161,12 +161,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     super.setUp(testInfo)
 
-    val superuserAdminClient = createSuperuserAdminClient()
-    superuserAdminClient.createAcls(List(AclClusterAction, AclAlter).asJava).values
-    servers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(ClusterActionAndClusterAlterAcls, s.dataPlaneRequestProcessor.authorizer.get, clusterResource)
-    }
-
     // create the test topic with all the brokers as replicas
     createTopic(topic, 1, 3)
   }
