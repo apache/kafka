@@ -357,6 +357,8 @@ public class RestServer {
             builder.port(advertisedPort);
         else if (serverConnector != null && serverConnector.getPort() > 0)
             builder.port(serverConnector.getPort());
+        else if (serverConnector != null && serverConnector.getLocalPort() > 0)
+            builder.port(serverConnector.getLocalPort());
 
         log.info("Advertised URI: {}", builder.build());
 

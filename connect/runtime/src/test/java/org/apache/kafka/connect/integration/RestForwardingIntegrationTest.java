@@ -37,6 +37,7 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.test.IntegrationTest;
@@ -44,6 +45,7 @@ import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
@@ -58,6 +60,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,6 +77,7 @@ import static org.mockito.Mockito.when;
 @Category(IntegrationTest.class)
 public class RestForwardingIntegrationTest {
 
+    private Map<String, Object> sslConfig;
     @Mock
     private Plugins plugins;
     private RestClient followerClient;
@@ -88,6 +92,11 @@ public class RestForwardingIntegrationTest {
     private SslContextFactory factory;
     private CloseableHttpClient httpClient;
     private Collection<CloseableHttpResponse> responses = new ArrayList<>();
+
+    @Before
+    public void setUp() throws IOException, GeneralSecurityException {
+        sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
+    }
 
     @After
     public void tearDown() throws IOException {
@@ -112,27 +121,42 @@ public class RestForwardingIntegrationTest {
 
     @Test
     public void testRestForwardNoSsl() throws Exception {
-        testRestForwardToLeader(false, false);
+        // A cluster with no SSL configured whatsoever, using HTTP
+        testRestForwardToLeader(false, false, false);
     }
 
     @Test
-    public void testRestForwardSsl() throws Exception {
-        testRestForwardToLeader(true, true);
+    public void testRestForwardNoSslDualListener() throws Exception {
+        // A cluster configured with HTTPS listeners, but still advertising HTTP
+        testRestForwardToLeader(true, false, false);
     }
 
     @Test
     public void testRestForwardLeaderSsl() throws Exception {
-        testRestForwardToLeader(false, true);
+        // A heterogeneous cluster where the leader rolls to advertise HTTPS before the follower
+        testRestForwardToLeader(true, false, true);
     }
 
     @Test
     public void testRestForwardFollowerSsl() throws Exception {
-        testRestForwardToLeader(true, false);
+        // A heterogeneous cluster where the follower rolls to advertise HTTPS before the leader
+        testRestForwardToLeader(true, true, false);
+    }
+    @Test
+    public void testRestForwardSslDualListener() throws Exception {
+        // A cluster that has just rolled to advertise HTTPS on both workers
+        testRestForwardToLeader(true, true, true);
     }
 
-    public void testRestForwardToLeader(boolean followerSsl, boolean leaderSsl) throws Exception {
-        DistributedConfig followerConfig = new DistributedConfig(baseWorkerProps(followerSsl));
-        DistributedConfig leaderConfig = new DistributedConfig(baseWorkerProps(leaderSsl));
+    @Test
+    public void testRestForwardSsl() throws Exception {
+        // A cluster that has finished rolling to SSL and disabled the HTTP listener
+        testRestForwardToLeader(false, true, true);
+    }
+
+    public void testRestForwardToLeader(boolean dualListener, boolean followerSsl, boolean leaderSsl) throws Exception {
+        DistributedConfig followerConfig = new DistributedConfig(baseWorkerProps(dualListener, followerSsl));
+        DistributedConfig leaderConfig = new DistributedConfig(baseWorkerProps(dualListener, leaderSsl));
 
         // Follower worker setup
         followerClient = new RestClient(followerConfig);
@@ -167,12 +191,13 @@ public class RestForwardingIntegrationTest {
                 .putConnectorConfig(any(), any(), anyBoolean(), followerCallbackCaptor.capture());
 
         // Leader will reply
-        Herder.Created<ConnectorInfo> leaderAnswer = new Herder.Created<>(true, null);
+        ConnectorInfo connectorInfo = new ConnectorInfo("blah", Collections.emptyMap(), Collections.emptyList(), ConnectorType.SOURCE);
+        Herder.Created<ConnectorInfo> leaderAnswer = new Herder.Created<>(true, connectorInfo);
         ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> leaderCallbackCaptor = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
             leaderCallbackCaptor.getValue().onCompletion(null, leaderAnswer);
             return null;
-        }).when(followerHerder)
+        }).when(leaderHerder)
                 .putConnectorConfig(any(), any(), anyBoolean(), leaderCallbackCaptor.capture());
 
         // Client makes request to the follower
@@ -191,7 +216,7 @@ public class RestForwardingIntegrationTest {
         assertEquals(201, httpResponse.getStatusLine().getStatusCode());
     }
 
-    private Map<String, String> baseWorkerProps(boolean ssl) throws IOException, GeneralSecurityException {
+    private Map<String, String> baseWorkerProps(boolean dualListener, boolean advertiseSSL) {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
         workerProps.put(DistributedConfig.CONFIG_TOPIC_CONFIG, "config-topic");
@@ -200,8 +225,7 @@ public class RestForwardingIntegrationTest {
         workerProps.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "connect-offsets");
-        if (ssl) {
-            Map<String, Object> sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
+        if (dualListener || advertiseSSL) {
             for (String k : sslConfig.keySet()) {
                 if (sslConfig.get(k) instanceof Password) {
                     workerProps.put(k, ((Password) sslConfig.get(k)).value());
@@ -211,9 +235,15 @@ public class RestForwardingIntegrationTest {
                     workerProps.put(k, sslConfig.get(k).toString());
                 }
             }
-            workerProps.put(WorkerConfig.LISTENERS_CONFIG, "HTTPS://localhost:0");
+        }
+        if (dualListener) {
+            workerProps.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:0, https://localhost:0");
+            // Every server is brought up with both a plaintext and an SSL listener; we use this property
+            // to dictate which URL it advertises to other servers when a request must be forwarded to it
+            // and which URL we issue requests against during testing
+            workerProps.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, advertiseSSL ? "http" : "https");
         } else {
-            workerProps.put(WorkerConfig.LISTENERS_CONFIG, "HTTP://localhost:0");
+            workerProps.put(WorkerConfig.LISTENERS_CONFIG, advertiseSSL ? "https://localhost:0" : "http://localhost:0");
         }
 
         return workerProps;
