@@ -40,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 import static java.util.Arrays.asList;
@@ -48,11 +49,10 @@ import static java.util.Arrays.asList;
 public class KStreamNewProcessorApiTest {
 
     @Test
-    @DisplayName("Test for using new Processor API and state stores with the DSL")
-    void shouldGetStateStoreWithNewProcessor() {
+    @DisplayName("Should attach the state store using ConnectedStoreProvider")
+    void shouldGetStateStoreWithConnectedStoreProvider() {
         final StreamsBuilder builder = new StreamsBuilder();
         final StoreBuilder<?> storeBuilder = Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("store"), Serdes.String(), Serdes.String());
-
 
         builder.stream("input", Consumed.with(Serdes.String(), Serdes.String()))
                 .processValues(new TransformerSupplier(storeBuilder), "store")
@@ -72,15 +72,54 @@ public class KStreamNewProcessorApiTest {
             final List<String> actualOutput =
                     new ArrayList<>(testDriver.createOutputTopic("output", keyDeserializer, Serdes.String().deserializer()).readValuesToList());
 
+            final KeyValueStore<String, String> stateStore = testDriver.getKeyValueStore("store");
+
             Assertions.assertEquals(expectedOutput, actualOutput);
+            Assertions.assertEquals(stateStore.get("a"), "fooUpdated");
+            Assertions.assertEquals(stateStore.get("b"), "barUpdated");
+            Assertions.assertEquals(stateStore.get("c"), "bazUpdated");
+        }
+    }
+
+    @Test
+    @DisplayName("Should attach the state store StreamBuilder.addStateStore")
+    void shouldGetStateStoreWithStreamBuilder() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final StoreBuilder<?> storeBuilder = Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("store"), Serdes.String(), Serdes.String());
+
+        builder.addStateStore(storeBuilder);
+        builder.stream("input", Consumed.with(Serdes.String(), Serdes.String()))
+                .processValues(new TransformerSupplier(null), "store")
+                .to("output", Produced.with(Serdes.String(), Serdes.String()));
+
+        final List<KeyValue<String, String>> words = Arrays.asList(KeyValue.pair("a", "foo"), KeyValue.pair("b", "bar"), KeyValue.pair("c", "baz"));
+        try (TopologyTestDriver testDriver = new TopologyTestDriver(builder.build())) {
+            final TestInputTopic<String, String>
+                    testDriverInputTopic =
+                    testDriver.createInputTopic("input", Serdes.String().serializer(), Serdes.String().serializer());
+
+            words.forEach(clk -> testDriverInputTopic.pipeInput(clk.key, clk.value));
+
+            final List<String> expectedOutput = asList("fooUpdated", "barUpdated", "bazUpdated");
+
+            final Deserializer<String> keyDeserializer = Serdes.String().deserializer();
+            final List<String> actualOutput =
+                    new ArrayList<>(testDriver.createOutputTopic("output", keyDeserializer, Serdes.String().deserializer()).readValuesToList());
+
+            final KeyValueStore<String, String> stateStore = testDriver.getKeyValueStore("store");
+            
+            Assertions.assertEquals(expectedOutput, actualOutput);
+            Assertions.assertEquals(stateStore.get("a"), "fooUpdated");
+            Assertions.assertEquals(stateStore.get("b"), "barUpdated");
+            Assertions.assertEquals(stateStore.get("c"), "bazUpdated");
         }
     }
     private static class TransformerSupplier implements FixedKeyProcessorSupplier<String, String, String> {
         private final StoreBuilder<?> storeBuilder;
-
         public TransformerSupplier(final StoreBuilder<?> storeBuilder) {
             this.storeBuilder = storeBuilder;
         }
+
 
         @Override
         public ContextualFixedKeyProcessor<String, String, String> get() {
@@ -92,12 +131,12 @@ public class KStreamNewProcessorApiTest {
                 public void init(final FixedKeyProcessorContext<String, String> context) {
                     super.init(context);
                     store = context.getStateStore("store");
+                    Objects.requireNonNull(store, "State store can't be null");
                     this.context = context;
                 }
 
                 @Override
                 public void process(final FixedKeyRecord<String, String> record) {
-                    final String updated = store.get(record.key());
                     store.putIfAbsent(record.key(), record.value() + "Updated");
                     context().forward(record.withValue(record.value() + "Updated"));
                 }
@@ -111,7 +150,10 @@ public class KStreamNewProcessorApiTest {
 
         @Override
         public Set<StoreBuilder<?>> stores() {
-            return Collections.singleton(storeBuilder);
+            if (storeBuilder != null) {
+                return Collections.singleton(storeBuilder);
+            }
+            return null;
         }
     }
 }
