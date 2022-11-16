@@ -31,7 +31,6 @@ import org.mockito.ArgumentMatchers.{any, argThat, eq => eqThat}
 import org.mockito.Mockito.{mock, times, verify, when}
 
 import java.util.{Collection, Collections, Optional}
-import scala.collection.Seq
 import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 
@@ -203,7 +202,7 @@ class TopicCommandTest {
     assertTrue(exception.getCause.isInstanceOf[ThrottlingQuotaExceededException])
 
     verify(adminClient, times(1)).deleteTopics(
-      eqThat(Seq(topicName).asJavaCollection),
+      argThat((_.contains(topicName)): ArgumentMatcher[Collection[String]]),
       argThat((_.shouldRetryOnQuotaViolation() == false): ArgumentMatcher[DeleteTopicsOptions])
     )
   }
