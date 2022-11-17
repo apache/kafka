@@ -2994,6 +2994,7 @@ public class StreamThreadTest {
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime),
             topologyMetadata,
             "thread-id",
+            PROCESS_ID.toString(),
             new LogContext(),
             null,
             null,
