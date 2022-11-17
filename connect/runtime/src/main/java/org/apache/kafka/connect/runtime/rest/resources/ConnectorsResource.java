@@ -29,6 +29,7 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.distributed.RequestTargetException;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
@@ -326,7 +327,7 @@ public class ConnectorsResource implements ConnectResource {
                                final byte[] requestBody) throws Throwable {
         List<Map<String, String>> taskConfigs = new ObjectMapper().readValue(requestBody, TASK_CONFIGS_TYPE);
         FutureCallback<Void> cb = new FutureCallback<>();
-        herder.putTaskConfigs(connector, taskConfigs, cb, InternalRequestSignature.fromHeaders(requestBody, headers));
+        herder.putTaskConfigs(connector, taskConfigs, cb, InternalRequestSignature.fromHeaders(Crypto.SYSTEM, requestBody, headers));
         completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks", "POST", headers, taskConfigs, forward);
     }
 
@@ -338,7 +339,7 @@ public class ConnectorsResource implements ConnectResource {
                              final @QueryParam("forward") Boolean forward,
                              final byte[] requestBody) throws Throwable {
         FutureCallback<Void> cb = new FutureCallback<>();
-        herder.fenceZombieSourceTasks(connector, cb, InternalRequestSignature.fromHeaders(requestBody, headers));
+        herder.fenceZombieSourceTasks(connector, cb, InternalRequestSignature.fromHeaders(Crypto.SYSTEM, requestBody, headers));
         completeOrForwardRequest(cb, "/connectors/" + connector + "/fence", "PUT", headers, requestBody, forward);
     }
 
