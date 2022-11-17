@@ -24,14 +24,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 
-import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
-import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -77,6 +73,8 @@ public abstract class AbstractStickyAssignorTest {
     // simulate ConsumerProtocolSubscription V2 or above protocol
     protected abstract Subscription buildSubscriptionV2Above(List<String> topics, List<TopicPartition> partitions, int generation);
 
+    protected abstract ByteBuffer generateUserData(List<String> topics, List<TopicPartition> partitions, int generation);
+
     @BeforeEach
     public void setUp() {
         assignor = createAssignor();
@@ -93,7 +91,7 @@ public abstract class AbstractStickyAssignorTest {
         List<String> topics = topics(topic);
         List<TopicPartition> ownedPartitions = partitions(tp(topic1, 0), tp(topic2, 1));
         List<Subscription> subscriptions = new ArrayList<>();
-        // add all subscription in ConsumerProtocolSubscription versions
+        // add subscription in all ConsumerProtocolSubscription versions
         subscriptions.add(buildSubscriptionV0(topics, ownedPartitions, generationId));
         subscriptions.add(buildSubscriptionV1(topics, ownedPartitions, generationId));
         subscriptions.add(buildSubscriptionV2Above(topics, ownedPartitions, generationId));
@@ -107,53 +105,17 @@ public abstract class AbstractStickyAssignorTest {
     }
 
     @Test
-    public void testMemberDataFromSubscriptionWithInconsistentData() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic, 2);
-        List<TopicPartition> ownedPartitionsInUserdata = partitions(tp1);
-        List<TopicPartition> ownedPartitionsInSubscription = partitions(tp0);
+    public void testMemberDataFromSubscriptionWithEmptyPartitionsAndValidGeneration() {
+        List<String> topics = topics(topic);
+        List<TopicPartition> ownedPartitions = partitions(tp(topic1, 0), tp(topic2, 1));
 
-        assignor.onAssignment(new ConsumerPartitionAssignor.Assignment(ownedPartitionsInUserdata), new ConsumerGroupMetadata(groupId, generationId, consumer1, Optional.empty()));
-        ByteBuffer userDataWithHigherGenerationId = assignor.subscriptionUserData(new HashSet<>(topics(topic)));
-        // The owned partitions and generation id are provided in user data and different owned partition is provided in subscription without generation id
-        // If subscription provides no generation id, we'll honor the generation id in userData and owned partitions in subscription
-        Subscription subscription = new Subscription(topics(topic), userDataWithHigherGenerationId, ownedPartitionsInSubscription);
+        // subscription containing empty owned partitions and valid generation id, and non-empty owned partition in user data,
+        // member data should honor the one in subscription since generation id is valid
+        Subscription subscription = new Subscription(topics, generateUserData(topics, ownedPartitions, generationId + 1), Collections.emptyList(), generationId);
 
         AbstractStickyAssignor.MemberData memberData = assignor.memberDataFromSubscription(subscription);
-        // in CooperativeStickyAssignor, we'll serialize owned partition in subscription into userData
-        // but in StickyAssignor, we'll serialize owned partition in assignment into userData
-        if (assignor instanceof CooperativeStickyAssignor) {
-            assertEquals(ownedPartitionsInSubscription, memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");
-        } else {
-            assertEquals(ownedPartitionsInUserdata, memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");
-        }
+        assertEquals(Collections.emptyList(), memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");
         assertEquals(generationId, memberData.generation.orElse(-1), "subscription: " + subscription + " doesn't have expected generation id");
-    }
-
-    @Test
-    public void testAssignorWithOldVersionSubscriptions() {
-        Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        partitionsPerTopic.put(topic1, 3);
-
-        List<String> subscribedTopics = topics(topic1);
-
-        // cooperative sticky assignor only supports ConsumerProtocolSubscription V1 or above
-        if (assignor instanceof CooperativeStickyAssignor) {
-            subscriptions.put(consumer1, buildSubscriptionV1(subscribedTopics, partitions(tp(topic1, 0)), generationId));
-        } else {
-            subscriptions.put(consumer1, buildSubscriptionV0(subscribedTopics, partitions(tp(topic1, 0)), generationId));
-        }
-        subscriptions.put(consumer2, buildSubscriptionV1(subscribedTopics, partitions(tp(topic1, 1)), generationId));
-        subscriptions.put(consumer3, buildSubscriptionV2Above(subscribedTopics, Collections.emptyList(), generationId));
-
-        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(partitions(tp(topic1, 0)), assignment.get(consumer1));
-        assertEquals(partitions(tp(topic1, 1)), assignment.get(consumer2));
-        assertEquals(partitions(tp(topic1, 2)), assignment.get(consumer3));
-        assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
-
-        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
-        assertTrue(isFullyBalanced(assignment));
     }
 
     @Test
@@ -1120,4 +1082,7 @@ public abstract class AbstractStickyAssignorTest {
         }
     }
 
+    protected AbstractStickyAssignor.MemberData memberDataFromSubscription(Subscription subscription) {
+        return assignor.memberDataFromSubscription(subscription);
+    }
 }

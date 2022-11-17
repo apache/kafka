@@ -21,6 +21,8 @@ import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor;
 import org.apache.kafka.clients.consumer.internals.AbstractStickyAssignorTest;
 import org.apache.kafka.common.TopicPartition;
 
+import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -58,6 +60,12 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
     @Override
     public Subscription buildSubscriptionV2Above(List<String> topics, List<TopicPartition> partitions, int generationId) {
         return new Subscription(topics, null, partitions, generationId);
+    }
+
+    @Override
+    public ByteBuffer generateUserData(List<String> topics, List<TopicPartition> partitions, int generation) {
+        assignor.onAssignment(new ConsumerPartitionAssignor.Assignment(partitions), new ConsumerGroupMetadata(groupId, generationId, consumer1, Optional.empty()));
+        return assignor.subscriptionUserData(new HashSet<>(topics));
     }
 
     @Test
@@ -117,6 +125,46 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
         assertEquals(partitions(tp(topic, 2)), assignment.get(consumer2));
         // In the cooperative assignor, topic-0 has to be considered "owned" and so it cant be assigned until both have "revoked" it
         assertTrue(assignment.get(consumer3).isEmpty());
+
+        verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
+        assertTrue(isFullyBalanced(assignment));
+    }
+
+    @Test
+    public void testMemberDataFromSubscriptionWithInconsistentData() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic, 2);
+        List<TopicPartition> ownedPartitionsInUserdata = partitions(tp1);
+        List<TopicPartition> ownedPartitionsInSubscription = partitions(tp0);
+
+        assignor.onAssignment(new ConsumerPartitionAssignor.Assignment(ownedPartitionsInUserdata), new ConsumerGroupMetadata(groupId, generationId, consumer1, Optional.empty()));
+        ByteBuffer userDataWithHigherGenerationId = assignor.subscriptionUserData(new HashSet<>(topics(topic)));
+        // The owned partitions and generation id are provided in user data and different owned partition is provided in subscription without generation id
+        // If subscription provides no generation id, we'll honor the generation id in userData and owned partitions in subscription
+        Subscription subscription = new Subscription(topics(topic), userDataWithHigherGenerationId, ownedPartitionsInSubscription);
+
+        AbstractStickyAssignor.MemberData memberData = memberDataFromSubscription(subscription);
+        // In CooperativeStickyAssignor, we'll serialize owned partition in subscription into userData
+        assertEquals(ownedPartitionsInSubscription, memberData.partitions, "subscription: " + subscription + " doesn't have expected owned partition");
+        assertEquals(generationId, memberData.generation.orElse(-1), "subscription: " + subscription + " doesn't have expected generation id");
+    }
+
+    @Test
+    public void testAssignorWithOldVersionSubscriptions() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, 3);
+
+        List<String> subscribedTopics = topics(topic1);
+
+        // cooperative sticky assignor only supports ConsumerProtocolSubscription V1 or above
+        subscriptions.put(consumer1, buildSubscriptionV1(subscribedTopics, partitions(tp(topic1, 0)), generationId));
+        subscriptions.put(consumer2, buildSubscriptionV1(subscribedTopics, partitions(tp(topic1, 1)), generationId));
+        subscriptions.put(consumer3, buildSubscriptionV2Above(subscribedTopics, Collections.emptyList(), generationId));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(partitions(tp(topic1, 0)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic1, 1)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic1, 2)), assignment.get(consumer3));
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));

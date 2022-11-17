@@ -164,7 +164,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
     // visible for testing
     MemberData memberDataFromSubscription(Subscription subscription) {
-        if (!subscription.ownedPartitions().isEmpty() && subscription.generationId().isPresent()) {
+        if (subscription.generationId().isPresent()) {
             // In ConsumerProtocolSubscription v2 or higher, we don't need to deserialize the byte buffer
             // and take from fields directly
             return new MemberData(subscription.ownedPartitions(), subscription.generationId());
