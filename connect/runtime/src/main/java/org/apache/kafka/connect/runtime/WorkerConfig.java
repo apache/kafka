@@ -320,13 +320,15 @@ public class WorkerConfig extends AbstractConfig {
 
     private String kafkaClusterId;
 
-    public static String lookupKafkaClusterId(WorkerConfig config) {
+    // Visible for testing
+    static String lookupKafkaClusterId(WorkerConfig config) {
         log.info("Creating Kafka admin client");
         try (Admin adminClient = Admin.create(config.originals())) {
             return lookupKafkaClusterId(adminClient);
         }
     }
 
+    // Visible for testing
     static String lookupKafkaClusterId(Admin adminClient) {
         log.debug("Looking up Kafka cluster ID");
         try {

@@ -25,7 +25,6 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
@@ -37,7 +36,6 @@ import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.nio.ByteBuffer;
@@ -63,12 +61,9 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.AdditionalMatchers.aryEq;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -80,7 +75,6 @@ public class KafkaOffsetBackingStoreTest {
     private static final short TOPIC_PARTITIONS = 2;
     private static final short TOPIC_REPLICATION_FACTOR = 5;
     private static final Map<String, String> DEFAULT_PROPS = new HashMap<>();
-    private static final DistributedConfig DEFAULT_DISTRIBUTED_CONFIG;
     static {
         DEFAULT_PROPS.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "broker1:9092,broker2:9093");
         DEFAULT_PROPS.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, TOPIC);
@@ -92,8 +86,6 @@ public class KafkaOffsetBackingStoreTest {
         DEFAULT_PROPS.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
         DEFAULT_PROPS.put(DistributedConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
         DEFAULT_PROPS.put(DistributedConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
-        DEFAULT_DISTRIBUTED_CONFIG = new DistributedConfig(DEFAULT_PROPS);
-
     }
     private static final Map<ByteBuffer, ByteBuffer> FIRST_SET = new HashMap<>();
     static {
@@ -110,11 +102,10 @@ public class KafkaOffsetBackingStoreTest {
     private static final ByteBuffer TP0_VALUE_NEW = buffer("VAL0_NEW");
     private static final ByteBuffer TP1_VALUE_NEW = buffer("VAL1_NEW");
 
+    private Map<String, String> props = new HashMap<>(DEFAULT_PROPS);
     @Mock
     KafkaBasedLog<byte[], byte[]> storeLog;
     private KafkaOffsetBackingStore store;
-
-    private MockedStatic<WorkerConfig> workerConfigMockedStatic;
 
     @Captor
     private ArgumentCaptor<String> capturedTopic;
@@ -145,24 +136,25 @@ public class KafkaOffsetBackingStoreTest {
         doReturn(storeLog).when(store).createKafkaBasedLog(capturedTopic.capture(), capturedProducerProps.capture(),
                 capturedConsumerProps.capture(), capturedConsumedCallback.capture(),
                 capturedNewTopic.capture(), capturedAdminSupplier.capture());
-
-        workerConfigMockedStatic = mockStatic(WorkerConfig.class, CALLS_REAL_METHODS);
-        workerConfigMockedStatic.when(() -> WorkerConfig.lookupKafkaClusterId(any())).thenReturn("test-cluster");
     }
 
     @After
     public void tearDown() {
-        workerConfigMockedStatic.close();
         verifyNoMoreInteractions(storeLog);
+    }
+
+    private DistributedConfig mockConfig(Map<String, String> props) {
+        DistributedConfig config = spy(new DistributedConfig(props));
+        doReturn("test-cluster").when(config).kafkaClusterId();
+        return config;
     }
 
     @Test
     public void testStartStop() {
-        Map<String, String> settings = new HashMap<>(DEFAULT_PROPS);
-        settings.put("offset.storage.min.insync.replicas", "3");
-        settings.put("offset.storage.max.message.bytes", "1001");
+        props.put("offset.storage.min.insync.replicas", "3");
+        props.put("offset.storage.max.message.bytes", "1001");
 
-        store.configure(new DistributedConfig(settings));
+        store.configure(mockConfig(props));
         store.start();
 
         verify(storeLog).start();
@@ -196,7 +188,7 @@ public class KafkaOffsetBackingStoreTest {
             return null;
         }).when(storeLog).start();
 
-        store.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        store.configure(mockConfig(props));
         store.start();
 
         HashMap<ByteBuffer, ByteBuffer> data = store.data;
@@ -210,7 +202,7 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testGetSet() throws Exception {
-        store.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        store.configure(mockConfig(props));
         store.start();
 
         verify(storeLog).start();
@@ -299,7 +291,7 @@ public class KafkaOffsetBackingStoreTest {
             return null;
         }).when(storeLog).readToEnd(storeLogCallbackArgumentCaptor.capture());
 
-        store.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        store.configure(mockConfig(props));
         store.start();
 
         verify(storeLog).start();
@@ -336,7 +328,7 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testSetFailure() {
-        store.configure(DEFAULT_DISTRIBUTED_CONFIG);
+        store.configure(mockConfig(props));
         store.start();
 
         verify(storeLog).start();
@@ -380,12 +372,10 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testConsumerPropertiesInsertedByDefaultWithExactlyOnceSourceEnabled() {
-        Map<String, String> workerProps = new HashMap<>(DEFAULT_PROPS);
-        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
-        workerProps.remove(ISOLATION_LEVEL_CONFIG);
-        DistributedConfig config = new DistributedConfig(workerProps);
+        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
+        props.remove(ISOLATION_LEVEL_CONFIG);
 
-        store.configure(config);
+        store.configure(mockConfig(props));
 
         assertEquals(
                 IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
@@ -395,12 +385,10 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testConsumerPropertiesOverrideUserSuppliedValuesWithExactlyOnceSourceEnabled() {
-        Map<String, String> workerProps = new HashMap<>(DEFAULT_PROPS);
-        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
-        workerProps.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
-        DistributedConfig config = new DistributedConfig(workerProps);
+        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
+        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
 
-        store.configure(config);
+        store.configure(mockConfig(props));
 
         assertEquals(
                 IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
@@ -410,24 +398,20 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testConsumerPropertiesNotInsertedByDefaultWithoutExactlyOnceSourceEnabled() {
-        Map<String, String> workerProps = new HashMap<>(DEFAULT_PROPS);
-        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
-        workerProps.remove(ISOLATION_LEVEL_CONFIG);
-        DistributedConfig config = new DistributedConfig(workerProps);
+        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
+        props.remove(ISOLATION_LEVEL_CONFIG);
 
-        store.configure(config);
+        store.configure(mockConfig(props));
 
         assertNull(capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG));
     }
 
     @Test
     public void testConsumerPropertiesDoNotOverrideUserSuppliedValuesWithoutExactlyOnceSourceEnabled() {
-        Map<String, String> workerProps = new HashMap<>(DEFAULT_PROPS);
-        workerProps.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
-        workerProps.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
-        DistributedConfig config = new DistributedConfig(workerProps);
+        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
+        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
 
-        store.configure(config);
+        store.configure(mockConfig(props));
 
         assertEquals(
                 IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT),
@@ -438,12 +422,7 @@ public class KafkaOffsetBackingStoreTest {
 
     @Test
     public void testClientIds() {
-        Map<String, String> workerProps = new HashMap<>(DEFAULT_PROPS);
-        DistributedConfig config = new DistributedConfig(workerProps);
-
-        workerConfigMockedStatic.when(() -> WorkerConfig.lookupKafkaClusterId(any())).thenReturn("test-cluster");
-
-        store.configure(config);
+        store.configure(mockConfig(props));
 
         final String expectedClientId = CLIENT_ID_BASE + "offsets";
         assertEquals(expectedClientId, capturedProducerProps.getValue().get(CLIENT_ID_CONFIG));
