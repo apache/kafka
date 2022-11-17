@@ -1071,7 +1071,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         Objects.requireNonNull(tableJoined, "tableJoined can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
 
-
         //Old values are a useful optimization. The old values from the foreignKeyTable table are compared to the new values,
         //such that identical values do not cause a prefixScan. PrefixScan and propagation can be expensive and should
         //not be done needlessly.
