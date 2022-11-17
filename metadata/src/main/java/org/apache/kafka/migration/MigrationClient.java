@@ -58,12 +58,6 @@ public interface MigrationClient {
 
     MigrationRecoveryState updateTopicPartitions(Map<String, Map<Integer, PartitionRegistration>> topicPartitions, MigrationRecoveryState state);
 
-    MigrationRecoveryState createKRaftBroker(int brokerId, BrokerRegistration brokerRegistration, MigrationRecoveryState state);
-
-    MigrationRecoveryState updateKRaftBroker(int brokerId, BrokerRegistration brokerRegistration, MigrationRecoveryState state);
-
-    MigrationRecoveryState removeKRaftBroker(int brokerId, MigrationRecoveryState state);
-
     void sendRequestToBroker(int brokerId,
                              AbstractControlRequest.Builder<? extends AbstractControlRequest> request,
                              Consumer<AbstractResponse> callback);

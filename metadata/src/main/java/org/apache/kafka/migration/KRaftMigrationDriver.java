@@ -101,18 +101,6 @@ public class KRaftMigrationDriver {
                                 }
                             });
                         }
-
-                        if (delta.clusterDelta() != null) {
-                            delta.clusterDelta().changedBrokers().forEach((brokerId, brokerRegistrationOpt) -> {
-                                if (brokerRegistrationOpt.isPresent() && image.cluster().broker(brokerId) == null) {
-                                    apply("Create Broker " + brokerId, migrationState -> client.createKRaftBroker(brokerId, brokerRegistrationOpt.get(), migrationState));
-                                } else if (brokerRegistrationOpt.isPresent()) {
-                                    apply("Update Broker " + brokerId, migrationState -> client.updateKRaftBroker(brokerId, brokerRegistrationOpt.get(), migrationState));
-                                } else {
-                                    apply("Remove Broker " + brokerId, migrationState -> client.removeKRaftBroker(brokerId, migrationState));
-                                }
-                            });
-                        }
                     } finally {
                         image = delta.apply();
                         delta = null;

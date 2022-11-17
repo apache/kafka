@@ -22,6 +22,9 @@ import org.apache.kafka.server.common.ApiMessageAndVersion;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * Interface to allow the migration driver to push metadata to the KRaft controller
+ */
 public interface ZkMetadataConsumer {
     void beginMigration();
     CompletableFuture<?> acceptBatch(List<ApiMessageAndVersion> recordBatch);

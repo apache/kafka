@@ -319,41 +319,4 @@ class ZkMigrationClient(zkClient: KafkaZkClient,
       state.withZkVersion(migrationZkVersion)
     }
   }
-
-  override def createKRaftBroker(brokerId: Int, brokerRegistration: BrokerRegistration, state: MigrationRecoveryState): MigrationRecoveryState = {
-    val brokerInfo = BrokerInfo(
-      Broker(
-        id = brokerId,
-        endPoints = brokerRegistration.listeners().values().asScala.map(EndPoint.fromJava).toSeq,
-        rack = brokerRegistration.rack().toScala),
-      MetadataVersion.latest(), // TODO ???
-      -1
-    )
-    val req = CreateRequest(brokerInfo.path, brokerInfo.toJsonBytes, zkClient.defaultAcls(brokerInfo.path), CreateMode.PERSISTENT)
-    val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(Seq(req), state.controllerZkVersion(), state)
-    responses.foreach(System.err.println)
-    state.withZkVersion(migrationZkVersion)
-  }
-
-  override def updateKRaftBroker(brokerId: Int, brokerRegistration: BrokerRegistration, state: MigrationRecoveryState): MigrationRecoveryState = {
-    val brokerInfo = BrokerInfo(
-      Broker(
-        id = brokerId,
-        endPoints = brokerRegistration.listeners().values().asScala.map(EndPoint.fromJava).toSeq,
-        rack = brokerRegistration.rack().toScala),
-      MetadataVersion.latest(), // TODO ???
-      -1
-    )
-    val req = SetDataRequest(BrokerIdZNode.path(brokerId), brokerInfo.toJsonBytes, ZkVersion.MatchAnyVersion)
-    val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(Seq(req), state.controllerZkVersion(), state)
-    responses.foreach(System.err.println)
-    state.withZkVersion(migrationZkVersion)
-  }
-
-  override def removeKRaftBroker(brokerId: Int, state: MigrationRecoveryState): MigrationRecoveryState = {
-    val req = DeleteRequest(BrokerIdZNode.path(brokerId), ZkVersion.MatchAnyVersion)
-    val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(Seq(req), state.controllerZkVersion(), state)
-    responses.foreach(System.err.println)
-    state.withZkVersion(migrationZkVersion)
-  }
 }
