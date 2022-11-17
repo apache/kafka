@@ -20,7 +20,6 @@ package org.apache.kafka.connect.runtime.distributed;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.Test;
-import org.mockito.MockedStatic;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.Mac;
@@ -45,8 +44,9 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockStatic;
 
 public class DistributedConfigTest {
 
@@ -69,58 +69,53 @@ public class DistributedConfigTest {
     }
 
     @Test
-    public void testDefaultAlgorithmsNotPresent() {
+    public void testDefaultAlgorithmsNotPresent() throws NoSuchAlgorithmException {
         final String fakeKeyGenerationAlgorithm = "FakeKeyGenerationAlgorithm";
         final String fakeMacAlgorithm = "FakeMacAlgorithm";
 
         final KeyGenerator fakeKeyGenerator = mock(KeyGenerator.class);
         final Mac fakeMac = mock(Mac.class);
+        final Crypto crypto = mock(Crypto.class);
 
         Map<String, String> configs = configs();
         configs.put(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, fakeKeyGenerationAlgorithm);
         configs.put(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, fakeMacAlgorithm);
         configs.put(DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, fakeMacAlgorithm);
 
-        try (
-                MockedStatic<KeyGenerator> keyGenerator = mockStatic(KeyGenerator.class);
-                MockedStatic<Mac> mac = mockStatic(Mac.class)
-        ) {
-            // Make it seem like the default key generation algorithm isn't available on this worker
-            keyGenerator.when(() -> KeyGenerator.getInstance(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT))
-                    .thenThrow(new NoSuchAlgorithmException());
-            // But the one specified in the worker config file is
-            keyGenerator.when(() -> KeyGenerator.getInstance(fakeKeyGenerationAlgorithm))
-                    .thenReturn(fakeKeyGenerator);
+        // Make it seem like the default key generation algorithm isn't available on this worker
+        doThrow(new NoSuchAlgorithmException())
+                .when(crypto).keyGenerator(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT);
+        // But the one specified in the worker config file is
+        doReturn(fakeKeyGenerator)
+                .when(crypto).keyGenerator(fakeKeyGenerationAlgorithm);
 
-            // And for the signature algorithm
-            mac.when(() -> Mac.getInstance(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT))
-                    .thenThrow(new NoSuchAlgorithmException());
-            // Likewise for key verification algorithms
-            DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT.forEach(verificationAlgorithm ->
-                keyGenerator.when(() -> Mac.getInstance(verificationAlgorithm))
-                        .thenThrow(new NoSuchAlgorithmException())
-            );
-            mac.when(() -> Mac.getInstance(fakeMacAlgorithm))
-                    .thenReturn(fakeMac);
-
-            // Should succeed; even though the defaults aren't present, the manually-specified algorithms are valid
-            new DistributedConfig(configs);
-
-            // Should fail; the default key generation algorithm isn't present, and no override is specified
-            String removed = configs.remove(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG);
-            assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
-            configs.put(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, removed);
-
-            // Should fail; the default key generation algorithm isn't present, and no override is specified
-            removed = configs.remove(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG);
-            assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
-            configs.put(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, removed);
-
-            // Should fail; the default key generation algorithm isn't present, and no override is specified
-            removed = configs.remove(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG);
-            assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
-            configs.put(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, removed);
+        // And for the signature algorithm
+        doThrow(new NoSuchAlgorithmException())
+                .when(crypto).mac(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
+        // Likewise for key verification algorithms
+        for (String verificationAlgorithm : DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT) {
+            doThrow(new NoSuchAlgorithmException())
+                    .when(crypto).mac(verificationAlgorithm);
         }
+        doReturn(fakeMac).when(crypto).mac(fakeMacAlgorithm);
+
+        // Should succeed; even though the defaults aren't present, the manually-specified algorithms are valid
+        new DistributedConfig(crypto, configs);
+
+        // Should fail; the default key generation algorithm isn't present, and no override is specified
+        String removed = configs.remove(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG);
+        assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
+        configs.put(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, removed);
+
+        // Should fail; the default key generation algorithm isn't present, and no override is specified
+        removed = configs.remove(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG);
+        assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
+        configs.put(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, removed);
+
+        // Should fail; the default key generation algorithm isn't present, and no override is specified
+        removed = configs.remove(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG);
+        assertThrows(ConfigException.class, () -> new DistributedConfig(configs));
+        configs.put(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, removed);
     }
 
     @Test
