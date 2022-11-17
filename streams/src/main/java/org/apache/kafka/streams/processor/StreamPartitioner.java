@@ -79,7 +79,7 @@ public interface StreamPartitioner<K, V> {
      * */
     default Optional<Set<Integer>> partitions(String topic, K key, V value, int numPartitions) {
         final Integer partition = partition(topic, key, value, numPartitions);
-        return partition == null ? Optional.empty() : Optional.of(Collections.singleton(partition(topic, key, value, numPartitions)));
+        return partition == null ? Optional.empty() : Optional.of(Collections.singleton(partition));
     }
 
 }
