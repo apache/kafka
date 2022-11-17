@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.migration;
 
+/**
+ * The ZooKeeper state of the KRaft controller when it is elected as the active controller.
+ */
 public class ZkControllerState {
     public static final ZkControllerState EMPTY = new ZkControllerState(-1, -1, -1);
 
