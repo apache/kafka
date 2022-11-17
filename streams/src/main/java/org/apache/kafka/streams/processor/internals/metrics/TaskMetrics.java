@@ -105,7 +105,7 @@ public class TaskMetrics {
                                                    final String taskId,
                                                    final StreamsMetricsImpl streamsMetrics) {
         final String name = CACHE_SIZE_BYTES_TOTAL;
-        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, name, Sensor.RecordingLevel.INFO);
+        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, name, RecordingLevel.DEBUG);
 
         addValueMetricToSensor(
                 sensor,

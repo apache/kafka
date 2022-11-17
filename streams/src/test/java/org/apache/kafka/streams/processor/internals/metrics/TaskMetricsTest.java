@@ -118,7 +118,7 @@ public class TaskMetricsTest {
     @Test
     public void shouldGetTotalCacheSizeInBytesSensor() {
         final String operation = "cache-size-bytes-total";
-        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.INFO))
+        when(streamsMetrics.taskLevelSensor(THREAD_ID, TASK_ID, operation, RecordingLevel.DEBUG))
                 .thenReturn(expectedSensor);
         final String totalBytesDescription = "The total size in bytes of this task's cache.";
         when(streamsMetrics.taskLevelTagMap(THREAD_ID, TASK_ID)).thenReturn(tagMap);
