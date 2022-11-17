@@ -298,6 +298,7 @@ public class StreamThread extends Thread {
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
     private final Optional<String> getGroupInstanceID;
+    private final String threadIdSuffix; // shortened version of the threadId: {processUUID}-StreamThread-{threadIdx}
 
     private final ChangelogReader changelogReader;
     private final ConsumerRebalanceListener rebalanceListener;
@@ -338,6 +339,7 @@ public class StreamThread extends Thread {
                                       final int threadIdx,
                                       final Runnable shutdownErrorHook,
                                       final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler) {
+        final String threadIdSuffix = processId + "-StreamThread-" + threadIdx;
         final String threadId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
@@ -432,6 +434,7 @@ public class StreamThread extends Thread {
             streamsMetrics,
             topologyMetadata,
             threadId,
+            threadIdSuffix,
             logContext,
             referenceContainer.assignmentErrorCode,
             referenceContainer.nextScheduledRebalanceMs,
@@ -472,6 +475,7 @@ public class StreamThread extends Thread {
                         final StreamsMetricsImpl streamsMetrics,
                         final TopologyMetadata topologyMetadata,
                         final String threadId,
+                        final String threadIdSuffix,
                         final LogContext logContext,
                         final AtomicInteger assignmentErrorCode,
                         final AtomicLong nextProbingRebalanceMs,
@@ -537,6 +541,7 @@ public class StreamThread extends Thread {
         this.nextProbingRebalanceMs = nextProbingRebalanceMs;
         this.nonFatalExceptionsToHandle = nonFatalExceptionsToHandle;
         this.getGroupInstanceID = mainConsumer.groupMetadata().groupInstanceId();
+        this.threadIdSuffix = threadIdSuffix;
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final int dummyThreadIdx = 1;
@@ -611,9 +616,11 @@ public class StreamThread extends Thread {
                     cacheResizer.accept(size);
                 }
                 runOnce();
-                if (nextProbingRebalanceMs.get() < time.milliseconds()) {
+
+                // Check for a scheduled rebalance but don't trigger it until the current rebalance is done
+                if (!taskManager.isRebalanceInProgress() && nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("Triggering the followup rebalance scheduled for {}.", Utils.toLogDateTimeFormat(nextProbingRebalanceMs.get()));
-                    mainConsumer.enforceRebalance("Scheduled probing rebalance");
+                    mainConsumer.enforceRebalance(threadIdSuffix + " requested followup rebalance by " + nextProbingRebalanceMs.get());
                     nextProbingRebalanceMs.set(Long.MAX_VALUE);
                 }
             } catch (final TaskCorruptedException e) {
