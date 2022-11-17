@@ -80,22 +80,21 @@ public class RestForwardingIntegrationTest {
     private Map<String, Object> sslConfig;
     @Mock
     private Plugins plugins;
-    private RestClient followerClient;
     private RestServer followerServer;
     @Mock
     private Herder followerHerder;
-    private RestClient leaderClient;
     private RestServer leaderServer;
     @Mock
     private Herder leaderHerder;
 
     private SslContextFactory factory;
     private CloseableHttpClient httpClient;
-    private Collection<CloseableHttpResponse> responses = new ArrayList<>();
+    private Collection<CloseableHttpResponse> responses;
 
     @Before
     public void setUp() throws IOException, GeneralSecurityException {
         sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
+        responses = new ArrayList<>();
     }
 
     @After
@@ -140,6 +139,7 @@ public class RestForwardingIntegrationTest {
         // A heterogeneous cluster where the follower rolls to advertise HTTPS before the leader
         testRestForwardToLeader(true, true, false);
     }
+
     @Test
     public void testRestForwardSslDualListener() throws Exception {
         // A cluster that has just rolled to advertise HTTPS on both workers
@@ -157,14 +157,14 @@ public class RestForwardingIntegrationTest {
         DistributedConfig leaderConfig = new DistributedConfig(baseWorkerProps(dualListener, leaderSsl));
 
         // Follower worker setup
-        followerClient = new RestClient(followerConfig);
+        RestClient followerClient = new RestClient(followerConfig);
         followerServer = new RestServer(followerConfig, followerClient);
         followerServer.initializeServer();
         when(followerHerder.plugins()).thenReturn(plugins);
         followerServer.initializeResources(followerHerder);
 
         // Leader worker setup
-        leaderClient = new RestClient(leaderConfig);
+        RestClient leaderClient = new RestClient(leaderConfig);
         leaderServer = new RestServer(leaderConfig, leaderClient);
         leaderServer.initializeServer();
         when(leaderHerder.plugins()).thenReturn(plugins);
@@ -236,10 +236,10 @@ public class RestForwardingIntegrationTest {
         }
         if (dualListener) {
             workerProps.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:0, https://localhost:0");
-            // Every server is brought up with both a plaintext and an SSL listener; we use this property
+            // This server is brought up with both a plaintext and an SSL listener; we use this property
             // to dictate which URL it advertises to other servers when a request must be forwarded to it
             // and which URL we issue requests against during testing
-            workerProps.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, advertiseSSL ? "http" : "https");
+            workerProps.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, advertiseSSL ? "https" : "http");
         } else {
             workerProps.put(WorkerConfig.LISTENERS_CONFIG, advertiseSSL ? "https://localhost:0" : "http://localhost:0");
         }
