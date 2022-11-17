@@ -335,15 +335,8 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     private void removeAllProducedSensors() {
-<<<<<<< HEAD
         for (final Sensor sensor : producedSensorByTopic.values()) {
             streamsMetrics.removeSensor(sensor);
-=======
-        for (final Map<String, Sensor> nodeMap : sinkNodeToProducedSensorByTopic.values()) {
-            for (final Sensor sensor : nodeMap.values()) {
-                streamsMetrics.removeSensor(sensor);
-            }
->>>>>>> 398ae6a4c1 (Adding missing methods)
         }
     }
 
