@@ -1652,7 +1652,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def makeGroupCoordinatorRequestContextFrom(
+  private def makeGroupCoordinatorRequestContext(
     request: RequestChannel.Request,
     requestLocal: RequestLocal
   ): GroupCoordinatorRequestContext = {
@@ -1684,7 +1684,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else if (!authHelper.authorize(request.context, READ, GROUP, joinGroupRequest.data.groupId)) {
       sendResponse(joinGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
     } else {
-      val ctx = makeGroupCoordinatorRequestContextFrom(request, requestLocal)
+      val ctx = makeGroupCoordinatorRequestContext(request, requestLocal)
       newGroupCoordinator.joinGroup(ctx, joinGroupRequest.data).handle[Unit] { (response, exception) =>
         if (exception != null) {
           sendResponse(joinGroupRequest.getErrorResponse(exception))
