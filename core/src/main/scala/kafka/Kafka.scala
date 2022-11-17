@@ -70,7 +70,7 @@ object Kafka extends Logging {
         config,
         Time.SYSTEM,
         threadNamePrefix = None,
-        enableForwarding = false
+        enableForwarding = config.enableApiForwarding,
       )
     } else {
       new KafkaRaftServer(

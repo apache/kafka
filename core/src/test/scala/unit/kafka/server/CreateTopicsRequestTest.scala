@@ -28,9 +28,17 @@ import org.apache.kafka.common.requests.CreateTopicsRequest
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+
+import java.util.Properties
 import scala.jdk.CollectionConverters._
 
 class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
+
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
+    properties.setProperty(KafkaConfig.MigrationEnabledProp, "true")
+    super.brokerPropertyOverrides(properties)
+  }
+
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testValidCreateTopicsRequests(quorum: String): Unit = {
@@ -154,7 +162,8 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     // behavior of returning NOT_CONTROLLER. Instead, the request is forwarded.
     val req = topicsReq(Seq(topicReq("topic1")))
     val response = sendCreateTopicRequest(req, notControllerSocketServer)
-    assertEquals(1, response.errorCounts().get(Errors.NOT_CONTROLLER))
+    response.data().topics().asScala.foreach(topic => topic.errorCode())
+    assertEquals(1, response.errorCounts().get(Errors.NONE))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)

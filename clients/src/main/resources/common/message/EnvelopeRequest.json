@@ -16,10 +16,11 @@
 {
   "apiKey": 58,
   "type": "request",
-  "listeners": ["controller"],
+  "listeners": ["controller", "zkBroker"],
   "name": "EnvelopeRequest",
   // Request struct for forwarding.
-  "validVersions": "0",
+  // Version 1 adds the envelope request support to ZK brokers as well.
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "RequestData", "type": "bytes", "versions": "0+", "zeroCopy": true,
