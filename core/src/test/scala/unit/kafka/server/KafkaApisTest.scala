@@ -96,6 +96,8 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 
+import java.util.concurrent.atomic.AtomicReference
+
 class KafkaApisTest {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
   private val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
@@ -2689,6 +2691,47 @@ class KafkaApisTest {
     val capturedResponse = verifyNoThrottling(requestChannelRequest)
     val response = capturedResponse.getValue.asInstanceOf[JoinGroupResponse]
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
+  }
+
+  @Test
+  def testHandleJoinGroupRequestUnexpectedException(): Unit = {
+    val joinGroupRequest = new JoinGroupRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setProtocolType("consumer")
+      .setRebalanceTimeoutMs(1000)
+      .setSessionTimeoutMs(2000)
+
+    val requestChannelRequest = buildRequest(new JoinGroupRequest.Builder(joinGroupRequest).build())
+
+    val expectedRequestContext = new GroupCoordinatorRequestContext(
+      ApiKeys.JOIN_GROUP.latestVersion,
+      requestChannelRequest.context.clientId,
+      requestChannelRequest.context.clientAddress,
+      RequestLocal.NoCaching.bufferSupplier
+    )
+
+    val future = new CompletableFuture[JoinGroupResponseData]()
+    when(newGroupCoordinator.joinGroup(
+      ArgumentMatchers.eq(expectedRequestContext),
+      ArgumentMatchers.eq(joinGroupRequest)
+    )).thenReturn(future)
+
+    val response = new AtomicReference[JoinGroupResponse]()
+    when(requestChannel.sendResponse(any(), any(), any())).thenAnswer { _ =>
+      throw new Exception("Something went wrong")
+    }.thenAnswer { invocation =>
+      val resp = invocation.getArgument(1, classOf[JoinGroupResponse])
+      response.set(resp)
+    }
+
+    createKafkaApis().handle(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+
+    future.completeExceptionally(Errors.NOT_COORDINATOR.exception)
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.get.error)
   }
 
   @Test

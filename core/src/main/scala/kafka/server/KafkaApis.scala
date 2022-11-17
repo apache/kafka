@@ -77,7 +77,7 @@ import org.apache.kafka.server.authorizer._
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.util
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional}
 import org.apache.kafka.server.common.MetadataVersion
@@ -166,6 +166,12 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Top-level method that handles all requests and multiplexes to the right api
    */
   override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
+    def handleError(e: Throwable): Unit = {
+      trace(s"Unexpected error handling request ${request.requestDesc(true)} " +
+        s"with context ${request.context}", e)
+      requestHelper.handleError(request, e)
+    }
+
     try {
       trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
@@ -189,6 +195,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
         case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
         case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request, requestLocal)
+          .exceptionally(handleError)
         case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
         case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
         case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request, requestLocal)
@@ -243,10 +250,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     } catch {
       case e: FatalExitError => throw e
-      case e: Throwable =>
-        error(s"Unexpected error handling request ${request.requestDesc(true)} " +
-          s"with context ${request.context}", e)
-        requestHelper.handleError(request, e)
+      case e: Throwable => handleError(e)
     } finally {
       // try to complete delayed action. In order to avoid conflicting locking, the actions to complete delayed requests
       // are kept in a queue. We add the logic to check the ReplicaManager queue at the end of KafkaApis.handle() and the
@@ -1664,7 +1668,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     )
   }
 
-  def handleJoinGroupRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
+  def handleJoinGroupRequest(
+    request: RequestChannel.Request,
+    requestLocal: RequestLocal
+  ): CompletableFuture[Unit] = {
     val joinGroupRequest = request.body[JoinGroupRequest]
 
     def sendResponse(response: AbstractResponse): Unit = {
@@ -1681,8 +1688,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
       sendResponse(joinGroupRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else if (!authHelper.authorize(request.context, READ, GROUP, joinGroupRequest.data.groupId)) {
       sendResponse(joinGroupRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
     } else {
       val ctx = makeGroupCoordinatorRequestContext(request, requestLocal)
       newGroupCoordinator.joinGroup(ctx, joinGroupRequest.data).handle[Unit] { (response, exception) =>
