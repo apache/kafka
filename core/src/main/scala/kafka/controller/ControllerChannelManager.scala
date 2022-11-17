@@ -49,7 +49,7 @@ object ControllerChannelManager {
   val RequestRateAndQueueTimeMetricName = "RequestRateAndQueueTimeMs"
 }
 
-class ControllerChannelManager(controllerContext: ControllerContext,
+class ControllerChannelManager(controllerEpoch: () => Int,
                                config: KafkaConfig,
                                time: Time,
                                metrics: Metrics,
@@ -67,8 +67,8 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     }
   )
 
-  def startup() = {
-    controllerContext.liveOrShuttingDownBrokers.foreach(addNewBroker)
+  def startup(initialBrokers: Set[Broker]) = {
+    initialBrokers.foreach(addNewBroker)
 
     brokerLock synchronized {
       brokerStateInfo.foreach(brokerState => startRequestSendThread(brokerState._1))
@@ -173,7 +173,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
       RequestRateAndQueueTimeMetricName, TimeUnit.MILLISECONDS, TimeUnit.SECONDS, brokerMetricTags(broker.id)
     )
 
-    val requestThread = new RequestSendThread(config.brokerId, controllerContext, messageQueue, networkClient,
+    val requestThread = new RequestSendThread(config.brokerId, controllerEpoch, messageQueue, networkClient,
       brokerNode, config, time, requestRateAndQueueTimeMetrics, stateChangeLogger, threadName)
     requestThread.setDaemon(false)
 
@@ -214,7 +214,7 @@ case class QueueItem(apiKey: ApiKeys, request: AbstractControlRequest.Builder[_ 
                      callback: AbstractResponse => Unit, enqueueTimeMs: Long)
 
 class RequestSendThread(val controllerId: Int,
-                        val controllerContext: ControllerContext,
+                        val controllerEpoch: () => Int,
                         val queue: BlockingQueue[QueueItem],
                         val networkClient: NetworkClient,
                         val brokerNode: Node,
@@ -255,7 +255,7 @@ class RequestSendThread(val controllerId: Int,
           }
         } catch {
           case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
-            warn(s"Controller $controllerId epoch ${controllerContext.epoch} fails to send request $requestBuilder " +
+            warn(s"Controller $controllerId epoch ${controllerEpoch.apply()} fails to send request $requestBuilder " +
               s"to broker $brokerNode. Reconnecting to broker.", e)
             networkClient.close(brokerNode.idString)
             isSendSuccessful = false
@@ -270,7 +270,7 @@ class RequestSendThread(val controllerId: Int,
 
         val response = clientResponse.responseBody
 
-        stateChangeLogger.withControllerEpoch(controllerContext.epoch).trace(s"Received response " +
+        stateChangeLogger.withControllerEpoch(controllerEpoch.apply()).trace(s"Received response " +
           s"$response for request $api with correlation id " +
           s"${requestHeader.correlationId} sent to broker $brokerNode")
 

@@ -280,9 +280,9 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
       val controllerContext = new ControllerContext
       controllerContext.setLiveBrokers(brokerAndEpochs)
-      controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
+      controllerChannelManager = new ControllerChannelManager(() => controllerContext.epoch, controllerConfig, Time.SYSTEM,
         metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
-      controllerChannelManager.startup()
+      controllerChannelManager.startup(controllerContext.liveOrShuttingDownBrokers)
 
       // Initiate a sendRequest and wait until connection is established and one byte is received by the peer
       val requestBuilder = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
