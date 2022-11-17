@@ -27,7 +27,8 @@
   //
   // Starting from Apache Kafka 2.4 (KIP-511), ApiKeys field is populated with the supported
   // versions of the ApiVersionsRequest when an UNSUPPORTED_VERSION error is returned.
-  "validVersions": "0-3",
+  // Version 4 adds ZkMigrationReady for use only by KRaft controllers as part of KIP-866
+  "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
@@ -69,6 +70,8 @@
         {"name":  "MinVersionLevel", "type": "int16", "versions":  "3+",
           "about": "The cluster-wide finalized min version level for the feature."}
       ]
-    }
+    },
+    { "name": "ZkMigrationReady", "type": "int8", "versions": "4+", "taggedVersions": "4+", "tag": 3, "ignorable": true,
+      "about": "Set by a KRaft controller if the required configurations for ZK migration are present." }
   ]
 }
