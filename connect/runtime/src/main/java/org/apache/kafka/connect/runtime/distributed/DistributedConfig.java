@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.security.ssl.Crypto;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.slf4j.Logger;
@@ -207,7 +208,7 @@ public class DistributedConfig extends WorkerConfig {
         + "which must include the algorithm used for the " + INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG + " property. "
         + "The algorithm(s) '" + INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT + "' will be used as a default on JVMs that provide them; "
         + "on other JVMs, no default is used and a value for this property must be manually specified in the worker config.";
-    private CryptoLibrary cryptoLibrary;
+    private Crypto crypto;
 
     private enum ExactlyOnceSourceSupport {
         DISABLED(false),
@@ -237,9 +238,9 @@ public class DistributedConfig extends WorkerConfig {
             //       + "See the exactly-once source support documentation at [add docs link here] for more information on this feature.";
     public static final String EXACTLY_ONCE_SOURCE_SUPPORT_DEFAULT = ExactlyOnceSourceSupport.DISABLED.toString();
 
-    private static Object defaultKeyGenerationAlgorithm(CryptoLibrary cryptoLibrary) {
+    private static Object defaultKeyGenerationAlgorithm(Crypto crypto) {
         try {
-            validateKeyAlgorithm(cryptoLibrary, INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT);
+            validateKeyAlgorithm(crypto, INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT);
             return INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT;
         } catch (Throwable t) {
             log.info(
@@ -252,9 +253,9 @@ public class DistributedConfig extends WorkerConfig {
         }
     }
 
-    private static Object defaultSignatureAlgorithm(CryptoLibrary cryptoLibrary) {
+    private static Object defaultSignatureAlgorithm(Crypto crypto) {
         try {
-            validateSignatureAlgorithm(cryptoLibrary, INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
+            validateSignatureAlgorithm(crypto, INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG, INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
             return INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT;
         } catch (Throwable t) {
             log.info(
@@ -267,11 +268,11 @@ public class DistributedConfig extends WorkerConfig {
         }
     }
 
-    private static Object defaultVerificationAlgorithms(CryptoLibrary cryptoLibrary) {
+    private static Object defaultVerificationAlgorithms(Crypto crypto) {
         List<String> result = new ArrayList<>();
         for (String verificationAlgorithm : INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT) {
             try {
-                validateSignatureAlgorithm(cryptoLibrary, INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, verificationAlgorithm);
+                validateSignatureAlgorithm(crypto, INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG, verificationAlgorithm);
                 result.add(verificationAlgorithm);
             } catch (Throwable t) {
                 log.trace("Verification algorithm '{}' not found", verificationAlgorithm);
@@ -289,17 +290,9 @@ public class DistributedConfig extends WorkerConfig {
         return result;
     }
 
-    private static ConfigDef config(CryptoLibrary cryptoLibrary) {
-        ConfigDef configDef = baseConfigDef();
-        addCoreConfigs(configDef);
-        addInternalTopicConfigs(configDef);
-        addProtocolConfigs(configDef);
-        addInterWorkerConfigs(configDef, cryptoLibrary);
-        return configDef;
-    }
-
-    private static void addCoreConfigs(ConfigDef configDef) {
-        configDef
+    @SuppressWarnings("unchecked")
+    private static ConfigDef config(Crypto crypto) {
+        return baseConfigDef()
             .define(GROUP_ID_CONFIG,
                     ConfigDef.Type.STRING,
                     ConfigDef.Importance.HIGH,
@@ -407,11 +400,7 @@ public class DistributedConfig extends WorkerConfig {
                     ConfigDef.Type.INT,
                     WORKER_UNSYNC_BACKOFF_MS_DEFAULT,
                     ConfigDef.Importance.MEDIUM,
-                    WORKER_UNSYNC_BACKOFF_MS_DOC);
-    }
-
-    private static void addInternalTopicConfigs(ConfigDef configDef) {
-        configDef
+                    WORKER_UNSYNC_BACKOFF_MS_DOC)
             .define(OFFSET_STORAGE_TOPIC_CONFIG,
                     ConfigDef.Type.STRING,
                     ConfigDef.Importance.HIGH,
@@ -453,11 +442,7 @@ public class DistributedConfig extends WorkerConfig {
                     (short) 3,
                     REPLICATION_FACTOR_VALIDATOR,
                     ConfigDef.Importance.LOW,
-                    STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC);
-    }
-
-    private static void addProtocolConfigs(ConfigDef configDef) {
-        configDef
+                    STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
             .define(CONNECT_PROTOCOL_CONFIG,
                     ConfigDef.Type.STRING,
                     CONNECT_PROTOCOL_DEFAULT,
@@ -478,13 +463,8 @@ public class DistributedConfig extends WorkerConfig {
                     SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT,
                     between(0, Integer.MAX_VALUE),
                     ConfigDef.Importance.LOW,
-                    SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC);
-    }
-
-    @SuppressWarnings("unchecked")
-    public static void addInterWorkerConfigs(ConfigDef configDef, CryptoLibrary cryptoLibrary) {
-        configDef
-                .define(INTER_WORKER_KEY_TTL_MS_CONFIG,
+                    SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC)
+            .define(INTER_WORKER_KEY_TTL_MS_CONFIG,
                     ConfigDef.Type.INT,
                     INTER_WORKER_KEY_TTL_MS_MS_DEFAULT,
                     between(0, Integer.MAX_VALUE),
@@ -492,9 +472,9 @@ public class DistributedConfig extends WorkerConfig {
                     INTER_WORKER_KEY_TTL_MS_MS_DOC)
             .define(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG,
                     ConfigDef.Type.STRING,
-                    defaultKeyGenerationAlgorithm(cryptoLibrary),
+                    defaultKeyGenerationAlgorithm(crypto),
                     ConfigDef.LambdaValidator.with(
-                            (name, value) -> validateKeyAlgorithm(cryptoLibrary, name, (String) value),
+                            (name, value) -> validateKeyAlgorithm(crypto, name, (String) value),
                             () -> "Any KeyGenerator algorithm supported by the worker JVM"),
                     ConfigDef.Importance.LOW,
                     INTER_WORKER_KEY_GENERATION_ALGORITHM_DOC)
@@ -505,17 +485,17 @@ public class DistributedConfig extends WorkerConfig {
                     INTER_WORKER_KEY_SIZE_DOC)
             .define(INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG,
                     ConfigDef.Type.STRING,
-                    defaultSignatureAlgorithm(cryptoLibrary),
+                    defaultSignatureAlgorithm(crypto),
                     ConfigDef.LambdaValidator.with(
-                            (name, value) -> validateSignatureAlgorithm(cryptoLibrary, name, (String) value),
+                            (name, value) -> validateSignatureAlgorithm(crypto, name, (String) value),
                             () -> "Any MAC algorithm supported by the worker JVM"),
                     ConfigDef.Importance.LOW,
                     INTER_WORKER_SIGNATURE_ALGORITHM_DOC)
             .define(INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG,
                     ConfigDef.Type.LIST,
-                    defaultVerificationAlgorithms(cryptoLibrary),
+                    defaultVerificationAlgorithms(crypto),
                     ConfigDef.LambdaValidator.with(
-                            (name, value) -> validateVerificationAlgorithms(cryptoLibrary, name, (List<String>) value),
+                            (name, value) -> validateVerificationAlgorithms(crypto, name, (List<String>) value),
                             () -> "A list of one or more MAC algorithms, each supported by the worker JVM"),
                     ConfigDef.Importance.LOW,
                     INTER_WORKER_VERIFICATION_ALGORITHMS_DOC);
@@ -570,24 +550,24 @@ public class DistributedConfig extends WorkerConfig {
     }
 
     public DistributedConfig(Map<String, String> props) {
-        this(CryptoLibrary.SYSTEM, props);
+        this(Crypto.SYSTEM, props);
     }
 
     // Visible for testing
-    DistributedConfig(CryptoLibrary cryptoLibrary, Map<String, String> props) {
-        super(config(cryptoLibrary), props);
-        this.cryptoLibrary = cryptoLibrary;
+    DistributedConfig(Crypto crypto, Map<String, String> props) {
+        super(config(crypto), props);
+        this.crypto = crypto;
         exactlyOnceSourceSupport = ExactlyOnceSourceSupport.fromProperty(getString(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG));
         validateInterWorkerKeyConfigs();
     }
 
     public static void main(String[] args) {
-        System.out.println(config(CryptoLibrary.SYSTEM).toHtml(4, config -> "connectconfigs_" + config));
+        System.out.println(config(Crypto.SYSTEM).toHtml(4, config -> "connectconfigs_" + config));
     }
 
     public KeyGenerator getInternalRequestKeyGenerator() {
         try {
-            KeyGenerator result = cryptoLibrary.getKeyGeneratorInstance(getString(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG));
+            KeyGenerator result = crypto.keyGenerator(getString(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG));
             Optional.ofNullable(getInt(INTER_WORKER_KEY_SIZE_CONFIG)).ifPresent(result::init);
             return result;
         } catch (NoSuchAlgorithmException | InvalidParameterException e) {
@@ -644,7 +624,7 @@ public class DistributedConfig extends WorkerConfig {
         }
     }
 
-    private static void validateVerificationAlgorithms(CryptoLibrary cryptoLibrary, String configName, List<String> algorithms) {
+    private static void validateVerificationAlgorithms(Crypto crypto, String configName, List<String> algorithms) {
         if (algorithms.isEmpty()) {
             throw new ConfigException(
                     configName,
@@ -654,24 +634,24 @@ public class DistributedConfig extends WorkerConfig {
         }
         for (String algorithm : algorithms) {
             try {
-                cryptoLibrary.getMacInstance(algorithm);
+                crypto.mac(algorithm);
             } catch (NoSuchAlgorithmException e) {
                 throw unsupportedAlgorithmException(configName, algorithm, "Mac");
             }
         }
     }
 
-    private static void validateSignatureAlgorithm(CryptoLibrary cryptoLibrary, String configName, String algorithm) {
+    private static void validateSignatureAlgorithm(Crypto crypto, String configName, String algorithm) {
         try {
-            cryptoLibrary.getMacInstance(algorithm);
+            crypto.mac(algorithm);
         } catch (NoSuchAlgorithmException e) {
             throw unsupportedAlgorithmException(configName, algorithm, "Mac");
         }
     }
 
-    private static void validateKeyAlgorithm(CryptoLibrary cryptoLibrary, String configName, String algorithm) {
+    private static void validateKeyAlgorithm(Crypto crypto, String configName, String algorithm) {
         try {
-            cryptoLibrary.getKeyGeneratorInstance(algorithm);
+            crypto.keyGenerator(algorithm);
         } catch (NoSuchAlgorithmException e) {
             throw unsupportedAlgorithmException(configName, algorithm, "KeyGenerator");
         }

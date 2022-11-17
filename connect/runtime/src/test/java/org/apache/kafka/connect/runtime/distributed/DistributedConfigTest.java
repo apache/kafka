@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.security.ssl.Crypto;
 import org.junit.Test;
 
 import javax.crypto.KeyGenerator;
@@ -75,7 +76,7 @@ public class DistributedConfigTest {
 
         final KeyGenerator fakeKeyGenerator = mock(KeyGenerator.class);
         final Mac fakeMac = mock(Mac.class);
-        final CryptoLibrary cryptoLibrary = mock(CryptoLibrary.class);
+        final Crypto crypto = mock(Crypto.class);
 
         Map<String, String> configs = configs();
         configs.put(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG, fakeKeyGenerationAlgorithm);
@@ -84,23 +85,23 @@ public class DistributedConfigTest {
 
         // Make it seem like the default key generation algorithm isn't available on this worker
         doThrow(new NoSuchAlgorithmException())
-                .when(cryptoLibrary).getKeyGeneratorInstance(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT);
+                .when(crypto).keyGenerator(DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_DEFAULT);
         // But the one specified in the worker config file is
         doReturn(fakeKeyGenerator)
-                .when(cryptoLibrary).getKeyGeneratorInstance(fakeKeyGenerationAlgorithm);
+                .when(crypto).keyGenerator(fakeKeyGenerationAlgorithm);
 
         // And for the signature algorithm
         doThrow(new NoSuchAlgorithmException())
-                .when(cryptoLibrary).getMacInstance(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
+                .when(crypto).mac(DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_DEFAULT);
         // Likewise for key verification algorithms
         for (String verificationAlgorithm : DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT) {
             doThrow(new NoSuchAlgorithmException())
-                    .when(cryptoLibrary).getMacInstance(verificationAlgorithm);
+                    .when(crypto).mac(verificationAlgorithm);
         }
-        doReturn(fakeMac).when(cryptoLibrary).getMacInstance(fakeMacAlgorithm);
+        doReturn(fakeMac).when(crypto).mac(fakeMacAlgorithm);
 
         // Should succeed; even though the defaults aren't present, the manually-specified algorithms are valid
-        new DistributedConfig(cryptoLibrary, configs);
+        new DistributedConfig(crypto, configs);
 
         // Should fail; the default key generation algorithm isn't present, and no override is specified
         String removed = configs.remove(INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG);

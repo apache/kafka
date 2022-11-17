@@ -17,7 +17,7 @@
 package org.apache.kafka.connect.runtime.rest;
 
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.runtime.distributed.CryptoLibrary;
+import org.apache.kafka.common.security.ssl.Crypto;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.eclipse.jetty.client.api.Request;
 
@@ -43,16 +43,16 @@ public class InternalRequestSignature {
     /**
      * Add a signature to a request.
      *
-     * @param cryptoLibrary
+     * @param crypto             the cryptography library used to generate {@link Mac} instances, may not be null
      * @param key                the key to sign the request with; may not be null
      * @param requestBody        the body of the request; may not be null
      * @param signatureAlgorithm the algorithm to use to sign the request; may not be null
      * @param request            the request to add the signature to; may not be null
      */
-    public static void addToRequest(CryptoLibrary cryptoLibrary, SecretKey key, byte[] requestBody, String signatureAlgorithm, Request request) {
+    public static void addToRequest(Crypto crypto, SecretKey key, byte[] requestBody, String signatureAlgorithm, Request request) {
         Mac mac;
         try {
-            mac = mac(cryptoLibrary, signatureAlgorithm);
+            mac = crypto.mac(signatureAlgorithm);
         }  catch (NoSuchAlgorithmException e) {
             throw new ConnectException(e);
         }
@@ -64,13 +64,13 @@ public class InternalRequestSignature {
     /**
      * Extract a signature from a request.
      *
-     * @param cryptoLibrary
+     * @param crypto        the cryptography library used to generate {@link Mac} instances, may not be null
      * @param requestBody   the body of the request; may not be null
      * @param headers       the headers for the request; may be null
      * @return the signature extracted from the request, or null if one or more request signature
      * headers was not present
      */
-    public static InternalRequestSignature fromHeaders(CryptoLibrary cryptoLibrary, byte[] requestBody, HttpHeaders headers) {
+    public static InternalRequestSignature fromHeaders(Crypto crypto, byte[] requestBody, HttpHeaders headers) {
         if (headers == null) {
             return null;
         }
@@ -83,7 +83,7 @@ public class InternalRequestSignature {
 
         Mac mac;
         try {
-            mac = mac(cryptoLibrary, signatureAlgorithm);
+            mac = crypto.mac(signatureAlgorithm);
         } catch (NoSuchAlgorithmException e) {
             throw new BadRequestException(e.getMessage());
         }
@@ -115,10 +115,6 @@ public class InternalRequestSignature {
 
     public boolean isValid(SecretKey key) {
         return MessageDigest.isEqual(sign(mac, key, requestBody), requestSignature);
-    }
-
-    private static Mac mac(CryptoLibrary cryptoLibrary, String signatureAlgorithm) throws NoSuchAlgorithmException {
-        return cryptoLibrary.getMacInstance(signatureAlgorithm);
     }
 
     private static byte[] sign(Mac mac, SecretKey key, byte[] requestBody) {

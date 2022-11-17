@@ -18,7 +18,7 @@
 package org.apache.kafka.connect.runtime.rest;
 
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.runtime.distributed.CryptoLibrary;
+import org.apache.kafka.common.security.ssl.Crypto;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.eclipse.jetty.client.api.Request;
 import org.junit.Test;
@@ -59,39 +59,39 @@ public class InternalRequestSignatureTest {
         36, 72, 86, -71, -32, 13, -8, 115, 85, 73, -65, -112, 6, 68, 41, -50
     };
     private static final String ENCODED_SIGNATURE = Base64.getEncoder().encodeToString(SIGNATURE);
-    private final CryptoLibrary cryptoLibrary = CryptoLibrary.SYSTEM;
+    private final Crypto crypto = Crypto.SYSTEM;
 
     @Test
     public void fromHeadersShouldReturnNullOnNullHeaders() {
-        assertNull(InternalRequestSignature.fromHeaders(cryptoLibrary, REQUEST_BODY, null));
+        assertNull(InternalRequestSignature.fromHeaders(crypto, REQUEST_BODY, null));
     }
 
     @Test
     public void fromHeadersShouldReturnNullIfSignatureHeaderMissing() {
-        assertNull(InternalRequestSignature.fromHeaders(cryptoLibrary, REQUEST_BODY, internalRequestHeaders(null, SIGNATURE_ALGORITHM)));
+        assertNull(InternalRequestSignature.fromHeaders(crypto, REQUEST_BODY, internalRequestHeaders(null, SIGNATURE_ALGORITHM)));
     }
 
     @Test
     public void fromHeadersShouldReturnNullIfSignatureAlgorithmHeaderMissing() {
-        assertNull(InternalRequestSignature.fromHeaders(cryptoLibrary, REQUEST_BODY, internalRequestHeaders(ENCODED_SIGNATURE, null)));
+        assertNull(InternalRequestSignature.fromHeaders(crypto, REQUEST_BODY, internalRequestHeaders(ENCODED_SIGNATURE, null)));
     }
 
     @Test
     public void fromHeadersShouldThrowExceptionOnInvalidSignatureAlgorithm() {
-        assertThrows(BadRequestException.class, () -> InternalRequestSignature.fromHeaders(cryptoLibrary, REQUEST_BODY,
+        assertThrows(BadRequestException.class, () -> InternalRequestSignature.fromHeaders(crypto, REQUEST_BODY,
             internalRequestHeaders(ENCODED_SIGNATURE, "doesn'texist")));
     }
 
     @Test
     public void fromHeadersShouldThrowExceptionOnInvalidBase64Signature() {
-        assertThrows(BadRequestException.class, () -> InternalRequestSignature.fromHeaders(cryptoLibrary, REQUEST_BODY,
+        assertThrows(BadRequestException.class, () -> InternalRequestSignature.fromHeaders(crypto, REQUEST_BODY,
             internalRequestHeaders("not valid base 64", SIGNATURE_ALGORITHM)));
     }
 
     @Test
     public void fromHeadersShouldReturnNonNullResultOnValidSignatureAndSignatureAlgorithm() {
         InternalRequestSignature signature =
-                InternalRequestSignature.fromHeaders(cryptoLibrary, REQUEST_BODY, internalRequestHeaders(ENCODED_SIGNATURE, SIGNATURE_ALGORITHM));
+                InternalRequestSignature.fromHeaders(crypto, REQUEST_BODY, internalRequestHeaders(ENCODED_SIGNATURE, SIGNATURE_ALGORITHM));
         assertNotNull(signature);
         assertNotNull(signature.keyAlgorithm());
     }
@@ -99,9 +99,9 @@ public class InternalRequestSignatureTest {
     @Test
     public void addToRequestShouldThrowExceptionOnInvalidSignatureAlgorithm() throws NoSuchAlgorithmException {
         Request request = mock(Request.class);
-        CryptoLibrary cryptoLibrary = mock(CryptoLibrary.class);
-        when(cryptoLibrary.getMacInstance(anyString())).thenThrow(new NoSuchAlgorithmException("doesn'texist"));
-        assertThrows(ConnectException.class, () -> InternalRequestSignature.addToRequest(cryptoLibrary, KEY, REQUEST_BODY, "doesn'texist", request));
+        Crypto crypto = mock(Crypto.class);
+        when(crypto.mac(anyString())).thenThrow(new NoSuchAlgorithmException("doesn'texist"));
+        assertThrows(ConnectException.class, () -> InternalRequestSignature.addToRequest(crypto, KEY, REQUEST_BODY, "doesn'texist", request));
     }
 
     @Test
@@ -118,7 +118,7 @@ public class InternalRequestSignatureTest {
                 signatureAlgorithmCapture.capture()
             )).thenReturn(request);
 
-        InternalRequestSignature.addToRequest(cryptoLibrary, KEY, REQUEST_BODY, SIGNATURE_ALGORITHM, request);
+        InternalRequestSignature.addToRequest(crypto, KEY, REQUEST_BODY, SIGNATURE_ALGORITHM, request);
 
         assertEquals(
             "Request should have valid base 64-encoded signature added as header",
@@ -139,7 +139,7 @@ public class InternalRequestSignatureTest {
         InternalRequestSignature signature = new InternalRequestSignature(REQUEST_BODY, mac, SIGNATURE);
         assertTrue(signature.isValid(KEY));
 
-        signature = InternalRequestSignature.fromHeaders(cryptoLibrary, REQUEST_BODY, internalRequestHeaders(ENCODED_SIGNATURE, SIGNATURE_ALGORITHM));
+        signature = InternalRequestSignature.fromHeaders(crypto, REQUEST_BODY, internalRequestHeaders(ENCODED_SIGNATURE, SIGNATURE_ALGORITHM));
         assertTrue(signature.isValid(KEY));
 
         signature = new InternalRequestSignature("[{\"different_config\":\"different_value\"}]".getBytes(), mac, SIGNATURE);
