@@ -34,17 +34,19 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRec
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.{LogContext, SystemTime}
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyLong}
 import org.mockito.Mockito.{mock, never, times, verify, when}
+
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.{Collections, Optional}
-
-import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
@@ -1100,6 +1102,75 @@ class ReplicaFetcherThreadTest {
     assertEquals(Collections.singletonList(tid1p0), fetchRequestBuilder2.removed())
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testLocalFetchCompletionIfHighWatermarkUpdated(highWatermarkUpdated: Boolean): Unit = {
+    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
+    val config = KafkaConfig.fromProps(props)
+    val highWatermarkReceivedFromLeader = 100L
+
+    val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
+    when(mockBlockingSend.brokerEndPoint()).thenReturn(brokerEndPoint)
+
+    val maybeNewHighWatermark = if (highWatermarkUpdated) {
+      Some(highWatermarkReceivedFromLeader)
+    } else {
+      None
+    }
+    val log: UnifiedLog = mock(classOf[UnifiedLog])
+    when(log.maybeUpdateHighWatermark(highWatermarkReceivedFromLeader))
+      .thenReturn(maybeNewHighWatermark)
+
+    val appendInfo: Option[LogAppendInfo] = Some(mock(classOf[LogAppendInfo]))
+
+    val partition: Partition = mock(classOf[Partition])
+    when(partition.localLogOrException).thenReturn(log)
+    when(partition.appendRecordsToFollowerOrFutureReplica(any[MemoryRecords], any[Boolean])).thenReturn(appendInfo)
+
+    // In Scala 2.12, the partitionsWithNewHighWatermark buffer is cleared before the replicaManager mock is verified.
+    // Capture the argument at the time of invocation.
+    val completeDelayedFetchRequestsArgument = mutable.Buffer.empty[TopicPartition]
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.getPartitionOrException(any[TopicPartition])).thenReturn(partition)
+    when(replicaManager.completeDelayedFetchRequests(any[Seq[TopicPartition]])).thenAnswer(invocation =>
+      completeDelayedFetchRequestsArgument ++= invocation.getArguments()(0).asInstanceOf[Seq[TopicPartition]]
+    )
+    val brokerTopicStats = new BrokerTopicStats
+    when(replicaManager.brokerTopicStats).thenReturn(brokerTopicStats)
+
+    val replicaQuota: ReplicaQuota = mock(classOf[ReplicaQuota])
+
+    val thread = createReplicaFetcherThread(
+      name = "replica-fetcher",
+      fetcherId = 0,
+      brokerConfig = config,
+      failedPartitions = failedPartitions,
+      replicaMgr = replicaManager,
+      quota = replicaQuota,
+      leaderEndpointBlockingSend = mockBlockingSend)
+
+    val tp0 = new TopicPartition("testTopic", 0)
+    val tp1 = new TopicPartition("testTopic", 1)
+    val records = MemoryRecords.withRecords(CompressionType.NONE,
+      new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
+    val partitionData = new FetchResponseData.PartitionData()
+      .setRecords(records)
+      .setHighWatermark(highWatermarkReceivedFromLeader)
+
+    thread.processPartitionData(tp0, 0, partitionData.setPartitionIndex(0))
+    thread.processPartitionData(tp1, 0, partitionData.setPartitionIndex(1))
+    verify(replicaManager, times(0)).completeDelayedFetchRequests(any[Seq[TopicPartition]])
+
+    thread.doWork()
+    if (highWatermarkUpdated) {
+      assertEquals(Seq(tp0, tp1), completeDelayedFetchRequestsArgument)
+      verify(replicaManager, times(1)).completeDelayedFetchRequests(any[Seq[TopicPartition]])
+    } else {
+      verify(replicaManager, times(0)).completeDelayedFetchRequests(any[Seq[TopicPartition]])
+    }
+    assertEquals(mutable.Buffer.empty, thread.partitionsWithNewHighWatermark)
+  }
+
   private def newOffsetForLeaderPartitionResult(
    tp: TopicPartition,
    leaderEpoch: Int,
@@ -1129,11 +1200,15 @@ class ReplicaFetcherThreadTest {
     when(mockBlockingSend.brokerEndPoint()).thenReturn(brokerEndPoint)
 
     val log: UnifiedLog = mock(classOf[UnifiedLog])
+    val records = MemoryRecords.withRecords(CompressionType.NONE,
+      new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
+    when(log.maybeUpdateHighWatermark(hw = 0)).thenReturn(None)
 
     val partition: Partition = mock(classOf[Partition])
     when(partition.localLogOrException).thenReturn(log)
     when(partition.isReassigning).thenReturn(isReassigning)
     when(partition.isAddingLocalReplica).thenReturn(isReassigning)
+    when(partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false)).thenReturn(None)
 
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     when(replicaManager.getPartitionOrException(any[TopicPartition])).thenReturn(partition)
@@ -1152,8 +1227,6 @@ class ReplicaFetcherThreadTest {
       mockBlockingSend
     )
 
-    val records = MemoryRecords.withRecords(CompressionType.NONE,
-      new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
     val partitionData: thread.FetchData = new FetchResponseData.PartitionData()
       .setPartitionIndex(t1p0.partition)
       .setLastStableOffset(0)

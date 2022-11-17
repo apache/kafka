@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -90,6 +91,7 @@ public class StoreChangelogReader implements ChangelogReader {
     //   1) restoring active task or
     //   2) updating standby task at a given time,
     // but never doing both
+    // A changelog reader with no tasks at all is in state ACTIVE_RESTORING
     enum ChangelogReaderState {
         ACTIVE_RESTORING("ACTIVE_RESTORING"),
 
@@ -200,6 +202,8 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final StateRestoreListener stateRestoreListener;
 
+    private final boolean stateUpdaterEnabled;
+
     // source of the truth of the current registered changelogs;
     // NOTE a changelog would only be removed when its corresponding task
     // is being removed from the thread; otherwise it would stay in this map even after completed
@@ -225,6 +229,9 @@ public class StoreChangelogReader implements ChangelogReader {
         this.adminClient = adminClient;
         this.restoreConsumer = restoreConsumer;
         this.stateRestoreListener = stateRestoreListener;
+
+        this.stateUpdaterEnabled =
+            InternalConfig.getBoolean(config.originals(), InternalConfig.STATE_UPDATER_ENABLED, false);
 
         this.groupId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
@@ -417,6 +424,11 @@ public class StoreChangelogReader implements ChangelogReader {
     // 3. if there are any restoring changelogs, try to read from the restore consumer and process them.
     @Override
     public void restore(final Map<TaskId, Task> tasks) {
+
+        // If we are updating only standby tasks, and are not using a separate thread, we should
+        // use a non-blocking poll to unblock the processing as soon as possible.
+        final boolean useNonBlockingPoll = state == ChangelogReaderState.STANDBY_UPDATING && !stateUpdaterEnabled;
+
         initializeChangelogs(tasks, registeredChangelogs());
 
         if (!activeRestoringChangelogs().isEmpty() && state == ChangelogReaderState.STANDBY_UPDATING) {
@@ -435,10 +447,7 @@ public class StoreChangelogReader implements ChangelogReader {
             try {
                 pauseResumePartitions(tasks, restoringChangelogs);
 
-                // for restoring active and updating standby we may prefer different poll time
-                // in order to make sure we call the main consumer#poll in time.
-                // TODO: once we move ChangelogReader to a separate thread this may no longer be a concern
-                polledRecords = restoreConsumer.poll(state == ChangelogReaderState.STANDBY_UPDATING ? Duration.ZERO : pollTime);
+                polledRecords = restoreConsumer.poll(useNonBlockingPoll ? Duration.ZERO : pollTime);
 
                 // TODO (?) If we cannot fetch records during restore, should we trigger `task.timeout.ms` ?
                 // TODO (?) If we cannot fetch records for standby task, should we trigger `task.timeout.ms` ?
@@ -990,6 +999,10 @@ public class StoreChangelogReader implements ChangelogReader {
         }
 
         removeChangelogsFromRestoreConsumer(revokedInitializedChangelogs);
+
+        if (changelogs.isEmpty()) {
+            state = ChangelogReaderState.ACTIVE_RESTORING;
+        }
     }
 
     @Override
@@ -998,6 +1011,8 @@ public class StoreChangelogReader implements ChangelogReader {
             changelogMetadata.clear();
         }
         changelogs.clear();
+
+        state = ChangelogReaderState.ACTIVE_RESTORING;
 
         try {
             restoreConsumer.unsubscribe();

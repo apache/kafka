@@ -1725,7 +1725,8 @@ public class KafkaConsumerTest {
                                         .setMemberId(memberId)
                                         .setMetadata(byteBuffer.array())
                                 )
-                        )
+                        ),
+                ApiKeys.JOIN_GROUP.latestVersion()
         );
 
         client.prepareResponseFrom(leaderResponse, coordinator);
@@ -2438,7 +2439,8 @@ public class KafkaConsumerTest {
                         .setProtocolName(assignor.name())
                         .setLeader(leaderId)
                         .setMemberId(memberId)
-                        .setMembers(Collections.emptyList())
+                        .setMembers(Collections.emptyList()),
+                ApiKeys.JOIN_GROUP.latestVersion()
         );
     }
 
