@@ -18,7 +18,7 @@
 package org.apache.kafka.connect.runtime.rest;
 
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.common.security.ssl.Crypto;
+import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.eclipse.jetty.client.api.Request;
 import org.junit.Test;

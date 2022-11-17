@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.security.ssl.Crypto;
 import org.junit.Test;
 
 import javax.crypto.KeyGenerator;

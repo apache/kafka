@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.ssl;
+package org.apache.kafka.connect.runtime.distributed;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.Mac;

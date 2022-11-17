@@ -29,7 +29,7 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.WorkerConfig;
-import org.apache.kafka.common.security.ssl.Crypto;
+import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.distributed.RequestTargetException;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
