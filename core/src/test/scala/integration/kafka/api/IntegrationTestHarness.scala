@@ -45,6 +45,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   val producerConfig = new Properties
   val consumerConfig = new Properties
   val adminClientConfig = new Properties
+  val superuserClientConfig = new Properties
   val serverConfig = new Properties
 
   private val consumers = mutable.Buffer[KafkaConsumer[_, _]]()
@@ -102,12 +103,22 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     doSetup(testInfo, createOffsetsTopic = true)
   }
 
+  /*
+   * The superuser by default is set up the same as the admin.
+   * Some tests need a separate principal for superuser operations.
+   * These tests may need to override the config before creating the offset topic.
+   */
+  protected def doSuperuserSetup(testInfo: TestInfo): Unit = {
+    superuserClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
+  }
+
   def doSetup(testInfo: TestInfo,
               createOffsetsTopic: Boolean): Unit = {
     // Generate client security properties before starting the brokers in case certs are needed
     producerConfig ++= clientSecurityProps("producer")
     consumerConfig ++= clientSecurityProps("consumer")
     adminClientConfig ++= clientSecurityProps("adminClient")
+    superuserClientConfig ++= superuserSecurityProps("superuserClient")
 
     super.setUp(testInfo)
 
@@ -124,14 +135,20 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
     adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
 
+    doSuperuserSetup(testInfo)
+
     if (createOffsetsTopic) {
-      super.createOffsetsTopic(listenerName, adminClientConfig)
+      super.createOffsetsTopic(listenerName, superuserClientConfig)
     }
   }
 
   def clientSecurityProps(certAlias: String): Properties = {
     TestUtils.securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, certAlias, TestUtils.SslCertificateCn,
       clientSaslProperties)
+  }
+
+  def superuserSecurityProps(certAlias: String): Properties = {
+    clientSecurityProps(certAlias)
   }
 
   def createProducer[K, V](keySerializer: Serializer[K] = new ByteArraySerializer,
@@ -164,6 +181,18 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   ): Admin = {
     val props = new Properties
     props ++= adminClientConfig
+    props ++= configOverrides
+    val admin = TestUtils.createAdminClient(brokers, listenerName, props)
+    adminClients += admin
+    admin
+  }
+
+  def createSuperuserAdminClient(
+    listenerName: ListenerName = listenerName,
+    configOverrides: Properties = new Properties
+  ): Admin = {
+    val props = new Properties
+    props ++= superuserClientConfig
     props ++= configOverrides
     val admin = TestUtils.createAdminClient(brokers, listenerName, props)
     adminClients += admin
