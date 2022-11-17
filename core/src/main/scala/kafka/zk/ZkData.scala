@@ -1029,13 +1029,12 @@ object MigrationZNode {
       "kraft_controller_id" -> migration.kraftControllerId(),
       "kraft_controller_epoch" -> migration.kraftControllerEpoch(),
       "kraft_metadata_offset" -> migration.kraftMetadataOffset(),
-      "kraft_metadata_epoch" -> migration.kraftMetadataEpoch(),
-      "last_update_time_ms" -> migration.lastUpdatedTimeMs()
+      "kraft_metadata_epoch" -> migration.kraftMetadataEpoch()
     )
     Json.encodeAsBytes(jsonMap.asJava)
   }
 
-  def decode(bytes: Array[Byte], zkVersion: Int): MigrationRecoveryState = {
+  def decode(bytes: Array[Byte], zkVersion: Int, modifyTimeMs: Long): MigrationRecoveryState = {
     val jsonDataAsString = bytes.map(_.toChar).mkString
     Json.parseBytes(bytes).map(_.asJsonObject).flatMap { js =>
       val version = js("version").to[Int]
@@ -1046,8 +1045,7 @@ object MigrationZNode {
       val controllerEpoch = js("kraft_controller_epoch").to[Int]
       val metadataOffset = js("kraft_metadata_offset").to[Long]
       val metadataEpoch = js("kraft_metadata_epoch").to[Long]
-      val lastUpdateMs = js("last_update_time_ms").to[Long]
-      Some(new MigrationRecoveryState(controllerId, controllerEpoch, metadataOffset, metadataEpoch, lastUpdateMs, zkVersion, -2))
+      Some(new MigrationRecoveryState(controllerId, controllerEpoch, metadataOffset, metadataEpoch, modifyTimeMs, zkVersion, -2))
     }.getOrElse(throw new KafkaException(s"Failed to parse the migration json $jsonDataAsString"))
   }
 }
