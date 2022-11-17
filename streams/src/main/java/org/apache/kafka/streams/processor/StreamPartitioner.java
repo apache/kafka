@@ -66,8 +66,8 @@ public interface StreamPartitioner<K, V> {
     Integer partition(String topic, K key, V value, int numPartitions);
 
     /**
-     * Determine the partition numbers to which a record, with the given key and value and the current number
-     * of partitions, should be multi-casted to.
+     * Determine the number(s) of the partition(s) to which a record with the given key and value should be sent, 
+     * for the given topic and current partition count
      * @param topic the topic name this record is sent to
      * @param key the key of the record
      * @param value the value of the record
