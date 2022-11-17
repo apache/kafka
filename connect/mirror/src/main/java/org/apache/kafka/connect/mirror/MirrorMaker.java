@@ -255,9 +255,10 @@ public class MirrorMaker {
         // Pass the shared admin to the distributed herder as an additional AutoCloseable object that should be closed when the
         // herder is stopped. MirrorMaker has multiple herders, and having the herder own the close responsibility is much easier than
         // tracking the various shared admin objects in this class.
+        // Do not provide a restClient to the DistributedHerder to indicate that request forwarding is disabled
         Herder herder = new DistributedHerder(distributedConfig, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
-                advertisedUrl, CLIENT_CONFIG_OVERRIDE_POLICY, sharedAdmin);
+                advertisedUrl, null, CLIENT_CONFIG_OVERRIDE_POLICY, sharedAdmin);
         herders.put(sourceAndTarget, herder);
     }
 

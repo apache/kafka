@@ -122,7 +122,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({DistributedHerder.class, RestClient.class})
+@PrepareForTest({DistributedHerder.class})
 @PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
 public class DistributedHerderTest {
     private static final Map<String, String> HERDER_CONFIG = new HashMap<>();
@@ -212,6 +212,7 @@ public class DistributedHerderTest {
     @Mock private WorkerConfigTransformer transformer;
     @Mock private Callback<Herder.Created<ConnectorInfo>> putConnectorCallback;
     @Mock private Plugins plugins;
+    @Mock private RestClient restClient;
     private CountDownLatch shutdownCalled = new CountDownLatch(1);
 
     private ConfigBackingStore.UpdateListener configUpdateListener;
@@ -240,7 +241,7 @@ public class DistributedHerderTest {
         herder = PowerMock.createPartialMock(DistributedHerder.class,
                 new String[]{"connectorType", "updateDeletedConnectorStatus", "updateDeletedTaskStatus", "validateConnectorConfig", "buildRestartPlan", "recordRestarting"},
                 new DistributedConfig(HERDER_CONFIG), worker, WORKER_ID, KAFKA_CLUSTER_ID,
-                statusBackingStore, configBackingStore, member, MEMBER_URL, metrics, time, noneConnectorClientConfigOverridePolicy,
+                statusBackingStore, configBackingStore, member, MEMBER_URL, restClient, metrics, time, noneConnectorClientConfigOverridePolicy,
                 new AutoCloseable[]{uponShutdown});
 
         configUpdateListener = herder.new ConfigUpdateListener();
@@ -2969,11 +2970,9 @@ public class DistributedHerderTest {
         member.wakeup();
         EasyMock.expectLastCall();
 
-        PowerMock.mockStatic(RestClient.class);
-
         org.easymock.IExpectationSetters<RestClient.HttpResponse<Object>> expectRequest = EasyMock.expect(
-                RestClient.httpRequest(
-                        anyObject(), EasyMock.eq("PUT"), EasyMock.isNull(), EasyMock.isNull(), EasyMock.isNull(), anyObject(), anyObject(), anyObject()
+                restClient.httpRequest(
+                        anyObject(), EasyMock.eq("PUT"), EasyMock.isNull(), EasyMock.isNull(), EasyMock.isNull(), anyObject(), anyObject()
                 ));
         if (succeed) {
             expectRequest.andReturn(null);
@@ -3835,7 +3834,7 @@ public class DistributedHerderTest {
         return PowerMock.createPartialMock(DistributedHerder.class,
                 new String[]{"connectorType", "updateDeletedConnectorStatus", "updateDeletedTaskStatus", "validateConnectorConfig"},
                 new DistributedConfig(config), worker, WORKER_ID, KAFKA_CLUSTER_ID,
-                statusBackingStore, configBackingStore, member, MEMBER_URL, metrics, time, noneConnectorClientConfigOverridePolicy,
+                statusBackingStore, configBackingStore, member, MEMBER_URL, restClient, metrics, time, noneConnectorClientConfigOverridePolicy,
                 new AutoCloseable[0]);
     }
 

@@ -28,6 +28,7 @@ import org.apache.kafka.connect.runtime.WorkerInfo;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.Converter;
@@ -99,7 +100,9 @@ public class ConnectDistributed {
         String kafkaClusterId = config.kafkaClusterId();
         log.debug("Kafka cluster ID: {}", kafkaClusterId);
 
-        RestServer rest = new RestServer(config);
+        RestClient restClient = new RestClient(config);
+
+        RestServer rest = new RestServer(config, restClient);
         rest.initializeServer();
 
         URI advertisedUrl = rest.advertisedUrl();
@@ -138,7 +141,7 @@ public class ConnectDistributed {
         // herder is stopped. This is easier than having to track and own the lifecycle ourselves.
         DistributedHerder herder = new DistributedHerder(config, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
-                advertisedUrl.toString(), connectorClientConfigOverridePolicy, sharedAdmin);
+                advertisedUrl.toString(), restClient, connectorClientConfigOverridePolicy, sharedAdmin);
 
         final Connect connect = new Connect(herder, rest);
         log.info("Kafka Connect distributed worker initialization took {}ms", time.hiResClockMs() - initStart);

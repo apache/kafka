@@ -82,16 +82,16 @@ public class ConnectorsResource implements ConnectResource {
         new TypeReference<List<Map<String, String>>>() { };
 
     private final Herder herder;
-    private final WorkerConfig config;
+    private final RestClient restClient;
     private long requestTimeoutMs;
     @javax.ws.rs.core.Context
     private ServletContext context;
     private final boolean isTopicTrackingDisabled;
     private final boolean isTopicTrackingResetDisabled;
 
-    public ConnectorsResource(Herder herder, WorkerConfig config) {
+    public ConnectorsResource(Herder herder, WorkerConfig config, RestClient restClient) {
         this.herder = herder;
-        this.config = config;
+        this.restClient = restClient;
         isTopicTrackingDisabled = !config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         isTopicTrackingResetDisabled = !config.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG);
         this.requestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
@@ -404,7 +404,10 @@ public class ConnectorsResource implements ConnectResource {
             Throwable cause = e.getCause();
 
             if (cause instanceof RequestTargetException) {
-                if (forward == null || forward) {
+                if (restClient == null) {
+                    throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(),
+                            "Cannot complete request as non-leader with request forwarding disabled");
+                } else if (forward == null || forward) {
                     // the only time we allow recursive forwarding is when no forward flag has
                     // been set, which should only be seen by the first worker to handle a user request.
                     // this gives two total hops to resolve the request before giving up.
@@ -425,7 +428,7 @@ public class ConnectorsResource implements ConnectResource {
                     }
                     String forwardUrl = uriBuilder.build().toString();
                     log.debug("Forwarding request {} {} {}", forwardUrl, method, body);
-                    return translator.translate(RestClient.httpRequest(forwardUrl, method, headers, body, resultType, config));
+                    return translator.translate(restClient.httpRequest(forwardUrl, method, headers, body, resultType));
                 } else {
                     // we should find the right target for the query within two hops, so if
                     // we don't, it probably means that a rebalance has taken place.
