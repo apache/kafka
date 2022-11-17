@@ -2106,7 +2106,7 @@ public class TaskManagerTest {
         assertThat(uncorruptedActive.commitCompleted, is(false));
 
         taskManager.handleRebalanceStart(singleton(topic1));
-        assertThat(taskManager.isRebalanceInProgress(), is(true));
+        assertThat(taskManager.rebalanceInProgress(), is(true));
         taskManager.handleCorruption(singleton(taskId00));
 
         assertThat(uncorruptedActive.commitPrepared, is(false));
@@ -3370,11 +3370,11 @@ public class TaskManagerTest {
         expectLastCall();
         expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(new ArrayList<>());
         replay(consumer, stateDirectory);
-        assertThat(taskManager.isRebalanceInProgress(), is(false));
+        assertThat(taskManager.rebalanceInProgress(), is(false));
         taskManager.handleRebalanceStart(emptySet());
-        assertThat(taskManager.isRebalanceInProgress(), is(true));
+        assertThat(taskManager.rebalanceInProgress(), is(true));
         taskManager.handleRebalanceComplete();
-        assertThat(taskManager.isRebalanceInProgress(), is(false));
+        assertThat(taskManager.rebalanceInProgress(), is(false));
     }
 
     @Test

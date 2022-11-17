@@ -600,7 +600,7 @@ public class StreamThread extends Thread {
 
         // if the thread is still in the middle of a rebalance, we should keep polling
         // until the rebalance is completed before we close and commit the tasks
-        while (isRunning() || taskManager.isRebalanceInProgress()) {
+        while (isRunning() || taskManager.rebalanceInProgress()) {
             try {
                 checkForTopologyUpdates();
                 // If we received the shutdown signal while waiting for a topology to be added, we can
@@ -618,7 +618,7 @@ public class StreamThread extends Thread {
                 runOnce();
 
                 // Check for a scheduled rebalance but don't trigger it until the current rebalance is done
-                if (!taskManager.isRebalanceInProgress() && nextProbingRebalanceMs.get() < time.milliseconds()) {
+                if (!taskManager.rebalanceInProgress() && nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("Triggering the followup rebalance scheduled for {}.", Utils.toLogDateTimeFormat(nextProbingRebalanceMs.get()));
                     mainConsumer.enforceRebalance(threadIdSuffix + " requested followup rebalance by " + nextProbingRebalanceMs.get());
                     nextProbingRebalanceMs.set(Long.MAX_VALUE);
