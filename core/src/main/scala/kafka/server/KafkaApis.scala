@@ -167,7 +167,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     def handleError(e: Throwable): Unit = {
-      trace(s"Unexpected error handling request ${request.requestDesc(true)} " +
+      error(s"Unexpected error handling request ${request.requestDesc(true)} " +
         s"with context ${request.context}", e)
       requestHelper.handleError(request, e)
     }

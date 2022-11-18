@@ -96,8 +96,6 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 
-import java.util.concurrent.atomic.AtomicReference
-
 class KafkaApisTest {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
   private val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
@@ -2717,12 +2715,11 @@ class KafkaApisTest {
       ArgumentMatchers.eq(joinGroupRequest)
     )).thenReturn(future)
 
-    val response = new AtomicReference[JoinGroupResponse]()
+    var response: JoinGroupResponse = null
     when(requestChannel.sendResponse(any(), any(), any())).thenAnswer { _ =>
       throw new Exception("Something went wrong")
     }.thenAnswer { invocation =>
-      val resp = invocation.getArgument(1, classOf[JoinGroupResponse])
-      response.set(resp)
+      response = invocation.getArgument(1, classOf[JoinGroupResponse])
     }
 
     createKafkaApis().handle(
@@ -2731,7 +2728,7 @@ class KafkaApisTest {
     )
 
     future.completeExceptionally(Errors.NOT_COORDINATOR.exception)
-    assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.get.error)
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.error)
   }
 
   @Test
