@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.metadata.util;
 
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
+import java.util.Collection;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
 
 /**
@@ -43,11 +43,8 @@ public final class SnapshotReason {
     /**
      * Converts a collection of reasons into a string.
      */
-    static public String stringFromReasons(Iterable<SnapshotReason> reasons) {
-        return StreamSupport
-            .stream(reasons.spliterator(), false)
-            .map(SnapshotReason::toString)
-            .collect(Collectors.joining(", "));
+    static public String stringFromReasons(Collection<SnapshotReason> reasons) {
+        return Utils.join(reasons, ", ");
     }
 
     private final String reason;

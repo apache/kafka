@@ -521,7 +521,7 @@ public final class QuorumController implements Controller {
         private SnapshotGenerator generator = null;
 
         void createSnapshotGenerator(long committedOffset, int committedEpoch, long committedTimestamp) {
-            if (inProgress()) {
+            if (snapshotInProgress()) {
                 throw new IllegalStateException("Snapshot generator already exists");
             }
             if (!snapshotRegistry.hasSnapshot(committedOffset)) {
@@ -563,7 +563,7 @@ public final class QuorumController implements Controller {
         }
 
         void cancel() {
-            if (!inProgress()) return;
+            if (!snapshotInProgress()) return;
             log.error("Cancelling snapshot {}", generator.lastContainedLogOffset());
             generator.writer().close();
             generator = null;
@@ -602,7 +602,7 @@ public final class QuorumController implements Controller {
 
         @Override
         public void run() {
-            if (!inProgress()) {
+            if (!snapshotInProgress()) {
                 log.debug("No snapshot is in progress because it was previously canceled");
                 return;
             }
@@ -623,13 +623,13 @@ public final class QuorumController implements Controller {
         }
 
         OptionalLong snapshotLastOffsetFromLog() {
-            if (!inProgress()) {
+            if (!snapshotInProgress()) {
                 return OptionalLong.empty();
             }
             return OptionalLong.of(generator.lastContainedLogOffset());
         }
 
-        public boolean inProgress() {
+        public boolean snapshotInProgress() {
             return generator != null;
         }
     }
@@ -1523,7 +1523,7 @@ public final class QuorumController implements Controller {
     }
 
     private void maybeGenerateSnapshot() {
-        if (!snapshotGeneratorManager.inProgress()) {
+        if (!snapshotGeneratorManager.snapshotInProgress()) {
             Set<SnapshotReason> snapshotReasons = new HashSet<>();
             // Check if a snapshot should be generated because of committed bytes
             if (committedBytesSinceLastSnapshot >= snapshotMaxNewRecordBytes) {
@@ -1546,7 +1546,7 @@ public final class QuorumController implements Controller {
             if (!snapshotReasons.isEmpty()) {
                 if (!isActiveController()) {
                     // The active controller creates in-memory snapshot every time an uncommitted
-                    // batch gets appended. The in-active controller can be more efficient and only
+                    // batch gets appended. The inactive controller can be more efficient and only
                     // create an in-memory snapshot when needed.
                     snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
                 }
@@ -2227,7 +2227,7 @@ public final class QuorumController implements Controller {
     public CompletableFuture<Long> beginWritingSnapshot() {
         CompletableFuture<Long> future = new CompletableFuture<>();
         appendControlEvent("beginWritingSnapshot", () -> {
-            if (!snapshotGeneratorManager.inProgress()) {
+            if (!snapshotGeneratorManager.snapshotInProgress()) {
                 log.info(
                     "Generating a snapshot that includes (epoch={}, offset={}) because, {}.",
                     lastCommittedEpoch,
