@@ -169,8 +169,8 @@ class BrokerMetadataListener(
       Option(_delta.featuresDelta()).flatMap { featuresDelta =>
         featuresDelta
           .metadataVersionChange()
-          .map(SnapshotReason.metadataVersionChanged)
           .asScala
+          .map(SnapshotReason.metadataVersionChanged)
       }
     } else {
       None
