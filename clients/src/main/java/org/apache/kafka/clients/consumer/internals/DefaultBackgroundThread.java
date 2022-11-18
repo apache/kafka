@@ -96,9 +96,8 @@ public class DefaultBackgroundThread extends KafkaThread {
                     coordinator,
                     backgroundEventQueue);
         } catch (final Exception e) {
-            // now propagate the exception
             close();
-            throw new KafkaException("Failed to construct background processor", e);
+            throw new KafkaException("Failed to construct background processor", e.getCause());
         }
 
     }

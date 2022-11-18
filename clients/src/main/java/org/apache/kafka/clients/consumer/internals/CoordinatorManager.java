@@ -41,10 +41,11 @@ import java.util.concurrent.BlockingQueue;
 
 public class CoordinatorManager {
     final static int RECONNECT_BACKOFF_EXP_BASE = 2;
-    final static double RECONNECT_BACKOFF_JITTER = 0.2;
+    final static double RECONNECT_BACKOFF_JITTER = 0.0;
     private final Logger log;
     private final Time time;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
+    private final NetworkClientUtils networkClientUtil;
     private Node coordinator = null;
     protected final KafkaClient client;
     private ExponentialBackoff exponentialBackoff;
@@ -73,6 +74,7 @@ public class CoordinatorManager {
         this.coordinatorRequestState = new CoordinatorRequestState();
         this.groupId = groupId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
+        this.networkClientUtil = new NetworkClientUtils(time, client);
     }
 
     public boolean coordinatorUnknown() {
@@ -112,6 +114,10 @@ public class CoordinatorManager {
         }
 
         return !coordinatorUnknown();
+    }
+
+    protected long backoffMs() {
+        return exponentialBackoff.backoff(coordinatorRequestState.numAttempts);
     }
 
     /**
@@ -186,22 +192,18 @@ public class CoordinatorManager {
                 time.milliseconds(),
                 true);
         coordinatorRequestState.lastSentMs = time.milliseconds();
-        long now = time.milliseconds();
-        if (client.ready(node, now)) {
-            client.send(req, now);
-        }
+        networkClientUtil.trySend(req, node);
     }
 
     private void lookupCoordinator() {
         coordinatorRequestState.incrAttempts();
         // find a node to ask about the coordinator
-        Node node = this.client.leastLoadedNode(time.milliseconds());
+        Node node = networkClientUtil.leastLoadedNode();
         if (node == null) {
             log.debug("No broker available to send FindCoordinator request");
             enqueueErrorEvent(Errors.BROKER_NOT_AVAILABLE.exception());
             return;
         }
-
         sendFindCoordinatorRequest(node);
     }
 

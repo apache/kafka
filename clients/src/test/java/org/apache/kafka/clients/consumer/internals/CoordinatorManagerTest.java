@@ -33,6 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -40,6 +41,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,11 +53,6 @@ public class CoordinatorManagerTest {
     private LogContext logContext;
     private LinkedBlockingDeque<BackgroundEvent> eventQueue;
     private Node node;
-
-    private int sessionTimeoutMs = 300;
-    private int heartbeatIntervalMs = 100;
-    private int maxPollIntervalMs = 900;
-    private long retryBackoffMs = 10L;
     private final Properties properties = new Properties();
     private Optional<String> groupId;
     private int rebalanceTimeoutMs;
@@ -88,6 +85,37 @@ public class CoordinatorManagerTest {
         ClientResponse resp = client.poll(0, this.time.milliseconds()).get(0);
         assertTrue(resp.responseBody() instanceof FindCoordinatorResponse);
         coordinator.onResponse((FindCoordinatorResponse) resp.responseBody());
+        assertTrue(coordinator.ensureCoordinatorReady());
+    }
+
+    @Test
+    public void testTestFindCoordinatorError() {
+        long now = this.time.milliseconds();
+        long nowNs = this.time.nanoseconds();
+        this.time = new MockTime(0, now, nowNs);
+        CoordinatorManager coordinator = setupCoordinatorManager();
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, groupId.orElse(null), node));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId.orElse(null), node));
+
+        assertFalse(coordinator.ensureCoordinatorReady());
+        List<ClientResponse> resps = client.poll(0, this.time.milliseconds());
+        assertEquals(1, resps.size());
+        ClientResponse resp = resps.get(0);
+        assertTrue(resp.responseBody() instanceof FindCoordinatorResponse);
+        coordinator.onResponse((FindCoordinatorResponse) resp.responseBody());
+        assertFalse(coordinator.ensureCoordinatorReady());
+
+        // Test backoffMs
+        this.time.sleep(coordinator.backoffMs() - 20);
+        assertFalse(coordinator.ensureCoordinatorReady());
+        assertEquals(0, client.poll(0, this.time.milliseconds()).size());
+
+        // successful lookup
+        this.time.setCurrentTimeMs(time.milliseconds() + coordinator.backoffMs());
+        assertFalse(coordinator.ensureCoordinatorReady());
+        ClientResponse respSuccess = client.poll(0, this.time.milliseconds()).get(0);
+        assertTrue(respSuccess.responseBody() instanceof FindCoordinatorResponse);
+        coordinator.onResponse((FindCoordinatorResponse) respSuccess.responseBody());
         assertTrue(coordinator.ensureCoordinatorReady());
     }
     

@@ -23,7 +23,11 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -32,6 +36,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.Collections;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
@@ -40,6 +45,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,6 +57,7 @@ public class DefaultEventHandlerTest {
     private Optional<String> groupInstanceId = Optional.of("g-1");
     private long retryBackoffMs = 1000;
     private final Properties properties = new Properties();
+    private GroupRebalanceConfig rebalanceConfig;
 
     @BeforeEach
     public void setup() {
@@ -58,7 +65,7 @@ public class DefaultEventHandlerTest {
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(RETRY_BACKOFF_MS_CONFIG, "100");
 
-        new GroupRebalanceConfig(sessionTimeoutMs,
+        this.rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
                 rebalanceTimeoutMs,
                 heartbeatIntervalMs,
                 groupId,
@@ -75,12 +82,14 @@ public class DefaultEventHandlerTest {
         final SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         final ConsumerMetadata metadata = newConsumerMetadata(false, subscriptions);
         final MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
+        Node node = metadata.fetch().nodes().get(0);
         final BlockingQueue<ApplicationEvent> aq = new LinkedBlockingQueue<>();
         final BlockingQueue<BackgroundEvent> bq = new LinkedBlockingQueue<>();
         final DefaultEventHandler handler = new DefaultEventHandler(
                 time,
-                new ConsumerConfig(properties),
-                null,
+                new ConsumerConfig(this.properties),
+                this.rebalanceConfig,
                 logContext,
                 aq,
                 bq,
@@ -97,10 +106,10 @@ public class DefaultEventHandlerTest {
         while (handler.isEmpty()) {
             time.sleep(100);
         }
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
         final Optional<BackgroundEvent> poll = handler.poll();
         assertTrue(poll.isPresent());
-        assertTrue(poll.get() instanceof NoopBackgroundEvent);
-
+        assertEquals(BackgroundEvent.EventType.NOOP, poll.get().type);
         assertFalse(client.hasInFlightRequests()); // noop does not send network request
     }
 
