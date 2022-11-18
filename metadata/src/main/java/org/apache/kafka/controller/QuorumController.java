@@ -1165,6 +1165,18 @@ public final class QuorumController implements Controller {
         public void abortMigration() {
 
         }
+
+        @Override
+        public CompletableFuture<BrokerRegistrationReply> registerZkBroker(BrokerRegistrationRequestData brokerRegistration) {
+            // TODO this is temporary!! Eventually the ZK brokers will register through a regular RPC
+            ControllerWriteEvent<BrokerRegistrationReply> batchEvent = new ControllerWriteEvent<>("registerZkBroker", () -> {
+                log.info("Registering ZK broker {}", brokerRegistration.brokerId());
+                return clusterControl.registerBroker(brokerRegistration, writeOffset + 1, featureControl.
+                    finalizedFeatures(Long.MAX_VALUE));
+            });
+            queue.append(batchEvent);
+            return batchEvent.future();
+        }
     }
 
     private void maybeCompleteAuthorizerInitialLoad() {

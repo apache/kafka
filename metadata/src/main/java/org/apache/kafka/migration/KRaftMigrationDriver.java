@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.migration;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.protocol.ApiMessage;
@@ -23,6 +25,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.OffsetAndEpoch;
@@ -261,8 +264,31 @@ public class KRaftMigrationDriver {
             added.forEach(brokerId -> {
                 Optional<ZkBrokerRegistration> broker = client.readBrokerRegistration(brokerId);
                 if (broker.isPresent()) {
-                    client.addZkBroker(brokerId);
                     zkBrokerRegistrations.put(brokerId, broker.get());
+
+                    // Inform the migration client of this broker for sending RPCs
+                    client.addZkBroker(brokerId);
+
+                    // Register this broker with the KRaft controller.
+                    // TODO this is temporary until ZK brokers can send the registration RPC!!
+                    BrokerRegistration registration = broker.get().brokerRegistration();
+                    BrokerRegistrationRequestData.ListenerCollection listeners = new BrokerRegistrationRequestData.ListenerCollection();
+                    registration.listeners().forEach((name, endpoint) ->
+                        listeners.add(new BrokerRegistrationRequestData.Listener()
+                            .setName(name)
+                            .setHost(endpoint.host())
+                            .setPort(endpoint.port())
+                            .setSecurityProtocol(endpoint.securityProtocol().id))
+                    );
+                    BrokerRegistrationRequestData brokerRegistrationData = new BrokerRegistrationRequestData()
+                        .setBrokerId(registration.id())
+                        .setClusterId(broker.get().clusterId().map(Uuid::toString).orElse(null))
+                        .setIncarnationId(registration.incarnationId())
+                        .setRack(registration.rack().orElse(null))
+                        .setFeatures(new BrokerRegistrationRequestData.FeatureCollection())
+                        .setInterBrokerProtocolVersion(broker.get().ibp().orElse(null))
+                        .setListeners(listeners);
+                    consumer.registerZkBroker(brokerRegistrationData);
                 } else {
                     throw new IllegalStateException("Saw broker " + brokerId + " added, but registration data is missing");
                 }

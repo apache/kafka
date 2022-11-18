@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.migration;
 
+import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
@@ -30,4 +32,5 @@ public interface ZkMetadataConsumer {
     CompletableFuture<?> acceptBatch(List<ApiMessageAndVersion> recordBatch);
     OffsetAndEpoch completeMigration();
     void abortMigration();
+    CompletableFuture<BrokerRegistrationReply> registerZkBroker(BrokerRegistrationRequestData brokerRegistration);
 }

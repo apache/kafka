@@ -1,7 +1,7 @@
 package kafka.migration
 
 import kafka.api.LeaderAndIsr
-import kafka.cluster.{Broker, EndPoint}
+import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.migration.ZkMigrationClient.brokerToBrokerRegistration
 import kafka.server.{ConfigEntityName, ConfigType, ZkAdminManager}
@@ -25,7 +25,7 @@ import java.util.function.Consumer
 import java.util.{Collections, Optional}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters._
+
 
 object ZkMigrationClient {
   def brokerToBrokerRegistration(broker: Broker, epoch: Long): ZkBrokerRegistration = {
