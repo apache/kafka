@@ -39,15 +39,13 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
+import java.time.Duration;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
@@ -62,11 +60,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.*;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class KafkaOffsetBackingStoreTest {
@@ -198,6 +192,50 @@ public class KafkaOffsetBackingStoreTest {
         store.stop();
 
         verify(storeLog).stop();
+    }
+
+    @Test
+    public void testKeepAddingCallbacksEvenWhenWorkerThreadIsDead() throws InterruptedException {
+
+        AtomicInteger invocationCount = new AtomicInteger();
+        Callback<Void> callback = (error, result) -> invocationCount.getAndIncrement();
+
+        store.configure(mockConfig(props));
+        store.start();
+
+        verify(storeLog).start();
+        doCallRealMethod().when(storeLog).startWorkThread();
+
+        storeLog.readLogEndOffsetCallbacks = new ArrayDeque<>();
+        // Add a callback to the queue so that the RuntimeException is thrown
+        storeLog.readLogEndOffsetCallbacks.add(callback);
+        // call explicitly
+        storeLog.startWorkThread();
+
+        // This should fail the WorkThread after it has been started
+        doThrow(new RuntimeException("Dummy error"))
+                .when(storeLog).readToLogEnd(false);
+
+        // Trying to add callbacks should still succeed
+        storeLog.readLogEndOffsetCallbacks.add(callback);
+        storeLog.readLogEndOffsetCallbacks.add(callback);
+        // callback queue should have 3 callbacks
+        assertEquals(3, storeLog.readLogEndOffsetCallbacks.size());
+
+        Thread.sleep(Duration.ofSeconds(10).toMillis());
+
+        // The callback sizes remain unchanged
+        assertEquals(3, storeLog.readLogEndOffsetCallbacks.size());
+        // WorkThread is in terminated state
+        assertEquals(Thread.State.TERMINATED, storeLog.thread.getState());
+
+        // We should still be able to add more callbacks.
+        storeLog.readLogEndOffsetCallbacks.add(callback);
+        storeLog.readLogEndOffsetCallbacks.add(callback);
+
+        // size increases further
+        assertEquals(5, storeLog.readLogEndOffsetCallbacks.size());
+
     }
 
     @Test

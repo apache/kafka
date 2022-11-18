@@ -98,9 +98,9 @@ public class KafkaBasedLog<K, V> {
     private Optional<Producer<K, V>> producer;
     private TopicAdmin admin;
 
-    private Thread thread;
+    public Thread thread;
     private boolean stopRequested;
-    private final Queue<Callback<Void>> readLogEndOffsetCallbacks;
+    public Queue<Callback<Void>> readLogEndOffsetCallbacks;
     private final java.util.function.Consumer<TopicAdmin> initializer;
 
     /**
@@ -267,12 +267,16 @@ public class KafkaBasedLog<K, V> {
 
         readToLogEnd(true);
 
-        thread = new WorkThread();
-        thread.start();
+        startWorkThread();
 
         log.info("Finished reading KafkaBasedLog for topic " + topic);
 
         log.info("Started KafkaBasedLog for topic " + topic);
+    }
+
+    public void startWorkThread() {
+        thread = new WorkThread();
+        thread.start();
     }
 
     public void stop() {
@@ -394,7 +398,7 @@ public class KafkaBasedLog<K, V> {
      * @param shouldRetry Boolean flag to enable retry for the admin client {@code listOffsets()} call.
      * @see TopicAdmin#retryEndOffsets
      */
-    private void readToLogEnd(boolean shouldRetry) {
+    public void readToLogEnd(boolean shouldRetry) {
         Set<TopicPartition> assignment = consumer.assignment();
         Map<TopicPartition, Long> endOffsets = readEndOffsets(assignment, shouldRetry);
         log.trace("Reading to end of log offsets {}", endOffsets);
@@ -469,7 +473,7 @@ public class KafkaBasedLog<K, V> {
         return consumer.endOffsets(assignment);
     }
 
-    private class WorkThread extends Thread {
+    public class WorkThread extends Thread {
         public WorkThread() {
             super("KafkaBasedLog Work Thread - " + topic);
         }
@@ -477,7 +481,7 @@ public class KafkaBasedLog<K, V> {
         @Override
         public void run() {
             try {
-                log.trace("{} started execution", this);
+                log.info("{} started execution", this);
                 while (true) {
                     int numCallbacks;
                     synchronized (KafkaBasedLog.this) {
@@ -524,6 +528,7 @@ public class KafkaBasedLog<K, V> {
             } catch (Throwable t) {
                 log.error("Unexpected exception in {}", this, t);
             }
+            log.info("Worker thread execution is done");
         }
     }
 }
