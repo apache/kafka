@@ -298,7 +298,6 @@ public class StreamThread extends Thread {
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
     private final Optional<String> getGroupInstanceID;
-    private final String threadIdSuffix; // shortened version of the threadId: {processUUID}-StreamThread-{threadIdx}
 
     private final ChangelogReader changelogReader;
     private final ConsumerRebalanceListener rebalanceListener;
@@ -434,7 +433,6 @@ public class StreamThread extends Thread {
             streamsMetrics,
             topologyMetadata,
             threadId,
-            threadIdSuffix,
             logContext,
             referenceContainer.assignmentErrorCode,
             referenceContainer.nextScheduledRebalanceMs,
@@ -475,7 +473,6 @@ public class StreamThread extends Thread {
                         final StreamsMetricsImpl streamsMetrics,
                         final TopologyMetadata topologyMetadata,
                         final String threadId,
-                        final String threadIdSuffix,
                         final LogContext logContext,
                         final AtomicInteger assignmentErrorCode,
                         final AtomicLong nextProbingRebalanceMs,
@@ -541,7 +538,6 @@ public class StreamThread extends Thread {
         this.nextProbingRebalanceMs = nextProbingRebalanceMs;
         this.nonFatalExceptionsToHandle = nonFatalExceptionsToHandle;
         this.getGroupInstanceID = mainConsumer.groupMetadata().groupInstanceId();
-        this.threadIdSuffix = threadIdSuffix;
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final int dummyThreadIdx = 1;
@@ -620,7 +616,7 @@ public class StreamThread extends Thread {
                 // Check for a scheduled rebalance but don't trigger it until the current rebalance is done
                 if (!taskManager.rebalanceInProgress() && nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("Triggering the followup rebalance scheduled for {}.", Utils.toLogDateTimeFormat(nextProbingRebalanceMs.get()));
-                    mainConsumer.enforceRebalance(threadIdSuffix + " requested followup rebalance by " + nextProbingRebalanceMs.get());
+                    mainConsumer.enforceRebalance("triggered followup rebalance scheduled for " + nextProbingRebalanceMs.get());
                     nextProbingRebalanceMs.set(Long.MAX_VALUE);
                 }
             } catch (final TaskCorruptedException e) {
