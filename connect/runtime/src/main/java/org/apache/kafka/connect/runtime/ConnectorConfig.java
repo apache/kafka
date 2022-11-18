@@ -37,6 +37,7 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -270,10 +271,10 @@ public class ConnectorConfig extends AbstractConfig {
     /**
      * Returns the initialized list of {@link Transformation} which are specified in {@link #TRANSFORMS_CONFIG}.
      */
-    public <R extends ConnectRecord<R>> List<Transformation<R>> transformations() {
+    public <R extends ConnectRecord<R>> LinkedHashMap<String, Transformation<R>> transformations() {
         final List<String> transformAliases = getList(TRANSFORMS_CONFIG);
 
-        final List<Transformation<R>> transformations = new ArrayList<>(transformAliases.size());
+        final LinkedHashMap<String, Transformation<R>> transformations = new LinkedHashMap<>(transformAliases.size());
         for (String alias : transformAliases) {
             final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
 
@@ -289,9 +290,9 @@ public class ConnectorConfig extends AbstractConfig {
                     @SuppressWarnings("unchecked")
                     Predicate<R> predicate = Utils.newInstance(getClass(predicatePrefix + "type"), Predicate.class);
                     predicate.configure(originalsWithPrefix(predicatePrefix));
-                    transformations.add(new PredicatedTransformation<>(predicate, negate == null ? false : Boolean.parseBoolean(negate.toString()), transformation));
+                    transformations.put(alias, new PredicatedTransformation<>(predicate, negate != null && Boolean.parseBoolean(negate.toString()), transformation));
                 } else {
-                    transformations.add(transformation);
+                    transformations.put(alias, transformation);
                 }
             } catch (Exception e) {
                 throw new ConnectException(e);
@@ -300,6 +301,7 @@ public class ConnectorConfig extends AbstractConfig {
 
         return transformations;
     }
+
 
     /**
      * Returns an enriched {@link ConfigDef} building upon the {@code ConfigDef}, using the current configuration specified in {@code props} as an input.

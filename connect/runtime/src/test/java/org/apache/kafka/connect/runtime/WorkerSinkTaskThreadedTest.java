@@ -142,7 +142,7 @@ public class WorkerSinkTaskThreadedTest {
         workerTask = new WorkerSinkTask(
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverter,
                 valueConverter, headerConverter,
-                new TransformationChain<>(Collections.emptyList(), RetryWithToleranceOperatorTest.NOOP_OPERATOR),
+                new TransformationChain<>(Collections.emptyMap(), RetryWithToleranceOperatorTest.NOOP_OPERATOR),
                 consumer, pluginLoader, time, RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore);
 
         recordsReturned = 0;

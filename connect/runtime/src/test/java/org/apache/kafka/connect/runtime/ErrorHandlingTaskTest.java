@@ -89,6 +89,7 @@ import java.util.concurrent.Executor;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
@@ -571,7 +572,7 @@ public class ErrorHandlingTaskTest {
         oo.put("schemas.enable", "false");
         converter.configure(oo);
 
-        TransformationChain<SinkRecord> sinkTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SinkRecord>()), retryWithToleranceOperator);
+        TransformationChain<SinkRecord> sinkTransforms = new TransformationChain<>(singletonMap("test", new FaultyPassthrough<SinkRecord>()), retryWithToleranceOperator);
 
         workerSinkTask = new WorkerSinkTask(
             taskId, sinkTask, statusListener, initialState, workerConfig,
@@ -600,7 +601,7 @@ public class ErrorHandlingTaskTest {
     }
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator, Converter converter) {
-        TransformationChain<SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SourceRecord>()), retryWithToleranceOperator);
+        TransformationChain<SourceRecord> sourceTransforms = new TransformationChain<>(singletonMap("test", new FaultyPassthrough<SourceRecord>()), retryWithToleranceOperator);
 
         workerSourceTask = PowerMock.createPartialMock(
             WorkerSourceTask.class, new String[]{"commitOffsets", "isStopping"},

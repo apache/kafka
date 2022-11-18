@@ -32,7 +32,6 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -516,9 +515,9 @@ public class TopicCreationTest {
         topicCreation.addTopic(FOO_TOPIC);
         assertFalse(topicCreation.isTopicCreationRequired(FOO_TOPIC));
 
-        List<Transformation<SourceRecord>> transformations = sourceConfig.transformations();
+        Map<String, Transformation<SourceRecord>> transformations = sourceConfig.transformations();
         assertEquals(1, transformations.size());
-        Cast<SourceRecord> xform = (Cast<SourceRecord>) transformations.get(0);
+        Cast<SourceRecord> xform = (Cast<SourceRecord>) transformations.get("xformName");
         SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, null, Schema.INT8_SCHEMA, 42));
         assertEquals(Schema.Type.INT8, transformed.valueSchema().type());
         assertEquals((byte) 42, transformed.value());
@@ -623,15 +622,15 @@ public class TopicCreationTest {
         assertEquals(barPartitions, barTopicSpec.numPartitions());
         assertThat(barTopicSpec.configs(), is(barTopicProps));
 
-        List<Transformation<SourceRecord>> transformations = sourceConfig.transformations();
+        Map<String, Transformation<SourceRecord>> transformations = sourceConfig.transformations();
         assertEquals(2, transformations.size());
 
-        Cast<SourceRecord> castXForm = (Cast<SourceRecord>) transformations.get(0);
+        Cast<SourceRecord> castXForm = (Cast<SourceRecord>) transformations.get(castName);
         SourceRecord transformed = castXForm.apply(new SourceRecord(null, null, "topic", 0, null, null, Schema.INT8_SCHEMA, 42));
         assertEquals(Schema.Type.INT8, transformed.valueSchema().type());
         assertEquals((byte) 42, transformed.value());
 
-        RegexRouter<SourceRecord> regexRouterXForm = (RegexRouter<SourceRecord>) transformations.get(1);
+        RegexRouter<SourceRecord> regexRouterXForm = (RegexRouter<SourceRecord>) transformations.get(regexRouterName);
         transformed = regexRouterXForm.apply(new SourceRecord(null, null, "topic", 0, null, null, Schema.INT8_SCHEMA, 42));
         assertEquals("prefix-topic", transformed.topic());
     }

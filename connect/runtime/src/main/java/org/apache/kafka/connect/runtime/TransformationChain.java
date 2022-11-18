@@ -23,17 +23,18 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.StringJoiner;
 
 public class TransformationChain<R extends ConnectRecord<R>> implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(TransformationChain.class);
 
-    private final List<Transformation<R>> transformations;
+    private final LinkedHashMap<String, Transformation<R>> transformations;
     private final RetryWithToleranceOperator retryWithToleranceOperator;
 
-    public TransformationChain(List<Transformation<R>> transformations, RetryWithToleranceOperator retryWithToleranceOperator) {
+    public TransformationChain(LinkedHashMap<String, Transformation<R>> transformations, RetryWithToleranceOperator retryWithToleranceOperator) {
         this.transformations = transformations;
         this.retryWithToleranceOperator = retryWithToleranceOperator;
     }
@@ -41,13 +42,12 @@ public class TransformationChain<R extends ConnectRecord<R>> implements AutoClos
     public R apply(R record) {
         if (transformations.isEmpty()) return record;
 
-        for (final Transformation<R> transformation : transformations) {
+        for (final Map.Entry<String, Transformation<R>> transformation : transformations.entrySet()) {
             final R current = record;
 
-            log.trace("Applying transformation {} to {}",
-                transformation.getClass().getName(), record);
+            log.trace("Applying transformation {} => {} to {}", transformation.getKey(), transformation.getValue().getClass().getName(), record);
             // execute the operation
-            record = retryWithToleranceOperator.execute(() -> transformation.apply(current), Stage.TRANSFORMATION, transformation.getClass());
+            record = retryWithToleranceOperator.execute(() -> transformation.getValue().apply(current), Stage.TRANSFORMATION, transformation.getClass());
 
             if (record == null) break;
         }
@@ -57,7 +57,7 @@ public class TransformationChain<R extends ConnectRecord<R>> implements AutoClos
 
     @Override
     public void close() {
-        for (Transformation<R> transformation : transformations) {
+        for (Transformation<R> transformation : transformations.values()) {
             transformation.close();
         }
     }
@@ -77,8 +77,8 @@ public class TransformationChain<R extends ConnectRecord<R>> implements AutoClos
 
     public String toString() {
         StringJoiner chain = new StringJoiner(", ", getClass().getName() + "{", "}");
-        for (Transformation<R> transformation : transformations) {
-            chain.add(transformation.getClass().getName());
+        for (Map.Entry<String, Transformation<R>> transformation : transformations.entrySet()) {
+            chain.add(transformation.getKey() + "=>" + transformation.getValue().getClass().getName());
         }
         return chain.toString();
     }
