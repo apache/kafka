@@ -406,7 +406,7 @@ subprojects {
       // connect tests
       "**/ConnectorPluginsResourceTest.*",
       "**/DistributedHerderTest.*", "**/FileOffsetBakingStoreTest.*",
-      "**/ErrorHandlingTaskTest.*", "**/KafkaConfigBackingStoreTest.*", "**/KafkaOffsetBackingStoreTest.*",
+      "**/ErrorHandlingTaskTest.*", "**/KafkaConfigBackingStoreTest.*",
       "**/KafkaBasedLogTest.*", "**/OffsetStorageWriterTest.*", "**/StandaloneHerderTest.*",
       "**/SourceTaskOffsetCommitterTest.*",
       "**/WorkerSinkTaskTest.*", "**/WorkerSinkTaskThreadedTest.*",
@@ -2627,6 +2627,7 @@ project(':connect:runtime') {
     testImplementation libs.httpclient
 
     testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.bcpkix
   }
 
   javadoc {

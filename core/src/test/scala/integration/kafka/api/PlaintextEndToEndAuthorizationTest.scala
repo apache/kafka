@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.clients.admin.AdminClientConfig
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.apache.kafka.common.errors.TopicAuthorizationException
@@ -74,6 +75,15 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(List.empty, None, ZkSasl))
     super.setUp(testInfo)
+  }
+
+  /*
+   * The principal used for all authenticated connections to listenerName is always clientPrincipal.
+   * The super user runs as kafkaPrincipal so we set the superuser admin client to connect directly to
+   * the interBrokerListenerName for superuser operations.
+   */ 
+  override def doSuperuserSetup(testInfo: TestInfo): Unit = {
+    superuserClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(interBrokerListenerName))
   }
 
   @Test

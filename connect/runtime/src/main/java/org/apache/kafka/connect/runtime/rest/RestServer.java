@@ -85,6 +85,8 @@ public class RestServer {
     private static final String PROTOCOL_HTTPS = "https";
 
     private final WorkerConfig config;
+
+    private final RestClient restClient;
     private final ContextHandlerCollection handlers;
     private final Server jettyServer;
 
@@ -94,8 +96,9 @@ public class RestServer {
     /**
      * Create a REST server for this herder using the specified configs.
      */
-    public RestServer(WorkerConfig config) {
+    public RestServer(WorkerConfig config, RestClient restClient) {
         this.config = config;
+        this.restClient = restClient;
 
         List<String> listeners = config.getList(WorkerConfig.LISTENERS_CONFIG);
         List<String> adminListeners = config.getList(WorkerConfig.ADMIN_LISTENERS_CONFIG);
@@ -218,7 +221,7 @@ public class RestServer {
 
         this.resources = new ArrayList<>();
         resources.add(new RootResource(herder));
-        resources.add(new ConnectorsResource(herder, config));
+        resources.add(new ConnectorsResource(herder, config, restClient));
         resources.add(new ConnectorPluginsResource(herder));
         resources.forEach(resourceConfig::register);
 
@@ -354,6 +357,8 @@ public class RestServer {
             builder.port(advertisedPort);
         else if (serverConnector != null && serverConnector.getPort() > 0)
             builder.port(serverConnector.getPort());
+        else if (serverConnector != null && serverConnector.getLocalPort() > 0)
+            builder.port(serverConnector.getLocalPort());
 
         log.info("Advertised URI: {}", builder.build());
 

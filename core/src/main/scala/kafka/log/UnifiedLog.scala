@@ -373,8 +373,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Update the high watermark to a new offset. The new high watermark will be lower
    * bounded by the log start offset and upper bounded by the log end offset.
    *
-   * This is intended to be called when initializing the high watermark or when updating
-   * it on a follower after receiving a Fetch response from the leader.
+   * This is intended to be called by the leader when initializing the high watermark.
    *
    * @param hw the suggested new value for the high watermark
    * @return the updated high watermark offset
@@ -429,6 +428,27 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         Some(oldHighWatermark)
       } else {
         None
+      }
+    }
+  }
+
+  /**
+   * Update high watermark with a new value. The new high watermark will be lower
+   * bounded by the log start offset and upper bounded by the log end offset.
+   *
+   * This method is intended to be used by the follower to update its high watermark after
+   * replication from the leader.
+   *
+   * @return the new high watermark if the high watermark changed, None otherwise.
+   */
+  def maybeUpdateHighWatermark(hw: Long): Option[Long] = {
+    lock.synchronized {
+      val oldHighWatermark = highWatermarkMetadata
+      updateHighWatermark(LogOffsetMetadata(hw)) match {
+        case oldHighWatermark.messageOffset =>
+          None
+        case newHighWatermark =>
+          Some(newHighWatermark)
       }
     }
   }
