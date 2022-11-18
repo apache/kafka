@@ -59,6 +59,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final ConsumerConfig config;
     private final CoordinatorManager coordinator;
     private final ApplicationEventProcessor applicationEventProcessor;
+    private final NetworkClientUtils networkClientUtils;
 
     private boolean running;
     private Optional<ApplicationEvent> inflightEvent;
@@ -84,6 +85,7 @@ public class DefaultBackgroundThread extends KafkaThread {
             // subscriptionState is initialized by the polling thread
             this.metadata = metadata;
             this.networkClient = networkClient;
+            this.networkClientUtils = new NetworkClientUtils(this.time, networkClient);
             this.running = true;
             this.coordinator = new CoordinatorManager(time,
                     logContext,
@@ -149,15 +151,14 @@ public class DefaultBackgroundThread extends KafkaThread {
         // if there are pending events to process, poll then continue without
         // blocking.
         if (!applicationEventQueue.isEmpty() || inflightEvent.isPresent()) {
-            handleNetworkResponses(networkClient.poll(0, time.milliseconds()));
+            handleNetworkResponses(networkClientUtils.poll());
             return;
         }
         // if there are no events to process, poll until timeout. The timeout
         // will be the minimum of the requestTimeoutMs, nextHeartBeatMs, and
         // nextMetadataUpdate. See NetworkClient.poll impl.
-        handleNetworkResponses(networkClient.poll(
-                timeToNextHeartbeatMs(time.milliseconds()),
-                time.milliseconds()));
+        handleNetworkResponses(networkClientUtils.poll(
+                time.timer(timeToNextHeartbeatMs()), false));
     }
 
     private boolean maybeFindCoordinator() {
@@ -177,7 +178,7 @@ public class DefaultBackgroundThread extends KafkaThread {
         }
     }
 
-    private long timeToNextHeartbeatMs(final long nowMs) {
+    private long timeToNextHeartbeatMs() {
         // TODO: implemented when heartbeat is added to the impl
         return 100;
     }
@@ -217,13 +218,13 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     public void wakeup() {
-        networkClient.wakeup();
+        networkClientUtils.wakeup();
     }
 
     public void close() {
         this.running = false;
         this.wakeup();
-        Utils.closeQuietly(networkClient, "consumer network client");
+        Utils.closeQuietly(networkClient, "network client");
         Utils.closeQuietly(metadata, "consumer metadata client");
     }
 }

@@ -84,34 +84,31 @@ public class DefaultBackgroundThreadTest {
 
     @Test
     public void testStartupAndTearDown() throws InterruptedException {
-        final MockClient client = new MockClient(time, metadata);
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
         final DefaultBackgroundThread backgroundThread = setupMockHandler();
         backgroundThread.start();
-        assertTrue(client.active());
+        assertTrue(networkClient.active());
         backgroundThread.close();
-        assertFalse(client.active());
+        assertFalse(networkClient.active());
     }
 
     @Test
     public void testInterruption() throws InterruptedException {
-        final MockClient client = new MockClient(time, metadata);
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
         final DefaultBackgroundThread backgroundThread = setupMockHandler();
         backgroundThread.start();
-        assertTrue(client.active());
+        assertTrue(networkClient.active());
         backgroundThread.close();
-        assertFalse(client.active());
+        assertFalse(networkClient.active());
     }
 
     @Test
     void testWakeup() {
         this.time = new MockTime(0);
-        final MockClient client = new MockClient(time, metadata);
         when(applicationEventsQueue.isEmpty()).thenReturn(true);
         when(applicationEventsQueue.isEmpty()).thenReturn(true);
         final DefaultBackgroundThread runnable = setupMockHandler();
-        client.poll(0, time.milliseconds());
+        networkClient.poll(0, time.milliseconds());
         runnable.wakeup();
 
         assertThrows(WakeupException.class, runnable::runOnce);
@@ -123,6 +120,7 @@ public class DefaultBackgroundThreadTest {
         // ensure network poll and application queue poll will happen in a
         // single iteration
         this.time = new MockTime(100);
+        this.networkClient = mock(KafkaClient.class);
         final DefaultBackgroundThread runnable = setupMockHandler();
         runnable.runOnce();
 
