@@ -130,8 +130,12 @@ public class NetworkClientUtils {
      * Check if the code is disconnected and unavailable for immediate reconnection (i.e. if it is in
      * reconnect backoff window following the disconnect).
      */
-    public boolean isUnavailable(Node node) {
+    public boolean nodeUnavailable(Node node) {
         return client.connectionFailed(node) && client.connectionDelay(node, time.milliseconds()) > 0;
+    }
+
+    public void tryDisconnect(Optional<Node> coordinator) {
+        coordinator.ifPresent(node -> client.disconnect(node.idString()));
     }
 
     public static class UnsentRequest {
@@ -152,6 +156,5 @@ public class NetworkClientUtils {
             this.node = Optional.ofNullable(node);
             this.timer = timer;
         }
-
     }
 }

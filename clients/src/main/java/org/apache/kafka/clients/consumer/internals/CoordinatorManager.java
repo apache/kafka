@@ -59,7 +59,6 @@ public class CoordinatorManager {
                               final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                               final Optional<String> groupId,
                               final long rebalanceTimeoutMs) {
-        // TODO: We should decouple the KafkaClient from this class
         this.time = time;
         this.log = logContext.logger(this.getClass());
         this.backgroundEventQueue = backgroundEventQueue;
@@ -74,12 +73,19 @@ public class CoordinatorManager {
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
     }
 
+    /**
+     * Returns a non-empty UnsentRequest if the following conditions are met:
+     * 1. The request has not been sent
+     * 2. There is no inflight request
+     * 3. If the previous request failed, and the retryBackoff has expired
+     * @return Optional UnsentRequest.  Empty if we are not allowed to send a request.
+     */
     public Optional<NetworkClientUtils.UnsentRequest> tryFindCoordinator() {
         if (coordinatorRequestState.lastSentMs == -1) {
             // no request has been sent
             return Optional.of(
                     new NetworkClientUtils.UnsentRequest(
-                            this.time.timer(requestTimeoutMs), // TODO: What is the correct timer to use here
+                            this.time.timer(requestTimeoutMs),
                             getFindCoordinatorRequest()));
         }
 
@@ -100,36 +106,29 @@ public class CoordinatorManager {
                         getFindCoordinatorRequest()));
     }
 
-    protected void markCoordinatorUnknown(boolean isDisconnected, String cause) {
+    /**
+     * Mark the current coordinator null and return the old coordinator. Return an empty Optional
+     * if the current coordinator is unknown.
+     * @param cause
+     * @return Optional coordinator node that can be null.
+     */
+    protected Optional<Node> markCoordinatorUnknown(String cause) {
+        Node oldCoordinator = this.coordinator;
         if (this.coordinator != null) {
             log.info("Group coordinator {} is unavailable or invalid due to cause: {}. "
-                            + "isDisconnected: {}. Rediscovery will be attempted.", this.coordinator,
-                    cause, isDisconnected);
-            Node oldCoordinator = this.coordinator;
-
-            // Mark the coordinator dead before disconnecting requests since the callbacks for any pending
-            // requests may attempt to do likewise. This also prevents new requests from being sent to the
-            // coordinator while the disconnect is in progress.
+                            + "isDisconnected: {}. Rediscovery will be attempted.", this.coordinator, cause);
             this.coordinator = null;
-
-            /*
-            // Disconnect from the coordinator to ensure that there are no in-flight requests remaining.
-            // Pending callbacks will be invoked with a DisconnectException on the next call to poll.
-            if (!isDisconnected) {
-                log.info("Requesting disconnect from last known coordinator {}", oldCoordinator);
-                client.disconnectAsync(oldCoordinator);
-            }
-             */
-
             lastTimeOfConnectionMs = time.milliseconds();
         } else {
             long durationOfOngoingDisconnect = time.milliseconds() - lastTimeOfConnectionMs;
             if (durationOfOngoingDisconnect > this.rebalanceTimeoutMs)
                 log.warn("Consumer has been disconnected from the group coordinator for {}ms", durationOfOngoingDisconnect);
         }
+        return Optional.ofNullable(oldCoordinator);
     }
 
     private AbstractRequest.Builder getFindCoordinatorRequest() {
+        coordinatorRequestState.updateLastSend();
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
                 .setKey(this.groupId.orElse(null));
@@ -137,19 +136,13 @@ public class CoordinatorManager {
         return requestBuilder;
     }
 
-    protected long backoffMs() {
-        return exponentialBackoff.backoff(coordinatorRequestState.numAttempts);
-    }
-
-
     public void handleSuccessFindCoordinatorResponse(FindCoordinatorResponse resp) {
         List<FindCoordinatorResponseData.Coordinator> coordinators = resp.coordinators();
         if (coordinators.size() != 1) {
-            log.error("Group coordinator lookup failed: Invalid response containing more than a single coordinator");
-            enqueueErrorEvent(new IllegalStateException("Group coordinator lookup failed: Invalid response containing" +
-                    " more than " +
-                    "a" +
-                    " single coordinator"));
+            log.error(
+                    "Group coordinator lookup failed: Invalid response containing more than a single coordinator");
+            enqueueErrorEvent(new IllegalStateException(
+                    "Group coordinator lookup failed: Invalid response containing more than a single coordinator"));
         }
         FindCoordinatorResponseData.Coordinator coordinatorData = coordinators.get(0);
         Errors error = Errors.forCode(coordinatorData.errorCode());
@@ -195,7 +188,7 @@ public class CoordinatorManager {
      * @param response FindCoordinator response
      */
     public void onResponse(FindCoordinatorResponse response) {
-        coordinatorRequestState.lastReceivedMs = time.milliseconds();
+        coordinatorRequestState.updateLastReceived();
         if (response.hasError()) {
             handleFailedCoordinatorResponse(response);
             return;
@@ -212,9 +205,9 @@ public class CoordinatorManager {
     }
 
     private class CoordinatorRequestState {
-        long lastSentMs;
-        long lastReceivedMs;
-        int numAttempts;
+        private long lastSentMs;
+        private long lastReceivedMs;
+        private int numAttempts;
         public CoordinatorRequestState() {
             this.lastSentMs = -1;
             this.lastReceivedMs = -1;
@@ -227,15 +220,13 @@ public class CoordinatorManager {
         }
 
         public void updateLastSend() {
+            // Here we update the timer everytime we try to send a request. Also increment number of attempts.
+            this.numAttempts++;
             this.lastSentMs = time.milliseconds();
         }
 
         public void updateLastReceived() {
             this.lastReceivedMs = time.milliseconds();
-        }
-
-        public void incrAttempts() {
-            this.numAttempts++;
         }
 
         private boolean requestBackoffExpired() {

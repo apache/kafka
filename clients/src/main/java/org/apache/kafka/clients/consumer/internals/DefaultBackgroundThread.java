@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -167,21 +168,24 @@ public class DefaultBackgroundThread extends KafkaThread {
     }
 
     /**
-     * Get the coordinator if its connection is still active. Otherwise mark it unknown and
-     * return null.
+     * Get the coordinator if its connection is still active. Otherwise, mark it unknown and
+     * return an empty optional node.
      *
-     * @return the current coordinator or null if it is unknown
+     * @return coordinator node. Empty if it is unknown.
      */
-    protected synchronized Node checkAndGetCoordinator(Node coordinator) {
-        if (coordinator != null && networkClientUtils.isUnavailable(coordinator)) {
-            this.coordinatorManager.markCoordinatorUnknown(true, "coordinator unavailable");
-            return null;
+    protected Optional<Node> checkAndGetCoordinator(Node coordinator) {
+        // If the current coordinator is unavailable, mark it unknown and disconnect it
+        if (coordinator != null && networkClientUtils.nodeUnavailable(coordinator)) {
+            log.info("Requesting disconnect from last known coordinator {}", coordinator);
+            networkClientUtils.tryDisconnect(
+                    this.coordinatorManager.markCoordinatorUnknown("coordinator unavailable"));
+            return Optional.empty();
         }
-        return coordinator;
+        return Optional.ofNullable(coordinator);
     }
 
     public boolean coordinatorUnknown() {
-        return checkAndGetCoordinator(coordinatorManager.coordinator()) == null;
+        return !checkAndGetCoordinator(coordinatorManager.coordinator()).isPresent();
     }
 
     private boolean shouldFindCoordinator() {
