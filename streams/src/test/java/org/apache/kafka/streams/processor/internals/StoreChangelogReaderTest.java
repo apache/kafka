@@ -396,12 +396,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     public void shouldRestoreFromBeginningAndCheckCompletion() {
         final TaskId taskId = new TaskId(0, 0);
 
-        // adding another null return to handle debug log where offset is printed.
-        if (type == STANDBY) {
-            EasyMock.expect(storeMetadata.offset()).andReturn(null).andReturn(null).andReturn(9L).anyTimes();
-        } else {
-            EasyMock.expect(storeMetadata.offset()).andReturn(null).andReturn(9L).anyTimes();
-        }
+        EasyMock.expect(storeMetadata.offset()).andReturn(null).andReturn(9L).anyTimes();
         EasyMock.expect(stateManager.changelogOffsets()).andReturn(singletonMap(tp, 5L));
         EasyMock.expect(stateManager.taskId()).andReturn(taskId).anyTimes();
         EasyMock.replay(stateManager, storeMetadata, store);
