@@ -3543,6 +3543,72 @@ public class DistributedHerderTest {
         assertEquals(0, shutdownCalled.getCount());
     }
 
+    @Test
+    public void testPollDurationOnSlowConnectorOperations() {
+        connectProtocolVersion = CONNECT_PROTOCOL_V1;
+        // If an operation during tick() takes some amount of time, that time should count against the rebalance delay
+        int rebalanceDelayMs = 20000;
+        long operationDelayMs = 10000;
+        long maxPollWaitMs = rebalanceDelayMs - operationDelayMs;
+        EasyMock.expect(member.memberId()).andStubReturn("member");
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(connectProtocolVersion);
+
+        // Assign the connector to this worker, and have it start
+        expectRebalance(Collections.emptyList(), Collections.emptyList(), ConnectProtocol.Assignment.NO_ERROR, 1, Arrays.asList(CONN1), Collections.emptyList(), rebalanceDelayMs);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+        Capture<Callback<TargetState>> onFirstStart = newCapture();
+        worker.startConnector(EasyMock.eq(CONN1), EasyMock.anyObject(), EasyMock.anyObject(),
+                EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), capture(onFirstStart));
+        PowerMock.expectLastCall().andAnswer(() -> {
+            onFirstStart.getValue().onCompletion(null, TargetState.STARTED);
+            time.sleep(operationDelayMs);
+            return true;
+        });
+        expectQueueHerderOperation();
+        expectExecuteTaskReconfiguration(true, conn1SinkConfig, () -> TASK_CONFIGS);
+        // We should poll for less than the delay - time to start the connector, meaning that a long connector start
+        // does not delay the poll timeout
+        member.poll(leq(maxPollWaitMs));
+        PowerMock.expectLastCall();
+
+        // Rebalance again due to config update
+        expectQueueHerderOperation();
+        expectRebalance(Collections.emptyList(), Collections.emptyList(), ConnectProtocol.Assignment.NO_ERROR, 1, Arrays.asList(CONN1), Collections.emptyList(), rebalanceDelayMs);
+        EasyMock.expect(configBackingStore.snapshot()).andReturn(SNAPSHOT_UPDATED_CONN1_CONFIG);
+
+        worker.stopAndAwaitConnector(CONN1);
+        PowerMock.expectLastCall();
+        EasyMock.expect(member.currentProtocolVersion()).andStubReturn(connectProtocolVersion);
+        Capture<Callback<TargetState>> onSecondStart = newCapture();
+        worker.startConnector(EasyMock.eq(CONN1), EasyMock.anyObject(), EasyMock.anyObject(),
+                EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED), capture(onSecondStart));
+        PowerMock.expectLastCall().andAnswer(() -> {
+            onSecondStart.getValue().onCompletion(null, TargetState.STARTED);
+            time.sleep(operationDelayMs);
+            return true;
+        });
+        expectQueueHerderOperation();
+        member.poll(leq(maxPollWaitMs));
+        PowerMock.expectLastCall();
+
+        // Third tick should resolve all outstanding requests
+        expectRebalance(Collections.emptyList(), Collections.emptyList(), ConnectProtocol.Assignment.NO_ERROR, 1, Collections.singletonList(CONN1), Collections.emptyList(), rebalanceDelayMs);
+        // which includes querying the connector task configs after the update
+        expectExecuteTaskReconfiguration(true, conn1SinkConfigUpdated, () -> {
+            time.sleep(operationDelayMs);
+            return TASK_CONFIGS;
+        });
+        member.poll(leq(maxPollWaitMs));
+        PowerMock.expectLastCall();
+
+        PowerMock.replayAll();
+        herder.tick();
+        configUpdateListener.onConnectorConfigUpdate(CONN1); // read updated config
+        herder.tick();
+        herder.tick();
+        PowerMock.verifyAll();
+    }
+
     private void expectRebalance(final long offset,
                                  final List<String> assignedConnectors,
                                  final List<ConnectorTaskId> assignedTasks) {
