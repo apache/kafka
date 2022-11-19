@@ -165,7 +165,7 @@ public class TaskManager {
         return activeTaskCreator.threadProducer();
     }
 
-    boolean isRebalanceInProgress() {
+    boolean rebalanceInProgress() {
         return rebalanceInProgress;
     }
 

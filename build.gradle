@@ -2627,6 +2627,7 @@ project(':connect:runtime') {
     testImplementation libs.httpclient
 
     testRuntimeOnly libs.slf4jlog4j
+    testRuntimeOnly libs.bcpkix
   }
 
   javadoc {
