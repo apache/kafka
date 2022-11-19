@@ -586,10 +586,11 @@ public class StreamThread extends Thread {
                     cacheResizer.accept(size);
                 }
                 runOnce();
-                if (nextProbingRebalanceMs.get() < time.milliseconds()) {
+
+                // Check for a scheduled rebalance but don't trigger it until the current rebalance is done
+                if (!taskManager.isRebalanceInProgress() && nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("Triggering the followup rebalance scheduled for {} ms.", nextProbingRebalanceMs.get());
-                    mainConsumer.enforceRebalance("Scheduled probing rebalance");
-                    nextProbingRebalanceMs.set(Long.MAX_VALUE);
+                    mainConsumer.enforceRebalance("triggered followup rebalance scheduled for " + nextProbingRebalanceMs.get());
                 }
             } catch (final TaskCorruptedException e) {
                 log.warn("Detected the states of tasks " + e.corruptedTasks() + " are corrupted. " +
