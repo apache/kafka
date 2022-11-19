@@ -16,15 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -33,7 +30,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -41,9 +37,6 @@ import java.util.concurrent.LinkedBlockingDeque;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CoordinatorManagerTest {
     private MockTime time;
@@ -79,44 +72,11 @@ public class CoordinatorManagerTest {
     
     @Test
     public void testTestFindCoordinator() {
-        CoordinatorManager coordinator = setupCoordinatorManager();
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId.orElse(null), node));
-        assertFalse(coordinator.ensureCoordinatorReady());
-        ClientResponse resp = client.poll(0, this.time.milliseconds()).get(0);
-        assertTrue(resp.responseBody() instanceof FindCoordinatorResponse);
-        coordinator.onResponse((FindCoordinatorResponse) resp.responseBody());
-        assertTrue(coordinator.ensureCoordinatorReady());
+
     }
 
     @Test
     public void testTestFindCoordinatorError() {
-        long now = this.time.milliseconds();
-        long nowNs = this.time.nanoseconds();
-        this.time = new MockTime(0, now, nowNs);
-        CoordinatorManager coordinator = setupCoordinatorManager();
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, groupId.orElse(null), node));
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId.orElse(null), node));
-
-        assertFalse(coordinator.ensureCoordinatorReady());
-        List<ClientResponse> resps = client.poll(0, this.time.milliseconds());
-        assertEquals(1, resps.size());
-        ClientResponse resp = resps.get(0);
-        assertTrue(resp.responseBody() instanceof FindCoordinatorResponse);
-        coordinator.onResponse((FindCoordinatorResponse) resp.responseBody());
-        assertFalse(coordinator.ensureCoordinatorReady());
-
-        // Test backoffMs
-        this.time.sleep(coordinator.backoffMs() - 20);
-        assertFalse(coordinator.ensureCoordinatorReady());
-        assertEquals(0, client.poll(0, this.time.milliseconds()).size());
-
-        // successful lookup
-        this.time.setCurrentTimeMs(time.milliseconds() + coordinator.backoffMs());
-        assertFalse(coordinator.ensureCoordinatorReady());
-        ClientResponse respSuccess = client.poll(0, this.time.milliseconds()).get(0);
-        assertTrue(respSuccess.responseBody() instanceof FindCoordinatorResponse);
-        coordinator.onResponse((FindCoordinatorResponse) respSuccess.responseBody());
-        assertTrue(coordinator.ensureCoordinatorReady());
     }
     
     private CoordinatorManager setupCoordinatorManager() {
@@ -125,7 +85,6 @@ public class CoordinatorManagerTest {
                 this.logContext,
                 new ConsumerConfig(properties),
                 this.eventQueue,
-                this.client,
                 this.groupId,
                 this.rebalanceTimeoutMs);
     }

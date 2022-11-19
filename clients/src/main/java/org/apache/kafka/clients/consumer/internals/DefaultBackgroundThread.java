@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -57,7 +58,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final KafkaClient networkClient;
     private final ConsumerMetadata metadata;
     private final ConsumerConfig config;
-    private final CoordinatorManager coordinator;
+    private final CoordinatorManager coordinatorManager;
     private final ApplicationEventProcessor applicationEventProcessor;
     private final NetworkClientUtils networkClientUtils;
 
@@ -85,17 +86,18 @@ public class DefaultBackgroundThread extends KafkaThread {
             // subscriptionState is initialized by the polling thread
             this.metadata = metadata;
             this.networkClient = networkClient;
-            this.networkClientUtils = new NetworkClientUtils(this.time, networkClient);
+            this.networkClientUtils = new NetworkClientUtils(
+                    this.time,
+                    networkClient);
             this.running = true;
-            this.coordinator = new CoordinatorManager(time,
+            this.coordinatorManager = new CoordinatorManager(time,
                     logContext,
                     config,
                     backgroundEventQueue,
-                    networkClient,
                     Optional.ofNullable(rebalanceConfig.groupId),
                     rebalanceConfig.rebalanceTimeoutMs);
             this.applicationEventProcessor = new ApplicationEventProcessor(
-                    coordinator,
+                    coordinatorManager,
                     backgroundEventQueue);
         } catch (final Exception e) {
             close();
@@ -131,12 +133,13 @@ public class DefaultBackgroundThread extends KafkaThread {
     /**
      * Process event from a single poll. It performs the following tasks sequentially:
      *  1. Try to poll and event from the queue, and try to process it.
-     *  2. Poll coordinator and update the metadata if needed.
+     *  2. Try to find Coordinator if needed
      *  3. Try to send fetches.
-     *  4. Try to poll the networkClient for outstanding requests. If non: poll until next
+     *  4. Poll the networkClient for outstanding requests. If non: poll until next
      *  iteration.
      */
     void runOnce() {
+        // TODO: we might not need the inflightEvent here
         this.inflightEvent = maybePollEvent();
         if (this.inflightEvent.isPresent()) {
             log.debug("processing application event: {}", this.inflightEvent);
@@ -146,7 +149,9 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.inflightEvent = Optional.empty();
         }
 
-        maybeFindCoordinator();
+        if (shouldFindCoordinator() && coordinatorUnknown()) {
+            coordinatorManager.tryFindCoordinator().ifPresent(networkClientUtils::add);
+        }
 
         // if there are pending events to process, poll then continue without
         // blocking.
@@ -161,20 +166,39 @@ public class DefaultBackgroundThread extends KafkaThread {
                 time.timer(timeToNextHeartbeatMs()), false));
     }
 
-    private boolean maybeFindCoordinator() {
+    /**
+     * Get the coordinator if its connection is still active. Otherwise mark it unknown and
+     * return null.
+     *
+     * @return the current coordinator or null if it is unknown
+     */
+    protected synchronized Node checkAndGetCoordinator(Node coordinator) {
+        if (coordinator != null && networkClientUtils.isUnavailable(coordinator)) {
+            this.coordinatorManager.markCoordinatorUnknown(true, "coordinator unavailable");
+            return null;
+        }
+        return coordinator;
+    }
+
+    public boolean coordinatorUnknown() {
+        return checkAndGetCoordinator(coordinatorManager.coordinator()) == null;
+    }
+
+    private boolean shouldFindCoordinator() {
         // TODO: add conditions for coordinator discovery. Example: when there are pending commits, or we have
         //  rebalance in progress.
-        return coordinator.ensureCoordinatorReady();
+        return true;
     }
 
     private void handleNetworkResponses(List<ClientResponse> res) {
-        res.stream().forEach(this::handleNetworkResponse);
+        res.forEach(this::handleNetworkResponse);
     }
 
     private void handleNetworkResponse(ClientResponse res) {
+        //res.requestHeader().correlationId() // incremented very time we send the request
         if (res.responseBody() instanceof FindCoordinatorResponse) {
             FindCoordinatorResponse response = (FindCoordinatorResponse) res.responseBody();
-            coordinator.onResponse(response);
+            coordinatorManager.onResponse(response);
         }
     }
 

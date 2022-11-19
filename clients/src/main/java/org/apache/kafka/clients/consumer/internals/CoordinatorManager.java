@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
@@ -28,6 +26,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.ExponentialBackoff;
@@ -44,10 +43,9 @@ public class CoordinatorManager {
     final static double RECONNECT_BACKOFF_JITTER = 0.0;
     private final Logger log;
     private final Time time;
+    private final long requestTimeoutMs;
+    private Node coordinator;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
-    private final NetworkClientUtils networkClientUtil;
-    private Node coordinator = null;
-    protected final KafkaClient client;
     private ExponentialBackoff exponentialBackoff;
     private long lastTimeOfConnectionMs = -1L; // starting logging a warning only after unable to connect for a while
     private CoordinatorRequestState coordinatorRequestState;
@@ -59,12 +57,11 @@ public class CoordinatorManager {
                               final LogContext logContext,
                               final ConsumerConfig config,
                               final BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                              final KafkaClient client,
                               final Optional<String> groupId,
                               final long rebalanceTimeoutMs) {
+        // TODO: We should decouple the KafkaClient from this class
         this.time = time;
         this.log = logContext.logger(this.getClass());
-        this.client = client;
         this.backgroundEventQueue = backgroundEventQueue;
         this.exponentialBackoff = new ExponentialBackoff(
                 config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
@@ -74,80 +71,33 @@ public class CoordinatorManager {
         this.coordinatorRequestState = new CoordinatorRequestState();
         this.groupId = groupId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
-        this.networkClientUtil = new NetworkClientUtils(time, client);
+        this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
     }
 
-    public boolean coordinatorUnknown() {
-        return checkAndGetCoordinator() == null;
-    }
-
-    public boolean ensureCoordinatorReady() {
-        // coordinator found
-        if (!coordinatorUnknown()) {
-            coordinatorRequestState.reset();
-            return true;
-        }
-
+    public Optional<NetworkClientUtils.UnsentRequest> tryFindCoordinator() {
         if (coordinatorRequestState.lastSentMs == -1) {
             // no request has been sent
-            lookupCoordinator();
-            return false;
+            return Optional.of(
+                    new NetworkClientUtils.UnsentRequest(
+                            this.time.timer(requestTimeoutMs), // TODO: What is the correct timer to use here
+                            getFindCoordinatorRequest()));
         }
 
         if (coordinatorRequestState.lastReceivedMs == -1 ||
                 coordinatorRequestState.lastReceivedMs < coordinatorRequestState.lastSentMs) {
             // there is an inflight request
-            return false;
+            return Optional.empty();
         }
 
         if (!coordinatorRequestState.requestBackoffExpired()) {
             // retryBackoff
-            return false;
+            return Optional.empty();
         }
 
-        lookupCoordinator();
-
-        if (coordinator != null && isUnavailable(coordinator)) {
-            // we found the coordinator, but the connection has failed, so mark
-            // it dead and backoff before retrying discovery
-            markCoordinatorUnknown("coordinator unavailable");
-        }
-
-        return !coordinatorUnknown();
-    }
-
-    protected long backoffMs() {
-        return exponentialBackoff.backoff(coordinatorRequestState.numAttempts);
-    }
-
-    /**
-     * Get the coordinator if its connection is still active. Otherwise mark it unknown and
-     * return null.
-     *
-     * @return the current coordinator or null if it is unknown
-     */
-    protected Node checkAndGetCoordinator() {
-        if (coordinator != null && isUnavailable(coordinator)) {
-            markCoordinatorUnknown(true, "coordinator unavailable");
-            return null;
-        }
-        return this.coordinator;
-    }
-
-    /**
-     * Check if the code is disconnected and unavailable for immediate reconnection (i.e. if it is in
-     * reconnect backoff window following the disconnect).
-     */
-    public boolean isUnavailable(Node node) {
-        return client.connectionFailed(node) && client.connectionDelay(node, time.milliseconds()) > 0;
-    }
-
-    protected void markCoordinatorUnknown(Errors error) {
-        markCoordinatorUnknown(false, "error response " + error.name());
-    }
-
-    protected void markCoordinatorUnknown(String cause) {
-        markCoordinatorUnknown(false, cause);
+        return Optional.of(
+                new NetworkClientUtils.UnsentRequest(
+                        this.time.timer(requestTimeoutMs),
+                        getFindCoordinatorRequest()));
     }
 
     protected void markCoordinatorUnknown(boolean isDisconnected, String cause) {
@@ -162,12 +112,14 @@ public class CoordinatorManager {
             // coordinator while the disconnect is in progress.
             this.coordinator = null;
 
+            /*
             // Disconnect from the coordinator to ensure that there are no in-flight requests remaining.
             // Pending callbacks will be invoked with a DisconnectException on the next call to poll.
             if (!isDisconnected) {
                 log.info("Requesting disconnect from last known coordinator {}", oldCoordinator);
-                client.disconnect(oldCoordinator.idString());
+                client.disconnectAsync(oldCoordinator);
             }
+             */
 
             lastTimeOfConnectionMs = time.milliseconds();
         } else {
@@ -177,35 +129,18 @@ public class CoordinatorManager {
         }
     }
 
-    /**
-     * Send a FindCoordinatorRequest
-     */
-    private void sendFindCoordinatorRequest(Node node) {
-        log.debug("Sending FindCoordinator request to broker {}", node);
+    private AbstractRequest.Builder getFindCoordinatorRequest() {
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
                 .setKey(this.groupId.orElse(null));
         FindCoordinatorRequest.Builder requestBuilder = new FindCoordinatorRequest.Builder(data);
-        ClientRequest req = client.newClientRequest(
-                node.idString(),
-                requestBuilder,
-                time.milliseconds(),
-                true);
-        coordinatorRequestState.lastSentMs = time.milliseconds();
-        networkClientUtil.trySend(req, node);
+        return requestBuilder;
     }
 
-    private void lookupCoordinator() {
-        coordinatorRequestState.incrAttempts();
-        // find a node to ask about the coordinator
-        Node node = networkClientUtil.leastLoadedNode();
-        if (node == null) {
-            log.debug("No broker available to send FindCoordinator request");
-            enqueueErrorEvent(Errors.BROKER_NOT_AVAILABLE.exception());
-            return;
-        }
-        sendFindCoordinatorRequest(node);
+    protected long backoffMs() {
+        return exponentialBackoff.backoff(coordinatorRequestState.numAttempts);
     }
+
 
     public void handleSuccessFindCoordinatorResponse(FindCoordinatorResponse resp) {
         List<FindCoordinatorResponseData.Coordinator> coordinators = resp.coordinators();
@@ -228,8 +163,6 @@ public class CoordinatorManager {
                     coordinatorData.host(),
                     coordinatorData.port());
             log.info("Discovered group coordinator {}", coordinator);
-            // ensure coordinator is ready here
-            client.ready(coordinator, time.milliseconds());
             coordinatorRequestState.reset();
             return;
         }
@@ -272,6 +205,10 @@ public class CoordinatorManager {
 
     private void enqueueErrorEvent(Exception e) {
         backgroundEventQueue.add(new ErrorBackgroundEvent(e));
+    }
+
+    public Node coordinator() {
+        return coordinator;
     }
 
     private class CoordinatorRequestState {
