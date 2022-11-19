@@ -436,7 +436,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         //       Another example: if multiple configurations are submitted for the same connector,
         //       the only one that actually has to be written to the config topic is the
         //       most-recently one.
-        long nextRequestTimeoutMs = Long.MAX_VALUE;
+        long scheduledTick = Long.MAX_VALUE;
         while (true) {
             final DistributedHerderRequest next = peekWithoutException();
             if (next == null) {
@@ -444,7 +444,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             } else if (now >= next.at) {
                 requests.pollFirst();
             } else {
-                nextRequestTimeoutMs = next.at - now;
+                scheduledTick = Math.min(scheduledTick, next.at);
                 break;
             }
 
@@ -455,15 +455,15 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         processRestartRequests();
 
         if (scheduledRebalance < Long.MAX_VALUE) {
-            nextRequestTimeoutMs = Math.min(nextRequestTimeoutMs, Math.max(scheduledRebalance - now, 0));
+            scheduledTick = Math.min(scheduledTick, scheduledRebalance);
             rebalanceResolved = false;
-            log.debug("Scheduled rebalance at: {} (now: {} nextRequestTimeoutMs: {}) ",
-                    scheduledRebalance, now, nextRequestTimeoutMs);
+            log.debug("Scheduled rebalance at: {} (now: {} scheduledTick: {}) ",
+                    scheduledRebalance, now, scheduledTick);
         }
         if (isLeader() && internalRequestValidationEnabled() && keyExpiration < Long.MAX_VALUE) {
-            nextRequestTimeoutMs = Math.min(nextRequestTimeoutMs, Math.max(keyExpiration - now, 0));
-            log.debug("Scheduled next key rotation at: {} (now: {} nextRequestTimeoutMs: {}) ",
-                    keyExpiration, now, nextRequestTimeoutMs);
+            scheduledTick = Math.min(scheduledTick, keyExpiration);
+            log.debug("Scheduled next key rotation at: {} (now: {} scheduledTick: {}) ",
+                    keyExpiration, now, scheduledTick);
         }
 
         // Process any configuration updates
@@ -511,6 +511,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         // Let the group take any actions it needs to
         try {
+            long nextRequestTimeoutMs = Math.max(scheduledTick - time.milliseconds(), 0L);
             log.trace("Polling for group activity; will wait for {}ms or until poll is interrupted by "
                     + "either config backing store updates or a new external request",
                     nextRequestTimeoutMs);
