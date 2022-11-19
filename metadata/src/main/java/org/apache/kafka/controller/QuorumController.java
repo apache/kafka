@@ -169,7 +169,7 @@ public final class QuorumController implements Controller {
         private int defaultNumPartitions = 1;
         private ReplicaPlacer replicaPlacer = new StripedReplicaPlacer(new Random());
         private long snapshotMaxNewRecordBytes = Long.MAX_VALUE;
-        private long maxSnapshotIntervalMs = 0;
+        private long snapshotMaxIntervalMs = 0;
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private OptionalLong maxIdleIntervalNs = OptionalLong.empty();
         private long sessionTimeoutNs = ClusterControlManager.DEFAULT_SESSION_TIMEOUT_NS;
@@ -246,8 +246,8 @@ public final class QuorumController implements Controller {
             return this;
         }
 
-        public Builder setMaxSnapshotIntervalMs(long value) {
-            this.maxSnapshotIntervalMs = value;
+        public Builder setSnapshotMaxIntervalMs(long value) {
+            this.snapshotMaxIntervalMs = value;
             return this;
         }
 
@@ -346,7 +346,7 @@ public final class QuorumController implements Controller {
                     defaultNumPartitions,
                     replicaPlacer,
                     snapshotMaxNewRecordBytes,
-                    maxSnapshotIntervalMs,
+                    snapshotMaxIntervalMs,
                     leaderImbalanceCheckIntervalNs,
                     maxIdleIntervalNs,
                     sessionTimeoutNs,
@@ -1420,13 +1420,14 @@ public final class QuorumController implements Controller {
             long now = time.milliseconds();
             long delayMs = Math.min(
                 0,
-                maxSnapshotIntervalMs + oldestCommittedLogOnlyAppendTimestamp - now
+                snapshotMaxIntervalMs + oldestCommittedLogOnlyAppendTimestamp - now
             );
 
             log.debug(
-                "Scheduling write event for {} because maxSnapshotIntervalMs ({}), " +
+                "Scheduling write event for {} because snapshotMaxIntervalMs ({}), " +
                 "oldestCommittedLogOnlyAppendTimestamp ({}) and now ({})",
-                maxSnapshotIntervalMs,
+                MAYBE_GENERATE_SNAPSHOT,
+                snapshotMaxIntervalMs,
                 oldestCommittedLogOnlyAppendTimestamp,
                 now
             );
@@ -1533,11 +1534,11 @@ public final class QuorumController implements Controller {
             }
 
             // Check if a snapshot should be generated because of committed append times
-            if (maxSnapshotIntervalMs > 0) {
+            if (snapshotMaxIntervalMs > 0) {
                 // Time base snasphots are enabled
                 long snapshotIntervalMs = time.milliseconds() - oldestCommittedLogOnlyAppendTimestamp;
-                if (snapshotIntervalMs >= maxSnapshotIntervalMs) {
-                    snapshotReasons.add(SnapshotReason.maxIntervalExceeded(snapshotIntervalMs, maxSnapshotIntervalMs));
+                if (snapshotIntervalMs >= snapshotMaxIntervalMs) {
+                    snapshotReasons.add(SnapshotReason.maxIntervalExceeded(snapshotIntervalMs, snapshotMaxIntervalMs));
                 } else {
                     maybeScheduleNextGenerateSnapshot();
                 }
@@ -1545,9 +1546,9 @@ public final class QuorumController implements Controller {
 
             if (!snapshotReasons.isEmpty()) {
                 if (!isActiveController()) {
-                    // The active controller creates in-memory snapshot every time an uncommitted
-                    // batch gets appended. The inactive controller can be more efficient and only
-                    // create an in-memory snapshot when needed.
+                    // The inactive controllers only create an in-memory snapshot when generating a snapshot. This is
+                    // unlike the active controller which creates in-memory snapshots every time an uncommitted batch
+                    // gets replayed.
                     snapshotRegistry.getOrCreateSnapshot(lastCommittedOffset);
                 }
 
@@ -1761,7 +1762,7 @@ public final class QuorumController implements Controller {
     /**
      * Maximum amount of to wait for a record in the log to get included in a snapshot.
      */
-    private final long maxSnapshotIntervalMs;
+    private final long snapshotMaxIntervalMs;
 
     /**
      * Timestamp for the oldest record that was committed but not included in a snapshot.
@@ -1826,7 +1827,7 @@ public final class QuorumController implements Controller {
         int defaultNumPartitions,
         ReplicaPlacer replicaPlacer,
         long snapshotMaxNewRecordBytes,
-        long maxSnapshotIntervalMs,
+        long snapshotMaxIntervalMs,
         OptionalLong leaderImbalanceCheckIntervalNs,
         OptionalLong maxIdleIntervalNs,
         long sessionTimeoutNs,
@@ -1884,7 +1885,7 @@ public final class QuorumController implements Controller {
             build();
         this.producerIdControlManager = new ProducerIdControlManager(clusterControl, snapshotRegistry);
         this.snapshotMaxNewRecordBytes = snapshotMaxNewRecordBytes;
-        this.maxSnapshotIntervalMs = maxSnapshotIntervalMs;
+        this.snapshotMaxIntervalMs = snapshotMaxIntervalMs;
         this.leaderImbalanceCheckIntervalNs = leaderImbalanceCheckIntervalNs;
         this.maxIdleIntervalNs = maxIdleIntervalNs;
         this.replicationControl = new ReplicationControlManager.Builder().

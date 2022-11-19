@@ -1622,12 +1622,12 @@ class KafkaConfigTest {
     val validValue = 100
     val props = new Properties()
     props.putAll(kraftProps())
-    props.setProperty(KafkaConfig.MetadataMaxSnapshotIntervalMsProp, validValue.toString)
+    props.setProperty(KafkaConfig.MetadataSnapshotMaxIntervalMsProp, validValue.toString)
 
     val config = KafkaConfig.fromProps(props)
-    assertEquals(validValue, config.metadataMaxSnapshotIntervalMs)
+    assertEquals(validValue, config.metadataSnapshotMaxIntervalMs)
 
-    props.setProperty(KafkaConfig.MetadataMaxSnapshotIntervalMsProp, "-1")
+    props.setProperty(KafkaConfig.MetadataSnapshotMaxIntervalMsProp, "-1")
     val errorMessage = assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage
 
     assertEquals(

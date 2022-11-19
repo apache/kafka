@@ -237,7 +237,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * Returns the snapshot id of the latest snapshot, if it exists. If a snapshot doesn't exists, returns an
      * {@link Optional#empty()}.
      *
-     * @return the snapshot of the latest snaphost, if it exists
+     * @return the id of the latest snaphost, if it exists
      */
     Optional<OffsetAndEpoch> latestSnapshotId();
 }

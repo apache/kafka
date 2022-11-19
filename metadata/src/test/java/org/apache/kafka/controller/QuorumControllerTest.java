@@ -831,7 +831,7 @@ public class QuorumControllerTest {
             QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).
                 setControllerBuilderInitializer(controllerBuilder -> {
                     controllerBuilder.setConfigSchema(SCHEMA);
-                    controllerBuilder.setMaxSnapshotIntervalMs(100);
+                    controllerBuilder.setSnapshotMaxIntervalMs(100);
                     // Disable snapshot generation due to bytes committed
                     controllerBuilder.setSnapshotMaxNewRecordBytes(Long.MAX_VALUE);
                 }).
