@@ -1244,8 +1244,12 @@ class ReplicaManager(val config: KafkaConfig,
 
           partition.remoteReplicas.foreach { replica =>
             val replicaState = replica.stateSnapshot
-            // Exclude replicas that don't have the requested offset (whether or not if they're in the ISR)
-            if (replicaState.logEndOffset >= fetchOffset && replicaState.logStartOffset <= fetchOffset) {
+            // Exclude replicas that don't have the requested offset. Also exclude replicas that are not
+            // in the ISR as the follower may lag behind indefinitely.
+            if (replicaState.logEndOffset >= fetchOffset &&
+              replicaState.logStartOffset <= fetchOffset &&
+              partition.inSyncReplicaIds.contains(replica.brokerId)
+            ) {
               replicaInfoSet.add(new DefaultReplicaView(
                 replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
                 replicaState.logEndOffset,
