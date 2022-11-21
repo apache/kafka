@@ -121,6 +121,16 @@ class KRaftQuorumImplementation(
   }
 }
 
+class QuorumTestHarnessFaultHandlerFactory(
+  val faultHandler: MockFaultHandler
+) extends FaultHandlerFactory {
+  override def build(
+    name: String,
+    fatal: Boolean,
+    action: Runnable
+  ): FaultHandler = faultHandler
+}
+
 @Tag("integration")
 abstract class QuorumTestHarness extends Logging {
   val zkConnectionTimeout = 10000
@@ -198,11 +208,9 @@ abstract class QuorumTestHarness extends Logging {
     }
   }
 
-  val faultHandler = new MockFaultHandler("quorumTestHarnessFaultHandler")
+  val faultHandlerFactory = new QuorumTestHarnessFaultHandlerFactory(new MockFaultHandler("quorumTestHarnessFaultHandler"))
 
-  val faultHandlerFactory = new FaultHandlerFactory {
-    override def build(name: String, fatal: Boolean, action: Runnable): FaultHandler = faultHandler
-  }
+  val faultHandler = faultHandlerFactory.faultHandler
 
   // Note: according to the junit documentation: "JUnit Jupiter does not guarantee the execution
   // order of multiple @BeforeEach methods that are declared within a single test class or test
