@@ -35,17 +35,16 @@ import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNa
 import org.apache.kafka.streams.processor.internals.namedtopology.NamedTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.hamcrest.CoreMatchers;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -53,6 +52,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -69,7 +69,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-@Category({IntegrationTest.class})
+@Tag("integration")
 public class PauseResumeIntegrationTest {
     private static final Duration STARTUP_TIMEOUT = Duration.ofSeconds(45);
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
@@ -101,10 +101,14 @@ public class PauseResumeIntegrationTest {
     private KafkaStreams kafkaStreams, kafkaStreams2;
     private KafkaStreamsNamedTopologyWrapper streamsNamedTopologyWrapper;
 
-    @Rule
-    public final TestName testName = new TestName();
 
-    @BeforeClass
+    private static Stream<Boolean> parameters() {
+        return Stream.of(
+            Boolean.TRUE,
+            Boolean.FALSE);
+    }
+
+    @BeforeAll
     public static void startCluster() throws Exception {
         CLUSTER.start();
         producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(),
@@ -113,18 +117,18 @@ public class PauseResumeIntegrationTest {
             StringDeserializer.class, LongDeserializer.class);
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
-    @Before
-    public void createTopics() throws InterruptedException {
+    @BeforeEach
+    public void createTopics(final TestInfo testInfo) throws InterruptedException {
         cleanStateBeforeTest(CLUSTER, 1, INPUT_STREAM_1, INPUT_STREAM_2, OUTPUT_STREAM_1, OUTPUT_STREAM_2);
-        appId = safeUniqueTestName(PauseResumeIntegrationTest.class, testName);
+        appId = safeUniqueTestName(PauseResumeIntegrationTest.class, testInfo);
     }
 
-    private Properties props() {
+    private Properties props(final boolean stateUpdaterEnabled) {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -136,10 +140,11 @@ public class PauseResumeIntegrationTest {
         properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         properties.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
+        properties.put(StreamsConfig.InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
         return properties;
     }
 
-    @After
+    @AfterEach
     public void shutdown() throws InterruptedException {
         for (final KafkaStreams streams : Arrays.asList(kafkaStreams, kafkaStreams2, streamsNamedTopologyWrapper)) {
             if (streams != null) {
@@ -152,9 +157,10 @@ public class PauseResumeIntegrationTest {
         IntegrationTestUtils.produceKeyValuesSynchronously(topic, records, producerConfig, CLUSTER.time);
     }
 
-    @Test
-    public void shouldPauseAndResumeKafkaStreams() throws Exception {
-        kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1);
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldPauseAndResumeKafkaStreams(final boolean stateUpdaterEnabled) throws Exception {
+        kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1, stateUpdaterEnabled);
         kafkaStreams.start();
         waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, STARTUP_TIMEOUT);
 
@@ -176,9 +182,10 @@ public class PauseResumeIntegrationTest {
         assertTopicSize(OUTPUT_STREAM_1, 10);
     }
 
-    @Test
-    public void shouldAllowForTopologiesToStartPaused() throws Exception {
-        kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1);
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldAllowForTopologiesToStartPaused(final boolean stateUpdaterEnabled) throws Exception {
+        kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1, stateUpdaterEnabled);
         kafkaStreams.pause();
         kafkaStreams.start();
         waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, STARTUP_TIMEOUT);
@@ -195,9 +202,10 @@ public class PauseResumeIntegrationTest {
         assertTopicSize(OUTPUT_STREAM_1, 5);
     }
 
-    @Test
-    public void shouldPauseAndResumeKafkaStreamsWithNamedTopologies() throws Exception {
-        streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props());
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldPauseAndResumeKafkaStreamsWithNamedTopologies(final boolean stateUpdaterEnabled) throws Exception {
+        streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props(stateUpdaterEnabled));
         final NamedTopologyBuilder builder1 = getNamedTopologyBuilder1();
         final NamedTopologyBuilder builder2 = getNamedTopologyBuilder2();
 
@@ -229,9 +237,10 @@ public class PauseResumeIntegrationTest {
         awaitOutput(OUTPUT_STREAM_1, 5, COUNT_OUTPUT_DATA2);
     }
 
-    @Test
-    public void shouldPauseAndResumeAllKafkaStreamsWithNamedTopologies() throws Exception {
-        streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props());
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldPauseAndResumeAllKafkaStreamsWithNamedTopologies(final boolean stateUpdaterEnabled) throws Exception {
+        streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props(stateUpdaterEnabled));
         final NamedTopologyBuilder builder1 = getNamedTopologyBuilder1();
         final NamedTopologyBuilder builder2 = getNamedTopologyBuilder2();
 
@@ -264,9 +273,10 @@ public class PauseResumeIntegrationTest {
         assertTopicSize(OUTPUT_STREAM_2, 5);
     }
 
-    @Test
-    public void shouldAllowForNamedTopologiesToStartPaused() throws Exception {
-        streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props());
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void shouldAllowForNamedTopologiesToStartPaused(final boolean stateUpdaterEnabled) throws Exception {
+        streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props(stateUpdaterEnabled));
         final NamedTopologyBuilder builder1 = getNamedTopologyBuilder1();
         final NamedTopologyBuilder builder2 = getNamedTopologyBuilder2();
 
@@ -306,18 +316,19 @@ public class PauseResumeIntegrationTest {
         assertTopicSize(OUTPUT_STREAM_2, 5);
     }
 
-    @Test
-    public void pauseResumeShouldWorkAcrossInstances() throws Exception {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void pauseResumeShouldWorkAcrossInstances(final boolean stateUpdaterEnabled) throws Exception {
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
 
-        kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1);
+        kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1, stateUpdaterEnabled);
         kafkaStreams.pause();
         kafkaStreams.start();
 
         waitForApplicationState(singletonList(kafkaStreams), State.RUNNING, STARTUP_TIMEOUT);
         assertTrue(kafkaStreams.isPaused());
 
-        kafkaStreams2 = buildKafkaStreams(OUTPUT_STREAM_2);
+        kafkaStreams2 = buildKafkaStreams(OUTPUT_STREAM_2, stateUpdaterEnabled);
         kafkaStreams2.pause();
         kafkaStreams2.start();
         waitForApplicationState(singletonList(kafkaStreams2), State.RUNNING, STARTUP_TIMEOUT);
@@ -337,11 +348,12 @@ public class PauseResumeIntegrationTest {
         awaitOutput(OUTPUT_STREAM_1, 5, COUNT_OUTPUT_DATA);
     }
 
-    @Test
-    public void pausedTopologyShouldNotRestoreStateStores() throws Exception {
-        final Properties properties1 = props();
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void pausedTopologyShouldNotRestoreStateStores(final boolean stateUpdaterEnabled) throws Exception {
+        final Properties properties1 = props(stateUpdaterEnabled);
         properties1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        final Properties properties2 = props();
+        final Properties properties2 = props(stateUpdaterEnabled);
         properties2.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
 
@@ -385,8 +397,8 @@ public class PauseResumeIntegrationTest {
         assertEquals(stateStoreLag1, stateStoreLag2);
     }
 
-    private KafkaStreams buildKafkaStreams(final String outputTopic) {
-        return buildKafkaStreams(outputTopic, props());
+    private KafkaStreams buildKafkaStreams(final String outputTopic, final boolean stateUpdaterEnabled) {
+        return buildKafkaStreams(outputTopic, props(stateUpdaterEnabled));
     }
 
     private KafkaStreams buildKafkaStreams(final String outputTopic, final Properties properties) {
