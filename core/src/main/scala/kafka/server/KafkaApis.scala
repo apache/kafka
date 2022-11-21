@@ -412,136 +412,203 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Handle an offset commit request
    */
   def handleOffsetCommitRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
-    val header = request.header
     val offsetCommitRequest = request.body[OffsetCommitRequest]
 
-    val unauthorizedTopicErrors = mutable.Map[TopicPartition, Errors]()
-    val nonExistingTopicErrors = mutable.Map[TopicPartition, Errors]()
-    // the callback for sending an offset commit response
-    def sendResponseCallback(commitStatus: Map[TopicPartition, Errors]): Unit = {
-      val combinedCommitStatus = commitStatus ++ unauthorizedTopicErrors ++ nonExistingTopicErrors
-      if (isDebugEnabled)
-        combinedCommitStatus.forKeyValue { (topicPartition, error) =>
-          if (error != Errors.NONE) {
-            debug(s"Offset commit request with correlation id ${header.correlationId} from client ${header.clientId} " +
-              s"on partition $topicPartition failed due to ${error.exceptionName}")
+    def sendResponse(response: OffsetCommitResponse): Unit = {
+      trace(s"Sending offset commit response $response for correlation id ${request.header.correlationId} to " +
+        s"client ${request.header.clientId}.")
+
+      if (isDebugEnabled) {
+        response.data.topics.forEach { topic =>
+          topic.partitions.forEach { partition =>
+            if (partition.errorCode != Errors.NONE.code) {
+              debug(s"Offset commit request with correlation id ${request.header.correlationId} from client ${request.header.clientId} " +
+                s"on partition ${topic.name}-${partition.partitionIndex} failed due to ${Errors.forCode(partition.errorCode)}")
+            }
           }
         }
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new OffsetCommitResponse(requestThrottleMs, combinedCommitStatus.asJava))
+      }
+
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+        response.maybeSetThrottleTimeMs(requestThrottleMs)
+        response
+      })
     }
 
-      // reject the request if not authorized to the group
+    // Reject the request if not authorized to the group
     if (!authHelper.authorize(request.context, READ, GROUP, offsetCommitRequest.data.groupId)) {
-      val error = Errors.GROUP_AUTHORIZATION_FAILED
-      val responseTopicList = OffsetCommitRequest.getErrorResponseTopics(
-        offsetCommitRequest.data.topics,
-        error)
-
-      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => new OffsetCommitResponse(
-        new OffsetCommitResponseData()
-            .setTopics(responseTopicList)
-            .setThrottleTimeMs(requestThrottleMs)
-      ))
+      sendResponse(offsetCommitRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
     } else if (offsetCommitRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion.isLessThan(IBP_2_3_IV0)) {
       // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
       // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
       // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-      val errorMap = new mutable.HashMap[TopicPartition, Errors]
-      for (topicData <- offsetCommitRequest.data.topics.asScala) {
-        for (partitionData <- topicData.partitions.asScala) {
-          val topicPartition = new TopicPartition(topicData.name, partitionData.partitionIndex)
-          errorMap += topicPartition -> Errors.UNSUPPORTED_VERSION
-        }
-      }
-      sendResponseCallback(errorMap.toMap)
+      sendResponse(offsetCommitRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
     } else {
-      val authorizedTopicRequestInfoBldr = immutable.Map.newBuilder[TopicPartition, OffsetCommitRequestData.OffsetCommitRequestPartition]
+      val offsetCommitResponseData = new OffsetCommitResponseData()
+      val topicsPendingPartitions = new mutable.HashMap[String, OffsetCommitResponseData.OffsetCommitResponseTopic]()
 
-      val topics = offsetCommitRequest.data.topics.asScala
-      val authorizedTopics = authHelper.filterByAuthorized(request.context, READ, TOPIC, topics)(_.name)
-      for (topicData <- topics) {
-        for (partitionData <- topicData.partitions.asScala) {
-          val topicPartition = new TopicPartition(topicData.name, partitionData.partitionIndex)
-          if (!authorizedTopics.contains(topicData.name))
-            unauthorizedTopicErrors += (topicPartition -> Errors.TOPIC_AUTHORIZATION_FAILED)
-          else if (!metadataCache.contains(topicPartition))
-            nonExistingTopicErrors += (topicPartition -> Errors.UNKNOWN_TOPIC_OR_PARTITION)
-          else
-            authorizedTopicRequestInfoBldr += (topicPartition -> partitionData)
+      val authorizedTopics = authHelper.filterByAuthorized(
+        request.context,
+        READ,
+        TOPIC,
+        offsetCommitRequest.data.topics.asScala
+      )(_.name)
+
+      def makePartitionResponse(
+        partitionIndex: Int,
+        error: Errors
+      ): OffsetCommitResponseData.OffsetCommitResponsePartition = {
+        new OffsetCommitResponseData.OffsetCommitResponsePartition()
+          .setPartitionIndex(partitionIndex)
+          .setErrorCode(error.code)
+      }
+
+      def addTopicToResponse(
+        topic: OffsetCommitRequestData.OffsetCommitRequestTopic,
+        error: Errors
+      ): Unit = {
+        val topicResponse = new OffsetCommitResponseData.OffsetCommitResponseTopic().setName(topic.name)
+        offsetCommitResponseData.topics.add(topicResponse)
+        topic.partitions.forEach { partition =>
+          topicResponse.partitions.add(makePartitionResponse(partition.partitionIndex, error))
         }
       }
 
-      val authorizedTopicRequestInfo = authorizedTopicRequestInfoBldr.result()
+      val authorizedTopicsRequest = new util.ArrayList[OffsetCommitRequestData.OffsetCommitRequestTopic]()
+      offsetCommitRequest.data.topics.forEach { topic =>
+        if (!authorizedTopics.contains(topic.name)) {
+          // If the topic is not authorized, we add the topic and all its partitions
+          // to the response with TOPIC_AUTHORIZATION_FAILED.
+          addTopicToResponse(topic, Errors.TOPIC_AUTHORIZATION_FAILED)
+        } else if (!metadataCache.contains(topic.name)) {
+          // If the topic is unknown, we add the topic and all its partitions
+          // to the response with UNKNOWN_TOPIC_OR_PARTITION.
+          addTopicToResponse(topic, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+        } else {
+          // Otherwise, we check all partitions to ensure that they all exist.
+          var topicRequestWithValidPartitions: OffsetCommitRequestData.OffsetCommitRequestTopic = null
+          var topicResponseWithInvalidPartitions: OffsetCommitResponseData.OffsetCommitResponseTopic = null
 
-      if (authorizedTopicRequestInfo.isEmpty)
-        sendResponseCallback(Map.empty)
-      else if (header.apiVersion == 0) {
-        // for version 0 always store offsets to ZK
-        val zkSupport = metadataSupport.requireZkOrThrow(KafkaApis.unsupported("Version 0 offset commit requests"))
-        val responseInfo = authorizedTopicRequestInfo.map {
-          case (topicPartition, partitionData) =>
+          topic.partitions.forEach { partition =>
+            if (metadataCache.getPartitionInfo(topic.name, partition.partitionIndex).nonEmpty) {
+              // If the partition exists, we copy it into the valid set.
+              if (topicRequestWithValidPartitions == null) {
+                topicRequestWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic().setName(topic.name)
+              }
+              topicRequestWithValidPartitions.partitions.add(partition)
+            } else {
+              // Otherwise, we add it to the response with UNKNOWN_TOPIC_OR_PARTITION.
+              if (topicResponseWithInvalidPartitions == null) {
+                topicResponseWithInvalidPartitions = new OffsetCommitResponseData.OffsetCommitResponseTopic().setName(topic.name)
+              }
+              topicResponseWithInvalidPartitions.partitions.add(makePartitionResponse(partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION))
+            }
+          }
+
+          // Known partitions are added to the authorized set.
+          if (topicRequestWithValidPartitions != null) {
+            authorizedTopicsRequest.add(topicRequestWithValidPartitions)
+          }
+
+          // Unknown partitions are added to the response.
+          if (topicResponseWithInvalidPartitions != null) {
+            offsetCommitResponseData.topics.add(topicResponseWithInvalidPartitions)
+            // We keep track of topics with both known and unknown partitions such
+            // that we can merge the response from the coordinator into it later on.
+            if (topicRequestWithValidPartitions != null) {
+              topicsPendingPartitions += topic.name -> topicResponseWithInvalidPartitions
+            }
+          }
+        }
+      }
+
+      if (authorizedTopicsRequest.isEmpty) {
+        sendResponse(new OffsetCommitResponse(offsetCommitResponseData))
+      } else if (request.header.apiVersion == 0) {
+        // For version 0, always store offsets to ZK.
+        val zkSupport = metadataSupport.requireZkOrThrow(
+          KafkaApis.unsupported("Version 0 offset commit requests"))
+
+        authorizedTopicsRequest.forEach { topic =>
+          val topicResponse = topicsPendingPartitions.get(topic.name) match {
+            case None =>
+              // If there is no pending topic response, we create
+              // a new one and add it to the response.
+              val newTopicResponse = new OffsetCommitResponseData.OffsetCommitResponseTopic().setName(topic.name)
+              offsetCommitResponseData.topics.add(newTopicResponse)
+              newTopicResponse
+
+            case Some(existingTopicResponse) =>
+              // Otherwise, we use the existing one.
+              existingTopicResponse
+          }
+
+          topic.partitions.forEach { partition =>
             try {
-              if (partitionData.committedMetadata() != null
-                && partitionData.committedMetadata().length > config.offsetMetadataMaxSize)
-                (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE)
-              else {
+              if (partition.committedMetadata != null && partition.committedMetadata.length > config.offsetMetadataMaxSize) {
+                topicResponse.partitions.add(makePartitionResponse(partition.partitionIndex, Errors.OFFSET_METADATA_TOO_LARGE))
+              } else {
                 zkSupport.zkClient.setOrCreateConsumerOffset(
                   offsetCommitRequest.data.groupId,
-                  topicPartition,
-                  partitionData.committedOffset)
-                (topicPartition, Errors.NONE)
+                  new TopicPartition(topic.name, partition.partitionIndex),
+                  partition.committedOffset
+                )
+                topicResponse.partitions.add(makePartitionResponse(partition.partitionIndex, Errors.NONE))
               }
             } catch {
-              case e: Throwable => (topicPartition, Errors.forException(e))
+              case e: Throwable =>
+                topicResponse.partitions.add(makePartitionResponse(partition.partitionIndex, Errors.forException(e)))
             }
+          }
         }
-        sendResponseCallback(responseInfo)
+
+        sendResponse(new OffsetCommitResponse(offsetCommitResponseData))
       } else {
-        // for version 1 and beyond store offsets in offset manager
+        // Create a new request data with the authorized topic-partitions.
+        val offsetCommitRequestData = new OffsetCommitRequestData()
+          .setGroupId(offsetCommitRequest.data.groupId)
+          .setMemberId(offsetCommitRequest.data.memberId)
+          .setGenerationId(offsetCommitRequest.data.generationId)
+          .setRetentionTimeMs(offsetCommitRequest.data.retentionTimeMs)
+          .setGroupInstanceId(offsetCommitRequest.data.groupInstanceId)
+          .setTopics(authorizedTopicsRequest)
 
-        // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
-        // expire timestamp is computed differently for v1 and v2.
-        //   - If v1 and no explicit commit timestamp is provided we treat it the same as v5.
-        //   - If v1 and explicit retention time is provided we calculate expiration timestamp based on that
-        //   - If v2/v3/v4 (no explicit commit timestamp) we treat it the same as v5.
-        //   - For v5 and beyond there is no per partition expiration timestamp, so this field is no longer in effect
-        val currentTimestamp = time.milliseconds
-        val partitionData = authorizedTopicRequestInfo.map { case (k, partitionData) =>
-          val metadata = if (partitionData.committedMetadata == null)
-            OffsetAndMetadata.NoMetadata
-          else
-            partitionData.committedMetadata
+        newGroupCoordinator.commitOffsets(
+          request.context,
+          offsetCommitRequestData,
+          requestLocal.bufferSupplier
+        ).handle[Unit] { (results, exception) =>
+          if (exception != null) {
+            sendResponse(offsetCommitRequest.getErrorResponse(exception))
+          } else {
+            if (offsetCommitResponseData.topics.isEmpty) {
+              // If the pre-processed response is empty, we can directly
+              // send back the new one.
+              sendResponse(new OffsetCommitResponse(results))
+            } else {
+              // Otherwise, we have to add the topic-partitions from new
+              // one into the pre-processed one.
+              results.topics.forEach { topic =>
+                topicsPendingPartitions.get(topic.name) match {
+                  case None =>
+                    // If there is no pending topic response, we just
+                    // add the one we've got to the response.
+                    offsetCommitResponseData.topics.add(topic)
 
-          val leaderEpochOpt = if (partitionData.committedLeaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
-            Optional.empty[Integer]
-          else
-            Optional.of[Integer](partitionData.committedLeaderEpoch)
-
-          k -> new OffsetAndMetadata(
-            offset = partitionData.committedOffset,
-            leaderEpoch = leaderEpochOpt,
-            metadata = metadata,
-            commitTimestamp = partitionData.commitTimestamp match {
-              case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimestamp
-              case customTimestamp => customTimestamp
-            },
-            expireTimestamp = offsetCommitRequest.data.retentionTimeMs match {
-              case OffsetCommitRequest.DEFAULT_RETENTION_TIME => None
-              case retentionTime => Some(currentTimestamp + retentionTime)
+                  case Some(existingTopicResponse) =>
+                    // Otherwise, we copy partitions to the pending
+                    // topic response.
+                    existingTopicResponse.partitions.addAll(topic.partitions)
+                }
+              }
+              sendResponse(new OffsetCommitResponse(offsetCommitResponseData))
             }
-          )
+          }
+        }.exceptionally { exception =>
+          error(s"Unexpected error handling request ${request.requestDesc(true)} " +
+            s"with context ${request.context}", exception)
+          requestHelper.handleError(request, exception)
         }
-
-        // call coordinator to handle commit offset
-        groupCoordinator.handleCommitOffsets(
-          offsetCommitRequest.data.groupId,
-          offsetCommitRequest.data.memberId,
-          Option(offsetCommitRequest.data.groupInstanceId),
-          offsetCommitRequest.data.generationId,
-          partitionData,
-          sendResponseCallback,
-          requestLocal)
       }
     }
   }

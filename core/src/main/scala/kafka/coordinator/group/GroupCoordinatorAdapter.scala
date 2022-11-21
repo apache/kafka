@@ -16,15 +16,20 @@
  */
 package kafka.coordinator.group
 
+import kafka.common.OffsetAndMetadata
 import kafka.server.RequestLocal
 import kafka.utils.Implicits.MapExtensionMethods
-import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
-import org.apache.kafka.common.requests.RequestContext
-import org.apache.kafka.common.utils.BufferSupplier
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext}
+import org.apache.kafka.common.utils.{BufferSupplier, Time}
 
 import java.util
+import java.util.Optional
 import java.util.concurrent.CompletableFuture
-import scala.collection.immutable
+import scala.collection.{immutable, mutable}
 import scala.jdk.CollectionConverters._
 
 /**
@@ -32,7 +37,8 @@ import scala.jdk.CollectionConverters._
  * that exposes the new org.apache.kafka.coordinator.group.GroupCoordinator interface.
  */
 class GroupCoordinatorAdapter(
-  val coordinator: GroupCoordinator
+  private val coordinator: GroupCoordinator,
+  private val time: Time
 ) extends org.apache.kafka.coordinator.group.GroupCoordinator {
 
   override def joinGroup(
@@ -233,5 +239,80 @@ class GroupCoordinatorAdapter(
         .setErrorCode(error.code))
     }
     CompletableFuture.completedFuture(results)
+  }
+
+  override def commitOffsets(
+    context: RequestContext,
+    request: OffsetCommitRequestData,
+    bufferSupplier: BufferSupplier
+  ): CompletableFuture[OffsetCommitResponseData] = {
+    val future = new CompletableFuture[OffsetCommitResponseData]()
+
+    def callback(commitStatus: Map[TopicPartition, Errors]): Unit = {
+      val response = new OffsetCommitResponseData()
+      val byTopics = new util.HashMap[String, OffsetCommitResponseData.OffsetCommitResponseTopic]()
+
+      commitStatus.forKeyValue { (tp, error) =>
+        var topic = byTopics.get(tp.topic)
+        if (topic == null) {
+          topic = new OffsetCommitResponseData.OffsetCommitResponseTopic()
+            .setName(tp.topic)
+          byTopics.put(tp.topic, topic)
+          response.topics.add(topic)
+        }
+        topic.partitions.add(new OffsetCommitResponseData.OffsetCommitResponsePartition()
+          .setPartitionIndex(tp.partition)
+          .setErrorCode(error.code))
+      }
+
+      future.complete(response)
+    }
+
+    // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
+    // expire timestamp is computed differently for v1 and v2.
+    //   - If v1 and no explicit commit timestamp is provided we treat it the same as v5.
+    //   - If v1 and explicit retention time is provided we calculate expiration timestamp based on that
+    //   - If v2/v3/v4 (no explicit commit timestamp) we treat it the same as v5.
+    //   - For v5 and beyond there is no per partition expiration timestamp, so this field is no longer in effect
+    val currentTimestamp = time.milliseconds
+    val partitions = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
+
+    request.topics.forEach { topic =>
+      topic.partitions.forEach { partition =>
+        val tp = new TopicPartition(topic.name, partition.partitionIndex)
+        partitions += tp -> new OffsetAndMetadata(
+          offset = partition.committedOffset,
+          leaderEpoch = partition.committedLeaderEpoch match {
+            case RecordBatch.NO_PARTITION_LEADER_EPOCH => Optional.empty[Integer]
+            case committedLeaderEpoch => Optional.of[Integer](committedLeaderEpoch)
+          },
+          metadata = partition.committedMetadata match {
+            case null => OffsetAndMetadata.NoMetadata
+            case metadata => metadata
+          },
+          commitTimestamp = partition.commitTimestamp match {
+            case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimestamp
+            case customTimestamp => customTimestamp
+          },
+          expireTimestamp = request.retentionTimeMs match {
+            case OffsetCommitRequest.DEFAULT_RETENTION_TIME => None
+            case retentionTime => Some(currentTimestamp + retentionTime)
+          }
+        )
+      }
+    }
+
+    // call coordinator to handle commit offset
+    coordinator.handleCommitOffsets(
+      request.groupId,
+      request.memberId,
+      Option(request.groupInstanceId),
+      request.generationId,
+      partitions.toMap,
+      callback,
+      RequestLocal(bufferSupplier)
+    )
+
+    future
   }
 }

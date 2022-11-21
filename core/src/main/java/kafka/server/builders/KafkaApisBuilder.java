@@ -179,7 +179,7 @@ public class KafkaApisBuilder {
                              metadataSupport,
                              replicaManager,
                              groupCoordinator,
-                             new GroupCoordinatorAdapter(groupCoordinator),
+                             new GroupCoordinatorAdapter(groupCoordinator, time),
                              txnCoordinator,
                              autoTopicCreationManager,
                              brokerId,

@@ -22,6 +22,8 @@ import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
@@ -52,6 +54,7 @@ public interface GroupCoordinator {
     );
 
     /**
+<<<<<<< HEAD
      * Sync a Generic Group.
      *
      * @param context           The coordinator request context.
@@ -130,6 +133,21 @@ public interface GroupCoordinator {
     CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> deleteGroups(
         RequestContext context,
         List<String> groupIds,
+        BufferSupplier bufferSupplier
+    );
+
+    /**
+     * Commit offsets for a given Group.
+     *
+     * @param context           The request context.
+     * @param request           The OffsetCommitRequest data.
+     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     *
+     * @return A future yielding the response or an exception.
+     */
+    CompletableFuture<OffsetCommitResponseData> commitOffsets(
+        RequestContext context,
+        OffsetCommitRequestData request,
         BufferSupplier bufferSupplier
     );
 }

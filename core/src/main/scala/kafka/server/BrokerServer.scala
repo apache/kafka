@@ -406,7 +406,7 @@ class BrokerServer(
         metadataSupport = raftSupport,
         replicaManager = replicaManager,
         groupCoordinator = groupCoordinator,
-        newGroupCoordinator = new GroupCoordinatorAdapter(groupCoordinator),
+        newGroupCoordinator = new GroupCoordinatorAdapter(groupCoordinator, time),
         txnCoordinator = transactionCoordinator,
         autoTopicCreationManager = autoTopicCreationManager,
         brokerId = config.nodeId,

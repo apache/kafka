@@ -16,16 +16,19 @@
  */
 package kafka.coordinator.group
 
+import kafka.common.OffsetAndMetadata
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import kafka.server.RequestLocal
-import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import kafka.utils.MockTime
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.{DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.BufferSupplier
+import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
@@ -34,6 +37,7 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{mock, verify, when}
 
 import java.net.InetAddress
+import java.util.Optional
 import scala.jdk.CollectionConverters._
 
 class GroupCoordinatorAdapterTest {
@@ -58,7 +62,7 @@ class GroupCoordinatorAdapterTest {
   @ApiKeyVersionsSource(apiKey = ApiKeys.JOIN_GROUP)
   def testJoinGroup(version: Short): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
 
     val ctx = makeContext(ApiKeys.JOIN_GROUP, version)
     val request = new JoinGroupRequestData()
@@ -146,7 +150,7 @@ class GroupCoordinatorAdapterTest {
   @ApiKeyVersionsSource(apiKey = ApiKeys.SYNC_GROUP)
   def testSyncGroup(version: Short): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
 
     val ctx = makeContext(ApiKeys.SYNC_GROUP, version)
     val data = new SyncGroupRequestData()
@@ -213,7 +217,7 @@ class GroupCoordinatorAdapterTest {
   @Test
   def testHeartbeat(): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
 
     val ctx = makeContext(ApiKeys.HEARTBEAT, ApiKeys.HEARTBEAT.latestVersion)
     val data = new HeartbeatRequestData()
@@ -244,7 +248,7 @@ class GroupCoordinatorAdapterTest {
 
   def testLeaveGroup(): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
 
     val ctx = makeContext(ApiKeys.LEAVE_GROUP, ApiKeys.LEAVE_GROUP.latestVersion)
     val data = new LeaveGroupRequestData()
@@ -313,7 +317,7 @@ class GroupCoordinatorAdapterTest {
     expectedStatesFilter: Set[String]
   ): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
 
     val ctx = makeContext(ApiKeys.LIST_GROUPS, ApiKeys.LIST_GROUPS.latestVersion)
     val data = new ListGroupsRequestData()
@@ -348,7 +352,7 @@ class GroupCoordinatorAdapterTest {
   @Test
   def testDescribeGroup(): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
 
     val groupId1 = "group-1"
     val groupId2 = "group-2"
@@ -405,7 +409,7 @@ class GroupCoordinatorAdapterTest {
   @Test
   def testDeleteGroups(): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
 
     val ctx = makeContext(ApiKeys.DELETE_GROUPS, ApiKeys.DELETE_GROUPS.latestVersion)
     val groupIds = List("group-1", "group-2", "group-3")
@@ -435,5 +439,75 @@ class GroupCoordinatorAdapterTest {
       .setErrorCode(Errors.INVALID_GROUP_ID.code))
 
     assertEquals(expectedResults, future.get())
+  }
+
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+  def testCommitOffsets(version: Short): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val time = new MockTime()
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, time)
+    val now = time.milliseconds()
+
+    val ctx = makeContext(ApiKeys.OFFSET_COMMIT, version)
+    val data = new OffsetCommitRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setGenerationId(10)
+      .setRetentionTimeMs(1000)
+      .setTopics(List(
+        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100)
+              .setCommitTimestamp(now)
+              .setCommittedLeaderEpoch(1)
+          ).asJava)
+      ).asJava)
+    val bufferSupplier = BufferSupplier.create()
+
+    val future = adapter.commitOffsets(ctx, data, bufferSupplier)
+    assertFalse(future.isDone)
+
+    val capturedCallback: ArgumentCaptor[Map[TopicPartition, Errors] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, Errors] => Unit])
+
+    verify(groupCoordinator).handleCommitOffsets(
+      ArgumentMatchers.eq(data.groupId),
+      ArgumentMatchers.eq(data.memberId),
+      ArgumentMatchers.eq(None),
+      ArgumentMatchers.eq(data.generationId),
+      ArgumentMatchers.eq(Map(
+        new TopicPartition("foo", 0) -> new OffsetAndMetadata(
+          offset = 100,
+          leaderEpoch = Optional.of[Integer](1),
+          metadata = "",
+          commitTimestamp = now,
+          expireTimestamp = Some(now + 1000L)
+        )
+      )),
+      capturedCallback.capture(),
+      ArgumentMatchers.eq(RequestLocal(bufferSupplier))
+    )
+
+    capturedCallback.getValue.apply(Map(
+      new TopicPartition("foo", 0) -> Errors.NONE
+    ))
+
+    val expectedResponseData = new OffsetCommitResponseData()
+      .setTopics(List(
+        new OffsetCommitResponseData.OffsetCommitResponseTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorCode(Errors.NONE.code)
+          ).asJava)
+      ).asJava)
+
+    assertTrue(future.isDone)
+    assertEquals(expectedResponseData, future.get())
   }
 }
