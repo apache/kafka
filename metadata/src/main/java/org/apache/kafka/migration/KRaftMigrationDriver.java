@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.migration;
 
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.metadata.MetadataRecordType;
 import org.apache.kafka.common.protocol.ApiMessage;
@@ -42,6 +40,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -74,6 +73,9 @@ public class KRaftMigrationDriver {
                         delta = new MetadataDelta(image);
                     }
                     delta.replay(offset, epoch, record);
+                    if (delta.clusterDelta() != null) {
+                        eventQueue.append(new BrokerRegistrationEvent(delta.clusterDelta().changedBrokers()));
+                    }
                 }
 
                 @Override
@@ -116,12 +118,12 @@ public class KRaftMigrationDriver {
     class ZkBrokerListener implements MigrationClient.BrokerRegistrationListener {
         @Override
         public void onBrokerChange(Integer brokerId) {
-            eventQueue.append(new BrokerIdChangeEvent(brokerId));
+            log.info("ZK /broker/{} change", brokerId);
         }
 
         @Override
         public void onBrokersChange() {
-            eventQueue.append(new BrokersChangeEvent());
+            log.info("ZK /brokers change");
         }
     }
 
@@ -250,89 +252,44 @@ public class KRaftMigrationDriver {
         }
     }
 
-    class BrokersChangeEvent implements EventQueue.Event {
+    class BrokerRegistrationEvent implements EventQueue.Event {
+
+        private final Map<Integer, Optional<BrokerRegistration>> changedBrokers;
+
+        BrokerRegistrationEvent(Map<Integer, Optional<BrokerRegistration>> changedBrokers) {
+            this.changedBrokers = changedBrokers;
+        }
+
         @Override
         public void run() throws Exception {
-            Set<Integer> updatedBrokerIds = client.readBrokerIds();
-            Set<Integer> added = new HashSet<>(updatedBrokerIds);
-            added.removeAll(zkBrokerRegistrations.keySet());
-
-            Set<Integer> removed = new HashSet<>(zkBrokerRegistrations.keySet());
-            removed.removeAll(updatedBrokerIds);
-
-            log.debug("ZK Brokers added: " + added + ", removed: " + removed);
-            added.forEach(brokerId -> {
-                Optional<ZkBrokerRegistration> broker = client.readBrokerRegistration(brokerId);
-                if (broker.isPresent()) {
-                    zkBrokerRegistrations.put(brokerId, broker.get());
-
-                    // Inform the migration client of this broker for sending RPCs
-                    client.addZkBroker(brokerId);
-
-                    // Register this broker with the KRaft controller.
-                    // TODO this is temporary until ZK brokers can send the registration RPC!!
-                    /*
-                    BrokerRegistration registration = broker.get().brokerRegistration();
-                    BrokerRegistrationRequestData.ListenerCollection listeners = new BrokerRegistrationRequestData.ListenerCollection();
-                    registration.listeners().forEach((name, endpoint) ->
-                        listeners.add(new BrokerRegistrationRequestData.Listener()
-                            .setName(name)
-                            .setHost(endpoint.host())
-                            .setPort(endpoint.port())
-                            .setSecurityProtocol(endpoint.securityProtocol().id))
-                    );
-                    BrokerRegistrationRequestData brokerRegistrationData = new BrokerRegistrationRequestData()
-                        .setBrokerId(registration.id())
-                        .setIsZkBroker(true)
-                        .setClusterId(broker.get().clusterId().map(Uuid::toString).orElse(null))
-                        .setIncarnationId(registration.incarnationId())
-                        .setRack(registration.rack().orElse(null))
-                        .setFeatures(new BrokerRegistrationRequestData.FeatureCollection())
-
-                        .setListeners(listeners);
-                    consumer.registerZkBroker(brokerRegistrationData);
-
-                     */
+            changedBrokers.forEach((brokerId, registrationOpt) -> {
+                if (registrationOpt.isPresent()) {
+                    // Added
+                    if (registrationOpt.get().zkBroker()) {
+                        log.debug("ZK Broker {} registered with KRaft controller", brokerId);
+                        zkBrokerRegistrations.put(brokerId, registrationOpt.get());
+                        client.addZkBroker(brokerId);
+                    }
                 } else {
-                    throw new IllegalStateException("Saw broker " + brokerId + " added, but registration data is missing");
+                    // Removed
+                    if (zkBrokerRegistrations.remove(brokerId) != null) {
+                        log.debug("ZK Broker {} unregistered from KRaft controller", brokerId);
+                        client.removeZkBroker(brokerId);
+                    }
                 }
             });
-            removed.forEach(brokerId -> {
-                client.removeZkBroker(brokerId);
-                zkBrokerRegistrations.remove(brokerId);
-            });
 
-            // TODO actually verify the IBP and clusterID
-            boolean brokersReady = zkBrokerRegistrations.values().stream().allMatch(broker ->
-                broker.isMigrationReady() && broker.ibp().isPresent() && broker.clusterId().isPresent());
-            // TODO add some state to track if brokers are ready
-            if (brokersReady) {
-                log.debug("All ZK Brokers are ready for migration.");
-                //transitionTo(MigrationState.READY);
+            if (zkBrokerRegistrations.keySet().containsAll(knownZkBrokers)) {
+                log.info("All ZK brokers have registered, ZK data migration will now begin.");
+                // TODO state transition
             } else {
-                log.debug("Some ZK Brokers still not ready for migration.");
-                //transitionTo(MigrationState.INELIGIBLE);
+                Set<Integer> waitingBrokers = new HashSet<>(knownZkBrokers);
+                waitingBrokers.removeAll(zkBrokerRegistrations.keySet());
+                String waiting = waitingBrokers.stream()
+                    .map(Object::toString)
+                    .collect(Collectors.joining(","));
+                log.info("Not all ZK brokers have registered. Still waiting on brokers {}", waiting);
             }
-            // TODO integrate with ClusterControlManager
-        }
-
-        @Override
-        public void handleException(Throwable e) {
-            log.error("Had an exception in " + this.getClass().getSimpleName(), e);
-        }
-    }
-
-    class BrokerIdChangeEvent implements EventQueue.Event {
-        private final int brokerId;
-
-        BrokerIdChangeEvent(int brokerId) {
-            this.brokerId = brokerId;
-        }
-
-        @Override
-        public void run() throws Exception {
-            // TODO not sure this is expected. Can registration data change at runtime?
-            log.debug("Broker {} changed. New registration: {}", brokerId, client.readBrokerRegistration(brokerId));
         }
 
         @Override
@@ -386,7 +343,9 @@ public class KRaftMigrationDriver {
             ZkControllerState zkControllerState = client.claimControllerLeadership(
                 recoveryState.kraftControllerId(), recoveryState.kraftControllerEpoch());
             apply("BecomeZkLeaderEvent", state -> state.mergeWithControllerState(zkControllerState));
-
+            knownZkBrokers.addAll(client.readBrokerIds());
+            knownZkBrokers.addAll(client.readBrokerIdsFromTopicAssignments());
+            log.info("Claimed controller leadership in ZK {}. Now waiting for brokers {}", zkControllerState, knownZkBrokers);
             if (!recoveryState.zkMigrationComplete()) {
                 transitionTo(MigrationState.ZK_MIGRATION);
             } else {
@@ -402,7 +361,9 @@ public class KRaftMigrationDriver {
     private final KafkaEventQueue eventQueue;
     private volatile MigrationState migrationState;
     private volatile MigrationRecoveryState recoveryState;
-    private final Map<Integer, ZkBrokerRegistration> zkBrokerRegistrations = new HashMap<>();
+    private final Map<Integer, BrokerRegistration> zkBrokerRegistrations = new HashMap<>();
+    private final Set<Integer> knownZkBrokers = new HashSet<>();
+
     private final MetadataLogListener listener = new MetadataLogListener();
     private ZkMetadataConsumer consumer;
 

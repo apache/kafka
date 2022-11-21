@@ -19,7 +19,6 @@ package org.apache.kafka.migration;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.AbstractControlRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
-import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
@@ -49,6 +48,8 @@ public interface MigrationClient {
     Optional<ZkBrokerRegistration> readBrokerRegistration(int brokerId);
 
     Set<Integer> readBrokerIds();
+
+    Set<Integer> readBrokerIdsFromTopicAssignments();
 
     MigrationRecoveryState getOrCreateMigrationRecoveryState(MigrationRecoveryState initialState);
 
