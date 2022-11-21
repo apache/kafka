@@ -24,6 +24,9 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.net.URL;
 
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -35,15 +38,19 @@ public class ReadVersionFromResource implements Converter {
 
     }
 
-    @Override
-    public byte[] fromConnectData(final String topic, final Schema schema, final Object value) {
-        try (InputStream stream = this.getClass().getResourceAsStream("/version");
-             BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
+    private String version(InputStream stream) throws IOException {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
             return reader.lines()
                     .filter(s -> !s.isEmpty() && !s.startsWith("#"))
                     .collect(Collectors.toList())
-                    .get(0)
-                    .getBytes(StandardCharsets.UTF_8);
+                    .get(0);
+        }
+    }
+
+    @Override
+    public byte[] fromConnectData(final String topic, final Schema schema, final Object value) {
+        try (InputStream stream = this.getClass().getResourceAsStream("/version")) {
+            return version(stream).getBytes(StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new AssertionError(e);
         }
@@ -51,6 +58,17 @@ public class ReadVersionFromResource implements Converter {
 
     @Override
     public SchemaAndValue toConnectData(final String topic, final byte[] value) {
-        return null;
+        try {
+            Enumeration<URL> e = this.getClass().getClassLoader().getResources("version");
+            ArrayList<String> versions = new ArrayList<>();
+            while (e.hasMoreElements()) {
+                try (InputStream stream = e.nextElement().openStream()) {
+                    versions.add(version(stream));
+                }
+            }
+            return new SchemaAndValue(null, versions);
+        } catch (IOException e) {
+            throw new AssertionError(e);
+        }
     }
 }

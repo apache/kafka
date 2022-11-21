@@ -21,6 +21,7 @@ import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map.Entry;
 
@@ -363,11 +364,11 @@ public class PluginsTest {
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V1,
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V2,
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V2.getClassName(),
-                "2.0.0");
+                "2.0.0", "1.0.0");
     }
 
     private void assertClassLoaderReadsVersionFromResource(
-            TestPlugin parentResource, TestPlugin childResource, String className, String expectedVersion) throws MalformedURLException {
+            TestPlugin parentResource, TestPlugin childResource, String className, String... expectedVersions) throws MalformedURLException {
         String pluginPath = TestPlugins.pluginPath(parentResource);
         URLClassLoader parent = new URLClassLoader(
                 new URL[]{new File(pluginPath).toURI().toURL()});
@@ -386,8 +387,11 @@ public class PluginsTest {
                 Converter.class
         );
         // Verify the version was read from the correct resource
-        assertEquals(expectedVersion,
+        assertEquals(expectedVersions[0],
                 new String(converter.fromConnectData(null, null, null)));
+        // When requesting multiple resources, they should be listed in the correct order
+        assertEquals(Arrays.asList(expectedVersions),
+                converter.toConnectData(null, null).value());
     }
 
     public static void assertPluginClassLoaderAlwaysActive(Map<String, SamplingTestPlugin> samples) {
