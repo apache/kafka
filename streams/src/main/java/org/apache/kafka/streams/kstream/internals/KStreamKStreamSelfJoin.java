@@ -41,6 +41,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
     private final long joinThisAfterMs;
     private final long joinOtherBeforeMs;
     private final long joinOtherAfterMs;
+    private final long retentionPeriod;
     private final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joinerThis;
 
     private final TimeTracker sharedTimeTracker;
@@ -49,7 +50,8 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
         final String windowName,
         final JoinWindowsInternal windows,
         final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joinerThis,
-        final TimeTracker sharedTimeTracker) {
+        final TimeTracker sharedTimeTracker,
+        final long retentionPeriod) {
 
         this.windowName = windowName;
         this.joinThisBeforeMs = windows.beforeMs;
@@ -58,6 +60,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
         this.joinOtherAfterMs = windows.beforeMs;
         this.joinerThis = joinerThis;
         this.sharedTimeTracker = sharedTimeTracker;
+        this.retentionPeriod = retentionPeriod;
     }
 
     @Override
@@ -93,6 +96,8 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
                 .withValue(joinerThis.apply(record.key(), record.value(), (V2) record.value()))
                 .withTimestamp(inputRecordTimestamp);
             sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
+            // We emit the self record only if it isn't expired.
+            final boolean emitSelfRecord = inputRecordTimestamp > sharedTimeTracker.streamTime - retentionPeriod + 1;
 
             // Join current record with other
             try (final WindowStoreIterator<V2> iter = windowStore.fetch(record.key(), timeFrom, timeTo)) {
@@ -120,7 +125,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
 
                     // This is needed so that output records follow timestamp order
                     // Join this with self
-                    if (inputRecordTimestamp < maxRecordTimestamp && !emittedJoinWithSelf) {
+                    if (inputRecordTimestamp < maxRecordTimestamp && !emittedJoinWithSelf && emitSelfRecord) {
                         emittedJoinWithSelf = true;
                         context().forward(selfRecord);
                     }
@@ -134,7 +139,7 @@ class KStreamKStreamSelfJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1
             }
 
             // Join this with self
-            if (!emittedJoinWithSelf) {
+            if (!emittedJoinWithSelf && emitSelfRecord) {
                 context().forward(selfRecord);
             }
         }

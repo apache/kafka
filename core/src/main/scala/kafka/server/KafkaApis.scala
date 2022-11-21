@@ -246,6 +246,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // try to complete delayed action. In order to avoid conflicting locking, the actions to complete delayed requests
       // are kept in a queue. We add the logic to check the ReplicaManager queue at the end of KafkaApis.handle() and the
       // expiration thread for certain delayed operations (e.g. DelayedJoin)
+      // Delayed fetches are also completed by ReplicaFetcherThread.
       replicaManager.tryCompleteActions()
       // The local completion time may be set while processing the request. Only record it if it's unset.
       if (request.apiLocalCompleteTimeNanos < 0)
@@ -1652,22 +1653,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a join-group response
     def sendResponseCallback(joinResult: JoinGroupResult): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val protocolName = if (request.context.apiVersion() >= 7)
-          joinResult.protocolName.orNull
-        else
-          joinResult.protocolName.getOrElse(GroupCoordinator.NoProtocol)
-
         val responseBody = new JoinGroupResponse(
           new JoinGroupResponseData()
             .setThrottleTimeMs(requestThrottleMs)
             .setErrorCode(joinResult.error.code)
             .setGenerationId(joinResult.generationId)
             .setProtocolType(joinResult.protocolType.orNull)
-            .setProtocolName(protocolName)
+            .setProtocolName(joinResult.protocolName.orNull)
             .setLeader(joinResult.leaderId)
             .setSkipAssignment(joinResult.skipAssignment)
             .setMemberId(joinResult.memberId)
-            .setMembers(joinResult.members.asJava)
+            .setMembers(joinResult.members.asJava),
+          request.context.apiVersion
         )
 
         trace("Sending join group response %s for correlation id %d to client %s."

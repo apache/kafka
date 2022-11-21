@@ -60,12 +60,14 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRocksDbConfigSetter;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
 import org.hamcrest.Matchers;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.jupiter.api.Assertions;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Cache;
@@ -92,11 +94,6 @@ import java.util.stream.Collectors;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.isNull;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.notNull;
-import static org.easymock.EasyMock.reset;
 import static org.hamcrest.CoreMatchers.either;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -109,10 +106,15 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.powermock.api.easymock.PowerMock.replay;
-import static org.powermock.api.easymock.PowerMock.verify;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.notNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     private static boolean enableBloomFilters = false;
     final static String DB_NAME = "db-name";
@@ -123,7 +125,8 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     private final Serializer<String> stringSerializer = new StringSerializer();
     private final Deserializer<String> stringDeserializer = new StringDeserializer();
 
-    private final RocksDBMetricsRecorder metricsRecorder = mock(RocksDBMetricsRecorder.class);
+    @Mock
+    private RocksDBMetricsRecorder metricsRecorder;
 
     InternalMockProcessorContext context;
     RocksDBStore rocksDBStore;
@@ -194,28 +197,20 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     public void shouldAddValueProvidersWithoutStatisticsToInjectedMetricsRecorderWhenRecordingLevelInfo() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.INFO);
-        reset(metricsRecorder);
-        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
-        replay(metricsRecorder);
 
         rocksDBStore.openDB(context.appConfigs(), context.stateDir());
 
-        verify(metricsRecorder);
-        reset(metricsRecorder);
+        verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
     }
 
     @Test
     public void shouldAddValueProvidersWithStatisticsToInjectedMetricsRecorderWhenRecordingLevelDebug() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG);
-        reset(metricsRecorder);
-        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), notNull());
-        replay(metricsRecorder);
 
         rocksDBStore.openDB(context.appConfigs(), context.stateDir());
 
-        verify(metricsRecorder);
-        reset(metricsRecorder);
+        verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), notNull());
     }
 
     @Test
@@ -224,14 +219,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         try {
             context = getProcessorContext(RecordingLevel.DEBUG);
             rocksDBStore.openDB(context.appConfigs(), context.stateDir());
-            reset(metricsRecorder);
-            metricsRecorder.removeValueProviders(DB_NAME);
-            replay(metricsRecorder);
         } finally {
             rocksDBStore.close();
         }
 
-        verify(metricsRecorder);
+        verify(metricsRecorder).removeValueProviders(DB_NAME);
     }
 
     public static class RocksDBConfigSetterWithUserProvidedStatistics implements RocksDBConfigSetter {
@@ -250,12 +242,10 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     public void shouldNotSetStatisticsInValueProvidersWhenUserProvidesStatistics() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
-        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
-        replay(metricsRecorder);
 
         rocksDBStore.openDB(context.appConfigs(), context.stateDir());
-        verify(metricsRecorder);
-        reset(metricsRecorder);
+
+        verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
     }
 
     public static class RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig implements RocksDBConfigSetter {
@@ -306,12 +296,10 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             RecordingLevel.DEBUG,
             RocksDBConfigSetterWithUserProvidedNewPlainTableFormatConfig.class
         );
-        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), isNull(), notNull());
-        replay(metricsRecorder);
 
         rocksDBStore.openDB(context.appConfigs(), context.stateDir());
-        verify(metricsRecorder);
-        reset(metricsRecorder);
+
+        verify(metricsRecorder).addValueProviders(eq(DB_NAME), notNull(), isNull(), notNull());
     }
 
     @Test
@@ -813,15 +801,14 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST, time);
 
-        context = EasyMock.niceMock(InternalMockProcessorContext.class);
-        EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
-        EasyMock.expect(context.taskId()).andStubReturn(taskId);
-        EasyMock.expect(context.appConfigs())
-            .andStubReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
-        EasyMock.expect(context.stateDir()).andStubReturn(dir);
+        context = mock(InternalMockProcessorContext.class);
+        when(context.metrics()).thenReturn(streamsMetrics);
+        when(context.taskId()).thenReturn(taskId);
+        when(context.appConfigs())
+            .thenReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
+        when(context.stateDir()).thenReturn(dir);
         final MonotonicProcessorRecordContext processorRecordContext = new MonotonicProcessorRecordContext("test", 0);
-        EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.of(processorRecordContext));
-        EasyMock.replay(context);
+        when(context.recordMetadata()).thenReturn(Optional.of(processorRecordContext));
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         final byte[] key = "hello".getBytes();
@@ -847,15 +834,14 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST, time);
 
-        context = EasyMock.niceMock(InternalMockProcessorContext.class);
-        EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
-        EasyMock.expect(context.taskId()).andStubReturn(taskId);
-        EasyMock.expect(context.appConfigs())
-                .andStubReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
-        EasyMock.expect(context.stateDir()).andStubReturn(dir);
+        context = mock(InternalMockProcessorContext.class);
+        when(context.metrics()).thenReturn(streamsMetrics);
+        when(context.taskId()).thenReturn(taskId);
+        when(context.appConfigs())
+                .thenReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
+        when(context.stateDir()).thenReturn(dir);
         final MonotonicProcessorRecordContext processorRecordContext = new MonotonicProcessorRecordContext("test", 0);
-        EasyMock.expect(context.recordMetadata()).andStubReturn(Optional.of(processorRecordContext));
-        EasyMock.replay(context);
+        when(context.recordMetadata()).thenReturn(Optional.of(processorRecordContext));
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
         final byte[] key = "hello".getBytes();
@@ -881,12 +867,11 @@ public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
             new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST, time);
 
         final Properties props = StreamsTestUtils.getStreamsConfig();
-        context = EasyMock.niceMock(InternalMockProcessorContext.class);
-        EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
-        EasyMock.expect(context.taskId()).andStubReturn(taskId);
-        EasyMock.expect(context.appConfigs()).andStubReturn(new StreamsConfig(props).originals());
-        EasyMock.expect(context.stateDir()).andStubReturn(dir);
-        EasyMock.replay(context);
+        context = mock(InternalMockProcessorContext.class);
+        when(context.metrics()).thenReturn(streamsMetrics);
+        when(context.taskId()).thenReturn(taskId);
+        when(context.appConfigs()).thenReturn(new StreamsConfig(props).originals());
+        when(context.stateDir()).thenReturn(dir);
 
         rocksDBStore.init((StateStoreContext) context, rocksDBStore);
 

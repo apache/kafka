@@ -66,8 +66,8 @@ versions += [
   grgit: "4.1.1",
   httpclient: "4.5.13",
   easymock: "4.3",
-  jackson: "2.13.3",
-  jacksonDatabind: "2.13.3",
+  jackson: "2.13.4",
+  jacksonDatabind: "2.13.4.2",
   jacoco: "0.8.7",
   javassist: "3.27.0-GA",
   jetty: "9.4.48.v20220622",
@@ -110,7 +110,7 @@ versions += [
   powermock: "2.0.9",
   reflections: "0.9.12",
   reload4j: "1.2.19",
-  rocksDB: "6.29.4.1",
+  rocksDB: "7.1.2",
   scalaCollectionCompat: "2.6.0",
   // When updating the scalafmt version please also update the version field in checkstyle/.scalafmt.conf. scalafmt now
   // has the version field as mandatory in its configuration, see
@@ -120,7 +120,7 @@ versions += [
   scoverage: "1.4.11",
   slf4j: "1.7.36",
   snappy: "1.1.8.4",
-  spotbugs: "4.2.2",
+  spotbugs: "4.7.3",
   swaggerAnnotations: "2.2.0",
   swaggerJaxrs2: "2.2.0",
   zinc: "1.6.1",

@@ -184,6 +184,11 @@ object JaasTestUtils {
   def clientLoginModule(mechanism: String, keytabLocation: Option[File], serviceName: String = serviceName): String =
     kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword, KafkaOAuthBearerUser, serviceName).toString
 
+  // Returns the dynamic configuration, using credentials for admin
+  def adminLoginModule(mechanism: String, keytabLocation: Option[File], serviceName: String = serviceName): String =
+    kafkaClientModule(mechanism, keytabLocation, KafkaServerPrincipal, KafkaPlainAdmin, KafkaPlainAdminPassword,
+    KafkaScramAdmin, KafkaScramAdminPassword, KafkaOAuthBearerAdmin, serviceName).toString
+
   def tokenClientLoginModule(tokenId: String, password: String): String = {
     ScramLoginModule(
       tokenId,

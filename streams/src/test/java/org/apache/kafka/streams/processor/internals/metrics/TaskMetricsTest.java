@@ -41,7 +41,6 @@ public class TaskMetricsTest {
     private final Sensor expectedSensor = mock(Sensor.class);
     private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
 
-
     @Test
     public void shouldGetActiveProcessRatioSensor() {
         final String operation = "active-process-ratio";

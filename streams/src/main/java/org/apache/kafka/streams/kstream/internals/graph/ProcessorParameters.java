@@ -114,13 +114,12 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
 
     @SuppressWarnings("unchecked")
     <KR, VR> KTableProcessorSupplier<KIn, VIn, KR, VR> kTableProcessorSupplier() {
-        // This cast always works because KTableProcessorSupplier hasn't been converted yet.
-        return (KTableProcessorSupplier<KIn, VIn, KR, VR>) processorSupplier;
+        return processorSupplier instanceof KTableProcessorSupplier ? (KTableProcessorSupplier<KIn, VIn, KR, VR>) processorSupplier : null;
     }
 
     @SuppressWarnings("unchecked")
     KTableKTableJoinMerger<KIn, VIn> kTableKTableJoinMergerProcessorSupplier() {
-        return (KTableKTableJoinMerger<KIn, VIn>) processorSupplier;
+        return processorSupplier instanceof KTableKTableJoinMerger ? (KTableKTableJoinMerger<KIn, VIn>) processorSupplier : null;
     }
 
     public String processorName() {
@@ -130,7 +129,8 @@ public class ProcessorParameters<KIn, VIn, KOut, VOut> {
     @Override
     public String toString() {
         return "ProcessorParameters{" +
-            "processor class=" + processorSupplier.get().getClass() +
+            "processor supplier class=" + (processorSupplier != null ? processorSupplier.getClass() : "null") +
+            ", fixed key processor supplier class=" + (fixedKeyProcessorSupplier != null ? fixedKeyProcessorSupplier.getClass() : "null") +
             ", processor name='" + processorName + '\'' +
             '}';
     }
