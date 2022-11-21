@@ -74,6 +74,9 @@ public class KRaftMigrationDriver {
                         delta = new MetadataDelta(image);
                     }
                     delta.replay(offset, epoch, record);
+                    image = delta.apply();
+                    eventQueue.append(new SendRPCsToBrokersEvent(delta, image));
+                    delta = new MetadataDelta(image);
                 }
 
                 @Override
@@ -81,6 +84,12 @@ public class KRaftMigrationDriver {
                     log.error("Had an exception in " + this.getClass().getSimpleName(), e);
                 }
             });
+        }
+
+        public boolean zkBrokersReadyForMigration(Set<Integer> expectedBrokers) {
+            Set<Integer> knownZkBrokers = image.cluster().zkBrokers().keySet();
+            knownZkBrokers.retainAll(expectedBrokers);
+            return knownZkBrokers.equals(expectedBrokers);
         }
 
         ZkWriteEvent syncMetadataToZkEvent() {
@@ -122,6 +131,37 @@ public class KRaftMigrationDriver {
         @Override
         public void onBrokersChange() {
             eventQueue.append(new BrokersChangeEvent());
+        }
+    }
+
+    class SendRPCsToBrokersEvent implements EventQueue.Event {
+        private final MetadataDelta delta;
+        private final MetadataImage image;
+
+        SendRPCsToBrokersEvent(MetadataDelta delta, MetadataImage image) {
+            this.delta = delta;
+            this.image = image;
+        }
+
+        @Override
+        public void run() throws Exception {
+            switch (migrationState) {
+                case DUAL_WRITE:
+                    // TODO: Stop replica implementation based on how we decide to deletion.
+                    if (delta.clusterDelta().changedBrokers().isEmpty() &&
+                        delta.topicsDelta().deletedTopicIds().isEmpty() && delta.topicsDelta().changedTopics().isEmpty()) {
+                        break;
+                    } else {
+                        log.info("Generating RPCs to the brokers");
+                        // TODO
+                    }
+                    break;
+                case ZK_MIGRATION:
+                    // TODO: Should we send any updates to brokers until migration is done?
+                default:
+                    // We shouldn't reach here?
+                    break;
+            }
         }
     }
 
@@ -170,20 +210,21 @@ public class KRaftMigrationDriver {
         public void run() throws Exception {
             switch (migrationState) {
                 case UNINITIALIZED:
-                    log.info("Recovering migration state");
-                    apply("Recovery", client::getOrCreateMigrationRecoveryState);
-                    client.watchZkBrokerRegistrations(new ZkBrokerListener());
-                    String maybeDone = recoveryState.zkMigrationComplete() ? "done" : "not done";
-                    log.info("Recovered migration state {}. ZK migration is {}.", recoveryState, maybeDone);
-                    transitionTo(MigrationState.INACTIVE);
+                    initializeMigrationState();
                     break;
                 case INACTIVE:
+                    // Nothing to do when the driver is inactive. We need to wait on the
+                    // controller node's state to move forward.
                     break;
-                case NEW_LEADER:
+                case WAIT_FOR_CONTROLLER_QUORUM:
+                    // TODO
+                    break;
+                case BECOME_CONTROLLER:
                     // This probably means we are retrying
                     eventQueue.append(new BecomeZkLeaderEvent());
                     break;
-                case NOT_READY:
+                case WAIT_FOR_BROKERS:
+                    eventQueue.append(new WaitForBrokersEvent());
                     break;
                 case ZK_MIGRATION:
                     eventQueue.append(new MigrateMetadataEvent());
@@ -250,6 +291,7 @@ public class KRaftMigrationDriver {
         }
     }
 
+    // TODO: Remove this event when BrokerRegistration is implemented for ZkBrokers.
     class BrokersChangeEvent implements EventQueue.Event {
         @Override
         public void run() throws Exception {
@@ -318,6 +360,7 @@ public class KRaftMigrationDriver {
         }
     }
 
+    // TODO: Remove this event when BrokerRegistration is implemented for ZkBrokers.
     class BrokerIdChangeEvent implements EventQueue.Event {
         private final int brokerId;
 
@@ -350,23 +393,27 @@ public class KRaftMigrationDriver {
 
         @Override
         public void run() throws Exception {
-            if (migrationState == MigrationState.UNINITIALIZED) {
-                // If we get notified about being the active controller before we have initialized, we need
-                // to reschedule this event.
-                eventQueue.append(new PollEvent());
-                eventQueue.append(this);
-                return;
-            }
-
-            if (!isActive) {
-                apply("KRaftLeaderEvent is active", state -> state.mergeWithControllerState(ZkControllerState.EMPTY));
-                transitionTo(MigrationState.INACTIVE);
-            } else {
-                // Apply the new KRaft state
-                apply("KRaftLeaderEvent not active", state -> state.withNewKRaftController(kraftControllerId, kraftControllerEpoch));
-                // Instead of doing the ZK write directly, schedule as an event so that we can easily retry ZK failures
-                transitionTo(MigrationState.NEW_LEADER);
-                eventQueue.append(new BecomeZkLeaderEvent());
+            // We can either the the active controller or just resigned being the controller.
+            switch (migrationState) {
+                case UNINITIALIZED:
+                    // Poll and retry after initialization
+                    long deadline = time.nanoseconds() + NANOSECONDS.convert(10, SECONDS);
+                    eventQueue.scheduleDeferred(
+                        "poll",
+                        new EventQueue.DeadlineFunction(deadline),
+                        this);
+                    break;
+                default:
+                    if (!isActive) {
+                        apply("KRaftLeaderEvent is active", state -> state.mergeWithControllerState(ZkControllerState.EMPTY));
+                        transitionTo(MigrationState.INACTIVE);
+                    } else {
+                        // Apply the new KRaft state
+                        apply("KRaftLeaderEvent not active", state -> state.withNewKRaftController(kraftControllerId, kraftControllerEpoch));
+                        // Instead of doing the ZK write directly, schedule as an event so that we can easily retry ZK failures
+                        transitionTo(MigrationState.BECOME_CONTROLLER);
+                    }
+                    break;
             }
         }
 
@@ -379,14 +426,38 @@ public class KRaftMigrationDriver {
     class BecomeZkLeaderEvent extends ZkWriteEvent {
         @Override
         public void run() throws Exception {
-            ZkControllerState zkControllerState = client.claimControllerLeadership(
-                recoveryState.kraftControllerId(), recoveryState.kraftControllerEpoch());
-            apply("BecomeZkLeaderEvent", state -> state.mergeWithControllerState(zkControllerState));
+            switch (migrationState) {
+                case BECOME_CONTROLLER:
+                    ZkControllerState zkControllerState = client.claimControllerLeadership(
+                        recoveryState.kraftControllerId(), recoveryState.kraftControllerEpoch());
+                    apply("BecomeZkLeaderEvent", state -> state.mergeWithControllerState(zkControllerState));
+                    if (!recoveryState.zkMigrationComplete()) {
+                        transitionTo(MigrationState.WAIT_FOR_BROKERS);
+                    } else {
+                        transitionTo(MigrationState.DUAL_WRITE);
+                    }
+                    break;
+                default:
+                    // Ignore the event as we're not trying to become controller anymore.
+                    break;
+            }
+        }
+    }
 
-            if (!recoveryState.zkMigrationComplete()) {
-                transitionTo(MigrationState.ZK_MIGRATION);
-            } else {
-                transitionTo(MigrationState.DUAL_WRITE);
+    class WaitForBrokersEvent implements EventQueue.Event {
+        @Override
+        public void run() throws Exception {
+            switch (migrationState) {
+                case WAIT_FOR_BROKERS:
+                    Set<Integer> brokers = getBrokersFromTopicAssignments();
+                    if (listener.zkBrokersReadyForMigration(brokers)) {
+                        brokerIdsFromTopicAssignments = null;
+                        transitionTo(MigrationState.ZK_MIGRATION);
+                    }
+                    break;
+                default:
+                    // State has change. Nothing to do.
+                    break;
             }
         }
     }
@@ -398,6 +469,7 @@ public class KRaftMigrationDriver {
     private final KafkaEventQueue eventQueue;
     private volatile MigrationState migrationState;
     private volatile MigrationRecoveryState recoveryState;
+    private volatile Set<Integer> brokerIdsFromTopicAssignments;
     private final Map<Integer, ZkBrokerRegistration> zkBrokerRegistrations = new HashMap<>();
     private final MetadataLogListener listener = new MetadataLogListener();
     private ZkMetadataConsumer consumer;
@@ -409,7 +481,27 @@ public class KRaftMigrationDriver {
         this.migrationState = MigrationState.UNINITIALIZED;
         this.recoveryState = MigrationRecoveryState.EMPTY;
         this.client = client;
+        this.brokerIdsFromTopicAssignments = null;
         this.eventQueue = new KafkaEventQueue(Time.SYSTEM, new LogContext("KRaftMigrationDriver"), "kraft-migration");
+    }
+
+    private void initializeMigrationState() {
+        log.info("Recovering migration state");
+        apply("Recovery", client::getOrCreateMigrationRecoveryState);
+        client.watchZkBrokerRegistrations(new ZkBrokerListener());
+        String maybeDone = recoveryState.zkMigrationComplete() ? "done" : "not done";
+        log.info("Recovered migration state {}. ZK migration is {}.", recoveryState, maybeDone);
+        // TODO: KRaft Migration should first make sure all quorum controller nodes
+        //  are ready for migration. So the next state should be
+        //  WAIT_FOR_CONTROLLER_QUORUM
+        transitionTo(MigrationState.INACTIVE);
+    }
+
+    private Set<Integer> getBrokersFromTopicAssignments() {
+        if (brokerIdsFromTopicAssignments == null) {
+            brokerIdsFromTopicAssignments = client.readBrokerIdsFromTopicAssignments();
+        }
+        return brokerIdsFromTopicAssignments;
     }
 
     public void setMigrationCallback(ZkMetadataConsumer consumer) {
@@ -425,6 +517,10 @@ public class KRaftMigrationDriver {
         eventQueue.prepend(new PollEvent());
     }
 
+    public void shutdown() throws InterruptedException {
+        eventQueue.close();
+    }
+
     public KRaftMetadataListener listener() {
         return listener;
     }
@@ -438,7 +534,7 @@ public class KRaftMigrationDriver {
 
     private void transitionTo(MigrationState newState) {
         // TODO enforce a state machine
+        // The next poll event will pick up the new state.
         migrationState = newState;
-        eventQueue.append(new PollEvent());
     }
 }

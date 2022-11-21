@@ -26,6 +26,7 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerFeature;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -57,6 +58,7 @@ public class BrokerRegistration {
     private final Optional<String> rack;
     private final boolean fenced;
     private final boolean inControlledShutdown;
+    private final MetadataVersion ibp;
 
     public BrokerRegistration(int id,
                               long epoch,
@@ -65,9 +67,10 @@ public class BrokerRegistration {
                               Map<String, VersionRange> supportedFeatures,
                               Optional<String> rack,
                               boolean fenced,
-                              boolean inControlledShutdown) {
+                              boolean inControlledShutdown,
+                              MetadataVersion ibp) {
         this(id, epoch, incarnationId, listenersToMap(listeners), supportedFeatures, rack,
-            fenced, inControlledShutdown);
+            fenced, inControlledShutdown, ibp);
     }
 
     public BrokerRegistration(int id,
@@ -77,7 +80,8 @@ public class BrokerRegistration {
                               Map<String, VersionRange> supportedFeatures,
                               Optional<String> rack,
                               boolean fenced,
-                              boolean inControlledShutdown) {
+                              boolean inControlledShutdown,
+                              MetadataVersion ibp) {
         this.id = id;
         this.epoch = epoch;
         this.incarnationId = incarnationId;
@@ -95,6 +99,7 @@ public class BrokerRegistration {
         this.rack = rack;
         this.fenced = fenced;
         this.inControlledShutdown = inControlledShutdown;
+        this.ibp = ibp;
     }
 
     public static BrokerRegistration fromRecord(RegisterBrokerRecord record) {
@@ -110,6 +115,11 @@ public class BrokerRegistration {
             supportedFeatures.put(feature.name(), VersionRange.of(
                 feature.minSupportedVersion(), feature.maxSupportedVersion()));
         }
+        MetadataVersion ibp = null;
+        if (record.interBrokerProtocolVersion() != null) {
+            ibp = MetadataVersion.fromVersionString(record.interBrokerProtocolVersion());
+        }
+
         return new BrokerRegistration(record.brokerId(),
             record.brokerEpoch(),
             record.incarnationId(),
@@ -117,7 +127,12 @@ public class BrokerRegistration {
             supportedFeatures,
             Optional.ofNullable(record.rack()),
             record.fenced(),
-            record.inControlledShutdown());
+            record.inControlledShutdown(),
+            ibp);
+    }
+
+    public boolean isZkBroker() {
+        return ibp != null;
     }
 
     public int id() {
@@ -256,7 +271,8 @@ public class BrokerRegistration {
             supportedFeatures,
             rack,
             newFenced,
-            newInControlledShutdownChange
+            newInControlledShutdownChange,
+            ibp
         );
     }
 }

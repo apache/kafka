@@ -359,10 +359,10 @@ public class ClusterControlManager {
             // Brokers that don't send a supported metadata.version range are assumed to only
             // support the original metadata.version.
             record.features().add(processRegistrationFeature(brokerId, finalizedFeatures,
-                    new BrokerRegistrationRequestData.Feature().
-                            setName(MetadataVersion.FEATURE_NAME).
-                            setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
-                            setMaxSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel())));
+                new BrokerRegistrationRequestData.Feature().
+                    setName(MetadataVersion.FEATURE_NAME).
+                    setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                    setMaxSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel())));
         }
 
         heartbeatManager.register(brokerId, record.fenced());
@@ -406,24 +406,10 @@ public class ClusterControlManager {
     public void replay(RegisterBrokerRecord record, long offset) {
         registerBrokerRecordOffsets.put(record.brokerId(), offset);
         int brokerId = record.brokerId();
-        List<Endpoint> listeners = new ArrayList<>();
-        for (BrokerEndpoint endpoint : record.endPoints()) {
-            listeners.add(new Endpoint(endpoint.name(),
-                SecurityProtocol.forId(endpoint.securityProtocol()),
-                endpoint.host(), endpoint.port()));
-        }
-        Map<String, VersionRange> features = new HashMap<>();
-        for (BrokerFeature feature : record.features()) {
-            features.put(feature.name(), VersionRange.of(
-                feature.minSupportedVersion(), feature.maxSupportedVersion()));
-        }
 
         // Update broker registrations.
         BrokerRegistration prevRegistration = brokerRegistrations.put(brokerId,
-                new BrokerRegistration(brokerId, record.brokerEpoch(),
-                    record.incarnationId(), listeners, features,
-                    Optional.ofNullable(record.rack()), record.fenced(),
-                    record.inControlledShutdown()));
+            BrokerRegistration.fromRecord(record));
         updateMetrics(prevRegistration, brokerRegistrations.get(brokerId));
         if (heartbeatManager != null) {
             if (prevRegistration != null) heartbeatManager.remove(brokerId);

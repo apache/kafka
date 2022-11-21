@@ -271,6 +271,7 @@ class ControllerServer(
     if (!maybeChangeStatus(STARTED, SHUTTING_DOWN)) return
     try {
       info("shutting down")
+      CoreUtils.swallow(kraftMigrationDriver.foreach(driver => driver.shutdown()), this)
       if (socketServer != null)
         CoreUtils.swallow(socketServer.stopProcessingRequests(), this)
       if (controller != null)

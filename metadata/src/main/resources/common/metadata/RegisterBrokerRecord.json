@@ -17,7 +17,7 @@
   "apiKey": 0,
   "type": "metadata",
   "name": "RegisterBrokerRecord",
-  "validVersions": "0-1",
+  "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
@@ -51,6 +51,8 @@
     { "name": "Fenced", "type": "bool", "versions": "0+", "default": "true",
       "about": "True if the broker is fenced." },
     { "name": "InControlledShutdown", "type": "bool", "versions": "1+", "default": "false",
-      "about": "True if the broker is in controlled shutdown." }
+      "about": "True if the broker is in controlled shutdown." },
+    { "name": "InterBrokerProtocolVersion", "type": "string", "versions": "2+", "taggedVersions": "2+", "tag": 0, "ignorable": true,
+      "about": "The static IBP that the broker was started with. This is only used by ZK brokers during a migration."}
   ]
 }

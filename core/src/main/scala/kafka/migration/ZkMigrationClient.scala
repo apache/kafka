@@ -28,11 +28,13 @@ import scala.jdk.CollectionConverters._
 
 
 object ZkMigrationClient {
+  // TODO: This is temporary. Zk brokers will send BrokerRegistration request with IBP 3.4 to
+  //  KRaft controller. KRaft controller will only accept such ZkBroker registrations.
   def brokerToBrokerRegistration(broker: Broker, epoch: Long): ZkBrokerRegistration = {
       val registration = new BrokerRegistration(broker.id, epoch, Uuid.ZERO_UUID,
         Collections.emptyList[Endpoint], Collections.emptyMap[String, VersionRange],
-        Optional.empty(), false, false)
-      new ZkBrokerRegistration(registration, null, null, false)
+        Optional.empty(), false, false, MetadataVersion.IBP_3_4_IV0)
+      new ZkBrokerRegistration(registration, "3.4", null, true)
   }
 }
 
@@ -215,6 +217,14 @@ class ZkMigrationClient(zkClient: KafkaZkClient,
 
   override def readBrokerIds(): util.Set[Integer] = {
     zkClient.getSortedBrokerList.map(Integer.valueOf).toSet.asJava
+  }
+
+  override def readBrokerIdsFromTopicAssignments(): util.Set[Integer] = {
+    val brokerIds = new util.HashSet[Integer]()
+    zkClient.getReplicaAssignmentForTopics(zkClient.getAllTopicsInCluster()).foreach { case (tp, assingments) =>
+      assingments.foreach(brokerIds.add(_))
+    }
+    Collections.unmodifiableSet(brokerIds)
   }
 
   override def addZkBroker(brokerId: Int): Unit = {
