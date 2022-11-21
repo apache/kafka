@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -44,8 +44,8 @@ class SchedulerTest {
 
   @Test
   def testMockSchedulerNonPeriodicTask(): Unit = {
-    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay = 1)
-    mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, delay = 100)
+    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay=1)
+    mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, delay=100)
     assertEquals(0, counter1.get, "Counter1 should not be incremented prior to task running.")
     assertEquals(0, counter2.get, "Counter2 should not be incremented prior to task running.")
     mockTime.sleep(1)
@@ -58,8 +58,8 @@ class SchedulerTest {
 
   @Test
   def testMockSchedulerPeriodicTask(): Unit = {
-    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay = 1, period = 1)
-    mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, delay = 100, period = 100)
+    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay=1, period=1)
+    mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, delay=100, period=100)
     assertEquals(0, counter1.get, "Counter1 should not be incremented prior to task running.")
     assertEquals(0, counter2.get, "Counter2 should not be incremented prior to task running.")
     mockTime.sleep(1)
@@ -72,7 +72,7 @@ class SchedulerTest {
 
   @Test
   def testReentrantTaskInMockScheduler(): Unit = {
-    mockTime.scheduler.schedule("test1", () => mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, delay = 0), delay = 1)
+    mockTime.scheduler.schedule("test1", () => mockTime.scheduler.schedule("test2", counter2.getAndIncrement _, delay=0), delay=1)
     mockTime.sleep(1)
     assertEquals(1, counter2.get)
   }
@@ -88,7 +88,7 @@ class SchedulerTest {
   }
 
   @Test
-  def testNonPeriodicTaskWhenPeriodEqual0(): Unit = {
+  def testNonPeriodicTaskWhenPeriodIsZero(): Unit = {
     scheduler.schedule("test", counter1.getAndIncrement _, delay = 0, period = 0)
     retry(30000) {
       assertEquals(counter1.get, 1)
@@ -97,11 +97,10 @@ class SchedulerTest {
     assertEquals(1, counter1.get, "Should only run once")
   }
 
-
   @Test
   def testPeriodicTask(): Unit = {
     scheduler.schedule("test", counter1.getAndIncrement _, delay = 0, period = 5)
-    retry(30000) {
+    retry(30000){
       assertTrue(counter1.get >= 20, "Should count to 20")
     }
   }
@@ -109,7 +108,7 @@ class SchedulerTest {
   @Test
   def testRestart(): Unit = {
     // schedule a task to increment a counter
-    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay = 1)
+    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay=1)
     mockTime.sleep(1)
     assertEquals(1, counter1.get())
 
@@ -118,7 +117,7 @@ class SchedulerTest {
     mockTime.scheduler.startup()
 
     // schedule another task to increment the counter
-    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay = 1)
+    mockTime.scheduler.schedule("test1", counter1.getAndIncrement _, delay=1)
     mockTime.sleep(1)
     assertEquals(2, counter1.get())
   }
@@ -167,8 +166,8 @@ class SchedulerTest {
   /**
    * Verify that scheduler lock is not held when invoking task method, allowing new tasks to be scheduled
    * when another is being executed. This is required to avoid deadlocks when:
-   * a) Thread1 executes a task which attempts to acquire LockA
-   * b) Thread2 holding LockA attempts to schedule a new task
+   *   a) Thread1 executes a task which attempts to acquire LockA
+   *   b) Thread2 holding LockA attempts to schedule a new task
    */
   @Timeout(15)
   @Test
@@ -176,14 +175,12 @@ class SchedulerTest {
     val initLatch = new CountDownLatch(1)
     val completionLatch = new CountDownLatch(2)
     val taskLatches = List(new CountDownLatch(1), new CountDownLatch(1))
-
     def scheduledTask(taskLatch: CountDownLatch): Unit = {
       initLatch.countDown()
       assertTrue(taskLatch.await(30, TimeUnit.SECONDS), "Timed out waiting for latch")
       completionLatch.countDown()
     }
-
-    mockTime.scheduler.schedule("test1", () => scheduledTask(taskLatches.head), delay = 1)
+    mockTime.scheduler.schedule("test1", () => scheduledTask(taskLatches.head), delay=1)
     val tickExecutor = Executors.newSingleThreadScheduledExecutor()
     try {
       tickExecutor.scheduleWithFixedDelay(() => mockTime.sleep(1), 0, 1, TimeUnit.MILLISECONDS)
