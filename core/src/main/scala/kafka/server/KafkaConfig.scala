@@ -730,7 +730,7 @@ object KafkaConfig {
   val MetadataSnapshotMaxNewRecordBytesDoc = "This is the maximum number of bytes in the log between the latest " +
     "snapshot and the high-watermark needed before generating a new snapshot. The default value is " +
     s"${Defaults.MetadataSnapshotMaxNewRecordBytes}. To generate snapshots based on the time elapsed, see " +
-    s"the <code>$MetadataSnapshotMaxIntervalMsProp</code> configuration. The Kafka node will generate a snapshot when "
+    s"the <code>$MetadataSnapshotMaxIntervalMsProp</code> configuration. The Kafka node will generate a snapshot when " +
     "either the maximum time interval is reached or the maximum bytes limit is reached."
   val MetadataSnapshotMaxIntervalMsDoc = "This is the maximum number of milliseconds to wait to generate a snapshot " +
     "if there are committed records in the log that are not included in the latest snapshot. A value of zero disables " +
