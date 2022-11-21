@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
@@ -46,12 +47,12 @@ public class CoordinatorManager {
     private final long requestTimeoutMs;
     private Node coordinator;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
-    private ExponentialBackoff exponentialBackoff;
+    private final ExponentialBackoff exponentialBackoff;
     private long lastTimeOfConnectionMs = -1L; // starting logging a warning only after unable to connect for a while
-    private CoordinatorRequestState coordinatorRequestState;
+    private final CoordinatorRequestState coordinatorRequestState;
 
-    private long rebalanceTimeoutMs;
-    private Optional<String> groupId;
+    private final long rebalanceTimeoutMs;
+    private final Optional<String> groupId;
 
     public CoordinatorManager(final Time time,
                               final LogContext logContext,
@@ -74,10 +75,9 @@ public class CoordinatorManager {
     }
 
     /**
-     * Returns a non-empty UnsentRequest if the following conditions are met:
+     * Returns a non-empty UnsentRequest we need send a FindCoordinatorRequest. These conditions are:
      * 1. The request has not been sent
-     * 2. There is no inflight request
-     * 3. If the previous request failed, and the retryBackoff has expired
+     * 2. If the previous request failed, and the retryBackoff has expired
      * @return Optional UnsentRequest.  Empty if we are not allowed to send a request.
      */
     public Optional<NetworkClientUtils.UnsentRequest> tryFindCoordinator() {
@@ -86,7 +86,8 @@ public class CoordinatorManager {
             return Optional.of(
                     new NetworkClientUtils.UnsentRequest(
                             this.time.timer(requestTimeoutMs),
-                            getFindCoordinatorRequest()));
+                            getFindCoordinatorRequest(),
+                            new FindCoordinatorRequestHandler()));
         }
 
         if (coordinatorRequestState.lastReceivedMs == -1 ||
@@ -103,20 +104,21 @@ public class CoordinatorManager {
         return Optional.of(
                 new NetworkClientUtils.UnsentRequest(
                         this.time.timer(requestTimeoutMs),
-                        getFindCoordinatorRequest()));
+                        getFindCoordinatorRequest(),
+                        new FindCoordinatorRequestHandler()));
     }
 
     /**
      * Mark the current coordinator null and return the old coordinator. Return an empty Optional
      * if the current coordinator is unknown.
-     * @param cause
+     * @param cause why the coordinator is marked unknown
      * @return Optional coordinator node that can be null.
      */
     protected Optional<Node> markCoordinatorUnknown(String cause) {
         Node oldCoordinator = this.coordinator;
         if (this.coordinator != null) {
             log.info("Group coordinator {} is unavailable or invalid due to cause: {}. "
-                            + "isDisconnected: {}. Rediscovery will be attempted.", this.coordinator, cause);
+                            + "Rediscovery will be attempted.", this.coordinator, cause);
             this.coordinator = null;
             lastTimeOfConnectionMs = time.milliseconds();
         } else {
@@ -127,17 +129,16 @@ public class CoordinatorManager {
         return Optional.ofNullable(oldCoordinator);
     }
 
-    private AbstractRequest.Builder getFindCoordinatorRequest() {
+    private AbstractRequest.Builder<?> getFindCoordinatorRequest() {
         coordinatorRequestState.updateLastSend();
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
                 .setKey(this.groupId.orElse(null));
-        FindCoordinatorRequest.Builder requestBuilder = new FindCoordinatorRequest.Builder(data);
-        return requestBuilder;
+        return new FindCoordinatorRequest.Builder(data);
     }
 
-    public void handleSuccessFindCoordinatorResponse(FindCoordinatorResponse resp) {
-        List<FindCoordinatorResponseData.Coordinator> coordinators = resp.coordinators();
+    void handleSuccessFindCoordinatorResponse(FindCoordinatorResponse response) {
+        List<FindCoordinatorResponseData.Coordinator> coordinators = response.coordinators();
         if (coordinators.size() != 1) {
             log.error(
                     "Group coordinator lookup failed: Invalid response containing more than a single coordinator");
@@ -169,17 +170,17 @@ public class CoordinatorManager {
         enqueueErrorEvent(error.exception());
     }
 
-    public void handleFailedCoordinatorResponse(FindCoordinatorResponse response) {
+    void handleFailedCoordinatorResponse(FindCoordinatorResponse response) {
         log.debug("FindCoordinator request failed due to {}", response.error().toString());
 
         if (!(response.error().exception() instanceof RetriableException)) {
-            log.info("FindCoordinator request hit fatal exception", response.error());
+            log.info("FindCoordinator request hit fatal exception", response.error().exception());
             // Remember the exception if fatal so we can ensure
             // it gets thrown by the main thread
             enqueueErrorEvent(response.error().exception());
         }
 
-        log.debug("Coordinator discovery failed, refreshing metadata", response.error());
+        log.debug("Coordinator discovery failed, refreshing metadata", response.error().exception());
     }
 
     /**
@@ -231,6 +232,14 @@ public class CoordinatorManager {
 
         private boolean requestBackoffExpired() {
             return (time.milliseconds() - this.lastReceivedMs) >= (exponentialBackoff.backoff(numAttempts));
+        }
+    }
+
+    private class FindCoordinatorRequestHandler extends NetworkClientUtils.RequestFutureCompletionHandler {
+        @Override
+        public void onComplete(ClientResponse response) {
+            super.onComplete(response);
+            CoordinatorManager.this.onResponse((FindCoordinatorResponse) response.responseBody());
         }
     }
 }

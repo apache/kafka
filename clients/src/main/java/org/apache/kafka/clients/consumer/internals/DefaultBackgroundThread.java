@@ -16,30 +16,24 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.NoopApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Background thread runnable that consumes {@code ApplicationEvent} and
@@ -56,7 +50,6 @@ public class DefaultBackgroundThread extends KafkaThread {
     private final Logger log;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
-    private final KafkaClient networkClient;
     private final ConsumerMetadata metadata;
     private final ConsumerConfig config;
     private final CoordinatorManager coordinatorManager;
@@ -65,8 +58,6 @@ public class DefaultBackgroundThread extends KafkaThread {
 
     private boolean running;
     private Optional<ApplicationEvent> inflightEvent;
-    private final AtomicReference<Optional<RuntimeException>> exception =
-        new AtomicReference<>(Optional.empty());
 
     public DefaultBackgroundThread(final Time time,
                                    final ConsumerConfig config,
@@ -86,9 +77,9 @@ public class DefaultBackgroundThread extends KafkaThread {
             this.inflightEvent = Optional.empty();
             // subscriptionState is initialized by the polling thread
             this.metadata = metadata;
-            this.networkClient = networkClient;
             this.networkClientUtils = new NetworkClientUtils(
                     this.time,
+                    logContext,
                     networkClient);
             this.running = true;
             this.coordinatorManager = new CoordinatorManager(time,
@@ -121,10 +112,7 @@ public class DefaultBackgroundThread extends KafkaThread {
             }
         } catch (final Throwable t) {
             log.error("The background thread failed due to unexpected error", t);
-            if (t instanceof RuntimeException)
-                this.exception.set(Optional.of((RuntimeException) t));
-            else
-                this.exception.set(Optional.of(new RuntimeException(t)));
+            throw new RuntimeException(t);
         } finally {
             close();
             log.debug("{} closed", getClass());
@@ -157,14 +145,13 @@ public class DefaultBackgroundThread extends KafkaThread {
         // if there are pending events to process, poll then continue without
         // blocking.
         if (!applicationEventQueue.isEmpty() || inflightEvent.isPresent()) {
-            handleNetworkResponses(networkClientUtils.poll());
+            networkClientUtils.poll();
             return;
         }
         // if there are no events to process, poll until timeout. The timeout
         // will be the minimum of the requestTimeoutMs, nextHeartBeatMs, and
         // nextMetadataUpdate. See NetworkClient.poll impl.
-        handleNetworkResponses(networkClientUtils.poll(
-                time.timer(timeToNextHeartbeatMs()), false));
+        networkClientUtils.poll(time.timer(timeToNextHeartbeatMs()), false);
     }
 
     /**
@@ -194,18 +181,6 @@ public class DefaultBackgroundThread extends KafkaThread {
         return true;
     }
 
-    private void handleNetworkResponses(List<ClientResponse> res) {
-        res.forEach(this::handleNetworkResponse);
-    }
-
-    private void handleNetworkResponse(ClientResponse res) {
-        //res.requestHeader().correlationId() // incremented very time we send the request
-        if (res.responseBody() instanceof FindCoordinatorResponse) {
-            FindCoordinatorResponse response = (FindCoordinatorResponse) res.responseBody();
-            coordinatorManager.onResponse(response);
-        }
-    }
-
     private long timeToNextHeartbeatMs() {
         // TODO: implemented when heartbeat is added to the impl
         return 100;
@@ -230,17 +205,6 @@ public class DefaultBackgroundThread extends KafkaThread {
         return applicationEventProcessor.process(event);
     }
 
-    /**
-     * Processes {@link NoopApplicationEvent} and equeue a
-     * {@link NoopBackgroundEvent}. This is intentionally left here for
-     * demonstration purpose.
-     *
-     * @param event a {@link NoopApplicationEvent}
-     */
-    private void process(final NoopApplicationEvent event) {
-        backgroundEventQueue.add(new NoopBackgroundEvent(event.message));
-    }
-
     public boolean isRunning() {
         return this.running;
     }
@@ -252,7 +216,7 @@ public class DefaultBackgroundThread extends KafkaThread {
     public void close() {
         this.running = false;
         this.wakeup();
-        Utils.closeQuietly(networkClient, "network client");
+        Utils.closeQuietly(networkClientUtils, "network client utils");
         Utils.closeQuietly(metadata, "consumer metadata client");
     }
 }

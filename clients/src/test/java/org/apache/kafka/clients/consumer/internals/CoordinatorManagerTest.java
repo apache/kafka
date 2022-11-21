@@ -22,6 +22,8 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -37,6 +39,8 @@ import java.util.concurrent.LinkedBlockingDeque;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CoordinatorManagerTest {
     private MockTime time;
@@ -71,12 +75,34 @@ public class CoordinatorManagerTest {
     }
     
     @Test
-    public void testTestFindCoordinator() {
+    public void testTryFindCoordinator() {
+        CoordinatorManager coordinatorManager = setupCoordinatorManager();
+        assertTrue(coordinatorManager.tryFindCoordinator().isPresent());
+        // Prevent sending successive FindCoordinator requests w/o a response
+        assertFalse(coordinatorManager.tryFindCoordinator().isPresent());
 
+        coordinatorManager.handleSuccessFindCoordinatorResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE,
+                "key", this.node));
+        assertTrue(coordinatorManager.tryFindCoordinator().isPresent());
     }
 
     @Test
     public void testTestFindCoordinatorError() {
+        CoordinatorManager coordinatorManager = setupCoordinatorManager();
+        assertTrue(coordinatorManager.tryFindCoordinator().isPresent());
+        coordinatorManager.onResponse(
+                FindCoordinatorResponse.prepareResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, "key",
+                this.node));
+        // Testing exp. backoff.
+        assertFalse(coordinatorManager.tryFindCoordinator().isPresent());
+        // First backoff should be 100ms
+        this.time.sleep(100);
+        assertTrue(coordinatorManager.tryFindCoordinator().isPresent());
+        coordinatorManager.onResponse(
+                FindCoordinatorResponse.prepareResponse(Errors.NONE, "key",
+                        this.node));
+        // It is permitted to rediscover coordinator again.
+        assertTrue(coordinatorManager.tryFindCoordinator().isPresent());
     }
     
     private CoordinatorManager setupCoordinatorManager() {
