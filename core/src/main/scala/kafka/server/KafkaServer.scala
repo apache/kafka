@@ -28,7 +28,9 @@ import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.metrics.KafkaMetricsReporter
+import kafka.migration.OffsetTrackingListener
 import kafka.network.{ControlPlaneAcceptor, DataPlaneAcceptor, RequestChannel, SocketServer}
+import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.metadata.{ZkConfigRepository, ZkMetadataCache}
 import kafka.utils._
@@ -36,6 +38,7 @@ import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
 import org.apache.kafka.common.message.ControlledShutdownRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
@@ -46,8 +49,10 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, Node, Uuid}
-import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange}
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.zookeeper.client.ZKClientConfig
@@ -193,6 +198,8 @@ class KafkaServer(
 
   def kafkaController: KafkaController = _kafkaController
 
+  var lifecycleManager: BrokerLifecycleManager = _
+
   /**
    * Start up API for bringing up a single instance of the Kafka server.
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
@@ -210,6 +217,10 @@ class KafkaServer(
       val canStartup = isStartingUp.compareAndSet(false, true)
       if (canStartup) {
         _brokerState = BrokerState.STARTING
+
+        lifecycleManager = new BrokerLifecycleManager(config,
+          time,
+          threadNamePrefix)
 
         /* setup zookeeper */
         initZkClient(time)
@@ -347,7 +358,64 @@ class KafkaServer(
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
 
         // Now that the broker is successfully registered, checkpoint its metadata
-        checkpointBrokerMetadata(ZkMetaProperties(clusterId, config.brokerId))
+        val zkMetaProperties = ZkMetaProperties(clusterId, config.brokerId)
+        checkpointBrokerMetadata(zkMetaProperties)
+
+        if (config.migrationEnabled) {
+          val kraftMetaProps = MetaProperties(zkMetaProperties.clusterId, zkMetaProperties.brokerId)
+          val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
+            RaftConfig.parseVoterConnections(config.quorumVoters))
+          val raftManager = new KafkaRaftManager[ApiMessageAndVersion](
+            kraftMetaProps,
+            config,
+            new MetadataRecordSerde,
+            KafkaRaftServer.MetadataPartition,
+            KafkaRaftServer.MetadataTopicId,
+            time,
+            metrics,
+            threadNamePrefix,
+            controllerQuorumVotersFuture
+          )
+          val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
+          val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
+          val brokerToQuorumChannelManager = BrokerToControllerChannelManager(
+            controllerNodeProvider = quorumControllerNodeProvider,
+            time = time,
+            metrics = metrics,
+            config = config,
+            channelName = "quorum",
+            threadNamePrefix = threadNamePrefix,
+            retryTimeoutMs = config.requestTimeoutMs.longValue
+          )
+
+          val listener = new OffsetTrackingListener()
+          raftManager.register(listener)
+
+          val networkListeners = new ListenerCollection()
+           config.effectiveAdvertisedListeners.foreach { ep =>
+             networkListeners.add(new Listener().
+               setHost(if (Utils.isBlank(ep.host)) InetAddress.getLocalHost.getCanonicalHostName else ep.host).
+               setName(ep.listenerName.value()).
+               setPort(if (ep.port == 0) socketServer.boundPort(ep.listenerName) else ep.port).
+               setSecurityProtocol(ep.securityProtocol.id))
+           }
+
+           val ibpAsFeature =
+             java.util.Collections.singletonMap(MetadataVersion.FEATURE_NAME,
+               VersionRange.of(config.interBrokerProtocolVersion.featureLevel(), config.interBrokerProtocolVersion.featureLevel()))
+
+           lifecycleManager.start(
+             () => listener.highestOffset,
+             brokerToQuorumChannelManager,
+             kraftMetaProps.clusterId,
+             networkListeners,
+             ibpAsFeature
+           )
+
+          raftManager.startup()
+          //lifecycleManager.initialCatchUpFuture.get()
+          //lifecycleManager.setReadyToUnfence().get()
+        }
 
         /* start token manager */
         tokenManager = new DelegationTokenManager(config, tokenCache, time , zkClient)
@@ -464,6 +532,10 @@ class KafkaServer(
         dynamicConfigManager = new ZkConfigManager(zkClient, dynamicConfigHandlers)
         dynamicConfigManager.startup()
 
+        if (lifecycleManager != null) {
+          lifecycleManager.initialCatchUpFuture.get
+          lifecycleManager.setReadyToUnfence().get
+        }
         socketServer.enableRequestProcessing(authorizerFutures)
 
         _brokerState = BrokerState.RUNNING
@@ -692,11 +764,26 @@ class KafkaServer(
       // We request the controller to do a controlled shutdown. On failure, we backoff for a configured period
       // of time and try again for a configured number of retries. If all the attempt fails, we simply force
       // the shutdown.
-      info("Starting controlled shutdown")
-
       _brokerState = BrokerState.PENDING_CONTROLLED_SHUTDOWN
 
-      val shutdownSucceeded = doControlledShutdown(config.controlledShutdownMaxRetries.intValue)
+      val shutdownSucceeded = if (lifecycleManager != null) {
+        lifecycleManager.beginControlledShutdown()
+        try {
+          info("Starting controlled shutdown via BrokerLifecycleManager")
+          lifecycleManager.controlledShutdownFuture.get(5L, TimeUnit.MINUTES)
+          true
+        } catch {
+          case _: TimeoutException =>
+            error("Timed out waiting for the controller to approve controlled shutdown")
+            false
+          case e: Throwable =>
+            error("Got unexpected exception waiting for controlled shutdown future", e)
+            false
+        }
+      } else {
+        info("Starting controlled shutdown")
+        doControlledShutdown(config.controlledShutdownMaxRetries.intValue)
+      }
 
       if (!shutdownSucceeded)
         warn("Proceeding to do an unclean shutdown as all the controlled shutdown attempts failed")
@@ -799,6 +886,9 @@ class KafkaServer(
         // Clear all reconfigurable instances stored in DynamicBrokerConfig
         config.dynamicConfig.clear()
 
+        if (lifecycleManager != null) {
+          lifecycleManager.close()
+        }
         _brokerState = BrokerState.NOT_RUNNING
 
         startupComplete.set(false)

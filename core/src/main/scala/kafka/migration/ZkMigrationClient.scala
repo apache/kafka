@@ -31,7 +31,7 @@ object ZkMigrationClient {
   def brokerToBrokerRegistration(broker: Broker, epoch: Long): ZkBrokerRegistration = {
       val registration = new BrokerRegistration(broker.id, epoch, Uuid.ZERO_UUID,
         Collections.emptyList[Endpoint], Collections.emptyMap[String, VersionRange],
-        Optional.empty(), false, false)
+        Optional.empty(), false, false, true)
       new ZkBrokerRegistration(registration, null, null, false)
   }
 }

@@ -271,6 +271,7 @@ public class KRaftMigrationDriver {
 
                     // Register this broker with the KRaft controller.
                     // TODO this is temporary until ZK brokers can send the registration RPC!!
+                    /*
                     BrokerRegistration registration = broker.get().brokerRegistration();
                     BrokerRegistrationRequestData.ListenerCollection listeners = new BrokerRegistrationRequestData.ListenerCollection();
                     registration.listeners().forEach((name, endpoint) ->
@@ -282,13 +283,16 @@ public class KRaftMigrationDriver {
                     );
                     BrokerRegistrationRequestData brokerRegistrationData = new BrokerRegistrationRequestData()
                         .setBrokerId(registration.id())
+                        .setIsZkBroker(true)
                         .setClusterId(broker.get().clusterId().map(Uuid::toString).orElse(null))
                         .setIncarnationId(registration.incarnationId())
                         .setRack(registration.rack().orElse(null))
                         .setFeatures(new BrokerRegistrationRequestData.FeatureCollection())
-                        .setInterBrokerProtocolVersion(broker.get().ibp().orElse(null))
+
                         .setListeners(listeners);
                     consumer.registerZkBroker(brokerRegistrationData);
+
+                     */
                 } else {
                     throw new IllegalStateException("Saw broker " + brokerId + " added, but registration data is missing");
                 }

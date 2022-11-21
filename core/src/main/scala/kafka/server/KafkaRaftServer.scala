@@ -112,11 +112,15 @@ class KafkaRaftServer(
 
   private val controller: Option[ControllerServer] = if (config.processRoles.contains(ControllerRole)) {
     // TODO clean these up
-    val zkClient = KafkaServer.zkClient("KRaft migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
-    val stateChangeLogger = new StateChangeLogger(-1, inControllerContext = false, None)
-    val channelManager = new ControllerChannelManager(() => -1, config, Time.SYSTEM, new Metrics(), stateChangeLogger)
-    val migrationClient = new ZkMigrationClient(zkClient, channelManager)
-    val migrationDriver = new KRaftMigrationDriver(config.nodeId, migrationClient)
+    val migrationDriver = if (config.migrationEnabled) {
+      val zkClient = KafkaServer.zkClient("KRaft migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
+      val stateChangeLogger = new StateChangeLogger(-1, inControllerContext = false, None)
+      val channelManager = new ControllerChannelManager(() => -1, config, Time.SYSTEM, new Metrics(), stateChangeLogger)
+      val migrationClient = new ZkMigrationClient(zkClient, channelManager)
+      Some(new KRaftMigrationDriver(config.nodeId, migrationClient))
+    } else {
+      None
+    }
 
     val controllerMetrics = new QuorumControllerMetrics(KafkaYammerMetrics.defaultRegistry(), time)
     val metadataFaultHandler = new LoggingFaultHandler("controller metadata",
@@ -136,7 +140,7 @@ class KafkaRaftServer(
       bootstrapMetadata,
       metadataFaultHandler,
       fatalFaultHandler,
-      Some(migrationDriver)
+      migrationDriver
     ))
   } else {
     None
