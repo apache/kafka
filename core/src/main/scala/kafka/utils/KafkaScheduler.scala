@@ -120,7 +120,6 @@ class KafkaScheduler(val threads: Int,
             trace("Completed execution of scheduled task '%s'.".format(name))
           }
         }
-        //fixbug: if period==0 , it should be an execution thread rather than a throw error
         if (period > 0)
           executor.scheduleAtFixedRate(runnable, delay, period, unit)
         else
