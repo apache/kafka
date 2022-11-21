@@ -74,7 +74,7 @@ public class ConnectorConfig extends AbstractConfig {
 
     public static final String CONNECTOR_CLASS_CONFIG = "connector.class";
 
-    public static final String VERSION_CONFIG = "version";
+    public static final String VERSION_CONFIG = "connector.version";
     private static final String CONNECTOR_CLASS_DOC =
             "Name or alias of the class for this connector. Must be a subclass of org.apache.kafka.connect.connector.Connector. " +
                     "If the connector is org.apache.kafka.connect.file.FileStreamSinkConnector, you can either specify this full name, " +
