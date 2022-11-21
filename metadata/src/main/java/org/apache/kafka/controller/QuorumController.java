@@ -1014,8 +1014,8 @@ public final class QuorumController implements Controller {
                         );
 
                         if (offset >= raftClient.latestSnapshotId().map(OffsetAndEpoch::offset).orElse(0L)) {
-                            oldestCommittedLogOnlyAppendTimestamp = Math.min(
-                                oldestCommittedLogOnlyAppendTimestamp,
+                            oldestNonSnapshottedTimestamp = Math.min(
+                                oldestNonSnapshottedTimestamp,
                                 batch.appendTimestamp()
                             );
                         }
@@ -1420,15 +1420,15 @@ public final class QuorumController implements Controller {
             long now = time.milliseconds();
             long delayMs = Math.min(
                 0,
-                snapshotMaxIntervalMs + oldestCommittedLogOnlyAppendTimestamp - now
+                snapshotMaxIntervalMs + oldestNonSnapshottedTimestamp - now
             );
 
             log.debug(
                 "Scheduling write event for {} because snapshotMaxIntervalMs ({}), " +
-                "oldestCommittedLogOnlyAppendTimestamp ({}) and now ({})",
+                "oldestNonSnapshottedTimestamp ({}) and now ({})",
                 MAYBE_GENERATE_SNAPSHOT,
                 snapshotMaxIntervalMs,
-                oldestCommittedLogOnlyAppendTimestamp,
+                oldestNonSnapshottedTimestamp,
                 now
             );
 
@@ -1524,7 +1524,13 @@ public final class QuorumController implements Controller {
     }
 
     private void maybeGenerateSnapshot() {
-        if (!snapshotGeneratorManager.snapshotInProgress()) {
+        if (snapshotGeneratorManager.snapshotInProgress()) {
+            /* Skip snapshot generation if there is a snaphshot in progress.
+             *
+             * When the in-progress snapshot completes it will call this method to check if the controller should
+             * generate another snapshot due to any of the reasons supported by this method.
+             */
+        } else {
             Set<SnapshotReason> snapshotReasons = new HashSet<>();
             // Check if a snapshot should be generated because of committed bytes
             if (committedBytesSinceLastSnapshot >= snapshotMaxNewRecordBytes) {
@@ -1536,7 +1542,7 @@ public final class QuorumController implements Controller {
             // Check if a snapshot should be generated because of committed append times
             if (snapshotMaxIntervalMs > 0) {
                 // Time base snasphots are enabled
-                long snapshotIntervalMs = time.milliseconds() - oldestCommittedLogOnlyAppendTimestamp;
+                long snapshotIntervalMs = time.milliseconds() - oldestNonSnapshottedTimestamp;
                 if (snapshotIntervalMs >= snapshotMaxIntervalMs) {
                     snapshotReasons.add(SnapshotReason.maxIntervalExceeded(snapshotIntervalMs, snapshotMaxIntervalMs));
                 } else {
@@ -1559,21 +1565,19 @@ public final class QuorumController implements Controller {
                     SnapshotReason.stringFromReasons(snapshotReasons)
                 );
 
-                snapshotGeneratorManager.createSnapshotGenerator(lastCommittedOffset, lastCommittedEpoch, lastCommittedTimestamp);
+                snapshotGeneratorManager.createSnapshotGenerator(
+                    lastCommittedOffset,
+                    lastCommittedEpoch,
+                    lastCommittedTimestamp
+                );
 
                 // Reset all of the snapshot counters
                 committedBytesSinceLastSnapshot = 0;
-                oldestCommittedLogOnlyAppendTimestamp = Long.MAX_VALUE;
+                oldestNonSnapshottedTimestamp = Long.MAX_VALUE;
 
                 // Starting a snapshot invalidates any scheduled snapshot generation
                 cancelNextGenerateSnapshot();
             }
-        } else {
-            /* Skip snapshot generation if there is a snaphshot in progress.
-             *
-             * When the in-progress snapshot completes it will call this method to check if the controller should generate
-             * another snapshot due to any of the reasons supported by this method.
-             */
         }
     }
 
@@ -1767,7 +1771,7 @@ public final class QuorumController implements Controller {
     /**
      * Timestamp for the oldest record that was committed but not included in a snapshot.
      */
-    private long oldestCommittedLogOnlyAppendTimestamp = Long.MAX_VALUE;
+    private long oldestNonSnapshottedTimestamp = Long.MAX_VALUE;
 
     /**
      * How long to delay partition leader balancing operations.

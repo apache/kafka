@@ -729,13 +729,15 @@ object KafkaConfig {
     "If it is not set, the metadata log is placed in the first log directory from log.dirs."
   val MetadataSnapshotMaxNewRecordBytesDoc = "This is the maximum number of bytes in the log between the latest " +
     "snapshot and the high-watermark needed before generating a new snapshot. The default value is " +
-    s"${Defaults.MetadataSnapshotMaxNewRecordBytes}. To geneate snapshots based on the time elapsed, see " +
-    s"the <code>$MetadataSnapshotMaxIntervalMsProp</code> configuration."
+    s"${Defaults.MetadataSnapshotMaxNewRecordBytes}. To generate snapshots based on the time elapsed, see " +
+    s"the <code>$MetadataSnapshotMaxIntervalMsProp</code> configuration. The Kafka node will generate a snapshot when "
+    "either the maximum time interval is reached or the maximum bytes limit is reached."
   val MetadataSnapshotMaxIntervalMsDoc = "This is the maximum number of milliseconds to wait to generate a snapshot " +
     "if there are committed records in the log that are not included in the latest snapshot. A value of zero disables " +
-    s"time based snapshot generation. The default value is ${Defaults.MetadataSnapshotMaxIntervalMs}. To geneate " +
+    s"time based snapshot generation. The default value is ${Defaults.MetadataSnapshotMaxIntervalMs}. To generate " +
     s"snapshots based on the number of metadata bytes, see the <code>$MetadataSnapshotMaxNewRecordBytesProp</code> " +
-    "configuration."
+    "configuration. The Kafka node will generate a snapshot when either the maximum time interval is reached or the " +
+    "maximum bytes limit is reached."
   val MetadataMaxIdleIntervalMsDoc = "This configuration controls how often the active " +
     "controller should write no-op records to the metadata partition. If the value is 0, no-op records " +
     s"are not appended to the metadata partition. The default value is ${Defaults.MetadataMaxIdleIntervalMs}";
