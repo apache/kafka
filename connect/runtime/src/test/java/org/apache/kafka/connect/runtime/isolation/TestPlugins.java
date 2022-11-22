@@ -130,11 +130,11 @@ public class TestPlugins {
             this.hideFromPluginPath = hideFromPluginPath;
         }
 
-        public String getResourceDir() {
+        public String resourceDir() {
             return resourceDir;
         }
 
-        public String getClassName() {
+        public String className() {
             return className;
         }
 
@@ -152,7 +152,7 @@ public class TestPlugins {
         Map<TestPlugin, File> pluginJars = new HashMap<>();
         try {
             for (TestPlugin testPlugin : TestPlugin.values()) {
-                pluginJars.put(testPlugin, createPluginJar(testPlugin.resourceDir));
+                pluginJars.put(testPlugin, createPluginJar(testPlugin.resourceDir()));
             }
         } catch (Throwable e) {
             log.error("Could not set up plugin test jars", e);
@@ -209,7 +209,7 @@ public class TestPlugins {
     public static List<String> pluginClasses() {
         return PLUGIN_JARS.keySet()
                 .stream()
-                .map(TestPlugin::getClassName)
+                .map(TestPlugin::className)
                 .distinct()
                 .collect(Collectors.toList());
     }
