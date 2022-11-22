@@ -201,6 +201,7 @@ class ControllerServer(
           setSessionTimeoutNs(TimeUnit.NANOSECONDS.convert(config.brokerSessionTimeoutMs.longValue(),
             TimeUnit.MILLISECONDS)).
           setSnapshotMaxNewRecordBytes(config.metadataSnapshotMaxNewRecordBytes).
+          setSnapshotMaxIntervalMs(config.metadataSnapshotMaxIntervalMs).
           setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs).
           setMaxIdleIntervalNs(maxIdleIntervalNs).
           setMetrics(controllerMetrics).
