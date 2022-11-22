@@ -121,9 +121,8 @@ object BrokerToControllerChannelManager {
     config: KafkaConfig,
     channelName: String,
     threadNamePrefix: Option[String],
-    retryTimeoutMs: Long,
-    networkClientRetryTimeoutMs: Option[Int] = None
-   ): BrokerToControllerChannelManager = {
+    retryTimeoutMs: Long
+  ): BrokerToControllerChannelManager = {
     new BrokerToControllerChannelManagerImpl(
       controllerNodeProvider,
       time,
@@ -131,8 +130,7 @@ object BrokerToControllerChannelManager {
       config,
       channelName,
       threadNamePrefix,
-      retryTimeoutMs,
-      networkClientRetryTimeoutMs
+      retryTimeoutMs
     )
   }
 }
@@ -161,8 +159,7 @@ class BrokerToControllerChannelManagerImpl(
   config: KafkaConfig,
   channelName: String,
   threadNamePrefix: Option[String],
-  retryTimeoutMs: Long,
-  networkClientRetryTimeoutMs: Option[Int] = None
+  retryTimeoutMs: Long
 ) extends BrokerToControllerChannelManager with Logging {
   private val logContext = new LogContext(s"[BrokerToControllerChannelManager broker=${config.brokerId} name=$channelName] ")
   private val manualMetadataUpdater = new ManualMetadataUpdater()
@@ -214,7 +211,7 @@ class BrokerToControllerChannelManagerImpl(
         50,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
-        networkClientRetryTimeoutMs.getOrElse(config.controllerSocketTimeoutMs),
+        Math.min(Int.MaxValue, Math.min(config.controllerSocketTimeoutMs, retryTimeoutMs)).toInt, // request timeout should not exceed the provided retry timeout
         config.connectionSetupTimeoutMs,
         config.connectionSetupTimeoutMaxMs,
         time,
@@ -235,8 +232,7 @@ class BrokerToControllerChannelManagerImpl(
       config,
       time,
       threadName,
-      retryTimeoutMs,
-      networkClientRetryTimeoutMs
+      retryTimeoutMs
     )
   }
 
@@ -286,9 +282,8 @@ class BrokerToControllerRequestThread(
   config: KafkaConfig,
   time: Time,
   threadName: String,
-  retryTimeoutMs: Long,
-  networkClientRetryTimeoutMs: Option[Int] = None
-) extends InterBrokerSendThread(threadName, networkClient, networkClientRetryTimeoutMs.getOrElse(config.controllerSocketTimeoutMs), time, isInterruptible = false) {
+  retryTimeoutMs: Long
+) extends InterBrokerSendThread(threadName, networkClient, Math.min(Int.MaxValue, Math.min(config.controllerSocketTimeoutMs, retryTimeoutMs)).toInt, time, isInterruptible = false) {
 
   private val requestQueue = new LinkedBlockingDeque[BrokerToControllerQueueItem]()
   private val activeController = new AtomicReference[Node](null)
