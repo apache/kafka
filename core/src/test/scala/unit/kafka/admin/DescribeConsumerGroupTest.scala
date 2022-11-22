@@ -199,17 +199,23 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       val group = this.group + describeType.mkString("")
       addConsumerGroupExecutor(numConsumers = 1, group = group)
     }
-
     val expectedNumLines = describeTypes.length * 2
+    val expectedNumLinesState = describeTypes.length + 1
+
+    def provideExpectedNumLines(describeType:Array[String]):Int = {
+      if(Array(describeType).sameElements(describeTypeState))
+        expectedNumLinesState
+      else
+        expectedNumLines
+    }
 
     for (describeType <- describeTypes) {
       val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--all-groups") ++ describeType
       val service = getConsumerGroupService(cgcArgs)
-
       TestUtils.waitUntilTrue(() => {
         val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroups())
         val numLines = output.trim.split("\n").filterNot(line => line.isEmpty).length
-        (numLines == expectedNumLines) && error.isEmpty
+        (numLines == provideExpectedNumLines(describeType)) && error.isEmpty
       }, s"Expected a data row and no error in describe results with describe type ${describeType.mkString(" ")}.")
     }
   }
