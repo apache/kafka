@@ -23,8 +23,8 @@ import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.Enumeration;
-import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Vector;
 
 /**
  * A custom classloader dedicated to loading Connect plugin classes in classloading isolation.
@@ -99,32 +99,19 @@ public class PluginClassLoader extends URLClassLoader {
     @Override
     public Enumeration<URL> getResources(String name) throws IOException {
         Objects.requireNonNull(name);
-        @SuppressWarnings("unchecked")
-        Enumeration<URL>[] tmp = (Enumeration<URL>[]) new Enumeration<?>[2];
-        tmp[0] = findResources(name);
+        Vector<URL> resources = new Vector<>();
+        for (Enumeration<URL> foundLocally = findResources(name); foundLocally.hasMoreElements();) {
+            URL url = foundLocally.nextElement();
+            if (url != null)
+                resources.add(url);
+        }
         // Explicitly call the parent implementation instead of super to avoid double-listing the local resources
-        tmp[1] = getParent().getResources(name);
-        return new Enumeration<URL>() {
-            private int index;
-            private boolean next() {
-                while (index < tmp.length) {
-                    if (tmp[index] != null && tmp[index].hasMoreElements()) {
-                        return true;
-                    }
-                    index++;
-                }
-                return false;
-            }
-            public boolean hasMoreElements() {
-                return next();
-            }
-            public URL nextElement() {
-                if (!next()) {
-                    throw new NoSuchElementException();
-                }
-                return tmp[index].nextElement();
-            }
-        };
+        for (Enumeration<URL> foundByParent = getParent().getResources(name); foundByParent.hasMoreElements();) {
+            URL url = foundByParent.nextElement();
+            if (url != null)
+                resources.add(url);
+        }
+        return resources.elements();
     }
 
     // This method needs to be thread-safe because it is supposed to be called by multiple
