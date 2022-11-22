@@ -808,7 +808,7 @@ class Partition(val topicPartition: TopicPartition,
   ): Unit = {
     if (isLeader) {
       val followers = replicas.filter(_ != localBrokerId)
-      val removedReplicas = remoteReplicasMap.keys.filter(!followers.contains(_))
+      val removedReplicas = remoteReplicasMap.keys.filterNot(followers.contains(_))
 
       // Due to code paths accessing remoteReplicasMap without a lock,
       // first add the new replicas and then remove the old ones

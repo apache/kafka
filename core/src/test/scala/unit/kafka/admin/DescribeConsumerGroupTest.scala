@@ -208,7 +208,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
       TestUtils.waitUntilTrue(() => {
         val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroups())
-        val numLines = output.trim.split("\n").filterNot(line => line.isEmpty).length
+        val numLines = output.trim.split("\n").count(line => line.isEmpty)
         (numLines == expectedNumLines) && error.isEmpty
       }, s"Expected a data row and no error in describe results with describe type ${describeType.mkString(" ")}.")
     }
