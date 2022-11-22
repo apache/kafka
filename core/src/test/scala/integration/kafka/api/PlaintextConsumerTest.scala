@@ -697,7 +697,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testFetchOutOfRangeOffsetResetConfigEarliest(): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    //ensure no records arrive before poll is called so that the offset actually gets reset
+    // ensure no records arrive before poll is called so that the offset actually gets reset
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
     val consumer = createConsumer(configOverrides = this.consumerConfig)
     val totalRecords = 10L
@@ -718,7 +718,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testFetchOutOfRangeOffsetResetConfigLatest(): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
-    //ensure no records arrive before poll is called so that the offset actually gets reset
+    // ensure no records arrive before poll is called so that the offset actually gets reset
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
     val consumer = createConsumer(configOverrides = this.consumerConfig)
     val totalRecords = 10L
@@ -728,7 +728,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = startingTimestamp)
     consumer.assign(List(tp).asJava)
     consumer.seek(tp, 0)
-    //consume some, but not all of the records
+    // consume some, but not all of the records
     consumeAndVerifyRecords(consumer = consumer, numRecords = totalRecords.toInt/2, startingOffset = 0)
     // seek to out of range position
     val outOfRangePos = totalRecords + 17 //arbitrary, much higher offset
@@ -737,7 +737,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
     sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = totalRecords)
     val nextRecord = consumer.poll(Duration.ofMillis(50)).iterator().next()
-    //ensure the seek went to the last known record at the time of the previous poll
+    // ensure the seek went to the last known record at the time of the previous poll
     assertEquals(totalRecords,nextRecord.offset())
   }
 
