@@ -695,8 +695,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @Test
-  def testFetchInvalidOffsetResetConfigEarliest(): Unit = {
+  def testFetchOutOfRangeOffsetResetConfigEarliest(): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    //ensure no records arrive before poll is called so that the offset actually gets reset
+    this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
     val consumer = createConsumer(configOverrides = this.consumerConfig)
     val totalRecords = 10L
 
@@ -712,37 +714,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumeAndVerifyRecords(consumer = consumer, numRecords = 1, startingOffset = 0)
   }
 
-  @Test
-  def testFetchInvalidOffsetResetConfigLatestRecordsBeforeTimeout(): Unit = {
-
-    this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
-    // long wait time should (theoretically) mean that more records show up before this expires
-    this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "3000")
-    val consumer = createConsumer(configOverrides = this.consumerConfig)
-    val totalRecords = 10L
-
-    val producer = createProducer()
-    val startingTimestamp = 0
-    sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = startingTimestamp)
-    consumer.assign(List(tp).asJava)
-    consumer.seek(tp,0)
-    consumeAndVerifyRecords(consumer = consumer, numRecords = totalRecords.toInt, startingOffset = 0)
-    // seek to out of range position
-    val outOfRangePos = totalRecords + 7 //arbitrary, much higher offset
-    consumer.seek(tp, outOfRangePos)
-    // assert that poll resets to the ending position
-    assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
-    //some new records show up before fetch max wait time
-    sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = totalRecords)
-    // ensure that new records start with the offset that was passed to seek(), as new records have arrived
-    val nextRecord = consumer.poll(Duration.ofMillis(50)).iterator().next()
-    assertEquals(outOfRangePos,nextRecord.offset())
-
-  }
 
   @Test
-  def testFetchInvalidOffsetResetConfigLatestNoRecordsBeforeTimeout(): Unit = {
+  def testFetchOutOfRangeOffsetResetConfigLatest(): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
+    //ensure no records arrive before poll is called so that the offset actually gets reset
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
     val consumer = createConsumer(configOverrides = this.consumerConfig)
     val totalRecords = 10L

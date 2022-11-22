@@ -1581,21 +1581,23 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * is invoked for the same partition more than once, the latest offset will be used on the next poll(). Note that
      * you may lose data if this API is arbitrarily used in the middle of consumption, to reset the fetch offsets
      *
-     * The next Consumer Record which will be retrieved when poll() is invoked will either have the offset specified or,
-     * by default, with {@link ConsumerConfig AUTO_RESET_CONFIG} set to "latest"
-     * a higher numbered offset. A higher numbered offset will be returned if there is no consumer record with the offset
-     * specified but there is one with a higher offset.
+     * The next Consumer Record which will be retrieved when poll() is invoked will have the offset specified, given that
+     * a record with that offset exists (ie: it is a valid offset).
+     *
      * seek(0) is equivalent to seek to beginning for a topic with beginning offset 0.
      * seekToEnd() is equivalent to seeking to the highest known offset + 1.
      *
-     * Seeking past the end of the highest known offset means an invalid offset is reached.
+     * Seeking to the offset smaller than the log start offset or larger than the log end offset
+     * or high watermark means an invalid offset is reached.
      * Invalid offset behaviour is controlled by
-     * the {@link ConsumerConfig AUTO_RESET_CONFIG} property. If this is set to "earliest", the next poll() will seek to the beginning
-     * before returning a record. If it is set to "latest", it will seek to the last known record (similar to seekToEnd()).
-     * Note that, in the "latest" if any new records show up before {@link ConsumerConfig FETCH_MAX_WAIT_MS_CONFIG}, then
-     * the next poll() may succeed in seeking to the requested offset, or otherwise it will seek to the new latest known offset.
+     * the {@link ConsumerConfig AUTO_RESET_CONFIG} property.
+     * If this is set to "earliest", the next poll will return records from the starting offset.
+     * If it is set to "latest", it will seek to the last known record (similar to seekToEnd()).
      * If it is set to "none", an {@link OffsetOutOfRangeException} will be thrown.
      *
+     * Note that,  the seek offset won't change to the in-flight fetch request, it will take effect in next fetch request.
+     * In order for the invalid offset behaviour to take effect immediately after seeking and polling,
+     * {@link ConsumerConfig FETCH_MAX_WAIT_MS_CONFIG} should be set to 0.
      *
      * @param offset the next offset returned by poll() will be either this or greater.
      * @throws IllegalArgumentException if the provided offset is negative
