@@ -302,11 +302,16 @@ class LogCleaner(initialConfig: CleanerConfig,
 
     protected override def loggerName = classOf[LogCleaner].getName
 
-    if (config.dedupeBufferSize / config.numThreads > Int.MaxValue)
+    /**
+      * @see SEE [[http://hg.openjdk.java.net/jdk8/jdk8/jdk/rev/ec45423a4700#l3.12]] for more information
+      */
+    val MAX_ARRAY_SIZE : Int = Int.MaxValue -8
+
+    if (config.dedupeBufferSize / config.numThreads > MAX_ARRAY_SIZE)
       warn("Cannot use more than 2G of cleaner buffer space per cleaner thread, ignoring excess buffer space...")
 
     val cleaner = new Cleaner(id = threadId,
-                              offsetMap = new SkimpyOffsetMap(memory = math.min(config.dedupeBufferSize / config.numThreads, Int.MaxValue).toInt,
+                              offsetMap = new SkimpyOffsetMap(memory = math.min(config.dedupeBufferSize / config.numThreads, MAX_ARRAY_SIZE).toInt,
                                                               hashAlgorithm = config.hashAlgorithm),
                               ioBufferSize = config.ioBufferSize / config.numThreads / 2,
                               maxIoBufferSize = config.maxMessageSize,
