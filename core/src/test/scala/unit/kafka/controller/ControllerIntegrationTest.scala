@@ -1775,6 +1775,83 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   }
 
   @Test
+  def testTopicDeletionWithOfflineBrokers(): Unit = {
+    val tp = new TopicPartition("t", 0)
+    val adminZkClient = new AdminZkClient(zkClient)
+
+    servers = makeServers(2)
+    TestUtils.createTopic(zkClient, tp.topic, 1, 2, servers)
+    val topicId1 = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+
+    // shutdown one broker and then delete the topic
+    val broker0 = servers.find(_.config.brokerId == 0).get
+    broker0.shutdown()
+    broker0.awaitShutdown()
+    adminZkClient.deleteTopic(tp.topic())
+    val broker1 = servers.find(_.config.brokerId == 1).get
+    TestUtils.waitUntilTrue(() => {
+      !broker1.replicaManager.getLog(tp).isDefined
+    }, "The replica on broker1 cannot be deleted")
+    TestUtils.waitUntilTrue(() => {
+      !zkClient.pathExists(TopicZNode.path(tp.topic()))
+    }, s"The topic ${tp.topic} is not removed from zookeeper")
+
+    // recreate the topic and wait until broker1 get the log recreated
+    val assignment = Map(tp.partition -> Seq(0, 1))
+    adminZkClient.createTopicWithAssignment(tp.topic, config = new Properties(), assignment)
+    TestUtils.waitUntilTrue(() => {
+      broker1.replicaManager.getLog(tp).isDefined
+    }, "The replica on broker1 cannot be deleted")
+    val topicId2 = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    assertNotEquals(topicId2, topicId1, "Topic IDs across generations should not be the same")
+
+    // restart the offline broker0, and wait until convergence of topic ID on all brokers
+    broker0.startup()
+    TestUtils.waitUntilTrue(() => {
+      servers.forall{s => {
+        val logOpt = s.replicaManager.getLog(tp)
+        if (logOpt.isDefined) {
+          logOpt.get.topicId == topicId2
+        } else {
+          false
+        }
+      }}
+    }, s"Not every online broker has the correct topic ID for topic ${tp.topic()}")
+  }
+
+  @Test
+  def testDeletionOfStrayPartitions(): Unit = {
+    val tp = new TopicPartition("t1", 0)
+    val adminZkClient = new AdminZkClient(zkClient)
+
+    servers = makeServers(2)
+    TestUtils.createTopic(zkClient, tp.topic, 1, 2, servers)
+    TestUtils.waitUntilTrue(() => {
+      servers.forall{server => server.replicaManager.getLog(tp).isDefined}
+    }, "The replica on broker1 cannot be deleted")
+
+    // shutdown one broker and then delete the topic
+    val broker0 = servers.find(_.config.brokerId == 0).get
+    broker0.shutdown()
+    broker0.awaitShutdown()
+    adminZkClient.deleteTopic(tp.topic())
+    TestUtils.waitUntilTrue(() => {
+      !zkClient.pathExists(TopicZNode.path(tp.topic()))
+    }, "The replica on broker1 cannot be deleted")
+
+
+    // restart the offline broker and make sure the stray partitions will be deleted
+    broker0.startup()
+    val topic2 = "t2"
+    // create another topic to ensure at least one LeaderAndIsr request is being sent to the restarted broker
+    TestUtils.createTopic(zkClient, topic2, 1, 2, servers)
+
+    TestUtils.waitUntilTrue(() => {
+      !broker0.replicaManager.getLog(tp).isDefined
+    }, "The replica on broker0 cannot be deleted", waitTimeMs = 20000)
+  }
+
+  @Test
   def testTopicIdUpgradeAfterReassigningPartitions(): Unit = {
     val tp = new TopicPartition("t", 0)
     val reassignment = Map(tp -> Some(Seq(0)))

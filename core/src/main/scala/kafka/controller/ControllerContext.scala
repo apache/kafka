@@ -79,6 +79,7 @@ class ControllerContext {
   val shuttingDownBrokerIds = mutable.Set.empty[Int]
   private val liveBrokers = mutable.Set.empty[Broker]
   private val liveBrokerEpochs = mutable.Map.empty[Int, Long]
+  private val leaderAndIsrRequestSent = mutable.Map.empty[Int, Boolean]
   var epoch: Int = KafkaController.InitialControllerEpoch
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion
 
@@ -206,11 +207,16 @@ class ControllerContext {
   def removeLiveBrokers(brokerIds: Set[Int]): Unit = {
     liveBrokers --= liveBrokers.filter(broker => brokerIds.contains(broker.id))
     liveBrokerEpochs --= brokerIds
+    leaderAndIsrRequestSent --= brokerIds
   }
 
   def updateBrokerMetadata(oldMetadata: Broker, newMetadata: Broker): Unit = {
     liveBrokers -= oldMetadata
     liveBrokers += newMetadata
+  }
+
+  def markLeaderAndIsrSent(brokerId: Int): Unit = {
+    leaderAndIsrRequestSent.put(brokerId, true)
   }
 
   // getter
@@ -219,6 +225,7 @@ class ControllerContext {
   def liveOrShuttingDownBrokers: Set[Broker] = liveBrokers
   def liveBrokerIdAndEpochs: Map[Int, Long] = liveBrokerEpochs
   def liveOrShuttingDownBroker(brokerId: Int): Option[Broker] = liveOrShuttingDownBrokers.find(_.id == brokerId)
+  def shouldSendFullLeaderAndIsr(brokerId: Int): Boolean = !leaderAndIsrRequestSent.get(brokerId).exists(_ == true)
 
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
     partitionAssignments.flatMap {
@@ -359,12 +366,16 @@ class ControllerContext {
     topicsToBeDeleted
   }
 
+  def replicasInStates(topic: String, expectedStates: Set[ReplicaState]): Set[PartitionAndReplica] = {
+    replicasForTopic(topic).filter(replica => expectedStates.contains(replicaStates(replica))).toSet
+  }
+
   def replicasInState(topic: String, state: ReplicaState): Set[PartitionAndReplica] = {
     replicasForTopic(topic).filter(replica => replicaStates(replica) == state).toSet
   }
 
-  def areAllReplicasInState(topic: String, state: ReplicaState): Boolean = {
-    replicasForTopic(topic).forall(replica => replicaStates(replica) == state)
+  def areAllReplicasInStates(topic: String, expectedStates: Set[ReplicaState]): Boolean = {
+    replicasForTopic(topic).forall(replica => expectedStates.contains(replicaStates(replica)))
   }
 
   def isAnyReplicaInState(topic: String, state: ReplicaState): Boolean = {

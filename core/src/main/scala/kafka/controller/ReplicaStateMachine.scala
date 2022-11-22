@@ -487,5 +487,5 @@ case object ReplicaDeletionIneligible extends ReplicaState {
 
 case object NonExistentReplica extends ReplicaState {
   val state: Byte = 7
-  val validPreviousStates: Set[ReplicaState] = Set(ReplicaDeletionSuccessful)
+  val validPreviousStates: Set[ReplicaState] = Set(ReplicaDeletionSuccessful, OfflineReplica)
 }

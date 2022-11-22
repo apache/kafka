@@ -496,11 +496,13 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
           .map(topic => (topic, controllerContext.topicIds.getOrElse(topic, Uuid.ZERO_UUID)))
           .toMap
         val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
-          controllerEpoch, brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, topicIds.asJava, leaders.asJava)
+          controllerEpoch, brokerEpoch, leaderAndIsrPartitionStates.values.toBuffer.asJava, topicIds.asJava, leaders.asJava,
+          controllerContext.shouldSendFullLeaderAndIsr(broker))
         sendRequest(broker, leaderAndIsrRequestBuilder, (r: AbstractResponse) => {
           val leaderAndIsrResponse = r.asInstanceOf[LeaderAndIsrResponse]
           sendEvent(LeaderAndIsrResponseReceived(leaderAndIsrResponse, broker))
         })
+        controllerContext.markLeaderAndIsrSent(broker)
       }
     }
     leaderAndIsrRequestMap.clear()
