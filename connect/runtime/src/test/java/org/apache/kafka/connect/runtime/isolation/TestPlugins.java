@@ -118,16 +118,16 @@ public class TestPlugins {
 
         private final String resourceDir;
         private final String className;
-        private final boolean hideFromPluginPath;
+        private final boolean hideByDefault;
 
         TestPlugin(String resourceDir, String className) {
             this(resourceDir, className, false);
         }
 
-        TestPlugin(String resourceDir, String className, boolean hideFromPluginPath) {
+        TestPlugin(String resourceDir, String className, boolean hideByDefault) {
             this.resourceDir = resourceDir;
             this.className = className;
-            this.hideFromPluginPath = hideFromPluginPath;
+            this.hideByDefault = hideByDefault;
         }
 
         public String resourceDir() {
@@ -138,8 +138,8 @@ public class TestPlugins {
             return className;
         }
 
-        public boolean hideFromPluginPath() {
-            return hideFromPluginPath;
+        public boolean hideByDefault() {
+            return hideByDefault;
         }
     }
 
@@ -183,7 +183,7 @@ public class TestPlugins {
     public static List<String> pluginPath() {
         return PLUGIN_JARS.entrySet()
             .stream()
-            .filter(e -> !e.getKey().hideFromPluginPath())
+            .filter(e -> !e.getKey().hideByDefault())
             .map(e -> e.getValue().getPath())
             .collect(Collectors.toList());
     }
