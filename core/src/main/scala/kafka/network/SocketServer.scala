@@ -1035,7 +1035,8 @@ private[kafka] class Processor(
   // `protected` for test usage
   protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send): Unit = {
     val connectionId = response.request.context.connectionId
-    trace(s"Socket server received response to send to $connectionId, registering for write and sending data: $response")
+    if (isTraceEnabled)
+      trace(s"Socket server received response to send to $connectionId, registering for write and sending data: $response")
     // `channel` can be None if the connection was closed remotely or if selector closed it for being idle for too long
     if (channel(connectionId).isEmpty) {
       warn(s"Attempting to send response via channel for which there is no open connection, connection id $connectionId")

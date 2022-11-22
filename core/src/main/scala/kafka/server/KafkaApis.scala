@@ -162,8 +162,10 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     try {
-      trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
-        s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
+      if (isTraceEnabled) {
+        trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
+          s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
+      }
 
       if (!apiVersionManager.isApiEnabled(request.header.apiKey)) {
         // The socket server will reject APIs which are not exposed in this scope and close the connection

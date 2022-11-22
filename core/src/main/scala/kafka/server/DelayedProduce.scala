@@ -67,7 +67,9 @@ class DelayedProduce(delayMs: Long,
       status.acksPending = false
     }
 
-    trace(s"Initial partition status for $topicPartition is $status")
+    if (isTraceEnabled) {
+      trace(s"Initial partition status for $topicPartition is $status")
+    }
   }
 
   /**
@@ -84,7 +86,11 @@ class DelayedProduce(delayMs: Long,
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
     produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>
-      trace(s"Checking produce satisfaction for $topicPartition, current status $status")
+
+      if (isTraceEnabled) {
+        trace(s"Checking produce satisfaction for $topicPartition, current status $status")
+      }
+
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
         val (hasEnough, error) = replicaManager.getPartitionOrError(topicPartition) match {

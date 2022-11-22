@@ -465,7 +465,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       producerStateManager.onHighWatermarkUpdated(newHighWatermark.messageOffset)
       maybeIncrementFirstUnstableOffset()
     }
-    trace(s"Setting high watermark $newHighWatermark")
+
+    if (isTraceEnabled) {
+      trace(s"Setting high watermark $newHighWatermark")
+    }
   }
 
   /**

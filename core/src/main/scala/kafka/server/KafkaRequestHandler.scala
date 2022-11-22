@@ -71,7 +71,11 @@ class KafkaRequestHandler(id: Int,
         case request: RequestChannel.Request =>
           try {
             request.requestDequeueTimeNanos = endTime
-            trace(s"Kafka request handler $id on broker $brokerId handling request $request")
+
+            if (isTraceEnabled) {
+              trace(s"Kafka request handler $id on broker $brokerId handling request $request")
+            }
+
             apis.handle(request, requestLocal)
           } catch {
             case e: FatalExitError =>

@@ -706,7 +706,10 @@ class ProducerStateManager(
       throw new IllegalArgumentException(s"Invalid producer id ${appendInfo.producerId} passed to update " +
         s"for partition $topicPartition")
 
-    trace(s"Updated producer ${appendInfo.producerId} state to $appendInfo")
+    if (isTraceEnabled) {
+      trace(s"Updated producer ${appendInfo.producerId} state to $appendInfo")
+    }
+    
     val updatedEntry = appendInfo.toEntry
     producers.get(appendInfo.producerId) match {
       case Some(currentEntry) =>
