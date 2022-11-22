@@ -60,59 +60,61 @@ import org.slf4j.LoggerFactory;
  * {@link TestPlugins#assertAvailable()} to verify that the plugins initialized correctly.
  * Otherwise, exceptions during the plugin build are not propagated, and may invalidate your test.
  * You can access the list of plugin jars for assembling a {@literal plugin.path}, and reference
- * the names of the different plugins directly via the exposed constants.
+ * the names of the different plugins directly via the {@link TestPlugin} enum.
  */
 public class TestPlugins {
     public enum TestPlugin {
         /**
-         * Resource dir and class name of a plugin which will always throw an exception during loading
+         * A plugin which will always throw an exception during loading
          */
         ALWAYS_THROW_EXCEPTION("always-throw-exception", "test.plugins.AlwaysThrowException"),
         /**
-         * Resource dir and class name of a plugin which samples information about its initialization.
+         * A plugin which samples information about its initialization.
          */
         ALIASED_STATIC_FIELD("aliased-static-field", "test.plugins.AliasedStaticField"),
         /**
-         * Resource dir and class name of a {@link org.apache.kafka.connect.storage.Converter}
+         * A {@link org.apache.kafka.connect.storage.Converter}
          * which samples information about its method calls.
          */
         SAMPLING_CONVERTER("sampling-converter", "test.plugins.SamplingConverter"),
         /**
-         * Resource dir and class name of a {@link org.apache.kafka.common.Configurable}
+         * A {@link org.apache.kafka.common.Configurable}
          * which samples information about its method calls.
          */
         SAMPLING_CONFIGURABLE("sampling-configurable", "test.plugins.SamplingConfigurable"),
         /**
-         * Resource dir and class name of a {@link org.apache.kafka.connect.storage.HeaderConverter}
+         * A {@link org.apache.kafka.connect.storage.HeaderConverter}
          * which samples information about its method calls.
          */
         SAMPLING_HEADER_CONVERTER("sampling-header-converter", "test.plugins.SamplingHeaderConverter"),
         /**
-         * Resource dir and class name of a {@link org.apache.kafka.common.config.provider.ConfigProvider}
+         * A {@link org.apache.kafka.common.config.provider.ConfigProvider}
          * which samples information about its method calls.
          */
         SAMPLING_CONFIG_PROVIDER("sampling-config-provider", "test.plugins.SamplingConfigProvider"),
         /**
-         * Resource dir and class name of a plugin which uses a {@link java.util.ServiceLoader}
+         * A plugin which uses a {@link java.util.ServiceLoader}
          * to load internal classes, and samples information about their initialization.
          */
         SERVICE_LOADER("service-loader", "test.plugins.ServiceLoaderPlugin"),
         /**
-         * Resource dir and class name of plugins which reads a version string from resource.
+         * A plugin which reads a version string from a resource and packages the version string 1.0.0.
          */
         READ_VERSION_FROM_RESOURCE_V1("read-version-from-resource-v1", "test.plugins.ReadVersionFromResource"),
-        // The behavior of DelegatingClassLoader when two jars providing the same plugin are both
-        // on the plugin path is undeterministic. So, hide the v2 jar from the plugin path. This jar
-        // is only used in certain testcases that verify resources are read correctly when provided
-        // in both the PluginClassLoader and its parent class loader.
-        READ_VERSION_FROM_RESOURCE_V2("read-version-from-resource-v2",
-                "test.plugins.ReadVersionFromResource", true),
-
         /**
-         * Resource dir and class names of plugins that are included in a single jar.
+         * A plugin which reads a version string from a resource and packages the version string 2.0.0.
+         * This plugin is hidden from the plugin path by default and must be added explicitly.
+         */
+        READ_VERSION_FROM_RESOURCE_V2("read-version-from-resource-v2", "test.plugins.ReadVersionFromResource", true),
+        /**
+         * A plugin which shares a jar file with {@link TestPlugin#MULTIPLE_PLUGINS_IN_JAR_THING_TWO}
          */
         MULTIPLE_PLUGINS_IN_JAR_THING_ONE("multiple-plugins-in-jar", "test.plugins.ThingOne"),
-        MULTIPLE_PLUGINS_IN_JAR_THING_TWO("multiple-plugins-in-jar", "test.plugins.ThingTwo");
+        /**
+         * A plugin which shares a jar file with {@link TestPlugin#MULTIPLE_PLUGINS_IN_JAR_THING_ONE}
+         * This jar file is hidden from the plugin path by default, but this plugin will appear in the shared jar file which is included on the plugin path.
+         */
+        MULTIPLE_PLUGINS_IN_JAR_THING_TWO("multiple-plugins-in-jar", "test.plugins.ThingTwo", true);
 
         private final String resourceDir;
         private final String className;
