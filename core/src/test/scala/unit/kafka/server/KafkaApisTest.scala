@@ -2728,6 +2728,9 @@ class KafkaApisTest {
     )
 
     future.completeExceptionally(Errors.NOT_COORDINATOR.exception)
+
+    // The exception expected here is the one thrown by `sendResponse`. As
+    // `Exception` is not a Kafka errors, `UNKNOWN_SERVER_ERROR` is returned.
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.error)
   }
 

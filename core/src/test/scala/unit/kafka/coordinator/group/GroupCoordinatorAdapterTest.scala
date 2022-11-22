@@ -55,7 +55,7 @@ class GroupCoordinatorAdapterTest {
     val adapter = new GroupCoordinatorAdapter(groupCoordinator)
 
     val ctx = makeContext(version)
-    val data = new JoinGroupRequestData()
+    val request = new JoinGroupRequestData()
       .setGroupId("group")
       .setMemberId("member")
       .setProtocolType("consumer")
@@ -70,7 +70,7 @@ class GroupCoordinatorAdapterTest {
           .setName("second")
           .setMetadata("second".getBytes())).iterator.asJava))
 
-    val future = adapter.joinGroup(ctx, data)
+    val future = adapter.joinGroup(ctx, request)
     assertFalse(future.isDone)
 
     val capturedProtocols: ArgumentCaptor[List[(String, Array[Byte])]] =
@@ -79,16 +79,16 @@ class GroupCoordinatorAdapterTest {
       ArgumentCaptor.forClass(classOf[JoinGroupCallback])
 
     verify(groupCoordinator).handleJoinGroup(
-      ArgumentMatchers.eq(data.groupId),
-      ArgumentMatchers.eq(data.memberId),
+      ArgumentMatchers.eq(request.groupId),
+      ArgumentMatchers.eq(request.memberId),
       ArgumentMatchers.eq(None),
       ArgumentMatchers.eq(if (version >= 4) true else false),
       ArgumentMatchers.eq(if (version >= 9) true else false),
       ArgumentMatchers.eq(ctx.clientId),
       ArgumentMatchers.eq(InetAddress.getLocalHost.toString),
-      ArgumentMatchers.eq(data.rebalanceTimeoutMs),
-      ArgumentMatchers.eq(data.sessionTimeoutMs),
-      ArgumentMatchers.eq(data.protocolType),
+      ArgumentMatchers.eq(request.rebalanceTimeoutMs),
+      ArgumentMatchers.eq(request.sessionTimeoutMs),
+      ArgumentMatchers.eq(request.protocolType),
       capturedProtocols.capture(),
       capturedCallback.capture(),
       ArgumentMatchers.eq(Some("reason")),

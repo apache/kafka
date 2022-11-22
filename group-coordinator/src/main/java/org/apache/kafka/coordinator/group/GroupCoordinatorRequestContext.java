@@ -71,4 +71,14 @@ public class GroupCoordinatorRequestContext {
     public int hashCode() {
         return Objects.hash(apiVersion, clientId, clientAddress, bufferSupplier);
     }
+
+    @Override
+    public String toString() {
+        return "GroupCoordinatorRequestContext("
+            + "apiVersion=" + apiVersion
+            + ", clientId=" + clientId
+            + ", clientAddress=" + clientAddress
+            + ", bufferSupplier=" + bufferSupplier
+            + ")";
+    }
 }
