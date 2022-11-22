@@ -179,8 +179,6 @@ public class PluginsTest {
 
     @Test
     public void shouldThrowIfPluginThrows() {
-        TestPlugins.assertAvailable();
-
         assertThrows(ConnectException.class, () -> plugins.newPlugin(
             TestPlugin.ALWAYS_THROW_EXCEPTION.className(),
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
@@ -191,7 +189,6 @@ public class PluginsTest {
     @Test
     public void shouldShareStaticValuesBetweenSamePlugin() {
         // Plugins are not isolated from other instances of their own class.
-        TestPlugins.assertAvailable();
         Converter firstPlugin = plugins.newPlugin(
             TestPlugin.ALIASED_STATIC_FIELD.className(),
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
@@ -215,7 +212,6 @@ public class PluginsTest {
 
     @Test
     public void newPluginShouldServiceLoadWithPluginClassLoader() {
-        TestPlugins.assertAvailable();
         Converter plugin = plugins.newPlugin(
             TestPlugin.SERVICE_LOADER.className(),
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
@@ -232,7 +228,6 @@ public class PluginsTest {
 
     @Test
     public void newPluginShouldInstantiateWithPluginClassLoader() {
-        TestPlugins.assertAvailable();
         Converter plugin = plugins.newPlugin(
             TestPlugin.ALIASED_STATIC_FIELD.className(),
             new AbstractConfig(new ConfigDef(), Collections.emptyMap()),
@@ -246,14 +241,12 @@ public class PluginsTest {
 
     @Test
     public void shouldFailToFindConverterInCurrentClassloader() {
-        TestPlugins.assertAvailable();
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestPlugin.SAMPLING_CONVERTER.className());
         assertThrows(ConfigException.class, this::createConfig);
     }
 
     @Test
     public void newConverterShouldConfigureWithPluginClassLoader() {
-        TestPlugins.assertAvailable();
         props.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, TestPlugin.SAMPLING_CONVERTER.className());
         ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_CONVERTER.className());
         try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
@@ -274,7 +267,6 @@ public class PluginsTest {
 
     @Test
     public void newConfigProviderShouldConfigureWithPluginClassLoader() {
-        TestPlugins.assertAvailable();
         String providerPrefix = "some.provider";
         props.put(providerPrefix + ".class", TestPlugin.SAMPLING_CONFIG_PROVIDER.className());
 
@@ -298,7 +290,6 @@ public class PluginsTest {
 
     @Test
     public void newHeaderConverterShouldConfigureWithPluginClassLoader() {
-        TestPlugins.assertAvailable();
         props.put(WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG, TestPlugin.SAMPLING_HEADER_CONVERTER.className());
         ClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_HEADER_CONVERTER.className());
         try (LoaderSwap loaderSwap = plugins.withClassLoader(classLoader)) {
@@ -319,7 +310,6 @@ public class PluginsTest {
 
     @Test
     public void newPluginsShouldConfigureWithPluginClassLoader() {
-        TestPlugins.assertAvailable();
         List<Configurable> configurables = plugins.newPlugins(
             Collections.singletonList(TestPlugin.SAMPLING_CONFIGURABLE.className()),
             config,
@@ -336,8 +326,6 @@ public class PluginsTest {
 
     @Test
     public void pluginClassLoaderReadVersionFromResourceExistingOnlyInChild() throws Exception {
-        TestPlugins.assertAvailable();
-
         assertClassLoaderReadsVersionFromResource(
                 TestPlugin.ALIASED_STATIC_FIELD,
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V1,
@@ -347,8 +335,6 @@ public class PluginsTest {
 
     @Test
     public void pluginClassLoaderReadVersionFromResourceExistingOnlyInParent() throws Exception {
-        TestPlugins.assertAvailable();
-
         assertClassLoaderReadsVersionFromResource(
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V1,
                 TestPlugin.ALIASED_STATIC_FIELD,
@@ -358,8 +344,6 @@ public class PluginsTest {
 
     @Test
     public void pluginClassLoaderReadVersionFromResourceExistingInParentAndChild() throws Exception {
-        TestPlugins.assertAvailable();
-
         assertClassLoaderReadsVersionFromResource(
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V1,
                 TestPlugin.READ_VERSION_FROM_RESOURCE_V2,
@@ -369,16 +353,26 @@ public class PluginsTest {
 
     private void assertClassLoaderReadsVersionFromResource(
             TestPlugin parentResource, TestPlugin childResource, String className, String... expectedVersions) throws MalformedURLException {
-        String pluginPath = TestPlugins.pluginPath(parentResource);
-        URLClassLoader parent = new URLClassLoader(
-                new URL[]{new File(pluginPath).toURI().toURL()});
-
+        URL[] systemPath = TestPlugins.pluginPath(parentResource)
+                .stream()
+                .map(File::new)
+                .map(File::toURI)
+                .map(uri -> {
+                    try {
+                        return uri.toURL();
+                    } catch (MalformedURLException e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .toArray(URL[]::new);
+        URLClassLoader parent = new URLClassLoader(systemPath);
 
         // Initialize Plugins object with parent class loader in the class loader tree. This is
         // to simulate the situation where jars exist on both system classpath and plugin path.
-        Map<String, String> pluginProps = new HashMap<>();
-        pluginProps.put(WorkerConfig.PLUGIN_PATH_CONFIG,
-                TestPlugins.pluginPath(childResource));
+        Map<String, String> pluginProps = Collections.singletonMap(
+                WorkerConfig.PLUGIN_PATH_CONFIG,
+                String.join(",", TestPlugins.pluginPath(childResource))
+        );
         plugins = new Plugins(pluginProps, parent);
 
         Converter converter = plugins.newPlugin(

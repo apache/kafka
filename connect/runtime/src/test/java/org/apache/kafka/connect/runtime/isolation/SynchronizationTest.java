@@ -70,7 +70,6 @@ public class SynchronizationTest {
 
     @Before
     public void setup() {
-        TestPlugins.assertAvailable();
         Map<String, String> pluginProps = Collections.singletonMap(
             WorkerConfig.PLUGIN_PATH_CONFIG,
             String.join(",", TestPlugins.pluginPath())

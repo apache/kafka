@@ -33,6 +33,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -52,15 +53,12 @@ import org.slf4j.LoggerFactory;
  *
  * <p>To add a plugin, create the source files in the resource tree, and edit this class to build
  * that plugin during initialization. For example, the plugin class {@literal package.Class} should
- * be placed in {@literal resources/test-plugins/something/package/Class.java} and loaded using
- * {@code createPluginJar("something")}. The class name, contents, and plugin directory can take
- * any value you need for testing.
+ * be placed in {@literal resources/test-plugins/something/package/Class.java} and added as a
+ * TestPlugin enum {@code PLUGIN_ID("something", "package.Class");}. The class name, contents,
+ * and plugin directory can take any value you need for testing.
  *
- * <p>To use this class in your tests, make sure to first call
- * {@link TestPlugins#assertAvailable()} to verify that the plugins initialized correctly.
- * Otherwise, exceptions during the plugin build are not propagated, and may invalidate your test.
- * You can access the list of plugin jars for assembling a {@literal plugin.path}, and reference
- * the names of the different plugins directly via the {@link TestPlugin} enum.
+ * <p>You can then assemble a {@literal plugin.path} of a list of plugin jars via {@link TestPlugins#pluginPath},
+ * and reference the names of the different plugins directly via the {@link TestPlugin} enum.
  */
 public class TestPlugins {
     public enum TestPlugin {
@@ -103,31 +101,30 @@ public class TestPlugins {
         READ_VERSION_FROM_RESOURCE_V1("read-version-from-resource-v1", "test.plugins.ReadVersionFromResource"),
         /**
          * A plugin which reads a version string from a resource and packages the version string 2.0.0.
-         * This plugin is hidden from the plugin path by default and must be added explicitly.
+         * This plugin is not included in {@link TestPlugins#pluginPath()} and must be included explicitly
          */
-        READ_VERSION_FROM_RESOURCE_V2("read-version-from-resource-v2", "test.plugins.ReadVersionFromResource", true),
+        READ_VERSION_FROM_RESOURCE_V2("read-version-from-resource-v2", "test.plugins.ReadVersionFromResource", false),
         /**
          * A plugin which shares a jar file with {@link TestPlugin#MULTIPLE_PLUGINS_IN_JAR_THING_TWO}
          */
         MULTIPLE_PLUGINS_IN_JAR_THING_ONE("multiple-plugins-in-jar", "test.plugins.ThingOne"),
         /**
          * A plugin which shares a jar file with {@link TestPlugin#MULTIPLE_PLUGINS_IN_JAR_THING_ONE}
-         * This jar file is hidden from the plugin path by default, but this plugin will appear in the shared jar file which is included on the plugin path.
          */
-        MULTIPLE_PLUGINS_IN_JAR_THING_TWO("multiple-plugins-in-jar", "test.plugins.ThingTwo", true);
+        MULTIPLE_PLUGINS_IN_JAR_THING_TWO("multiple-plugins-in-jar", "test.plugins.ThingTwo");
 
         private final String resourceDir;
         private final String className;
-        private final boolean hideByDefault;
+        private final boolean includeByDefault;
 
         TestPlugin(String resourceDir, String className) {
-            this(resourceDir, className, false);
+            this(resourceDir, className, true);
         }
 
-        TestPlugin(String resourceDir, String className, boolean hideByDefault) {
+        TestPlugin(String resourceDir, String className, boolean includeByDefault) {
             this.resourceDir = resourceDir;
             this.className = className;
-            this.hideByDefault = hideByDefault;
+            this.includeByDefault = includeByDefault;
         }
 
         public String resourceDir() {
@@ -138,21 +135,24 @@ public class TestPlugins {
             return className;
         }
 
-        public boolean hideByDefault() {
-            return hideByDefault;
+        public boolean includeByDefault() {
+            return includeByDefault;
         }
     }
 
     private static final Logger log = LoggerFactory.getLogger(TestPlugins.class);
-    private static final Map<TestPlugin, File> PLUGIN_JARS;
+    private static final Map<String, File> PLUGIN_JARS;
     private static final Throwable INITIALIZATION_EXCEPTION;
 
     static {
         Throwable err = null;
-        Map<TestPlugin, File> pluginJars = new HashMap<>();
+        Map<String, File> pluginJars = new HashMap<>();
         try {
             for (TestPlugin testPlugin : TestPlugin.values()) {
-                pluginJars.put(testPlugin, createPluginJar(testPlugin.resourceDir()));
+                if (pluginJars.containsKey(testPlugin.resourceDir())) {
+                    log.debug("Skipping recompilation of " + testPlugin.resourceDir());
+                }
+                pluginJars.put(testPlugin.resourceDir(), createPluginJar(testPlugin.resourceDir()));
             }
         } catch (Throwable e) {
             log.error("Could not set up plugin test jars", e);
@@ -162,11 +162,7 @@ public class TestPlugins {
         INITIALIZATION_EXCEPTION = err;
     }
 
-    /**
-     * Ensure that the test plugin JARs were assembled without error before continuing.
-     * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
-     */
-    public static void assertAvailable() throws AssertionError {
+    private static void assertAvailable() throws AssertionError {
         if (INITIALIZATION_EXCEPTION != null) {
             throw new AssertionError("TestPlugins did not initialize completely",
                 INITIALIZATION_EXCEPTION);
@@ -177,41 +173,59 @@ public class TestPlugins {
     }
 
     /**
-     * A list of jar files containing test plugins
+     * Assemble a default plugin path containing all TestPlugin instances which are not hidden by default.
      * @return A list of plugin jar filenames
+     * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
     public static List<String> pluginPath() {
-        return PLUGIN_JARS.entrySet()
-            .stream()
-            .filter(e -> !e.getKey().hideByDefault())
-            .map(e -> e.getValue().getPath())
-            .collect(Collectors.toList());
+        return pluginPath(defaultPlugins());
     }
 
     /**
-     * Gets the path to a single jar containing the test plugin.
-     * @param testPlugin the unique {@link TestPlugin} enum representing the plugin
-     * @return a string representing the plugin jar filename, or null if a plugin for the
-     *   resourceDir could not be found.
+     * Assemble a plugin path containing some TestPlugin instances
+     * @param plugins One or more plugins which should be included on the plugin path.
+     * @return A list of plugin jar filenames containing the specified test plugins
+     * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
-    public static String pluginPath(TestPlugin testPlugin) {
-        File jarFile = PLUGIN_JARS.get(testPlugin);
-        if (jarFile == null) {
-            return null;
-        }
-        return jarFile.getPath();
+    public static List<String> pluginPath(TestPlugin... plugins) {
+        assertAvailable();
+        return Arrays.stream(plugins)
+                .filter(Objects::nonNull)
+                .map(TestPlugin::resourceDir)
+                .distinct()
+                .map(PLUGIN_JARS::get)
+                .map(File::getPath)
+                .collect(Collectors.toList());
     }
 
     /**
-     * Get all of the classes that were successfully built by this class
+     * Get all plugin classes which are included on the default classpath
      * @return A list of plugin class names
+     * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
     public static List<String> pluginClasses() {
-        return PLUGIN_JARS.keySet()
-                .stream()
+        return pluginClasses(defaultPlugins());
+    }
+
+    /**
+     * Get all plugin classes which are included in the specified plugins
+     * @param plugins One or more plugins which are included in the plugin path.
+     * @return A list of plugin class names
+     * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
+     */
+    public static List<String> pluginClasses(TestPlugin... plugins) {
+        assertAvailable();
+        return Arrays.stream(plugins)
+                .filter(Objects::nonNull)
                 .map(TestPlugin::className)
                 .distinct()
                 .collect(Collectors.toList());
+    }
+
+    private static TestPlugin[] defaultPlugins() {
+        return Arrays.stream(TestPlugin.values())
+                .filter(TestPlugin::includeByDefault)
+                .toArray(TestPlugin[]::new);
     }
 
     private static File createPluginJar(String resourceDir) throws IOException {

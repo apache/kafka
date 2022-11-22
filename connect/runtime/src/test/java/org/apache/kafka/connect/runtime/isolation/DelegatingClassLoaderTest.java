@@ -53,7 +53,6 @@ public class DelegatingClassLoaderTest {
 
     @Test
     public void testLoadingUnloadedPluginClass() {
-        TestPlugins.assertAvailable();
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
                 Collections.emptyList(),
                 DelegatingClassLoader.class.getClassLoader()
@@ -66,7 +65,6 @@ public class DelegatingClassLoaderTest {
 
     @Test
     public void testLoadingPluginClass() throws ClassNotFoundException {
-        TestPlugins.assertAvailable();
         DelegatingClassLoader classLoader = new DelegatingClassLoader(
                 TestPlugins.pluginPath(),
                 DelegatingClassLoader.class.getClassLoader()
@@ -123,8 +121,6 @@ public class DelegatingClassLoaderTest {
 
     @Test
     public void testLoadingMixOfValidAndInvalidPlugins() throws Exception {
-        TestPlugins.assertAvailable();
-
         pluginDir.newFile("invalid.jar");
         pluginDir.newFolder("my-plugin");
         pluginDir.newFile("my-plugin/invalid.jar");
