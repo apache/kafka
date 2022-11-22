@@ -71,6 +71,7 @@ public class DefaultBackgroundThreadTest {
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(RETRY_BACKOFF_MS_CONFIG, REFRESH_BACK_OFF_MS);
+        this.backgroundThread = mockBackgroundThread();
     }
 
     @AfterEach
