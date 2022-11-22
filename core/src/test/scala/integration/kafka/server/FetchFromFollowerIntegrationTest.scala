@@ -124,9 +124,9 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     // Shutdown follower broker. Consumer will reach out to leader after metadata.max.age.ms
     brokers(followerBrokerId).shutdown()
     TestUtils.waitUntilTrue(() => {
-      brokers(followerBrokerId).awaitShutdown()
-      true
-    }, "follower did not shut down in time.")
+      val endpoints = brokers(leaderBrokerId).metadataCache.getPartitionReplicaEndpoints(topicPartition, listenerName)
+      !endpoints.contains(followerBrokerId)
+    }, "follower is still reachable.")
 
     response = connectAndReceive[FetchResponse](request, brokers(leaderBrokerId).socketServer)
     assertEquals(Errors.NONE, response.error)
