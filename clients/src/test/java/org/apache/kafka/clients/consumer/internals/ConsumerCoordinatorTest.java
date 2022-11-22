@@ -1512,6 +1512,70 @@ public abstract class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testRebalanceWithPauseTopicPartition() {
+        final String consumerId = "leader";
+        final List<String> topics = Arrays.asList(topic1, topic2);
+        final List<TopicPartition> partitions = Arrays.asList(t1p, t2p);
+        subscriptions.subscribe(toSet(topics), rebalanceListener);
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, singletonMap(topic1, 1)));
+        coordinator.maybeUpdateSubscriptionMetadata();
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        Map<String, List<String>> initialSubscription = singletonMap(consumerId, topics);
+        partitionAssignor.prepare(singletonMap(consumerId, singletonList(t1p)));
+
+        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, initialSubscription, Errors.NONE));
+        client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+        coordinator.poll(time.timer(Long.MAX_VALUE));
+
+        // pause t1p
+        subscriptions.pause(t1p);
+
+        // rejoin will only be set in the next poll call
+        assertFalse(coordinator.rejoinNeededOrPending());
+        assertEquals(toSet(topics), subscriptions.subscription());
+        assertEquals(singleton(t1p), subscriptions.assignedPartitions());
+        assertEquals(0, rebalanceListener.revokedCount);
+        assertNull(rebalanceListener.revoked);
+        assertEquals(1, rebalanceListener.assignedCount);
+
+        // Change metadata to trigger rebalance.
+        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1,
+                Utils.mkMap(Utils.mkEntry(topic1, 1), Utils.mkEntry(topic2, 1))));
+        coordinator.poll(time.timer(0));
+
+        partitionAssignor.prepare(singletonMap(consumerId, partitions));
+
+        assertTrue(coordinator.rejoinNeededOrPending());
+
+        client.respond(request -> {
+            if (!(request instanceof JoinGroupRequest)) {
+                return false;
+            } else {
+                JoinGroupRequest joinRequest = (JoinGroupRequest) request;
+                return consumerId.equals(joinRequest.data().memberId());
+            }
+        }, joinGroupLeaderResponse(2, consumerId, initialSubscription, Errors.NONE));
+        client.prepareResponse(syncGroupResponse(partitions, Errors.NONE));
+        coordinator.poll(time.timer(Long.MAX_VALUE));
+
+        // If the pausedTopicPartition is still in the assignment after the rebalance is completed, its pause mark is maintained
+        assertTrue(subscriptions.pausedPartitions().contains(t1p));
+
+        assertFalse(coordinator.rejoinNeededOrPending());
+        Collection<TopicPartition> revoked = getRevoked(partitions, partitions);
+        assertEquals(revoked.isEmpty() ? 0 : 1, rebalanceListener.revokedCount);
+        assertEquals(revoked.isEmpty() ? null : singleton(t1p), rebalanceListener.revoked);
+
+        Collection<TopicPartition> added = getAdded(partitions, partitions);
+        assertEquals(2, rebalanceListener.assignedCount);
+        assertEquals(added.isEmpty() ? singleton(t2p) : toSet(partitions), rebalanceListener.assigned);
+        assertEquals(toSet(partitions), subscriptions.assignedPartitions());
+    }
+
+    @Test
     public void testWakeupDuringJoin() {
         final String consumerId = "leader";
         final List<TopicPartition> owned = Collections.emptyList();

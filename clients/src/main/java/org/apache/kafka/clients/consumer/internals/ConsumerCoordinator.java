@@ -117,6 +117,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private AtomicBoolean asyncCommitFenced;
     private ConsumerGroupMetadata groupMetadata;
     private final boolean throwOnFetchStableOffsetsUnsupported;
+    private Set<TopicPartition> pausedPartitions;
 
     // hold onto request&future for committed offset requests to enable async calls.
     private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
@@ -461,6 +462,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             this.nextAutoCommitTimer.updateAndReset(autoCommitIntervalMs);
 
         subscriptions.assignFromSubscribed(assignedPartitions);
+
+        if (pausedPartitions != null && !pausedPartitions.isEmpty())
+            pausedPartitions.forEach(topicPartition -> {
+                if (subscriptions.isAssigned(topicPartition))
+                    subscriptions.pause(topicPartition);
+            });
 
         // Add partitions that were not previously owned but are now assigned
         firstException.compareAndSet(null, invokePartitionsAssigned(addedPartitions));
@@ -811,6 +818,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // so that users can still access the previously owned partitions to commit offsets etc.
         Exception exception = null;
         final SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(COMPARATOR);
+        pausedPartitions = subscriptions.pausedPartitions();
         if (generation == Generation.NO_GENERATION.generationId ||
             memberId.equals(Generation.NO_GENERATION.memberId)) {
             revokedPartitions.addAll(subscriptions.assignedPartitions());
