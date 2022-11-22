@@ -731,14 +731,14 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // consume some, but not all of the records
     consumeAndVerifyRecords(consumer = consumer, numRecords = totalRecords.toInt/2, startingOffset = 0)
     // seek to out of range position
-    val outOfRangePos = totalRecords + 17 //arbitrary, much higher offset
+    val outOfRangePos = totalRecords + 17 // arbitrary, much higher offset
     consumer.seek(tp, outOfRangePos)
     // assert that poll resets to the ending position
     assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
     sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = totalRecords)
     val nextRecord = consumer.poll(Duration.ofMillis(50)).iterator().next()
     // ensure the seek went to the last known record at the time of the previous poll
-    assertEquals(totalRecords,nextRecord.offset())
+    assertEquals(totalRecords, nextRecord.offset())
   }
 
   @Test
