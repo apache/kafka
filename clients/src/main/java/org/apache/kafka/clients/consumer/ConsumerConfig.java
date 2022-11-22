@@ -365,6 +365,8 @@ public class ConsumerConfig extends AbstractConfig {
 
     public static final String LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_CONFIG = CommonClientConfigs.LI_CLIENT_CLUSTER_METADATA_EXPIRE_TIME_MS_CONFIG;
 
+    public static final int DEFAULT_FETCH_MAX_WAIT_MS = 500;
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -471,7 +473,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         FETCH_MAX_BYTES_DOC)
                                 .define(FETCH_MAX_WAIT_MS_CONFIG,
                                         Type.INT,
-                                        500,
+                                        DEFAULT_FETCH_MAX_WAIT_MS,
                                         atLeast(0),
                                         Importance.LOW,
                                         FETCH_MAX_WAIT_MS_DOC)

@@ -28,6 +28,7 @@ import kafka.network
 import kafka.server.{BrokerMetadataStats, KafkaConfig, Observer}
 import kafka.utils.{Logging, NotNothing, Pool}
 import kafka.utils.Implicits._
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -275,7 +276,12 @@ object RequestChannel extends Logging {
         None
       else {
         val isFromFollower = body[FetchRequest].isFromFollower
-        if (isFromFollower) None
+        val maxWait = body[FetchRequest].maxWait()
+        // exclude the fetch requests that has fetch.max.wait.ms greater than the default setting for SizeBucketMetric.
+        // Otherwise the P999 metrics do not reflect the broker performance correctly because P999 could be
+        // just maxWait in the condition that there isn't sufficient data to immediately satisfy the requirement
+        // given by fetch.min.bytes for some of the time and maxWait is set to a large number (e.g., 30 seconds)
+        if (isFromFollower || maxWait > ConsumerConfig.DEFAULT_FETCH_MAX_WAIT_MS) None
         else Some(metrics.getRequestSizeBucketMetricName(metrics.consumerFetchRequestSizeMetricNameMap, responseBytes))
       }
     }
