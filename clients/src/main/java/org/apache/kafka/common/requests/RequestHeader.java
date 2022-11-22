@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 
 import java.nio.ByteBuffer;
-import java.util.Optional;
 
 /**
  * The header for a request in the Kafka protocol
